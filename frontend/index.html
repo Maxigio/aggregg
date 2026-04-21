@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auto Moto Radar</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/nouislider@15.8.1/dist/nouislider.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="amr-header">
+    <div class="container">
+      <nav class="amr-nav">
+        <div class="amr-logo">
+          <svg class="amr-logo-icon" width="30" height="30" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect width="32" height="32" rx="7" fill="#1e40af"/>
+            <circle cx="16" cy="16" r="10" fill="none" stroke="#93c5fd" stroke-width="1.8"/>
+            <circle cx="16" cy="16" r="5.5" fill="none" stroke="#93c5fd" stroke-width="1.8"/>
+            <circle cx="16" cy="16" r="1.8" fill="#93c5fd"/>
+            <line x1="16" y1="6" x2="16" y2="3.5" stroke="#93c5fd" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="26" y1="16" x2="28.5" y2="16" stroke="#93c5fd" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span class="amr-logo-text">Auto Moto Radar</span>
+        </div>
+        <p class="amr-tagline">Cerca su Subito.it, Autoscout24 e Moto.it in un colpo solo</p>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container py-4">
+
+    <!-- FORM RICERCA -->
+    <div class="amr-card mb-4">
+      <form id="searchForm">
+
+        <!-- Tipo veicolo -->
+        <div class="mb-4">
+          <label class="form-label fw-semibold text-muted small text-uppercase ls-1">Tipo veicolo</label>
+          <div class="d-flex gap-3">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="tipo" id="tipoAuto" value="auto" checked />
+              <label class="form-check-label fw-medium" for="tipoAuto">Auto</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="tipo" id="tipoMoto" value="moto" />
+              <label class="form-check-label fw-medium" for="tipoMoto">Moto</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3">
+
+          <!-- Marca -->
+          <div class="col-12 col-md-4">
+            <label for="marca" class="form-label fw-semibold">Marca <span class="text-danger">*</span></label>
+            <select class="form-select" id="marca" required>
+              <option value="">Caricamento...</option>
+            </select>
+          </div>
+
+          <!-- Modello -->
+          <div class="col-12 col-md-4">
+            <label for="modello" class="form-label fw-semibold">Modello</label>
+            <select id="modello" class="form-select">
+              <option value="">Seleziona prima la marca</option>
+            </select>
+          </div>
+
+          <!-- Regione -->
+          <div class="col-12 col-md-4">
+            <label for="regione" class="form-label fw-semibold">Regione</label>
+            <select class="form-select" id="regione">
+              <option value="">Tutta Italia</option>
+            </select>
+          </div>
+
+          <!-- Prezzo Min -->
+          <div class="col-6 col-md-3">
+            <label for="prezzoMin" class="form-label fw-semibold">Prezzo min (€)</label>
+            <input type="number" class="form-control" id="prezzoMin" placeholder="es. 1000" min="0" />
+          </div>
+
+          <!-- Prezzo Max -->
+          <div class="col-6 col-md-3">
+            <label for="prezzoMax" class="form-label fw-semibold">Prezzo max (€)</label>
+            <input type="number" class="form-control" id="prezzoMax" placeholder="es. 20000" min="0" />
+          </div>
+
+          <!-- Anno Min -->
+          <div class="col-6 col-md-3">
+            <label for="annoMin" class="form-label fw-semibold">Anno da</label>
+            <input type="number" class="form-control" id="annoMin" placeholder="es. 2015" min="1900" />
+          </div>
+
+          <!-- Anno Max -->
+          <div class="col-6 col-md-3">
+            <label for="annoMax" class="form-label fw-semibold">Anno a</label>
+            <input type="number" class="form-control" id="annoMax" min="1900" />
+          </div>
+
+          <!-- KM Max -->
+          <div class="col-12 col-md-4">
+            <label for="kmMax" class="form-label fw-semibold">Km max</label>
+            <input type="number" class="form-control" id="kmMax" placeholder="es. 100000" min="0" />
+          </div>
+
+        </div>
+
+        <div class="mt-4 text-center">
+          <button type="submit" class="btn amr-btn-primary btn-lg px-5">Cerca</button>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- STATO RICERCA / ERRORE -->
+    <div id="statusBox" class="d-none mb-4">
+      <div id="loadingState" class="text-center d-none py-3">
+        <div class="spinner-border text-primary me-2" role="status" style="width:1.2rem;height:1.2rem;border-width:2px"></div>
+        <span class="text-muted">Ricerca in corso su tutti i siti...</span>
+      </div>
+      <div id="errorState" class="alert amr-alert-error d-flex align-items-center justify-content-between d-none" role="alert">
+        <span id="errorText"></span>
+        <button type="button" class="btn-close ms-3" id="errorClose"></button>
+      </div>
+    </div>
+
+    <!-- STATS PANEL -->
+    <div id="statsPanel" class="d-none mb-3">
+      <div class="amr-card py-0">
+        <div class="row text-center g-0">
+          <div class="col stat-box border-end">
+            <div class="stat-label">Minimo</div>
+            <div class="stat-value" id="statMin">—</div>
+          </div>
+          <div class="col stat-box border-end">
+            <div class="stat-label">Esporta</div>
+            <button class="stat-action-btn" id="btnStatCsv">↓ CSV</button>
+          </div>
+          <div class="col stat-box border-end">
+            <div class="stat-label">Report</div>
+            <button class="stat-action-btn stat-action-pdf" id="btnStatPdf">↓ PDF</button>
+          </div>
+          <div class="col stat-box border-end">
+            <div class="stat-label">Massimo</div>
+            <div class="stat-value" id="statMax">—</div>
+          </div>
+          <div class="col stat-box">
+            <div class="stat-label">Con prezzo</div>
+            <div class="stat-value" id="statCount">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CLIENT FILTERS PANEL -->
+    <div id="clientFiltersPanel" class="d-none mb-3">
+      <div class="amr-card py-3">
+        <div class="row g-3 align-items-center">
+          <div class="col-12 col-sm-auto">
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" id="excludeNoPrice" />
+              <label class="form-check-label fw-semibold small" for="excludeNoPrice">Solo con prezzo</label>
+            </div>
+          </div>
+          <div class="col-12 col-sm">
+            <div class="fw-semibold small text-muted mb-2">Fascia prezzo</div>
+            <div id="prezzoSlider" class="mb-1"></div>
+            <div class="d-flex justify-content-between small text-muted mt-1">
+              <span id="sliderLabelMin"></span>
+              <span id="sliderLabelMax"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RISULTATI -->
+    <div id="resultsSection" class="d-none">
+
+      <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
+        <div>
+          <h6 id="resultsCount" class="mb-1 fw-semibold"></h6>
+          <div id="fonteBreakdown" class="text-muted small"></div>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <div id="fonteChips" class="d-flex gap-2">
+            <button class="amr-chip amr-chip-subito active" data-fonte="subito">Subito.it</button>
+            <button class="amr-chip amr-chip-autoscout active" data-fonte="autoscout">Autoscout24</button>
+            <button class="amr-chip amr-chip-moto active" data-fonte="moto">Moto.it</button>
+          </div>
+          <select class="form-select form-select-sm w-auto" id="sortSelect">
+            <option value="prezzo_asc">Prezzo crescente</option>
+            <option value="prezzo_desc">Prezzo decrescente</option>
+            <option value="anno_desc">Anno più recente</option>
+            <option value="km_asc">Km minori</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="resultsGrid" class="row g-3"></div>
+
+      <div class="text-center mt-5">
+        <button class="btn btn-outline-secondary btn-sm" id="backToSearch">Torna alla ricerca</button>
+      </div>
+    </div>
+
+    <!-- NESSUN RISULTATO -->
+    <div id="noResults" class="text-center text-muted d-none py-5">
+      <p class="fs-5">Nessun risultato trovato.</p>
+      <p class="small">Prova a modificare i filtri o selezionare una regione più ampia.</p>
+      <button class="btn btn-outline-secondary btn-sm mt-2" onclick="window.scrollTo({top:0,behavior:'smooth'})">Modifica ricerca</button>
+    </div>
+
+  </main>
+
+  <footer class="amr-footer">
+    <div class="container text-center">
+      <small>Auto Moto Radar — uso personale</small>
+    </div>
+  </footer>
+
+  <!-- BOTTONE FLOTTANTE SALVATI -->
+  <button id="btnSalvati" style="display:none"
+    class="amr-btn-salvati position-fixed bottom-0 end-0 m-3 rounded-pill shadow d-flex align-items-center gap-2"
+    data-bs-toggle="offcanvas" data-bs-target="#offcanvasSalvati">
+    Salvati <span class="badge bg-white text-primary" id="salvatiCount">0</span>
+  </button>
+
+  <!-- OFFCANVAS SALVATI -->
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasSalvati"
+       aria-labelledby="offcanvasSalvatiLabel" style="width:360px">
+    <div class="offcanvas-header border-bottom">
+      <h5 class="offcanvas-title fw-semibold" id="offcanvasSalvatiLabel">Annunci salvati</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Chiudi"></button>
+    </div>
+    <div class="offcanvas-body p-0">
+      <div id="salvatiList" class="p-3"></div>
+    </div>
+  </div>
+
+  <!-- MODAL CONFRONTO -->
+  <div class="modal fade" id="confrontoModal" tabindex="-1" aria-labelledby="confrontoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header amr-modal-header">
+          <h5 class="modal-title fw-semibold" id="confrontoModalLabel">Confronto annunci</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+        </div>
+        <div class="modal-body" id="confrontoBody"></div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Chiudi</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/nouislider@15.8.1/dist/nouislider.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="brands.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

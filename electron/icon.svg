@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Sfondo con gradient blu -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e40af"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <linearGradient id="banana" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Sfondo arrotondato -->
+  <rect x="0" y="0" width="1024" height="1024" rx="230" ry="230" fill="url(#bg)"/>
+
+  <!-- Corpo banana (arco) -->
+  <path d="M 210 720
+           C 210 400, 400 210, 720 210
+           L 820 210
+           C 820 210, 820 280, 780 350
+           C 720 460, 600 560, 480 640
+           C 380 710, 290 760, 210 780
+           Z"
+        fill="url(#banana)" stroke="#78350f" stroke-width="14"/>
+
+  <!-- Punte marroni -->
+  <circle cx="212" cy="778" r="28" fill="#78350f"/>
+  <path d="M 800 180 L 830 220 L 790 240 Z" fill="#78350f"/>
+
+  <!-- Cartellino prezzo -->
+  <g transform="translate(620 640) rotate(-15)">
+    <path d="M 0 0 L 280 0 L 340 60 L 280 120 L 0 120 Z" fill="#ef4444" stroke="#7f1d1d" stroke-width="8"/>
+    <circle cx="300" cy="60" r="12" fill="#ffffff"/>
+    <text x="40" y="85" font-family="Arial Black, sans-serif" font-size="64" fill="#ffffff" font-weight="900">€</text>
+    <text x="100" y="85" font-family="Arial Black, sans-serif" font-size="48" fill="#ffffff" font-weight="900">auto</text>
+  </g>
+</svg>

@@ -1,0 +1,11 @@
+node_modules/
+.env
+.DS_Store
+dist/
+pw-browsers/
+.claude/
+._*
+
+# Artefatti build icona (rigenerabili da electron/icon.svg)
+electron/icon.png
+electron/icon.iconset/
