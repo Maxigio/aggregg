@@ -5,7 +5,7 @@
   "main": "electron/main.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Maxigio/AGG.git"
+    "url": "https://github.com/Maxigio/aggregg.git"
   },
   "scripts": {
     "start": "node backend/server.js",
@@ -38,7 +38,7 @@
       {
         "provider": "github",
         "owner": "Maxigio",
-        "repo": "AGG"
+        "repo": "aggregg"
       }
     ],
     "mac": {

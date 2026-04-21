@@ -20,7 +20,7 @@ const path = require('path');
 const os   = require('os');
 
 const GITHUB_OWNER = 'Maxigio';
-const GITHUB_REPO  = 'AGG';
+const GITHUB_REPO  = 'aggregg';
 const CHECK_DELAY_MS = 10_000;
 
 // Confronto versione SemVer semplice (x.y.z)

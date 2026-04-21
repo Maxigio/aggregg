@@ -120,8 +120,24 @@ function resolveChromiumExecutable(pwBrowsersRoot) {
     return path.join(base, 'chrome-win64', 'chrome.exe');
   }
   if (os === 'darwin') {
-    const dir = arch === 'arm64' ? 'chrome-mac-arm64' : 'chrome-mac';
-    return path.join(base, dir, 'Chromium.app', 'Contents', 'MacOS', 'Chromium');
+    // Nuovo formato Chrome for Testing (Playwright >= rev 1217):
+    //   chrome-mac-x64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing
+    // Vecchio formato Chromium (rev < 1217):
+    //   chrome-mac/Chromium.app/Contents/MacOS/Chromium
+    const candidates = arch === 'arm64'
+      ? [
+          ['chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'],
+          ['chrome-mac-arm64', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'],
+        ]
+      : [
+          ['chrome-mac-x64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'],
+          ['chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'],
+        ];
+    for (const parts of candidates) {
+      const exe = path.join(base, ...parts);
+      if (fs.existsSync(exe)) return exe;
+    }
+    throw new Error(`Chromium non trovato in ${base} (arch: ${arch})`);
   }
   if (os === 'linux') {
     return path.join(base, 'chrome-linux', 'chrome');
