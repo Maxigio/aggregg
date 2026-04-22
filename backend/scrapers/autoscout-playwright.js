@@ -23,8 +23,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // In un bundle Electron (macOS/Windows) le risorse sono in process.resourcesPath/pw-browsers.
 // In dev (senza bundle) usiamo la cartella locale al repo.
-const PW_BROWSERS = process.resourcesPath && require('fs').existsSync(path.join(process.resourcesPath, 'pw-browsers'))
-  ? path.join(process.resourcesPath, 'pw-browsers')
+const _respath = process.env.RESOURCES_PATH || process.resourcesPath;
+const PW_BROWSERS = _respath && require('fs').existsSync(path.join(_respath, 'pw-browsers'))
+  ? path.join(_respath, 'pw-browsers')
   : path.join(__dirname, '../../pw-browsers');
 process.env.PLAYWRIGHT_BROWSERS_PATH = PW_BROWSERS;
 

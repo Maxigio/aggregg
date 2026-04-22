@@ -12,7 +12,7 @@ const PORT = 47321;
 function startServer() {
   const serverPath = path.join(__dirname, '../backend/server.js');
   serverProcess = fork(serverPath, [], {
-    env: { ...process.env, PORT: String(PORT) },
+    env: { ...process.env, PORT: String(PORT), RESOURCES_PATH: process.resourcesPath },
   });
   serverProcess.on('error', err => console.error('[AMR Server]', err.message));
 }

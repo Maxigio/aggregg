@@ -39,8 +39,9 @@ function kmMaxToKey(kmMax) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ─── Path Chromium cross-platform (dev vs bundle Electron) ───────────────────
-const PW_BROWSERS = process.resourcesPath && require('fs').existsSync(path.join(process.resourcesPath, 'pw-browsers'))
-  ? path.join(process.resourcesPath, 'pw-browsers')
+const _respath = process.env.RESOURCES_PATH || process.resourcesPath;
+const PW_BROWSERS = _respath && require('fs').existsSync(path.join(_respath, 'pw-browsers'))
+  ? path.join(_respath, 'pw-browsers')
   : path.join(__dirname, '../../pw-browsers');
 process.env.PLAYWRIGHT_BROWSERS_PATH = PW_BROWSERS;
 

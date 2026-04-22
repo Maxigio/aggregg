@@ -1,6 +1,6 @@
 {
   "name": "automotoradar",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Comparatore prezzi auto e moto usate",
   "main": "electron/main.js",
   "repository": {
