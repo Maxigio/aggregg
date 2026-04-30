@@ -11,8 +11,11 @@
     "start": "node backend/server.js",
     "electron": "electron .",
     "prepare:mac": "node scripts/prepare-mac-chromium.js",
+    "prepare:mac-arm64": "node scripts/prepare-mac-chromium-arm64.js",
     "build:mac": "npm run prepare:mac && electron-builder --mac --x64",
+    "build:mac-arm64": "npm run prepare:mac-arm64 && electron-builder --mac --arm64",
     "dist:mac": "electron-builder --mac --x64",
+    "dist:mac-arm64": "electron-builder --mac --arm64",
     "dist:win": "electron-builder --win --x64",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
