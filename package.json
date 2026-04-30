@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node backend/server.js",
     "electron": "electron .",
+    "postinstall": "node scripts/bundle-vendor.js",
     "prepare:mac": "node scripts/prepare-mac-chromium.js",
     "prepare:mac-arm64": "node scripts/prepare-mac-chromium-arm64.js",
     "build:mac": "npm run prepare:mac && electron-builder --mac --x64",
@@ -82,6 +83,11 @@
       "node_modules/**",
       "!node_modules/electron",
       "!node_modules/electron-builder",
+      "!node_modules/bootstrap",
+      "!node_modules/nouislider",
+      "!node_modules/tom-select",
+      "!node_modules/jspdf",
+      "!node_modules/jspdf-autotable",
       "data/**",
       "!pw-browsers/**"
     ]
@@ -98,8 +104,13 @@
     "playwright": "^1.59.1"
   },
   "devDependencies": {
+    "bootstrap": "^5.3.3",
     "electron": "^35.0.0",
     "electron-builder": "^25.0.0",
-    "electron-updater": "^6.3.0"
+    "electron-updater": "^6.3.0",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.2",
+    "nouislider": "^15.8.1",
+    "tom-select": "^2.4.3"
   }
 }

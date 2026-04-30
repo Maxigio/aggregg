@@ -9,3 +9,6 @@ pw-browsers/
 # Artefatti build icona (rigenerabili da electron/icon.svg)
 electron/icon.png
 electron/icon.iconset/
+
+# Librerie frontend vendor (generate da scripts/bundle-vendor.js via postinstall)
+frontend/vendor/
