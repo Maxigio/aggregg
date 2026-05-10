@@ -201,10 +201,6 @@ app.get('/api/search', async (req, res) => {
   const brandOnAutoscout = Boolean(asMeta);
   const brandOnMotoIt    = Boolean(brandEntry?.motoit?.brandSlug);
 
-  const modelSpecified   = Boolean(params.modello);
-  const modelOnAutoscout = modelEntry ? (modelEntry.sites || []).includes('autoscout') : Boolean(params.mmmvAutoscout);
-  const modelOnMotoIt    = modelEntry ? (modelEntry.sites || []).includes('motoit')    : true;
-
   // Passa mmmv AS24 al scraper: livello modello > livello brand.
   // Filtro regione: gestito lato scraper con zip=<Region> (Italy)+zipr+lat/lon
   // sul path /lst?mmmv= (verificato contro l'UI AS24; non servono slug per-modello).
@@ -212,13 +208,27 @@ app.get('/api/search', async (req, res) => {
     params.autoscoutMmmv = params.mmmvAutoscout || `${asMeta.makeId}|||`;
   }
 
-  // Subito: sempre tentato — la ricerca a testo libero ?q= funziona per qualsiasi marca/modello.
-  // Skippa AS24 se brand non in catalogo o modello non su AS24 (modello specificato).
-  const skipAutoscout = !brandOnAutoscout || (modelSpecified && modelEntry && !modelOnAutoscout);
-  // Skippa Moto.it se il brand non è nel catalogo motoit (niente fallback → niente URL fallaci).
-  const skipMotoIt    = params.tipo !== 'moto'
-                        || !brandOnMotoIt
-                        || (modelSpecified && modelEntry && !modelOnMotoIt);
+  // ── Skip tollerante (P6) ──────────────────────────────────────────────────
+  // L'app interroga ogni fonte se il BRAND è coperto da quella fonte. Non skippa
+  // AS24 / Moto.it solo perché il `sites` del modello specifico non li include:
+  // il flag `sites` era derivato dal catalogo statico al build (assenza del
+  // metadata ≠ assenza degli annunci). Il post-filter sul titolo per le moto
+  // (riga ~280) garantisce che gli annunci di altri modelli vengano scartati.
+  //
+  // Auto: 100% dei modelli ha sites=[subito,autoscout], quindi la nuova regola
+  // non cambia nulla.
+  // Moto: 90% dei modelli aveva sites monco → ora coperti automaticamente.
+  const skipAutoscout = !brandOnAutoscout;
+  const skipMotoIt    = params.tipo !== 'moto' || !brandOnMotoIt;
+
+  // Log informativo quando interroghiamo AS24/MotoIt a livello brand-only
+  // (fallback che si appoggia al post-filter sul titolo).
+  if (params.modello && brandOnAutoscout && !params.mmmvAutoscout) {
+    console.log(`[server] AS24 brand-only fallback per "${params.marca} ${params.modello}" (mmmv specifico assente)`);
+  }
+  if (params.modello && params.tipo === 'moto' && brandOnMotoIt && !params.motoitModelSlug) {
+    console.log(`[server] Moto.it brand-only fallback per "${params.marca} ${params.modello}" (slug specifico assente)`);
+  }
 
   // Subito ha wrapper dedicato per propagare 'needs_bootstrap' al frontend
   const [subitoRes, asItems, motoItems] = await Promise.all([
