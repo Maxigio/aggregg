@@ -1,5 +1,6 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, net } = require('electron');
 const path = require('path');
+const http = require('http');
 const { fork } = require('child_process');
 const { scheduleUpdateCheck } = require('./auto-update');
 
@@ -23,7 +24,32 @@ function startServer() {
   serverProcess.on('error', err => console.error('[AMR Server]', err.message));
 }
 
-function createWindow() {
+// Polling: aspetta che il server Express risponda su /api/subito/status (endpoint
+// leggero che non richiede browser pronto). Un setTimeout fisso era troppo
+// fragile su Mac lenti (papà vedeva schermata bianca con backend non ancora
+// avviato; refresh manuale dopo qualche secondo la mostrava). Polling intelligente
+// → loadURL avviene esattamente quando il backend è up, indipendentemente dal Mac.
+function waitForBackend(maxSeconds = 60) {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const tryOnce = () => {
+      const req = http.get({ host: 'localhost', port: PORT, path: '/api/subito/status', timeout: 1500 }, res => {
+        res.resume();
+        if (res.statusCode === 200) return resolve(true);
+        if (Date.now() - started >= maxSeconds * 1000) return resolve(false);
+        setTimeout(tryOnce, 250);
+      });
+      req.on('error', () => {
+        if (Date.now() - started >= maxSeconds * 1000) return resolve(false);
+        setTimeout(tryOnce, 250);
+      });
+      req.on('timeout', () => { req.destroy(); });
+    };
+    tryOnce();
+  });
+}
+
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width:     1280,
     height:    820,
@@ -38,12 +64,42 @@ function createWindow() {
     show: false, // mostra solo dopo che la pagina è carica
   });
 
-  // Aspetta che il server Express sia pronto, poi carica la UI
-  setTimeout(() => {
-    mainWindow.loadURL(`http://localhost:${PORT}`);
-  }, 1200);
+  // Mostra subito una splash inline mentre aspettiamo il backend.
+  // (data URL con HTML statico → niente file extra da distribuire.)
+  const splashHtml = `data:text/html;charset=utf-8,${encodeURIComponent(`
+    <html><head><style>
+      body { margin:0; height:100vh; display:flex; align-items:center; justify-content:center;
+             background:#f1f5f9; font-family:-apple-system,BlinkMacSystemFont,sans-serif; color:#475569; }
+      .box { text-align:center; }
+      .spinner { width:32px; height:32px; border:3px solid #cbd5e1; border-top-color:#1e40af;
+                 border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px; }
+      @keyframes spin { to { transform:rotate(360deg); } }
+      h2 { font-size:1.05rem; font-weight:500; margin:0; }
+    </style></head><body>
+      <div class="box"><div class="spinner"></div><h2>Avvio Auto Moto Radar…</h2></div>
+    </body></html>
+  `)}`;
+  mainWindow.loadURL(splashHtml);
+  mainWindow.show();  // splash visibile da subito
 
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  // Aspetta che il backend sia up (max 60s) prima di caricare la UI vera
+  const ready = await waitForBackend();
+  if (ready) {
+    mainWindow.loadURL(`http://localhost:${PORT}`);
+  } else {
+    // Fallback: mostra un messaggio di errore comprensibile invece di schermata bianca
+    const errHtml = `data:text/html;charset=utf-8,${encodeURIComponent(`
+      <html><head><style>
+        body { margin:0; padding:40px; font-family:-apple-system,sans-serif; color:#1e293b; background:#f1f5f9; }
+        h1 { color:#dc2626; } code { background:#e2e8f0; padding:2px 6px; border-radius:4px; }
+      </style></head><body>
+        <h1>⚠️ Il backend non si è avviato</h1>
+        <p>L'applicazione non è riuscita a connettersi al motore interno entro 60 secondi.</p>
+        <p>Prova a chiudere completamente l'app (<code>⌘ + Q</code>) e riaprirla. Se il problema persiste, contatta lo sviluppatore.</p>
+      </body></html>
+    `)}`;
+    mainWindow.loadURL(errHtml);
+  }
 
   // Link esterni (annunci) si aprono nel browser di sistema, non in Electron
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -52,7 +108,7 @@ function createWindow() {
   });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith(`http://localhost:${PORT}`)) {
+    if (!url.startsWith(`http://localhost:${PORT}`) && !url.startsWith('data:')) {
       event.preventDefault();
       shell.openExternal(url);
     }

@@ -377,16 +377,24 @@ async function runSubitoBootstrap() {
     if (data.ok) {
       hideBootstrapBanner();
       showError(''); // clear
-      // Aggiorna la pillola immediatamente
       fetchSubitoStatus();
-      // Notifica positiva temporanea
       const note = document.createElement('div');
       note.className = 'alert alert-success';
-      note.textContent = 'Sessione Subito aggiornata. Puoi rilanciare la ricerca.';
+      const hours = data.expiresInHours ? ` (valida ~${data.expiresInHours} ore)` : '';
+      note.textContent = `Sessione Subito aggiornata${hours}. Puoi rilanciare la ricerca.`;
       statusBox.appendChild(note);
-      setTimeout(() => note.remove(), 5000);
+      setTimeout(() => note.remove(), 6000);
     } else {
-      showError(`Bootstrap Subito fallito: ${data.reason || 'errore sconosciuto'}. Riprova.`);
+      // Messaggio dettagliato per aiutare l'utente a capire cosa fare.
+      const reasonMap = {
+        window_closed:        'Hai chiuso la finestra Chrome prima del completamento.',
+        timeout:              'Tempo scaduto (5 minuti): il CAPTCHA non è stato completato.',
+        chrome_launch_failed: 'Impossibile aprire Chrome. Riprova o contatta lo sviluppatore.',
+        error:                'Errore tecnico durante il bootstrap.',
+      };
+      const reasonText = reasonMap[data.reason] || `Errore: ${data.reason || 'sconosciuto'}`;
+      const hint       = data.hint ? ` ${data.hint}` : '';
+      showError(`Bootstrap Subito fallito. ${reasonText}${hint}`);
     }
   } catch (err) {
     showError('Errore comunicazione con il server durante il bootstrap.');
