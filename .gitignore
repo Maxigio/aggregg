@@ -12,3 +12,7 @@ electron/icon.iconset/
 
 # Librerie frontend vendor (generate da scripts/bundle-vendor.js via postinstall)
 frontend/vendor/
+
+# Session storage Subito (bootstrap interattivo, contiene cookie DataDome)
+data/.subito-session.json
+data/models.json.bak

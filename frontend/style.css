@@ -74,6 +74,35 @@ body {
   font-weight: 400;
 }
 
+/* ─── Pillola di stato Subito (nell'header) ───────────────────────────────── */
+.subito-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.85);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+.subito-pill:hover { background: rgba(255,255,255,0.12); }
+.subito-pill-dot   { font-size: 0.7rem; line-height: 1; }
+.subito-pill-ok        { color: #86efac; border-color: rgba(34,197,94,0.4); }
+.subito-pill-warn      { color: #fde047; border-color: rgba(234,179,8,0.45); }
+.subito-pill-blocked   { color: #fca5a5; border-color: rgba(239,68,68,0.5); background: rgba(239,68,68,0.12); }
+.subito-pill-unknown   { color: rgba(255,255,255,0.55); }
+.subito-pill-busy      { opacity: 0.7; pointer-events: none; }
+.subito-pill-busy .subito-pill-dot { animation: subitoPulse 1.2s ease-in-out infinite; }
+@keyframes subitoPulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+
 /* ─── Cards generiche ─────────────────────────────────────────────────────── */
 .amr-card {
   background: var(--white);

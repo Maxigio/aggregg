@@ -12,7 +12,13 @@ const PORT = 47321;
 function startServer() {
   const serverPath = path.join(__dirname, '../backend/server.js');
   serverProcess = fork(serverPath, [], {
-    env: { ...process.env, PORT: String(PORT), RESOURCES_PATH: process.resourcesPath },
+    env: {
+      ...process.env,
+      PORT:           String(PORT),
+      RESOURCES_PATH: process.resourcesPath,
+      // Path scrivibile per persistenza session Subito (cookie DataDome)
+      USER_DATA_PATH: app.getPath('userData'),
+    },
   });
   serverProcess.on('error', err => console.error('[AMR Server]', err.message));
 }

@@ -3,8 +3,32 @@ const path = require('path');
 const scrapeSubito    = require('./scrapers/subito-playwright');
 const scrapeAutoscout = require('./scrapers/autoscout-playwright');
 const scrapeMotoIt    = require('./scrapers/motoit');
+const subitoSession   = require('./scrapers/subito-session');
+const { runBootstrap } = require('./scrapers/subito-bootstrap');
 const province        = require('../data/province.json');
 const modelsData      = require('../data/models.json');
+
+const { SubitoBlockedError, keepAliveSubito } = scrapeSubito;
+
+// Auto-refresh: keep-alive periodico a Subito per estendere il cookie DataDome
+// finché l'app resta aperta. Riduce il bootstrap manuale a "quasi-mai".
+//   - INTERVAL: ogni 15 minuti (tipico TTL DataDome è 24h, ma DataDome estende
+//     spesso il cookie ad ogni request valida — 15 min è abbondante per stare
+//     dentro qualunque finestra ragionevole).
+//   - Solo se esiste già una session (no point chiamare keep-alive senza state).
+const KEEP_ALIVE_INTERVAL_MS = 15 * 60 * 1000;
+let keepAliveTimer = null;
+function startKeepAlive() {
+  if (keepAliveTimer) return;
+  keepAliveTimer = setInterval(async () => {
+    const state = subitoSession.loadStorageState();
+    if (!state) return;  // niente da rinfrescare
+    if (subitoSession.isSubitoBlocked()) return;  // già bloccato, l'utente farà bootstrap
+    const res = await keepAliveSubito();
+    console.log('[keep-alive] ' + (res.ok ? 'OK' : 'FAIL ' + res.reason));
+  }, KEEP_ALIVE_INTERVAL_MS);
+  keepAliveTimer.unref?.();
+}
 
 /** Normalizza stringa: solo lettere e cifre minuscole (per matching fuzzy) */
 const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -30,7 +54,6 @@ app.get('/api/brands', (req, res) => {
     .map(([nome, b]) => ({
       nome,
       sites:     b.sites || [],
-      subito:    b.subito    || null,
       autoscout: b.autoscout || null,
     }))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'it', { sensitivity: 'base' }));
@@ -47,20 +70,18 @@ app.get('/api/models', (req, res) => {
     return res.status(400).json({ error: 'marca obbligatoria' });
   }
   const entry = modelsData[tipo]?.[marca.trim()];
-  if (!entry) return res.json({ modelli: [], brandKey: null, sites: [] });
+  if (!entry) return res.json({ modelli: [], sites: [] });
 
-  // entry.models è sempre un array nel nuovo schema unificato (sia auto sia moto)
+  // entry.models è sempre un array nel nuovo schema unificato (sia auto sia moto).
+  // Subito usa solo ?q=marca+modello, niente più slug/key per Subito nel payload.
   const modelli = (entry.models || []).map(m => ({
     nome:           m.nome,
     sites:          m.sites || [],
-    slugSubito:     m.slugSubito     || '',
-    subitoKey:      m.subitoKey      || '',
     mmmvAutoscout:  m.mmmvAutoscout  || '',
     kindAS:         m.kindAS         || '',
     slugMotoIt:     m.slugMotoIt     || '',
   }));
-  const brandKey = entry.subito?.brandKey || null;
-  res.json({ modelli, brandKey, sites: entry.sites || [] });
+  res.json({ modelli, sites: entry.sites || [] });
 });
 
 // Set di regioni valide (derivato da province.json)
@@ -70,9 +91,7 @@ const REGIONI_VALIDE = new Set(Object.values(province).map(p => p.regione));
 function parseSearchParams(query) {
   const {
     tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMax, regione,
-    slugSubito, slugAutoscout, slugMoto, mmmvAutoscout, modelloSlugSubito, modelloSlugMoto, slugMotoAs,
-    motoBrandKey, motoModelKey,
-    motoitBrandSlug, motoitModelSlug,
+    mmmvAutoscout, motoitBrandSlug, motoitModelSlug,
   } = query;
 
   const errors = [];
@@ -86,28 +105,22 @@ function parseSearchParams(query) {
     return isNaN(n) || n < 0 ? null : n;
   };
 
+  // Subito non riceve più metadata per sito: cerca sempre con ?q=marca+modello.
+  // Autoscout24 usa mmmvAutoscout, Moto.it usa motoitBrandSlug/motoitModelSlug.
   return {
     params: {
-      tipo:          tipo.trim(),
-      marca:         marca.trim(),
-      modello:       modello ? modello.trim() : '',
-      regione:       regione ? regione.trim() : '',
-      prezzoMin:     toInt(prezzoMin),
-      prezzoMax:     toInt(prezzoMax),
-      annoMin:       toInt(annoMin),
-      annoMax:       toInt(annoMax),
-      kmMax:         toInt(kmMax),
-      slugSubito:         slugSubito         || null,
-      slugAutoscout:      slugAutoscout      || null,
-      slugMoto:           slugMoto           || null,
-      mmmvAutoscout:      mmmvAutoscout      || null,
-      modelloSlugSubito:  modelloSlugSubito  || null,
-      modelloSlugMoto:    modelloSlugMoto    || null,
-      slugMotoAs:         slugMotoAs         || null,
-      motoBrandKey:       motoBrandKey       || null,
-      motoModelKey:       motoModelKey       || null,
-      motoitBrandSlug:    motoitBrandSlug    || null,
-      motoitModelSlug:    motoitModelSlug    || null,
+      tipo:             tipo.trim(),
+      marca:            marca.trim(),
+      modello:          modello ? modello.trim() : '',
+      regione:          regione ? regione.trim() : '',
+      prezzoMin:        toInt(prezzoMin),
+      prezzoMax:        toInt(prezzoMax),
+      annoMin:          toInt(annoMin),
+      annoMax:          toInt(annoMax),
+      kmMax:            toInt(kmMax),
+      mmmvAutoscout:    mmmvAutoscout    || null,
+      motoitBrandSlug:  motoitBrandSlug  || null,
+      motoitModelSlug:  motoitModelSlug  || null,
     }
   };
 }
@@ -125,6 +138,24 @@ async function withTimeout(promise, ms, nomeSito) {
   }
 }
 
+// Wrapper Subito-specifico: distingue fra bloccato (CAPTCHA/403 → needs_bootstrap)
+// e altri errori (timeout/parsing → 'error'). Ritorna { items, status }.
+async function runSubito(params, ms) {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Timeout su Subito.it')), ms)
+  );
+  try {
+    const items = await Promise.race([scrapeSubito(params), timeout]);
+    return { items, status: 'ok' };
+  } catch (err) {
+    if (err instanceof SubitoBlockedError) {
+      return { items: [], status: 'needs_bootstrap', reason: err.reason };
+    }
+    console.warn('[WARN] ' + err.message);
+    return { items: [], status: 'error', reason: err.message };
+  }
+}
+
 app.get('/api/search', async (req, res) => {
   const parsed = parseSearchParams(req.query);
   if (parsed.errors) {
@@ -134,38 +165,29 @@ app.get('/api/search', async (req, res) => {
   const { params } = parsed;
 
   // ── Risoluzione metadata per-sito dal catalogo unificato ──────────────────
-  // La verità su "brand/modello è su AS24 / Subito / MotoIt?" sta in data/models.json.
-  // Il server risolve autonomamente i metadata a partire da (marca, modello) —
-  // il client può anche non passare mmmv/slug, e il server li deriva dal DB.
+  // Subito: niente metadata da risolvere — usa sempre ?q=marca+modello.
+  // Autoscout24: serve mmmvAutoscout (livello modello, fallback livello brand).
+  // Moto.it: servono motoitBrandSlug + motoitModelSlug (slug-based, niente fallback).
   const brandEntry = modelsData[params.tipo]?.[params.marca] || null;
   const asMeta     = brandEntry?.autoscout || null;
-  const subMeta    = brandEntry?.subito    || null;
 
   // Match modello tramite nome (tolleranza minima: trim + compare diretto)
   const modelEntry = params.modello && brandEntry?.models
     ? brandEntry.models.find(m => m.nome === params.modello.trim())
     : null;
 
-  // Se il client non ha passato i campi metadata, li deriviamo dal DB.
   if (modelEntry) {
-    if (!params.mmmvAutoscout     && modelEntry.mmmvAutoscout) params.mmmvAutoscout     = modelEntry.mmmvAutoscout;
-    if (!params.modelloSlugSubito && modelEntry.slugSubito)    params.modelloSlugSubito = modelEntry.slugSubito;
-    if (!params.motoModelKey      && modelEntry.subitoKey && params.tipo === 'moto') {
-      params.motoModelKey = modelEntry.subitoKey;
-    }
+    if (!params.mmmvAutoscout && modelEntry.mmmvAutoscout) params.mmmvAutoscout = modelEntry.mmmvAutoscout;
     // Submodelli che su AS24 sono collassati sotto un modelId condiviso
     // (es. Ducati Diavel V4 sta in modelId=70147 insieme a Diavel 1260 e Diavel classico).
     // asFilterToken = sottostringa da cercare nel titolo AS24 per isolare il submodello.
     params.asFilterToken = modelEntry.asFilterToken || null;
   }
-  if (brandEntry && params.tipo === 'moto' && !params.motoBrandKey && subMeta?.brandKey) {
-    params.motoBrandKey = subMeta.brandKey;
-  }
 
   // ── Slug Moto.it (SOLO da catalogo esplicito, niente fallback fallaci) ────
   // Moto.it espone filtri via /moto-usate/ricerca?brand=<slugBrand>&model=<slugBrand>|<slugModel>.
   // La verità su presenza brand/modello è in data/models.json (merge del catalogo Moto.it).
-  // NIENTE fallback su slugAS/slugSubito: genererebbero URL fallaci (brand=xxx inesistente
+  // NIENTE fallback su slugAS: genererebbe URL fallaci (brand=xxx inesistente
   // su Moto.it → zero risultati, o peggio risultati diversi da quelli attesi).
   if (params.tipo === 'moto') {
     if (!params.motoitBrandSlug && brandEntry?.motoit?.brandSlug) {
@@ -176,12 +198,10 @@ app.get('/api/search', async (req, res) => {
     }
   }
 
-  const brandOnSubito    = Boolean(subMeta) || !brandEntry; // brand sconosciuto → tentiamo
   const brandOnAutoscout = Boolean(asMeta);
   const brandOnMotoIt    = Boolean(brandEntry?.motoit?.brandSlug);
 
   const modelSpecified   = Boolean(params.modello);
-  const modelOnSubito    = modelEntry ? (modelEntry.sites || []).includes('subito')    : true;
   const modelOnAutoscout = modelEntry ? (modelEntry.sites || []).includes('autoscout') : Boolean(params.mmmvAutoscout);
   const modelOnMotoIt    = modelEntry ? (modelEntry.sites || []).includes('motoit')    : true;
 
@@ -192,27 +212,26 @@ app.get('/api/search', async (req, res) => {
     params.autoscoutMmmv = params.mmmvAutoscout || `${asMeta.makeId}|||`;
   }
 
-  // Skippa siti dove il modello non esiste (D3=a simmetrico su entrambi i siti).
+  // Subito: sempre tentato — la ricerca a testo libero ?q= funziona per qualsiasi marca/modello.
+  // Skippa AS24 se brand non in catalogo o modello non su AS24 (modello specificato).
   const skipAutoscout = !brandOnAutoscout || (modelSpecified && modelEntry && !modelOnAutoscout);
-  const skipSubito    = !brandOnSubito    || (modelSpecified && modelEntry && !modelOnSubito);
   // Skippa Moto.it se il brand non è nel catalogo motoit (niente fallback → niente URL fallaci).
   const skipMotoIt    = params.tipo !== 'moto'
                         || !brandOnMotoIt
                         || (modelSpecified && modelEntry && !modelOnMotoIt);
 
-  const scrapers = [
-    skipSubito
-      ? Promise.resolve([])
-      : withTimeout(scrapeSubito(params),    TIMEOUT_MS, 'Subito.it'),
+  // Subito ha wrapper dedicato per propagare 'needs_bootstrap' al frontend
+  const [subitoRes, asItems, motoItems] = await Promise.all([
+    runSubito(params, TIMEOUT_MS),
     skipAutoscout
       ? Promise.resolve([])
       : withTimeout(scrapeAutoscout(params), TIMEOUT_MS, 'Autoscout24'),
     skipMotoIt
       ? Promise.resolve([])
       : withTimeout(scrapeMotoIt(params), TIMEOUT_MS, 'Moto.it'),
-  ];
+  ]);
 
-  const grezzi = (await Promise.all(scrapers)).flat();
+  const grezzi = [...subitoRes.items, ...asItems, ...motoItems];
 
   // ── Filtro post-scraping ─────────────────────────────────────────────────────
   // Rimuove accenti per confronto robusto (es. "Citroën" → "Citroen")
@@ -234,12 +253,12 @@ app.get('/api/search', async (req, res) => {
     const titoloNorm = norm(r.titolo);
 
     // 1+2. Marca/modello: skip post-filter quando il sito li ha già filtrati server-side.
-    //    - Subito auto:  brand nel path /vendita/auto/{marca}/, modello in /{modello}/
-    //    - Subito moto:  brand via param bb=, modello via param bm= (motoBrandKey/motoModelKey)
-    //    - Autoscout/Moto.it: brand sempre nel path → fidiamoci del sito.
+    //    - Subito (auto+moto): ricerca testuale ?q=marca+modello → titolo già filtrato.
+    //    - Autoscout: brand+modello via mmmv → modelId server-side.
+    //    - Moto.it:   brand+modello via slug nel path/query.
     //    Senza questa eccezione il post-filter scarta annunci validi con titoli "creativi"
     //    (es. "KTM Adventure 1190" cercando "1190 Adventure", o "Giulia TI 2.2" senza "Alfa").
-    const subitoFiltered    = r.fonte === 'subito'    && (params.tipo === 'auto' || params.motoBrandKey);
+    const subitoFiltered    = r.fonte === 'subito';
     const autoscoutFiltered = r.fonte === 'autoscout' && Boolean(params.autoscoutMmmv);
     // Moto.it filtra server-side via ?brand= (quasi sempre presente) o ?model=
     const motoitFiltered    = r.fonte === 'moto'      && Boolean(params.motoitBrandSlug || params.motoitModelSlug);
@@ -251,7 +270,7 @@ app.get('/api/search', async (req, res) => {
     // (Per auto i nomi modello Autoscout sono in inglese "3-Series" e non compaiono nei titoli.)
     // Eccezione: asFilterToken forza il filtro titolo su AS24 anche quando mmmvAutoscout esiste,
     // per isolare submodelli che AS24 colloca sotto un modelId condiviso (es. Diavel V4).
-    const subitoModelFiltered    = r.fonte === 'subito'    && (params.modelloSlugSubito || params.motoModelKey);
+    const subitoModelFiltered    = r.fonte === 'subito'    && Boolean(params.modello);
     const autoscoutModelFiltered = r.fonte === 'autoscout' && Boolean(params.mmmvAutoscout) && !params.asFilterToken;
     // Moto.it filtra per modello quando il client/server ha risolto motoitModelSlug
     const motoitModelFiltered    = r.fonte === 'moto'      && Boolean(params.motoitModelSlug);
@@ -282,7 +301,58 @@ app.get('/api/search', async (req, res) => {
     return true;
   });
 
-  res.json({ risultati, totale: risultati.length });
+  res.json({
+    risultati,
+    totale:       risultati.length,
+    subitoStatus: subitoRes.status,           // 'ok' | 'needs_bootstrap' | 'error'
+    subitoReason: subitoRes.reason || null,   // 'captcha' | '403' | 'no_data' | timeout msg
+  });
+});
+
+// ─── Subito session bootstrap ────────────────────────────────────────────────
+// L'utente clicca "Aggiorna sessione Subito" → questo endpoint apre Chrome
+// non-headless puntato a subito.it; quando l'utente risolve il CAPTCHA, lo
+// storageState viene salvato e le ricerche tornano a funzionare in headless.
+
+let bootstrapInFlight = null;  // promise in corso, evita lanci multipli concorrenti
+
+app.post('/api/subito/bootstrap', express.json(), async (req, res) => {
+  if (bootstrapInFlight) {
+    return res.status(409).json({ ok: false, reason: 'already_in_progress' });
+  }
+  bootstrapInFlight = runBootstrap({
+    onProgress: msg => console.log('[bootstrap] ' + msg),
+  });
+  try {
+    const result = await bootstrapInFlight;
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, reason: 'exception', error: err.message });
+  } finally {
+    bootstrapInFlight = null;
+  }
+});
+
+app.get('/api/subito/status', (req, res) => {
+  const state = subitoSession.loadStorageState();
+  const info  = subitoSession.inspectSession(state);
+  const last  = subitoSession.getLastRefresh();
+  res.json({
+    health:        subitoSession.getSessionHealth(),  // 'ok' | 'expiring_soon' | 'blocked' | 'never_configured'
+    blocked:       subitoSession.isSubitoBlocked(),
+    hasSession:    Boolean(state),
+    hasDataDome:   info.hasDataDome,
+    expiresIn:     info.expiresIn,        // secondi residui o null
+    bootstrapping: Boolean(bootstrapInFlight),
+    lastRefresh:   last.at,               // timestamp ms ultimo keep-alive riuscito (o null)
+    lastRefreshOk: last.ok,               // bool: ultimo tentativo
+  });
+});
+
+// Endpoint per forzare un keep-alive on-demand (es. utente clicca "rinfresca ora")
+app.post('/api/subito/keep-alive', express.json(), async (req, res) => {
+  const result = await keepAliveSubito();
+  res.json(result);
 });
 
 const server = app.listen(PORT, () => {
@@ -300,6 +370,16 @@ const server = app.listen(PORT, () => {
       if (r.status === 'rejected') console.warn(`[prewarm] ${names[i]} KO: ${r.reason?.message || r.reason}`);
       else                         console.log(`[prewarm] ${names[i]} OK`);
     });
+
+    // Boot keep-alive immediato (se c'è già una session) — rinfresca il cookie
+    // all'avvio dell'app, prima che l'utente lanci la prima ricerca.
+    const state = subitoSession.loadStorageState();
+    if (state) {
+      keepAliveSubito().then(r => {
+        console.log('[keep-alive boot] ' + (r.ok ? 'OK' : 'FAIL ' + r.reason));
+      });
+    }
+    startKeepAlive();
   });
 });
 module.exports = server;

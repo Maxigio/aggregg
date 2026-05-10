@@ -22,6 +22,12 @@ const excludeNoPrice     = document.getElementById('excludeNoPrice');
 const prezzoSliderEl     = document.getElementById('prezzoSlider');
 const btnStatCsv         = document.getElementById('btnStatCsv');
 const btnStatPdf         = document.getElementById('btnStatPdf');
+const subitoBanner       = document.getElementById('subitoBootstrapBanner');
+const btnBootstrap       = document.getElementById('btnBootstrapSubito');
+const bootstrapBtnText   = document.getElementById('bootstrapBtnText');
+const bootstrapBtnSpinner = document.getElementById('bootstrapBtnSpinner');
+const subitoPill         = document.getElementById('subitoStatusPill');
+const subitoPillText     = subitoPill?.querySelector('.subito-pill-text');
 
 // ─── Stato ────────────────────────────────────────────────────────────────────
 let currentResults       = [];
@@ -34,10 +40,6 @@ let modelloTomSelect     = null;
 
 // Cache brand list dal server per tipo corrente (con metadata sites)
 const brandCache = { auto: null, moto: null };
-// Mappa nome-brand → entry brands.js (per motoIt slug client-side)
-function brandsJsEntry(tipo, nome) {
-  return (BRANDS[tipo] || []).find(b => b.nome === nome) || null;
-}
 
 const FONTE_LABEL = { subito: 'Subito.it', autoscout: 'Autoscout24', moto: 'Moto.it' };
 
@@ -149,24 +151,14 @@ async function populateMarca(tipo) {
   marcaSelect.innerHTML = '<option value="">Caricamento marche…</option>';
   marcaSelect.disabled = true;
 
-  // Carica dal server (union Subito+AS24) e arricchisce con motoIt da brands.js
+  // Carica dal server: sites già include subito/autoscout/motoit dal catalogo unificato
   if (!brandCache[tipo]) {
     try {
-      const res = await fetch(`/api/brands?tipo=${encodeURIComponent(tipo)}`);
+      const res  = await fetch(`/api/brands?tipo=${encodeURIComponent(tipo)}`);
       const data = await res.json();
-      const jsMap = new Map((BRANDS[tipo] || []).map(b => [b.nome, b]));
-      brandCache[tipo] = (data.brands || []).map(b => {
-        const js = jsMap.get(b.nome);
-        const sites = [...b.sites];
-        if (tipo === 'moto' && js?.motoIt) sites.push('motoit');
-        return { ...b, sites };
-      });
+      brandCache[tipo] = data.brands || [];
     } catch {
-      // Fallback di sicurezza: lista statica brands.js
-      brandCache[tipo] = (BRANDS[tipo] || []).map(b => ({
-        nome:  b.nome,
-        sites: ['subito', 'autoscout', ...(tipo === 'moto' && b.motoIt ? ['motoit'] : [])],
-      }));
+      brandCache[tipo] = [];
     }
   }
 
@@ -205,17 +197,12 @@ function resetModelloSelect(placeholder) {
   modelloTomSelect.disable();
 }
 
-let currentMotoBrandKey = null;
-
 async function loadModelli(tipo, marca) {
   resetModelloSelect('Caricamento modelli...');
-  currentMotoBrandKey = null;
   try {
     const res     = await fetch(`/api/models?tipo=${encodeURIComponent(tipo)}&marca=${encodeURIComponent(marca)}`);
     const data    = await res.json();
     const modelli = data.modelli || [];
-
-    if (tipo === 'moto') currentMotoBrandKey = data.brandKey || null;
 
     modelloTomSelect.clear();
     modelloTomSelect.clearOptions();
@@ -231,11 +218,9 @@ async function loadModelli(tipo, marca) {
     modelli.forEach(m => {
       const label = `${m.nome}${sitesBadge(m.sites || [], tipo)}`;
       modelloTomSelect.addOption({
-        value:       m.nome,
-        text:        label,
-        mmmv:        m.mmmvAutoscout || '',
-        slugSubito:  m.slugSubito    || '',
-        subitoKey:   m.subitoKey     || '',
+        value: m.nome,
+        text:  label,
+        mmmv:  m.mmmvAutoscout || '',
       });
     });
 
@@ -256,15 +241,12 @@ async function doSearch() {
 
   if (!marca) { showError('Seleziona una marca prima di cercare.'); return; }
 
-  // Brand metadata: motoIt slug dal brands.js (client-side); il resto AS24/Subito
-  // viene risolto server-side dal catalogo unificato.
-  const brandJs            = brandsJsEntry(tipo, marca);
-  const brandSitesMeta     = (brandCache[tipo] || []).find(b => b.nome === marca);
-  const modelloNome        = modelloTomSelect?.getValue() || '';
-  const modelloOpt         = modelloNome ? (modelloTomSelect?.options?.[modelloNome] ?? null) : null;
-  const mmmvAutoscout      = modelloOpt?.mmmv       || '';
-  const modelloSlugSubito  = modelloOpt?.slugSubito || '';
-  const motoModelKey       = modelloOpt?.subitoKey  || '';
+  // Tutti i metadata per-sito (mmmv AS24, slug Moto.it) sono risolti server-side
+  // dal catalogo unificato data/models.json. Il client passa solo marca + modello;
+  // Subito cerca con ?q=marca+modello (niente slug per Subito).
+  const modelloNome   = modelloTomSelect?.getValue() || '';
+  const modelloOpt    = modelloNome ? (modelloTomSelect?.options?.[modelloNome] ?? null) : null;
+  const mmmvAutoscout = modelloOpt?.mmmv || '';
 
   const params = {
     tipo, marca,
@@ -277,16 +259,7 @@ async function doSearch() {
   };
 
   if (regioneSelect.value) params.regione = regioneSelect.value;
-
-  // Subito: server-side resolution non ancora in place per slug brand, usiamo brands.js
-  if (brandJs?.subito) params.slugSubito = brandJs.subito;
-  // Moto.it: solo da brands.js (catalogo motoIt ancora in brands.js)
-  if (brandJs?.motoIt) params.slugMoto   = brandJs.motoIt;
-
-  if (mmmvAutoscout)     params.mmmvAutoscout     = mmmvAutoscout;
-  if (modelloSlugSubito) params.modelloSlugSubito = modelloSlugSubito;
-  if (tipo === 'moto' && currentMotoBrandKey) params.motoBrandKey = currentMotoBrandKey;
-  if (tipo === 'moto' && motoModelKey)        params.motoModelKey = motoModelKey;
+  if (mmmvAutoscout)       params.mmmvAutoscout = mmmvAutoscout;
 
   Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });
 
@@ -304,6 +277,12 @@ async function doSearch() {
 
     currentResults = data.risultati || [];
 
+    // Subito bloccato da DataDome → mostra banner + aggiorna pillola
+    if (data.subitoStatus === 'needs_bootstrap') showBootstrapBanner();
+    else                                          hideBootstrapBanner();
+    // La response può aver cambiato lo state lato server (es. sbloccato dopo refresh)
+    fetchSubitoStatus();
+
     initPrezzoSlider(currentResults);
 
     if (!prezzoSliderInstance) renderResults(currentResults);
@@ -318,6 +297,172 @@ async function doSearch() {
     hideLoading();
   }
 }
+
+// ─── Subito session bootstrap (UI) ───────────────────────────────────────────
+function showBootstrapBanner() {
+  statusBox.classList.remove('d-none');
+  subitoBanner.classList.remove('d-none');
+  subitoBanner.classList.add('d-flex');
+}
+function hideBootstrapBanner() {
+  subitoBanner.classList.add('d-none');
+  subitoBanner.classList.remove('d-flex');
+}
+
+async function runSubitoBootstrap() {
+  bootstrapBtnText.textContent = 'Apertura finestra…';
+  bootstrapBtnSpinner.classList.remove('d-none');
+  btnBootstrap.disabled = true;
+
+  try {
+    const res  = await fetch('/api/subito/bootstrap', { method: 'POST' });
+    const data = await res.json();
+
+    if (data.ok) {
+      hideBootstrapBanner();
+      showError(''); // clear
+      // Aggiorna la pillola immediatamente
+      fetchSubitoStatus();
+      // Notifica positiva temporanea
+      const note = document.createElement('div');
+      note.className = 'alert alert-success';
+      note.textContent = 'Sessione Subito aggiornata. Puoi rilanciare la ricerca.';
+      statusBox.appendChild(note);
+      setTimeout(() => note.remove(), 5000);
+    } else {
+      showError(`Bootstrap Subito fallito: ${data.reason || 'errore sconosciuto'}. Riprova.`);
+    }
+  } catch (err) {
+    showError('Errore comunicazione con il server durante il bootstrap.');
+  } finally {
+    bootstrapBtnText.textContent = 'Aggiorna sessione';
+    bootstrapBtnSpinner.classList.add('d-none');
+    btnBootstrap.disabled = false;
+  }
+}
+
+if (btnBootstrap) btnBootstrap.addEventListener('click', runSubitoBootstrap);
+
+// ─── Pillola di stato Subito (sempre visibile nell'header) ───────────────────
+//
+// Stati possibili (campo `health` da /api/subito/status):
+//   - 'never_configured': nessuna sessione → click apre bootstrap
+//   - 'blocked':          sessione scaduta/bloccata → click apre bootstrap
+//   - 'expiring_soon':    cookie residuo < 30 min → click forza keep-alive
+//   - 'ok':               sessione viva → click forza keep-alive (refresh manuale)
+//
+// La pillola viene aggiornata:
+//   - all'avvio dell'app
+//   - dopo ogni ricerca (la response /api/search aggiorna implicitamente lo state)
+//   - ogni 60 secondi via polling
+//   - dopo un bootstrap o un keep-alive on-demand
+
+function fmtExpiry(secs) {
+  if (secs == null) return '';
+  if (secs < 60)        return secs + 's';
+  if (secs < 3600)      return Math.floor(secs / 60) + 'min';
+  if (secs < 86400)     return Math.floor(secs / 3600) + 'h';
+  return Math.floor(secs / 86400) + 'g';
+}
+
+function renderSubitoPill(status) {
+  if (!subitoPill || !subitoPillText) return;
+  // Reset classi colore
+  subitoPill.classList.remove('subito-pill-ok', 'subito-pill-warn', 'subito-pill-blocked', 'subito-pill-unknown');
+
+  if (status?.bootstrapping) {
+    subitoPill.classList.add('subito-pill-warn', 'subito-pill-busy');
+    subitoPillText.textContent = 'Bootstrap in corso…';
+    subitoPill.title = 'Risolvi il CAPTCHA nella finestra Chrome';
+    return;
+  }
+  subitoPill.classList.remove('subito-pill-busy');
+
+  switch (status?.health) {
+    case 'ok': {
+      subitoPill.classList.add('subito-pill-ok');
+      const exp = status.expiresIn != null ? ` (${fmtExpiry(status.expiresIn)})` : '';
+      subitoPillText.textContent = 'Subito attivo' + exp;
+      subitoPill.title = 'Sessione attiva. Click per rinfrescare.';
+      break;
+    }
+    case 'expiring_soon': {
+      subitoPill.classList.add('subito-pill-warn');
+      const exp = status.expiresIn != null ? ` (${fmtExpiry(status.expiresIn)})` : '';
+      subitoPillText.textContent = 'Subito in scadenza' + exp;
+      subitoPill.title = 'Cookie quasi scaduto. Click per rinfrescare.';
+      break;
+    }
+    case 'blocked': {
+      subitoPill.classList.add('subito-pill-blocked');
+      subitoPillText.textContent = 'Subito bloccato';
+      subitoPill.title = 'Sessione non valida. Click per riconfigurare.';
+      break;
+    }
+    case 'never_configured': {
+      subitoPill.classList.add('subito-pill-blocked');
+      subitoPillText.textContent = 'Configura Subito';
+      subitoPill.title = 'Nessuna sessione. Click per configurare.';
+      break;
+    }
+    default: {
+      subitoPill.classList.add('subito-pill-unknown');
+      subitoPillText.textContent = 'Subito —';
+    }
+  }
+}
+
+async function fetchSubitoStatus() {
+  try {
+    const res  = await fetch('/api/subito/status');
+    const data = await res.json();
+    renderSubitoPill(data);
+    // Mostra/nascondi banner in base allo stato (sincronizzato con la pillola)
+    if (data.health === 'blocked' || data.health === 'never_configured') showBootstrapBanner();
+    else                                                                  hideBootstrapBanner();
+    return data;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Click sulla pillola: comportamento basato sullo stato corrente
+async function handlePillClick() {
+  if (!subitoPill || subitoPill.classList.contains('subito-pill-busy')) return;
+  const isBlocked = subitoPill.classList.contains('subito-pill-blocked');
+  if (isBlocked) {
+    runSubitoBootstrap();          // apre Chrome + CAPTCHA
+  } else {
+    runKeepAlive();                // refresh silenzioso del cookie
+  }
+}
+
+async function runKeepAlive() {
+  if (!subitoPill) return;
+  subitoPill.classList.add('subito-pill-busy');
+  const oldText = subitoPillText?.textContent;
+  if (subitoPillText) subitoPillText.textContent = 'Rinfresco…';
+
+  try {
+    const res = await fetch('/api/subito/keep-alive', { method: 'POST' });
+    const data = await res.json();
+    await fetchSubitoStatus();
+    if (!data.ok) {
+      console.warn('keep-alive failed:', data.reason);
+    }
+  } catch (err) {
+    if (subitoPillText && oldText) subitoPillText.textContent = oldText;
+  } finally {
+    subitoPill.classList.remove('subito-pill-busy');
+  }
+}
+
+if (subitoPill) subitoPill.addEventListener('click', handlePillClick);
+
+// Polling: aggiorna la pillola ogni 60s (oltre agli aggiornamenti event-driven)
+const SUBITO_POLL_INTERVAL = 60 * 1000;
+fetchSubitoStatus();
+setInterval(fetchSubitoStatus, SUBITO_POLL_INTERVAL);
 
 // ─── Slider prezzo ────────────────────────────────────────────────────────────
 function initPrezzoSlider(results) {
@@ -639,7 +784,10 @@ function showLoading() {
 
 function hideLoading() {
   loadingState.classList.add('d-none');
-  if (errorState.classList.contains('d-none')) statusBox.classList.add('d-none');
+  // Nascondiamo statusBox solo se nessun altro figlio (errore / banner Subito) è visibile.
+  const errorVisible  = !errorState.classList.contains('d-none');
+  const bannerVisible = !subitoBanner.classList.contains('d-none');
+  if (!errorVisible && !bannerVisible) statusBox.classList.add('d-none');
 }
 
 function showError(msg) {
@@ -651,7 +799,8 @@ function showError(msg) {
 
 function hideError() {
   errorState.classList.add('d-none');
-  statusBox.classList.add('d-none');
+  // Mantieni statusBox aperto se il banner Subito è visibile
+  if (subitoBanner.classList.contains('d-none')) statusBox.classList.add('d-none');
 }
 
 function hideResults() {

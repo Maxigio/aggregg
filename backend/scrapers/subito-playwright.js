@@ -1,17 +1,31 @@
 /**
- * Scraper Subito.it con Playwright (Chrome headless reale).
- * Sostituisce axios + __NEXT_DATA__ con un browser vero per evitare i 403.
+ * Scraper Subito.it con Playwright + storageState persistente.
  *
- * Funzionalità:
- * - Chrome headless con flags anti-rilevamento
- * - Ordinamento per prezzo crescente (sort=p&order=asc)
- * - Fino a 5 pagine sequenziali (~150 risultati) con early-stop se pagina vuota
- * - Browser riusato per tutta la sessione (più veloce dalla seconda ricerca)
+ * Subito è protetto da DataDome (anti-bot). Per superarlo serve un cookie
+ * `datadome` valido — che si ottiene risolvendo manualmente il CAPTCHA una
+ * volta tramite il bootstrap interattivo (vedi subito-bootstrap.js).
+ * Lo scraper:
+ *   - Usa playwright-extra + stealth plugin (anti-fingerprint).
+ *   - Carica storageState (cookie + localStorage) dal file salvato dal bootstrap.
+ *   - Riconosce la CAPTCHA challenge di DataDome e segnala "blocked"
+ *     (l'API server propaga `subitoStatus: 'needs_bootstrap'` al frontend).
+ *   - Salva il storageState dopo ogni ricerca andata a buon fine, per
+ *     mantenere il cookie aggiornato (DataDome a volte refresha la session).
+ *
+ * Funzionalità invariate dal pre-refactor:
+ *   - Costruzione URL con `?q=marca+modello` (auto + moto).
+ *   - Fino a 5 pagine sequenziali (~150 risultati) con early-stop.
+ *   - Browser singleton riusato per la sessione.
  */
 
-const { chromium } = require('playwright');
-const path         = require('path');
-const { toSlug, toInt, resolveChromiumExecutable } = require('./utils');
+const path = require('path');
+const fs   = require('fs');
+const { chromium } = require('playwright-extra');
+const stealth     = require('puppeteer-extra-plugin-stealth')();
+const { toInt, resolveChromiumExecutable } = require('./utils');
+const session = require('./subito-session');
+
+chromium.use(stealth);
 
 // ─── Conversione km raw → codice categorico Subito ───────────────────────────
 // Subito usa indici di categoria per il filtro km, NON valori raw.
@@ -27,9 +41,6 @@ const KM_MAX_TABLE = [
 ];
 
 function kmMaxToKey(kmMax) {
-  // Trova il primo step il cui limite copre il kmMax richiesto.
-  // Arrotondiamo per eccesso così non escludiamo annunci al limite.
-  // Il post-filter in server.js garantisce il rispetto esatto del valore.
   for (const [limit, key] of KM_MAX_TABLE) {
     if (limit >= kmMax) return key;
   }
@@ -40,7 +51,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ─── Path Chromium cross-platform (dev vs bundle Electron) ───────────────────
 const _respath = process.env.RESOURCES_PATH || process.resourcesPath;
-const PW_BROWSERS = _respath && require('fs').existsSync(path.join(_respath, 'pw-browsers'))
+const PW_BROWSERS = _respath && fs.existsSync(path.join(_respath, 'pw-browsers'))
   ? path.join(_respath, 'pw-browsers')
   : path.join(__dirname, '../../pw-browsers');
 process.env.PLAYWRIGHT_BROWSERS_PATH = PW_BROWSERS;
@@ -50,15 +61,13 @@ let browserInstance = null;
 
 async function getBrowser() {
   if (browserInstance) {
-    // Verifica che sia ancora aperto
     try { browserInstance.contexts(); return browserInstance; } catch (_) {}
   }
-  console.log('[Subito-PW] Avvio Chrome headless…');
+  console.log('[Subito-PW] Avvio Chrome headless (stealth)…');
   browserInstance = await chromium.launch({
     executablePath: resolveChromiumExecutable(PW_BROWSERS),
     headless: true,
     args: [
-      '--disable-blink-features=AutomationControlled',
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
@@ -68,40 +77,30 @@ async function getBrowser() {
   return browserInstance;
 }
 
+// ─── Errore speciale: CAPTCHA / 403 → richiede bootstrap ─────────────────────
+class SubitoBlockedError extends Error {
+  constructor(reason) {
+    super('SUBITO_BLOCKED:' + reason);
+    this.name = 'SubitoBlockedError';
+    this.reason = reason; // 'captcha' | '403' | 'no_data'
+  }
+}
+
 // ─── Costruzione URL ──────────────────────────────────────────────────────────
-function buildUrl({ tipo, marca, modello, regione: regioneParam, prezzoMin, prezzoMax, annoMin, annoMax, kmMax, slugSubito, modelloSlugSubito, motoBrandKey, motoModelKey }, page = 1) {
-  const regione = regioneParam || 'italia';
+function buildUrl({ tipo, marca, modello, regione: regioneParam, prezzoMin, prezzoMax, annoMin, annoMax, kmMax }, page = 1) {
+  const regione  = regioneParam || 'italia';
+  const segmento = tipo === 'auto' ? 'auto' : 'moto-e-scooter';
+  const baseUrl  = `https://www.subito.it/annunci-${regione}/vendita/${segmento}/`;
 
   const qs = new URLSearchParams();
-  // Ordinamento per prezzo crescente — formato corretto Subito
+  qs.set('q', modello ? `${marca} ${modello}` : marca);
   qs.set('order', 'priceasc');
-  // Pagina (Subito usa ?o=N, 1-based)
   if (page > 1) qs.set('o', String(page));
-
-  let baseUrl;
-  if (tipo === 'auto') {
-    const marcaSlug   = slugSubito || toSlug(marca);
-    // Usa slugSubito dal database (campo modelloSlugSubito), se disponibile.
-    // Fallback a toSlug(modello) per retrocompatibilità (es. ricerche senza modello nel DB).
-    const modelloSlug = modello ? (modelloSlugSubito || toSlug(modello)) + '/' : '';
-    baseUrl = `https://www.subito.it/annunci-${regione}/vendita/auto/${marcaSlug}/${modelloSlug}`;
-  } else {
-    // Moto: usa chiavi numeriche bb (brand) e bm (model) — stesso sistema di Subito
-    baseUrl = `https://www.subito.it/annunci-${regione}/vendita/moto-e-scooter/`;
-    if (motoBrandKey) {
-      qs.set('bb', motoBrandKey);
-      if (motoModelKey) qs.set('bm', motoModelKey);
-    } else {
-      // fallback testuale se le chiavi non sono disponibili
-      qs.set('q', modello ? `${marca} ${modello}` : marca);
-    }
-  }
 
   if (prezzoMin != null) qs.set('ps', prezzoMin);
   if (prezzoMax != null) qs.set('pe', prezzoMax);
   if (annoMin   != null) qs.set('ys', annoMin);
   if (annoMax   != null) qs.set('ye', annoMax);
-  // km → codice categoria Subito (NON valore raw)
   if (kmMax     != null) qs.set('me', kmMaxToKey(kmMax));
 
   return `${baseUrl}?${qs.toString()}`;
@@ -128,50 +127,49 @@ function parseItem(entry) {
   };
 }
 
+// ─── Detection challenge DataDome ────────────────────────────────────────────
+function detectDataDomeChallenge(html, status) {
+  if (status === 403) return '403';
+  if (!html) return null;
+  // Lo HTML servito da DataDome è ~1KB con iframe a geo.captcha-delivery.com
+  // e payload {host:'geo.captcha-delivery.com'} inline. Marker robusti:
+  if (/geo\.captcha-delivery\.com/i.test(html))                  return 'captcha';
+  if (/<title>subito\.it<\/title>/.test(html) && html.length < 4000 && /captcha/i.test(html)) return 'captcha';
+  return null;
+}
+
 // ─── Fetch singola pagina ─────────────────────────────────────────────────────
-async function fetchPage(browser, url) {
-  const context = await browser.newContext({
-    userAgent:  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    locale:     'it-IT',
-    viewport:   { width: 1280, height: 900 },
-    extraHTTPHeaders: {
-      'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7',
-    },
-  });
-
-  // Nascondi il flag webdriver a livello di script di pagina
-  await context.addInitScript(() => {
-    Object.defineProperty(navigator, 'webdriver', { get: () => false });
-    window.chrome = { runtime: {} };
-  });
-
+async function fetchPage(context, url) {
   const page = await context.newPage();
-
   try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const status = resp?.status();
 
-    // Estrai __NEXT_DATA__ dal DOM (più affidabile che dall'HTML grezzo)
-    const nextDataJson = await page.$eval(
-      '#__NEXT_DATA__',
-      el => el.textContent
-    ).catch(() => null);
+    // Detect blocco DataDome prima di provare a estrarre __NEXT_DATA__
+    const html = await page.content();
+    const blocked = detectDataDomeChallenge(html, status);
+    if (blocked) {
+      throw new SubitoBlockedError(blocked);
+    }
 
+    const nextDataJson = await page.$eval('#__NEXT_DATA__', el => el.textContent).catch(() => null);
     if (!nextDataJson) {
-      console.warn('[Subito-PW] __NEXT_DATA__ non trovato su:', url);
-      return [];
+      // No __NEXT_DATA__ ma neanche CAPTCHA esplicito → trattalo come blocco soft.
+      // Spesso DataDome serve una variante senza marker espliciti in pagina.
+      console.warn('[Subito-PW] __NEXT_DATA__ assente su:', url);
+      throw new SubitoBlockedError('no_data');
     }
 
     const nextData = JSON.parse(nextDataJson);
     const list     = nextData?.props?.pageProps?.initialState?.items?.list;
     if (!Array.isArray(list)) return [];
-
     return list.map(parseItem).filter(Boolean);
   } finally {
-    await context.close();
+    await page.close();
   }
 }
 
-// ─── Rate limiting: minimo 2s tra una ricerca e la successiva ────────────────
+// ─── Rate limiting: minimo 2s tra ricerche ───────────────────────────────────
 let lastSearchAt = 0;
 async function throttle() {
   const wait = 2000 - (Date.now() - lastSearchAt);
@@ -183,37 +181,133 @@ const MAX_PAGES = 5;
 
 // ─── Scraper principale ───────────────────────────────────────────────────────
 async function scrapeSubito(params) {
+  // Se sappiamo già che siamo bloccati e il flag non è stato cleared via bootstrap,
+  // saltiamo subito senza consumare richieste (che incrementerebbero il fingerprint).
+  if (session.isSubitoBlocked()) {
+    throw new SubitoBlockedError('cached_block');
+  }
+
   await throttle();
   const browser = await getBrowser();
 
-  console.log(`[Subito-PW] Pagina 1: ${buildUrl(params, 1)}`);
+  // Carica storageState esistente se disponibile — il cookie DataDome è qui.
+  const storageState = session.loadStorageState();
+  const ctxOpts = {
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    locale:    'it-IT',
+    viewport:  { width: 1280, height: 900 },
+    extraHTTPHeaders: { 'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7' },
+  };
+  if (storageState) ctxOpts.storageState = storageState;
 
-  // Pagine sequenziali con pausa randomizzata: evita pattern rilevabili da Akamai WAF.
-  // Early-stop quando una pagina restituisce 0 annunci (fine risultati raggiunta).
-  const pages = [];
-  for (let p = 1; p <= MAX_PAGES; p++) {
-    const url = buildUrl(params, p);
-    const items = await fetchPage(browser, url);
-    pages.push(items);
-    if (items.length === 0) break;
-    if (p < MAX_PAGES) await sleep(800 + Math.random() * 600);
+  const context = await browser.newContext(ctxOpts);
+  console.log(`[Subito-PW] Pagina 1 (storageState=${storageState ? 'YES' : 'NO'}): ${buildUrl(params, 1)}`);
+
+  try {
+    const pages = [];
+    for (let p = 1; p <= MAX_PAGES; p++) {
+      const url = buildUrl(params, p);
+      const items = await fetchPage(context, url);
+      pages.push(items);
+      if (items.length === 0) break;
+      if (p < MAX_PAGES) await sleep(800 + Math.random() * 600);
+    }
+
+    const visti = new Set();
+    const risultati = pages.flat().filter(r => {
+      if (visti.has(r.url)) return false;
+      visti.add(r.url);
+      return true;
+    });
+
+    // Salva storageState aggiornato (DataDome a volte rinfresca il cookie)
+    try {
+      const fresh = await context.storageState();
+      session.saveStorageState(fresh);
+    } catch (_) { /* non-fatal */ }
+
+    const conteggi = pages.map(p => p.length).join('+');
+    console.log(`[Subito-PW] Totale: ${risultati.length} annunci (${conteggi})`);
+    return risultati;
+  } catch (err) {
+    if (err instanceof SubitoBlockedError) {
+      console.warn('[Subito-PW] Bloccato (' + err.reason + ') — serve bootstrap utente');
+      session.markSubitoBlocked();
+    }
+    throw err;
+  } finally {
+    await context.close();
   }
-
-  // Deduplicazione per URL
-  const visti    = new Set();
-  const risultati = pages.flat().filter(r => {
-    if (visti.has(r.url)) return false;
-    visti.add(r.url);
-    return true;
-  });
-
-  const conteggi = pages.map(p => p.length).join('+');
-  console.log(`[Subito-PW] Totale: ${risultati.length} annunci (${conteggi})`);
-  return risultati;
 }
 
-// Esposto per pre-warm al boot del server (evita primo-lancio in parallelo che
-// saturerebbe il TIMEOUT_MS della prima ricerca).
+// Esposto per pre-warm al boot del server.
 scrapeSubito.warmup = async () => { await getBrowser(); };
 
+/**
+ * Keep-alive: visita una pagina light di Subito usando lo storageState corrente.
+ * - Se la richiesta passa (200 + __NEXT_DATA__) → DataDome ha rinfrescato il cookie,
+ *   salviamo lo storageState aggiornato → la sessione resta viva senza intervento utente.
+ * - Se la richiesta è bloccata (403/CAPTCHA) → segniamo blocked, l'UI lo mostrerà.
+ *
+ * Strategia: usata da setInterval in server.js per estendere indefinitamente
+ * la sessione finché l'utente tiene aperta l'app. Riduce il bootstrap manuale
+ * a "una volta ogni X giorni quando l'app è chiusa abbastanza a lungo".
+ *
+ * Ritorna { ok: bool, reason?: string }.
+ */
+async function keepAliveSubito() {
+  const storageState = session.loadStorageState();
+  if (!storageState) {
+    return { ok: false, reason: 'no_session' };
+  }
+
+  let context;
+  try {
+    const browser = await getBrowser();
+    context = await browser.newContext({
+      storageState,
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      locale:    'it-IT',
+      viewport:  { width: 1280, height: 900 },
+      extraHTTPHeaders: { 'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7' },
+    });
+    const page = await context.newPage();
+
+    // Una pagina lista light (poche risorse) — Subito serve __NEXT_DATA__ ovunque.
+    const url = 'https://www.subito.it/annunci-italia/vendita/auto/?q=auto&order=priceasc';
+    const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const status = resp?.status();
+    const html = await page.content();
+    const blocked = detectDataDomeChallenge(html, status);
+
+    if (blocked) {
+      session.markSubitoBlocked();
+      session.recordRefresh(false);
+      console.warn('[Subito-PW] Keep-alive bloccato (' + blocked + ')');
+      return { ok: false, reason: blocked };
+    }
+
+    const hasNextData = await page.$eval('#__NEXT_DATA__', el => !!el).catch(() => false);
+    if (!hasNextData) {
+      session.recordRefresh(false);
+      return { ok: false, reason: 'no_data' };
+    }
+
+    // Cookie probabilmente rinfrescato — salva storageState aggiornato
+    const fresh = await context.storageState();
+    session.saveStorageState(fresh);
+    session.clearSubitoBlocked();
+    session.recordRefresh(true);
+    return { ok: true };
+  } catch (err) {
+    session.recordRefresh(false);
+    return { ok: false, reason: err.message };
+  } finally {
+    if (context) { try { await context.close(); } catch (_) {} }
+  }
+}
+
 module.exports = scrapeSubito;
+module.exports.buildUrl = buildUrl;
+module.exports.SubitoBlockedError = SubitoBlockedError;
+module.exports.keepAliveSubito    = keepAliveSubito;

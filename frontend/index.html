@@ -27,6 +27,11 @@
           <span class="amr-logo-text">Auto Moto Radar</span>
         </div>
         <p class="amr-tagline">Cerca su Subito.it, Autoscout24 e Moto.it in un colpo solo</p>
+        <!-- Pillola di stato Subito sempre visibile — click per bootstrap/refresh -->
+        <button type="button" id="subitoStatusPill" class="subito-pill subito-pill-unknown" title="Stato sessione Subito" aria-label="Stato Subito">
+          <span class="subito-pill-dot">●</span>
+          <span class="subito-pill-text">Subito —</span>
+        </button>
       </nav>
     </div>
   </header>
@@ -126,6 +131,17 @@
       <div id="errorState" class="alert amr-alert-error d-flex align-items-center justify-content-between d-none" role="alert">
         <span id="errorText"></span>
         <button type="button" class="btn-close ms-3" id="errorClose"></button>
+      </div>
+      <!-- Banner sessione Subito scaduta — apre bootstrap interattivo -->
+      <div id="subitoBootstrapBanner" class="alert alert-warning d-none align-items-center justify-content-between" role="alert">
+        <div>
+          <strong>Subito.it richiede una verifica anti-bot.</strong><br>
+          <small class="text-muted">Clicca "Aggiorna sessione": si aprirà una finestra Chrome dove dovrai risolvere un breve CAPTCHA. Una volta risolto, le ricerche su Subito torneranno a funzionare per ~12-24 ore.</small>
+        </div>
+        <button type="button" class="btn btn-warning ms-3" id="btnBootstrapSubito">
+          <span id="bootstrapBtnText">Aggiorna sessione</span>
+          <span id="bootstrapBtnSpinner" class="spinner-border spinner-border-sm ms-1 d-none" role="status"></span>
+        </button>
       </div>
     </div>
 
@@ -264,7 +280,6 @@
   <script src="/vendor/tom-select.complete.min.js"></script>
   <script src="/vendor/jspdf.umd.min.js"></script>
   <script src="/vendor/jspdf.plugin.autotable.min.js"></script>
-  <script src="brands.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

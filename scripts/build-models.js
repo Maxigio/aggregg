@@ -1,13 +1,19 @@
 /**
- * Genera data/models.json
+ * ⚠️  OBSOLETO — non usare per rigenerare data/models.json.
+ *
+ * Lo schema prodotto qui ({nome, mmmv?, slugMoto?}) è DIVERSO dallo schema
+ * attuale di data/models.json, che ha la forma annidata
+ *   { tipo: { brandName: { sites, autoscout: {makeId,slugAS}, motoit: {brandSlug}, models: [...] } } }
+ * con voci modello arricchite di mmmvAutoscout, modelIdAS, kindAS, slugMotoIt.
+ * Il catalogo è stato generato altrove (probabilmente via build_catalog*.js o
+ * tramite agent dedicato).
+ *
+ * Per pulire il catalogo esistente vedi scripts/clean-models.js (refactor P1).
+ * Per una rigenerazione completa serve un nuovo script che produca lo schema
+ * corrente — sarà parte di P2 (catalogo che invecchia).
  *
  * AUTO  : Autoscout taxonomy (C-type modelLines, fallback a models individuali)
  * MOTO  : Moto.it brand page (slug precisi) + cross-reference con Autoscout per mmmv
- *
- * Ogni entry:
- *   { nome, mmmv?, slugMoto? }
- *
- * Uso: node scripts/build-models.js
  */
 
 const axios  = require('axios');
