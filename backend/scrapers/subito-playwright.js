@@ -107,34 +107,48 @@ function buildUrl({ tipo, marca, modello, regione: regioneParam, prezzoMin, prez
 }
 
 // ─── Parsing annuncio dal JSON __NEXT_DATA__ ──────────────────────────────────
+// Nelle pagine `?q=` di Subito l'AdItem è direttamente l'entry (no wrapping
+// `.item` come nelle vecchie pagine path-based).
 function parseItem(entry) {
-  const item = entry?.item;
-  if (!item || item.kind !== 'AdItem') return null;
+  if (!entry || entry.kind !== 'AdItem') return null;
 
-  const f   = item.features || {};
-  const url = item.urls?.default;
+  const f   = entry.features || {};
+  const url = entry.urls?.default;
   if (!url || !/^https?:\/\//i.test(url)) return null;
+
+  // Subito usa "9999999" come placeholder per "km non specificati"
+  const kmRaw = toInt(f['/mileage_scalar']?.values?.[0]?.key);
+  const km    = kmRaw === 9999999 ? null : kmRaw;
 
   return {
     fonte:      'subito',
-    titolo:     item.subject || 'Annuncio senza titolo',
+    titolo:     entry.subject || 'Annuncio senza titolo',
     prezzo:     toInt(f['/price']?.values?.[0]?.key),
-    km:         toInt(f['/mileage_scalar']?.values?.[0]?.key),
+    km,
     anno:       toInt(f['/year']?.values?.[0]?.key),
     carburante: f['/fuel']?.values?.[0]?.value || null,
-    provincia:  item.geo?.city?.shortName || null,
+    provincia:  entry.geo?.city?.shortName || null,
     url,
   };
 }
 
 // ─── Detection challenge DataDome ────────────────────────────────────────────
+// La pagina valida è ~600 KB e contiene `__NEXT_DATA__`. La challenge DataDome è
+// ~1 KB e contiene un iframe verso `geo.captcha-delivery.com` con payload
+// {host:'geo.captcha-delivery.com'} inline.
+//
+// NOTA: non possiamo usare la sola presenza della stringa "datadome" o "captcha"
+// nel HTML — DataDome inietta script di tracking anche nelle pagine valide.
+// I marker affidabili sono:
+//   - status 403
+//   - HTML molto piccolo (< 4 KB) + iframe verso geo.captcha-delivery.com
 function detectDataDomeChallenge(html, status) {
   if (status === 403) return '403';
   if (!html) return null;
-  // Lo HTML servito da DataDome è ~1KB con iframe a geo.captcha-delivery.com
-  // e payload {host:'geo.captcha-delivery.com'} inline. Marker robusti:
-  if (/geo\.captcha-delivery\.com/i.test(html))                  return 'captcha';
-  if (/<title>subito\.it<\/title>/.test(html) && html.length < 4000 && /captcha/i.test(html)) return 'captcha';
+  // Challenge page ha SEMPRE l'iframe verso geo.captcha-delivery.com.
+  // Su pagina valida quel host non compare (la pagina ha solo lo script datadome
+  // js base, NON l'iframe della challenge).
+  if (html.length < 4000 && /geo\.captcha-delivery\.com/i.test(html)) return 'captcha';
   return null;
 }
 
@@ -161,9 +175,18 @@ async function fetchPage(context, url) {
     }
 
     const nextData = JSON.parse(nextDataJson);
-    const list     = nextData?.props?.pageProps?.initialState?.items?.list;
-    if (!Array.isArray(list)) return [];
-    return list.map(parseItem).filter(Boolean);
+    const items    = nextData?.props?.pageProps?.initialState?.items;
+    // Per le pagine `?q=` il payload split annunci in:
+    //   - originalList:  risultati standard della ricerca testuale (~30 per pagina)
+    //   - galleryList:   annunci promoted in cima alla pagina, comunque pertinenti
+    //                    alla query (verificato: contengono lo stesso match testuale).
+    // Uniamo entrambi; il dedup downstream sull'URL gestisce eventuali doppioni.
+    const merged = [
+      ...(Array.isArray(items?.galleryList)  ? items.galleryList  : []),
+      ...(Array.isArray(items?.originalList) ? items.originalList : []),
+    ];
+    if (merged.length === 0) return [];
+    return merged.map(parseItem).filter(Boolean);
   } finally {
     await page.close();
   }
