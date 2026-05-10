@@ -27,17 +27,19 @@ function chromiumRevision() {
 }
 
 // ─── Verifica presenza Chromium x64-Mac ───────────────────────────────────────
+// Da Playwright rev 1217 il path è cambiato: ora usa
+//   chrome-mac-x64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing
+// invece del vecchio chrome-mac/Chromium.app/Contents/MacOS/Chromium.
+// Controlliamo entrambi per retrocompatibilità.
 function macChromiumPresent(rev) {
-  const exe = path.join(
-    PW_BROWSERS,
-    `chromium-${rev}`,
-    'chrome-mac',
-    'Chromium.app',
-    'Contents',
-    'MacOS',
-    'Chromium'
-  );
-  return fs.existsSync(exe);
+  const base = path.join(PW_BROWSERS, `chromium-${rev}`);
+  const candidates = [
+    // Nuovo formato (Chrome for Testing, rev >= 1217)
+    path.join(base, 'chrome-mac-x64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+    // Vecchio formato (Chromium, rev < 1217)
+    path.join(base, 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+  ];
+  return candidates.some(p => fs.existsSync(p));
 }
 
 // ─── Scarica e decomprimi la build ufficiale ──────────────────────────────────
