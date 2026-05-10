@@ -5,6 +5,7 @@ const scrapeAutoscout = require('./scrapers/autoscout-playwright');
 const scrapeMotoIt    = require('./scrapers/motoit');
 const subitoSession   = require('./scrapers/subito-session');
 const { runBootstrap } = require('./scrapers/subito-bootstrap');
+const filtersSchema   = require('./scrapers/filters-schema');
 const province        = require('../data/province.json');
 const modelsData      = require('../data/models.json');
 
@@ -84,6 +85,18 @@ app.get('/api/models', (req, res) => {
   res.json({ modelli, sites: entry.sites || [] });
 });
 
+// Endpoint filtri per-piattaforma (P10): l'UI lo chiama all'avvio per
+// renderizzare il pannello filtri tripartito Subito | Autoscout | Moto.it.
+//   GET /api/filters?tipo=auto|moto
+// → { subito: [...], autoscout: [...], motoit: [...] }
+app.get('/api/filters', (req, res) => {
+  const { tipo } = req.query;
+  if (!tipo || !['auto', 'moto'].includes(tipo)) {
+    return res.status(400).json({ error: 'tipo deve essere "auto" o "moto"' });
+  }
+  res.json(filtersSchema.getSchema(tipo));
+});
+
 // Set di regioni valide (derivato da province.json)
 const REGIONI_VALIDE = new Set(Object.values(province).map(p => p.regione));
 
@@ -92,6 +105,7 @@ function parseSearchParams(query) {
   const {
     tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMax, regione,
     mmmvAutoscout, motoitBrandSlug, motoitModelSlug,
+    filtersSubito, filtersAutoscout, filtersMotoit,
   } = query;
 
   const errors = [];
@@ -105,8 +119,22 @@ function parseSearchParams(query) {
     return isNaN(n) || n < 0 ? null : n;
   };
 
+  // Filtri per-piattaforma (P10) — il client li passa come stringhe JSON
+  // separate. Es: filtersSubito='{"carburante":"2","cambio":"1"}'.
+  const parseFiltersBlob = (str, label) => {
+    if (!str) return {};
+    try {
+      const parsed = typeof str === 'string' ? JSON.parse(str) : str;
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (err) {
+      console.warn(`[parseFiltersBlob] ${label} JSON invalido: ${err.message}`);
+      return {};
+    }
+  };
+
   // Subito non riceve più metadata per sito: cerca sempre con ?q=marca+modello.
   // Autoscout24 usa mmmvAutoscout, Moto.it usa motoitBrandSlug/motoitModelSlug.
+  // I blob filters{Subito,Autoscout,Motoit} contengono i filtri specifici del sito (P10).
   return {
     params: {
       tipo:             tipo.trim(),
@@ -121,6 +149,9 @@ function parseSearchParams(query) {
       mmmvAutoscout:    mmmvAutoscout    || null,
       motoitBrandSlug:  motoitBrandSlug  || null,
       motoitModelSlug:  motoitModelSlug  || null,
+      filtersSubito:    parseFiltersBlob(filtersSubito,    'subito'),
+      filtersAutoscout: parseFiltersBlob(filtersAutoscout, 'autoscout'),
+      filtersMotoit:    parseFiltersBlob(filtersMotoit,    'motoit'),
     }
   };
 }

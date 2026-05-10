@@ -74,6 +74,37 @@ body {
   font-weight: 400;
 }
 
+/* ─── Pannello filtri per-piattaforma (P10) ─────────────────────────────── */
+.sitefilter-section {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: var(--gray-50);
+  height: 100%;
+}
+.sitefilter-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid;
+}
+/* Color coding per piattaforma */
+.sitefilter-subito    { border-color: rgba(220, 38, 38, 0.3);  background: rgba(220, 38, 38, 0.04); }
+.sitefilter-subito    .sitefilter-title { color: #b91c1c; border-color: rgba(220, 38, 38, 0.4); }
+.sitefilter-autoscout { border-color: rgba(217, 119, 6, 0.3);  background: rgba(217, 119, 6, 0.04); }
+.sitefilter-autoscout .sitefilter-title { color: #b45309; border-color: rgba(217, 119, 6, 0.4); }
+.sitefilter-motoit    { border-color: rgba(37, 99, 235, 0.3);  background: rgba(37, 99, 235, 0.04); }
+.sitefilter-motoit    .sitefilter-title { color: #1d4ed8; border-color: rgba(37, 99, 235, 0.4); }
+
+.sitefilter-fields .form-label    { font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; color: var(--gray-700); }
+.sitefilter-fields .form-select,
+.sitefilter-fields .form-control  { font-size: 0.85rem; padding: 4px 8px; height: auto; }
+.sitefilter-fields .filter-row    { margin-bottom: 10px; }
+.sitefilter-fields .range-pair    { display: flex; gap: 6px; }
+.sitefilter-fields .range-pair .form-control { flex: 1; }
+.sitefilter-emptyState            { padding-top: 8px; }
+
 /* ─── Pillola di stato Subito (nell'header) ───────────────────────────────── */
 .subito-pill {
   display: inline-flex;

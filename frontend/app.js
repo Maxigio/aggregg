@@ -36,7 +36,6 @@ let salvati              = [];   // annunci salvati nella sessione corrente
 const fontiAttive        = { subito: true, autoscout: true, moto: true };
 let prezzoSliderInstance = null;
 let sliderGlobalBounds   = [0, 0];
-let modelloTomSelect     = null;
 
 // Cache brand list dal server per tipo corrente (con metadata sites)
 const brandCache = { auto: null, moto: null };
@@ -62,22 +61,19 @@ async function init() {
 
   populateRegione();
   await populateMarca('auto');
-  initModelloSelect();
+  await loadFiltersSchema('auto');
   applyUrlParams();
 
-  marcaSelect.addEventListener('change', () => {
-    const tipo  = document.querySelector('input[name="tipo"]:checked').value;
-    const marca = marcaSelect.value;
-    if (marca) loadModelli(tipo, marca);
-    else       resetModelloSelect('Seleziona prima la marca');
-  });
-
-  tipoInputs.forEach(input => input.addEventListener('change', () => {
-    populateMarca(input.value);
+  // Cambio tipo (auto/moto): ricarica marche + ricarica schema filtri
+  tipoInputs.forEach(input => input.addEventListener('change', async () => {
+    await populateMarca(input.value);
+    await loadFiltersSchema(input.value);
     fonteChips.querySelector('[data-fonte="moto"]').style.display = input.value === 'moto' ? '' : 'none';
-    resetModelloSelect('Seleziona prima la marca');
     currentResults = [];
     hideResults();
+    // Reset modello e filtri sito quando cambia tipo
+    document.getElementById('modello').value = '';
+    resetSiteFilters();
   }));
 
   fonteChips.querySelector('[data-fonte="moto"]').style.display = 'none';
@@ -147,11 +143,14 @@ function populateRegione() {
 }
 
 
+// ─── Marca: input testuale + autocomplete via <datalist> (P10) ──────────────
+// Il dropdown rigido è stato rimosso: l'utente può digitare qualsiasi marca,
+// l'autocomplete dal catalogo `data/models.json` è solo un suggerimento soft.
 async function populateMarca(tipo) {
-  marcaSelect.innerHTML = '<option value="">Caricamento marche…</option>';
-  marcaSelect.disabled = true;
+  const datalist = document.getElementById('brandsList');
+  if (!datalist) return;
 
-  // Carica dal server: sites già include subito/autoscout/motoit dal catalogo unificato
+  // Carica dal server (cache per tipo)
   if (!brandCache[tipo]) {
     try {
       const res  = await fetch(`/api/brands?tipo=${encodeURIComponent(tipo)}`);
@@ -162,95 +161,143 @@ async function populateMarca(tipo) {
     }
   }
 
-  const brands = brandCache[tipo];
-  marcaSelect.innerHTML = '<option value="">Seleziona marca...</option>';
-  brands.forEach(b => {
+  // Popola <datalist> con le marche del tipo selezionato.
+  datalist.innerHTML = '';
+  (brandCache[tipo] || []).forEach(b => {
     const opt = document.createElement('option');
     opt.value = b.nome;
-    opt.textContent = `${b.nome}${sitesBadge(b.sites, tipo)}`;
-    marcaSelect.appendChild(opt);
-  });
-  marcaSelect.disabled = false;
-  resetModelloSelect('Seleziona prima la marca');
-}
-
-// ─── Dropdown modello (tom-select) ───────────────────────────────────────────
-function initModelloSelect() {
-  modelloTomSelect = new TomSelect('#modello', {
-    placeholder:      'Tutti i modelli',
-    allowEmptyOption: true,
-    searchField:      ['text'],
-    maxOptions:       300,
-    render: {
-      no_results: () => '<div class="no-results">Nessun modello trovato</div>',
-    },
+    datalist.appendChild(opt);
   });
 }
 
-function resetModelloSelect(placeholder) {
-  if (!modelloTomSelect) return;
-  modelloTomSelect.clear();
-  modelloTomSelect.clearOptions();
-  modelloTomSelect.addOption({ value: '', text: '' });
-  modelloTomSelect.settings.placeholder = placeholder || 'Tutti i modelli';
-  modelloTomSelect.inputState();
-  modelloTomSelect.disable();
-}
+// Modello è ora un input testuale libero (#modello). Niente più TomSelect.
 
-async function loadModelli(tipo, marca) {
-  resetModelloSelect('Caricamento modelli...');
+// ─── Pannello filtri per-piattaforma (P10) ──────────────────────────────────
+// Schema dei filtri caricato dal server una volta per tipo (auto/moto).
+let filtersSchemaCache = null;          // cache schema per il tipo attualmente caricato
+
+const sitefiltersPanel    = document.getElementById('sitefiltersPanel');
+const sitefiltersSubito   = document.getElementById('sitefiltersSubito');
+const sitefiltersAutoscout= document.getElementById('sitefiltersAutoscout');
+const sitefiltersMotoit   = document.getElementById('sitefiltersMotoit');
+const sitefiltersMotoitEmpty = document.getElementById('sitefiltersMotoitEmpty');
+const btnSiteFiltersApply = document.getElementById('btnSiteFiltersApply');
+const btnSiteFiltersReset = document.getElementById('btnSiteFiltersReset');
+
+async function loadFiltersSchema(tipo) {
   try {
-    const res     = await fetch(`/api/models?tipo=${encodeURIComponent(tipo)}&marca=${encodeURIComponent(marca)}`);
-    const data    = await res.json();
-    const modelli = data.modelli || [];
-
-    modelloTomSelect.clear();
-    modelloTomSelect.clearOptions();
-
-    if (modelli.length === 0) {
-      modelloTomSelect.settings.placeholder = 'Nessun modello disponibile';
-      modelloTomSelect.inputState();
-      modelloTomSelect.disable();
-      return;
-    }
-
-    modelloTomSelect.addOption({ value: '', text: '' });
-    modelli.forEach(m => {
-      const label = `${m.nome}${sitesBadge(m.sites || [], tipo)}`;
-      modelloTomSelect.addOption({
-        value: m.nome,
-        text:  label,
-        mmmv:  m.mmmvAutoscout || '',
-      });
-    });
-
-    modelloTomSelect.settings.placeholder = 'Tutti i modelli';
-    modelloTomSelect.inputState();
-    modelloTomSelect.enable();
-  } catch {
-    modelloTomSelect.settings.placeholder = 'Errore caricamento modelli';
-    modelloTomSelect.inputState();
-    modelloTomSelect.disable();
+    const res = await fetch(`/api/filters?tipo=${encodeURIComponent(tipo)}`);
+    filtersSchemaCache = await res.json();
+    renderSiteFilters(tipo);
+  } catch (err) {
+    console.warn('loadFiltersSchema failed', err);
+    filtersSchemaCache = { subito: [], autoscout: [], motoit: [] };
+    renderSiteFilters(tipo);
   }
 }
+
+function renderSiteFilters(tipo) {
+  if (!filtersSchemaCache) return;
+
+  // Render per ognuna delle 3 sezioni
+  renderSiteSection(sitefiltersSubito,    filtersSchemaCache.subito,    'subito');
+  renderSiteSection(sitefiltersAutoscout, filtersSchemaCache.autoscout, 'autoscout');
+  renderSiteSection(sitefiltersMotoit,    filtersSchemaCache.motoit,    'motoit');
+
+  // Sezione Moto.it disabilitata se tipo == auto
+  if (tipo === 'auto') {
+    sitefiltersMotoit.classList.add('d-none');
+    sitefiltersMotoitEmpty?.classList.remove('d-none');
+  } else {
+    sitefiltersMotoit.classList.remove('d-none');
+    sitefiltersMotoitEmpty?.classList.add('d-none');
+  }
+}
+
+function renderSiteSection(container, filters, sitePrefix) {
+  if (!container) return;
+  if (!filters || filters.length === 0) {
+    container.innerHTML = '<div class="text-muted small">Nessun filtro specifico.</div>';
+    return;
+  }
+  container.innerHTML = filters.map(f => {
+    const inputId = `sf_${sitePrefix}_${f.key}`;
+    if (f.type === 'select') {
+      const opts = (f.values || []).map(v =>
+        `<option value="${v.value}">${v.label}</option>`
+      ).join('');
+      return `
+        <div class="filter-row">
+          <label class="form-label" for="${inputId}">${f.label}</label>
+          <select id="${inputId}" class="form-select" data-sitekey="${sitePrefix}.${f.key}">
+            <option value="">— qualsiasi —</option>
+            ${opts}
+          </select>
+        </div>
+      `;
+    }
+    if (f.type === 'range') {
+      // range con from/to
+      const fromId = `${inputId}_from`, toId = `${inputId}_to`;
+      return `
+        <div class="filter-row">
+          <label class="form-label">${f.label}</label>
+          <div class="range-pair">
+            <input type="number" id="${fromId}" class="form-control" placeholder="da" data-sitekey="${sitePrefix}.${f.key}" data-bound="from" />
+            <input type="number" id="${toId}"   class="form-control" placeholder="a"  data-sitekey="${sitePrefix}.${f.key}" data-bound="to" />
+          </div>
+        </div>
+      `;
+    }
+    return '';
+  }).join('');
+}
+
+// Raccoglie i valori dei filtri attivi nelle 3 sezioni e li restituisce come 3 blob.
+function getActiveSiteFilters() {
+  const out = { subito: {}, autoscout: {}, motoit: {} };
+  if (!sitefiltersPanel) return out;
+  const inputs = sitefiltersPanel.querySelectorAll('[data-sitekey]');
+  for (const el of inputs) {
+    const [site, key] = el.dataset.sitekey.split('.');
+    const val = el.value;
+    if (val == null || val === '') continue;
+    const bound = el.dataset.bound;
+    if (bound) {
+      out[site][key] = out[site][key] || {};
+      out[site][key][bound] = val;
+    } else {
+      out[site][key] = val;
+    }
+  }
+  return out;
+}
+
+function resetSiteFilters() {
+  if (!sitefiltersPanel) return;
+  const inputs = sitefiltersPanel.querySelectorAll('[data-sitekey]');
+  inputs.forEach(el => { el.value = ''; });
+}
+
+if (btnSiteFiltersApply) btnSiteFiltersApply.addEventListener('click', () => doSearch());
+if (btnSiteFiltersReset) btnSiteFiltersReset.addEventListener('click', () => { resetSiteFilters(); doSearch(); });
+
 
 // ─── Ricerca ──────────────────────────────────────────────────────────────────
 async function doSearch() {
   const tipo  = document.querySelector('input[name="tipo"]:checked').value;
   const marca = marcaSelect.value.trim();
 
-  if (!marca) { showError('Seleziona una marca prima di cercare.'); return; }
+  if (!marca) { showError('Inserisci una marca prima di cercare.'); return; }
 
-  // Tutti i metadata per-sito (mmmv AS24, slug Moto.it) sono risolti server-side
-  // dal catalogo unificato data/models.json. Il client passa solo marca + modello;
-  // Subito cerca con ?q=marca+modello (niente slug per Subito).
-  const modelloNome   = modelloTomSelect?.getValue() || '';
-  const modelloOpt    = modelloNome ? (modelloTomSelect?.options?.[modelloNome] ?? null) : null;
-  const mmmvAutoscout = modelloOpt?.mmmv || '';
+  // P10: marca da input testuale (con autocomplete soft), modello completamente
+  // libero. Il server risolve mmmvAutoscout/motoitBrandSlug dal catalogo se
+  // disponibili — altrimenti fallback brand-only + post-filter (P6).
+  const modelloLibero = document.getElementById('modello').value.trim();
 
   const params = {
     tipo, marca,
-    modello:   modelloNome,
+    modello:   modelloLibero,
     prezzoMin: document.getElementById('prezzoMin').value,
     prezzoMax: document.getElementById('prezzoMax').value,
     annoMin:   document.getElementById('annoMin').value,
@@ -259,7 +306,13 @@ async function doSearch() {
   };
 
   if (regioneSelect.value) params.regione = regioneSelect.value;
-  if (mmmvAutoscout)       params.mmmvAutoscout = mmmvAutoscout;
+
+  // Filtri per-piattaforma (P10): blob JSON-serializzati dei filtri attivi
+  // del pannello tripartito. Se l'utente non ha applicato filtri, sono {}.
+  const activeFilters = getActiveSiteFilters();
+  if (Object.keys(activeFilters.subito).length)    params.filtersSubito    = JSON.stringify(activeFilters.subito);
+  if (Object.keys(activeFilters.autoscout).length) params.filtersAutoscout = JSON.stringify(activeFilters.autoscout);
+  if (Object.keys(activeFilters.motoit).length)    params.filtersMotoit    = JSON.stringify(activeFilters.motoit);
 
   Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });
 
@@ -282,6 +335,9 @@ async function doSearch() {
     else                                          hideBootstrapBanner();
     // La response può aver cambiato lo state lato server (es. sbloccato dopo refresh)
     fetchSubitoStatus();
+
+    // P10: rivela il pannello filtri tripartito dopo la prima ricerca andata a buon fine.
+    if (sitefiltersPanel) sitefiltersPanel.classList.remove('d-none');
 
     initPrezzoSlider(currentResults);
 
@@ -1027,20 +1083,11 @@ function applyUrlParams() {
     if (p.has('regione')) regioneSelect.value = p.get('regione');
   };
 
-  // modello: va caricato async dopo la marca
+  // P10: marca + modello sono input liberi, niente più async loadModelli
   const modello = p.get('modello') || '';
-  if (marca && modello) {
-    loadModelli(tipo, marca).then(() => {
-      // Imposta il valore nel TomSelect dopo il caricamento
-      if (modelloTomSelect) {
-        modelloTomSelect.setValue(modello, true); // true = silent (no events)
-      }
-      applyGeo();
-      // Lancia la ricerca automaticamente
-      doSearch();
-    });
-  } else if (marca) {
-    loadModelli(tipo, marca);
+  if (marca) {
+    marcaSelect.value = marca;
+    if (modello) document.getElementById('modello').value = modello;
     applyGeo();
     doSearch();
   }

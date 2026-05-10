@@ -17,6 +17,7 @@
 const { chromium } = require('playwright');
 const path         = require('path');
 const { toInt, resolveChromiumExecutable } = require('./utils');
+const filtersSchema = require('./filters-schema');
 
 const BASE = 'https://www.moto.it';
 const MAX_PAGES = 5;
@@ -56,7 +57,8 @@ async function getBrowser() {
 // Moto.it offre un motore di ricerca completo a /moto-usate/ricerca con query params.
 // Paginazione via /pagina-N nel path (NON come query param).
 function buildUrl(params, page = 1) {
-  const { prezzoMin, prezzoMax, annoMin, annoMax, kmMax, regione, motoitBrandSlug, motoitModelSlug } = params;
+  const { prezzoMin, prezzoMax, annoMin, annoMax, kmMax, regione,
+          motoitBrandSlug, motoitModelSlug, filtersMotoit } = params;
 
   // Path pagina (1 = senza suffisso, >1 = /pagina-N)
   const pagePath = page > 1 ? `/pagina-${page}` : '';
@@ -86,6 +88,14 @@ function buildUrl(params, page = 1) {
 
   // Ordinamento: prezzo crescente (obiettivo "i più economici")
   qs.set('sort', 'price-a');
+
+  // Filtri specifici Moto.it (P10) — definiti in filters-schema.js
+  // Es: { categoria: 'enduro', cilindrata: {from: 600, to: 1300} }
+  //   → &category=enduro&displacement_f=600&displacement_t=1300
+  if (filtersMotoit && Object.keys(filtersMotoit).length > 0) {
+    const miSchema = filtersSchema.MOTOIT_FILTERS.filter(f => f.appliesTo.includes('moto'));
+    filtersSchema.applySiteFilters(qs, filtersMotoit, miSchema);
+  }
 
   return `${BASE}/moto-usate/ricerca${pagePath}?${qs.toString()}`;
 }

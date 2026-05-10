@@ -7,7 +7,6 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link href="/vendor/bootstrap.min.css" rel="stylesheet" />
   <link href="/vendor/nouislider.min.css" rel="stylesheet" />
-  <link href="/vendor/tom-select.bootstrap5.min.css" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -59,20 +58,20 @@
 
         <div class="row g-3">
 
-          <!-- Marca -->
+          <!-- Marca (input testuale con autocomplete soft via datalist) -->
           <div class="col-12 col-md-4">
             <label for="marca" class="form-label fw-semibold">Marca <span class="text-danger">*</span></label>
-            <select class="form-select" id="marca" required>
-              <option value="">Caricamento...</option>
-            </select>
+            <input type="text" class="form-control" id="marca" list="brandsList"
+                   autocomplete="off" placeholder="es. BMW, Honda, Yamaha…" required />
+            <datalist id="brandsList"></datalist>
           </div>
 
-          <!-- Modello -->
+          <!-- Modello (libero, niente vincoli al catalogo) -->
           <div class="col-12 col-md-4">
             <label for="modello" class="form-label fw-semibold">Modello</label>
-            <select id="modello" class="form-select">
-              <option value="">Seleziona prima la marca</option>
-            </select>
+            <input type="text" class="form-control" id="modello"
+                   autocomplete="off" placeholder="es. 318d, Africa Twin, R 1250 GS…" />
+            <small class="text-muted d-block mt-1">Lascia vuoto per cercare tutti i modelli della marca</small>
           </div>
 
           <!-- Regione -->
@@ -120,6 +119,38 @@
         </div>
 
       </form>
+    </div>
+
+    <!-- PANNELLO FILTRI PER-PIATTAFORMA (P10) — popolato dinamicamente dopo la prima ricerca -->
+    <div id="sitefiltersPanel" class="amr-card mb-4 d-none">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0">Filtri avanzati per piattaforma</h5>
+        <div>
+          <button type="button" class="btn btn-sm btn-outline-secondary me-2" id="btnSiteFiltersReset">Reset</button>
+          <button type="button" class="btn btn-sm amr-btn-primary" id="btnSiteFiltersApply">Applica filtri</button>
+        </div>
+      </div>
+      <div class="row g-3">
+        <div class="col-12 col-lg-4">
+          <div class="sitefilter-section sitefilter-subito">
+            <h6 class="sitefilter-title">📍 Subito.it</h6>
+            <div class="sitefilter-fields" id="sitefiltersSubito"></div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="sitefilter-section sitefilter-autoscout">
+            <h6 class="sitefilter-title">📍 Autoscout24</h6>
+            <div class="sitefilter-fields" id="sitefiltersAutoscout"></div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="sitefilter-section sitefilter-motoit">
+            <h6 class="sitefilter-title">📍 Moto.it</h6>
+            <div class="sitefilter-fields" id="sitefiltersMotoit"></div>
+            <div class="sitefilter-emptyState text-muted small d-none" id="sitefiltersMotoitEmpty">Disponibile solo per ricerche moto.</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- STATO RICERCA / ERRORE -->
@@ -277,7 +308,6 @@
 
   <script src="/vendor/bootstrap.bundle.min.js"></script>
   <script src="/vendor/nouislider.min.js"></script>
-  <script src="/vendor/tom-select.complete.min.js"></script>
   <script src="/vendor/jspdf.umd.min.js"></script>
   <script src="/vendor/jspdf.plugin.autotable.min.js"></script>
   <script src="app.js"></script>

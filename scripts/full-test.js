@@ -176,6 +176,34 @@ async function testBrandsModels() {
   assert(me.status === 200 && (me.json?.modelli || []).length === 0,
          'Marca inesistente → modelli=[]');
   console.log('└──────');
+
+  // ── /api/filters (P10 — schema filtri per-piattaforma) ───────────────────
+  section('ENDPOINT /api/filters (P10)');
+  const fa = await get('/api/filters?tipo=auto');
+  assert(fa.status === 200, 'GET /api/filters?tipo=auto → 200', `(${fa.status})`);
+  assert(fa.json?.subito?.length    > 0, 'auto: filtri Subito > 0',    `(${fa.json?.subito?.length})`);
+  assert(fa.json?.autoscout?.length > 0, 'auto: filtri AS24 > 0',      `(${fa.json?.autoscout?.length})`);
+  assert((fa.json?.motoit || []).length === 0, 'auto: 0 filtri MotoIt (esclusi)');
+
+  const fm = await get('/api/filters?tipo=moto');
+  assert(fm.status === 200, 'GET /api/filters?tipo=moto → 200');
+  assert(fm.json?.subito?.length    > 0, 'moto: filtri Subito > 0',    `(${fm.json?.subito?.length})`);
+  assert(fm.json?.motoit?.length    > 0, 'moto: filtri MotoIt > 0',    `(${fm.json?.motoit?.length})`);
+
+  // struttura filtro
+  const filterSample = fa.json.autoscout[0];
+  assert(filterSample.key && filterSample.label && filterSample.type,
+         'filtro ha key+label+type', `(${filterSample.key} / ${filterSample.label} / ${filterSample.type})`);
+
+  // filtri applicati: ricerca BMW 318 con carburante=Diesel via filtersAutoscout
+  const filtersJson = JSON.stringify({ carburante: 'D' });
+  const filtered = await get('/api/search?tipo=auto&marca=BMW&modello=318&filtersAutoscout=' + encodeURIComponent(filtersJson));
+  assert(filtered.status === 200, 'search con filtersAutoscout → 200');
+  const asResults = (filtered.json?.risultati || []).filter(r => r.fonte === 'autoscout');
+  assert(asResults.length > 0, '  filtri AS24 applicati: > 0 risultati', `(${asResults.length})`);
+  const allDiesel = asResults.slice(0, 10).every(r => !r.carburante || /diesel/i.test(r.carburante));
+  assert(allDiesel, '  primi 10 AS24 sono Diesel (filtro funziona)');
+  console.log('└──────');
 }
 
 // ─── Endpoint search (cuore di P1) ───────────────────────────────────────────
