@@ -40,8 +40,20 @@ function arm64ChromiumPresent(rev) {
 }
 
 // ─── Scarica e decomprimi la build arm64 ufficiale ───────────────────────────
+// La CDN Azure (playwright.azureedge.net) è stata dismessa. Il nuovo CDN
+// ufficiale è `cdn.playwright.dev` e usa il formato Chrome for Testing:
+//   cdn.playwright.dev/builds/cft/<version>/mac-arm64/chrome-mac-arm64.zip
+// La <version> è in browsers.json (es. 147.0.7727.15).
+function browserVersion() {
+  const j = JSON.parse(fs.readFileSync(BROWSERS_JSON, 'utf8'));
+  const c = j.browsers.find(b => b.name === 'chromium');
+  return c?.browserVersion || null;
+}
+
 async function downloadArm64Chromium(rev) {
-  const url     = `https://playwright.azureedge.net/builds/chromium/${rev}/chromium-mac-arm64.zip`;
+  const ver = browserVersion();
+  if (!ver) throw new Error('browserVersion non trovata in browsers.json');
+  const url     = `https://cdn.playwright.dev/builds/cft/${ver}/mac-arm64/chrome-mac-arm64.zip`;
   const destDir = path.join(PW_BROWSERS, `chromium-${rev}`);
   const zipPath = path.join(destDir, 'chromium-mac-arm64.zip');
 
