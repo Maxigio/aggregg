@@ -9,6 +9,8 @@ const filtersSchema   = require('./scrapers/filters-schema');
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
 const { resolveMotoitModelSlug } = require('./scrapers/motoit-models');
 const { getDetail } = require('./scrapers/detail');
+const saved = require('./saved');
+const analysis = require('../frontend/analysis.js');   // modulo isomorfo (UMD) → ramo Node
 const { makeResolver, makeModelResolver, loadAliasMap } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
 const modelsData      = require('../data/models.json');
@@ -245,9 +247,19 @@ app.get('/api/search', async (req, res) => {
   if (parsed.errors) {
     return res.status(400).json({ error: parsed.errors.join(', ') });
   }
+  try {
+    res.json(await runSearch(parsed.params));
+  } catch (e) {
+    console.error('[runSearch]', e.message);
+    res.status(500).json({ error: 'Errore interno durante la ricerca' });
+  }
+});
 
-  const { params } = parsed;
-
+// ─── Core ricerca RIUSABILE (§11) ─────────────────────────────────────────────
+// Pipeline unica: risoluzione metadata → scraping multi-fonte → post-filter →
+// stato per-fonte. Chiamato da GET /api/search E dal motore avvisi (saved-check),
+// così UI e avvisi danno risultati/rating coerenti. Ritorna l'oggetto-response.
+async function runSearch(params) {
   // ── Risoluzione metadata per-sito dal catalogo unificato ──────────────────
   // Subito: niente metadata da risolvere — usa sempre ?q=marca+modello.
   // Autoscout24: serve mmmvAutoscout (livello modello, fallback livello brand).
@@ -451,7 +463,7 @@ app.get('/api/search', async (req, res) => {
     ? 'modello filtrato per titolo'
     : (asRes.reason || null);
 
-  res.json({
+  return {
     risultati,
     totale:       risultati.length,
     subitoStatus: subitoRes.status,           // 'ok' | 'empty' | 'needs_bootstrap' | 'error'
@@ -462,7 +474,78 @@ app.get('/api/search', async (req, res) => {
       autoscout: { status: asRes.status,     reason: asReason,                 count: asCount },
       moto:      { status: motoRes.status,   reason: motoRes.reason || null,   count: countBy('moto') },
     },
-  });
+  };
+}
+
+// ─── §11 Ricerche salvate + avvisi ───────────────────────────────────────────
+const SAVED_STALE_MS  = 6 * 60 * 60 * 1000;  // ricontrolla al boot solo se più vecchio di 6h
+const SAVED_BOOT_CAP  = 5;                    // max ricerche processate per avvio
+let savedCheckInFlight = null;                // single-inflight: boot e "Controlla ora" non si sovrappongono
+
+// Esegue il check di UNA ricerca: runSearch (core condiviso) → analyzeResults
+// (modulo isomorfo) → recordCheck (avvisi filtrati). Ritorna i nuovi avvisi.
+async function checkSaved(id) {
+  const s = saved.getSaved(id);
+  if (!s) return null;
+  const out = await runSearch({ ...s.params });
+  const results = analysis.analyzeResults(out.risultati || []);
+  const alerts = saved.recordCheck(id, results);
+  return { id, label: s.label, nuovi: alerts.length, sources: out.sources };
+}
+
+// Check di tutte (o le stantie). Sequenziale, single-inflight, salta se Subito
+// è bloccato (evita di bruciare la sessione). Cap al boot.
+async function checkAllSaved({ onlyStale = false, cap = Infinity } = {}) {
+  if (savedCheckInFlight) return savedCheckInFlight;
+  savedCheckInFlight = (async () => {
+    const esiti = [];
+    if (subitoSession.isSubitoBlocked()) {
+      console.log('[saved] Subito bloccato → salto il check automatico.');
+      return esiti;
+    }
+    const now = Date.now();
+    let done = 0;
+    for (const s of saved.listSaved()) {
+      if (done >= cap) break;
+      if (onlyStale && s.lastChecked && now - s.lastChecked < SAVED_STALE_MS) continue;
+      try { esiti.push(await checkSaved(s.id)); done++; }
+      catch (e) { console.warn(`[saved] check ${s.id} fallito: ${e.message}`); }
+    }
+    return esiti;
+  })();
+  try { return await savedCheckInFlight; }
+  finally { savedCheckInFlight = null; }
+}
+
+// CRUD
+app.get('/api/saved', (req, res) => res.json({ saved: saved.listSaved() }));
+
+app.post('/api/saved', express.json(), (req, res) => {
+  const { label, params } = req.body || {};
+  if (!params || !params.tipo || !params.marca) {
+    return res.status(400).json({ error: 'params con tipo+marca obbligatori' });
+  }
+  res.json({ saved: saved.addSaved({ label, params }) });
+});
+
+app.delete('/api/saved/:id', (req, res) => {
+  res.json({ ok: saved.removeSaved(req.params.id) });
+});
+
+app.post('/api/saved/:id/read', (req, res) => {
+  res.json({ ok: saved.markRead(req.params.id) });
+});
+
+// Controlla ora: una (?id=) o tutte. Restituisce gli esiti + la lista aggiornata.
+app.post('/api/saved/check', express.json(), async (req, res) => {
+  try {
+    const id = req.query.id;
+    const esiti = id ? [await checkSaved(id)].filter(Boolean) : await checkAllSaved({ cap: 20 });
+    res.json({ esiti, saved: saved.listSaved() });
+  } catch (e) {
+    console.error('[saved/check]', e.message);
+    res.status(500).json({ error: 'Errore durante il controllo' });
+  }
 });
 
 // ─── Subito session bootstrap ────────────────────────────────────────────────
@@ -536,6 +619,18 @@ const server = app.listen(PORT, () => {
       });
     }
     startKeepAlive();
+
+    // §11 — boot-check ricerche salvate (gentile): solo le stantie (>6h), cap 5,
+    // sequenziale, non bloccante, salta se Subito è bloccato. Ritardo per non
+    // competere col keep-alive boot.
+    setTimeout(() => {
+      checkAllSaved({ onlyStale: true, cap: SAVED_BOOT_CAP })
+        .then(esiti => {
+          const tot = esiti.reduce((a, e) => a + (e?.nuovi || 0), 0);
+          if (esiti.length) console.log(`[saved] boot-check: ${esiti.length} ricerche, ${tot} nuovi avvisi.`);
+        })
+        .catch(e => console.warn('[saved] boot-check KO:', e.message));
+    }, 8000).unref?.();
   });
 });
 module.exports = server;
