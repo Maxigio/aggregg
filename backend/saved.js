@@ -154,12 +154,14 @@ function computeAlerts(search, results) {
     const prev = seen[r.url];
     let motivo = null, key = null;
     if (prev == null) {
-      motivo = 'nuovo'; key = `${r.url}|nuovo`;
+      // Annuncio NUOVO (mai visto): se è anche affare forte → 'affare' (più saliente),
+      // altrimenti 'nuovo'. NB: gli affari PREESISTENTI non riallertano (sono già
+      // visibili nei risultati) → niente flood a ogni check.
+      if (flags.includes('affare')) { motivo = 'affare'; key = `${r.url}|affare`; }
+      else                          { motivo = 'nuovo';  key = `${r.url}|nuovo`; }
     } else if (r.prezzo <= prev - Math.max(DROP_ABS, prev * DROP_PCT)) {
       motivo = 'calo';  key = `${r.url}|calo|${r.prezzo}`;   // include prezzo → ulteriori cali ri-notificano
     }
-    // Affare forte ha priorità (più saliente) su "nuovo"; non sovrascrive un calo.
-    if (flags.includes('affare') && motivo !== 'calo') { motivo = 'affare'; key = `${r.url}|affare`; }
 
     if (!motivo || alerted.has(key)) continue;
     alerted.add(key);

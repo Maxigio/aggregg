@@ -480,42 +480,57 @@ async function runSearch(params) {
 // ─── §11 Ricerche salvate + avvisi ───────────────────────────────────────────
 const SAVED_STALE_MS  = 6 * 60 * 60 * 1000;  // ricontrolla al boot solo se più vecchio di 6h
 const SAVED_BOOT_CAP  = 5;                    // max ricerche processate per avvio
-let savedCheckInFlight = null;                // single-inflight: boot e "Controlla ora" non si sovrappongono
 
-// Esegue il check di UNA ricerca: runSearch (core condiviso) → analyzeResults
-// (modulo isomorfo) → recordCheck (avvisi filtrati). Ritorna i nuovi avvisi.
-async function checkSaved(id) {
+// MUTEX unico: TUTTI i check (singolo, tutti, boot) passano da qui → mai due
+// recordCheck concorrenti (load→save sullo stesso file = update persi). Catena
+// di promise serializzata. NB: limite single-processo (Electron forka un solo
+// server); accessi multi-processo allo stesso file restano fuori scope.
+let savedLock = Promise.resolve();
+function withSavedLock(fn) {
+  const run = savedLock.then(fn, fn);   // esegue dopo il precedente, anche se errore
+  savedLock = run.then(() => {}, () => {});
+  return run;
+}
+
+// Normalizza i params salvati (stringhe dal frontend) negli stessi tipi che
+// l'endpoint produce, riusando parseSearchParams (validazione + int). Fallback
+// ai grezzi se non validi.
+function normalizeSavedParams(raw) {
+  const parsed = parseSearchParams(raw || {});
+  return parsed.errors ? { ...raw } : parsed.params;
+}
+
+// Check di UNA ricerca (SENZA lock — usato dentro il lock): runSearch (core) →
+// analyzeResults (isomorfo) → recordCheck (avvisi filtrati).
+async function _checkSavedOne(id) {
   const s = saved.getSaved(id);
   if (!s) return null;
-  const out = await runSearch({ ...s.params });
+  const out = await runSearch(normalizeSavedParams(s.params));
   const results = analysis.analyzeResults(out.risultati || []);
   const alerts = saved.recordCheck(id, results);
   return { id, label: s.label, nuovi: alerts.length, sources: out.sources };
 }
 
-// Check di tutte (o le stantie). Sequenziale, single-inflight, salta se Subito
-// è bloccato (evita di bruciare la sessione). Cap al boot.
-async function checkAllSaved({ onlyStale = false, cap = Infinity } = {}) {
-  if (savedCheckInFlight) return savedCheckInFlight;
-  savedCheckInFlight = (async () => {
-    const esiti = [];
-    if (subitoSession.isSubitoBlocked()) {
-      console.log('[saved] Subito bloccato → salto il check automatico.');
-      return esiti;
-    }
-    const now = Date.now();
-    let done = 0;
-    for (const s of saved.listSaved()) {
-      if (done >= cap) break;
-      if (onlyStale && s.lastChecked && now - s.lastChecked < SAVED_STALE_MS) continue;
-      try { esiti.push(await checkSaved(s.id)); done++; }
-      catch (e) { console.warn(`[saved] check ${s.id} fallito: ${e.message}`); }
-    }
+// Check di tutte (o le stantie), SENZA lock. Salta se Subito è bloccato.
+async function _checkAll({ onlyStale = false, cap = Infinity } = {}) {
+  const esiti = [];
+  if (subitoSession.isSubitoBlocked()) {
+    console.log('[saved] Subito bloccato → salto il check automatico.');
     return esiti;
-  })();
-  try { return await savedCheckInFlight; }
-  finally { savedCheckInFlight = null; }
+  }
+  const now = Date.now();
+  let done = 0;
+  for (const s of saved.listSaved()) {
+    if (done >= cap) break;
+    if (onlyStale && s.lastChecked && now - s.lastChecked < SAVED_STALE_MS) continue;
+    try { esiti.push(await _checkSavedOne(s.id)); done++; }
+    catch (e) { console.warn(`[saved] check ${s.id} fallito: ${e.message}`); }
+  }
+  return esiti;
 }
+
+const checkSaved    = (id)   => withSavedLock(() => _checkSavedOne(id));
+const checkAllSaved = (opts) => withSavedLock(() => _checkAll(opts));
 
 // CRUD
 app.get('/api/saved', (req, res) => res.json({ saved: saved.listSaved() }));

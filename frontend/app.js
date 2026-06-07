@@ -1056,7 +1056,11 @@ async function markRicercaRead(id) {
   try { await fetch(`/api/saved/${encodeURIComponent(id)}/read`, { method: 'POST' }); }
   catch (_) {}
   const s = savedSearches.find(x => x.id === id);
-  if (s) { s.novita = 0; updateNovitaBadge(); }
+  if (s) { s.novita = 0; s.digest = {}; updateNovitaBadge(); }
+  // Feedback immediato: togli badge "N" e bordo-novità dalla card, senza
+  // collassare la lista avvisi aperta.
+  const card = document.querySelector(`.ric-card[data-id="${CSS.escape(id)}"]`);
+  if (card) { card.classList.remove('has-novita'); card.querySelector('.ric-badge')?.remove(); }
 }
 
 const MOTIVO_LABEL = { nuovo: 'nuovi', calo: 'cali', affare: 'affari' };
