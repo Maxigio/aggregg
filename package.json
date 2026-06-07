@@ -13,8 +13,10 @@
     "postinstall": "node scripts/bundle-vendor.js",
     "prepare:mac": "node scripts/prepare-mac-chromium.js",
     "prepare:mac-arm64": "node scripts/prepare-mac-chromium-arm64.js",
+    "prepare:mac-universal": "node scripts/prepare-mac-chromium-universal.js",
     "build:mac": "npm run prepare:mac && electron-builder --mac --x64",
     "build:mac-arm64": "npm run prepare:mac-arm64 && electron-builder --mac --arm64",
+    "build:mac-universal": "npm run prepare:mac-universal && electron-builder --mac --universal",
     "dist:mac": "electron-builder --mac --x64",
     "dist:mac-arm64": "electron-builder --mac --arm64",
     "dist:win": "electron-builder --win --x64",
@@ -69,6 +71,12 @@
       "target": [
         {
           "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
           "arch": [
             "x64"
           ]

@@ -1,5 +1,6 @@
 const { app, BrowserWindow, shell, net } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const { fork } = require('child_process');
 const { scheduleUpdateCheck } = require('./auto-update');
@@ -9,6 +10,46 @@ let serverProcess;
 
 // Porta fissa non-standard per evitare conflitti con altri servizi locali
 const PORT = 47321;
+
+// ── Modalità portatile (§14): app da SSD → dati ACCANTO all'app, seguono il
+// supporto su qualsiasi computer. Calcolata PRIMA di app.whenReady perché
+// setPath('userData') va fatto prima del primo accesso a userData.
+function computePortable() {
+  let appDir;
+  if (process.env.PORTABLE_EXECUTABLE_DIR) {
+    appDir = process.env.PORTABLE_EXECUTABLE_DIR;          // build Windows "portable" (exe in TEMP → questa è la dir reale)
+  } else if (process.platform === 'darwin') {
+    const exe = app.getPath('exe');                        // Foo.app/Contents/MacOS/Foo
+    appDir = path.dirname(path.resolve(exe, '..', '..', '..'));  // dir che CONTIENE Foo.app
+  } else {
+    appDir = path.dirname(app.getPath('exe'));
+  }
+  const dataDir = path.join(appDir, 'AutoMotoRadar-Data');
+  // Segnale PRIMARIO deterministico: marker .portable o cartella dati già presente.
+  let portable = false;
+  try { portable = !!process.env.PORTABLE_EXECUTABLE_DIR
+                 || fs.existsSync(path.join(appDir, '.portable'))
+                 || fs.existsSync(dataDir); } catch (_) {}
+  // Fallback DEBOLE (solo se il marker manca): app su volume esterno macOS.
+  if (!portable && process.platform === 'darwin' && appDir.startsWith('/Volumes/')) {
+    console.log('[portable] euristica volume-esterno attiva (nessun marker .portable):', appDir);
+    portable = true;
+  }
+  if (!portable) return false;
+  try {
+    fs.mkdirSync(dataDir, { recursive: true });
+    app.setPath('userData', dataDir);                      // cache Electron + persistenza seguono il SSD
+    console.log('[portable] dati in', dataDir);
+    return true;
+  } catch (e) {
+    console.warn('[portable] scrittura fallita su', dataDir, '→ fallback userData ospite:', e.message);
+    return false;
+  }
+}
+
+// Solo in build pacchettizzata: in DEV (npm run electron) l'exe è dentro
+// node_modules/electron (spesso su volume esterno) → l'euristica scatterebbe a vuoto.
+const PORTABLE = app.isPackaged && computePortable();
 
 function startServer() {
   const serverPath = path.join(__dirname, '../backend/server.js');
@@ -122,7 +163,9 @@ app.whenReady().then(() => {
   createWindow();
   // Check aggiornamenti GitHub Releases dopo che la UI è pronta (10s di delay).
   // Non blocca l'uso dell'app; se rete assente, fallisce silente.
-  if (app.isPackaged) scheduleUpdateCheck(mainWindow);
+  // OFF in modalità portatile: l'updater scaricherebbe/installerebbe un DMG che
+  // rompe il workflow da-SSD (l'app non è in /Applications).
+  if (app.isPackaged && !PORTABLE) scheduleUpdateCheck(mainWindow);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

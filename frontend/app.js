@@ -11,14 +11,19 @@ const resultsCount       = document.getElementById('resultsCount');
 const fonteBreakdown     = document.getElementById('fonteBreakdown');
 const noResults          = document.getElementById('noResults');
 const sortSelect         = document.getElementById('sortSelect');
+const groupSelect        = document.getElementById('groupSelect');
 const marcaSelect        = document.getElementById('marca');
 const regioneSelect      = document.getElementById('regione');
 const tipoInputs         = document.querySelectorAll('input[name="tipo"]');
-const fonteChips         = document.getElementById('fonteChips');
+const groupChips         = document.getElementById('groupChips');
 const backToSearch       = document.getElementById('backToSearch');
-const statsPanel         = document.getElementById('statsPanel');
-const clientFiltersPanel = document.getElementById('clientFiltersPanel');
-const excludeNoPrice     = document.getElementById('excludeNoPrice');
+const resultsNav         = document.getElementById('resultsNav');
+const isolaRow           = document.getElementById('isolaRow');
+const isolaToggle        = document.getElementById('isolaToggle');
+const isolaCount         = document.getElementById('isolaCount');
+const chipsAllNone       = document.getElementById('chipsAllNone');
+const advancedToggle     = document.getElementById('advancedToggle');
+const advancedFilters    = document.getElementById('advancedFilters');
 const prezzoSliderEl     = document.getElementById('prezzoSlider');
 const btnStatCsv         = document.getElementById('btnStatCsv');
 const btnStatPdf         = document.getElementById('btnStatPdf');
@@ -26,14 +31,15 @@ const subitoBanner       = document.getElementById('subitoBootstrapBanner');
 const btnBootstrap       = document.getElementById('btnBootstrapSubito');
 const bootstrapBtnText   = document.getElementById('bootstrapBtnText');
 const bootstrapBtnSpinner = document.getElementById('bootstrapBtnSpinner');
-const subitoPill         = document.getElementById('subitoStatusPill');
-const subitoPillText     = subitoPill?.querySelector('.subito-pill-text');
 
 // ─── Stato ────────────────────────────────────────────────────────────────────
 let currentResults       = [];
 let confronto            = [];   // max 2 result objects per il confronto
 let salvati              = [];   // annunci salvati nella sessione corrente
-const fontiAttive        = { subito: true, autoscout: true, moto: true };
+let hiddenGroups         = new Set();   // chiavi-gruppo nascoste via chip (group-by attivo)
+let lastGroupKeys        = [];          // chiavi gruppo dell'ultima resa (per Tutte/Nessuna)
+let isolaOpen            = false;       // pannello Isola aperto/chiuso (dropdown)
+let lastSources          = null;        // stato per-fonte dall'ultima ricerca
 let prezzoSliderInstance = null;
 let sliderGlobalBounds   = [0, 0];
 
@@ -42,13 +48,20 @@ const brandCache = { auto: null, moto: null };
 
 const FONTE_LABEL = { subito: 'Subito.it', autoscout: 'Autoscout24', moto: 'Moto.it' };
 
-// Abbreviazioni siti per badge: S=Subito, A=Autoscout, M=Moto.it
-function sitesBadge(sites, tipo) {
-  const marks = [];
-  if (sites.includes('subito'))    marks.push('S');
-  if (sites.includes('autoscout')) marks.push('A');
-  if (tipo === 'moto' && sites.includes('motoit')) marks.push('M');
-  return marks.length ? ` [${marks.join('·')}]` : '';
+// ─── Icone Lucide (SVG inline, dependency-free / offline) ───────────────────
+const ICONS = {
+  bookmark:          '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>',
+  'bookmark-filled': '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" fill="currentColor"/>',
+  compare:           '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/>',
+  chevron:           '<path d="m6 9 6 6 6-6"/>',
+  external:          '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/>',
+  trendingDown:      '<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>',
+  alert:             '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  help:              '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+  x:                 '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+};
+function icon(name, cls = '') {
+  return `<svg class="ico ${cls}" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 }
 
 
@@ -61,34 +74,34 @@ async function init() {
 
   populateRegione();
   await populateMarca('auto');
-  await loadFiltersSchema('auto');
+  setupMarcaAutocomplete();
   applyUrlParams();
 
-  // Cambio tipo (auto/moto): ricarica marche + ricarica schema filtri
+  // Cambio tipo (auto/moto): ricarica marche
   tipoInputs.forEach(input => input.addEventListener('change', async () => {
     await populateMarca(input.value);
-    await loadFiltersSchema(input.value);
-    fonteChips.querySelector('[data-fonte="moto"]').style.display = input.value === 'moto' ? '' : 'none';
     currentResults = [];
     hideResults();
-    // Reset modello e filtri sito quando cambia tipo
+    // Reset modello quando cambia tipo
     document.getElementById('modello').value = '';
-    resetSiteFilters();
   }));
 
-  fonteChips.querySelector('[data-fonte="moto"]').style.display = 'none';
-
-  fonteChips.addEventListener('click', e => {
-    const btn = e.target.closest('[data-fonte]');
+  // Chip di gruppo: isolano/nascondono un gruppo (solo con group-by attivo)
+  if (groupChips) groupChips.addEventListener('click', e => {
+    const btn = e.target.closest('.grp-chip');
     if (!btn) return;
-    const fonte = btn.dataset.fonte;
-    fontiAttive[fonte] = !fontiAttive[fonte];
-    btn.classList.toggle('active', fontiAttive[fonte]);
+    const key = btn.dataset.group;
+    if (hiddenGroups.has(key)) hiddenGroups.delete(key);
+    else                       hiddenGroups.add(key);
     renderResults(currentResults);
   });
 
-  sortSelect.addEventListener('change',    () => renderResults(currentResults));
-  excludeNoPrice.addEventListener('change', () => renderResults(currentResults));
+  sortSelect.addEventListener('change', () => renderResults(currentResults));
+  if (groupSelect) groupSelect.addEventListener('change', () => {
+    hiddenGroups.clear();                 // reset isolamento al cambio dimensione
+    isolaOpen = false;                    // pannello Isola collassato di default
+    renderResults(currentResults);
+  });
 
   btnStatCsv.addEventListener('click', () => exportCsv(currentResults));
   btnStatPdf.addEventListener('click', () => exportPdf(currentResults));
@@ -98,11 +111,28 @@ async function init() {
 
   // ── Event delegation: card risultati ─────────────────────────────────────
   resultsGrid.addEventListener('click', e => {
+    // Collasso/espansione sezione gruppo
+    const groupHeader = e.target.closest('.group-header');
+    if (groupHeader) {
+      const section = groupHeader.closest('.result-group');
+      section?.classList.toggle('collapsed');
+      return;
+    }
+
     const card = e.target.closest('[data-url]');
     if (!card) return;
     const url = card.dataset.url;
     if (e.target.closest('.btn-salva'))     { toggleSalva(url);     return; }
     if (e.target.closest('.btn-confronta')) { toggleConfronto(url); return; }
+    // Apri/chiudi il dettaglio rating senza aprire l'annuncio
+    if (e.target.closest('.rating-toggle')) {
+      const detail = card.querySelector('.rating-detail');
+      const toggle = card.querySelector('.rating-toggle');
+      const open   = detail.classList.toggle('d-none');
+      toggle.setAttribute('aria-expanded', String(!open));
+      if (!open) loadSpec(card);   // appena aperto → carica spec extra (lazy, una sola volta)
+      return;
+    }
     window.open(url, '_blank', 'noopener,noreferrer');
   });
 
@@ -116,10 +146,34 @@ async function init() {
     window.open(url, '_blank', 'noopener,noreferrer');
   });
 
-  // ── Event delegation: min/max cliccabili nelle stats ─────────────────────
-  statsPanel.addEventListener('click', e => {
+  // ── Event delegation: min/max cliccabili nelle stats (navbar) ────────────
+  resultsNav.addEventListener('click', e => {
     const btn = e.target.closest('.stat-clickable');
     if (btn) scrollToCard(btn.dataset.url);
+  });
+
+  // ── Chip Isola: Tutte / Nessuna ──────────────────────────────────────────
+  if (chipsAllNone) chipsAllNone.addEventListener('click', () => {
+    if (hiddenGroups.size >= lastGroupKeys.length && lastGroupKeys.length) {
+      hiddenGroups.clear();                       // erano tutte nascoste → mostra tutte
+    } else {
+      hiddenGroups = new Set(lastGroupKeys);      // nascondi tutte
+    }
+    renderResults(currentResults);
+  });
+
+  // ── Isola: dropdown apri/chiudi ──────────────────────────────────────────
+  if (isolaToggle) isolaToggle.addEventListener('click', () => {
+    isolaOpen = !isolaOpen;
+    isolaToggle.setAttribute('aria-expanded', String(isolaOpen));
+    isolaRow.classList.toggle('d-none', !isolaOpen);
+  });
+
+  // ── Filtri avanzati (hero): apri/chiudi ──────────────────────────────────
+  if (advancedToggle) advancedToggle.addEventListener('click', () => {
+    const open = advancedFilters.classList.toggle('d-none');
+    advancedToggle.setAttribute('aria-expanded', String(!open));
+    advancedToggle.classList.toggle('open', !open);
   });
 
   // Stato iniziale salvati (lista vuota)
@@ -147,10 +201,7 @@ function populateRegione() {
 // Il dropdown rigido è stato rimosso: l'utente può digitare qualsiasi marca,
 // l'autocomplete dal catalogo `data/models.json` è solo un suggerimento soft.
 async function populateMarca(tipo) {
-  const datalist = document.getElementById('brandsList');
-  if (!datalist) return;
-
-  // Carica dal server (cache per tipo)
+  // Carica le marche del tipo nella cache (consumata dall'autocomplete custom).
   if (!brandCache[tipo]) {
     try {
       const res  = await fetch(`/api/brands?tipo=${encodeURIComponent(tipo)}`);
@@ -160,127 +211,123 @@ async function populateMarca(tipo) {
       brandCache[tipo] = [];
     }
   }
+}
 
-  // Popola <datalist> con le marche del tipo selezionato.
-  datalist.innerHTML = '';
-  (brandCache[tipo] || []).forEach(b => {
-    const opt = document.createElement('option');
-    opt.value = b.nome;
-    datalist.appendChild(opt);
+// ─── Autocomplete marca CUSTOM (sostituisce il <datalist> nativo) ───────────
+// Stilabile (chiaro, selezione visibile) + Tab/Enter completano, ↑/↓ navigano.
+function currentTipo() {
+  return document.querySelector('input[name="tipo"]:checked')?.value || 'auto';
+}
+function setupMarcaAutocomplete() {
+  const list = document.getElementById('marcaAC');
+  if (!marcaSelect || !list) return;
+  const acn = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+  let matches = [], active = -1;
+
+  const close = () => { list.classList.add('d-none'); list.innerHTML = ''; active = -1; marcaSelect.setAttribute('aria-expanded', 'false'); };
+  const render = () => {
+    if (!matches.length) return close();
+    list.innerHTML = matches.map((b, i) =>
+      `<li class="ac-item${i === active ? ' active' : ''}" role="option" data-i="${i}">${escapeHtml(b.nome)}</li>`).join('');
+    list.classList.remove('d-none');
+    marcaSelect.setAttribute('aria-expanded', 'true');
+  };
+  const pick = i => { if (matches[i]) { marcaSelect.value = matches[i].nome; close(); document.getElementById('modello')?.focus(); } };
+
+  marcaSelect.addEventListener('input', () => {
+    const q = acn(marcaSelect.value);
+    const brands = brandCache[currentTipo()] || [];
+    matches = q ? brands.filter(b => acn(b.nome).includes(q)).slice(0, 8) : [];
+    active = matches.length ? 0 : -1;
+    render();
   });
+  marcaSelect.addEventListener('keydown', e => {
+    if (list.classList.contains('d-none') || !matches.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); active = (active + 1) % matches.length; render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = (active - 1 + matches.length) % matches.length; render(); }
+    else if (e.key === 'Enter') { if (active >= 0) { e.preventDefault(); pick(active); } }
+    else if (e.key === 'Tab') { if (active >= 0) { e.preventDefault(); pick(active); } }   // Tab completa
+    else if (e.key === 'Escape') { close(); }
+  });
+  list.addEventListener('mousedown', e => { const li = e.target.closest('.ac-item'); if (li) { e.preventDefault(); pick(+li.dataset.i); } });
+  marcaSelect.addEventListener('blur', () => setTimeout(close, 120));
 }
 
 // Modello è ora un input testuale libero (#modello). Niente più TomSelect.
 
-// ─── Pannello filtri per-piattaforma (P10) ──────────────────────────────────
-// Schema dei filtri caricato dal server una volta per tipo (auto/moto).
-let filtersSchemaCache = null;          // cache schema per il tipo attualmente caricato
+// ─── Motore di analisi: rating 0-100 + evidenziazioni ───────────────────────
+// Tutto calcolato client-side sul set di risultati, una sola volta dopo la
+// ricerca. I comparabili di ogni annuncio sono gli altri annunci dello stesso
+// CLUSTER-MODELLO (non l'intero set): così confrontiamo prezzi tra mezzi simili
+// e lo stesso annuncio mantiene sempre lo stesso punteggio a prescindere dalla
+// vista (ordinamento/raggruppamento/filtro fonti agiscono solo sulla resa).
 
-const sitefiltersPanel    = document.getElementById('sitefiltersPanel');
-const sitefiltersSubito   = document.getElementById('sitefiltersSubito');
-const sitefiltersAutoscout= document.getElementById('sitefiltersAutoscout');
-const sitefiltersMotoit   = document.getElementById('sitefiltersMotoit');
-const sitefiltersMotoitEmpty = document.getElementById('sitefiltersMotoitEmpty');
-const btnSiteFiltersApply = document.getElementById('btnSiteFiltersApply');
-const btnSiteFiltersReset = document.getElementById('btnSiteFiltersReset');
+// Modulo analisi (scoring/flag/cluster) estratto in frontend/analysis.js — isomorfo,
+// condiviso col motore-avvisi server (§11). Caricato via <script> PRIMA di app.js.
+const { analyzeResults, clusterModello } = (typeof window !== 'undefined' ? window : globalThis).AMRAnalysis;
 
-async function loadFiltersSchema(tipo) {
-  try {
-    const res = await fetch(`/api/filters?tipo=${encodeURIComponent(tipo)}`);
-    filtersSchemaCache = await res.json();
-    renderSiteFilters(tipo);
-  } catch (err) {
-    console.warn('loadFiltersSchema failed', err);
-    filtersSchemaCache = { subito: [], autoscout: [], motoit: [] };
-    renderSiteFilters(tipo);
+const FLAG_META = {
+  affare:        { icon: 'trendingDown', label: 'Affare',           cls: 'flag-affare' },
+  sospetto:      { icon: 'alert',        label: 'Prezzo sospetto',  cls: 'flag-rosso' },
+  km_bassi:      { icon: 'alert',        label: 'Km incoerenti',    cls: 'flag-rosso' },
+  km_alti:       { icon: 'alert',        label: 'Km molto alti',    cls: 'flag-rosso' },
+  dato_mancante: { icon: 'help',         label: 'Dati incompleti',  cls: 'flag-giallo' },
+};
+
+function scoreTier(score) {
+  if (score >= 70) return 'score-ottimo';
+  if (score >= 45) return 'score-medio';
+  return 'score-basso';
+}
+
+// ─── Raggruppamento (GROUP BY) ──────────────────────────────────────────────
+function bucketKm(km) {
+  if (km == null)   return 'Km non indicati';
+  if (km < 50000)   return '< 50.000 km';
+  if (km < 100000)  return '50.000 – 100.000 km';
+  if (km < 150000)  return '100.000 – 150.000 km';
+  if (km < 200000)  return '150.000 – 200.000 km';
+  return '> 200.000 km';
+}
+
+function bucketAnno(anno) {
+  if (anno == null) return 'Anno non indicato';
+  if (anno >= 2020) return 'Dal 2020';
+  if (anno >= 2015) return '2015 – 2019';
+  if (anno >= 2010) return '2010 – 2014';
+  if (anno >= 2000) return '2000 – 2009';
+  return 'Prima del 2000';
+}
+
+function groupKeyFn(dim) {
+  switch (dim) {
+    case 'fonte':      return r => FONTE_LABEL[r.fonte] || r.fonte;
+    case 'carburante': return r => r.carburante || 'Carburante non indicato';
+    case 'km':         return r => bucketKm(r.km);
+    case 'anno':       return r => bucketAnno(r.anno);
+    case 'provincia':  return r => r.provincia || 'Zona non indicata';
+    case 'modello':    return r => r._cluster || clusterModello(r.titolo);
+    default:           return null;
   }
 }
 
-function renderSiteFilters(tipo) {
-  if (!filtersSchemaCache) return;
-
-  // Render per ognuna delle 3 sezioni
-  renderSiteSection(sitefiltersSubito,    filtersSchemaCache.subito,    'subito');
-  renderSiteSection(sitefiltersAutoscout, filtersSchemaCache.autoscout, 'autoscout');
-  renderSiteSection(sitefiltersMotoit,    filtersSchemaCache.motoit,    'motoit');
-
-  // Sezione Moto.it disabilitata se tipo == auto
-  if (tipo === 'auto') {
-    sitefiltersMotoit.classList.add('d-none');
-    sitefiltersMotoitEmpty?.classList.remove('d-none');
-  } else {
-    sitefiltersMotoit.classList.remove('d-none');
-    sitefiltersMotoitEmpty?.classList.add('d-none');
+// Raggruppa results → [{ key, items, minPrezzo }] ordinato per prezzo minimo asc.
+function groupResults(results, dim) {
+  const keyFn = groupKeyFn(dim);
+  if (!keyFn) return null;
+  const map = new Map();
+  for (const r of results) {
+    const k = keyFn(r);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(r);
   }
+  const groups = [...map.entries()].map(([key, items]) => {
+    const prezzi = items.map(i => i.prezzo).filter(p => p != null && p > 0);
+    return { key, items, minPrezzo: prezzi.length ? Math.min(...prezzi) : null };
+  });
+  groups.sort((a, b) => (a.minPrezzo ?? Infinity) - (b.minPrezzo ?? Infinity));
+  return groups;
 }
-
-function renderSiteSection(container, filters, sitePrefix) {
-  if (!container) return;
-  if (!filters || filters.length === 0) {
-    container.innerHTML = '<div class="text-muted small">Nessun filtro specifico.</div>';
-    return;
-  }
-  container.innerHTML = filters.map(f => {
-    const inputId = `sf_${sitePrefix}_${f.key}`;
-    if (f.type === 'select') {
-      const opts = (f.values || []).map(v =>
-        `<option value="${v.value}">${v.label}</option>`
-      ).join('');
-      return `
-        <div class="filter-row">
-          <label class="form-label" for="${inputId}">${f.label}</label>
-          <select id="${inputId}" class="form-select" data-sitekey="${sitePrefix}.${f.key}">
-            <option value="">— qualsiasi —</option>
-            ${opts}
-          </select>
-        </div>
-      `;
-    }
-    if (f.type === 'range') {
-      // range con from/to
-      const fromId = `${inputId}_from`, toId = `${inputId}_to`;
-      return `
-        <div class="filter-row">
-          <label class="form-label">${f.label}</label>
-          <div class="range-pair">
-            <input type="number" id="${fromId}" class="form-control" placeholder="da" data-sitekey="${sitePrefix}.${f.key}" data-bound="from" />
-            <input type="number" id="${toId}"   class="form-control" placeholder="a"  data-sitekey="${sitePrefix}.${f.key}" data-bound="to" />
-          </div>
-        </div>
-      `;
-    }
-    return '';
-  }).join('');
-}
-
-// Raccoglie i valori dei filtri attivi nelle 3 sezioni e li restituisce come 3 blob.
-function getActiveSiteFilters() {
-  const out = { subito: {}, autoscout: {}, motoit: {} };
-  if (!sitefiltersPanel) return out;
-  const inputs = sitefiltersPanel.querySelectorAll('[data-sitekey]');
-  for (const el of inputs) {
-    const [site, key] = el.dataset.sitekey.split('.');
-    const val = el.value;
-    if (val == null || val === '') continue;
-    const bound = el.dataset.bound;
-    if (bound) {
-      out[site][key] = out[site][key] || {};
-      out[site][key][bound] = val;
-    } else {
-      out[site][key] = val;
-    }
-  }
-  return out;
-}
-
-function resetSiteFilters() {
-  if (!sitefiltersPanel) return;
-  const inputs = sitefiltersPanel.querySelectorAll('[data-sitekey]');
-  inputs.forEach(el => { el.value = ''; });
-}
-
-if (btnSiteFiltersApply) btnSiteFiltersApply.addEventListener('click', () => doSearch());
-if (btnSiteFiltersReset) btnSiteFiltersReset.addEventListener('click', () => { resetSiteFilters(); doSearch(); });
 
 
 // ─── Ricerca ──────────────────────────────────────────────────────────────────
@@ -307,17 +354,10 @@ async function doSearch() {
 
   if (regioneSelect.value) params.regione = regioneSelect.value;
 
-  // Filtri per-piattaforma (P10): blob JSON-serializzati dei filtri attivi
-  // del pannello tripartito. Se l'utente non ha applicato filtri, sono {}.
-  const activeFilters = getActiveSiteFilters();
-  if (Object.keys(activeFilters.subito).length)    params.filtersSubito    = JSON.stringify(activeFilters.subito);
-  if (Object.keys(activeFilters.autoscout).length) params.filtersAutoscout = JSON.stringify(activeFilters.autoscout);
-  if (Object.keys(activeFilters.motoit).length)    params.filtersMotoit    = JSON.stringify(activeFilters.motoit);
-
   Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });
 
-  excludeNoPrice.checked = false;
   confronto = [];
+  document.body.classList.add('has-results');   // hero va in alto (non più centrata)
 
   showLoading();
   hideResults();
@@ -328,7 +368,10 @@ async function doSearch() {
 
     if (!res.ok) { showError(data.error || 'Errore durante la ricerca.'); return; }
 
-    currentResults = data.risultati || [];
+    // Analizza UNA volta: rating + evidenziazioni sul cluster-modello.
+    currentResults = analyzeResults(data.risultati || []);
+    lastSources    = data.sources || null;   // stato per-fonte (ok/empty/skipped/timeout/error)
+    renderSourceStatus();
 
     // Subito bloccato da DataDome → mostra banner + aggiorna pillola
     if (data.subitoStatus === 'needs_bootstrap') showBootstrapBanner();
@@ -336,15 +379,12 @@ async function doSearch() {
     // La response può aver cambiato lo state lato server (es. sbloccato dopo refresh)
     fetchSubitoStatus();
 
-    // P10: rivela il pannello filtri tripartito dopo la prima ricerca andata a buon fine.
-    if (sitefiltersPanel) sitefiltersPanel.classList.remove('d-none');
-
     initPrezzoSlider(currentResults);
 
     if (!prezzoSliderInstance) renderResults(currentResults);
 
     if (currentResults.length > 0) {
-      statsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      resultsNav.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
   } catch {
@@ -407,81 +447,14 @@ async function runSubitoBootstrap() {
 
 if (btnBootstrap) btnBootstrap.addEventListener('click', runSubitoBootstrap);
 
-// ─── Pillola di stato Subito (sempre visibile nell'header) ───────────────────
-//
-// Stati possibili (campo `health` da /api/subito/status):
-//   - 'never_configured': nessuna sessione → click apre bootstrap
-//   - 'blocked':          sessione scaduta/bloccata → click apre bootstrap
-//   - 'expiring_soon':    cookie residuo < 30 min → click forza keep-alive
-//   - 'ok':               sessione viva → click forza keep-alive (refresh manuale)
-//
-// La pillola viene aggiornata:
-//   - all'avvio dell'app
-//   - dopo ogni ricerca (la response /api/search aggiorna implicitamente lo state)
-//   - ogni 60 secondi via polling
-//   - dopo un bootstrap o un keep-alive on-demand
-
-function fmtExpiry(secs) {
-  if (secs == null) return '';
-  if (secs < 60)        return secs + 's';
-  if (secs < 3600)      return Math.floor(secs / 60) + 'min';
-  if (secs < 86400)     return Math.floor(secs / 3600) + 'h';
-  return Math.floor(secs / 86400) + 'g';
-}
-
-function renderSubitoPill(status) {
-  if (!subitoPill || !subitoPillText) return;
-  // Reset classi colore
-  subitoPill.classList.remove('subito-pill-ok', 'subito-pill-warn', 'subito-pill-blocked', 'subito-pill-unknown');
-
-  if (status?.bootstrapping) {
-    subitoPill.classList.add('subito-pill-warn', 'subito-pill-busy');
-    subitoPillText.textContent = 'Bootstrap in corso…';
-    subitoPill.title = 'Risolvi il CAPTCHA nella finestra Chrome';
-    return;
-  }
-  subitoPill.classList.remove('subito-pill-busy');
-
-  switch (status?.health) {
-    case 'ok': {
-      subitoPill.classList.add('subito-pill-ok');
-      const exp = status.expiresIn != null ? ` (${fmtExpiry(status.expiresIn)})` : '';
-      subitoPillText.textContent = 'Subito attivo' + exp;
-      subitoPill.title = 'Sessione attiva. Click per rinfrescare.';
-      break;
-    }
-    case 'expiring_soon': {
-      subitoPill.classList.add('subito-pill-warn');
-      const exp = status.expiresIn != null ? ` (${fmtExpiry(status.expiresIn)})` : '';
-      subitoPillText.textContent = 'Subito in scadenza' + exp;
-      subitoPill.title = 'Cookie quasi scaduto. Click per rinfrescare.';
-      break;
-    }
-    case 'blocked': {
-      subitoPill.classList.add('subito-pill-blocked');
-      subitoPillText.textContent = 'Subito bloccato';
-      subitoPill.title = 'Sessione non valida. Click per riconfigurare.';
-      break;
-    }
-    case 'never_configured': {
-      subitoPill.classList.add('subito-pill-blocked');
-      subitoPillText.textContent = 'Configura Subito';
-      subitoPill.title = 'Nessuna sessione. Click per configurare.';
-      break;
-    }
-    default: {
-      subitoPill.classList.add('subito-pill-unknown');
-      subitoPillText.textContent = 'Subito —';
-    }
-  }
-}
-
+// ─── Stato Subito → solo banner quando serve ────────────────────────────────
+// Niente più pillola persistente: lo stato viene controllato (avvio, dopo ogni
+// ricerca, ogni 60s) e mostra il banner bootstrap solo se la sessione è
+// bloccata / mai configurata.
 async function fetchSubitoStatus() {
   try {
     const res  = await fetch('/api/subito/status');
     const data = await res.json();
-    renderSubitoPill(data);
-    // Mostra/nascondi banner in base allo stato (sincronizzato con la pillola)
     if (data.health === 'blocked' || data.health === 'never_configured') showBootstrapBanner();
     else                                                                  hideBootstrapBanner();
     return data;
@@ -490,40 +463,6 @@ async function fetchSubitoStatus() {
   }
 }
 
-// Click sulla pillola: comportamento basato sullo stato corrente
-async function handlePillClick() {
-  if (!subitoPill || subitoPill.classList.contains('subito-pill-busy')) return;
-  const isBlocked = subitoPill.classList.contains('subito-pill-blocked');
-  if (isBlocked) {
-    runSubitoBootstrap();          // apre Chrome + CAPTCHA
-  } else {
-    runKeepAlive();                // refresh silenzioso del cookie
-  }
-}
-
-async function runKeepAlive() {
-  if (!subitoPill) return;
-  subitoPill.classList.add('subito-pill-busy');
-  const oldText = subitoPillText?.textContent;
-  if (subitoPillText) subitoPillText.textContent = 'Rinfresco…';
-
-  try {
-    const res = await fetch('/api/subito/keep-alive', { method: 'POST' });
-    const data = await res.json();
-    await fetchSubitoStatus();
-    if (!data.ok) {
-      console.warn('keep-alive failed:', data.reason);
-    }
-  } catch (err) {
-    if (subitoPillText && oldText) subitoPillText.textContent = oldText;
-  } finally {
-    subitoPill.classList.remove('subito-pill-busy');
-  }
-}
-
-if (subitoPill) subitoPill.addEventListener('click', handlePillClick);
-
-// Polling: aggiorna la pillola ogni 60s (oltre agli aggiornamenti event-driven)
 const SUBITO_POLL_INTERVAL = 60 * 1000;
 fetchSubitoStatus();
 setInterval(fetchSubitoStatus, SUBITO_POLL_INTERVAL);
@@ -565,39 +504,131 @@ function initPrezzoSlider(results) {
 
 // ─── Rendering risultati ──────────────────────────────────────────────────────
 function renderResults(results) {
-  let filtered = results.filter(r => fontiAttive[r.fonte]);
-
-  if (excludeNoPrice.checked) {
-    filtered = filtered.filter(r => r.prezzo != null);
-  }
+  let filtered = results.slice();
 
   if (prezzoSliderInstance) {
     const [sMin, sMax] = prezzoSliderInstance.get().map(Number);
     filtered = filtered.filter(r => r.prezzo == null || (r.prezzo >= sMin && r.prezzo <= sMax));
   }
 
-const sorted = sortResults([...filtered], sortSelect.value);
+  const sorted = sortResults([...filtered], sortSelect.value);
 
-  statsPanel.classList.remove('d-none');
-  clientFiltersPanel.classList.remove('d-none');
-  updateStats(sorted);
+  // Raggruppamento + chip di isolamento (solo con group-by attivo)
+  const dim = groupSelect ? groupSelect.value : '';
+  let groups = null, visible = sorted;
+  if (dim) {
+    groups  = groupResults(sorted, dim);
+    const keyOf = groupKeyFn(dim);
+    visible = sorted.filter(r => !hiddenGroups.has(keyOf(r)));
+  }
+  renderGroupChips(dim, groups);
 
-  if (sorted.length === 0) {
+  resultsNav.classList.remove('d-none');   // navbar comandi visibile finché ci sono risultati
+  updateStats(visible);
+
+  if (visible.length === 0) {
     noResults.classList.remove('d-none');
     resultsSection.classList.add('d-none');
+    fonteBreakdown.textContent = '';
     return;
   }
 
   noResults.classList.add('d-none');
   resultsSection.classList.remove('d-none');
 
-  resultsCount.textContent = `${sorted.length} risultati trovati`;
-  const breakdown = Object.entries(
-    sorted.reduce((acc, r) => { acc[r.fonte] = (acc[r.fonte] || 0) + 1; return acc; }, {})
-  ).map(([f, n]) => `${FONTE_LABEL[f] || f}: ${n}`).join(' · ');
-  fonteBreakdown.textContent = breakdown;
+  resultsCount.textContent = `${visible.length} risultati`;
 
-  resultsGrid.innerHTML = sorted.map(cardHTML).join('');
+  if (dim) {
+    const shown = groups.filter(g => !hiddenGroups.has(g.key));
+    resultsGrid.innerHTML = shown.map(g => groupHTML(g, dim)).join('');
+  } else {
+    resultsGrid.innerHTML = `<div class="result-list">${visible.map(r => rowHTML(r, dim)).join('')}</div>`;
+  }
+}
+
+// Stato per-fonte: dice all'utente cosa è successo per ogni sito
+// (ok+conteggio / nessun risultato / saltato+motivo / timeout / errore).
+const SOURCE_STATUS = {
+  ok:              { cls: 'src-ok' },
+  empty:           { cls: 'src-muted', txt: 'nessun risultato' },
+  skipped:         { cls: 'src-muted' },                              // usa reason
+  timeout:         { cls: 'src-bad',   txt: 'timeout' },
+  error:           { cls: 'src-bad',   txt: 'errore' },
+  needs_bootstrap: { cls: 'src-warn',  txt: 'verifica richiesta' },
+};
+const SKIP_REASON_TXT = {
+  'solo moto':             'solo moto',
+  'marca non su Moto.it':  'non disponibile',
+  'marca non su Autoscout':'non disponibile',
+};
+function renderSourceStatus() {
+  if (!fonteBreakdown) return;
+  if (!lastSources) { fonteBreakdown.innerHTML = ''; return; }
+  const order = ['subito', 'autoscout', 'moto'];
+  fonteBreakdown.innerHTML = order.map(f => {
+    const s = lastSources[f];
+    if (!s) return '';
+    const meta = SOURCE_STATUS[s.status] || { cls: 'src-muted' };
+    let txt;
+    if (s.status === 'ok')           txt = `${s.count}`;
+    else if (s.status === 'skipped') txt = SKIP_REASON_TXT[s.reason] || s.reason || 'saltato';
+    else                             txt = meta.txt || s.status;
+    const dim = s.status === 'ok' ? '' : ' src-dim';
+    return `<span class="src ${meta.cls}${dim}">${FONTE_LABEL[f]} <b>${txt}</b></span>`;
+  }).join('');
+}
+
+// Isola (navbar, dropdown): toggle "Isola (n)" + pannello chip + Tutte/Nessuna.
+function renderGroupChips(dim, groups) {
+  if (!groupChips || !isolaRow || !isolaToggle) return;
+
+  // Nessun group-by → nascondi toggle e pannello
+  if (!dim || !groups || !groups.length) {
+    groupChips.innerHTML = '';
+    isolaRow.classList.add('d-none');
+    isolaToggle.classList.add('d-none');
+    isolaOpen = false;
+    isolaToggle.setAttribute('aria-expanded', 'false');
+    lastGroupKeys = [];
+    return;
+  }
+
+  lastGroupKeys = groups.map(g => g.key);
+
+  // Toggle visibile; conteggio = gruppi attualmente nascosti (es. "2 nascosti")
+  isolaToggle.classList.remove('d-none');
+  const nHidden = groups.filter(g => hiddenGroups.has(g.key)).length;
+  if (isolaCount) isolaCount.textContent = nHidden ? `(${nHidden} nascosti)` : `(${groups.length})`;
+
+  // Pannello: visibile solo se aperto
+  isolaRow.classList.toggle('d-none', !isolaOpen);
+  isolaToggle.setAttribute('aria-expanded', String(isolaOpen));
+
+  groupChips.innerHTML = groups.map(g => {
+    const active = !hiddenGroups.has(g.key);
+    return `<button type="button" class="grp-chip${active ? ' active' : ''}" data-group="${escapeHtml(String(g.key))}">${escapeHtml(String(g.key))} <span class="grp-chip-n">${g.items.length}</span></button>`;
+  }).join('');
+
+  if (chipsAllNone) {
+    const allHidden = hiddenGroups.size >= lastGroupKeys.length;
+    chipsAllNone.textContent = allHidden ? 'Tutte' : 'Nessuna';
+  }
+}
+
+// Sezione gruppo collassabile: header (etichetta + conteggio + prezzo min) + lista.
+function groupHTML(g, dim) {
+  const fmt  = n => n != null ? `€ ${n.toLocaleString('it-IT')}` : '—';
+  const rows = `<div class="result-list">${g.items.map(r => rowHTML(r, dim)).join('')}</div>`;
+  return `
+    <div class="result-group">
+      <button type="button" class="group-header" aria-expanded="true">
+        <span class="group-caret">${icon('chevron')}</span>
+        <span class="group-title">${escapeHtml(String(g.key))}</span>
+        <span class="group-meta">${g.items.length} annunci${g.minPrezzo != null ? ` · da ${fmt(g.minPrezzo)}` : ''}</span>
+      </button>
+      <div class="group-body">${rows}</div>
+    </div>
+  `;
 }
 
 // ─── Statistiche ──────────────────────────────────────────────────────────────
@@ -606,16 +637,15 @@ function updateStats(results) {
   const fmt    = n => `€ ${n.toLocaleString('it-IT')}`;
 
   if (prices.length === 0) {
-    document.getElementById('statMin').innerHTML     = '—';
-    document.getElementById('statMax').innerHTML     = '—';
-    document.getElementById('statCount').textContent = `0 / ${results.length}`;
+    document.getElementById('statMin').innerHTML = '—';
+    document.getElementById('statMax').innerHTML = '—';
     return;
   }
 
   const min = prices[0];
   const max = prices[prices.length - 1];
 
-  // Trova i result corrispondenti a min e max per rendere i valori cliccabili
+  // Min/Max cliccabili → scroll alla card corrispondente
   const minResult = results.find(r => r.prezzo === min);
   const maxResult = results.find(r => r.prezzo === max);
 
@@ -624,9 +654,8 @@ function updateStats(results) {
       ? `<button class="stat-clickable" data-url="${escapeHtml(result.url)}">${fmt(val)}</button>`
       : fmt(val);
 
-  document.getElementById('statMin').innerHTML     = makeClickable(min, minResult);
-  document.getElementById('statMax').innerHTML     = makeClickable(max, maxResult);
-  document.getElementById('statCount').textContent = `${prices.length} / ${results.length}`;
+  document.getElementById('statMin').innerHTML = makeClickable(min, minResult);
+  document.getElementById('statMax').innerHTML = makeClickable(max, maxResult);
 }
 
 // ─── Scroll & highlight card ──────────────────────────────────────────────────
@@ -647,6 +676,7 @@ function sortResults(results, criteria) {
     case 'prezzo_desc': return results.sort((a, b) => (b.prezzo ?? -Infinity) - (a.prezzo ?? -Infinity));
     case 'anno_desc':   return results.sort((a, b) => (b.anno   ?? 0)         - (a.anno   ?? 0));
     case 'km_asc':      return results.sort((a, b) => (a.km     ?? Infinity)  - (b.km     ?? Infinity));
+    case 'rating_desc': return results.sort((a, b) => (b._score ?? -1)        - (a._score ?? -1));
     default:            return results;
   }
 }
@@ -660,10 +690,87 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-function cardHTML(item) {
+// Dropdown rating — spiegazione testuale onesta (niente chart astratte).
+// Base del confronto: stesso modello tra i risultati (cluster). Trasparente sul
+// campione; con <4 simili segnala "pochi dati".
+function ratingExplain(item, opts = {}) {
+  const bd = item._scoreBreakdown || {};
+  const n = bd.comparabili ?? 0;
+  const modello = item._cluster ? item._cluster.toUpperCase() : 'stesso modello';
+
+  if (n < 2) {
+    return `<div class="rx-note">Nessun altro annuncio simile trovato: convenienza non valutabile.</div>`;
+  }
+
+  const eur = v => '€ ' + Math.abs(Math.round(v)).toLocaleString('it-IT');
+  const kmf = v => Math.abs(Math.round(v)).toLocaleString('it-IT') + ' km';
+  const chip = (cls, label, val) => `<span class="rx-chip ${cls}"><em>${label}</em> ${val}</span>`;
+  const chips = [];
+
+  if (bd.avgPrezzo != null && item.prezzo != null && item.prezzo > 0) {
+    const d = item.prezzo - bd.avgPrezzo, pct = Math.round(Math.abs(d) / bd.avgPrezzo * 100), good = d <= 0;
+    chips.push(chip(good ? 'rx-good' : 'rx-bad', 'Prezzo', `${good ? '−' : '+'}${eur(d)} · ${pct}% ${good ? 'sotto' : 'sopra'}`));
+  }
+  if (bd.avgKm != null && item.km != null) {
+    const d = item.km - bd.avgKm;
+    if (Math.abs(d) < 3000) chips.push(chip('rx-mid', 'Km', 'in media'));
+    else chips.push(chip(d < 0 ? 'rx-good' : 'rx-bad', 'Km', `${d < 0 ? '−' : '+'}${kmf(d)}`));
+  }
+  if (bd.avgAnno != null && item.anno != null) {
+    const d = Math.round(item.anno - bd.avgAnno);
+    chips.push(chip(d > 0 ? 'rx-good' : d < 0 ? 'rx-bad' : 'rx-mid', 'Anno', d === 0 ? `${item.anno}` : `${item.anno} (${d > 0 ? '+' : ''}${d})`));
+  }
+
+  // Ranking solo se raggruppato (in vista mista l'ordine è già palese)
+  const rank = (opts.showRank && bd.priceRank != null && bd.priceRankTot >= 2)
+    ? ` · <b>${bd.priceRank}°</b> più conveniente` : '';
+  const low = bd.lowData ? ` · <span class="rx-lowinline">pochi dati</span>` : '';
+
+  return `
+    <div class="rx-head">vs <b>${n}</b> simili · ${escapeHtml(modello)}${rank}${low}</div>
+    <div class="rx-chips">${chips.join('')}</div>`;
+}
+
+// §15 — Spec extra ON-CLICK: alla prima apertura del dropdown Rating, fetch
+// /api/detail (lazy, cache server). Best-effort: se la fonte non risponde mostra
+// "dettagli non disponibili". data-loaded evita refetch.
+const SPEC_LABELS = {
+  cambio: 'Cambio', potenzaCv: 'Potenza', cilindrata: 'Cilindrata',
+  proprietari: 'Proprietari', allestimento: 'Allestimento', revisione: 'Revisione',
+};
+function renderSpec(detail) {
+  const fmt = (k, v) => {
+    if (v == null || v === '') return '';
+    const val = k === 'potenzaCv' ? `${v} CV` : k === 'cilindrata' ? `${v} cc` : escapeHtml(String(v));
+    return `<span class="spec-item"><span class="spec-k">${SPEC_LABELS[k]}</span> ${val}</span>`;
+  };
+  const items = Object.keys(SPEC_LABELS).map(k => fmt(k, detail[k])).filter(Boolean);
+  return items.length ? items.join('') : '<span class="spec-empty">Nessun dettaglio aggiuntivo</span>';
+}
+async function loadSpec(card) {
+  const box = card.querySelector('.row-spec');
+  if (!box || box.dataset.loaded === '1') return;
+  box.dataset.loaded = '1';
+  const url = card.dataset.url;
+  if (!url || !/^https?:/.test(url)) { box.innerHTML = ''; return; }
+  box.innerHTML = '<span class="spec-loading">Carico dettagli…</span>';
+  try {
+    const r = await fetch(`/api/detail?url=${encodeURIComponent(url)}`);
+    const j = await r.json();
+    box.innerHTML = (j.ok && j.detail) ? renderSpec(j.detail)
+      : '<span class="spec-empty">Dettagli non disponibili</span>';
+  } catch (_) {
+    box.dataset.loaded = '0';   // errore di rete → consenti retry alla prossima apertura
+    box.innerHTML = '<span class="spec-empty">Dettagli non disponibili</span>';
+  }
+}
+
+// Riga risultato (lista densa). Flag ed evidenziazioni vivono SOLO nel
+// dropdown "Rating": la riga resta pulita (punteggio · titolo · prezzo).
+function rowHTML(item, dim = '') {
   const prezzoStr  = item.prezzo != null
     ? `€ ${item.prezzo.toLocaleString('it-IT')}`
-    : 'Prezzo non disponibile';
+    : 'n/d';
 
   const dettagli = [
     item.anno       ? `${item.anno}`                           : null,
@@ -678,20 +785,39 @@ function cardHTML(item) {
   const isSalvato   = salvati.some(r => r.url === item.url);
   const inConfronto = confronto.some(r => r.url === item.url);
 
+  const score    = item._score ?? 50;
+  const scoreCls = scoreTier(score);
+
+  // Evidenziazioni — nel dropdown
+  const flagsHtml = (item._flags || []).map(f => {
+    const m = FLAG_META[f];
+    return m ? `<span class="flag ${m.cls}">${icon(m.icon)} ${m.label}</span>` : '';
+  }).join('');
+
+  // Dettaglio rating (espandibile): flag + spiegazione testuale + spec on-click (§15)
+  const ratingDetail = `
+    <div class="rating-detail d-none">
+      ${flagsHtml ? `<div class="flags">${flagsHtml}</div>` : ''}
+      ${ratingExplain(item, { showRank: !!dim })}
+      <div class="row-spec" data-loaded="0"></div>
+    </div>`;
+
   return `
-    <div class="col-12 col-md-6 col-lg-4">
-      <div class="result-card" data-url="${urlSafe}">
-        <div class="result-main">
-          <span class="fonte ${fonteClass}">${escapeHtml(fonteLabel)}</span>
-          <div class="titolo">${escapeHtml(item.titolo)}</div>
-          <div class="prezzo">${prezzoStr}</div>
-          ${dettagli ? `<div class="dettagli">${escapeHtml(dettagli)}</div>` : ''}
-        </div>
-        <div class="card-actions">
-          <button class="btn-confronta${inConfronto ? ' attivo' : ''}" title="Confronta">⚖️ Confronta</button>
-          <button class="btn-salva${isSalvato ? ' attivo' : ''}" title="${isSalvato ? 'Rimuovi dai salvati' : 'Salva annuncio'}">🔖</button>
+    <div class="result-row" data-url="${urlSafe}">
+      <div class="row-score ${scoreCls}" title="Punteggio affare (0-100)">${score}</div>
+      <div class="row-main">
+        <div class="row-titolo">${escapeHtml(item.titolo)}</div>
+        <div class="row-dett">${dettagli ? escapeHtml(dettagli) + ' · ' : ''}<span class="fonte ${fonteClass}">${escapeHtml(fonteLabel)}</span></div>
+      </div>
+      <div class="row-right">
+        <div class="row-prezzo">${prezzoStr}</div>
+        <div class="row-actions">
+          <button type="button" class="rating-toggle" aria-expanded="false" title="Dettaglio rating">Rating ${icon('chevron', 'chevron')}</button>
+          <button class="btn-confronta${inConfronto ? ' attivo' : ''}" title="Confronta">${icon('compare')}</button>
+          <button class="btn-salva${isSalvato ? ' attivo' : ''}" title="${isSalvato ? 'Rimuovi dai salvati' : 'Salva annuncio'}">${icon(isSalvato ? 'bookmark-filled' : 'bookmark')}</button>
         </div>
       </div>
+      ${ratingDetail}
     </div>
   `;
 }
@@ -831,8 +957,8 @@ function renderSalvati() {
           <div class="salvato-dettagli">${fmt(r.prezzo)} · ${fmtKm(r.km)} · ${r.anno || '—'}</div>
         </div>
         <div class="salvato-actions">
-          <button class="btn-confronta-salvato${inConf ? ' attivo' : ''}" title="Confronta">⚖️</button>
-          <button class="btn-rimuovi-salvato" title="Rimuovi">✕</button>
+          <button class="btn-confronta-salvato${inConf ? ' attivo' : ''}" title="Confronta">${icon('compare')}</button>
+          <button class="btn-rimuovi-salvato" title="Rimuovi">${icon('x')}</button>
         </div>
       </div>
     `;
@@ -870,14 +996,14 @@ function hideError() {
 function hideResults() {
   resultsSection.classList.add('d-none');
   noResults.classList.add('d-none');
-  statsPanel.classList.add('d-none');
-  clientFiltersPanel.classList.add('d-none');
+  resultsNav.classList.add('d-none');
+  fonteBreakdown.textContent = '';
   resultsGrid.innerHTML = '';
 }
 
 // ─── Export CSV ───────────────────────────────────────────────────────────────
 function exportCsv(results) {
-  const cols = ['Fonte', 'Titolo', 'Prezzo (€)', 'Anno', 'KM', 'Carburante', 'Provincia', 'URL'];
+  const cols = ['Fonte', 'Titolo', 'Prezzo (€)', 'Anno', 'KM', 'Carburante', 'Provincia', 'Rating', 'Segnalazioni', 'URL'];
   const rows = results.map(r => [
     r.fonte,
     r.titolo,
@@ -886,6 +1012,8 @@ function exportCsv(results) {
     r.km     != null ? r.km     : '',
     r.carburante || '',
     r.provincia  || '',
+    r._score != null ? r._score : '',
+    (r._flags || []).map(f => FLAG_META[f]?.label || f).join('; '),
     r.url,
   ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
 
@@ -995,11 +1123,16 @@ function exportPdf(results) {
     r.km     != null ? r.km.toLocaleString('it-IT') + ' km' : '—',
     r.carburante || '—',
     r.provincia  || '—',
+    r._score != null ? String(r._score) : '—',
   ]);
+
+  // Colori rating per fascia (allineati a scoreTier)
+  const ratingColor = s =>
+    s >= 70 ? [22, 101, 52] : s >= 45 ? [146, 64, 14] : [185, 28, 28];
 
   doc.autoTable({
     startY: boxY + boxH + 5,
-    head:   [['Fonte', 'Titolo', 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia']],
+    head:   [['Fonte', 'Titolo', 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia', 'Rating']],
     body:   tableBody,
     styles: {
       font: 'helvetica',
@@ -1018,11 +1151,18 @@ function exportPdf(results) {
     columnStyles: {
       0: { halign: 'center', cellWidth: 24 },
       1: { cellWidth: 'auto' },
-      2: { halign: 'right',  cellWidth: 26, fontStyle: 'bold', textColor: C_BLUE_700 },
+      2: { halign: 'right',  cellWidth: 24, fontStyle: 'bold', textColor: C_BLUE_700 },
       3: { halign: 'center', cellWidth: 14 },
-      4: { halign: 'right',  cellWidth: 26 },
-      5: { halign: 'center', cellWidth: 22 },
-      6: { halign: 'center', cellWidth: 22 },
+      4: { halign: 'right',  cellWidth: 24 },
+      5: { halign: 'center', cellWidth: 20 },
+      6: { halign: 'center', cellWidth: 20 },
+      7: { halign: 'center', cellWidth: 16, fontStyle: 'bold' },
+    },
+    didParseCell(data) {
+      if (data.section === 'body' && data.column.index === 7) {
+        const s = results[data.row.index]?._score;
+        if (s != null) data.cell.styles.textColor = ratingColor(s);
+      }
     },
     didDrawCell(data) {
       if (data.section !== 'body' || data.column.index !== 0) return;

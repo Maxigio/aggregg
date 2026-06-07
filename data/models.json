@@ -55814,7 +55814,8 @@
     "Beta": {
       "sites": [
         "subito",
-        "autoscout"
+        "autoscout",
+        "motoit"
       ],
       "autoscout": {
         "makeId": 50011,
@@ -56761,8 +56762,259 @@
           "mmmvAutoscout": "50011|50126||",
           "modelIdAS": 50126,
           "kindAS": "model"
+        },
+        {
+          "nome": "Euro 350 Classic",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "euro-350-classic"
+        },
+        {
+          "nome": "Evo 300 4T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "evo-300-4t"
+        },
+        {
+          "nome": "GS 250",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "gs-250"
+        },
+        {
+          "nome": "Minicross R10",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "minicross-r10"
+        },
+        {
+          "nome": "Minicross R12",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "minicross-r12"
+        },
+        {
+          "nome": "RE 125 4T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "re-125-4t"
+        },
+        {
+          "nome": "RR 125 2T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-125-2t"
+        },
+        {
+          "nome": "RR 125 4T Enduro",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-125-4t-enduro"
+        },
+        {
+          "nome": "RR 125 4T Motard",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-125-4t-motard"
+        },
+        {
+          "nome": "RR 200 2T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-200-2t"
+        },
+        {
+          "nome": "RR 250 2T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-250-2t"
+        },
+        {
+          "nome": "RR 300 2T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-300-2t"
+        },
+        {
+          "nome": "RR 350 4T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-350-4t"
+        },
+        {
+          "nome": "RR 390 4T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-390-4t"
+        },
+        {
+          "nome": "RR 400 4T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-400-4t"
+        },
+        {
+          "nome": "RR 430 4T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-430-4t"
+        },
+        {
+          "nome": "RR 450 4T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-450-4t"
+        },
+        {
+          "nome": "RR 480 4T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-480-4t"
+        },
+        {
+          "nome": "RR 50 Enduro",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-50-enduro"
+        },
+        {
+          "nome": "RR 50 Motard",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-50-motard"
+        },
+        {
+          "nome": "RR 525 4T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-525-4t"
+        },
+        {
+          "nome": "RR X-PRO 125 2T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-x-pro-125-2t"
+        },
+        {
+          "nome": "RR X-PRO 200 2T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-x-pro-200-2t"
+        },
+        {
+          "nome": "RR X-PRO 350 4T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-x-pro-350-4t"
+        },
+        {
+          "nome": "RR X-PRO 390 4T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-x-pro-390-4t"
+        },
+        {
+          "nome": "RR X-PRO 430 4T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-x-pro-430-4t"
+        },
+        {
+          "nome": "RR X-PRO 480 4T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rr-x-pro-480-4t"
+        },
+        {
+          "nome": "RX 300 2T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rx-300-2t"
+        },
+        {
+          "nome": "RX 450 4T",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rx-450-4t"
+        },
+        {
+          "nome": "Synt 260",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "synt-260"
+        },
+        {
+          "nome": "Xtrainer",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "xtrainer"
         }
-      ]
+      ],
+      "motoit": {
+        "brandSlug": "betamotor"
+      }
     },
     "CFMOTO": {
       "sites": [
@@ -59158,7 +59410,8 @@
     "Fantic": {
       "sites": [
         "subito",
-        "autoscout"
+        "autoscout",
+        "motoit"
       ],
       "autoscout": {
         "makeId": 50035,
@@ -59691,8 +59944,59 @@
           "sites": [
             "subito"
           ]
+        },
+        {
+          "nome": "CAB REG 50",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "cab-reg-50"
+        },
+        {
+          "nome": "Caballero 125 XM",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "caballero-125-xm"
+        },
+        {
+          "nome": "Issimo",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "issimo"
+        },
+        {
+          "nome": "Issimo 50",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "issimo-50"
+        },
+        {
+          "nome": "Issimo City",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "issimo-city"
+        },
+        {
+          "nome": "XEF 450 Rally",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "xef-450-rally"
         }
-      ]
+      ],
+      "motoit": {
+        "brandSlug": "fantic-motor"
+      }
     },
     "Gas Gas": {
       "sites": [
@@ -89525,211 +89829,6 @@
         "brandSlug": "yamaha"
       }
     },
-    "Zero Motorcycles": {
-      "sites": [
-        "subito",
-        "autoscout"
-      ],
-      "autoscout": {
-        "makeId": 51533,
-        "slugAS": "zero",
-        "totalAnnunci": 16
-      },
-      "models": [
-        {
-          "nome": "DS",
-          "sites": [
-            "subito"
-          ]
-        },
-        {
-          "nome": "DSR",
-          "sites": [
-            "subito"
-          ]
-        },
-        {
-          "nome": "DSR/X",
-          "sites": [
-            "subito"
-          ]
-        },
-        {
-          "nome": "FX",
-          "sites": [
-            "subito"
-          ]
-        },
-        {
-          "nome": "FXE",
-          "sites": [
-            "subito"
-          ]
-        },
-        {
-          "nome": "FXS",
-          "sites": [
-            "subito"
-          ]
-        },
-        {
-          "nome": "S",
-          "sites": [
-            "subito"
-          ]
-        },
-        {
-          "nome": "SR",
-          "sites": [
-            "subito"
-          ]
-        },
-        {
-          "nome": "SR/F",
-          "sites": [
-            "subito"
-          ]
-        },
-        {
-          "nome": "SR/S",
-          "sites": [
-            "subito"
-          ]
-        },
-        {
-          "nome": "XB",
-          "sites": [
-            "subito"
-          ]
-        },
-        {
-          "nome": "XE",
-          "sites": [
-            "subito"
-          ]
-        },
-        {
-          "nome": "Zero DS",
-          "sites": [
-            "subito",
-            "autoscout"
-          ],
-          "mmmvAutoscout": "51533|70817||",
-          "modelIdAS": 70817,
-          "kindAS": "model"
-        },
-        {
-          "nome": "Zero DSR",
-          "sites": [
-            "subito",
-            "autoscout"
-          ],
-          "mmmvAutoscout": "51533|74708||",
-          "modelIdAS": 74708,
-          "kindAS": "model"
-        },
-        {
-          "nome": "Zero DSR/X",
-          "sites": [
-            "subito",
-            "autoscout"
-          ],
-          "mmmvAutoscout": "51533|76540||",
-          "modelIdAS": 76540,
-          "kindAS": "model"
-        },
-        {
-          "nome": "Zero FX",
-          "sites": [
-            "subito",
-            "autoscout"
-          ],
-          "mmmvAutoscout": "51533|70819||",
-          "modelIdAS": 70819,
-          "kindAS": "model"
-        },
-        {
-          "nome": "Zero FXE",
-          "sites": [
-            "subito",
-            "autoscout"
-          ],
-          "mmmvAutoscout": "51533|76539||",
-          "modelIdAS": 76539,
-          "kindAS": "model"
-        },
-        {
-          "nome": "Zero FXS",
-          "sites": [
-            "subito",
-            "autoscout"
-          ],
-          "mmmvAutoscout": "51533|74709||",
-          "modelIdAS": 74709,
-          "kindAS": "model"
-        },
-        {
-          "nome": "Zero MX",
-          "sites": [
-            "subito",
-            "autoscout"
-          ],
-          "mmmvAutoscout": "51533|70821||",
-          "modelIdAS": 70821,
-          "kindAS": "model"
-        },
-        {
-          "nome": "Zero S",
-          "sites": [
-            "subito",
-            "autoscout"
-          ],
-          "mmmvAutoscout": "51533|70818||",
-          "modelIdAS": 70818,
-          "kindAS": "model"
-        },
-        {
-          "nome": "Zero SR",
-          "sites": [
-            "subito",
-            "autoscout"
-          ],
-          "mmmvAutoscout": "51533|72011||",
-          "modelIdAS": 72011,
-          "kindAS": "model"
-        },
-        {
-          "nome": "Zero SR/F",
-          "sites": [
-            "subito",
-            "autoscout"
-          ],
-          "mmmvAutoscout": "51533|76538||",
-          "modelIdAS": 76538,
-          "kindAS": "model"
-        },
-        {
-          "nome": "Zero SR/S",
-          "sites": [
-            "subito",
-            "autoscout"
-          ],
-          "mmmvAutoscout": "51533|76537||",
-          "modelIdAS": 76537,
-          "kindAS": "model"
-        },
-        {
-          "nome": "Zero XU",
-          "sites": [
-            "subito",
-            "autoscout"
-          ],
-          "mmmvAutoscout": "51533|70820||",
-          "modelIdAS": 70820,
-          "kindAS": "model"
-        }
-      ]
-    },
     " eSchwalbe": {
       "sites": [
         "subito",
@@ -96040,7 +96139,8 @@
     "Benda": {
       "sites": [
         "subito",
-        "autoscout"
+        "autoscout",
+        "motoit"
       ],
       "autoscout": {
         "makeId": 51509,
@@ -96157,8 +96257,27 @@
           "mmmvAutoscout": "51509|77484||",
           "modelIdAS": 77484,
           "kindAS": "model"
+        },
+        {
+          "nome": "BD-125 Sporty",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "bd-125-sporty"
+        },
+        {
+          "nome": "BD-300 Sporty",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "bd-300-sporty"
         }
-      ]
+      ],
+      "motoit": {
+        "brandSlug": "benda-motorcycles"
+      }
     },
     "Benda Scooter": {
       "sites": [
@@ -97960,7 +98079,8 @@
     "Brixton": {
       "sites": [
         "subito",
-        "autoscout"
+        "autoscout",
+        "motoit"
       ],
       "autoscout": {
         "makeId": 51775,
@@ -98097,8 +98217,19 @@
           "mmmvAutoscout": "51775|75689||",
           "modelIdAS": 75689,
           "kindAS": "model"
+        },
+        {
+          "nome": "Saxby 250",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "saxby-250"
         }
-      ]
+      ],
+      "motoit": {
+        "brandSlug": "brixton-motorcycles"
+      }
     },
     "Brough Superior": {
       "sites": [
@@ -100511,7 +100642,8 @@
     "Can-Am": {
       "sites": [
         "subito",
-        "autoscout"
+        "autoscout",
+        "motoit"
       ],
       "autoscout": {
         "makeId": 50124,
@@ -100748,8 +100880,51 @@
           "mmmvAutoscout": "50124|72304||",
           "modelIdAS": 72304,
           "kindAS": "model"
+        },
+        {
+          "nome": "Origin",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "origin"
+        },
+        {
+          "nome": "Outlander 800 BD",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "outlander-800-bd"
+        },
+        {
+          "nome": "Outlander 850 BD",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "outlander-850-bd"
+        },
+        {
+          "nome": "Renegade 800 EFI",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "renegade-800-efi"
+        },
+        {
+          "nome": "Spyder",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "spyder"
         }
-      ]
+      ],
+      "motoit": {
+        "brandSlug": "can-am-brp"
+      }
     },
     "Cannondale": {
       "sites": [
@@ -114249,7 +114424,8 @@
     "Keeway": {
       "sites": [
         "subito",
-        "autoscout"
+        "autoscout",
+        "motoit"
       ],
       "autoscout": {
         "makeId": 50642,
@@ -114556,8 +114732,139 @@
           "mmmvAutoscout": "50642|74876||",
           "modelIdAS": 74876,
           "kindAS": "model"
+        },
+        {
+          "nome": "Blackster 250",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "blackster-250"
+        },
+        {
+          "nome": "Icon 125",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "icon-125"
+        },
+        {
+          "nome": "Iskia 125",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "iskia-125"
+        },
+        {
+          "nome": "K Light 125",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "k-light-125"
+        },
+        {
+          "nome": "Logik 125i",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "logik-125i"
+        },
+        {
+          "nome": "RK V125C",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rk-v125c"
+        },
+        {
+          "nome": "RKS 125",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "rks-125"
+        },
+        {
+          "nome": "Sixties 300",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "sixties-300"
+        },
+        {
+          "nome": "Superlight 125",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "superlight-125"
+        },
+        {
+          "nome": "Supershadow 250",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "supershadow-250"
+        },
+        {
+          "nome": "Terrafina 350",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "terrafina-350"
+        },
+        {
+          "nome": "TX 125 Motard",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "tx-125-motard"
+        },
+        {
+          "nome": "V-Cruise",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "v-cruise"
+        },
+        {
+          "nome": "V302 C",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "v302-c"
+        },
+        {
+          "nome": "X Light 125",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "x-light-125"
+        },
+        {
+          "nome": "XDV 125",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "xdv-125"
         }
-      ]
+      ],
+      "motoit": {
+        "brandSlug": "keeway-motor"
+      }
     },
     "Kinroad": {
       "sites": [
@@ -119317,7 +119624,8 @@
     "Mash": {
       "sites": [
         "subito",
-        "autoscout"
+        "autoscout",
+        "motoit"
       ],
       "autoscout": {
         "makeId": 51555,
@@ -119554,8 +119862,115 @@
           "mmmvAutoscout": "51555|71009||",
           "modelIdAS": 71009,
           "kindAS": "model"
+        },
+        {
+          "nome": "Black Seven 125",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "black-seven-125"
+        },
+        {
+          "nome": "Black Seven 250",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "black-seven-250"
+        },
+        {
+          "nome": "Dirt Track 125",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "dirt-track-125"
+        },
+        {
+          "nome": "Dirt Track 50",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "dirt-track-50"
+        },
+        {
+          "nome": "Dirt Track 650",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "dirt-track-650"
+        },
+        {
+          "nome": "Family Side 400",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "family-side-400"
+        },
+        {
+          "nome": "Scrambler 400",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "scrambler-400"
+        },
+        {
+          "nome": "Seventy",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "seventy"
+        },
+        {
+          "nome": "Seventy Five",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "seventy-five"
+        },
+        {
+          "nome": "SIX Hundred 650",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "six-hundred-650"
+        },
+        {
+          "nome": "TT 40",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "tt-40"
+        },
+        {
+          "nome": "VON Dutch 400",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "von-dutch-400"
+        },
+        {
+          "nome": "X Ride 650",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "x-ride-650"
         }
-      ]
+      ],
+      "motoit": {
+        "brandSlug": "mash-italia"
+      }
     },
     "Masini": {
       "sites": [
@@ -120408,7 +120823,8 @@
     "Mondial": {
       "sites": [
         "subito",
-        "autoscout"
+        "autoscout",
+        "motoit"
       ],
       "autoscout": {
         "makeId": 51717,
@@ -120525,8 +120941,91 @@
           "mmmvAutoscout": "51717|73453||",
           "modelIdAS": 73453,
           "kindAS": "model"
+        },
+        {
+          "nome": "Flat Track",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "flat-track"
+        },
+        {
+          "nome": "Flex 300",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "flex-300"
+        },
+        {
+          "nome": "HPS 125",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "hps-125"
+        },
+        {
+          "nome": "HPS 300",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "hps-300"
+        },
+        {
+          "nome": "Imola 50",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "imola-50"
+        },
+        {
+          "nome": "Piega 125",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "piega-125"
+        },
+        {
+          "nome": "Piega 452",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "piega-452"
+        },
+        {
+          "nome": "SMX 125",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "smx-125"
+        },
+        {
+          "nome": "Spartan 250",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "spartan-250"
+        },
+        {
+          "nome": "Sport Classic 300",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "sport-classic-300"
         }
-      ]
+      ],
+      "motoit": {
+        "brandSlug": "fb-mondial"
+      }
     },
     "Montesa": {
       "sites": [
@@ -135530,7 +136029,8 @@
     "Talaria": {
       "sites": [
         "subito",
-        "autoscout"
+        "autoscout",
+        "motoit"
       ],
       "autoscout": {
         "makeId": 51932,
@@ -135577,8 +136077,51 @@
           "mmmvAutoscout": "51932|76422||",
           "modelIdAS": 76422,
           "kindAS": "model"
+        },
+        {
+          "nome": "Komodo",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "komodo"
+        },
+        {
+          "nome": "Sting TL3000",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "sting-tl3000"
+        },
+        {
+          "nome": "Sting TL3000 MX",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "sting-tl3000-mx"
+        },
+        {
+          "nome": "Sting TL4000",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "sting-tl4000"
+        },
+        {
+          "nome": "Sting TL5500",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "sting-tl5500"
         }
-      ]
+      ],
+      "motoit": {
+        "brandSlug": "talaria-moto"
+      }
     },
     "Tante Paula": {
       "sites": [
@@ -148211,1143 +148754,11 @@
         }
       ]
     },
-    "Benda Motorcycles": {
-      "sites": [
-        "subito",
-        "motoit"
-      ],
-      "motoit": {
-        "brandSlug": "benda-motorcycles"
-      },
-      "models": [
-        {
-          "nome": "BD-125 Sporty",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "bd-125-sporty"
-        },
-        {
-          "nome": "BD-300 Sporty",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "bd-300-sporty"
-        },
-        {
-          "nome": "Chinchilla 500",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "chinchilla-500"
-        },
-        {
-          "nome": "Dark Flag 500",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "dark-flag-500"
-        },
-        {
-          "nome": "LFC 700",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "lfc-700"
-        },
-        {
-          "nome": "Napoleon BOB 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "napoleon-bob-250"
-        },
-        {
-          "nome": "Napoleon BOB 500",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "napoleon-bob-500"
-        }
-      ]
-    },
-    "Betamotor": {
-      "sites": [
-        "subito",
-        "motoit"
-      ],
-      "motoit": {
-        "brandSlug": "betamotor"
-      },
-      "models": [
-        {
-          "nome": "ALP 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "alp-125"
-        },
-        {
-          "nome": "ALP 200",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "alp-200"
-        },
-        {
-          "nome": "ALP 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "alp-250"
-        },
-        {
-          "nome": "ALP 4 0",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "alp-4-0"
-        },
-        {
-          "nome": "Alp X",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "alp-x"
-        },
-        {
-          "nome": "ARK 50",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "ark-50"
-        },
-        {
-          "nome": "Eikon 150",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "eikon-150"
-        },
-        {
-          "nome": "Euro 350 Classic",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "euro-350-classic"
-        },
-        {
-          "nome": "EVO 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "evo-125"
-        },
-        {
-          "nome": "EVO 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "evo-250"
-        },
-        {
-          "nome": "EVO 290",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "evo-290"
-        },
-        {
-          "nome": "EVO 300",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "evo-300"
-        },
-        {
-          "nome": "Evo 300 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "evo-300-4t"
-        },
-        {
-          "nome": "EVO 80",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "evo-80"
-        },
-        {
-          "nome": "GS 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "gs-250"
-        },
-        {
-          "nome": "Minicross R10",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "minicross-r10"
-        },
-        {
-          "nome": "Minicross R12",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "minicross-r12"
-        },
-        {
-          "nome": "Motard 4 0",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "motard-4-0"
-        },
-        {
-          "nome": "RE 125 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "re-125-4t"
-        },
-        {
-          "nome": "REV 3 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rev-3-250"
-        },
-        {
-          "nome": "REV 3 270",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rev-3-270"
-        },
-        {
-          "nome": "RR 125 2T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-125-2t"
-        },
-        {
-          "nome": "RR 125 4T Enduro",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-125-4t-enduro"
-        },
-        {
-          "nome": "RR 125 4T Motard",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-125-4t-motard"
-        },
-        {
-          "nome": "RR 200 2T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-200-2t"
-        },
-        {
-          "nome": "RR 250 2T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-250-2t"
-        },
-        {
-          "nome": "RR 300 2T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-300-2t"
-        },
-        {
-          "nome": "RR 350 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-350-4t"
-        },
-        {
-          "nome": "RR 390 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-390-4t"
-        },
-        {
-          "nome": "RR 400 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-400-4t"
-        },
-        {
-          "nome": "RR 430 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-430-4t"
-        },
-        {
-          "nome": "RR 450 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-450-4t"
-        },
-        {
-          "nome": "RR 480 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-480-4t"
-        },
-        {
-          "nome": "RR 498 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-498-4t"
-        },
-        {
-          "nome": "RR 50 Enduro",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-50-enduro"
-        },
-        {
-          "nome": "RR 50 Motard",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-50-motard"
-        },
-        {
-          "nome": "RR 525 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-525-4t"
-        },
-        {
-          "nome": "RR X-PRO 125 2T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-x-pro-125-2t"
-        },
-        {
-          "nome": "RR X-PRO 200 2T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-x-pro-200-2t"
-        },
-        {
-          "nome": "RR X-PRO 350 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-x-pro-350-4t"
-        },
-        {
-          "nome": "RR X-PRO 390 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-x-pro-390-4t"
-        },
-        {
-          "nome": "RR X-PRO 430 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-x-pro-430-4t"
-        },
-        {
-          "nome": "RR X-PRO 480 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rr-x-pro-480-4t"
-        },
-        {
-          "nome": "RX 300 2T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rx-300-2t"
-        },
-        {
-          "nome": "RX 450 4T",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rx-450-4t"
-        },
-        {
-          "nome": "Synt 260",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "synt-260"
-        },
-        {
-          "nome": "Techno 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "techno-250"
-        },
-        {
-          "nome": "Urban 200",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "urban-200"
-        },
-        {
-          "nome": "Xtrainer",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xtrainer"
-        }
-      ]
-    },
-    "Brixton Motorcycles": {
-      "sites": [
-        "subito",
-        "motoit"
-      ],
-      "motoit": {
-        "brandSlug": "brixton-motorcycles"
-      },
-      "models": [
-        {
-          "nome": "BX 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "bx-125"
-        },
-        {
-          "nome": "Cromwell 1200",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "cromwell-1200"
-        },
-        {
-          "nome": "Cromwell 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "cromwell-125"
-        },
-        {
-          "nome": "Cromwell 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "cromwell-250"
-        },
-        {
-          "nome": "Crossfire 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "crossfire-125"
-        },
-        {
-          "nome": "Crossfire 500",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "crossfire-500"
-        },
-        {
-          "nome": "Felsberg 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "felsberg-125"
-        },
-        {
-          "nome": "Felsberg 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "felsberg-250"
-        },
-        {
-          "nome": "Glanville 250 X",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "glanville-250-x"
-        },
-        {
-          "nome": "Saxby 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "saxby-250"
-        },
-        {
-          "nome": "Sunray 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "sunray-125"
-        }
-      ]
-    },
-    "Can-Am Brp": {
-      "sites": [
-        "subito",
-        "motoit"
-      ],
-      "motoit": {
-        "brandSlug": "can-am-brp"
-      },
-      "models": [
-        {
-          "nome": "Origin",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "origin"
-        },
-        {
-          "nome": "Outlander 800 BD",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "outlander-800-bd"
-        },
-        {
-          "nome": "Outlander 850 BD",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "outlander-850-bd"
-        },
-        {
-          "nome": "Renegade 800 EFI",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "renegade-800-efi"
-        },
-        {
-          "nome": "Spyder",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "spyder"
-        }
-      ]
-    },
-    "Fantic Motor": {
-      "sites": [
-        "subito",
-        "motoit"
-      ],
-      "motoit": {
-        "brandSlug": "fantic-motor"
-      },
-      "models": [
-        {
-          "nome": "CAB REG 50",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "cab-reg-50"
-        },
-        {
-          "nome": "Caballero 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "caballero-125"
-        },
-        {
-          "nome": "Caballero 125 XM",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "caballero-125-xm"
-        },
-        {
-          "nome": "Caballero 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "caballero-250"
-        },
-        {
-          "nome": "Caballero 50",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "caballero-50"
-        },
-        {
-          "nome": "Caballero 500",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "caballero-500"
-        },
-        {
-          "nome": "Caballero 700",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "caballero-700"
-        },
-        {
-          "nome": "Enduro 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "enduro-125"
-        },
-        {
-          "nome": "Enduro 50",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "enduro-50"
-        },
-        {
-          "nome": "Issimo",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "issimo"
-        },
-        {
-          "nome": "Issimo 50",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "issimo-50"
-        },
-        {
-          "nome": "Issimo City",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "issimo-city"
-        },
-        {
-          "nome": "Motard 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "motard-125"
-        },
-        {
-          "nome": "Motard 50",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "motard-50"
-        },
-        {
-          "nome": "Stealth 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "stealth-125"
-        },
-        {
-          "nome": "Trial 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "trial-125"
-        },
-        {
-          "nome": "Trial 300",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "trial-300"
-        },
-        {
-          "nome": "Trial 50",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "trial-50"
-        },
-        {
-          "nome": "XE 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xe-125"
-        },
-        {
-          "nome": "XE 300",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xe-300"
-        },
-        {
-          "nome": "XE 50",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xe-50"
-        },
-        {
-          "nome": "XEF 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xef-125"
-        },
-        {
-          "nome": "XEF 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xef-250"
-        },
-        {
-          "nome": "XEF 310",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xef-310"
-        },
-        {
-          "nome": "XEF 450",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xef-450"
-        },
-        {
-          "nome": "XEF 450 Rally",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xef-450-rally"
-        },
-        {
-          "nome": "XM 50",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xm-50"
-        },
-        {
-          "nome": "XMF 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xmf-125"
-        },
-        {
-          "nome": "XX 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xx-125"
-        },
-        {
-          "nome": "XX 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xx-250"
-        },
-        {
-          "nome": "XXF 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xxf-250"
-        },
-        {
-          "nome": "XXF 450",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xxf-450"
-        }
-      ]
-    },
-    "FB Mondial": {
-      "sites": [
-        "subito",
-        "motoit"
-      ],
-      "motoit": {
-        "brandSlug": "fb-mondial"
-      },
-      "models": [
-        {
-          "nome": "Flat Track",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "flat-track"
-        },
-        {
-          "nome": "Flex 300",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "flex-300"
-        },
-        {
-          "nome": "HPS 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "hps-125"
-        },
-        {
-          "nome": "HPS 300",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "hps-300"
-        },
-        {
-          "nome": "Imola 50",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "imola-50"
-        },
-        {
-          "nome": "Piega 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "piega-125"
-        },
-        {
-          "nome": "Piega 452",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "piega-452"
-        },
-        {
-          "nome": "SMX 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "smx-125"
-        },
-        {
-          "nome": "Spartan 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "spartan-250"
-        },
-        {
-          "nome": "Sport Classic 300",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "sport-classic-300"
-        }
-      ]
-    },
-    "Keeway Motor": {
-      "sites": [
-        "subito",
-        "motoit"
-      ],
-      "motoit": {
-        "brandSlug": "keeway-motor"
-      },
-      "models": [
-        {
-          "nome": "Blackster 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "blackster-250"
-        },
-        {
-          "nome": "Icon 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "icon-125"
-        },
-        {
-          "nome": "Iskia 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "iskia-125"
-        },
-        {
-          "nome": "K Light 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "k-light-125"
-        },
-        {
-          "nome": "Logik 125i",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "logik-125i"
-        },
-        {
-          "nome": "RK V125C",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rk-v125c"
-        },
-        {
-          "nome": "RKF 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rkf-125"
-        },
-        {
-          "nome": "RKS 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rks-125"
-        },
-        {
-          "nome": "RKV 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "rkv-125"
-        },
-        {
-          "nome": "Sixties 300",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "sixties-300"
-        },
-        {
-          "nome": "Superlight 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "superlight-125"
-        },
-        {
-          "nome": "Supershadow 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "supershadow-250"
-        },
-        {
-          "nome": "Terrafina 350",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "terrafina-350"
-        },
-        {
-          "nome": "TX 125 Motard",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "tx-125-motard"
-        },
-        {
-          "nome": "V-Cruise",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "v-cruise"
-        },
-        {
-          "nome": "V302 C",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "v302-c"
-        },
-        {
-          "nome": "X Light 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "x-light-125"
-        },
-        {
-          "nome": "XDV 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "xdv-125"
-        }
-      ]
-    },
     "Kl": {
       "sites": [
         "subito",
-        "motoit"
+        "motoit",
+        "autoscout"
       ],
       "motoit": {
         "brandSlug": "kl"
@@ -149417,146 +148828,10 @@
           ],
           "slugMotoIt": "kxe-125"
         }
-      ]
-    },
-    "Mash Italia": {
-      "sites": [
-        "subito",
-        "motoit"
       ],
-      "motoit": {
-        "brandSlug": "mash-italia"
-      },
-      "models": [
-        {
-          "nome": "Black Seven 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "black-seven-125"
-        },
-        {
-          "nome": "Black Seven 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "black-seven-250"
-        },
-        {
-          "nome": "Cafè Racer",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "cafe-racer"
-        },
-        {
-          "nome": "Dirt Track 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "dirt-track-125"
-        },
-        {
-          "nome": "Dirt Track 50",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "dirt-track-50"
-        },
-        {
-          "nome": "Dirt Track 650",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "dirt-track-650"
-        },
-        {
-          "nome": "Family Side 400",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "family-side-400"
-        },
-        {
-          "nome": "Five Hundred 400",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "five-hundred-400"
-        },
-        {
-          "nome": "Scrambler 400",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "scrambler-400"
-        },
-        {
-          "nome": "Seventy",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "seventy"
-        },
-        {
-          "nome": "Seventy Five",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "seventy-five"
-        },
-        {
-          "nome": "SIX Hundred 650",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "six-hundred-650"
-        },
-        {
-          "nome": "TT 40",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "tt-40"
-        },
-        {
-          "nome": "Two Fifty",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "two-fifty"
-        },
-        {
-          "nome": "VON Dutch 400",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "von-dutch-400"
-        },
-        {
-          "nome": "X Ride 650",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "x-ride-650"
-        }
-      ]
+      "autoscout": {
+        "makeId": 51997
+      }
     },
     "Morbidelli": {
       "sites": [
@@ -149641,61 +148916,11 @@
         }
       ]
     },
-    "Talaria Moto": {
-      "sites": [
-        "subito",
-        "motoit"
-      ],
-      "motoit": {
-        "brandSlug": "talaria-moto"
-      },
-      "models": [
-        {
-          "nome": "Komodo",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "komodo"
-        },
-        {
-          "nome": "Sting TL3000",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "sting-tl3000"
-        },
-        {
-          "nome": "Sting TL3000 MX",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "sting-tl3000-mx"
-        },
-        {
-          "nome": "Sting TL4000",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "sting-tl4000"
-        },
-        {
-          "nome": "Sting TL5500",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "sting-tl5500"
-        }
-      ]
-    },
     "Tm Moto": {
       "sites": [
         "subito",
-        "motoit"
+        "motoit",
+        "autoscout"
       ],
       "motoit": {
         "brandSlug": "tm-moto"
@@ -149853,7 +149078,10 @@
           ],
           "slugMotoIt": "smx-450-f"
         }
-      ]
+      ],
+      "autoscout": {
+        "makeId": 50431
+      }
     },
     "Valenti Racing": {
       "sites": [
@@ -149917,7 +149145,8 @@
     "Zero": {
       "sites": [
         "subito",
-        "motoit"
+        "motoit",
+        "autoscout"
       ],
       "motoit": {
         "brandSlug": "zero"
@@ -149986,8 +149215,155 @@
             "motoit"
           ],
           "slugMotoIt": "sr-s"
+        },
+        {
+          "nome": "FXS",
+          "sites": [
+            "subito"
+          ]
+        },
+        {
+          "nome": "SR",
+          "sites": [
+            "subito"
+          ]
+        },
+        {
+          "nome": "XB",
+          "sites": [
+            "subito"
+          ]
+        },
+        {
+          "nome": "XE",
+          "sites": [
+            "subito"
+          ]
+        },
+        {
+          "nome": "Zero DS",
+          "sites": [
+            "subito",
+            "autoscout"
+          ],
+          "mmmvAutoscout": "51533|70817||",
+          "modelIdAS": 70817,
+          "kindAS": "model"
+        },
+        {
+          "nome": "Zero DSR",
+          "sites": [
+            "subito",
+            "autoscout"
+          ],
+          "mmmvAutoscout": "51533|74708||",
+          "modelIdAS": 74708,
+          "kindAS": "model"
+        },
+        {
+          "nome": "Zero DSR/X",
+          "sites": [
+            "subito",
+            "autoscout"
+          ],
+          "mmmvAutoscout": "51533|76540||",
+          "modelIdAS": 76540,
+          "kindAS": "model"
+        },
+        {
+          "nome": "Zero FX",
+          "sites": [
+            "subito",
+            "autoscout"
+          ],
+          "mmmvAutoscout": "51533|70819||",
+          "modelIdAS": 70819,
+          "kindAS": "model"
+        },
+        {
+          "nome": "Zero FXE",
+          "sites": [
+            "subito",
+            "autoscout"
+          ],
+          "mmmvAutoscout": "51533|76539||",
+          "modelIdAS": 76539,
+          "kindAS": "model"
+        },
+        {
+          "nome": "Zero FXS",
+          "sites": [
+            "subito",
+            "autoscout"
+          ],
+          "mmmvAutoscout": "51533|74709||",
+          "modelIdAS": 74709,
+          "kindAS": "model"
+        },
+        {
+          "nome": "Zero MX",
+          "sites": [
+            "subito",
+            "autoscout"
+          ],
+          "mmmvAutoscout": "51533|70821||",
+          "modelIdAS": 70821,
+          "kindAS": "model"
+        },
+        {
+          "nome": "Zero S",
+          "sites": [
+            "subito",
+            "autoscout"
+          ],
+          "mmmvAutoscout": "51533|70818||",
+          "modelIdAS": 70818,
+          "kindAS": "model"
+        },
+        {
+          "nome": "Zero SR",
+          "sites": [
+            "subito",
+            "autoscout"
+          ],
+          "mmmvAutoscout": "51533|72011||",
+          "modelIdAS": 72011,
+          "kindAS": "model"
+        },
+        {
+          "nome": "Zero SR/F",
+          "sites": [
+            "subito",
+            "autoscout"
+          ],
+          "mmmvAutoscout": "51533|76538||",
+          "modelIdAS": 76538,
+          "kindAS": "model"
+        },
+        {
+          "nome": "Zero SR/S",
+          "sites": [
+            "subito",
+            "autoscout"
+          ],
+          "mmmvAutoscout": "51533|76537||",
+          "modelIdAS": 76537,
+          "kindAS": "model"
+        },
+        {
+          "nome": "Zero XU",
+          "sites": [
+            "subito",
+            "autoscout"
+          ],
+          "mmmvAutoscout": "51533|70820||",
+          "modelIdAS": 70820,
+          "kindAS": "model"
         }
-      ]
+      ],
+      "autoscout": {
+        "makeId": 51533
+      }
     }
   }
 }

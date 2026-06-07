@@ -16,3 +16,8 @@ frontend/vendor/
 # Session storage Subito (bootstrap interattivo, contiene cookie DataDome)
 data/.subito-session.json
 data/models.json.bak
+
+# Artefatti runtime (non versionare)
+data/bootstrap.log
+data/chrome-profile/
+AutoMotoRadar-Data/

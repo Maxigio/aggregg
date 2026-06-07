@@ -1,0 +1,38 @@
+AUTO MOTO RADAR — uso da SSD portatile
+========================================
+
+MODALITÀ PORTATILE (i dati seguono il SSD)
+------------------------------------------
+Se accanto all'app c'è un file vuoto chiamato ".portable" (o la cartella
+"AutoMotoRadar-Data"), l'app salva ricerche salvate e impostazioni in
+"AutoMotoRadar-Data" SUL SSD, accanto all'app. Così i tuoi dati ti seguono su
+qualsiasi computer.
+
+Per attivarla: crea un file vuoto ".portable" nella stessa cartella dell'app
+(su macOS: accanto a "Auto Moto Radar.app"). Su Windows la versione "portable.exe"
+è già portatile di suo.
+
+Senza marker, l'app salva i dati sul computer ospite (comportamento standard).
+
+
+macOS — PRIMO AVVIO (app non firmata)
+-------------------------------------
+La prima volta su un nuovo Mac, macOS blocca le app non firmate. Sblocca così:
+
+  Opzione A (consigliata): tasto-DESTRO sull'app -> "Apri" -> conferma "Apri".
+  Su macOS recenti (Sequoia) potrebbe non bastare: vai in
+    Impostazioni di Sistema -> Privacy e sicurezza -> scorri in fondo ->
+    "Apri comunque" accanto al nome dell'app.
+
+  Opzione B (Terminale): esegui una volta
+    xattr -cr "/Volumes/NOME_SSD/Auto Moto Radar.app"
+  (sostituisci NOME_SSD col nome del tuo SSD).
+
+Dopo il primo sblocco, l'app si apre normalmente.
+
+
+NOTA — sessione Subito.it
+-------------------------
+La sessione di Subito.it (anti-bot DataDome) è legata al computer/rete: NON è
+portatile. Su un nuovo Mac va rifatta la verifica anti-bot dall'app ("Aggiorna
+sessione"). Le ricerche salvate e le impostazioni invece seguono il SSD.

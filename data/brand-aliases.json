@@ -1,0 +1,16 @@
+{
+  "_note": "Gruppi di nomi che sono LO STESSO brand reale (curati a mano dall'audit). Primo = nome canonico (entry più ricca). Esclusi i falsi-alias: Ariel Motor (auto, Atom) ≠ Ariel Motorcycles (moto); Benda Scooter (makeId AS24 diverso) ≠ Benda.",
+  "moto": [
+    ["Beta", "Betamotor"],
+    ["Fantic", "Fantic Motor"],
+    ["Benda", "Benda Motorcycles"],
+    ["Brixton", "Brixton Motorcycles"],
+    ["Can-Am", "Can-Am Brp"],
+    ["Keeway", "Keeway Motor"],
+    ["Mash", "Mash Italia"],
+    ["Mondial", "FB Mondial"],
+    ["Talaria", "Talaria Moto"],
+    ["Zero", "Zero Motorcycles"]
+  ],
+  "auto": []
+}

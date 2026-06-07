@@ -11,147 +11,61 @@
 </head>
 <body>
 
-  <header class="amr-header">
-    <div class="container">
-      <nav class="amr-nav">
-        <div class="amr-logo">
-          <svg class="amr-logo-icon" width="30" height="30" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <rect width="32" height="32" rx="7" fill="#1e40af"/>
-            <circle cx="16" cy="16" r="10" fill="none" stroke="#93c5fd" stroke-width="1.8"/>
-            <circle cx="16" cy="16" r="5.5" fill="none" stroke="#93c5fd" stroke-width="1.8"/>
-            <circle cx="16" cy="16" r="1.8" fill="#93c5fd"/>
-            <line x1="16" y1="6" x2="16" y2="3.5" stroke="#93c5fd" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="26" y1="16" x2="28.5" y2="16" stroke="#93c5fd" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          <span class="amr-logo-text">Auto Moto Radar</span>
-        </div>
-        <p class="amr-tagline">Cerca su Subito.it, Autoscout24 e Moto.it in un colpo solo</p>
-        <!-- Pillola di stato Subito sempre visibile — click per bootstrap/refresh -->
-        <button type="button" id="subitoStatusPill" class="subito-pill subito-pill-unknown" title="Stato sessione Subito" aria-label="Stato Subito">
-          <span class="subito-pill-dot">●</span>
-          <span class="subito-pill-text">Subito —</span>
-        </button>
-      </nav>
-    </div>
-  </header>
-
   <main class="container py-4">
 
-    <!-- FORM RICERCA -->
-    <div class="amr-card mb-4">
-      <form id="searchForm">
+    <!-- HERO RICERCA (full-width) — logo + nome app + strumenti di ricerca -->
+    <section class="hero">
+      <div class="hero-brand">
+        <svg class="hero-logo" width="34" height="34" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="32" height="32" rx="7" fill="#2563eb"/>
+          <circle cx="16" cy="16" r="10" fill="none" stroke="#bfdbfe" stroke-width="1.8"/>
+          <circle cx="16" cy="16" r="5.5" fill="none" stroke="#bfdbfe" stroke-width="1.8"/>
+          <circle cx="16" cy="16" r="1.8" fill="#bfdbfe"/>
+          <line x1="16" y1="6" x2="16" y2="3.5" stroke="#bfdbfe" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="26" y1="16" x2="28.5" y2="16" stroke="#bfdbfe" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span class="hero-name">Auto Moto Radar</span>
+      </div>
 
-        <!-- Tipo veicolo -->
-        <div class="mb-4">
-          <label class="form-label fw-semibold text-muted small text-uppercase ls-1">Tipo veicolo</label>
-          <div class="d-flex gap-3">
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="tipo" id="tipoAuto" value="auto" checked />
-              <label class="form-check-label fw-medium" for="tipoAuto">Auto</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="tipo" id="tipoMoto" value="moto" />
-              <label class="form-check-label fw-medium" for="tipoMoto">Moto</label>
-            </div>
-          </div>
+      <form id="searchForm" class="hero-form">
+        <!-- Toggle Auto / Moto -->
+        <div class="seg-toggle" role="radiogroup" aria-label="Tipo veicolo">
+          <input type="radio" name="tipo" id="tipoAuto" value="auto" checked />
+          <label for="tipoAuto">Auto</label>
+          <input type="radio" name="tipo" id="tipoMoto" value="moto" />
+          <label for="tipoMoto">Moto</label>
         </div>
 
-        <div class="row g-3">
-
-          <!-- Marca (input testuale con autocomplete soft via datalist) -->
-          <div class="col-12 col-md-4">
-            <label for="marca" class="form-label fw-semibold">Marca <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="marca" list="brandsList"
-                   autocomplete="off" placeholder="es. BMW, Honda, Yamaha…" required />
-            <datalist id="brandsList"></datalist>
+        <!-- Campi protagonisti -->
+        <div class="hero-fields">
+          <div class="ac-wrap">
+            <input type="text" id="marca" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"
+                   class="hero-input" placeholder="Marca — es. BMW, Honda, Yamaha" required />
+            <ul id="marcaAC" class="ac-list d-none" role="listbox"></ul>
           </div>
-
-          <!-- Modello (libero, niente vincoli al catalogo) -->
-          <div class="col-12 col-md-4">
-            <label for="modello" class="form-label fw-semibold">Modello</label>
-            <input type="text" class="form-control" id="modello"
-                   autocomplete="off" placeholder="es. 318d, Africa Twin, R 1250 GS…" />
-            <small class="text-muted d-block mt-1">Lascia vuoto per cercare tutti i modelli della marca</small>
-          </div>
-
-          <!-- Regione -->
-          <div class="col-12 col-md-4">
-            <label for="regione" class="form-label fw-semibold">Regione</label>
-            <select class="form-select" id="regione">
-              <option value="">Tutta Italia</option>
-            </select>
-          </div>
-
-          <!-- Prezzo Min -->
-          <div class="col-6 col-md-3">
-            <label for="prezzoMin" class="form-label fw-semibold">Prezzo min (€)</label>
-            <input type="number" class="form-control" id="prezzoMin" placeholder="es. 1000" min="0" />
-          </div>
-
-          <!-- Prezzo Max -->
-          <div class="col-6 col-md-3">
-            <label for="prezzoMax" class="form-label fw-semibold">Prezzo max (€)</label>
-            <input type="number" class="form-control" id="prezzoMax" placeholder="es. 20000" min="0" />
-          </div>
-
-          <!-- Anno Min -->
-          <div class="col-6 col-md-3">
-            <label for="annoMin" class="form-label fw-semibold">Anno da</label>
-            <input type="number" class="form-control" id="annoMin" placeholder="es. 2015" min="1900" />
-          </div>
-
-          <!-- Anno Max -->
-          <div class="col-6 col-md-3">
-            <label for="annoMax" class="form-label fw-semibold">Anno a</label>
-            <input type="number" class="form-control" id="annoMax" min="1900" />
-          </div>
-
-          <!-- KM Max -->
-          <div class="col-12 col-md-4">
-            <label for="kmMax" class="form-label fw-semibold">Km max</label>
-            <input type="number" class="form-control" id="kmMax" placeholder="es. 100000" min="0" />
-          </div>
-
+          <input type="text" id="modello" autocomplete="off"
+                 class="hero-input" placeholder="Modello — es. 318d (opzionale)" />
+          <button type="submit" class="hero-cerca">Cerca</button>
         </div>
 
-        <div class="mt-4 text-center">
-          <button type="submit" class="btn amr-btn-primary btn-lg px-5">Cerca</button>
+        <!-- Filtri avanzati a scomparsa -->
+        <button type="button" class="hero-adv-toggle" id="advancedToggle" aria-expanded="false">Filtri avanzati</button>
+        <div class="hero-adv d-none" id="advancedFilters">
+          <label class="adv-field"><span>Prezzo min (€)</span>
+            <input type="number" id="prezzoMin" placeholder="es. 1000" min="0" /></label>
+          <label class="adv-field"><span>Prezzo max (€)</span>
+            <input type="number" id="prezzoMax" placeholder="es. 20000" min="0" /></label>
+          <label class="adv-field"><span>Anno da</span>
+            <input type="number" id="annoMin" placeholder="es. 2015" min="1900" /></label>
+          <label class="adv-field"><span>Anno a</span>
+            <input type="number" id="annoMax" min="1900" /></label>
+          <label class="adv-field"><span>Km max</span>
+            <input type="number" id="kmMax" placeholder="es. 100000" min="0" /></label>
+          <label class="adv-field"><span>Regione</span>
+            <select id="regione"><option value="">Tutta Italia</option></select></label>
         </div>
-
       </form>
-    </div>
-
-    <!-- PANNELLO FILTRI PER-PIATTAFORMA (P10) — popolato dinamicamente dopo la prima ricerca -->
-    <div id="sitefiltersPanel" class="amr-card mb-4 d-none">
-      <div class="d-flex align-items-center justify-content-between mb-3">
-        <h5 class="mb-0">Filtri avanzati per piattaforma</h5>
-        <div>
-          <button type="button" class="btn btn-sm btn-outline-secondary me-2" id="btnSiteFiltersReset">Reset</button>
-          <button type="button" class="btn btn-sm amr-btn-primary" id="btnSiteFiltersApply">Applica filtri</button>
-        </div>
-      </div>
-      <div class="row g-3">
-        <div class="col-12 col-lg-4">
-          <div class="sitefilter-section sitefilter-subito">
-            <h6 class="sitefilter-title">📍 Subito.it</h6>
-            <div class="sitefilter-fields" id="sitefiltersSubito"></div>
-          </div>
-        </div>
-        <div class="col-12 col-lg-4">
-          <div class="sitefilter-section sitefilter-autoscout">
-            <h6 class="sitefilter-title">📍 Autoscout24</h6>
-            <div class="sitefilter-fields" id="sitefiltersAutoscout"></div>
-          </div>
-        </div>
-        <div class="col-12 col-lg-4">
-          <div class="sitefilter-section sitefilter-motoit">
-            <h6 class="sitefilter-title">📍 Moto.it</h6>
-            <div class="sitefilter-fields" id="sitefiltersMotoit"></div>
-            <div class="sitefilter-emptyState text-muted small d-none" id="sitefiltersMotoitEmpty">Disponibile solo per ricerche moto.</div>
-          </div>
-        </div>
-      </div>
-    </div>
+    </section>
 
     <!-- STATO RICERCA / ERRORE -->
     <div id="statusBox" class="d-none mb-4">
@@ -176,81 +90,73 @@
       </div>
     </div>
 
-    <!-- STATS PANEL -->
-    <div id="statsPanel" class="d-none mb-3">
-      <div class="amr-card py-0">
-        <div class="row text-center g-0">
-          <div class="col stat-box border-end">
-            <div class="stat-label">Minimo</div>
-            <div class="stat-value" id="statMin">—</div>
-          </div>
-          <div class="col stat-box border-end">
-            <div class="stat-label">Esporta</div>
-            <button class="stat-action-btn" id="btnStatCsv">↓ CSV</button>
-          </div>
-          <div class="col stat-box border-end">
-            <div class="stat-label">Report</div>
-            <button class="stat-action-btn stat-action-pdf" id="btnStatPdf">↓ PDF</button>
-          </div>
-          <div class="col stat-box border-end">
-            <div class="stat-label">Massimo</div>
-            <div class="stat-value" id="statMax">—</div>
-          </div>
-          <div class="col stat-box">
-            <div class="stat-label">Con prezzo</div>
-            <div class="stat-value" id="statCount">—</div>
+    <!-- NAVBAR DI CONTROLLO (sticky) — appare dopo la ricerca, assorbe stats+filtri+toolbar -->
+    <div id="resultsNav" class="results-nav d-none">
+      <div class="rnav-main">
+        <!-- Gruppo: riepilogo -->
+        <div class="rnav-group rnav-summary">
+          <span id="resultsCount" class="rnav-count"></span>
+          <span class="rnav-stat"><span class="rnav-stat-label">min</span><b id="statMin">—</b></span>
+          <span class="rnav-stat"><span class="rnav-stat-label">max</span><b id="statMax">—</b></span>
+        </div>
+        <span class="rnav-sep"></span>
+        <!-- Gruppo: vista -->
+        <div class="rnav-group rnav-view">
+          <label class="toolbar-field">
+            <span class="toolbar-field-label">Raggruppa</span>
+            <select class="form-select form-select-sm w-auto" id="groupSelect">
+              <option value="">Nessuno</option>
+              <option value="modello">Modello / variante</option>
+              <option value="fonte">Fonte</option>
+              <option value="carburante">Carburante</option>
+              <option value="km">Fascia di km</option>
+              <option value="anno">Anno</option>
+              <option value="provincia">Provincia</option>
+            </select>
+          </label>
+          <label class="toolbar-field">
+            <span class="toolbar-field-label">Ordina</span>
+            <select class="form-select form-select-sm w-auto" id="sortSelect">
+              <option value="prezzo_asc">Prezzo ↑</option>
+              <option value="prezzo_desc">Prezzo ↓</option>
+              <option value="anno_desc">Anno recente</option>
+              <option value="km_asc">Km minori</option>
+              <option value="rating_desc">Rating migliore</option>
+            </select>
+          </label>
+          <button type="button" class="rnav-isola-toggle d-none" id="isolaToggle" aria-expanded="false">
+            Isola <span id="isolaCount" class="isola-count"></span>
+          </button>
+        </div>
+        <span class="rnav-sep"></span>
+        <!-- Gruppo: filtro prezzo -->
+        <div class="rnav-group rnav-filter">
+          <span class="toolbar-field-label">Prezzo</span>
+          <div class="rnav-price">
+            <div id="prezzoSlider"></div>
+            <span class="rnav-price-labels"><span id="sliderLabelMin"></span><span id="sliderLabelMax"></span></span>
           </div>
         </div>
+        <span class="rnav-sep"></span>
+        <!-- Gruppo: export -->
+        <div class="rnav-group rnav-export">
+          <button class="rnav-btn" id="btnStatCsv">CSV</button>
+          <button class="rnav-btn rnav-btn-pdf" id="btnStatPdf">PDF</button>
+        </div>
+      </div>
+      <!-- Pannello Isola collassabile: chip per gruppo + Tutte/Nessuna -->
+      <div class="rnav-isola d-none" id="isolaRow">
+        <span class="chips-label">Isola</span>
+        <div id="groupChips" class="group-chips"></div>
+        <button type="button" class="chips-allnone" id="chipsAllNone">Nessuna</button>
       </div>
     </div>
 
-    <!-- CLIENT FILTERS PANEL -->
-    <div id="clientFiltersPanel" class="d-none mb-3">
-      <div class="amr-card py-3">
-        <div class="row g-3 align-items-center">
-          <div class="col-12 col-sm-auto">
-            <div class="form-check form-switch mb-0">
-              <input class="form-check-input" type="checkbox" id="excludeNoPrice" />
-              <label class="form-check-label fw-semibold small" for="excludeNoPrice">Solo con prezzo</label>
-            </div>
-          </div>
-          <div class="col-12 col-sm">
-            <div class="fw-semibold small text-muted mb-2">Fascia prezzo</div>
-            <div id="prezzoSlider" class="mb-1"></div>
-            <div class="d-flex justify-content-between small text-muted mt-1">
-              <span id="sliderLabelMin"></span>
-              <span id="sliderLabelMax"></span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div id="fonteBreakdown" class="text-muted small mb-2"></div>
 
     <!-- RISULTATI -->
     <div id="resultsSection" class="d-none">
-
-      <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
-        <div>
-          <h6 id="resultsCount" class="mb-1 fw-semibold"></h6>
-          <div id="fonteBreakdown" class="text-muted small"></div>
-        </div>
-        <div class="d-flex align-items-center gap-2 flex-wrap">
-          <div id="fonteChips" class="d-flex gap-2">
-            <button class="amr-chip amr-chip-subito active" data-fonte="subito">Subito.it</button>
-            <button class="amr-chip amr-chip-autoscout active" data-fonte="autoscout">Autoscout24</button>
-            <button class="amr-chip amr-chip-moto active" data-fonte="moto">Moto.it</button>
-          </div>
-          <select class="form-select form-select-sm w-auto" id="sortSelect">
-            <option value="prezzo_asc">Prezzo crescente</option>
-            <option value="prezzo_desc">Prezzo decrescente</option>
-            <option value="anno_desc">Anno più recente</option>
-            <option value="km_asc">Km minori</option>
-          </select>
-        </div>
-      </div>
-
-      <div id="resultsGrid" class="row g-3"></div>
-
+      <div id="resultsGrid"></div>
       <div class="text-center mt-5">
         <button class="btn btn-outline-secondary btn-sm" id="backToSearch">Torna alla ricerca</button>
       </div>
@@ -273,7 +179,7 @@
 
   <!-- BOTTONE FLOTTANTE SALVATI -->
   <button id="btnSalvati" style="display:none"
-    class="amr-btn-salvati position-fixed bottom-0 end-0 m-3 rounded-pill shadow d-flex align-items-center gap-2"
+    class="amr-btn-salvati position-fixed bottom-0 end-0 m-3 rounded-pill shadow align-items-center gap-2"
     data-bs-toggle="offcanvas" data-bs-target="#offcanvasSalvati">
     Salvati <span class="badge bg-white text-primary" id="salvatiCount">0</span>
   </button>
@@ -310,6 +216,7 @@
   <script src="/vendor/nouislider.min.js"></script>
   <script src="/vendor/jspdf.umd.min.js"></script>
   <script src="/vendor/jspdf.plugin.autotable.min.js"></script>
+  <script src="analysis.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

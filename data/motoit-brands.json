@@ -1,0 +1,378 @@
+[
+  {
+    "name": "Aprilia",
+    "slug": "aprilia"
+  },
+  {
+    "name": "Archive Motorcycle",
+    "slug": "archive-motorcycle"
+  },
+  {
+    "name": "Askoll",
+    "slug": "askoll"
+  },
+  {
+    "name": "Benda Motorcycles",
+    "slug": "benda-motorcycles"
+  },
+  {
+    "name": "Benelli",
+    "slug": "benelli"
+  },
+  {
+    "name": "Betamotor",
+    "slug": "betamotor"
+  },
+  {
+    "name": "Bimota",
+    "slug": "bimota"
+  },
+  {
+    "name": "Bmw",
+    "slug": "bmw"
+  },
+  {
+    "name": "Brixton Motorcycles",
+    "slug": "brixton-motorcycles"
+  },
+  {
+    "name": "Buell",
+    "slug": "buell"
+  },
+  {
+    "name": "Cagiva",
+    "slug": "cagiva"
+  },
+  {
+    "name": "Can-Am Brp",
+    "slug": "can-am-brp"
+  },
+  {
+    "name": "CFMOTO",
+    "slug": "cfmoto"
+  },
+  {
+    "name": "Cyclone",
+    "slug": "cyclone"
+  },
+  {
+    "name": "Derbi",
+    "slug": "derbi"
+  },
+  {
+    "name": "Ducati",
+    "slug": "ducati"
+  },
+  {
+    "name": "Fantic Motor",
+    "slug": "fantic-motor"
+  },
+  {
+    "name": "FB Mondial",
+    "slug": "fb-mondial"
+  },
+  {
+    "name": "GASGAS",
+    "slug": "gasgas"
+  },
+  {
+    "name": "Gilera",
+    "slug": "gilera"
+  },
+  {
+    "name": "Harley-Davidson",
+    "slug": "harley-davidson"
+  },
+  {
+    "name": "HM",
+    "slug": "hm"
+  },
+  {
+    "name": "Honda",
+    "slug": "honda"
+  },
+  {
+    "name": "Husaberg",
+    "slug": "husaberg"
+  },
+  {
+    "name": "Husqvarna",
+    "slug": "husqvarna"
+  },
+  {
+    "name": "Indian",
+    "slug": "indian"
+  },
+  {
+    "name": "Italjet Moto",
+    "slug": "italjet-moto"
+  },
+  {
+    "name": "Kawasaki",
+    "slug": "kawasaki"
+  },
+  {
+    "name": "Keeway Motor",
+    "slug": "keeway-motor"
+  },
+  {
+    "name": "Kl",
+    "slug": "kl"
+  },
+  {
+    "name": "Kove",
+    "slug": "kove"
+  },
+  {
+    "name": "KSR Moto",
+    "slug": "ksr-moto"
+  },
+  {
+    "name": "KTM",
+    "slug": "ktm"
+  },
+  {
+    "name": "Kymco",
+    "slug": "kymco"
+  },
+  {
+    "name": "Lifan",
+    "slug": "lifan"
+  },
+  {
+    "name": "Lml",
+    "slug": "lml"
+  },
+  {
+    "name": "Malaguti",
+    "slug": "malaguti"
+  },
+  {
+    "name": "Mash Italia",
+    "slug": "mash-italia"
+  },
+  {
+    "name": "Mbk",
+    "slug": "mbk"
+  },
+  {
+    "name": "MBP",
+    "slug": "mbp"
+  },
+  {
+    "name": "Montesa",
+    "slug": "montesa"
+  },
+  {
+    "name": "Morbidelli",
+    "slug": "morbidelli"
+  },
+  {
+    "name": "Moto Guzzi",
+    "slug": "moto-guzzi"
+  },
+  {
+    "name": "Moto Morini",
+    "slug": "moto-morini"
+  },
+  {
+    "name": "Moto usate Abruzzo",
+    "slug": "annunci-abruzzo"
+  },
+  {
+    "name": "Moto usate Basilicata",
+    "slug": "annunci-basilicata"
+  },
+  {
+    "name": "Moto usate Calabria",
+    "slug": "annunci-calabria"
+  },
+  {
+    "name": "Moto usate Campania",
+    "slug": "annunci-campania"
+  },
+  {
+    "name": "Moto usate Emilia Romagna",
+    "slug": "annunci-emilia-romagna"
+  },
+  {
+    "name": "Moto usate Friuli Venezia Giulia",
+    "slug": "annunci-friuli-venezia-giulia"
+  },
+  {
+    "name": "Moto usate Lazio",
+    "slug": "annunci-lazio"
+  },
+  {
+    "name": "Moto usate Liguria",
+    "slug": "annunci-liguria"
+  },
+  {
+    "name": "Moto usate Lombardia",
+    "slug": "annunci-lombardia"
+  },
+  {
+    "name": "Moto usate Marche",
+    "slug": "annunci-marche"
+  },
+  {
+    "name": "Moto usate Molise",
+    "slug": "annunci-molise"
+  },
+  {
+    "name": "Moto usate Piemonte",
+    "slug": "annunci-piemonte"
+  },
+  {
+    "name": "Moto usate Puglia",
+    "slug": "annunci-puglia"
+  },
+  {
+    "name": "Moto usate Sardegna",
+    "slug": "annunci-sardegna"
+  },
+  {
+    "name": "Moto usate Sicilia",
+    "slug": "annunci-sicilia"
+  },
+  {
+    "name": "Moto usate Toscana",
+    "slug": "annunci-toscana"
+  },
+  {
+    "name": "Moto usate Trentino Alto Adige",
+    "slug": "annunci-trentino-alto-adige"
+  },
+  {
+    "name": "Moto usate Umbria",
+    "slug": "annunci-umbria"
+  },
+  {
+    "name": "Moto usate Valle d'Aosta",
+    "slug": "annunci-valle-d-aosta"
+  },
+  {
+    "name": "Moto usate Veneto",
+    "slug": "annunci-veneto"
+  },
+  {
+    "name": "Mutt Motorcycles",
+    "slug": "mutt-motorcycles"
+  },
+  {
+    "name": "MV Agusta",
+    "slug": "mv-agusta"
+  },
+  {
+    "name": "Niu",
+    "slug": "niu"
+  },
+  {
+    "name": "Peugeot",
+    "slug": "peugeot"
+  },
+  {
+    "name": "Piaggio",
+    "slug": "piaggio"
+  },
+  {
+    "name": "Polaris",
+    "slug": "polaris"
+  },
+  {
+    "name": "QJ Motor",
+    "slug": "qj-motor"
+  },
+  {
+    "name": "Qooder",
+    "slug": "qooder"
+  },
+  {
+    "name": "Quadro",
+    "slug": "quadro"
+  },
+  {
+    "name": "Rieju",
+    "slug": "rieju"
+  },
+  {
+    "name": "Royal Enfield",
+    "slug": "royal-enfield"
+  },
+  {
+    "name": "Seat",
+    "slug": "seat"
+  },
+  {
+    "name": "Sherco",
+    "slug": "sherco"
+  },
+  {
+    "name": "Super Soco",
+    "slug": "super-soco"
+  },
+  {
+    "name": "Suzuki",
+    "slug": "suzuki"
+  },
+  {
+    "name": "Swm",
+    "slug": "swm"
+  },
+  {
+    "name": "Sym",
+    "slug": "sym"
+  },
+  {
+    "name": "Tm Moto",
+    "slug": "tm-moto"
+  },
+  {
+    "name": "Triumph",
+    "slug": "triumph"
+  },
+  {
+    "name": "TVS Motor",
+    "slug": "tvs-motor"
+  },
+  {
+    "name": "Valenti Racing",
+    "slug": "valenti-racing"
+  },
+  {
+    "name": "Vent",
+    "slug": "vent"
+  },
+  {
+    "name": "Vervemoto",
+    "slug": "vervemoto"
+  },
+  {
+    "name": "Vespa",
+    "slug": "vespa"
+  },
+  {
+    "name": "Voge",
+    "slug": "voge"
+  },
+  {
+    "name": "Wottan Motor",
+    "slug": "wottan-motor"
+  },
+  {
+    "name": "Yamaha",
+    "slug": "yamaha"
+  },
+  {
+    "name": "YCF",
+    "slug": "ycf"
+  },
+  {
+    "name": "Zero",
+    "slug": "zero"
+  },
+  {
+    "name": "Zontes",
+    "slug": "zontes"
+  }
+]

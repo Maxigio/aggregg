@@ -6,6 +6,10 @@ const scrapeMotoIt    = require('./scrapers/motoit');
 const subitoSession   = require('./scrapers/subito-session');
 const { runBootstrap } = require('./scrapers/subito-bootstrap');
 const filtersSchema   = require('./scrapers/filters-schema');
+const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
+const { resolveMotoitModelSlug } = require('./scrapers/motoit-models');
+const { getDetail } = require('./scrapers/detail');
+const { makeResolver, makeModelResolver, loadAliasMap } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
 const modelsData      = require('../data/models.json');
 
@@ -33,6 +37,35 @@ function startKeepAlive() {
 
 /** Normalizza stringa: solo lettere e cifre minuscole (per matching fuzzy) */
 const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// Lookup marca FUZZY (matcher condiviso): "BMW"/"bmw", "Beta"→"Betamotor",
+// "Fantic"→"Fantic Motor" agganciano la stessa entry. Evita lo skip a cascata di
+// AS24/Moto.it quando la marca digitata non combacia esatta col nome catalogo.
+// NB: serve solo a recuperare i metadata (makeId/slug/modelli); la query Subito
+// usa sempre il testo digitato dall'utente, non il nome catalogo.
+// Il value porta sia il nome canonico sia l'entry: serve il nome per la chiave
+// dei gruppi-serie (model-groups.json), l'entry per i metadata (makeId/slug/modelli).
+const catalogResolver = {
+  auto: makeResolver(Object.entries(modelsData.auto || {}).map(([nome, entry]) => ({ name: nome, value: { nome, entry } })), { alias: loadAliasMap('auto') }),
+  moto: makeResolver(Object.entries(modelsData.moto || {}).map(([nome, entry]) => ({ name: nome, value: { nome, entry } })), { alias: loadAliasMap('moto') }),
+};
+const lookupBrand = (tipo, marca) => catalogResolver[tipo]?.(marca) || null;
+
+// Gruppi-serie commerciali (es. BMW "Serie 3" → [316,318,320,…]) generati da
+// scripts/build-model-groups.js. Usati per narroware il titolo AS24 quando la
+// serie non ha una entry-modello singola (niente mmmv di modello).
+let modelGroups = { auto: {}, moto: {} };
+try { modelGroups = require('../data/model-groups.json'); } catch (_) { /* opzionale */ }
+function lookupModelGroup(tipo, brandName, modelText) {
+  const brands = modelGroups[tipo];
+  if (!brands || !brandName) return null;
+  const g = brands[brandName];
+  if (!g) return null;
+  const q = norm(modelText);
+  if (!q) return null;
+  for (const [serie, membri] of Object.entries(g)) if (norm(serie) === q) return membri;
+  return null;
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -97,6 +130,22 @@ app.get('/api/filters', (req, res) => {
   res.json(filtersSchema.getSchema(tipo));
 });
 
+// §15 — Arricchimento spec ON-CLICK: fetch pagina-dettaglio → { cambio, potenzaCv,
+// cilindrata, proprietari, allestimento, revisione }. Anti-SSRF: host allowlist in
+// detail.js (https + dominio fonte, ri-validato per-redirect). Best-effort: ok:false
+// se la fonte non risponde (es. Subito bloccato).
+app.get('/api/detail', async (req, res) => {
+  const url = req.query.url;
+  if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url obbligatorio' });
+  try {
+    const detail = await getDetail(url);
+    if (!detail) return res.json({ ok: false, detail: null });
+    res.json({ ok: true, detail });
+  } catch (e) {
+    return res.status(400).json({ error: e.message });   // host non in allowlist / schema non-https
+  }
+});
+
 // Set di regioni valide (derivato da province.json)
 const REGIONI_VALIDE = new Set(Object.values(province).map(p => p.regione));
 
@@ -156,16 +205,20 @@ function parseSearchParams(query) {
   };
 }
 
-// Wrapper timeout: se uno scraper fallisce restituisce [] senza bloccare gli altri
-async function withTimeout(promise, ms, nomeSito) {
+// Wrapper per-fonte: ritorna { items, status, reason } — mai [] muto.
+// status: 'ok' | 'empty' | 'timeout' | 'error'. Così la UI distingue
+// "rotto/saltato" da "nessun risultato".
+async function runSource(promise, ms, nomeSito) {
   const timeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error(`Timeout su ${nomeSito}`)), ms)
+    setTimeout(() => reject(new Error('__timeout__')), ms)
   );
   try {
-    return await Promise.race([promise, timeout]);
+    const items = await Promise.race([promise, timeout]);
+    return { items, status: items.length ? 'ok' : 'empty', reason: null };
   } catch (err) {
-    console.warn(`[WARN] ${err.message}`);
-    return [];
+    const isTimeout = err.message === '__timeout__';
+    console.warn(`[WARN] ${nomeSito}: ${isTimeout ? 'timeout' : err.message}`);
+    return { items: [], status: isTimeout ? 'timeout' : 'error', reason: isTimeout ? 'timeout' : err.message };
   }
 }
 
@@ -177,7 +230,7 @@ async function runSubito(params, ms) {
   );
   try {
     const items = await Promise.race([scrapeSubito(params), timeout]);
-    return { items, status: 'ok' };
+    return { items, status: items.length ? 'ok' : 'empty', reason: null };
   } catch (err) {
     if (err instanceof SubitoBlockedError) {
       return { items: [], status: 'needs_bootstrap', reason: err.reason };
@@ -199,12 +252,23 @@ app.get('/api/search', async (req, res) => {
   // Subito: niente metadata da risolvere — usa sempre ?q=marca+modello.
   // Autoscout24: serve mmmvAutoscout (livello modello, fallback livello brand).
   // Moto.it: servono motoitBrandSlug + motoitModelSlug (slug-based, niente fallback).
-  const brandEntry = modelsData[params.tipo]?.[params.marca] || null;
+  const brandHit   = lookupBrand(params.tipo, params.marca);
+  const brandEntry = brandHit?.entry || null;
+  const brandName  = brandHit?.nome  || null;   // nome canonico catalogo (chiave gruppi-serie)
   const asMeta     = brandEntry?.autoscout || null;
 
-  // Match modello tramite nome (tolleranza minima: trim + compare diretto)
-  const modelEntry = params.modello && brandEntry?.models
-    ? brandEntry.models.find(m => m.nome === params.modello.trim())
+  // Match modello: matcher condiviso (esatto-normalizzato → prefix), case/accent-insensitive.
+  // Risolve "durango"→"Durango", "318d"→"318". (Niente più `===` esatto case-sensitive.)
+  let modelEntry = null;
+  if (params.modello && brandEntry?.models?.length) {
+    const resolveModel = makeModelResolver(brandEntry.models.map(m => ({ name: m.nome, value: m })));
+    modelEntry = resolveModel(params.modello) || null;
+  }
+
+  // Serie commerciale senza entry-modello singola (es. BMW "Serie 3", solo i trim
+  // 316/318/… esistono nel catalogo). Membri dal catalogo → narrowing titolo AS24.
+  const groupMembers = (!modelEntry && params.modello && params.tipo === 'auto')
+    ? lookupModelGroup(params.tipo, brandName, params.modello)
     : null;
 
   if (modelEntry) {
@@ -215,28 +279,41 @@ app.get('/api/search', async (req, res) => {
     params.asFilterToken = modelEntry.asFilterToken || null;
   }
 
-  // ── Slug Moto.it (SOLO da catalogo esplicito, niente fallback fallaci) ────
-  // Moto.it espone filtri via /moto-usate/ricerca?brand=<slugBrand>&model=<slugBrand>|<slugModel>.
-  // La verità su presenza brand/modello è in data/models.json (merge del catalogo Moto.it).
-  // NIENTE fallback su slugAS: genererebbe URL fallaci (brand=xxx inesistente
-  // su Moto.it → zero risultati, o peggio risultati diversi da quelli attesi).
+  // ── Slug brand Moto.it — SOLO slug REALI (niente guess) ───────────────────
+  // Fonte 1: catalogo (brandEntry.motoit.brandSlug, quando presente).
+  // Fonte 2: data/motoit-brands.json (slug veri harvestati da Moto.it), risolto
+  //          per nome con match normalizzato/contenimento (es. "Beta"→betamotor).
+  // Il model slug resta SOLO dal catalogo: in mancanza si va brand-only e il
+  // post-filter sul titolo restringe al modello (es. "Alp 4.0"). Niente slug
+  // modello inventati.
   if (params.tipo === 'moto') {
-    if (!params.motoitBrandSlug && brandEntry?.motoit?.brandSlug) {
-      params.motoitBrandSlug = brandEntry.motoit.brandSlug;
+    if (!params.motoitBrandSlug) {
+      params.motoitBrandSlug = brandEntry?.motoit?.brandSlug || resolveMotoitSlug(params.marca) || null;
     }
     if (!params.motoitModelSlug && modelEntry?.slugMotoIt) {
       params.motoitModelSlug = modelEntry.slugMotoIt;
     }
+    // Slug-modello ON-DEMAND dalla pagina-brand Moto.it (evita undersampling:
+    // brand-only prende solo le prime pagine → 3/28 "Alp 4.0"). Solo se manca dal
+    // catalogo e abbiamo brandSlug + modello digitato. Cache nel modulo.
+    if (!params.motoitModelSlug && params.motoitBrandSlug && params.modello) {
+      try {
+        params.motoitModelSlug = await resolveMotoitModelSlug(params.motoitBrandSlug, params.modello) || null;
+      } catch (_) { /* fallback brand-only + post-filter */ }
+    }
   }
 
-  const brandOnAutoscout = Boolean(asMeta);
-  const brandOnMotoIt    = Boolean(brandEntry?.motoit?.brandSlug);
+  // makeId AS24: dal catalogo (fuzzy lookup recupera anche le entry con nome-variante,
+  // es. "Beta"→"Betamotor"=50011). brandOnAutoscout dipende dal makeId, non dalla
+  // sola presenza dell'oggetto autoscout (2 marche moto hanno autoscout senza makeId).
+  const asMakeId         = asMeta?.makeId || null;
+  const brandOnAutoscout = Boolean(asMakeId);
+  const brandOnMotoIt    = Boolean(params.motoitBrandSlug);  // slug reale risolto
 
-  // Passa mmmv AS24 al scraper: livello modello > livello brand.
-  // Filtro regione: gestito lato scraper con zip=<Region> (Italy)+zipr+lat/lon
-  // sul path /lst?mmmv= (verificato contro l'UI AS24; non servono slug per-modello).
-  if (brandOnAutoscout) {
-    params.autoscoutMmmv = params.mmmvAutoscout || `${asMeta.makeId}|||`;
+  // Passa mmmv AS24 al scraper: livello modello > livello brand (brand-only = makeId|||).
+  // Filtro regione: gestito lato scraper con zip=<Region> (Italy)+zipr+lat/lon.
+  if (asMakeId) {
+    params.autoscoutMmmv = params.mmmvAutoscout || `${asMakeId}|||`;
   }
 
   // ── Skip tollerante (P6) ──────────────────────────────────────────────────
@@ -251,6 +328,9 @@ app.get('/api/search', async (req, res) => {
   // Moto: 90% dei modelli aveva sites monco → ora coperti automaticamente.
   const skipAutoscout = !brandOnAutoscout;
   const skipMotoIt    = params.tipo !== 'moto' || !brandOnMotoIt;
+  // Motivi di skip (per lo stato per-fonte in UI)
+  const asSkipReason   = 'marca non su Autoscout';
+  const motoSkipReason = params.tipo !== 'moto' ? 'solo moto' : 'marca non su Moto.it';
 
   // Log informativo quando interroghiamo AS24/MotoIt a livello brand-only
   // (fallback che si appoggia al post-filter sul titolo).
@@ -261,18 +341,19 @@ app.get('/api/search', async (req, res) => {
     console.log(`[server] Moto.it brand-only fallback per "${params.marca} ${params.modello}" (slug specifico assente)`);
   }
 
-  // Subito ha wrapper dedicato per propagare 'needs_bootstrap' al frontend
-  const [subitoRes, asItems, motoItems] = await Promise.all([
+  // Ogni fonte ritorna { items, status, reason }. Subito ha wrapper dedicato
+  // (propaga 'needs_bootstrap'). Lo skip è uno stato esplicito, non un [] muto.
+  const [subitoRes, asRes, motoRes] = await Promise.all([
     runSubito(params, TIMEOUT_MS),
     skipAutoscout
-      ? Promise.resolve([])
-      : withTimeout(scrapeAutoscout(params), TIMEOUT_MS, 'Autoscout24'),
+      ? Promise.resolve({ items: [], status: 'skipped', reason: asSkipReason })
+      : runSource(scrapeAutoscout(params), TIMEOUT_MS, 'Autoscout24'),
     skipMotoIt
-      ? Promise.resolve([])
-      : withTimeout(scrapeMotoIt(params), TIMEOUT_MS, 'Moto.it'),
+      ? Promise.resolve({ items: [], status: 'skipped', reason: motoSkipReason })
+      : runSource(scrapeMotoIt(params), TIMEOUT_MS, 'Moto.it'),
   ]);
 
-  const grezzi = [...subitoRes.items, ...asItems, ...motoItems];
+  const grezzi = [...subitoRes.items, ...asRes.items, ...motoRes.items];
 
   // ── Filtro post-scraping ─────────────────────────────────────────────────────
   // Rimuove accenti per confronto robusto (es. "Citroën" → "Citroen")
@@ -287,6 +368,20 @@ app.get('/api/search', async (req, res) => {
 
   // Modello normalizzato (per match su titolo)
   const normModello = params.modello ? norm(params.modello) : '';
+
+  // Narrowing AS24 brand-only per AUTO (§12): quando manca l'mmmv di modello
+  // (serie commerciale o modello irrisolto), filtra i titoli AS24 sui token-modello.
+  // Confine-parola su forma space-normalizzata: evita "c220" ⊂ "glc220" (GLC≠Classe C).
+  const normSp = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+  const autoTokens = (params.tipo === 'auto' && params.modello && !params.mmmvAutoscout)
+    ? (groupMembers && groupMembers.length ? groupMembers.map(normSp) : [normSp(params.modello)]).filter(Boolean)
+    : null;
+  // Right-boundary = "non seguito da cifra": il codice-serie (es. "320") matcha i
+  // titoli con lettera-variante attaccata ("320d","318i") ma NON "3200"/"1320".
+  const autoTokenRe = autoTokens && autoTokens.length
+    ? new RegExp('(?:^| )(' + autoTokens.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![0-9])')
+    : null;
 
   const risultati = grezzi.filter(r => {
     // Usa titolo senza accenti per un match robusto (es. "Citroën" = "Citroen")
@@ -325,6 +420,10 @@ app.get('/api/search', async (req, res) => {
       if (tokenNorm && !titoloNorm.includes(tokenNorm)) return false;
     }
 
+    // Narrowing AS24 brand-only per AUTO (§12): serie commerciale / modello irrisolto.
+    // Confine-parola su titolo space-normalizzato (vedi autoTokenRe).
+    if (autoTokenRe && r.fonte === 'autoscout' && !autoTokenRe.test(normSp(r.titolo))) return false;
+
     // 3. Filtri numerici
     if (params.prezzoMin != null && r.prezzo != null && r.prezzo < params.prezzoMin)   return false;
     if (params.prezzoMax != null && r.prezzo != null && r.prezzo > params.prezzoMax)   return false;
@@ -342,11 +441,27 @@ app.get('/api/search', async (req, res) => {
     return true;
   });
 
+  // Conteggio per fonte DOPO il post-filter (riflette ciò che l'utente vede)
+  const countBy = f => risultati.filter(r => r.fonte === f).length;
+  const asCount = countBy('autoscout');
+
+  // §12: AS24 brand-only narrowato per titolo (serie/modello irrisolto) e finito a 0
+  // → reason esplicita, così la UI distingue "0 per filtro titolo" da errore/vuoto-vero.
+  const asReason = (autoTokenRe && asCount === 0 && asRes.status === 'ok')
+    ? 'modello filtrato per titolo'
+    : (asRes.reason || null);
+
   res.json({
     risultati,
     totale:       risultati.length,
-    subitoStatus: subitoRes.status,           // 'ok' | 'needs_bootstrap' | 'error'
+    subitoStatus: subitoRes.status,           // 'ok' | 'empty' | 'needs_bootstrap' | 'error'
     subitoReason: subitoRes.reason || null,   // 'captcha' | '403' | 'no_data' | timeout msg
+    // Stato per-fonte: la UI distingue saltato / vuoto / errore / ok.
+    sources: {
+      subito:    { status: subitoRes.status, reason: subitoRes.reason || null, count: countBy('subito') },
+      autoscout: { status: asRes.status,     reason: asReason,                 count: asCount },
+      moto:      { status: motoRes.status,   reason: motoRes.reason || null,   count: countBy('moto') },
+    },
   });
 });
 
