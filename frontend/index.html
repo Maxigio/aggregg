@@ -138,8 +138,9 @@
           </div>
         </div>
         <span class="rnav-sep"></span>
-        <!-- Gruppo: export -->
+        <!-- Gruppo: azioni -->
         <div class="rnav-group rnav-export">
+          <button class="rnav-btn" id="btnSalvaRicerca" title="Salva questa ricerca e ricevi avvisi sulle novità">Salva ricerca</button>
           <button class="rnav-btn" id="btnStatCsv">CSV</button>
           <button class="rnav-btn rnav-btn-pdf" id="btnStatPdf">PDF</button>
         </div>
@@ -193,6 +194,28 @@
     </div>
     <div class="offcanvas-body p-0">
       <div id="salvatiList" class="p-3"></div>
+    </div>
+  </div>
+
+  <!-- BOTTONE FLOTTANTE RICERCHE SALVATE -->
+  <button id="btnRicerche" style="display:none"
+    class="amr-btn-ricerche position-fixed bottom-0 start-0 m-3 rounded-pill shadow align-items-center gap-2"
+    data-bs-toggle="offcanvas" data-bs-target="#offcanvasRicerche">
+    Ricerche <span class="badge bg-danger" id="novitaCount" style="display:none">0</span>
+  </button>
+
+  <!-- OFFCANVAS RICERCHE SALVATE -->
+  <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasRicerche"
+       aria-labelledby="offcanvasRicercheLabel" style="width:380px">
+    <div class="offcanvas-header border-bottom">
+      <h5 class="offcanvas-title fw-semibold" id="offcanvasRicercheLabel">Ricerche salvate</h5>
+      <div class="d-flex align-items-center gap-2">
+        <button type="button" class="rnav-btn" id="btnControllaTutte">Controlla tutte</button>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Chiudi"></button>
+      </div>
+    </div>
+    <div class="offcanvas-body p-0">
+      <div id="ricercheList" class="p-3"></div>
     </div>
   </div>
 

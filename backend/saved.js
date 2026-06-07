@@ -56,12 +56,19 @@ function defaultLabel(params) {
 
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
 function listSaved() {
-  // non esporre seen/alerted (pesanti) nella lista UI
-  return loadAll().map(s => ({
-    id: s.id, label: s.label, params: s.params, createdAt: s.createdAt,
-    lastChecked: s.lastChecked || null,
-    novita: (s.alerts || []).filter(a => !a.letto).length,
-  }));
+  // non esporre seen/alerted (pesanti) nella lista UI; include il digest e gli
+  // avvisi non letti (piccoli) per la resa.
+  return loadAll().map(s => {
+    const unread = (s.alerts || []).filter(a => !a.letto);
+    const digest = unread.reduce((d, a) => { d[a.motivo] = (d[a.motivo] || 0) + 1; return d; }, {});
+    return {
+      id: s.id, label: s.label, params: s.params, createdAt: s.createdAt,
+      lastChecked: s.lastChecked || null,
+      novita: unread.length,
+      digest,
+      alerts: unread.slice(-30).reverse(),   // più recenti in cima
+    };
+  });
 }
 
 function addSaved({ label, params }) {

@@ -41,6 +41,8 @@ let lastGroupKeys        = [];          // chiavi gruppo dell'ultima resa (per T
 let isolaOpen            = false;       // pannello Isola aperto/chiuso (dropdown)
 let lastSources          = null;        // stato per-fonte dall'ultima ricerca
 let prezzoSliderInstance = null;
+let lastSearchParams     = null;        // §11: params dell'ultima ricerca (per "Salva ricerca")
+let savedSearches        = [];          // §11: ricerche salvate (da /api/saved)
 let sliderGlobalBounds   = [0, 0];
 
 // Cache brand list dal server per tipo corrente (con metadata sites)
@@ -108,6 +110,12 @@ async function init() {
   errorClose.addEventListener('click', hideError);
   backToSearch.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
   form.addEventListener('submit', async (e) => { e.preventDefault(); await doSearch(); });
+
+  // ── §11 Ricerche salvate + avvisi ────────────────────────────────────────
+  document.getElementById('btnSalvaRicerca').addEventListener('click', saveCurrentSearch);
+  document.getElementById('btnControllaTutte').addEventListener('click', () => checkRicerche());
+  document.getElementById('ricercheList').addEventListener('click', onRicercheClick);
+  loadSavedSearches();
 
   // ── Event delegation: card risultati ─────────────────────────────────────
   resultsGrid.addEventListener('click', e => {
@@ -355,6 +363,7 @@ async function doSearch() {
   if (regioneSelect.value) params.regione = regioneSelect.value;
 
   Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });
+  lastSearchParams = { ...params };   // §11: memorizza per "Salva ricerca"
 
   confronto = [];
   document.body.classList.add('has-results');   // hero va in alto (non più centrata)
@@ -962,6 +971,137 @@ function renderSalvati() {
         </div>
       </div>
     `;
+  }).join('');
+}
+
+// ─── §11 Ricerche salvate + avvisi ──────────────────────────────────────────
+async function loadSavedSearches() {
+  try {
+    const r = await fetch('/api/saved');
+    const j = await r.json();
+    savedSearches = j.saved || [];
+  } catch (_) { savedSearches = []; }
+  renderRicerche();
+  updateNovitaBadge();
+}
+
+function updateNovitaBadge() {
+  const tot = savedSearches.reduce((a, s) => a + (s.novita || 0), 0);
+  const badge = document.getElementById('novitaCount');
+  const btn   = document.getElementById('btnRicerche');
+  btn.style.display = savedSearches.length > 0 ? 'flex' : 'none';
+  if (tot > 0) { badge.textContent = tot; badge.style.display = 'inline-block'; }
+  else         { badge.style.display = 'none'; }
+}
+
+async function saveCurrentSearch() {
+  if (!lastSearchParams || !lastSearchParams.marca) {
+    showError('Fai prima una ricerca, poi salvala.'); return;
+  }
+  const btn = document.getElementById('btnSalvaRicerca');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/saved', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ params: lastSearchParams }),
+    });
+    if (!r.ok) throw new Error('save failed');
+    await loadSavedSearches();
+    btn.textContent = '✓ Salvata';
+    setTimeout(() => { btn.textContent = 'Salva ricerca'; btn.disabled = false; }, 1500);
+  } catch (_) {
+    showError('Salvataggio ricerca non riuscito.'); btn.disabled = false;
+  }
+}
+
+async function checkRicerche(id) {
+  const url = id ? `/api/saved/check?id=${encodeURIComponent(id)}` : '/api/saved/check';
+  const listEl = document.getElementById('ricercheList');
+  listEl.classList.add('checking');
+  try {
+    const r = await fetch(url, { method: 'POST' });
+    const j = await r.json();
+    if (j.saved) { savedSearches = j.saved; renderRicerche(); updateNovitaBadge(); }
+  } catch (_) {
+    showError('Controllo non riuscito.');
+  } finally {
+    listEl.classList.remove('checking');
+  }
+}
+
+function onRicercheClick(e) {
+  const card = e.target.closest('[data-id]');
+  if (!card) return;
+  const id = card.dataset.id;
+  if (e.target.closest('.ric-check'))  { checkRicerche(id); return; }
+  if (e.target.closest('.ric-del'))    { deleteRicerca(id); return; }
+  const alertEl = e.target.closest('.ric-alert[data-url]');
+  if (alertEl) {
+    markRicercaRead(id);
+    const u = alertEl.dataset.url;
+    if (/^https?:/.test(u)) window.open(u, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  if (e.target.closest('.ric-head')) card.classList.toggle('open');   // espandi/chiudi avvisi
+}
+
+async function deleteRicerca(id) {
+  try {
+    await fetch(`/api/saved/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await loadSavedSearches();
+  } catch (_) { showError('Eliminazione non riuscita.'); }
+}
+
+async function markRicercaRead(id) {
+  try { await fetch(`/api/saved/${encodeURIComponent(id)}/read`, { method: 'POST' }); }
+  catch (_) {}
+  const s = savedSearches.find(x => x.id === id);
+  if (s) { s.novita = 0; updateNovitaBadge(); }
+}
+
+const MOTIVO_LABEL = { nuovo: 'nuovi', calo: 'cali', affare: 'affari' };
+function renderRicerche() {
+  const c = document.getElementById('ricercheList');
+  if (!savedSearches.length) {
+    c.innerHTML = '<p class="text-muted text-center py-4">Nessuna ricerca salvata.<br><small>Fai una ricerca e premi "Salva ricerca".</small></p>';
+    return;
+  }
+  const whenTxt = ts => {
+    if (!ts) return 'mai controllata';
+    const min = Math.round((Date.now() - ts) / 60000);
+    if (min < 1) return 'adesso';
+    if (min < 60) return `${min} min fa`;
+    const h = Math.round(min / 60);
+    return h < 24 ? `${h}h fa` : `${Math.round(h / 24)}g fa`;
+  };
+  const fmt = n => n != null ? `€ ${n.toLocaleString('it-IT')}` : '—';
+  c.innerHTML = savedSearches.map(s => {
+    const novita = s.novita || 0;
+    const badge  = novita > 0 ? `<span class="ric-badge">${novita}</span>` : '';
+    // Digest: "2 nuovi · 1 calo · 1 affare"
+    const dig = Object.entries(s.digest || {})
+      .map(([m, n]) => `${n} ${MOTIVO_LABEL[m] || m}`).join(' · ');
+    const digestLine = dig ? `<div class="ric-digest">${dig}</div>` : '';
+    // Lista avvisi (espandibile)
+    const alertsHtml = (s.alerts || []).map(a => `
+      <div class="ric-alert ric-${a.motivo}" data-url="${escapeHtml(a.url)}" title="Apri annuncio">
+        <span class="ric-motivo">${MOTIVO_LABEL[a.motivo]?.slice(0, -1) || a.motivo}</span>
+        <span class="ric-alert-tit">${escapeHtml(a.titolo || 'Annuncio')}</span>
+        <span class="ric-alert-prezzo">${fmt(a.prezzo)}</span>
+      </div>`).join('');
+    return `
+      <div class="ric-card${novita ? ' has-novita' : ''}" data-id="${escapeHtml(s.id)}">
+        <div class="ric-head">
+          <div class="ric-title">${escapeHtml(s.label)} ${badge}</div>
+          <div class="ric-sub">${escapeHtml(s.params?.tipo || '')} · controllata ${whenTxt(s.lastChecked)}</div>
+          ${digestLine}
+        </div>
+        <div class="ric-actions">
+          <button class="rnav-btn ric-check" title="Controlla ora">Controlla</button>
+          <button class="rnav-btn ric-del" title="Elimina">${icon('x')}</button>
+        </div>
+        ${alertsHtml ? `<div class="ric-alerts">${alertsHtml}</div>` : ''}
+      </div>`;
   }).join('');
 }
 
