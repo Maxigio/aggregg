@@ -255,11 +255,44 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
+// ─── Cache ricerche recenti (§17.4) ───────────────────────────────────────────
+// Stessa ricerca entro il TTL → risposta istantanea. NON cacha se una fonte è
+// error/needs_bootstrap (non congelare uno stato-bloccato) né i 0-risultati totali.
+const SEARCH_CACHE_TTL = 3 * 60 * 1000;
+const SEARCH_CACHE_MAX = 50;
+const searchCache = new Map();   // key → { ts, data }
+function searchCacheKey(p) {
+  return ['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMax', 'regione']
+    .map(f => `${f}=${p[f] ?? ''}`).join('&').toLowerCase();
+}
+function cacheable(data) {
+  const bad = s => s === 'error' || s === 'needs_bootstrap';
+  const src = data.sources || {};
+  if (bad(src.subito?.status) || bad(src.autoscout?.status) || bad(src.moto?.status)) return false;
+  return (data.totale || 0) > 0;
+}
+
+// Wrapper con cache attorno al core.
+async function runSearch(params) {
+  const key = searchCacheKey(params);
+  const hit = searchCache.get(key);
+  if (hit && Date.now() - hit.ts < SEARCH_CACHE_TTL) {
+    searchCache.delete(key); searchCache.set(key, hit);   // LRU touch
+    return hit.data;
+  }
+  const data = await runSearchCore(params);
+  if (cacheable(data)) {
+    searchCache.set(key, { ts: Date.now(), data });
+    if (searchCache.size > SEARCH_CACHE_MAX) searchCache.delete(searchCache.keys().next().value);
+  }
+  return data;
+}
+
 // ─── Core ricerca RIUSABILE (§11) ─────────────────────────────────────────────
 // Pipeline unica: risoluzione metadata → scraping multi-fonte → post-filter →
 // stato per-fonte. Chiamato da GET /api/search E dal motore avvisi (saved-check),
 // così UI e avvisi danno risultati/rating coerenti. Ritorna l'oggetto-response.
-async function runSearch(params) {
+async function runSearchCore(params) {
   // ── Risoluzione metadata per-sito dal catalogo unificato ──────────────────
   // Subito: niente metadata da risolvere — usa sempre ?q=marca+modello.
   // Autoscout24: serve mmmvAutoscout (livello modello, fallback livello brand).

@@ -14,13 +14,62 @@
 
 const { chromium } = require('playwright');
 const path = require('path');
+const https = require('https');
 const { parseEuro, parseKm, REGION_AS24, resolveChromiumExecutable } = require('./utils');
 const filtersSchema = require('./filters-schema');
 
 const BASE = 'https://www.autoscout24.it';
-const NUM_PAGES = 4;
+const NUM_PAGES = 3;   // §17.2: 5→3 (i più economici restano in cima per l'ordine prezzo)
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+// §17.1: path HTTPS diretto (no browser) come primario, fallback Playwright. Spegnibile.
+const USE_HTTP_SCRAPE = process.env.USE_HTTP_SCRAPE !== '0';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// GET https con redirect+timeout → { status, body }.
+function httpGetText(url, hops = 0) {
+  return new Promise((resolve, reject) => {
+    if (hops > 5) return reject(new Error('too many redirects'));
+    const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'it-IT,it;q=0.9' } }, res => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        const next = res.headers.location.startsWith('http') ? res.headers.location : new URL(res.headers.location, url).href;
+        return httpGetText(next, hops + 1).then(resolve, reject);
+      }
+      let d = ''; res.setEncoding('utf8');
+      res.on('data', c => d += c);
+      res.on('end', () => resolve({ status: res.statusCode, body: d }));
+    });
+    req.on('error', reject);
+    req.setTimeout(15000, () => req.destroy(new Error('timeout')));
+  });
+}
+
+// Parse __NEXT_DATA__ da HTML → { items, ok }. ok=false ⇒ struttura attesa
+// assente (probabile challenge/soft-block) → il chiamante fa fallback al browser.
+function parseAs24Html(html) {
+  const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  if (!m) return { items: [], ok: false };
+  let nextData;
+  try { nextData = JSON.parse(m[1]); } catch (_) { return { items: [], ok: false }; }
+  const listings = nextData?.props?.pageProps?.listings;
+  if (!Array.isArray(listings)) return { items: [], ok: false };
+  return { items: listings.map(parseListing).filter(Boolean), ok: true };
+}
+
+// Tutte le pagine via HTTPS in parallelo. blocked=true se UNA pagina è sospetta
+// (no __NEXT_DATA__ / HTTP≠200&≠404) → fallback browser sull'intera ricerca.
+async function scrapeAs24ViaHttp(urls) {
+  const res = await Promise.all(urls.map(async u => {
+    try {
+      const { status, body } = await httpGetText(u);
+      if (status === 404) return { items: [], ok: true };       // 404 genuino (modello assente su AS24)
+      if (status !== 200) return { items: [], ok: false };
+      return parseAs24Html(body);
+    } catch (_) { return { items: [], ok: false }; }
+  }));
+  return { pages: res.map(r => r.items), blocked: res.some(r => !r.ok) };
+}
 
 // In un bundle Electron (macOS/Windows) le risorse sono in process.resourcesPath/pw-browsers.
 // In dev (senza bundle) usiamo la cartella locale al repo.
@@ -210,25 +259,37 @@ async function scrapeAutoscout(params) {
     return [];
   }
 
-  const browser = await getBrowser();
   const urls = Array.from({ length: NUM_PAGES }, (_, i) => buildUrl(params, i + 1).url);
-  console.log(`[AS24-PW] Fetching ${NUM_PAGES} pagine: ${urls[0]}`);
+  const dedup = pages => {
+    const visti = new Set();
+    return pages.flat().filter(r => { if (visti.has(r.url)) return false; visti.add(r.url); return true; });
+  };
 
+  // §17.1 — path HTTPS primario (no browser). Solo se NON bloccato ci si fida
+  // (anche 0 risultati genuini va bene); se bloccato/sospetto → fallback browser.
+  if (USE_HTTP_SCRAPE) {
+    try {
+      const { pages, blocked } = await scrapeAs24ViaHttp(urls);
+      if (!blocked) {
+        const risultati = dedup(pages);
+        console.log(`[AS24-HTTP] OK ${risultati.length} annunci (${pages.map(p => p.length).join('+')})`);
+        return risultati;
+      }
+      console.warn('[AS24-HTTP] sospetto blocco/struttura assente → fallback browser');
+    } catch (e) {
+      console.warn(`[AS24-HTTP] errore (${e.message}) → fallback browser`);
+    }
+  }
+
+  const browser = await getBrowser();
+  console.log(`[AS24-PW] Fetching ${NUM_PAGES} pagine (browser): ${urls[0]}`);
   const pages = await Promise.all(urls.map(u => fetchPage(browser, u).catch(err => {
     console.warn(`[AS24-PW] Errore pagina ${u}: ${err.message}`);
     return [];
   })));
 
-  // Dedup per URL
-  const visti = new Set();
-  const risultati = pages.flat().filter(r => {
-    if (visti.has(r.url)) return false;
-    visti.add(r.url);
-    return true;
-  });
-
-  const conteggi = pages.map(p => p.length).join('+');
-  console.log(`[AS24-PW] Totale: ${risultati.length} annunci (${conteggi})`);
+  const risultati = dedup(pages);
+  console.log(`[AS24-PW] Totale: ${risultati.length} annunci (${pages.map(p => p.length).join('+')})`);
   return risultati;
 }
 

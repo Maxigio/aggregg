@@ -218,7 +218,7 @@ async function throttle() {
   lastSearchAt = Date.now();
 }
 
-const MAX_PAGES = 5;
+const MAX_PAGES = 3;   // §17.2: 5→3 (ordine prezzo → i più economici restano in cima; taglia il tempo Subito)
 
 // ─── Scraper principale ───────────────────────────────────────────────────────
 async function scrapeSubito(params) {

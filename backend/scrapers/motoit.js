@@ -16,13 +16,36 @@
 
 const { chromium } = require('playwright');
 const path         = require('path');
+const https        = require('https');
+const cheerio      = require('cheerio');
 const { toInt, resolveChromiumExecutable } = require('./utils');
 const filtersSchema = require('./filters-schema');
 
 const BASE = 'https://www.moto.it';
-const MAX_PAGES = 5;
+const MAX_PAGES = 3;   // §17.2: 5→3 (ordine prezzo → i più economici restano in cima)
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+// §17.1: path HTTPS diretto (cheerio, no browser) primario, fallback Playwright. Spegnibile.
+const USE_HTTP_SCRAPE = process.env.USE_HTTP_SCRAPE !== '0';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function httpGetText(url, hops = 0) {
+  return new Promise((resolve, reject) => {
+    if (hops > 5) return reject(new Error('too many redirects'));
+    const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'it-IT,it;q=0.9' } }, res => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        const next = res.headers.location.startsWith('http') ? res.headers.location : new URL(res.headers.location, url).href;
+        return httpGetText(next, hops + 1).then(resolve, reject);
+      }
+      let d = ''; res.setEncoding('utf8');
+      res.on('data', c => d += c);
+      res.on('end', () => resolve({ status: res.statusCode, body: d }));
+    });
+    req.on('error', reject);
+    req.setTimeout(15000, () => req.destroy(new Error('timeout')));
+  });
+}
 
 // ─── Path Chromium cross-platform (dev vs bundle Electron) ───────────────────
 const _respath = process.env.RESOURCES_PATH || process.resourcesPath;
@@ -144,6 +167,62 @@ function parsePrezzo(str) {
   return isNaN(n) ? null : n;
 }
 
+// Mapping card-grezza → risultato (condiviso path browser + HTTPS).
+function mapCards(cards) {
+  return cards.map(c => {
+    if (!c.href) return null;
+    const fullUrl = c.href.startsWith('http') ? c.href : `${BASE}${c.href}`;
+    return {
+      fonte:      'moto',
+      titolo:     c.titolo || 'Annuncio senza titolo',
+      prezzo:     parsePrezzo(c.priceRaw),
+      km:         c.km,
+      anno:       c.anno,
+      carburante: null,
+      provincia:  c.provincia,
+      url:        fullUrl,
+    };
+  }).filter(Boolean);
+}
+
+// §17.1 — Estrae le card da HTML STATICO via cheerio (stessa logica di
+// extractCards, ma su stringa invece che su DOM Playwright). Le pagine
+// /moto-usate/ricerca rendono le `.mcard--big` server-side (verificato).
+function extractCardsHtml(html) {
+  const $ = cheerio.load(html);
+  const out = [];
+  $('.mcard--big').each((_, el) => {
+    const c = $(el);
+    const text = c.text().replace(/\s+/g, ' ').trim();
+    const titolo = c.find('h2, h3, .mcard-title, [class*="title"]').first().text().replace(/\s+/g, ' ').trim() || null;
+    const priceRaw = c.find('[class*="price"], [class*="prezzo"]').first().text().trim() || null;
+    const href = c.find('a[href]').first().attr('href') || null;
+    const years = [...text.matchAll(/\b(19\d{2}|20\d{2})\b/g)].map(m => m[1]);
+    const anno = years.length ? parseInt(years[years.length - 1], 10) : null;
+    const kmMatch = text.match(/([\d.]+)\s*Km/i);
+    const km = kmMatch ? parseInt(kmMatch[1].replace(/\./g, ''), 10) : null;
+    const provMatch = text.match(/\(([A-Z]{2})\)/);
+    const provincia = provMatch ? provMatch[1] : null;
+    out.push({ titolo, priceRaw, href, anno, km, provincia });
+  });
+  return out;
+}
+
+// Tutte le pagine via HTTPS in parallelo. blocked se la PRIMA pagina è sospetta
+// (status≠200 o 0 card su una query che dovrebbe popolare) → fallback browser.
+// Pagine successive con 0 card = fine genuina dei risultati (non blocco).
+async function scrapeMotoViaHttp(urls) {
+  const res = await Promise.all(urls.map(async (u, i) => {
+    try {
+      const { status, body } = await httpGetText(u);
+      if (status !== 200) return { items: [], ok: false };
+      const items = mapCards(extractCardsHtml(body));
+      return { items, ok: i === 0 ? items.length > 0 : true };
+    } catch (_) { return { items: [], ok: false }; }
+  }));
+  return { pages: res.map(r => r.items), blocked: !res[0].ok };
+}
+
 // ─── Fetch singola pagina ────────────────────────────────────────────────────
 async function fetchPage(browser, url) {
   const context = await browser.newContext({
@@ -177,21 +256,7 @@ async function fetchPage(browser, url) {
     }
 
     const cards = await extractCards(page);
-
-    return cards.map(c => {
-      if (!c.href) return null;
-      const fullUrl = c.href.startsWith('http') ? c.href : `${BASE}${c.href}`;
-      return {
-        fonte:      'moto',
-        titolo:     c.titolo || 'Annuncio senza titolo',
-        prezzo:     parsePrezzo(c.priceRaw),
-        km:         c.km,
-        anno:       c.anno,
-        carburante: null,
-        provincia:  c.provincia,
-        url:        fullUrl,
-      };
-    }).filter(Boolean);
+    return mapCards(cards);
   } finally {
     await context.close();
   }
@@ -216,15 +281,34 @@ async function scrapeMotoIt(params) {
   }
 
   await throttle();
+
+  const urls = Array.from({ length: MAX_PAGES }, (_, i) => buildUrl(params, i + 1));
+  const dedup = pages => {
+    const visti = new Set();
+    return pages.flat().filter(r => { if (visti.has(r.url)) return false; visti.add(r.url); return true; });
+  };
+
+  // §17.1 — path HTTPS primario (cheerio, no browser, pagine in parallelo).
+  if (USE_HTTP_SCRAPE) {
+    try {
+      const { pages, blocked } = await scrapeMotoViaHttp(urls);
+      if (!blocked) {
+        const risultati = dedup(pages);
+        console.log(`[Moto.it-HTTP] OK ${risultati.length} annunci (${pages.map(p => p.length).join('+')})`);
+        return risultati;
+      }
+      console.warn('[Moto.it-HTTP] sospetto blocco/pagina-1 vuota → fallback browser');
+    } catch (e) {
+      console.warn(`[Moto.it-HTTP] errore (${e.message}) → fallback browser`);
+    }
+  }
+
   const browser = await getBrowser();
-
-  console.log(`[Moto.it-PW] Pagina 1: ${buildUrl(params, 1)}`);
-
+  console.log(`[Moto.it-PW] Pagina 1 (browser): ${urls[0]}`);
   const pages = [];
   for (let p = 1; p <= MAX_PAGES; p++) {
-    const url = buildUrl(params, p);
     try {
-      const items = await fetchPage(browser, url);
+      const items = await fetchPage(browser, urls[p - 1]);
       pages.push(items);
       if (items.length === 0) break; // Fine risultati
       if (p < MAX_PAGES) await sleep(700 + Math.random() * 500);
@@ -234,16 +318,8 @@ async function scrapeMotoIt(params) {
     }
   }
 
-  // Dedup per URL
-  const visti = new Set();
-  const risultati = pages.flat().filter(r => {
-    if (visti.has(r.url)) return false;
-    visti.add(r.url);
-    return true;
-  });
-
-  const conteggi = pages.map(p => p.length).join('+');
-  console.log(`[Moto.it-PW] Totale: ${risultati.length} annunci (${conteggi})`);
+  const risultati = dedup(pages);
+  console.log(`[Moto.it-PW] Totale: ${risultati.length} annunci (${pages.map(p => p.length).join('+')})`);
   return risultati;
 }
 

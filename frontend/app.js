@@ -116,6 +116,7 @@ async function init() {
   document.getElementById('btnControllaTutte').addEventListener('click', () => checkRicerche());
   document.getElementById('ricercheList').addEventListener('click', onRicercheClick);
   loadSavedSearches();
+  loadSalvati();   // §18: ripristina i salvati da localStorage
 
   // ── Event delegation: card risultati ─────────────────────────────────────
   resultsGrid.addEventListener('click', e => {
@@ -938,9 +939,28 @@ function toggleSalva(url) {
     const result = trovaResult(url);
     if (result) salvati.push(result);
   }
+  persistSalvati();   // §18: persistenza tra sessioni
   aggiornaContatoreSalvati();
   renderSalvati();
   renderResults(currentResults);
+}
+
+// §18 — Persistenza salvati in localStorage (vive in userData Electron → segue
+// anche il SSD in modalità portatile §14). Cap per non gonfiare.
+const SALVATI_KEY = 'amr_salvati';
+const SALVATI_CAP = 200;
+function persistSalvati() {
+  try { localStorage.setItem(SALVATI_KEY, JSON.stringify(salvati.slice(-SALVATI_CAP))); }
+  catch (_) { /* quota/disabilitato → non-fatale */ }
+}
+function loadSalvati() {
+  try {
+    const raw = localStorage.getItem(SALVATI_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    salvati = Array.isArray(arr) ? arr : [];
+  } catch (_) { salvati = []; }
+  aggiornaContatoreSalvati();
+  renderSalvati();
 }
 
 function aggiornaContatoreSalvati() {
