@@ -147,18 +147,14 @@ function computeAlerts(search, results) {
 
   for (const r of results) {
     if (!r.url || r.prezzo == null || r.prezzo <= 0) continue;
-    const flags = r._flags || [];
-    if (flags.includes('sospetto') || flags.includes('dato_mancante')) continue;  // scarta rumore
-    if (r.prezzo < floor) continue;                                               // floor anti-scam
+    if (r.anno == null || r.km == null) continue;   // dati incompleti → niente avviso (rumore)
+    if (r.prezzo < floor) continue;                 // floor anti-scam (price-based)
 
     const prev = seen[r.url];
     let motivo = null, key = null;
     if (prev == null) {
-      // Annuncio NUOVO (mai visto): se è anche affare forte → 'affare' (più saliente),
-      // altrimenti 'nuovo'. NB: gli affari PREESISTENTI non riallertano (sono già
-      // visibili nei risultati) → niente flood a ogni check.
-      if (flags.includes('affare')) { motivo = 'affare'; key = `${r.url}|affare`; }
-      else                          { motivo = 'nuovo';  key = `${r.url}|nuovo`; }
+      // Annuncio NUOVO (mai visto). §21: niente più 'affare' (rating rimosso).
+      motivo = 'nuovo'; key = `${r.url}|nuovo`;
     } else if (r.prezzo <= prev - Math.max(DROP_ABS, prev * DROP_PCT)) {
       motivo = 'calo';  key = `${r.url}|calo|${r.prezzo}`;   // include prezzo → ulteriori cali ri-notificano
     }

@@ -183,6 +183,10 @@ function parseListing(item) {
     modelPart = modelPart.slice(make.length).trim();
   }
 
+  // §22 — campi strutturati gratis dal payload AS24 (no fetch).
+  const ccmRaw = item.vehicle?.engineDisplacementInCCM;
+  const cilindrata = ccmRaw ? (parseInt(String(ccmRaw).replace(/[^\d]/g, ''), 10) || null) : null;
+
   return {
     fonte:      'autoscout',
     titolo:     [make, modelPart].filter(Boolean).join(' ') || 'Annuncio senza titolo',
@@ -191,6 +195,10 @@ function parseListing(item) {
     anno:       parseAnno(item.vehicleDetails),
     carburante: detail(item.vehicleDetails, 'Carburante') || null,
     provincia:  parseProvincia(item.location?.city),
+    // §22 strutturati (mostrati istantanei nel pannello "Dettagli")
+    cambio:     item.vehicle?.transmission || null,
+    cilindrata,
+    variante:   item.vehicle?.modelVersionInput || item.vehicle?.variant || null,
     url,
   };
 }

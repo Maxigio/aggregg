@@ -133,13 +133,13 @@ async function init() {
     const url = card.dataset.url;
     if (e.target.closest('.btn-salva'))     { toggleSalva(url);     return; }
     if (e.target.closest('.btn-confronta')) { toggleConfronto(url); return; }
-    // Apri/chiudi il dettaglio rating senza aprire l'annuncio
-    if (e.target.closest('.rating-toggle')) {
-      const detail = card.querySelector('.rating-detail');
-      const toggle = card.querySelector('.rating-toggle');
+    // Apri/chiudi il pannello dettagli senza aprire l'annuncio
+    if (e.target.closest('.dettagli-toggle')) {
+      const detail = card.querySelector('.row-detail');
+      const toggle = card.querySelector('.dettagli-toggle');
       const open   = detail.classList.toggle('d-none');
       toggle.setAttribute('aria-expanded', String(!open));
-      if (!open) loadSpec(card);   // appena aperto → carica spec extra (lazy, una sola volta)
+      if (!open) loadSpec(card);   // appena aperto → carica i dettagli (lazy, una sola volta)
       return;
     }
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -271,22 +271,19 @@ function setupMarcaAutocomplete() {
 // e lo stesso annuncio mantiene sempre lo stesso punteggio a prescindere dalla
 // vista (ordinamento/raggruppamento/filtro fonti agiscono solo sulla resa).
 
-// Modulo analisi (scoring/flag/cluster) estratto in frontend/analysis.js — isomorfo,
-// condiviso col motore-avvisi server (§11). Caricato via <script> PRIMA di app.js.
-const { analyzeResults, clusterModello } = (typeof window !== 'undefined' ? window : globalThis).AMRAnalysis;
-
-const FLAG_META = {
-  affare:        { icon: 'trendingDown', label: 'Affare',           cls: 'flag-affare' },
-  sospetto:      { icon: 'alert',        label: 'Prezzo sospetto',  cls: 'flag-rosso' },
-  km_bassi:      { icon: 'alert',        label: 'Km incoerenti',    cls: 'flag-rosso' },
-  km_alti:       { icon: 'alert',        label: 'Km molto alti',    cls: 'flag-rosso' },
-  dato_mancante: { icon: 'help',         label: 'Dati incompleti',  cls: 'flag-giallo' },
-};
-
-function scoreTier(score) {
-  if (score >= 70) return 'score-ottimo';
-  if (score >= 45) return 'score-medio';
-  return 'score-basso';
+// §21: rating rimosso (vedi RATING-DESIGN.md). Resta `clusterModello` per il
+// group-by "Modello/variante" — funzione pura (era in frontend/analysis.js).
+function clusterModello(titolo) {
+  if (!titolo) return '?';
+  const norm = String(titolo).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const tokens = norm.match(/[a-z0-9]+/g) || [];
+  if (!tokens.length) return '?';
+  const marca   = tokens.find(t => /[a-z]/.test(t)) || tokens[0];
+  const modello = tokens.find(t => /\d/.test(t))
+               || tokens.filter(t => t !== marca)[0]
+               || '';
+  return (marca + (modello ? ' ' + modello : '')).trim();
 }
 
 // ─── Raggruppamento (GROUP BY) ──────────────────────────────────────────────
@@ -378,8 +375,8 @@ async function doSearch() {
 
     if (!res.ok) { showError(data.error || 'Errore durante la ricerca.'); return; }
 
-    // Analizza UNA volta: rating + evidenziazioni sul cluster-modello.
-    currentResults = analyzeResults(data.risultati || []);
+    // §21: niente più rating — si usano i risultati grezzi.
+    currentResults = data.risultati || [];
     lastSources    = data.sources || null;   // stato per-fonte (ok/empty/skipped/timeout/error)
     renderSourceStatus();
 
@@ -686,7 +683,6 @@ function sortResults(results, criteria) {
     case 'prezzo_desc': return results.sort((a, b) => (b.prezzo ?? -Infinity) - (a.prezzo ?? -Infinity));
     case 'anno_desc':   return results.sort((a, b) => (b.anno   ?? 0)         - (a.anno   ?? 0));
     case 'km_asc':      return results.sort((a, b) => (a.km     ?? Infinity)  - (b.km     ?? Infinity));
-    case 'rating_desc': return results.sort((a, b) => (b._score ?? -1)        - (a._score ?? -1));
     default:            return results;
   }
 }
@@ -700,74 +696,33 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-// Dropdown rating — basato sul PREZZO ATTESO (modello di deprezzamento §16).
-// "Affare" = sotto l'atteso per la SUA età/km, non sotto una mediana piatta.
-function ratingExplain(item, opts = {}) {
-  const bd = item._scoreBreakdown || {};
-  const n  = bd.comparabili ?? 0;
-  const modello = item._cluster ? item._cluster.toUpperCase() : 'stesso modello';
-  const eur = v => '€ ' + Math.round(v).toLocaleString('it-IT');
-  const kmTxt = v => v != null ? Math.round(v).toLocaleString('it-IT') + ' km' : '—';
-
-  if (bd.expected == null || item.prezzo == null || item.prezzo <= 0) {
-    return `<div class="rx-note">Pochi annunci simili (${n}): convenienza non valutabile in modo affidabile.</div>`;
-  }
-
-  // Verdetto dal residuo (quanto sotto/sopra l'atteso).
-  const delta = Math.round(bd.expected - item.prezzo);          // >0 = sotto l'atteso (buono)
-  const pct   = Math.round(Math.abs(delta) / bd.expected * 100);
-  let vClass = 'rx-mid', vText = 'In linea col prezzo atteso';
-  if (item._flags?.includes('sospetto')) { vClass = 'rx-bad';  vText = `Prezzo sospetto: ${pct}% sotto l'atteso (verifica bene)`; }
-  else if (delta > 0 && pct >= 5)        { vClass = 'rx-good'; vText = `Affare: ${eur(delta)} sotto il prezzo atteso (−${pct}%)`; }
-  else if (delta < 0 && pct >= 5)        { vClass = 'rx-bad';  vText = `Caro: ${eur(-delta)} sopra il prezzo atteso (+${pct}%)`; }
-
-  // Banda attesa per la sua età/km.
-  const eta = item.anno != null ? `~${item.anno}` : 'età n/d';
-  const banda = (bd.bandLo != null && bd.bandHi != null && bd.bandHi > bd.bandLo)
-    ? `${eur(bd.bandLo)}–${eur(bd.bandHi)}` : eur(bd.expected);
-
-  // Attributi (CONTESTO, non punteggio): km/anno vs i simili.
-  const ctx = [];
-  if (bd.itemKm != null && bd.neighKm != null) {
-    const d = bd.itemKm - bd.neighKm;
-    ctx.push(`Km ${kmTxt(bd.itemKm)} <span class="rx-ctx-cmp">(${d <= 0 ? '−' : '+'}${kmTxt(Math.abs(d))} vs simili)</span>`);
-  }
-  if (bd.itemAnno != null && bd.neighAnno != null) {
-    const d = Math.round(bd.itemAnno - bd.neighAnno);
-    ctx.push(`Anno ${bd.itemAnno}${d ? ` <span class="rx-ctx-cmp">(${d > 0 ? '+' : ''}${d} vs simili)</span>` : ''}`);
-  }
-
-  const rank = (opts.showRank && bd.priceRank != null && bd.priceRankTot >= 2)
-    ? `<div class="rx-rank">${bd.priceRank}° più conveniente tra ${bd.priceRankTot} simili</div>` : '';
-  const low = bd.lowData ? `<div class="rx-lowinline">Pochi dati (${n} simili): stima indicativa.</div>` : '';
-
-  return `
-    <div class="rx-verdict ${vClass}">${vText}</div>
-    <div class="rx-expected">Prezzo atteso <b>${banda}</b> per un <b>${escapeHtml(modello)}</b> ${eta} · ${kmTxt(item.km)} <span class="rx-sample">(da ${bd.vicini || n} annunci simili)</span></div>
-    <div class="rx-this">Questo annuncio: <b>${eur(item.prezzo)}</b></div>
-    ${ctx.length ? `<div class="rx-ctx">${ctx.join(' · ')}</div>` : ''}
-    ${rank}${low}`;
-}
-
-// §15 — Spec extra ON-CLICK: alla prima apertura del dropdown Rating, fetch
-// /api/detail (lazy, cache server). Best-effort: se la fonte non risponde mostra
-// "dettagli non disponibili". data-loaded evita refetch.
+// §22 — Pannello "Dettagli" on-click. Campi strutturati AS24 (cambio/cilindrata/
+// versione) sono già sull'item → render ISTANTANEO; per Subito/Moto.it fetch lazy
+// /api/detail (§15). `data-loaded` evita refetch.
 const SPEC_LABELS = {
-  cambio: 'Cambio', potenzaCv: 'Potenza', cilindrata: 'Cilindrata',
-  proprietari: 'Proprietari', allestimento: 'Allestimento', revisione: 'Revisione',
+  variante: 'Versione', cambio: 'Cambio', cilindrata: 'Cilindrata',
+  potenzaCv: 'Potenza', proprietari: 'Proprietari', allestimento: 'Allestimento', revisione: 'Revisione',
 };
-function renderSpec(detail) {
+function renderSpec(obj) {
   const fmt = (k, v) => {
     if (v == null || v === '') return '';
     const val = k === 'potenzaCv' ? `${v} CV` : k === 'cilindrata' ? `${v} cc` : escapeHtml(String(v));
     return `<span class="spec-item"><span class="spec-k">${SPEC_LABELS[k]}</span> ${val}</span>`;
   };
-  const items = Object.keys(SPEC_LABELS).map(k => fmt(k, detail[k])).filter(Boolean);
+  const items = Object.keys(SPEC_LABELS).map(k => fmt(k, obj[k])).filter(Boolean);
   return items.length ? items.join('') : '<span class="spec-empty">Nessun dettaglio aggiuntivo</span>';
 }
 async function loadSpec(card) {
   const box = card.querySelector('.row-spec');
   if (!box || box.dataset.loaded === '1') return;
+  const item = trovaResult(card.dataset.url) || {};
+  // Campi strutturati già presenti (AS24) → render immediato, niente fetch.
+  if (['variante', 'cambio', 'cilindrata'].some(k => item[k] != null && item[k] !== '')) {
+    box.dataset.loaded = '1';
+    box.innerHTML = renderSpec(item);
+    return;
+  }
+  // Altrimenti (Subito/Moto.it) → fetch lazy del dettaglio.
   box.dataset.loaded = '1';
   const url = card.dataset.url;
   if (!url || !/^https?:/.test(url)) { box.innerHTML = ''; return; }
@@ -778,17 +733,15 @@ async function loadSpec(card) {
     box.innerHTML = (j.ok && j.detail) ? renderSpec(j.detail)
       : '<span class="spec-empty">Dettagli non disponibili</span>';
   } catch (_) {
-    box.dataset.loaded = '0';   // errore di rete → consenti retry alla prossima apertura
+    box.dataset.loaded = '0';   // errore di rete → retry alla prossima apertura
     box.innerHTML = '<span class="spec-empty">Dettagli non disponibili</span>';
   }
 }
 
-// Riga risultato (lista densa). Flag ed evidenziazioni vivono SOLO nel
-// dropdown "Rating": la riga resta pulita (punteggio · titolo · prezzo).
+// Riga risultato (lista densa, §21: niente rating). Riga pulita: titolo · dati ·
+// prezzo + toggle "Dettagli" on-click.
 function rowHTML(item, dim = '') {
-  const prezzoStr  = item.prezzo != null
-    ? `€ ${item.prezzo.toLocaleString('it-IT')}`
-    : 'n/d';
+  const prezzoStr = item.prezzo != null ? `€ ${item.prezzo.toLocaleString('it-IT')}` : 'n/d';
 
   const dettagli = [
     item.anno       ? `${item.anno}`                           : null,
@@ -803,26 +756,8 @@ function rowHTML(item, dim = '') {
   const isSalvato   = salvati.some(r => r.url === item.url);
   const inConfronto = confronto.some(r => r.url === item.url);
 
-  const score    = item._score ?? 50;
-  const scoreCls = scoreTier(score);
-
-  // Evidenziazioni — nel dropdown
-  const flagsHtml = (item._flags || []).map(f => {
-    const m = FLAG_META[f];
-    return m ? `<span class="flag ${m.cls}">${icon(m.icon)} ${m.label}</span>` : '';
-  }).join('');
-
-  // Dettaglio rating (espandibile): flag + spiegazione testuale + spec on-click (§15)
-  const ratingDetail = `
-    <div class="rating-detail d-none">
-      ${flagsHtml ? `<div class="flags">${flagsHtml}</div>` : ''}
-      ${ratingExplain(item, { showRank: !!dim })}
-      <div class="row-spec" data-loaded="0"></div>
-    </div>`;
-
   return `
     <div class="result-row" data-url="${urlSafe}">
-      <div class="row-score ${scoreCls}" title="Punteggio affare (0-100)">${score}</div>
       <div class="row-main">
         <div class="row-titolo">${escapeHtml(item.titolo)}</div>
         <div class="row-dett">${dettagli ? escapeHtml(dettagli) + ' · ' : ''}<span class="fonte ${fonteClass}">${escapeHtml(fonteLabel)}</span></div>
@@ -830,12 +765,12 @@ function rowHTML(item, dim = '') {
       <div class="row-right">
         <div class="row-prezzo">${prezzoStr}</div>
         <div class="row-actions">
-          <button type="button" class="rating-toggle" aria-expanded="false" title="Dettaglio rating">Rating ${icon('chevron', 'chevron')}</button>
+          <button type="button" class="dettagli-toggle" aria-expanded="false" title="Mostra dettagli">Dettagli ${icon('chevron', 'chevron')}</button>
           <button class="btn-confronta${inConfronto ? ' attivo' : ''}" title="Confronta">${icon('compare')}</button>
           <button class="btn-salva${isSalvato ? ' attivo' : ''}" title="${isSalvato ? 'Rimuovi dai salvati' : 'Salva annuncio'}">${icon(isSalvato ? 'bookmark-filled' : 'bookmark')}</button>
         </div>
       </div>
-      ${ratingDetail}
+      <div class="row-detail d-none"><div class="row-spec" data-loaded="0"></div></div>
     </div>
   `;
 }
@@ -1091,7 +1026,7 @@ async function markRicercaRead(id) {
   if (card) { card.classList.remove('has-novita'); card.querySelector('.ric-badge')?.remove(); }
 }
 
-const MOTIVO_LABEL = { nuovo: 'nuovi', calo: 'cali', affare: 'affari' };
+const MOTIVO_LABEL = { nuovo: 'nuovi', calo: 'cali' };
 function renderRicerche() {
   const c = document.getElementById('ricercheList');
   if (!savedSearches.length) {
@@ -1175,7 +1110,7 @@ function hideResults() {
 
 // ─── Export CSV ───────────────────────────────────────────────────────────────
 function exportCsv(results) {
-  const cols = ['Fonte', 'Titolo', 'Prezzo (€)', 'Anno', 'KM', 'Carburante', 'Provincia', 'Rating', 'Segnalazioni', 'URL'];
+  const cols = ['Fonte', 'Titolo', 'Prezzo (€)', 'Anno', 'KM', 'Carburante', 'Provincia', 'URL'];
   const rows = results.map(r => [
     r.fonte,
     r.titolo,
@@ -1184,8 +1119,6 @@ function exportCsv(results) {
     r.km     != null ? r.km     : '',
     r.carburante || '',
     r.provincia  || '',
-    r._score != null ? r._score : '',
-    (r._flags || []).map(f => FLAG_META[f]?.label || f).join('; '),
     r.url,
   ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
 
@@ -1295,16 +1228,11 @@ function exportPdf(results) {
     r.km     != null ? r.km.toLocaleString('it-IT') + ' km' : '—',
     r.carburante || '—',
     r.provincia  || '—',
-    r._score != null ? String(r._score) : '—',
   ]);
-
-  // Colori rating per fascia (allineati a scoreTier)
-  const ratingColor = s =>
-    s >= 70 ? [22, 101, 52] : s >= 45 ? [146, 64, 14] : [185, 28, 28];
 
   doc.autoTable({
     startY: boxY + boxH + 5,
-    head:   [['Fonte', 'Titolo', 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia', 'Rating']],
+    head:   [['Fonte', 'Titolo', 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia']],
     body:   tableBody,
     styles: {
       font: 'helvetica',
@@ -1326,15 +1254,8 @@ function exportPdf(results) {
       2: { halign: 'right',  cellWidth: 24, fontStyle: 'bold', textColor: C_BLUE_700 },
       3: { halign: 'center', cellWidth: 14 },
       4: { halign: 'right',  cellWidth: 24 },
-      5: { halign: 'center', cellWidth: 20 },
-      6: { halign: 'center', cellWidth: 20 },
-      7: { halign: 'center', cellWidth: 16, fontStyle: 'bold' },
-    },
-    didParseCell(data) {
-      if (data.section === 'body' && data.column.index === 7) {
-        const s = results[data.row.index]?._score;
-        if (s != null) data.cell.styles.textColor = ratingColor(s);
-      }
+      5: { halign: 'center', cellWidth: 22 },
+      6: { halign: 'center', cellWidth: 22 },
     },
     didDrawCell(data) {
       if (data.section !== 'body' || data.column.index !== 0) return;

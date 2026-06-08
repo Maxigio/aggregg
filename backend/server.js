@@ -10,7 +10,6 @@ const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
 const { resolveMotoitModelSlug } = require('./scrapers/motoit-models');
 const { getDetail } = require('./scrapers/detail');
 const saved = require('./saved');
-const analysis = require('../frontend/analysis.js');   // modulo isomorfo (UMD) → ramo Node
 const { makeResolver, makeModelResolver, loadAliasMap } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
 const modelsData      = require('../data/models.json');
@@ -534,13 +533,12 @@ function normalizeSavedParams(raw) {
 }
 
 // Check di UNA ricerca (SENZA lock — usato dentro il lock): runSearch (core) →
-// analyzeResults (isomorfo) → recordCheck (avvisi filtrati).
+// recordCheck (avvisi price-based; §21: niente più analisi/rating).
 async function _checkSavedOne(id) {
   const s = saved.getSaved(id);
   if (!s) return null;
   const out = await runSearch(normalizeSavedParams(s.params));
-  const results = analysis.analyzeResults(out.risultati || []);
-  const alerts = saved.recordCheck(id, results);
+  const alerts = saved.recordCheck(id, out.risultati || []);
   return { id, label: s.label, nuovi: alerts.length, sources: out.sources };
 }
 
