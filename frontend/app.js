@@ -700,45 +700,53 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-// Dropdown rating — spiegazione testuale onesta (niente chart astratte).
-// Base del confronto: stesso modello tra i risultati (cluster). Trasparente sul
-// campione; con <4 simili segnala "pochi dati".
+// Dropdown rating — basato sul PREZZO ATTESO (modello di deprezzamento §16).
+// "Affare" = sotto l'atteso per la SUA età/km, non sotto una mediana piatta.
 function ratingExplain(item, opts = {}) {
   const bd = item._scoreBreakdown || {};
-  const n = bd.comparabili ?? 0;
+  const n  = bd.comparabili ?? 0;
   const modello = item._cluster ? item._cluster.toUpperCase() : 'stesso modello';
+  const eur = v => '€ ' + Math.round(v).toLocaleString('it-IT');
+  const kmTxt = v => v != null ? Math.round(v).toLocaleString('it-IT') + ' km' : '—';
 
-  if (n < 2) {
-    return `<div class="rx-note">Nessun altro annuncio simile trovato: convenienza non valutabile.</div>`;
+  if (bd.expected == null || item.prezzo == null || item.prezzo <= 0) {
+    return `<div class="rx-note">Pochi annunci simili (${n}): convenienza non valutabile in modo affidabile.</div>`;
   }
 
-  const eur = v => '€ ' + Math.abs(Math.round(v)).toLocaleString('it-IT');
-  const kmf = v => Math.abs(Math.round(v)).toLocaleString('it-IT') + ' km';
-  const chip = (cls, label, val) => `<span class="rx-chip ${cls}"><em>${label}</em> ${val}</span>`;
-  const chips = [];
+  // Verdetto dal residuo (quanto sotto/sopra l'atteso).
+  const delta = Math.round(bd.expected - item.prezzo);          // >0 = sotto l'atteso (buono)
+  const pct   = Math.round(Math.abs(delta) / bd.expected * 100);
+  let vClass = 'rx-mid', vText = 'In linea col prezzo atteso';
+  if (item._flags?.includes('sospetto')) { vClass = 'rx-bad';  vText = `Prezzo sospetto: ${pct}% sotto l'atteso (verifica bene)`; }
+  else if (delta > 0 && pct >= 5)        { vClass = 'rx-good'; vText = `Affare: ${eur(delta)} sotto il prezzo atteso (−${pct}%)`; }
+  else if (delta < 0 && pct >= 5)        { vClass = 'rx-bad';  vText = `Caro: ${eur(-delta)} sopra il prezzo atteso (+${pct}%)`; }
 
-  if (bd.avgPrezzo != null && item.prezzo != null && item.prezzo > 0) {
-    const d = item.prezzo - bd.avgPrezzo, pct = Math.round(Math.abs(d) / bd.avgPrezzo * 100), good = d <= 0;
-    chips.push(chip(good ? 'rx-good' : 'rx-bad', 'Prezzo', `${good ? '−' : '+'}${eur(d)} · ${pct}% ${good ? 'sotto' : 'sopra'}`));
+  // Banda attesa per la sua età/km.
+  const eta = item.anno != null ? `~${item.anno}` : 'età n/d';
+  const banda = (bd.bandLo != null && bd.bandHi != null && bd.bandHi > bd.bandLo)
+    ? `${eur(bd.bandLo)}–${eur(bd.bandHi)}` : eur(bd.expected);
+
+  // Attributi (CONTESTO, non punteggio): km/anno vs i simili.
+  const ctx = [];
+  if (bd.itemKm != null && bd.neighKm != null) {
+    const d = bd.itemKm - bd.neighKm;
+    ctx.push(`Km ${kmTxt(bd.itemKm)} <span class="rx-ctx-cmp">(${d <= 0 ? '−' : '+'}${kmTxt(Math.abs(d))} vs simili)</span>`);
   }
-  if (bd.avgKm != null && item.km != null) {
-    const d = item.km - bd.avgKm;
-    if (Math.abs(d) < 3000) chips.push(chip('rx-mid', 'Km', 'in media'));
-    else chips.push(chip(d < 0 ? 'rx-good' : 'rx-bad', 'Km', `${d < 0 ? '−' : '+'}${kmf(d)}`));
-  }
-  if (bd.avgAnno != null && item.anno != null) {
-    const d = Math.round(item.anno - bd.avgAnno);
-    chips.push(chip(d > 0 ? 'rx-good' : d < 0 ? 'rx-bad' : 'rx-mid', 'Anno', d === 0 ? `${item.anno}` : `${item.anno} (${d > 0 ? '+' : ''}${d})`));
+  if (bd.itemAnno != null && bd.neighAnno != null) {
+    const d = Math.round(bd.itemAnno - bd.neighAnno);
+    ctx.push(`Anno ${bd.itemAnno}${d ? ` <span class="rx-ctx-cmp">(${d > 0 ? '+' : ''}${d} vs simili)</span>` : ''}`);
   }
 
-  // Ranking solo se raggruppato (in vista mista l'ordine è già palese)
   const rank = (opts.showRank && bd.priceRank != null && bd.priceRankTot >= 2)
-    ? ` · <b>${bd.priceRank}°</b> più conveniente` : '';
-  const low = bd.lowData ? ` · <span class="rx-lowinline">pochi dati</span>` : '';
+    ? `<div class="rx-rank">${bd.priceRank}° più conveniente tra ${bd.priceRankTot} simili</div>` : '';
+  const low = bd.lowData ? `<div class="rx-lowinline">Pochi dati (${n} simili): stima indicativa.</div>` : '';
 
   return `
-    <div class="rx-head">vs <b>${n}</b> simili · ${escapeHtml(modello)}${rank}${low}</div>
-    <div class="rx-chips">${chips.join('')}</div>`;
+    <div class="rx-verdict ${vClass}">${vText}</div>
+    <div class="rx-expected">Prezzo atteso <b>${banda}</b> per un <b>${escapeHtml(modello)}</b> ${eta} · ${kmTxt(item.km)} <span class="rx-sample">(da ${bd.vicini || n} annunci simili)</span></div>
+    <div class="rx-this">Questo annuncio: <b>${eur(item.prezzo)}</b></div>
+    ${ctx.length ? `<div class="rx-ctx">${ctx.join(' · ')}</div>` : ''}
+    ${rank}${low}`;
 }
 
 // §15 — Spec extra ON-CLICK: alla prima apertura del dropdown Rating, fetch

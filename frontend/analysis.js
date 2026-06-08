@@ -20,12 +20,15 @@
 
   // Soglie delle evidenziazioni. Tarabili sui risultati reali.
   const FLAG_THRESHOLDS = {
-    affarePct:     0.20,    // prezzo <= mediana*(1-0.20) → 🟢 Affare
-    sospettoPct:   0.40,    // prezzo <  mediana*0.40     → 🔴 Prezzo sospetto
+    affarePct:     0.15,    // prezzo <= atteso*(1-0.15)  → 🟢 Affare
+    sospettoFact:  0.50,    // prezzo <  atteso*0.50      → 🔴 Prezzo sospetto (troppo bello)
     kmAnnuiBassi:  3000,    // km/anno < soglia con età>min → 🔴 sospetto scalata
     kmAnnuiAlti:   40000,   // km/anno > soglia            → 🔴 usura forte
     etaMinScalata: 3,
   };
+  const MIN_COMPARABILI = 6;   // sotto: niente k-NN affidabile → fallback mediana, no flag forti
+  const KNN_K           = 8;   // n. vicini per il prezzo atteso
+  const SCORE_SPAN      = 0.30; // residuo ±30% → punteggio 0/100
 
   function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
@@ -39,6 +42,13 @@
   function kmPerYear(r) {
     if (r.km == null || r.anno == null) return null;
     return r.km / Math.max(1, CURRENT_YEAR - r.anno + 1);
+  }
+
+  // Percentile (0..100) su array già ORDINATO crescente.
+  function percentile(sorted, p) {
+    if (!sorted.length) return null;
+    const i = Math.min(sorted.length - 1, Math.max(0, Math.round((p / 100) * (sorted.length - 1))));
+    return sorted[i];
   }
 
   // Percentile-rank di v dentro arr (0..1). Più alto = v maggiore nel set.
@@ -65,6 +75,70 @@
     return (marca + (modello ? ' ' + modello : '')).trim();
   }
 
+  // Prezzo ATTESO per un annuncio dai k vicini per età+km nel cluster (esclude sé
+  // stesso e i duplicati). Ritorna { expected, bandLo, bandHi, vicini, method } o null.
+  // Risolve un sistema lineare 3×3 (A·x=b) via eliminazione di Gauss con pivot.
+  function solve3(A, b) {
+    const M = [[...A[0], b[0]], [...A[1], b[1]], [...A[2], b[2]]];
+    for (let c = 0; c < 3; c++) {
+      let piv = c;
+      for (let r2 = c + 1; r2 < 3; r2++) if (Math.abs(M[r2][c]) > Math.abs(M[piv][c])) piv = r2;
+      if (Math.abs(M[piv][c]) < 1e-12) return null;   // singolare
+      [M[c], M[piv]] = [M[piv], M[c]];
+      for (let r2 = 0; r2 < 3; r2++) {
+        if (r2 === c) continue;
+        const f = M[r2][c] / M[c][c];
+        for (let k = c; k < 4; k++) M[r2][k] -= f * M[c][k];
+      }
+    }
+    return [M[0][3] / M[0][0], M[1][3] / M[1][1], M[2][3] / M[2][2]];
+  }
+
+  // Prezzo ATTESO via modello di deprezzamento: regressione ridge OLS
+  //   prezzo ≈ b0 + b1·età + b2·km   (predittori scalati [0,1] sul cluster).
+  // Cattura il trend (prezzo↓ con età/km) → predice l'atteso anche agli estremi,
+  // senza farsi dominare dagli outlier come la mediana/k-NN. residuo = sotto/sopra.
+  function expectedPrice(r, comparables) {
+    const priced = comparables.filter(p => p !== r && p.url !== r.url && p.prezzo > 0);
+    const cand = priced.filter(p => p.anno != null && p.km != null);
+    if (priced.length >= MIN_COMPARABILI && cand.length >= MIN_COMPARABILI && r.anno != null && r.km != null) {
+      const ages = cand.map(p => CURRENT_YEAR - p.anno);
+      const kms  = cand.map(p => p.km);
+      const aMin = Math.min(...ages), aMax = Math.max(...ages), aSpan = (aMax - aMin) || 1;
+      const kMin = Math.min(...kms),  kMax = Math.max(...kms),  kSpan = (kMax - kMin) || 1;
+      const sa = a => (a - aMin) / aSpan, sk = k => (k - kMin) / kSpan;
+      // Normal equations XᵀX, Xᵀy con design [1, age, km].
+      const XtX = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], Xty = [0, 0, 0];
+      cand.forEach((p, i) => {
+        const x = [1, sa(ages[i]), sk(kms[i])], y = p.prezzo;
+        for (let a = 0; a < 3; a++) { Xty[a] += x[a] * y; for (let b = 0; b < 3; b++) XtX[a][b] += x[a] * x[b]; }
+      });
+      const lambda = 0.05;                       // ridge: stabilità se età~km collineari
+      XtX[1][1] += lambda; XtX[2][2] += lambda;
+      const beta = solve3(XtX, Xty);
+      if (beta) {
+        const minP = Math.min(...cand.map(p => p.prezzo));
+        let expected = beta[0] + beta[1] * sa(CURRENT_YEAR - r.anno) + beta[2] * sk(r.km);
+        expected = Math.max(expected, minP * 0.3);   // niente attesi assurdi/negativi (estrapolazione)
+        // Banda dalla dispersione dei residui del fit.
+        const resid = cand.map(p => p.prezzo - (beta[0] + beta[1] * sa(CURRENT_YEAR - p.anno) + beta[2] * sk(p.km)))
+          .sort((a, b) => a - b);
+        return {
+          expected: Math.round(expected),
+          bandLo: Math.round(Math.max(minP * 0.3, expected + (percentile(resid, 25) || 0))),
+          bandHi: Math.round(expected + (percentile(resid, 75) || 0)),
+          vicini: cand, method: 'model',
+        };
+      }
+    }
+    // Fallback: mediana semplice (poco affidabile → no flag forti).
+    if (priced.length >= 2) {
+      const mp = priced.map(p => p.prezzo).sort((a, b) => a - b);
+      return { expected: median(mp), bandLo: percentile(mp, 25), bandHi: percentile(mp, 75), vicini: priced, method: 'median' };
+    }
+    return null;
+  }
+
   function analyzeResults(results) {
     // Raggruppa per cluster-modello → comparabili coerenti
     const clusters = {};
@@ -73,81 +147,58 @@
       (clusters[r._cluster] = clusters[r._cluster] || []).push(r);
     });
 
-    const W = SCORE_WEIGHTS;
-    const wTot = W.prezzo + W.kmAnnui + W.eta + W.completezza;
     const T = FLAG_THRESHOLDS;
+    const mean = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
 
     results.forEach(r => {
-      const peers      = clusters[r._cluster];
-      const peerPrices = peers.map(p => p.prezzo).filter(p => p != null && p > 0);
-      const med        = peerPrices.length >= 2 ? median(peerPrices) : null;
-      const peerKmY    = peers.map(kmPerYear).filter(v => v != null);
-      const peerAnni   = peers.map(p => p.anno).filter(v => v != null);
+      const peers   = clusters[r._cluster];
+      const est      = (r.prezzo != null && r.prezzo > 0) ? expectedPrice(r, peers) : null;
+      const expected = est ? est.expected : null;
+      const strong   = est && est.method === 'model';   // modello affidabile → flag forti
+      const lowData  = !strong;                          // mediana-fallback o niente → campione debole
 
-      // Classificazione prezzo (condivisa tra punteggio ed evidenziazioni)
-      let priceClass = null;  // 'sospetto' | 'affare' | 'normale'
-      if (med && r.prezzo != null && r.prezzo > 0) {
-        if (r.prezzo < med * T.sospettoPct)           priceClass = 'sospetto';
-        else if (r.prezzo <= med * (1 - T.affarePct)) priceClass = 'affare';
-        else                                          priceClass = 'normale';
+      // residuo% = quanto SOTTO l'atteso (>0 = affare). Punteggio = SOLO qualità-prezzo.
+      let residualPct = null, priceClass = null, cPrezzo = 50;
+      if (expected != null && expected > 0) {
+        residualPct = (expected - r.prezzo) / expected;
+        if (r.prezzo < expected * T.sospettoFact)        priceClass = 'sospetto';
+        else if (r.prezzo <= expected * (1 - T.affarePct)) priceClass = 'affare';
+        else                                              priceClass = 'normale';
+        cPrezzo = priceClass === 'sospetto'
+          ? 30                                            // troppo bello per essere vero → non premia
+          : clamp(50 + (residualPct / SCORE_SPAN) * 50, 0, 100);
       }
+      r._score = Math.round(cPrezzo);
 
-      // Componenti 0-100 (neutre = 50 quando mancano i comparabili o il dato)
-      let cPrezzo = 50, cKm = 50, cEta = 50;
-      if (priceClass === 'sospetto') {
-        // Prezzo troppo basso per essere vero: NON premia il punteggio (probabile
-        // fregatura/errore), lo penalizza.
-        cPrezzo = 25;
-      } else if (priceClass) {
-        cPrezzo = clamp(50 + ((med - r.prezzo) / med) * 100, 0, 100);
-      }
-      const ky = kmPerYear(r);
-      if (peerKmY.length >= 2 && ky != null) {
-        cKm = clamp((1 - pctRank(ky, peerKmY)) * 100, 0, 100); // meno km/anno = meglio
-      }
-      if (peerAnni.length >= 2 && r.anno != null) {
-        cEta = clamp(pctRank(r.anno, peerAnni) * 100, 0, 100); // più recente = meglio
-      }
-      const campi    = ['prezzo', 'anno', 'km', 'carburante', 'provincia'];
-      const presenti = campi.filter(k => r[k] != null && r[k] !== '').length;
-      const cCompl   = (presenti / campi.length) * 100;
-
-      r._score = Math.round(
-        (cPrezzo * W.prezzo + cKm * W.kmAnnui + cEta * W.eta + cCompl * W.completezza) / wTot
-      );
-
-      // Medie comparabili (per i delta concreti)
-      const mean = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
-      const peerKm   = peers.map(p => p.km).filter(v => v != null);
-      const avgPrezzo = mean(peerPrices);
-      const avgKm     = mean(peerKm);
-      const avgAnno   = mean(peerAnni);
-
-      // Ranking per convenienza (prezzo asc): 1 = più economico
-      let priceRank = null, conveniencePct = null;
-      const priceRankTot = peerPrices.length;
+      // Ranking convenienza nel cluster (prezzo asc): 1 = più economico
+      const pricedAll = peers.filter(p => p.prezzo != null && p.prezzo > 0).map(p => p.prezzo);
+      let priceRank = null;
+      const priceRankTot = pricedAll.length;
       if (r.prezzo != null && r.prezzo > 0 && priceRankTot >= 2) {
-        priceRank = peerPrices.filter(p => p < r.prezzo).length + 1;
-        conveniencePct = Math.round((priceRankTot - priceRank) / (priceRankTot - 1) * 100);
+        priceRank = pricedAll.filter(p => p < r.prezzo).length + 1;
       }
 
-      const lowData = peerPrices.length < 4;   // pochi simili → confronto poco affidabile
-
+      const ky = kmPerYear(r);
       r._scoreBreakdown = {
-        prezzo: Math.round(cPrezzo), kmAnnui: Math.round(cKm),
-        eta: Math.round(cEta), completezza: Math.round(cCompl),
-        mediana: med,
-        kmPerYear: ky != null ? Math.round(ky) : null,
-        comparabili: peerPrices.length,
+        expected,
+        bandLo: est ? est.bandLo : null,
+        bandHi: est ? est.bandHi : null,
+        residualPct,
+        method: est ? est.method : null,
+        vicini: est ? est.vicini.length : 0,
+        comparabili: peers.filter(p => p !== r && p.url !== r.url && p.prezzo > 0).length,
         lowData,
-        avgPrezzo, avgKm, avgAnno,
-        priceRank, priceRankTot, conveniencePct,
+        priceRank, priceRankTot,
+        kmPerYear: ky != null ? Math.round(ky) : null,
+        // contesto attributi (mediana dei vicini, NON entra nel punteggio)
+        neighKm:   est ? median(est.vicini.map(p => p.km).filter(v => v != null)) : null,
+        neighAnno: est ? median(est.vicini.map(p => p.anno).filter(v => v != null)) : null,
+        itemKm: r.km, itemAnno: r.anno,
       };
 
-      // Evidenziazioni (separate dal punteggio).
-      // Flag prezzo (Affare/Sospetto) solo con campione sufficiente (>=4 simili).
+      // Evidenziazioni (separate dal punteggio). Flag prezzo forti SOLO con k-NN.
       const flags = [];
-      if (!lowData) {
+      if (strong) {
         if (priceClass === 'sospetto') flags.push('sospetto');
         else if (priceClass === 'affare') flags.push('affare');
       }
