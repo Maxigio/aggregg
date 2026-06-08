@@ -513,10 +513,10 @@ async function runSearchCore(params) {
 const SAVED_STALE_MS  = 6 * 60 * 60 * 1000;  // ricontrolla al boot solo se più vecchio di 6h
 const SAVED_BOOT_CAP  = 5;                    // max ricerche processate per avvio
 
-// MUTEX unico: TUTTI i check (singolo, tutti, boot) passano da qui → mai due
-// recordCheck concorrenti (load→save sullo stesso file = update persi). Catena
-// di promise serializzata. NB: limite single-processo (Electron forka un solo
-// server); accessi multi-processo allo stesso file restano fuori scope.
+// MUTEX unico: TUTTI i check (singolo, tutti, boot) passano da qui → SERIALIZZA
+// gli scraping concorrenti (risorse/anti-block). NB l'integrità-file è già
+// garantita a parte: recordCheck è sincrono (load→save senza await) e ri-legge
+// fresh, quindi atomico anche vs CRUD. Single-processo (Electron forka 1 server).
 let savedLock = Promise.resolve();
 function withSavedLock(fn) {
   const run = savedLock.then(fn, fn);   // esegue dopo il precedente, anche se errore
@@ -532,14 +532,13 @@ function normalizeSavedParams(raw) {
   return parsed.errors ? { ...raw } : parsed.params;
 }
 
-// Check di UNA ricerca (SENZA lock — usato dentro il lock): runSearch (core) →
-// recordCheck (avvisi price-based; §21: niente più analisi/rating).
-async function _checkSavedOne(id) {
-  const s = saved.getSaved(id);
+// Check di UNA ricerca (SENZA lock — usato dentro il lock). `s` = oggetto con
+// {id, params, label} (da listSaved o getSaved) → niente reload (fix review §19).
+async function _checkSavedOne(s) {
   if (!s) return null;
   const out = await runSearch(normalizeSavedParams(s.params));
-  const alerts = saved.recordCheck(id, out.risultati || []);
-  return { id, label: s.label, nuovi: alerts.length, sources: out.sources };
+  const alerts = saved.recordCheck(s.id, out.risultati || []);
+  return { id: s.id, label: s.label, nuovi: alerts.length, sources: out.sources };
 }
 
 // Check di tutte (o le stantie), SENZA lock. Salta se Subito è bloccato.
@@ -551,16 +550,16 @@ async function _checkAll({ onlyStale = false, cap = Infinity } = {}) {
   }
   const now = Date.now();
   let done = 0;
-  for (const s of saved.listSaved()) {
+  for (const s of saved.listSaved()) {   // s ha già params/label → passato diretto
     if (done >= cap) break;
     if (onlyStale && s.lastChecked && now - s.lastChecked < SAVED_STALE_MS) continue;
-    try { esiti.push(await _checkSavedOne(s.id)); done++; }
+    try { esiti.push(await _checkSavedOne(s)); done++; }
     catch (e) { console.warn(`[saved] check ${s.id} fallito: ${e.message}`); }
   }
   return esiti;
 }
 
-const checkSaved    = (id)   => withSavedLock(() => _checkSavedOne(id));
+const checkSaved    = (id)   => withSavedLock(() => _checkSavedOne(saved.getSaved(id)));
 const checkAllSaved = (opts) => withSavedLock(() => _checkAll(opts));
 
 // CRUD

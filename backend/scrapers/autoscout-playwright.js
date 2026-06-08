@@ -303,5 +303,6 @@ async function scrapeAutoscout(params) {
 
 // Esposto per pre-warm al boot del server.
 scrapeAutoscout.warmup = async () => { await getBrowser(); };
+scrapeAutoscout._parseListing = parseListing;   // hook per i test (§20)
 
 module.exports = scrapeAutoscout;

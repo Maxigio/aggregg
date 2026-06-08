@@ -193,9 +193,13 @@ function recordCheck(id, results, { extraSeen = {}, removedUrls = [] } = {}) {
   for (const [u, p] of Object.entries(extraSeen)) if (p != null && p > 0) seen[u] = p;
   for (const u of removedUrls) delete seen[u];
 
+  // Coda avvisi: prune dei LETTI più vecchi di 30g (i non-letti restano), poi cap.
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const queue = [...(s.alerts || []), ...alerts].filter(a => !a.letto || (a.ts || 0) >= cutoff);
+
   s.seen        = capObject(seen, SEEN_CAP);
   s.alerted     = alertedKeys.slice(-ALERTED_CAP);
-  s.alerts      = [...(s.alerts || []), ...alerts].slice(-200);
+  s.alerts      = queue.slice(-200);
   s.fingerprint = fp;
   s.lastChecked = Date.now();
   saveAll(list);

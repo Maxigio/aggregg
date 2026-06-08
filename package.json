@@ -20,7 +20,7 @@
     "dist:mac": "electron-builder --mac --x64",
     "dist:mac-arm64": "electron-builder --mac --arm64",
     "dist:win": "electron-builder --win --x64",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test test/*.test.js"
   },
   "engines": {
     "node": ">=20.0.0"

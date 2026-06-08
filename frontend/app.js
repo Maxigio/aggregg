@@ -980,7 +980,9 @@ async function saveCurrentSearch() {
 async function checkRicerche(id) {
   const url = id ? `/api/saved/check?id=${encodeURIComponent(id)}` : '/api/saved/check';
   const listEl = document.getElementById('ricercheList');
-  listEl.classList.add('checking');
+  // §19.3: disabilita solo il bottone della card interessata (o tutta la lista se "Controlla tutte").
+  const btn = id ? listEl.querySelector(`.ric-card[data-id="${CSS.escape(id)}"] .ric-check`) : null;
+  if (btn) { btn.disabled = true; btn.textContent = '…'; } else { listEl.classList.add('checking'); }
   try {
     const r = await fetch(url, { method: 'POST' });
     const j = await r.json();
@@ -988,7 +990,7 @@ async function checkRicerche(id) {
   } catch (_) {
     showError('Controllo non riuscito.');
   } finally {
-    listEl.classList.remove('checking');
+    listEl.classList.remove('checking');   // renderRicerche ricrea il bottone (riabilitato)
   }
 }
 
