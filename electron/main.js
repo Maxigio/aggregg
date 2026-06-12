@@ -74,7 +74,7 @@ function waitForBackend(maxSeconds = 60) {
   return new Promise((resolve) => {
     const started = Date.now();
     const tryOnce = () => {
-      const req = http.get({ host: 'localhost', port: PORT, path: '/api/subito/status', timeout: 1500 }, res => {
+      const req = http.get({ host: 'localhost', port: PORT, path: '/api/health', timeout: 1500 }, res => {
         res.resume();
         if (res.statusCode === 200) return resolve(true);
         if (Date.now() - started >= maxSeconds * 1000) return resolve(false);

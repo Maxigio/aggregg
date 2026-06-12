@@ -21,3 +21,8 @@ data/models.json.bak
 data/bootstrap.log
 data/chrome-profile/
 AutoMotoRadar-Data/
+
+# Credenziali accesso remoto (hash password + secret cookie) — MAI versionare
+data/auth.json
+# Ricerche salvate utente (runtime)
+data/saved-searches.json

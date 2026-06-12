@@ -1,0 +1,37 @@
+AUTO MOTO RADAR — installazione su Mac (Apple Silicon / M1-M2-M3)
+=================================================================
+
+1) INSTALLA
+   - Apri il file .dmg (doppio clic).
+   - Trascina l'icona "Auto Moto Radar" dentro la cartella "Applicazioni".
+   - Espelli il disco del DMG.
+
+2) PRIMO AVVIO (app non firmata — una volta sola)
+   macOS blocca le app non firmate. Sblocca con UNO di questi modi:
+
+   Modo A (consigliato, da Terminale):
+     Apri "Terminale" (Applicazioni > Utility) e incolla questa riga, poi Invio:
+
+        xattr -cr "/Applications/Auto Moto Radar.app"
+
+     Poi apri l'app normalmente dal Launchpad / Applicazioni.
+
+   Modo B (senza Terminale):
+     - Tasto DESTRO sull'app in Applicazioni > "Apri" > nel riquadro premi "Apri".
+     - Se su macOS recente non basta: Impostazioni di Sistema > "Privacy e sicurezza"
+       > scorri in fondo > accanto al nome dell'app premi "Apri comunque".
+
+   Dopo il primo sblocco, l'app si apre sempre con un normale clic.
+
+3) PRIMA RICERCA — verifica Subito.it (una volta, dura ~12-24h)
+   Alla prima ricerca, Subito.it puo chiedere una verifica anti-bot:
+   - Comparira un banner "Aggiorna sessione Subito": premilo.
+   - Si apre una finestra Chrome: risolvi il breve CAPTCHA.
+   - Fatto: le ricerche su Subito tornano a funzionare.
+   CONSIGLIO: falla la sera prima, cosi il giorno dopo e gia pronta.
+
+4) USO
+   - Scegli Auto/Moto, scrivi la marca (es. BMW) ed eventuale modello (es. 320d),
+     premi "Cerca". I risultati arrivano da Subito, Autoscout24 e Moto.it.
+
+Nessuna connessione "strana" richiesta: l'app interroga solo i tre siti di annunci.

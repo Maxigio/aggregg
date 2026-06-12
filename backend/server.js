@@ -1,11 +1,14 @@
 const express = require('express');
 const path = require('path');
+const os = require('os');
+const { execFile } = require('child_process');
+const auth = require('./auth');
+const qrcode = require('qrcode-generator');
 const scrapeSubito    = require('./scrapers/subito-playwright');
 const scrapeAutoscout = require('./scrapers/autoscout-playwright');
 const scrapeMotoIt    = require('./scrapers/motoit');
 const subitoSession   = require('./scrapers/subito-session');
 const { runBootstrap } = require('./scrapers/subito-bootstrap');
-const filtersSchema   = require('./scrapers/filters-schema');
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
 const { resolveMotoitModelSlug } = require('./scrapers/motoit-models');
 const { getDetail } = require('./scrapers/detail');
@@ -76,6 +79,68 @@ const PORT = process.env.PORT || 3000;
 // ma manteniamo il timeout generoso per siti lenti (Subito spesso >20s full sort).
 const TIMEOUT_MS = 45000;
 
+// ─── Auth (attiva SOLO se è stata impostata una password) ────────────────────
+// Quando attiva, protegge TUTTE le rotte: niente scorciatoia loopback (Funnel
+// proxa a 127.0.0.1 → indistinguibile dal desktop). L'Electron locale fa login
+// una volta e tiene il cookie. Disattiva = comportamento locale di prima.
+const loginAttempts = new Map();   // ip → { fails, until }
+const LOCK_MAX = 5;
+const LOCK_MS  = 15 * 60 * 1000;
+const AUTH_FREE = new Set(['/login', '/logout', '/api/public-url', '/api/health']);
+
+function parseCookies(req) {
+  const out = {};
+  const h = req.headers.cookie;
+  if (!h) return out;
+  for (const part of h.split(';')) {
+    const i = part.indexOf('=');
+    if (i < 0) continue;
+    out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return out;
+}
+
+app.use((req, res, next) => {
+  if (!auth.isEnabled()) return next();          // nessuna password → app locale aperta
+  if (AUTH_FREE.has(req.path)) return next();     // /login, /logout sempre raggiungibili
+  if (auth.checkToken(parseCookies(req).amr_auth)) return next();
+  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'non autorizzato' });
+  if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) {
+    return res.redirect(302, '/login');
+  }
+  return res.status(401).send('non autorizzato');
+});
+
+app.get('/login', (req, res) => res.sendFile(path.join(__dirname, '../frontend/login.html')));
+
+app.post('/login', express.urlencoded({ extended: false }), async (req, res) => {
+  const ip = req.socket.remoteAddress || 'unknown';
+  const rec = loginAttempts.get(ip);
+  if (rec && rec.until > Date.now()) return res.redirect(302, '/login?err=1');   // lockout
+
+  if (!auth.verifyPassword(req.body && req.body.password)) {
+    await new Promise(r => setTimeout(r, 1000));   // delay anti-brute
+    const fails = (rec ? rec.fails : 0) + 1;
+    loginAttempts.set(ip, { fails, until: fails >= LOCK_MAX ? Date.now() + LOCK_MS : 0 });
+    return res.redirect(302, '/login?err=1');
+  }
+
+  loginAttempts.delete(ip);
+  const token  = auth.makeToken();
+  const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `amr_auth=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(auth.TTL_MS / 1000)}${secure}`);
+  res.redirect(302, '/');
+});
+
+app.get('/logout', (req, res) => {
+  res.setHeader('Set-Cookie', 'amr_auth=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+  res.redirect(302, '/login');
+});
+
+// Liveness per il probe di avvio Electron (waitForBackend). Auth-exempt: il
+// probe gira prima del login. Nessun dato sensibile.
+app.get('/api/health', (req, res) => res.json({ ok: true }));
+
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 // Endpoint lista brand (con metadata per-sito) — alimenta il dropdown marca
@@ -119,18 +184,6 @@ app.get('/api/models', (req, res) => {
   res.json({ modelli, sites: entry.sites || [] });
 });
 
-// Endpoint filtri per-piattaforma (P10): l'UI lo chiama all'avvio per
-// renderizzare il pannello filtri tripartito Subito | Autoscout | Moto.it.
-//   GET /api/filters?tipo=auto|moto
-// → { subito: [...], autoscout: [...], motoit: [...] }
-app.get('/api/filters', (req, res) => {
-  const { tipo } = req.query;
-  if (!tipo || !['auto', 'moto'].includes(tipo)) {
-    return res.status(400).json({ error: 'tipo deve essere "auto" o "moto"' });
-  }
-  res.json(filtersSchema.getSchema(tipo));
-});
-
 // §15 — Arricchimento spec ON-CLICK: fetch pagina-dettaglio → { cambio, potenzaCv,
 // cilindrata, proprietari, allestimento, revisione }. Anti-SSRF: host allowlist in
 // detail.js (https + dominio fonte, ri-validato per-redirect). Best-effort: ok:false
@@ -145,6 +198,43 @@ app.get('/api/detail', async (req, res) => {
   } catch (e) {
     return res.status(400).json({ error: e.message });   // host non in allowlist / schema non-https
   }
+});
+
+// ─── Indirizzi di accesso da telefono (helper "Apri da telefono") ─────────────
+// Elenca gli URL http://<ip>:PORT raggiungibili: IPv4 non-internal delle interfacce
+// locali. Include LAN (192.168/10.x) e Tailscale (100.64.0.0/10) se attivo.
+// Nessun input esterno → nessun rischio. Le "100.x" Tailscale in cima (più utili).
+// URL pubblico Funnel (best-effort): prova binari noti, gestisce ENOENT.
+// Cache TTL: l'endpoint è auth-exempt → evita di lanciare un subprocess
+// `tailscale` ad ogni richiesta (anti-spam/DoS leggero).
+let funnelCache = { ts: 0, url: null };
+const FUNNEL_TTL = 60 * 1000;
+function tailscalePublicUrl(cb) {
+  if (Date.now() - funnelCache.ts < FUNNEL_TTL) return cb(funnelCache.url);
+  const bins = ['/usr/local/bin/tailscale', 'tailscale'];
+  let i = 0;
+  const done = url => { funnelCache = { ts: Date.now(), url }; cb(url); };
+  const tryNext = () => {
+    if (i >= bins.length) return done(null);
+    execFile(bins[i++], ['funnel', 'status'], { timeout: 3000 }, (err, stdout) => {
+      if (err) return err.code === 'ENOENT' ? tryNext() : done(null);
+      const m = String(stdout).match(/https:\/\/[^\s]+/);
+      done(m ? m[0].replace(/\/$/, '') : null);
+    });
+  };
+  tryNext();
+}
+
+// URL pubblico + QR (per il logo cliccabile in app e login). Auth-exempt:
+// nessun dato sensibile (l'URL non è segreto, niente password nel QR).
+app.get('/api/public-url', (req, res) => {
+  tailscalePublicUrl(url => {
+    if (!url) return res.json({ url: null, svg: null });
+    const qr = qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    res.json({ url, svg: qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true }) });
+  });
 });
 
 // Set di regioni valide (derivato da province.json)

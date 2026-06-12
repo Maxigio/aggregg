@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auto Moto Radar — Accesso</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      font-family: system-ui, -apple-system, sans-serif; background: #f6f7f9; color: #111827;
+      padding: 20px;
+    }
+    .card {
+      width: 100%; max-width: 360px; background: #fff; border: 1px solid #e5e7eb;
+      border-radius: 14px; padding: 28px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .brand svg { display: block; border-radius: 8px; }
+    .brand b { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
+    label { display: block; font-size: 0.82rem; font-weight: 600; color: #6b7280; margin-bottom: 6px; }
+    input[type=password] {
+      width: 100%; font-size: 1rem; padding: 11px 12px; border: 1px solid #e5e7eb;
+      border-radius: 9px; background: #fff; color: #111827;
+    }
+    input[type=password]:focus { outline: none; border-color: #2563eb; }
+    button {
+      width: 100%; margin-top: 16px; font-size: 1rem; font-weight: 700; padding: 12px;
+      border: none; border-radius: 9px; background: #2563eb; color: #fff; cursor: pointer;
+    }
+    button:hover { background: #1d4ed8; }
+    .err {
+      display: none; margin-top: 14px; font-size: 0.85rem; color: #b91c1c;
+      background: #fee2e2; border: 1px solid #fca5a5; border-radius: 8px; padding: 8px 10px;
+    }
+    .err.show { display: block; }
+    .hint { margin-top: 16px; font-size: 0.76rem; color: #9ca3af; text-align: center; }
+    .brand { background: none; border: none; padding: 0; cursor: pointer; font: inherit; width: 100%; }
+    .brand:hover b { color: #2563eb; }
+    .qr-box { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; }
+    .qr-box.show { display: block; }
+    .qr-box svg { width: 190px; height: 190px; }
+    .qr-box .qr-hint { font-size: 0.78rem; color: #6b7280; margin: 0 0 10px; }
+    .qr-box .qr-link { display: inline-block; margin-top: 10px; font-size: 0.8rem; font-weight: 600; color: #2563eb; word-break: break-all; }
+    .qr-box .qr-empty { font-size: 0.82rem; color: #6b7280; font-style: italic; }
+  </style>
+</head>
+<body>
+  <form class="card" method="POST" action="/login">
+    <button type="button" class="brand" id="brandBtn" title="Mostra QR per il telefono">
+      <span style="display:flex;align-items:center;gap:10px;">
+        <svg width="30" height="30" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="32" height="32" rx="7" fill="#2563eb"/>
+          <circle cx="16" cy="16" r="10" fill="none" stroke="#bfdbfe" stroke-width="1.8"/>
+          <circle cx="16" cy="16" r="5.5" fill="none" stroke="#bfdbfe" stroke-width="1.8"/>
+          <circle cx="16" cy="16" r="1.8" fill="#bfdbfe"/>
+        </svg>
+        <b>Auto Moto Radar</b>
+      </span>
+    </button>
+    <div class="qr-box" id="qrBox"></div>
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" autocomplete="current-password" autofocus required />
+    <button type="submit">Entra</button>
+    <div class="err" id="err">Password errata o troppi tentativi. Riprova.</div>
+    <p class="hint">Accesso riservato</p>
+  </form>
+  <script>
+    if (new URLSearchParams(location.search).get('err')) document.getElementById('err').classList.add('show');
+
+    // Logo cliccabile → QR + link pubblico (per aprire l'app dal telefono).
+    var qrBox = document.getElementById('qrBox');
+    var loaded = false;
+    document.getElementById('brandBtn').addEventListener('click', async function () {
+      var open = qrBox.classList.toggle('show');
+      if (!open || loaded) return;
+      qrBox.innerHTML = '<p class="qr-empty">Caricamento…</p>';
+      try {
+        var r = await fetch('/api/public-url');
+        var d = await r.json();
+        if (!d.url) { qrBox.innerHTML = '<p class="qr-empty">Accesso pubblico non attivo.</p>'; return; }
+        qrBox.innerHTML = '<p class="qr-hint">Inquadra col telefono:</p>' + d.svg +
+          '<a class="qr-link" href="' + d.url + '" target="_blank" rel="noopener noreferrer">' + d.url + '</a>';
+        loaded = true;
+      } catch (e) { qrBox.innerHTML = '<p class="qr-empty">Impossibile leggere l\'indirizzo.</p>'; }
+    });
+  </script>
+</body>
+</html>

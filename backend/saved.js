@@ -3,13 +3,12 @@
  *
  * Persistenza: <USER_DATA_PATH>/saved-searches.json (Electron) o data/ (dev),
  * stesso pattern di subito-session. Solo logica dati + calcolo avvisi: il fetch
- * (runSearch) e l'analisi (analyzeResults) li orchestra server.js, che passa qui
- * risultati GIÀ analizzati (con _flags/_score).
+ * (runSearch) lo orchestra server.js, che passa qui i risultati grezzi.
  *
- * Avvisi con CONDIZIONI (requisito utente: niente "scam da 500€"):
- *  - esclude flag `sospetto` / `dato_mancante`
- *  - floor anti-scam assoluto/relativo (anche senza comparabili sufficienti)
- *  - NUOVO (url mai visto) · CALO (>= soglia) · AFFARE (flag affare)
+ * Avvisi PURAMENTE price-based (§21: rating rimosso, niente più "affare"):
+ *  - NUOVO (url mai visto) · CALO (>= soglia DROP_ABS/DROP_PCT)
+ *  - floor anti-scam assoluto/relativo → scarta i prezzi-spazzatura
+ *  - scarta annunci con anno/km mancanti (rumore)
  *  - coda persistente + set `alerted` per non ri-notificare lo stesso motivo
  */
 const fs   = require('fs');

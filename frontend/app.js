@@ -24,6 +24,8 @@ const isolaCount         = document.getElementById('isolaCount');
 const chipsAllNone       = document.getElementById('chipsAllNone');
 const advancedToggle     = document.getElementById('advancedToggle');
 const advancedFilters    = document.getElementById('advancedFilters');
+const logoBtn            = document.getElementById('logoBtn');
+const qrPanel            = document.getElementById('qrPanel');
 const prezzoSliderEl     = document.getElementById('prezzoSlider');
 const btnStatCsv         = document.getElementById('btnStatCsv');
 const btnStatPdf         = document.getElementById('btnStatPdf');
@@ -56,10 +58,6 @@ const ICONS = {
   'bookmark-filled': '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" fill="currentColor"/>',
   compare:           '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/>',
   chevron:           '<path d="m6 9 6 6 6-6"/>',
-  external:          '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/>',
-  trendingDown:      '<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>',
-  alert:             '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
-  help:              '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
   x:                 '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
 };
 function icon(name, cls = '') {
@@ -185,8 +183,34 @@ async function init() {
     advancedToggle.classList.toggle('open', !open);
   });
 
+  // ── Logo cliccabile: QR + link pubblico per aprire l'app dal telefono ────
+  if (logoBtn) logoBtn.addEventListener('click', async () => {
+    const open = qrPanel.classList.toggle('d-none');
+    logoBtn.setAttribute('aria-expanded', String(!open));
+    if (!open) await loadQrPanel();   // appena aperto → carica QR + link
+  });
+
   // Stato iniziale salvati (lista vuota)
   renderSalvati();
+}
+
+// Carica il QR + link pubblico (per aprire l'app dal telefono, ovunque).
+async function loadQrPanel() {
+  qrPanel.innerHTML = '<p class="qr-empty">Caricamento…</p>';
+  try {
+    const r = await fetch('/api/public-url');
+    const { url, svg } = await r.json();
+    if (!url) {
+      qrPanel.innerHTML = '<p class="qr-empty">Accesso pubblico non attivo (Funnel spento).</p>';
+      return;
+    }
+    qrPanel.innerHTML =
+      '<p class="qr-hint">Inquadra col telefono per aprire l\'app (serve la password):</p>' +
+      `<div class="qr-img">${svg}</div>` +
+      `<a class="qr-link" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+  } catch (_) {
+    qrPanel.innerHTML = '<p class="qr-empty">Impossibile leggere l\'indirizzo.</p>';
+  }
 }
 
 function populateRegione() {
