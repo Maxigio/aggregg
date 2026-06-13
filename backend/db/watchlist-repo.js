@@ -41,6 +41,12 @@ async function seedFromFile() {
 // ha ORDER/LIMIT diretti su UPDATE → sottoquery sugli id.
 async function activateRamp(n = 10) {
   if (!db.isEnabled()) return [];
+  // Ramp 1×/giorno: se c'è già stata un'attivazione nelle ultime ~20h, NON
+  // attivare altri (evita over-ramp quando l'app viene riavviata più volte/giorno).
+  const recent = await db.query(
+    `SELECT 1 FROM watchlist WHERE activated_at > now() - interval '20 hours' LIMIT 1`
+  );
+  if (recent && recent.rows.length) return [];
   const r = await db.query(
     `UPDATE watchlist SET activated_at = now()
       WHERE id IN (
@@ -56,9 +62,12 @@ async function activateRamp(n = 10) {
 
 async function dueTargets() {
   if (!db.isEnabled()) return [];
+  // Solo target NON spazzolati nelle ultime ~20h → cadenza 1×/giorno a prescindere
+  // dai riavvii dell'app (un relaunch in giornata trova 0 due → sweep no-op).
   const r = await db.query(
     `SELECT id, tipo, marca, modello FROM watchlist
       WHERE activated_at IS NOT NULL AND enabled = true
+        AND (last_swept IS NULL OR last_swept < now() - interval '20 hours')
       ORDER BY last_swept NULLS FIRST, id`
   );
   return r ? r.rows : [];
