@@ -129,7 +129,7 @@ function mapListing(node) {
 
 async function fetchPage(params, page) {
   const variables = buildVariables(params, page);
-  if (!variables) return { items: [], ok: true };
+  if (!variables) return { items: [], raw: 0 };
   const res = await httpPost(JSON.stringify({ query: QUERY, variables }));
   if (res.status === 401) throw new Error('AS24 GraphQL 401 (credenziale)');   // → fallback
   if (res.status !== 200) throw new Error(`AS24 GraphQL HTTP ${res.status}`);
@@ -138,16 +138,18 @@ async function fetchPage(params, page) {
   if (j.errors) throw new Error('AS24 GraphQL errors: ' + JSON.stringify(j.errors).slice(0, 120));
   const arr = ((j.data || {}).search || {}).listings;
   const list = (arr && arr.listings) || [];
-  return { items: list.map(mapListing).filter(Boolean), ok: true };
+  // `raw` = annunci grezzi della pagina (per decidere se c'è una pagina dopo);
+  // `items` è filtrato (onRequestOnly/prezzo-null) → non usarlo per la paginazione.
+  return { items: list.map(mapListing).filter(Boolean), raw: list.length };
 }
 
 /** Ritorna gli annunci AS24 via API. Throw su errore → fallback Playwright. */
 async function scrapeAutoscoutGraphql(params) {
   const out = [];
   for (let p = 1; p <= MAX_PAGES; p++) {
-    const { items } = await fetchPage(params, p);
+    const { items, raw } = await fetchPage(params, p);
     out.push(...items);
-    if (items.length < PAGE_SIZE) break;   // ultima pagina
+    if (raw < PAGE_SIZE) break;   // ultima pagina (conteggio GREZZO, non filtrato)
   }
   return out;
 }
