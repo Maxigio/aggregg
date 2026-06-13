@@ -2,7 +2,7 @@ const { app, BrowserWindow, shell, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
-const { fork } = require('child_process');
+const { fork, execFile, execFileSync } = require('child_process');
 const { scheduleUpdateCheck } = require('./auto-update');
 
 let mainWindow;
@@ -50,6 +50,42 @@ function computePortable() {
 // Solo in build pacchettizzata: in DEV (npm run electron) l'exe è dentro
 // node_modules/electron (spesso su volume esterno) → l'euristica scatterebbe a vuoto.
 const PORTABLE = app.isPackaged && computePortable();
+
+// ── Funnel automatico: ON all'avvio, OFF alla chiusura ───────────────────────
+// Espone l'app su internet (URL pubblico) SOLO se la password è impostata
+// (auth.json in userData). Senza password → niente esposizione. App chiusa →
+// `funnel reset`. Binario tailscale cercato in più path (Homebrew arm64/x64,
+// /usr/local, bundle App Store) perché un'app lanciata da Finder ha PATH minimo.
+function tailscaleBin() {
+  const candidates = [
+    '/opt/homebrew/bin/tailscale',                              // Homebrew Apple Silicon
+    '/usr/local/bin/tailscale',                                 // Homebrew Intel / pkg
+    '/Applications/Tailscale.app/Contents/MacOS/Tailscale',     // client App Store
+  ];
+  for (const c of candidates) { try { if (fs.existsSync(c)) return c; } catch (_) {} }
+  return 'tailscale';   // ultimo tentativo: PATH
+}
+
+function authEnabled() {
+  try { return fs.existsSync(path.join(app.getPath('userData'), 'auth.json')); }
+  catch (_) { return false; }
+}
+
+function enableFunnel() {
+  if (!authEnabled()) {
+    console.log('[funnel] password non impostata → Funnel NON attivato (nessuna esposizione pubblica)');
+    return;
+  }
+  execFile(tailscaleBin(), ['funnel', '--bg', String(PORT)], { timeout: 15000 }, (err, _out, stderr) => {
+    if (err) console.warn('[funnel] attivazione fallita:', String(stderr || err.message).trim().split('\n')[0]);
+    else     console.log('[funnel] attivo → URL pubblico pronto');
+  });
+}
+
+function disableFunnel() {
+  try { execFileSync(tailscaleBin(), ['funnel', 'reset'], { timeout: 3000, stdio: 'ignore' }); }
+  catch (_) {}
+}
 
 function startServer() {
   const serverPath = path.join(__dirname, '../backend/server.js');
@@ -127,6 +163,7 @@ async function createWindow() {
   const ready = await waitForBackend();
   if (ready) {
     mainWindow.loadURL(`http://localhost:${PORT}`);
+    enableFunnel();   // backend su → accendi l'URL pubblico (se password impostata)
   } else {
     // Fallback: mostra un messaggio di errore comprensibile invece di schermata bianca
     const errHtml = `data:text/html;charset=utf-8,${encodeURIComponent(`
@@ -173,6 +210,10 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  disableFunnel();   // server muore qui → spegni il Funnel (niente proxy verso backend morto)
   if (serverProcess) serverProcess.kill();
   if (process.platform !== 'darwin') app.quit();
 });
+
+// Cmd-Q diretto: assicura lo spegnimento del Funnel anche se la finestra resta aperta.
+app.on('before-quit', disableFunnel);

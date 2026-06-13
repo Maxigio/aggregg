@@ -1,79 +1,63 @@
 AUTO MOTO RADAR — usare l'app dal telefono, OVUNQUE (iPhone / Android)
 ======================================================================
 
-Come funziona: l'app gira sull'iMac. Il telefono apre solo un link nel
-browser. Con "Funnel" l'iMac ottiene un indirizzo internet pubblico e
-protetto da PASSWORD, raggiungibile da qualsiasi rete (anche dati), SENZA
-installare niente sul telefono.
+L'app gira sull'iMac. Il telefono apre solo un link nel browser, protetto da
+PASSWORD, raggiungibile da qualsiasi rete (anche dati), SENZA installare niente
+sul telefono.
 
-Requisito: l'iMac ACCESO con l'app aperta. Lo scraping lo fa l'iMac.
+Quando apri l'app sull'iMac, l'accesso pubblico (Funnel) si accende DA SOLO;
+quando la chiudi, si spegne. Nessun comando da digitare ogni volta.
+
+Requisito: iMac ACCESO con l'app aperta (il lavoro lo fa l'iMac).
 
 
 ===================================================================
 PARTE 1 — UNA VOLTA SOLA (la fa il figlio, sull'iMac)
 ===================================================================
 
-IMPORTANTE: per l'accesso remoto fai girare il server da Terminale con
-"npm start" (NON la app Electron). Cosi password e porta coincidono.
-
-1) IMPOSTA LA PASSWORD (obbligatoria PRIMA di esporre l'app)
+1) IMPOSTA LA PASSWORD (obbligatoria: senza, l'accesso pubblico NON si attiva)
    Da Terminale, nella cartella del progetto:
 
-       node scripts/set-password.js "scegli-una-password-robusta"
+       USER_DATA_PATH="$HOME/Library/Application Support/automotoradar" \
+         node scripts/set-password.js "scegli-una-password-robusta"
 
-   (minimo 10 caratteri; NON banale: l'indirizzo sara pubblico. Crea
-    data/auth.json, lo stesso file che leggera il server.)
+   (minimo 10 caratteri, NON banale: l'indirizzo sara pubblico.
+    Nota: l'app Electron legge la password da quella cartella userData.)
 
-2) AVVIA IL SERVER su porta 47321 e lascialo aperto:
+2) ABILITA HTTPS NEL PANNELLO TAILSCALE (toggle web, una volta)
+   https://login.tailscale.com/admin/dns  ->  "HTTPS Certificates"  ->  Enable.
+   Verifica anche che "Funnel" sia consentito per il dispositivo
+   (admin -> Access controls).
 
-       PORT=47321 npm start
-
-   (sull'iMac puoi usare l'app nel browser: http://localhost:47321 ,
-    chiedera la password una volta)
-
-3) ABILITA HTTPS NEL PANNELLO TAILSCALE (toggle web, una volta)
-   Vai su  https://login.tailscale.com/admin/dns
-   -> sezione "HTTPS Certificates" -> Enable.
-   (Serve a Funnel per il lucchetto HTTPS. Verifica anche che "Funnel" sia
-    consentito per il dispositivo: admin -> Access controls, attributo funnel.)
-
-4) ACCENDI FUNNEL (solo DOPO aver fatto i punti 1-2-3!)
-       tailscale serve --http=80 off        # spegne l'eventuale test precedente
-       tailscale funnel --bg 47321          # accende l'indirizzo pubblico
-
-   Vedi l'indirizzo con:
-       tailscale funnel status
-   Sara tipo:  https://imac-di-lucas.tailc82888.ts.net
-
-   NON accendere Funnel prima della password (punto 1): esporresti l'app
-   senza protezione.
+Fatto questo, NON serve piu lanciare comandi tailscale a mano.
 
 
 ===================================================================
-PARTE 2 — OGNI VOLTA (papà, dal telefono)
+PARTE 2 — OGNI VOLTA
 ===================================================================
 
-1) Tieni l'iMac acceso col server avviato (PORT=47321 npm start).
-2) Sul telefono apri nel browser:
-       https://imac-di-lucas.tailc82888.ts.net
-3) Compare la pagina di accesso: inserisci la PASSWORD -> Entra.
-   Il telefono se la ricorda: le volte dopo entri diretto.
-4) Usa l'app normalmente. Funziona su WiFi e su rete dati, ovunque.
+1) Sull'iMac: apri l'app "Auto Moto Radar". Il Funnel si accende da solo.
+   (L'indirizzo pubblico lo vedi cliccando il logo nell'app: appare un QR
+    + il link, tipo  https://imac-di-lucas.tailc82888.ts.net )
+
+2) Sul telefono: apri quell'indirizzo nel browser (o inquadra il QR).
+   Inserisci la PASSWORD -> Entra. Il telefono se la ricorda.
+
+3) Quando chiudi l'app sull'iMac, l'accesso pubblico si spegne.
 
 
 ===================================================================
 COSE DA SAPERE
 ===================================================================
-• iMac ACCESO: se e spento o in stop, dal telefono non risponde.
-  (Per tenerlo sveglio durante l'uso, da Terminale:  caffeinate -s  )
+• APP APERTA = indirizzo pubblico raggiungibile (protetto da password).
+  APP CHIUSA = non raggiungibile. iMac spento/in stop = non raggiungibile.
+  (Per tenerlo sveglio durante l'uso, da Terminale:  caffeinate -s )
 
-• SICUREZZA: l'indirizzo e PUBBLICO su internet, protetto solo dalla
-  password. Usa una password forte e non condividerla. Dopo 5 tentativi
-  sbagliati l'accesso si blocca per 15 minuti.
+• SICUREZZA: l'unica barriera e la password. Usane una forte, non condividerla.
+  Dopo 5 tentativi sbagliati l'accesso si blocca per 15 minuti.
 
-• SPEGNERE l'accesso pubblico quando non serve:
-       tailscale funnel 443 off
+• Se clicchi il logo e dice "Accesso pubblico non attivo": o non hai impostato
+  la password (Parte 1.1), o manca HTTPS/Funnel nel pannello Tailscale
+  (Parte 1.2), o tailscale non e installato/raggiungibile.
 
 • SUBITO.IT: la verifica anti-bot (CAPTCHA) va fatta UNA volta sull'iMac.
-
-• L'app sull'iMac chiede la password una volta (poi la ricorda).
