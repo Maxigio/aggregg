@@ -51,3 +51,22 @@ test('dueTargets: salta i target swept <20h, riprende dopo', async () => {
   due = await wl.dueTargets();
   assert.strictEqual(due.length, 3, 'dopo 21h → di nuovo due');
 });
+
+test('leaseTarget: target diversi + completeTarget libera e marca swept', async () => {
+  const a = await wl.leaseTarget('surface');
+  const b = await wl.leaseTarget('surface');
+  assert.ok(a && b);
+  assert.notStrictEqual(a.id, b.id, 'lease successivi danno target diversi (no doppioni)');
+  await wl.completeTarget(a.id);
+  const row = (await db.query('SELECT last_swept, leased_until, activated_at FROM watchlist WHERE id=$1', [a.id])).rows[0];
+  assert.ok(row.last_swept, 'completeTarget marca swept');
+  assert.strictEqual(row.leased_until, null, 'lease liberato');
+  assert.ok(row.activated_at, 'attivato (entra nel daily dell\'iMac)');
+});
+
+test('dueTargets esclude i target attualmente leasati', async () => {
+  await wl.activateRamp(3);
+  const leased = await wl.leaseTarget('surface');
+  const due = await wl.dueTargets();
+  assert.ok(!due.some(t => t.id === leased.id), 'iMac non tocca il target che il worker sta facendo');
+});

@@ -71,11 +71,12 @@ test('record: 3 transient consecutivi → degraded=true, blocked=false', async (
   assert.strictEqual(r.consec_fail, 3);
 });
 
-test('getHealth: sommario blocked/degraded', async () => {
-  await health.record('subito', { error: tagged('403', 403, 'blocked') });
-  await health.record('autoscout', { count: 10 });
+test('getHealth: sommario blocked/degraded taggato per nodo', async () => {
+  await health.record('subito', { error: tagged('403', 403, 'blocked') });           // node imac
+  await health.record('autoscout', { count: 10 });                                    // node imac
+  await health.record('subito', { count: 7, node: 'surface' });                        // altro nodo
   const h = await health.getHealth();
   assert.strictEqual(h.ok, false);
-  assert.deepStrictEqual(h.blocked, ['subito']);
-  assert.strictEqual(h.fonti.length, 2);
+  assert.deepStrictEqual(h.blocked, ['imac/subito']);
+  assert.strictEqual(h.nodi.length, 3);   // (imac,subito)+(imac,autoscout)+(surface,subito)
 });

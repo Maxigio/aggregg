@@ -10,6 +10,7 @@ const db = require('./db');
 const crawler = require('./crawler');
 const listingsRepo = require('./db/listings-repo');
 const healthRepo = require('./db/health-repo');
+const watchlistRepo = require('./db/watchlist-repo');
 const qrcode = require('qrcode-generator');
 const scrapeSubito    = require('./scrapers/subito-playwright');
 const scrapeAutoscout = require('./scrapers/autoscout-playwright');
@@ -192,6 +193,48 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 app.get('/api/crawler/health', async (req, res) => {
   try {
     res.json(await healthRepo.getHealth());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// §F3 — fill distribuito: coordinatore lease/ingest (DIETRO auth).
+// Il worker (Surface) prende 1 target mai crawlato, lo crawla dal SUO IP, e
+// rimanda i risultati qui. Niente esposizione DB: tutto via HTTP autenticato.
+app.get('/api/crawl/lease', async (req, res) => {
+  try {
+    const device = String(req.query.device || '').trim() || 'worker';
+    const t = await watchlistRepo.leaseTarget(device);
+    if (!t) return res.json({ none: true });
+    // Risolvi qui l'mmmv AS24 (catalogo sull'iMac) → il worker non serve il catalogo.
+    const as = crawler._resolveAutoscout(t);
+    res.json({ id: t.id, tipo: t.tipo, marca: t.marca, modello: t.modello, mmmv: (as && as.mmmv) || null });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/crawl/ingest', express.json({ limit: '10mb' }), async (req, res) => {
+  try {
+    const { id, device, sources } = req.body || {};
+    const tRow = await db.query('SELECT tipo, marca, modello FROM watchlist WHERE id=$1', [id]);
+    if (!tRow || !tRow.rows.length) return res.status(400).json({ error: 'target id sconosciuto' });
+    const target = tRow.rows[0];
+    const node = String(device || 'worker').trim();
+    let written = 0;
+    for (const s of (Array.isArray(sources) ? sources : [])) {
+      if (!s || !s.fonte) continue;
+      if (s.error) { await healthRepo.record(s.fonte, { error: s.error, node }); continue; }
+      let items = Array.isArray(s.items) ? s.items : [];
+      // Stesso guard anti-rumore del crawler iMac sui titoli Subito (free-text).
+      if (s.fonte === 'subito') items = items.filter(i => crawler._titleMatchesModel(i.titolo, target.modello));
+      const r = await listingsRepo.upsertListings(items, target);
+      if (!s.truncated) await listingsRepo.markGone(target, items.map(i => i.url), { fonte: s.fonte });
+      await healthRepo.record(s.fonte, { count: items.length, node });
+      written += r.written;
+    }
+    await watchlistRepo.completeTarget(id);
+    res.json({ written });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

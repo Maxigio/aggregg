@@ -68,9 +68,55 @@ async function dueTargets() {
     `SELECT id, tipo, marca, modello FROM watchlist
       WHERE activated_at IS NOT NULL AND enabled = true
         AND (last_swept IS NULL OR last_swept < now() - interval '20 hours')
+        AND (leased_until IS NULL OR leased_until < now())   -- non toccare i target leasati da un worker
       ORDER BY last_swept NULLS FIRST, id`
   );
   return r ? r.rows : [];
+}
+
+// F3 — lease atomico di UN target mai crawlato (per il worker distribuito).
+// FOR UPDATE SKIP LOCKED → due richieste concorrenti prendono target diversi.
+async function leaseTarget(device) {
+  if (!db.isEnabled() || !device) return null;
+  let client;
+  try { client = await db.getClient(); } catch (_) { return null; }
+  try {
+    await client.query('BEGIN');
+    const r = await client.query(
+      `SELECT id, tipo, marca, modello FROM watchlist
+        WHERE last_swept IS NULL AND enabled = true
+          AND (leased_until IS NULL OR leased_until < now())
+        ORDER BY id LIMIT 1
+        FOR UPDATE SKIP LOCKED`
+    );
+    if (!r.rows.length) { await client.query('COMMIT'); return null; }
+    const t = r.rows[0];
+    await client.query(
+      `UPDATE watchlist SET leased_by=$1, leased_until = now() + interval '15 minutes' WHERE id=$2`,
+      [device, t.id]
+    );
+    await client.query('COMMIT');
+    return t;
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[watchlist] leaseTarget KO:', e.message);
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
+// F3 — target completato dal worker: marca swept/attivato, libera il lease.
+async function completeTarget(id) {
+  if (!db.isEnabled()) return;
+  await db.query(
+    `UPDATE watchlist
+        SET last_swept = now(),
+            activated_at = COALESCE(activated_at, now()),
+            leased_by = NULL, leased_until = NULL
+      WHERE id = $1`,
+    [id]
+  );
 }
 
 async function markSwept(id) {
@@ -89,4 +135,4 @@ async function counts() {
   return r ? r.rows[0] : { total: 0, active: 0, pending: 0 };
 }
 
-module.exports = { insertTargets, seedFromFile, activateRamp, dueTargets, markSwept, counts };
+module.exports = { insertTargets, seedFromFile, activateRamp, dueTargets, markSwept, counts, leaseTarget, completeTarget };

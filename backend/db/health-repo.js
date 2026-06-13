@@ -30,11 +30,11 @@ function classifyOutcome(error, count = 0) {
 
 const DEGRADE_AT = 3;   // fallimenti transient/error consecutivi → degraded
 
-async function record(fonte, { error = null, count = 0 } = {}) {
+async function record(fonte, { error = null, count = 0, node = 'imac' } = {}) {
   if (!db.isEnabled()) return null;
   const outcome = classifyOutcome(error, count);
 
-  const prevRes = await db.query('SELECT * FROM crawl_health WHERE fonte=$1', [fonte]);
+  const prevRes = await db.query('SELECT * FROM crawl_health WHERE node=$1 AND fonte=$2', [node, fonte]);
   const prev = (prevRes && prevRes.rows[0]) || {};
   let consec = prev.consec_fail || 0;
   let okC = prev.ok_count || 0, emptyC = prev.empty_count || 0;
@@ -56,36 +56,37 @@ async function record(fonte, { error = null, count = 0 } = {}) {
 
   await db.query(
     `INSERT INTO crawl_health
-       (fonte, last_ok, last_event_at, last_outcome, last_blocked_at,
+       (node, fonte, last_ok, last_event_at, last_outcome, last_blocked_at,
         consec_fail, ok_count, empty_count, blocked_count, error_count, blocked, degraded)
-     VALUES ($1,
+     VALUES ($12, $1,
         CASE WHEN $2 THEN now() ELSE NULL END, now(), $3,
         CASE WHEN $4 THEN now() ELSE NULL END,
         $5,$6,$7,$8,$9,$10,$11)
-     ON CONFLICT (fonte) DO UPDATE SET
+     ON CONFLICT (node, fonte) DO UPDATE SET
         last_ok        = CASE WHEN $2 THEN now() ELSE crawl_health.last_ok END,
         last_event_at  = now(),
         last_outcome   = $3,
         last_blocked_at= CASE WHEN $4 THEN now() ELSE crawl_health.last_blocked_at END,
         consec_fail    = $5, ok_count = $6, empty_count = $7,
         blocked_count  = $8, error_count = $9, blocked = $10, degraded = $11`,
-    [fonte, setLastOk, outcome, setLastBlocked, consec, okC, emptyC, blkC, errC, blocked, degraded]
+    [fonte, setLastOk, outcome, setLastBlocked, consec, okC, emptyC, blkC, errC, blocked, degraded, node]
   );
 
   if (becameBlocked) {
     const code = error && error.status ? ' ' + error.status : '';
-    console.error(`🔴 [health] POSSIBILE BLOCCO su ${fonte} (${outcome}${code}) — crawler continua ma controlla /api/crawler/health`);
+    console.error(`🔴 [health] POSSIBILE BLOCCO su ${node}/${fonte} (${outcome}${code}) — controlla /api/crawler/health`);
   }
   return outcome;
 }
 
 async function getHealth() {
-  if (!db.isEnabled()) return { ok: true, enabled: false, blocked: [], degraded: [], fonti: [] };
-  const r = await db.query('SELECT * FROM crawl_health ORDER BY fonte');
+  if (!db.isEnabled()) return { ok: true, enabled: false, blocked: [], degraded: [], nodi: [] };
+  const r = await db.query('SELECT * FROM crawl_health ORDER BY node, fonte');
   const rows = (r && r.rows) || [];
-  const blocked = rows.filter(x => x.blocked).map(x => x.fonte);
-  const degraded = rows.filter(x => x.degraded).map(x => x.fonte);
-  return { ok: blocked.length === 0, enabled: true, blocked, degraded, fonti: rows };
+  const tag = x => `${x.node}/${x.fonte}`;
+  const blocked = rows.filter(x => x.blocked).map(tag);
+  const degraded = rows.filter(x => x.degraded).map(tag);
+  return { ok: blocked.length === 0, enabled: true, blocked, degraded, nodi: rows };
 }
 
 module.exports = { classifyOutcome, record, getHealth };
