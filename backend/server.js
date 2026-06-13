@@ -9,6 +9,7 @@ const auth = require('./auth');
 const db = require('./db');
 const crawler = require('./crawler');
 const listingsRepo = require('./db/listings-repo');
+const healthRepo = require('./db/health-repo');
 const qrcode = require('qrcode-generator');
 const scrapeSubito    = require('./scrapers/subito-playwright');
 const scrapeAutoscout = require('./scrapers/autoscout-playwright');
@@ -185,6 +186,16 @@ app.get('/logout', (req, res) => {
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 app.use(express.static(path.join(__dirname, '../frontend')));
+
+// §F1.5 — salute crawler / rilevamento ban. DIETRO auth (l'app è esposta via
+// Funnel pubblico → non auth-free). Sommario {ok, blocked[], degraded[], fonti[]}.
+app.get('/api/crawler/health', async (req, res) => {
+  try {
+    res.json(await healthRepo.getHealth());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // Endpoint lista brand (con metadata per-sito) — alimenta il dropdown marca
 app.get('/api/brands', (req, res) => {

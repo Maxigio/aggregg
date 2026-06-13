@@ -15,6 +15,17 @@
  */
 const https = require('https');
 
+// Errore "taggato" per la classificazione salute crawler (F1.5).
+function kindForStatus(s) {
+  if (s === 401) return 'auth';
+  if (s === 403 || s === 429) return 'blocked';
+  if (s >= 500) return 'transient';
+  return 'error';
+}
+function fail(msg, { status = null, kind = 'error' } = {}) {
+  const e = new Error(msg); e.status = status; e.kind = kind; return e;
+}
+
 const HOST = 'hades.subito.it';
 const CAT = { auto: '2', moto: '3' };
 const PAGE_SIZE = 50;
@@ -32,8 +43,8 @@ function httpGetJson(path) {
       res.on('data', c => d += c);
       res.on('end', () => resolve({ status: res.statusCode, body: d }));
     });
-    req.on('error', reject);
-    req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error('timeout')));
+    req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+    req.setTimeout(TIMEOUT_MS, () => req.destroy(fail('timeout', { kind: 'transient' })));
   });
 }
 
@@ -87,10 +98,10 @@ function buildPath(params, start) {
 
 async function fetchPage(params, start) {
   const res = await httpGetJson(buildPath(params, start));
-  if (res.status !== 200) throw new Error(`Subito hades HTTP ${res.status}`);
+  if (res.status !== 200) throw fail(`Subito hades HTTP ${res.status}`, { status: res.status, kind: kindForStatus(res.status) });
   let j;
-  try { j = JSON.parse(res.body); } catch (_) { throw new Error('Subito hades: body non-JSON (blocco?)'); }
-  if (j.errors) throw new Error('Subito hades errors: ' + JSON.stringify(j.errors).slice(0, 100));
+  try { j = JSON.parse(res.body); } catch (_) { throw fail('Subito hades: body non-JSON (blocco?)', { status: res.status, kind: 'blocked' }); }
+  if (j.errors) throw fail('Subito hades errors: ' + JSON.stringify(j.errors).slice(0, 100), { kind: 'error' });
   return Array.isArray(j.ads) ? j.ads : [];
 }
 

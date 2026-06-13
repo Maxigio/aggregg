@@ -13,6 +13,18 @@
  */
 const https = require('https');
 
+// Errore "taggato" per la classificazione salute crawler (F1.5).
+// kind: 'blocked' (ban-class) | 'auth' | 'transient' | 'error'.
+function kindForStatus(s) {
+  if (s === 401) return 'auth';
+  if (s === 403 || s === 429) return 'blocked';
+  if (s >= 500) return 'transient';
+  return 'error';
+}
+function fail(msg, { status = null, kind = 'error' } = {}) {
+  const e = new Error(msg); e.status = status; e.kind = kind; return e;
+}
+
 const HOST = 'listing-search.api.autoscout24.com';
 const AUTH = 'Basic YXMyNC1zZWFyY2gtZnVubmVsOnZucmZiYkJqSTMyT2wxV2thNnVOSFJwM0VZbjRkag==';
 const PAGE_SIZE = 50;
@@ -58,8 +70,8 @@ function httpPost(body) {
       res.on('data', c => d += c);
       res.on('end', () => resolve({ status: res.statusCode, body: d }));
     });
-    req.on('error', reject);
-    req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error('timeout')));
+    req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+    req.setTimeout(TIMEOUT_MS, () => req.destroy(fail('timeout', { kind: 'transient' })));
     req.write(data); req.end();
   });
 }
@@ -146,11 +158,11 @@ async function fetchPage(params, page, opts = {}) {
   const variables = buildVariables(params, page, opts);
   if (!variables) return { items: [], raw: 0 };
   const res = await httpPost(JSON.stringify({ query: QUERY, variables }));
-  if (res.status === 401) throw new Error('AS24 GraphQL 401 (credenziale)');   // → fallback
-  if (res.status !== 200) throw new Error(`AS24 GraphQL HTTP ${res.status}`);
+  if (res.status === 401) throw fail('AS24 GraphQL 401 (credenziale)', { status: 401, kind: 'auth' });   // → fallback
+  if (res.status !== 200) throw fail(`AS24 GraphQL HTTP ${res.status}`, { status: res.status, kind: kindForStatus(res.status) });
   let j;
-  try { j = JSON.parse(res.body); } catch (_) { throw new Error('AS24 GraphQL: body non-JSON'); }
-  if (j.errors) throw new Error('AS24 GraphQL errors: ' + JSON.stringify(j.errors).slice(0, 120));
+  try { j = JSON.parse(res.body); } catch (_) { throw fail('AS24 GraphQL: body non-JSON', { status: res.status, kind: 'blocked' }); }
+  if (j.errors) throw fail('AS24 GraphQL errors: ' + JSON.stringify(j.errors).slice(0, 120), { kind: 'error' });
   const arr = ((j.data || {}).search || {}).listings;
   const list = (arr && arr.listings) || [];
   // `raw` = annunci grezzi della pagina (per decidere se c'è una pagina dopo);

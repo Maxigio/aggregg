@@ -17,6 +17,7 @@ const path = require('path');
 const db = require('./db');
 const wl = require('./db/watchlist-repo');
 const repo = require('./db/listings-repo');
+const health = require('./db/health-repo');
 const scrapeAutoscoutGraphql = require('./scrapers/autoscout-graphql');
 const scrapeSubitoApi = require('./scrapers/subito-api');
 const { norm, makeResolver, makeModelResolver, loadAliasMap } = require('./scrapers/brand-match');
@@ -81,8 +82,10 @@ async function sweepTarget(target, stats) {
       else console.log(`[crawler] AS24 ${target.marca} ${target.modello}: vista parziale (cap) → skip venduto`);
       stats.written += r.written;
       stats.as += items.length;
+      await health.record('autoscout', { count: items.length });
     } catch (e) {
       console.warn(`[crawler] AS24 fallito ${target.marca} ${target.modello}: ${e.message}`);
+      await health.record('autoscout', { error: e });
     }
   }
   await sleep(THROTTLE_MS);
@@ -98,8 +101,10 @@ async function sweepTarget(target, stats) {
     else console.log(`[crawler] Subito ${target.marca} ${target.modello}: vista parziale (cap) → skip venduto`);
     stats.written += r.written;
     stats.sub += items.length;
+    await health.record('subito', { count: raw.length });
   } catch (e) {
     console.warn(`[crawler] Subito fallito ${target.marca} ${target.modello}: ${e.message}`);
+    await health.record('subito', { error: e });
   }
 }
 
