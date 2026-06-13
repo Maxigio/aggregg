@@ -24,6 +24,7 @@ const QUERY = `query Search($v:Vehicle_,$loc:Location_,$pr:Price_,$m:Metadata_){
   search{ listings(vehicle:$v, location:$loc, price:$pr, metadata:$m, locale:it_IT){
     listings{ details(withFallbackAttributes:true){
       webPage
+      publication{ createdTimestampWithOffset }
       prices{ public{ amountInEUR{ raw } onRequestOnly } }
       location{ city zip }
       vehicle{
@@ -31,6 +32,7 @@ const QUERY = `query Search($v:Vehicle_,$loc:Location_,$pr:Price_,$m:Metadata_){
         condition{ mileageInKm{ raw } firstRegistrationDate{ formatted } }
         engine{ transmissionType{ formatted } engineDisplacementInCCM{ raw } }
         fuels{ primary{ type{ raw formatted } } fuelCategory{ formatted } }
+        usageState
       }
     } }
   } }
@@ -64,7 +66,7 @@ function httpPost(body) {
 
 // Variabili dalla nostra params. classification: make/model = ID numerici del
 // catalogo (mmmvAutoscout = "makeId|modelId|...", brand-only = "makeId|||").
-function buildVariables(params, page) {
+function buildVariables(params, page, opts = {}) {
   const mmmv = String(params.autoscoutMmmv || params.mmmvAutoscout || '');
   const [makeStr, modelStr] = mmmv.split('|');
   const make = parseInt(makeStr, 10);
@@ -80,6 +82,10 @@ function buildVariables(params, page) {
   };
   const loc = { country: ['Italy'] };
   const m = { page, size: PAGE_SIZE };
+  // Crawler: ordina per età crescente (Age Asc = più recenti prima) per non
+  // sprecare le prime pagine sugli annunci-civetta a basso prezzo (sort default
+  // = prezzo crescente). enum passati come stringhe via variabili.
+  if (opts.sortByDate) m.sort = [{ field: 'Age', order: 'Asc' }];
 
   const vars = { v, loc, m };
   if (params.prezzoMin != null || params.prezzoMax != null) {
@@ -90,7 +96,9 @@ function buildVariables(params, page) {
 
 const yearOf = s => { const y = parseInt(String(s || '').split('/').pop(), 10); return Number.isFinite(y) ? y : null; };
 
-function mapListing(node) {
+const DAMAGED = new Set(['HadAccident', 'Wreck']);
+
+function mapListing(node, opts = {}) {
   const dt = node && node.details;
   if (!dt) return null;
   const pub = dt.prices && dt.prices.public;
@@ -105,8 +113,9 @@ function mapListing(node) {
   const titolo = [make, variante].filter(Boolean).join(' ')
               || (c.model && c.model.formatted) || 'Annuncio senza titolo';
   const ccm = v.engine && v.engine.engineDisplacementInCCM ? v.engine.engineDisplacementInCCM.raw : null;
+  const usage = v.usageState || null;   // New | Used | HadAccident | Wreck
 
-  return {
+  const out = {
     fonte: 'autoscout',
     titolo,
     prezzo,
@@ -124,11 +133,17 @@ function mapListing(node) {
     variante,
     zip: (dt.location && dt.location.zip) || null,   // per il post-filtro regione (fallback CAP→regione)
     url: dt.webPage || null,
+    // Campi per il DB (usati dal crawler; ignorati dal path on-search legacy):
+    nuovo: usage ? usage === 'New' : null,
+    danni: usage ? DAMAGED.has(usage) : null,
+    posted_at: (dt.publication && dt.publication.createdTimestampWithOffset) || null,
   };
+  if (opts.attachRaw) out._raw = dt;   // foto grezza per raw_json (keep-last)
+  return out;
 }
 
-async function fetchPage(params, page) {
-  const variables = buildVariables(params, page);
+async function fetchPage(params, page, opts = {}) {
+  const variables = buildVariables(params, page, opts);
   if (!variables) return { items: [], raw: 0 };
   const res = await httpPost(JSON.stringify({ query: QUERY, variables }));
   if (res.status === 401) throw new Error('AS24 GraphQL 401 (credenziale)');   // → fallback
@@ -140,18 +155,29 @@ async function fetchPage(params, page) {
   const list = (arr && arr.listings) || [];
   // `raw` = annunci grezzi della pagina (per decidere se c'è una pagina dopo);
   // `items` è filtrato (onRequestOnly/prezzo-null) → non usarlo per la paginazione.
-  return { items: list.map(mapListing).filter(Boolean), raw: list.length };
+  return { items: list.map(n => mapListing(n, opts)).filter(Boolean), raw: list.length };
 }
 
-/** Ritorna gli annunci AS24 via API. Throw su errore → fallback Playwright. */
-async function scrapeAutoscoutGraphql(params) {
+/**
+ * Ritorna gli annunci AS24 via API. Throw su errore → fallback Playwright.
+ * @param opts.maxPages   override profondità (crawler: 10-20; on-search: 2)
+ * @param opts.attachRaw  allega `_raw` (foto grezza) per il DB
+ * @param opts.sortByDate ordina per età crescente (più recenti prima)
+ * @param opts.withMeta   ritorna {items, truncated} invece dell'array (back-compat).
+ *                        truncated=true se fermato al cap con ultima pagina PIENA
+ *                        (vista parziale → il crawler NON deve rilevare venduti).
+ */
+async function scrapeAutoscoutGraphql(params, opts = {}) {
+  const maxPages = opts.maxPages || MAX_PAGES;
   const out = [];
-  for (let p = 1; p <= MAX_PAGES; p++) {
-    const { items, raw } = await fetchPage(params, p);
+  let truncated = false;
+  for (let p = 1; p <= maxPages; p++) {
+    const { items, raw } = await fetchPage(params, p, opts);
     out.push(...items);
-    if (raw < PAGE_SIZE) break;   // ultima pagina (conteggio GREZZO, non filtrato)
+    if (raw < PAGE_SIZE) break;       // lista esaurita (conteggio GREZZO) = vista completa
+    if (p === maxPages) truncated = true;   // ultima pagina piena al cap → forse altro
   }
-  return out;
+  return opts.withMeta ? { items: out, truncated } : out;
 }
 
 module.exports = scrapeAutoscoutGraphql;

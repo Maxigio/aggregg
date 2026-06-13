@@ -1,8 +1,14 @@
-const express = require('express');
 const path = require('path');
+// .env dalla ROOT della repo con path ASSOLUTO: dotenv di default cerca in
+// process.cwd(), che sotto Electron può non essere la repo → DATABASE_URL perso.
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+const express = require('express');
 const os = require('os');
 const { execFile } = require('child_process');
 const auth = require('./auth');
+const db = require('./db');
+const crawler = require('./crawler');
+const listingsRepo = require('./db/listings-repo');
 const qrcode = require('qrcode-generator');
 const scrapeSubito    = require('./scrapers/subito-playwright');
 const scrapeAutoscout = require('./scrapers/autoscout-playwright');
@@ -628,6 +634,14 @@ async function runSearchCore(params) {
     ? 'modello filtrato per titolo'
     : (asRes.reason || null);
 
+  // §DB — scrittura opportunistica on-search (fire-and-forget, NON blocca la
+  // risposta). Solo con marca+modello entrambi presenti (no brand-only/serie →
+  // model_key ambiguo). Dati gratis dei modelli cercati a mano.
+  if (params.marca && params.modello && db.isEnabled()) {
+    listingsRepo.upsertListings(risultati, { tipo: params.tipo, marca: params.marca, modello: params.modello })
+      .catch(e => console.warn('[db] on-search write KO:', e.message));
+  }
+
   return {
     risultati,
     totale:       risultati.length,
@@ -774,6 +788,19 @@ app.post('/api/subito/keep-alive', express.json(), async (req, res) => {
 
 const server = app.listen(PORT, () => {
   console.log(`Server avviato su http://localhost:${PORT}`);
+
+  // §DB — init schema (migrazioni) + avvio crawler proattivo. Best-effort: se
+  // DATABASE_URL manca o il DB è giù, l'app funziona lo stesso (crawler OFF).
+  if (db.isEnabled()) {
+    db.init()
+      .then(applied => {
+        if (applied.length) console.log(`[db] migrazioni applicate: ${applied.join(', ')}`);
+        crawler.start({ withLock: withSavedLock });
+      })
+      .catch(e => console.error('[db] init KO (crawler OFF):', e.message));
+  } else {
+    console.log('[db] DATABASE_URL assente → persistenza/crawler disattivati');
+  }
   // Pre-warm Chromium: primo lancio sposta il costo (3-5s × 3 browser) dal
   // primo /api/search al boot, eliminando il rischio di timeout sulla prima
   // ricerca quando i 3 scraper partono in parallelo.

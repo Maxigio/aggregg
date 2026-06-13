@@ -48,13 +48,15 @@ function feat(ad, label) {
 const digits = s => { const m = String(s == null ? '' : s).replace(/\./g, '').match(/\d+/); return m ? parseInt(m[0], 10) : null; };
 const yearOf = s => { const y = parseInt(String(s || '').split('/').pop(), 10); return Number.isFinite(y) && y > 1900 ? y : null; };
 
-function mapAd(ad) {
+function mapAd(ad, opts = {}) {
   const url = ad.urls && (ad.urls.default || ad.urls.mobile);
   if (!url) return null;
   // km: "124000 Km" oppure bucket "120.000 - 129.999" → estremo inferiore
   const kmRaw = feat(ad, 'Km');
   const km = kmRaw ? digits(String(kmRaw).split('-')[0]) : null;
-  return {
+  // data pubblicazione: hades espone ad.date (ISO) — usata come posted_at.
+  const posted = ad.date || (ad.dates && (ad.dates.display || ad.dates.created)) || null;
+  const out = {
     fonte: 'subito',
     titolo: ad.subject || 'Annuncio senza titolo',
     prezzo: digits(feat(ad, 'Prezzo')),
@@ -66,7 +68,13 @@ function mapAd(ad) {
     cilindrata: digits(feat(ad, 'Cilindrata')),
     variante: null,
     url,
+    // Campi per il DB (crawler); Subito non espone danni/nuovo pulito → null.
+    nuovo: null,
+    danni: null,
+    posted_at: posted,
   };
+  if (opts.attachRaw) out._raw = ad;   // foto grezza per raw_json (keep-last)
+  return out;
 }
 
 function buildPath(params, start) {
@@ -86,11 +94,20 @@ async function fetchPage(params, start) {
   return Array.isArray(j.ads) ? j.ads : [];
 }
 
-/** Annunci Subito via API. Throw su errore → fallback Playwright. */
-async function scrapeSubitoApi(params) {
+/**
+ * Annunci Subito via API. Throw su errore → fallback Playwright.
+ * @param opts.maxPages  override profondità (crawler: 10-20; on-search: 2)
+ * @param opts.attachRaw allega `_raw` (foto grezza) per il DB
+ * @param opts.withMeta  ritorna {items, truncated} invece dell'array (back-compat).
+ *                       truncated=true se fermato al cap con ultima pagina PIENA
+ *                       (vista parziale → il crawler NON deve rilevare venduti).
+ */
+async function scrapeSubitoApi(params, opts = {}) {
   const regione = params.regione ? String(params.regione).trim().toLowerCase() : null;
+  const maxPages = opts.maxPages || MAX_PAGES;
   const out = [];
-  for (let p = 0; p < MAX_PAGES; p++) {
+  let truncated = false;
+  for (let p = 0; p < maxPages; p++) {
     const ads = await fetchPage(params, p * PAGE_SIZE);
     for (const ad of ads) {
       // Filtro regione nativo: geo.region.friendly_name == nostra regione (stesso
@@ -99,12 +116,13 @@ async function scrapeSubitoApi(params) {
         const r = ad.geo && ad.geo.region && ad.geo.region.friendly_name;
         if (r && r.toLowerCase() !== regione) continue;
       }
-      const m = mapAd(ad);
+      const m = mapAd(ad, opts);
       if (m && m.prezzo != null) out.push(m);
     }
-    if (ads.length < PAGE_SIZE) break;
+    if (ads.length < PAGE_SIZE) break;       // lista esaurita = vista completa
+    if (p === maxPages - 1) truncated = true; // ultima pagina piena al cap → forse altro
   }
-  return out;
+  return opts.withMeta ? { items: out, truncated } : out;
 }
 
 module.exports = scrapeSubitoApi;
