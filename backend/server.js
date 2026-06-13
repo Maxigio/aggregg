@@ -17,6 +17,10 @@ const { getDetail } = require('./scrapers/detail');
 const saved = require('./saved');
 const { makeResolver, makeModelResolver, loadAliasMap } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
+const comuneRegione   = require('../data/comune-regione.json');   // comune→regione (post-filtro AS24)
+const normComune = s => String(s == null ? '' : s).toLowerCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const modelsData      = require('../data/models.json');
 
 const { SubitoBlockedError, keepAliveSubito } = scrapeSubito;
@@ -598,12 +602,18 @@ async function runSearchCore(params) {
     if (params.annoMax   != null && r.anno   != null && r.anno   > params.annoMax)     return false;
     if (params.kmMax     != null && r.km     != null && r.km     > params.kmMax)       return false;
 
-    // 4. Filtro geografico regione: NON serve post-filter.
-    //    Tutti e 3 gli scraper filtrano server-side:
-    //    - Subito: path /annunci-<regione>/...
-    //    - AS24:   path /lst-*/<brand>/<model>/<Region>%20(Italy) + lat/lon/zipr
-    //    - Moto.it: query region=<slug>
-    //    Ci fidiamo del filtro nativo di ciascun sito.
+    // 4. Filtro geografico regione.
+    //    - Subito (API hades): filtrato nello scraper via geo.region.
+    //    - Moto.it: query region=<slug> server-side.
+    //    - AS24 (API GraphQL): l'API NON filtra per regione → post-filtro qui sul
+    //      comune (r.provincia) via mappa comune→regione. Fail-open: comune ignoto
+    //      → tenuto (niente perdite silenziose; al massimo qualche fuori-regione).
+    //      (Sui risultati Playwright-AS24 r.provincia è un codice "MI" → ignoto →
+    //      tenuto: innocuo, lì la regione è già filtrata nativamente.)
+    if (params.regione && r.fonte === 'autoscout' && (r.provincia || r.zip)) {
+      const reg = comuneRegione[normComune(r.provincia)] || (r.zip && comuneRegione[String(r.zip)]);
+      if (reg && reg !== params.regione) return false;
+    }
 
     return true;
   });

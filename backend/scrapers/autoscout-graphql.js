@@ -117,10 +117,12 @@ function mapListing(node) {
       const t = f.primary && f.primary.type;
       return (t && (t.formatted || t.raw)) || (f.fuelCategory && f.fuelCategory.formatted) || null;
     })(),
-    provincia: (dt.location && dt.location.city) || null,
+    // city AS24 spesso è "Comune - Provincia - PV" → tieni il comune (1° segmento)
+    provincia: (dt.location && dt.location.city ? String(dt.location.city).split(' - ')[0].trim() : null) || null,
     cambio: (v.engine && v.engine.transmissionType && v.engine.transmissionType.formatted) || null,
     cilindrata: ccm ? (parseInt(String(ccm).replace(/[^\d]/g, ''), 10) || null) : null,
     variante,
+    zip: (dt.location && dt.location.zip) || null,   // per il post-filtro regione (fallback CAP→regione)
     url: dt.webPage || null,
   };
 }
