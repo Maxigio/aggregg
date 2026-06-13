@@ -62,11 +62,18 @@
     <label for="password">Password</label>
     <input type="password" id="password" name="password" autocomplete="current-password" autofocus required />
     <button type="submit">Entra</button>
-    <div class="err" id="err">Password errata o troppi tentativi. Riprova.</div>
+    <div class="err" id="err"></div>
     <p class="hint">Accesso riservato</p>
   </form>
   <script>
-    if (new URLSearchParams(location.search).get('err')) document.getElementById('err').classList.add('show');
+    var e = new URLSearchParams(location.search).get('err');
+    if (e) {
+      var box = document.getElementById('err');
+      box.textContent = e === 'locked'
+        ? 'Troppi tentativi falliti. Riprova tra qualche minuto.'
+        : 'Password errata.';
+      box.classList.add('show');
+    }
 
     // Logo cliccabile → QR + link pubblico (per aprire l'app dal telefono).
     var qrBox = document.getElementById('qrBox');

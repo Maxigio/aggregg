@@ -6,6 +6,8 @@ const auth = require('./auth');
 const qrcode = require('qrcode-generator');
 const scrapeSubito    = require('./scrapers/subito-playwright');
 const scrapeAutoscout = require('./scrapers/autoscout-playwright');
+const scrapeAutoscoutGraphql = require('./scrapers/autoscout-graphql');
+const scrapeSubitoApi = require('./scrapers/subito-api');
 const scrapeMotoIt    = require('./scrapers/motoit');
 const subitoSession   = require('./scrapers/subito-session');
 const { runBootstrap } = require('./scrapers/subito-bootstrap');
@@ -79,13 +81,39 @@ const PORT = process.env.PORT || 3000;
 // ma manteniamo il timeout generoso per siti lenti (Subito spesso >20s full sort).
 const TIMEOUT_MS = 45000;
 
+// AS24: API GraphQL ufficiale come path PRIMARIO (veloce, dati strutturati,
+// niente browser). Su errore/401 (credenziale ruotata) → fallback allo scraper
+// Playwright. Spegnibile con USE_AS24_GRAPHQL=0. Il post-filter titolo (§12) e i
+// filtri numerici lato server restano validi anche sui risultati GraphQL.
+const USE_AS24_GRAPHQL = process.env.USE_AS24_GRAPHQL !== '0';
+async function scrapeAutoscoutSmart(params) {
+  if (USE_AS24_GRAPHQL) {
+    try { return await scrapeAutoscoutGraphql(params); }
+    catch (e) { console.warn(`[AS24] GraphQL fallito (${e.message}) → fallback Playwright`); }
+  }
+  return scrapeAutoscout(params);
+}
+
+// Subito: API di prima parte hades.subito.it come PRIMARIO (JSON diretto, niente
+// DataDome/bootstrap CAPTCHA). Su errore/blocco → fallback allo scraper Playwright
+// (browser+stealth, che gestisce SubitoBlockedError → needs_bootstrap). Così il
+// CAPTCHA serve solo se ANCHE l'API fallisce. Spegnibile con USE_SUBITO_API=0.
+const USE_SUBITO_API = process.env.USE_SUBITO_API !== '0';
+async function scrapeSubitoSmart(params) {
+  if (USE_SUBITO_API) {
+    try { return await scrapeSubitoApi(params); }
+    catch (e) { console.warn(`[Subito] API hades fallita (${e.message}) → fallback Playwright`); }
+  }
+  return scrapeSubito(params);
+}
+
 // ─── Auth (attiva SOLO se è stata impostata una password) ────────────────────
 // Quando attiva, protegge TUTTE le rotte: niente scorciatoia loopback (Funnel
 // proxa a 127.0.0.1 → indistinguibile dal desktop). L'Electron locale fa login
 // una volta e tiene il cookie. Disattiva = comportamento locale di prima.
 const loginAttempts = new Map();   // ip → { fails, until }
-const LOCK_MAX = 5;
-const LOCK_MS  = 15 * 60 * 1000;
+const LOCK_MAX = 8;
+const LOCK_MS  = 10 * 60 * 1000;
 const AUTH_FREE = new Set(['/login', '/logout', '/api/public-url', '/api/health']);
 
 function parseCookies(req) {
@@ -114,9 +142,14 @@ app.use((req, res, next) => {
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, '../frontend/login.html')));
 
 app.post('/login', express.urlencoded({ extended: false }), async (req, res) => {
-  const ip = req.socket.remoteAddress || 'unknown';
+  // IP reale dietro Funnel: Tailscale è l'UNICO proxy fidato e aggiunge il client
+  // come ULTIMO hop di X-Forwarded-For → prendere il RIGHTMOST (il leftmost è
+  // spoofabile dal client). Senza proxy (Electron locale) usa remoteAddress.
+  // Senza questo, dietro Funnel ogni utente è 127.0.0.1 → lockout globale.
+  const xff = req.headers['x-forwarded-for'];
+  const ip  = (xff ? String(xff).split(',').pop().trim() : req.socket.remoteAddress) || 'unknown';
   const rec = loginAttempts.get(ip);
-  if (rec && rec.until > Date.now()) return res.redirect(302, '/login?err=1');   // lockout
+  if (rec && rec.until > Date.now()) return res.redirect(302, '/login?err=locked');   // lockout
 
   if (!auth.verifyPassword(req.body && req.body.password)) {
     await new Promise(r => setTimeout(r, 1000));   // delay anti-brute
@@ -320,7 +353,7 @@ async function runSubito(params, ms) {
     setTimeout(() => reject(new Error('Timeout su Subito.it')), ms)
   );
   try {
-    const items = await Promise.race([scrapeSubito(params), timeout]);
+    const items = await Promise.race([scrapeSubitoSmart(params), timeout]);
     return { items, status: items.length ? 'ok' : 'empty', reason: null };
   } catch (err) {
     if (err instanceof SubitoBlockedError) {
@@ -481,7 +514,7 @@ async function runSearchCore(params) {
     runSubito(params, TIMEOUT_MS),
     skipAutoscout
       ? Promise.resolve({ items: [], status: 'skipped', reason: asSkipReason })
-      : runSource(scrapeAutoscout(params), TIMEOUT_MS, 'Autoscout24'),
+      : runSource(scrapeAutoscoutSmart(params), TIMEOUT_MS, 'Autoscout24'),
     skipMotoIt
       ? Promise.resolve({ items: [], status: 'skipped', reason: motoSkipReason })
       : runSource(scrapeMotoIt(params), TIMEOUT_MS, 'Moto.it'),
