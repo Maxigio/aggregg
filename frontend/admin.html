@@ -219,7 +219,11 @@ $('#refreshBtn').addEventListener('click', () => refresh());
 $('#runBtn').addEventListener('click', async () => {
   try {
     const r = await api('/api/admin/crawl/run', { method:'POST' });
-    msg(r.running ? 'crawl già in corso' : 'crawl avviato sull\'iMac', false);
+    let m;
+    if (r.running) m = '⏳ crawl già in corso…';
+    else if (r.started) m = `▶ avviato sull'iMac: ${r.due} target da aggiornare`;
+    else m = `niente da fare: ${r.reason || 'tutti freschi (<20h)'}`;
+    msg(m, false);
     setTimeout(refresh, 1500);   // dà tempo al flag running di aggiornarsi
   } catch(err){ msg(err.message); }
 });

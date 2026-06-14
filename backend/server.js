@@ -275,12 +275,17 @@ app.get('/api/admin/nodes', (req, res) => res.json({ nodes: KNOWN_NODES }));
 // F6 — trigger crawl iMac on-demand (telecomando dal pannello, anche da remoto via
 // Funnel/tailnet). Fire-and-forget: lo sweep dura minuti → rispondo subito. Il guard
 // in crawler + la cadenza 20h di dueTargets rendono i trigger ripetuti no-op (anti-ban).
-app.post('/api/admin/crawl/run', (req, res) => {
+app.post('/api/admin/crawl/run', async (req, res) => {
   try {
     if (crawler.isRunning()) return res.json({ running: true });
+    // F6.1 — feedback ONESTO: conta i target due PRIMA di lanciare. Se 0 → non
+    // fingere "avviato" (era il bottone-placebo). NB: il ramp può attivarne ≤10
+    // nuovi nello sweep → il conteggio è quello "stantii adesso" (onesto: ≥N).
+    const due = await watchlistRepo.dueTargets('imac');
+    if (!due.length) return res.json({ started: false, due: 0, reason: 'tutti freschi (<20h)' });
     crawler.sweepAll({ withLock: withSavedLock })
       .catch(e => console.error('[crawler] trigger manuale errore:', e.message));
-    res.json({ started: true });
+    res.json({ started: true, due: due.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
