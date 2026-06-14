@@ -14,12 +14,25 @@
  *   Se motoitBrandSlug manca → bail out con [] (il brand non è su Moto.it).
  */
 
-const { chromium } = require('playwright');
+// playwright caricato LAZY dentro getBrowser() (solo se serve il fallback browser):
+// così richiedere questo modulo per il path HTTP (cheerio) NON tira playwright →
+// usabile sui worker (es. Windows) con solo `npm install cheerio`.
 const path         = require('path');
 const https        = require('https');
 const cheerio      = require('cheerio');
 const { toInt, resolveChromiumExecutable } = require('./utils');
 const filtersSchema = require('./filters-schema');
+
+// Errore taggato per la salute crawler (come AS24/Subito).
+function kindForStatus(s) {
+  if (s === 401) return 'auth';
+  if (s === 403 || s === 429) return 'blocked';
+  if (s >= 500) return 'transient';
+  return 'error';
+}
+function fail(msg, { status = null, kind = 'error' } = {}) {
+  const e = new Error(msg); e.status = status; e.kind = kind; return e;
+}
 
 const BASE = 'https://www.moto.it';
 const MAX_PAGES = 3;   // §17.2: 5→3 (ordine prezzo → i più economici restano in cima)
@@ -62,6 +75,7 @@ async function getBrowser() {
     try { browserInstance.contexts(); return browserInstance; } catch (_) {}
   }
   console.log('[Moto.it-PW] Avvio Chrome headless…');
+  const { chromium } = require('playwright');   // lazy: solo qui serve playwright
   browserInstance = await chromium.launch({
     executablePath: resolveChromiumExecutable(PW_BROWSERS),
     headless: true,
@@ -168,11 +182,11 @@ function parsePrezzo(str) {
 }
 
 // Mapping card-grezza → risultato (condiviso path browser + HTTPS).
-function mapCards(cards) {
+function mapCards(cards, opts = {}) {
   return cards.map(c => {
     if (!c.href) return null;
     const fullUrl = c.href.startsWith('http') ? c.href : `${BASE}${c.href}`;
-    return {
+    const out = {
       fonte:      'moto',
       titolo:     c.titolo || 'Annuncio senza titolo',
       prezzo:     parsePrezzo(c.priceRaw),
@@ -181,7 +195,13 @@ function mapCards(cards) {
       carburante: null,
       provincia:  c.provincia,
       url:        fullUrl,
+      // campi DB: Moto.it HTML non li espone puliti → null
+      nuovo:      null,
+      danni:      null,
+      posted_at:  null,
     };
+    if (opts.attachRaw) out._raw = c;   // card grezza per raw_json
+    return out;
   }).filter(Boolean);
 }
 
@@ -211,16 +231,37 @@ function extractCardsHtml(html) {
 // Tutte le pagine via HTTPS in parallelo. blocked se la PRIMA pagina è sospetta
 // (status≠200 o 0 card su una query che dovrebbe popolare) → fallback browser.
 // Pagine successive con 0 card = fine genuina dei risultati (non blocco).
-async function scrapeMotoViaHttp(urls) {
-  const res = await Promise.all(urls.map(async (u, i) => {
-    try {
-      const { status, body } = await httpGetText(u);
-      if (status !== 200) return { items: [], ok: false };
-      const items = mapCards(extractCardsHtml(body));
-      return { items, ok: i === 0 ? items.length > 0 : true };
-    } catch (_) { return { items: [], ok: false }; }
-  }));
-  return { pages: res.map(r => r.items), blocked: !res[0].ok };
+async function scrapeMotoViaHttp(urls, opts = {}) {
+  const delay = opts.pageDelayMs || 0;
+  // PARALLELO (on-search, pageDelayMs=0): comportamento IDENTICO a prima.
+  if (!delay) {
+    const res = await Promise.all(urls.map(async (u, i) => {
+      try {
+        const { status, body } = await httpGetText(u);
+        if (status !== 200) return { items: [], ok: false };
+        const items = mapCards(extractCardsHtml(body), opts);
+        return { items, ok: i === 0 ? items.length > 0 : true };
+      } catch (_) { return { items: [], ok: false }; }
+    }));
+    return { pages: res.map(r => r.items), blocked: !res[0].ok, truncated: false };
+  }
+  // SEQUENZIALE (crawler deep, anti-ban): pagina per pagina con delay, errori taggati.
+  const pages = [];
+  let truncated = false;
+  for (let i = 0; i < urls.length; i++) {
+    if (i > 0) await sleep(delay);
+    const { status, body } = await httpGetText(urls[i]);
+    if (status === 403 || status === 429) throw fail(`Moto.it HTTP ${status}`, { status, kind: 'blocked' });
+    if (status !== 200) {
+      if (i === 0) return { pages: [], blocked: true, truncated: false };  // pagina-1 sospetta
+      break;                                                               // pagina dopo non-200 = fine
+    }
+    const items = mapCards(extractCardsHtml(body), opts);
+    if (items.length === 0) break;                       // esaurito (fine risultati genuina)
+    pages.push(items);
+    if (i === urls.length - 1) truncated = true;         // ultima pagina ancora piena → forse altro
+  }
+  return { pages, blocked: false, truncated };
 }
 
 // ─── Fetch singola pagina ────────────────────────────────────────────────────
@@ -271,34 +312,40 @@ async function throttle() {
 }
 
 // ─── Scraper principale ──────────────────────────────────────────────────────
-async function scrapeMotoIt(params) {
+async function scrapeMotoIt(params, opts = {}) {
   // Solo moto (già garantito dal server, ma difesa in profondità)
-  if (params.tipo !== 'moto') return [];
+  if (params.tipo !== 'moto') return opts.withMeta ? { items: [], truncated: false } : [];
   // Senza motoitBrandSlug il brand non è su Moto.it: bail out (no fallback fallaci).
   if (!params.motoitBrandSlug) {
-    console.log(`[Moto.it-PW] Skip: nessun motoitBrandSlug per marca "${params.marca}".`);
-    return [];
+    console.log(`[Moto.it] Skip: nessun motoitBrandSlug per marca "${params.marca}".`);
+    return opts.withMeta ? { items: [], truncated: false } : [];
   }
 
   await throttle();
 
-  const urls = Array.from({ length: MAX_PAGES }, (_, i) => buildUrl(params, i + 1));
+  // deep = chiamata dal crawler (opts) → cap pagine proprio, NIENTE fallback browser
+  // (il crawler è solo-HTTP: su blocco → throw taggato, lo gestisce la salute).
+  const deep = !!(opts.pageDelayMs || opts.withMeta || opts.maxPages);
+  const maxPages = opts.maxPages || MAX_PAGES;
+  const urls = Array.from({ length: maxPages }, (_, i) => buildUrl(params, i + 1));
   const dedup = pages => {
     const visti = new Set();
     return pages.flat().filter(r => { if (visti.has(r.url)) return false; visti.add(r.url); return true; });
   };
 
-  // §17.1 — path HTTPS primario (cheerio, no browser, pagine in parallelo).
+  // §17.1 — path HTTPS primario (cheerio, no browser).
   if (USE_HTTP_SCRAPE) {
     try {
-      const { pages, blocked } = await scrapeMotoViaHttp(urls);
+      const { pages, blocked, truncated } = await scrapeMotoViaHttp(urls, opts);
       if (!blocked) {
         const risultati = dedup(pages);
-        console.log(`[Moto.it-HTTP] OK ${risultati.length} annunci (${pages.map(p => p.length).join('+')})`);
-        return risultati;
+        console.log(`[Moto.it-HTTP] OK ${risultati.length} annunci (${pages.map(p => p.length).join('+')})${truncated ? ' [troncato]' : ''}`);
+        return opts.withMeta ? { items: risultati, truncated } : risultati;
       }
+      if (deep) throw fail('Moto.it-HTTP: sospetto blocco (pagina-1 vuota)', { kind: 'blocked' });
       console.warn('[Moto.it-HTTP] sospetto blocco/pagina-1 vuota → fallback browser');
     } catch (e) {
+      if (deep) throw e;   // crawler: niente browser, propaga taggato alla salute
       console.warn(`[Moto.it-HTTP] errore (${e.message}) → fallback browser`);
     }
   }

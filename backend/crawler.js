@@ -20,6 +20,9 @@ const repo = require('./db/listings-repo');
 const health = require('./db/health-repo');
 const scrapeAutoscoutGraphql = require('./scrapers/autoscout-graphql');
 const scrapeSubitoApi = require('./scrapers/subito-api');
+const scrapeMotoIt = require('./scrapers/motoit');
+const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
+const { resolveMotoitModelSlug } = require('./scrapers/motoit-models');
 const { norm, makeResolver, makeModelResolver, loadAliasMap } = require('./scrapers/brand-match');
 
 const modelsData = require('../data/models.json');
@@ -55,6 +58,25 @@ function resolveAutoscout(target) {
     if (me && me.mmmvAutoscout) mmmv = me.mmmvAutoscout;
   }
   return { mmmv };
+}
+
+// Risoluzione slug Moto.it dal catalogo (come runSearchCore). Ritorna
+// {brandSlug, modelSlug} o null se la marca non è su Moto.it.
+async function resolveMotoit(target) {
+  const brandEntry = brandResolver(target.tipo)(target.marca);
+  const brandSlug = (brandEntry && brandEntry.motoit && brandEntry.motoit.brandSlug)
+    || resolveMotoitSlug(target.marca) || null;
+  if (!brandSlug) return null;
+  let modelSlug = null;
+  if (brandEntry && brandEntry.models && brandEntry.models.length) {
+    const mr = makeModelResolver(brandEntry.models.map(m => ({ name: m.nome, value: m })));
+    const me = mr(target.modello);
+    if (me && me.slugMotoIt) modelSlug = me.slugMotoIt;
+  }
+  if (!modelSlug) {
+    try { modelSlug = await resolveMotoitModelSlug(brandSlug, target.modello) || null; } catch (_) { /* brand-only */ }
+  }
+  return { brandSlug, modelSlug };
 }
 
 // Guard anti-rumore per Subito (free-text): tiene l'annuncio solo se tutti i
@@ -105,6 +127,31 @@ async function sweepTarget(target, stats) {
   } catch (e) {
     console.warn(`[crawler] Subito fallito ${target.marca} ${target.modello}: ${e.message}`);
     await health.record('subito', { error: e });
+  }
+
+  // Moto.it — SOLO per i moto (sito specialista, HTTP-first cheerio). Deep
+  // sequenziale con delay tra le pagine (anti-ban). Su blocco → throw taggato.
+  if (target.tipo === 'moto') {
+    await sleep(THROTTLE_MS);
+    try {
+      const mt = await resolveMotoit(target);
+      if (!mt) { console.log(`[crawler] Moto.it ${target.marca}: marca non su Moto.it → skip`); }
+      else {
+        const { items, truncated } = await scrapeMotoIt(
+          { tipo: 'moto', marca: target.marca, modello: target.modello, motoitBrandSlug: mt.brandSlug, motoitModelSlug: mt.modelSlug },
+          { maxPages: DEEP_PAGES, withMeta: true, attachRaw: true, pageDelayMs: THROTTLE_MS }
+        );
+        const r = await repo.upsertListings(items, target);
+        if (!truncated) await repo.markGone(target, items.map(i => i.url), { fonte: 'moto' });
+        else console.log(`[crawler] Moto.it ${target.marca} ${target.modello}: vista parziale (cap) → skip venduto`);
+        stats.written += r.written;
+        stats.moto = (stats.moto || 0) + items.length;
+        await health.record('moto', { count: items.length });
+      }
+    } catch (e) {
+      console.warn(`[crawler] Moto.it fallito ${target.marca} ${target.modello}: ${e.message}`);
+      await health.record('moto', { error: e });
+    }
   }
 }
 
