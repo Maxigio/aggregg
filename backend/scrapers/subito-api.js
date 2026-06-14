@@ -113,12 +113,16 @@ async function fetchPage(params, start) {
  *                       truncated=true se fermato al cap con ultima pagina PIENA
  *                       (vista parziale → il crawler NON deve rilevare venduti).
  */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 async function scrapeSubitoApi(params, opts = {}) {
   const regione = params.regione ? String(params.regione).trim().toLowerCase() : null;
   const maxPages = opts.maxPages || MAX_PAGES;
+  const pageDelay = opts.pageDelayMs || 0;   // pausa tra le pagine (anti-ban su crawl profondi)
   const out = [];
   let truncated = false;
   for (let p = 0; p < maxPages; p++) {
+    if (p > 0 && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
     const ads = await fetchPage(params, p * PAGE_SIZE);
     for (const ad of ads) {
       // Filtro regione nativo: geo.region.friendly_name == nostra regione (stesso

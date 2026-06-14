@@ -179,11 +179,15 @@ async function fetchPage(params, page, opts = {}) {
  *                        truncated=true se fermato al cap con ultima pagina PIENA
  *                        (vista parziale → il crawler NON deve rilevare venduti).
  */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 async function scrapeAutoscoutGraphql(params, opts = {}) {
   const maxPages = opts.maxPages || MAX_PAGES;
+  const pageDelay = opts.pageDelayMs || 0;   // pausa tra le pagine (anti-ban su crawl profondi)
   const out = [];
   let truncated = false;
   for (let p = 1; p <= maxPages; p++) {
+    if (p > 1 && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
     const { items, raw } = await fetchPage(params, p, opts);
     out.push(...items);
     if (raw < PAGE_SIZE) break;       // lista esaurita (conteggio GREZZO) = vista completa

@@ -12,6 +12,7 @@
  *   WORKER_PAGES=30 node worker/worker.js
  */
 const https = require('https');
+const http  = require('http');
 const { URL } = require('url');
 const scrapeAS  = require('../backend/scrapers/autoscout-graphql');
 const scrapeSub = require('../backend/scrapers/subito-api');
@@ -21,6 +22,8 @@ const PASSWORD = process.env.CRAWL_PASSWORD;
 const DEVICE   = process.env.DEVICE || 'worker';
 const PAGES    = parseInt(process.env.WORKER_PAGES || '30', 10);
 const THROTTLE = parseInt(process.env.WORKER_THROTTLE_MS || '1500', 10);
+const PAGE_DELAY = parseInt(process.env.WORKER_PAGE_DELAY_MS || '1500', 10);   // pausa tra le pagine
+const MAX_TARGETS = parseInt(process.env.WORKER_MAX_TARGETS || '0', 10);        // 0 = illimitato (test usa un numero piccolo)
 
 if (!CENTRAL || !PASSWORD) {
   console.error('Servono le env CENTRAL_URL e CRAWL_PASSWORD.');
@@ -29,30 +32,32 @@ if (!CENTRAL || !PASSWORD) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Richiesta HTTPS generica → {status, headers, body}.
-function httpsRequest(urlStr, { method = 'GET', headers = {}, body = null } = {}) {
+// Richiesta HTTP/HTTPS verso il centrale → {status, headers, body}.
+// Protocollo dall'URL → testabile in locale (http) e robusto in prod (https Funnel).
+function req(urlStr, { method = 'GET', headers = {}, body = null } = {}) {
   return new Promise((resolve, reject) => {
     const u = new URL(urlStr);
+    const mod = u.protocol === 'http:' ? http : https;
     const data = body != null ? Buffer.from(body, 'utf8') : null;
     if (data) headers['content-length'] = data.length;
-    const req = https.request({
-      hostname: u.hostname, port: u.port || 443, path: u.pathname + u.search,
-      method, headers,
+    const r = mod.request({
+      hostname: u.hostname, port: u.port || (u.protocol === 'http:' ? 80 : 443),
+      path: u.pathname + u.search, method, headers,
     }, res => {
       let d = ''; res.setEncoding('utf8');
       res.on('data', c => d += c);
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: d }));
     });
-    req.on('error', reject);
-    req.setTimeout(60000, () => req.destroy(new Error('timeout centrale')));
-    if (data) req.write(data);
-    req.end();
+    r.on('error', reject);
+    r.setTimeout(60000, () => r.destroy(new Error('timeout centrale')));
+    if (data) r.write(data);
+    r.end();
   });
 }
 
 // Login → cookie di sessione (amr_auth). /login risponde 302 + Set-Cookie.
 async function login() {
-  const res = await httpsRequest(CENTRAL + '/login', {
+  const res = await req(CENTRAL + '/login', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: 'password=' + encodeURIComponent(PASSWORD),
@@ -65,12 +70,12 @@ async function login() {
 }
 
 async function getJson(cookie, path) {
-  const res = await httpsRequest(CENTRAL + path, { headers: { cookie, accept: 'application/json' } });
+  const res = await req(CENTRAL + path, { headers: { cookie, accept: 'application/json' } });
   if (res.status !== 200) throw new Error(`GET ${path} → ${res.status}`);
   return JSON.parse(res.body);
 }
 async function postJson(cookie, path, obj) {
-  const res = await httpsRequest(CENTRAL + path, {
+  const res = await req(CENTRAL + path, {
     method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(obj),
   });
   if (res.status !== 200) throw new Error(`POST ${path} → ${res.status}: ${res.body.slice(0, 200)}`);
@@ -90,34 +95,61 @@ async function crawlSource(fonte, fn) {
   }
 }
 
+// Riprova una chiamata di rete fino a `tries` volte (backoff). Non per i 200.
+async function withRetry(label, fn, tries = 3) {
+  let last;
+  for (let i = 1; i <= tries; i++) {
+    try { return await fn(); }
+    catch (e) {
+      last = e;
+      console.log(`  ${label}: tentativo ${i}/${tries} fallito (${e.message})`);
+      if (i < tries) await sleep(2000 * i);
+    }
+  }
+  throw last;
+}
+
 async function run() {
   console.log(`[worker ${DEVICE}] login a ${CENTRAL} …`);
   const cookie = await login();
-  console.log(`[worker ${DEVICE}] connesso. Pagine/target=${PAGES}. Inizio fill.`);
-  const opts = { maxPages: PAGES, withMeta: true, attachRaw: false };
-  let done = 0;
+  console.log(`[worker ${DEVICE}] connesso. Pagine/target=${PAGES}, pausa-pagina=${PAGE_DELAY}ms. Inizio fill.`);
+  // pageDelayMs = pausa TRA le pagine (anti-ban su crawl profondo).
+  const opts = { maxPages: PAGES, withMeta: true, attachRaw: false, pageDelayMs: PAGE_DELAY };
+  let done = 0, skipped = 0;
 
   for (;;) {
-    const t = await getJson(cookie, `/api/crawl/lease?device=${encodeURIComponent(DEVICE)}`);
-    if (t.none) { console.log(`[worker ${DEVICE}] nessun target rimasto → fine. Completati: ${done}.`); break; }
-    console.log(`[${++done}] ${t.tipo} ${t.marca} ${t.modello} (id ${t.id})`);
+    if (MAX_TARGETS && done + skipped >= MAX_TARGETS) { console.log(`[worker ${DEVICE}] raggiunto WORKER_MAX_TARGETS=${MAX_TARGETS} → stop.`); break; }
+    // Il lease DEVE riuscire per proseguire: se il centrale è irraggiungibile → esci pulito.
+    let t;
+    try { t = await withRetry('lease', () => getJson(cookie, `/api/crawl/lease?device=${encodeURIComponent(DEVICE)}`)); }
+    catch (e) { console.error(`[worker ${DEVICE}] centrale irraggiungibile → esco. (${e.message})`); break; }
+    if (t.none) { console.log(`[worker ${DEVICE}] nessun target rimasto → FINE. Completati: ${done}, saltati: ${skipped}.`); break; }
+    console.log(`[${done + skipped + 1}] ${t.tipo} ${t.marca} ${t.modello} (id ${t.id})`);
 
-    const sources = [];
-    if (t.mmmv) {
-      sources.push(await crawlSource('autoscout', () => scrapeAS({ tipo: t.tipo, mmmvAutoscout: t.mmmv }, opts)));
-      await sleep(THROTTLE);
-    } else {
-      console.log('  autoscout: saltato (marca non su AS24)');
-    }
-    sources.push(await crawlSource('subito', () => scrapeSub({ tipo: t.tipo, marca: t.marca, modello: t.modello }, opts)));
+    // Un errore su QUESTO target non deve abbattere il loop: log + skip + avanti.
+    try {
+      const sources = [];
+      if (t.mmmv) {
+        sources.push(await crawlSource('autoscout', () => scrapeAS({ tipo: t.tipo, mmmvAutoscout: t.mmmv }, opts)));
+        await sleep(THROTTLE);
+      } else {
+        console.log('  autoscout: saltato (marca non su AS24)');
+      }
+      sources.push(await crawlSource('subito', () => scrapeSub({ tipo: t.tipo, marca: t.marca, modello: t.modello }, opts)));
 
-    const r = await postJson(cookie, '/api/crawl/ingest', { id: t.id, device: DEVICE, sources });
-    console.log(`  → ingest: ${r.written} scritti sul centrale`);
+      const r = await withRetry('ingest', () => postJson(cookie, '/api/crawl/ingest', { id: t.id, device: DEVICE, sources }));
+      console.log(`  → ingest: ${r.written} scritti sul centrale`);
+      done++;
 
-    // Se entrambe le fonti sono bloccate → fermati, non insistere (anti-ban).
-    if (sources.every(s => s.error && s.error.kind === 'blocked')) {
-      console.error(`[worker ${DEVICE}] entrambe le fonti BLOCCATE → mi fermo per non peggiorare.`);
-      break;
+      // Tutte le fonti tentate sono bloccate → fermati, non insistere (anti-ban).
+      const tried = sources.filter(s => s.error || s.items.length >= 0);
+      if (tried.length && tried.every(s => s.error && s.error.kind === 'blocked')) {
+        console.error(`[worker ${DEVICE}] tutte le fonti BLOCCATE → mi fermo per non peggiorare.`);
+        break;
+      }
+    } catch (e) {
+      skipped++;
+      console.error(`  target id ${t.id} SALTATO: ${e.message} (resta riprovabile dopo, il lease scade in 15min)`);
     }
     await sleep(THROTTLE);
   }

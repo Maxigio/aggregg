@@ -225,12 +225,14 @@ app.post('/api/crawl/ingest', express.json({ limit: '10mb' }), async (req, res) 
     for (const s of (Array.isArray(sources) ? sources : [])) {
       if (!s || !s.fonte) continue;
       if (s.error) { await healthRepo.record(s.fonte, { error: s.error, node }); continue; }
-      let items = Array.isArray(s.items) ? s.items : [];
-      // Stesso guard anti-rumore del crawler iMac sui titoli Subito (free-text).
-      if (s.fonte === 'subito') items = items.filter(i => crawler._titleMatchesModel(i.titolo, target.modello));
+      const raw = Array.isArray(s.items) ? s.items : [];
+      // Salute = stato del FETCH → conteggio PRE-filtro (Fix D).
+      await healthRepo.record(s.fonte, { count: raw.length, node });
+      // Guard anti-rumore Subito (free-text) PRIMA dell'upsert (come crawler iMac).
+      const items = s.fonte === 'subito' ? raw.filter(i => crawler._titleMatchesModel(i.titolo, target.modello)) : raw;
+      // NIENTE markGone (Fix C): il worker vede il target la 1ª volta → assenza ≠
+      // venduto. Il fill SOLO aggiunge; il sold-detection resta all'iMac (daily).
       const r = await listingsRepo.upsertListings(items, target);
-      if (!s.truncated) await listingsRepo.markGone(target, items.map(i => i.url), { fonte: s.fonte });
-      await healthRepo.record(s.fonte, { count: items.length, node });
       written += r.written;
     }
     await watchlistRepo.completeTarget(id);
