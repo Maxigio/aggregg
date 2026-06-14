@@ -20,7 +20,8 @@
     "dist:mac": "electron-builder --mac --x64",
     "dist:mac-arm64": "electron-builder --mac --arm64",
     "dist:win": "electron-builder --win --x64",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "build:worker": "node scripts/build-worker-bundle.js"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -125,6 +126,7 @@
     "electron": "^35.0.0",
     "electron-builder": "^25.0.0",
     "electron-updater": "^6.3.0",
+    "esbuild": "^0.28.1",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
     "nouislider": "^15.8.1",

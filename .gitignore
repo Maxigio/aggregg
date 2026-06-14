@@ -26,5 +26,7 @@ AutoMotoRadar-Data/
 data/auth.json
 # Config nodo worker (contiene la password app in chiaro) — MAI versionare
 worker/node.config.json
+# Bundle worker generato da esbuild (rigenerato al boot del server) — non versionare
+worker/dist/
 # Ricerche salvate utente (runtime)
 data/saved-searches.json

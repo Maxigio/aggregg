@@ -4,7 +4,10 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const express = require('express');
 const os = require('os');
+const fs = require('fs');
+const crypto = require('crypto');
 const { execFile } = require('child_process');
+const { buildWorkerBundle, OUTFILE: WORKER_BUNDLE } = require('../scripts/build-worker-bundle');   // F9
 const auth = require('./auth');
 const db = require('./db');
 const crawler = require('./crawler');
@@ -369,6 +372,30 @@ app.post('/api/admin/watchlist/distribute', express.json(), async (req, res) => 
     const r = await watchlistRepo.autoDistribute(nodes, ids);
     res.json(r);   // {assignments:[{node,count}], total}
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── F9 — il centrale serve il worker come 1 file bundle (i nodi lo scaricano, niente git/npm) ──
+let workerBundleVersion = null;
+async function ensureWorkerBundle() {
+  // Ricostruisce a ogni boot → il bundle servito combacia col codice iMac corrente.
+  try {
+    await buildWorkerBundle();
+  } catch (e) {
+    console.warn('[worker-bundle] build fallita (esbuild installato? `npm install`):', e.message);
+  }
+  try {
+    const buf = fs.readFileSync(WORKER_BUNDLE);
+    workerBundleVersion = crypto.createHash('sha256').update(buf).digest('hex');
+    console.log(`[worker-bundle] pronto v${workerBundleVersion.slice(0, 12)} (${buf.length} byte)`);
+  } catch (_) {
+    console.warn('[worker-bundle] nessun bundle disponibile → /api/worker/bundle.js darà 503');
+  }
+}
+
+app.get('/api/worker/bundle/version', (req, res) => res.json({ version: workerBundleVersion }));
+app.get('/api/worker/bundle.js', (req, res) => {
+  if (!workerBundleVersion) return res.status(503).json({ error: 'bundle non pronto' });
+  res.type('application/javascript').sendFile(WORKER_BUNDLE);
 });
 
 // Dashboard stato: salute nodi/fonti + conteggi listings per fonte + summary watchlist.
@@ -1001,6 +1028,9 @@ app.post('/api/subito/keep-alive', express.json(), async (req, res) => {
 
 const server = app.listen(PORT, () => {
   console.log(`Server avviato su http://localhost:${PORT}`);
+
+  // F9 — costruisce/aggiorna il bundle worker servito ai nodi (best-effort, non blocca il boot).
+  ensureWorkerBundle();
 
   // §DB — init schema (migrazioni) + avvio crawler proattivo. Best-effort: se
   // DATABASE_URL manca o il DB è giù, l'app funziona lo stesso (crawler OFF).

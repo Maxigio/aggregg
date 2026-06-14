@@ -2,12 +2,12 @@
   "centralUrl": "https://imac-di-lucas.tailc82888.ts.net",
   "password": "LA_TUA_PASSWORD_APP",
   "device": "surface",
+  "updateMode": "central",
   "mode": "both",
   "sources": "all",
   "intervalHours": 6,
   "pages": 30,
   "pageDelayMs": 1500,
-  "autoPull": true,
-  "branch": "feat/ui-redesign-rating-grouping",
-  "maxMin": 30
+  "maxMin": 30,
+  "_note": "updateMode 'central' = scarica il bundle dal centrale (niente git/npm, basta node). 'git' = git pull + npm (richiede repo+git+auth). 'none' = usa il codice locale senza aggiornare. autoPull/branch servono solo in modo git."
 }
