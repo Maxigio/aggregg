@@ -206,9 +206,15 @@ app.get('/api/crawl/lease', async (req, res) => {
     const device = String(req.query.device || '').trim() || 'worker';
     const t = await watchlistRepo.leaseTarget(device);
     if (!t) return res.json({ none: true });
-    // Risolvi qui l'mmmv AS24 (catalogo sull'iMac) → il worker non serve il catalogo.
+    // Risolvi qui mmmv AS24 + slug Moto.it (catalogo sull'iMac) → il worker non serve il catalogo.
     const as = crawler._resolveAutoscout(t);
-    res.json({ id: t.id, tipo: t.tipo, marca: t.marca, modello: t.modello, mmmv: (as && as.mmmv) || null });
+    const out = { id: t.id, tipo: t.tipo, marca: t.marca, modello: t.modello, mmmv: (as && as.mmmv) || null };
+    if (t.tipo === 'moto') {
+      const mt = await crawler._resolveMotoit(t);
+      out.motoitBrandSlug = (mt && mt.brandSlug) || null;
+      out.motoitModelSlug = (mt && mt.modelSlug) || null;
+    }
+    res.json(out);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

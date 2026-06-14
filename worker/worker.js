@@ -24,6 +24,16 @@ const PAGES    = parseInt(process.env.WORKER_PAGES || '30', 10);
 const THROTTLE = parseInt(process.env.WORKER_THROTTLE_MS || '1500', 10);
 const PAGE_DELAY = parseInt(process.env.WORKER_PAGE_DELAY_MS || '1500', 10);   // pausa tra le pagine
 const MAX_TARGETS = parseInt(process.env.WORKER_MAX_TARGETS || '0', 10);        // 0 = illimitato (test usa un numero piccolo)
+const SOURCES = (process.env.WORKER_SOURCES || 'all').toLowerCase();            // 'all' | 'moto'
+
+// Scraper Moto.it caricato LAZY (richiede cheerio sul nodo). Null se manca.
+let _motoScraper;
+function getMotoScraper() {
+  if (_motoScraper !== undefined) return _motoScraper;
+  try { _motoScraper = require('../backend/scrapers/motoit'); }
+  catch (e) { console.log('  moto.it: scraper non caricabile (manca cheerio? `npm install cheerio`):', e.message); _motoScraper = null; }
+  return _motoScraper;
+}
 
 if (!CENTRAL || !PASSWORD) {
   console.error('Servono le env CENTRAL_URL e CRAWL_PASSWORD.');
@@ -128,14 +138,30 @@ async function run() {
 
     // Un errore su QUESTO target non deve abbattere il loop: log + skip + avanti.
     try {
+      const doAuto = SOURCES === 'all';
+      const doMoto = SOURCES === 'all' || SOURCES === 'moto';
       const sources = [];
-      if (t.mmmv) {
+
+      if (doAuto && t.mmmv) {
         sources.push(await crawlSource('autoscout', () => scrapeAS({ tipo: t.tipo, mmmvAutoscout: t.mmmv }, opts)));
         await sleep(THROTTLE);
-      } else {
+      } else if (doAuto) {
         console.log('  autoscout: saltato (marca non su AS24)');
       }
-      sources.push(await crawlSource('subito', () => scrapeSub({ tipo: t.tipo, marca: t.marca, modello: t.modello }, opts)));
+      if (doAuto) {
+        sources.push(await crawlSource('subito', () => scrapeSub({ tipo: t.tipo, marca: t.marca, modello: t.modello }, opts)));
+      }
+      // Moto.it (solo target moto con slug dal lease)
+      if (doMoto && t.tipo === 'moto' && t.motoitBrandSlug) {
+        const sm = getMotoScraper();
+        if (sm) {
+          await sleep(THROTTLE);
+          sources.push(await crawlSource('moto', () => sm(
+            { tipo: 'moto', marca: t.marca, modello: t.modello, motoitBrandSlug: t.motoitBrandSlug, motoitModelSlug: t.motoitModelSlug },
+            { maxPages: PAGES, withMeta: true, attachRaw: false, pageDelayMs: PAGE_DELAY }
+          )));
+        }
+      }
 
       const r = await withRetry('ingest', () => postJson(cookie, '/api/crawl/ingest', { id: t.id, device: DEVICE, sources }));
       console.log(`  → ingest: ${r.written} scritti sul centrale`);

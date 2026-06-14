@@ -206,4 +206,4 @@ function start({ withLock } = {}) {
   console.log(`[crawler] schedulato (ogni 24h, primo run tra ${FIRST_RUN_DELAY_MS / 1000}s, ${DEEP_PAGES} pag/target)`);
 }
 
-module.exports = { start, sweepAll, sweepTarget, _titleMatchesModel: titleMatchesModel, _resolveAutoscout: resolveAutoscout };
+module.exports = { start, sweepAll, sweepTarget, _titleMatchesModel: titleMatchesModel, _resolveAutoscout: resolveAutoscout, _resolveMotoit: resolveMotoit };
