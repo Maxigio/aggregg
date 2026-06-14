@@ -52,9 +52,11 @@ test('dueTargets: salta i target swept <20h, riprende dopo', async () => {
   assert.strictEqual(due.length, 3, 'dopo 21h → di nuovo due');
 });
 
-test('leaseTarget: target diversi + completeTarget libera e marca swept', async () => {
-  const a = await wl.leaseTarget('surface');
-  const b = await wl.leaseTarget('surface');
+// NB F5: leaseTarget ora è node-filtered (= leaseDueTarget(dev,'fill')). I SEED
+// hanno assigned_node NULL → di proprietà iMac. 'imac' li vede, 'surface' no.
+test('leaseTarget(imac): target diversi + completeTarget libera e marca swept', async () => {
+  const a = await wl.leaseTarget('imac');
+  const b = await wl.leaseTarget('imac');
   assert.ok(a && b);
   assert.notStrictEqual(a.id, b.id, 'lease successivi danno target diversi (no doppioni)');
   await wl.completeTarget(a.id);
@@ -64,9 +66,60 @@ test('leaseTarget: target diversi + completeTarget libera e marca swept', async 
   assert.ok(row.activated_at, 'attivato (entra nel daily dell\'iMac)');
 });
 
-test('dueTargets esclude i target attualmente leasati', async () => {
+test('dueTargets(imac) esclude i target attualmente leasati', async () => {
   await wl.activateRamp(3);
-  const leased = await wl.leaseTarget('surface');
-  const due = await wl.dueTargets();
-  assert.ok(!due.some(t => t.id === leased.id), 'iMac non tocca il target che il worker sta facendo');
+  const leased = await wl.leaseTarget('imac');
+  const due = await wl.dueTargets('imac');
+  assert.ok(!due.some(t => t.id === leased.id), 'iMac non tocca un target con lease vivo');
+});
+
+// ─── F5 — partizione statica + mode ─────────────────────────────────────────
+test('partizione: surface vede SOLO i suoi target; NULL restano all\'iMac', async () => {
+  // assegna 1 target a surface, lascia gli altri NULL (=imac)
+  const all = await wl.listAll();
+  await wl.updateOne(all[0].id, { assigned_node: 'surface' });
+  // surface: fill prende solo il suo
+  const sFill = await wl.leaseDueTarget('surface', 'fill');
+  assert.ok(sFill, 'surface trova il suo target');
+  assert.strictEqual(sFill.id, all[0].id);
+  const sFill2 = await wl.leaseDueTarget('surface', 'fill');
+  assert.strictEqual(sFill2, null, 'surface ha 1 solo target → poi nulla');
+  // imac NON deve vedere il target di surface
+  const imacIds = [];
+  for (let t; (t = await wl.leaseDueTarget('imac', 'fill')); ) imacIds.push(t.id);
+  assert.ok(!imacIds.includes(all[0].id), 'iMac non tocca il target di surface');
+  assert.strictEqual(imacIds.length, all.length - 1, 'iMac vede tutti i NULL restanti');
+});
+
+test('mode fill vs due: fill=never-swept, due=attivato+stantio', async () => {
+  const all = await wl.listAll();
+  // tutti NULL=imac. nessuno attivato, nessuno swept.
+  // due: richiede activated_at → 0 candidati
+  assert.strictEqual(await wl.leaseDueTarget('imac', 'due'), null, 'due senza attivati → niente');
+  // fill: never-swept → trova
+  const f = await wl.leaseDueTarget('imac', 'fill');
+  assert.ok(f, 'fill prende un never-swept');
+  await wl.completeTarget(f.id);   // ora swept + activated
+  // fill non lo riprende (last_swept non più NULL)
+  await db.query('UPDATE watchlist SET leased_until=NULL');   // libera eventuali lease residui per il test
+  const stillFill = [];
+  for (let t; (t = await wl.leaseDueTarget('imac', 'fill')); ) { stillFill.push(t.id); await wl.completeTarget(t.id); }
+  assert.ok(!stillFill.includes(f.id), 'fill non ripesca un target già swept');
+  // ora tutti swept+activated; portali a 21h fa → due li ripiglia
+  await db.query("UPDATE watchlist SET last_swept = now() - interval '21 hours', leased_until = NULL");
+  const d = await wl.leaseDueTarget('imac', 'due');
+  assert.ok(d, 'due ripiglia un attivato e stantio >20h');
+});
+
+test('CRUD: addOne/updateOne/removeOne', async () => {
+  const added = await wl.addOne({ tipo: 'moto', marca: 'Honda', modello: 'SH 125', assigned_node: 'm2' });
+  assert.ok(added && added.id, 'addOne ritorna la riga');
+  assert.strictEqual(added.assigned_node, 'm2');
+  const upd = await wl.updateOne(added.id, { enabled: false });
+  assert.strictEqual(upd.enabled, false, 'updateOne spegne');
+  assert.strictEqual(upd.assigned_node, 'm2', 'assigned_node invariato se non passato');
+  const upd2 = await wl.updateOne(added.id, { assigned_node: null });
+  assert.strictEqual(upd2.assigned_node, null, 'null esplicito azzera il nodo (→ iMac)');
+  assert.strictEqual(await wl.removeOne(added.id), true);
+  assert.strictEqual(await wl.removeOne(added.id), false, 'già rimosso → false');
 });

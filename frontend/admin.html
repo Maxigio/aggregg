@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Auto Moto Radar</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <style>
+    :root {
+      --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --surface:#fff;
+      --bg:#f9fafb; --accent:#2563eb; --green:#16a34a; --red:#dc2626; --amber:#d97706;
+      --radius:10px; --shadow:0 1px 3px rgba(0,0,0,.08);
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+           color:var(--ink); background:var(--bg); padding:16px; }
+    h1 { font-size:20px; margin:0 0 4px; }
+    h2 { font-size:15px; margin:20px 0 8px; }
+    a { color:var(--accent); }
+    .top { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+            box-shadow:var(--shadow); padding:12px; margin-bottom:14px; }
+    .grid { display:flex; gap:10px; flex-wrap:wrap; }
+    .stat { flex:1 1 120px; border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+    .stat .n { font-size:18px; font-weight:600; }
+    .stat .l { color:var(--muted); font-size:12px; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+    th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+    tr.off td { opacity:.5; }
+    input,select,button { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+    button { cursor:pointer; }
+    button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+    button.danger { color:var(--red); border-color:#f3c2c2; }
+    button.link { border:none; background:none; color:var(--accent); padding:2px 4px; }
+    .pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; }
+    .pill.on { background:#dcfce7; color:var(--green); }
+    .pill.offp { background:#f3f4f6; color:var(--muted); }
+    .dot { font-size:12px; }
+    .row-add { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+    .err { color:var(--red); }
+    .muted { color:var(--muted); }
+    .health-line { margin:2px 0; }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div>
+      <h1>Admin · Auto Moto Radar</h1>
+      <div class="muted">Watch-list + stato nodi · <a href="/">← app</a></div>
+    </div>
+    <button class="link" id="refreshBtn">↻ aggiorna</button>
+  </div>
+  <div id="msg" class="err"></div>
+
+  <!-- ─── STATO ─────────────────────────────────────────────────────────── -->
+  <h2>Stato</h2>
+  <div class="card">
+    <div class="grid" id="counts"></div>
+    <div id="healthBox" style="margin-top:10px"></div>
+    <div id="byNode" style="margin-top:10px"></div>
+    <div id="byFonte" style="margin-top:10px"></div>
+  </div>
+
+  <!-- ─── WATCHLIST ─────────────────────────────────────────────────────── -->
+  <h2>Watch-list <span class="muted" id="wlCount"></span></h2>
+  <div class="card">
+    <div class="row-add">
+      <select id="addTipo"><option value="auto">auto</option><option value="moto">moto</option></select>
+      <input id="addMarca" placeholder="marca (es. BMW)" size="14" />
+      <input id="addModello" placeholder="modello (es. Serie 3)" size="16" />
+      <select id="addNode"></select>
+      <button class="primary" id="addBtn">+ aggiungi</button>
+    </div>
+  </div>
+  <div class="card" style="overflow-x:auto">
+    <table id="wlTable">
+      <thead><tr>
+        <th>tipo</th><th>marca</th><th>modello</th><th>nodo</th>
+        <th>stato</th><th>ultimo sweep</th><th></th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+<script>
+const $ = s => document.querySelector(s);
+let NODES = ['imac'];
+
+function msg(t, isErr=true){ const m=$('#msg'); m.textContent=t||''; m.className=isErr?'err':'muted'; }
+async function api(path, opts){
+  const r = await fetch(path, Object.assign({ headers:{'content-type':'application/json'} }, opts));
+  if (r.status === 401) { location.href = '/login'; throw new Error('non autorizzato'); }
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP '+r.status));
+  return j;
+}
+const fmtDate = s => s ? new Date(s).toLocaleString('it-IT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+// Escape per i campi utente (marca/modello arrivano dal DB → evita self-XSS in innerHTML).
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function nodeOptions(){
+  // "iMac (default)" = assigned_node NULL. Poi i nodi noti (imac escluso: già coperto dal default).
+  return ['<option value="">iMac (default)</option>']
+    .concat(NODES.filter(n => n !== 'imac').map(n => `<option value="${esc(n)}">${esc(n)}</option>`))
+    .join('');
+}
+
+async function loadStatus(){
+  const s = await api('/api/admin/status');
+  NODES = s.nodes || NODES;
+  // counts
+  const c = s.watchlist || {};
+  $('#counts').innerHTML = [
+    ['target totali', c.total], ['attivi', c.active], ['in coda (ramp)', c.pending],
+  ].map(([l,n])=>`<div class="stat"><div class="n">${n??'—'}</div><div class="l">${l}</div></div>`).join('');
+  // salute nodi/fonti
+  const h = s.health || {};
+  const lines = [];
+  lines.push(`<div class="health-line">${h.ok?'🟢 nessun blocco':'🔴 problemi rilevati'}</div>`);
+  (h.blocked||[]).forEach(b=> lines.push(`<div class="health-line">🔴 BLOCCATO: ${b.node||'?'} / ${b.fonte||b}</div>`));
+  (h.degraded||[]).forEach(b=> lines.push(`<div class="health-line">🟠 degradato: ${b.node||'?'} / ${b.fonte||b}</div>`));
+  $('#healthBox').innerHTML = '<b>Salute crawler</b>'+lines.join('');
+  // per nodo
+  const bn = (s.watchlistByNode||[]).map(r=>`<div class="health-line">📦 <b>${r.node}</b>: ${r.swept}/${r.total} swept</div>`).join('');
+  $('#byNode').innerHTML = bn ? '<b>Target per nodo</b>'+bn : '';
+  // per fonte
+  const bf = (s.listingsByFonte||[]).map(r=>`<div class="health-line">🗂️ <b>${r.fonte}</b>: ${r.active} attivi · ${r.gone} venduti · ${r.total} tot</div>`).join('');
+  $('#byFonte').innerHTML = bf ? '<b>Listings per fonte</b>'+bf : '';
+}
+
+async function loadWatchlist(){
+  const { targets } = await api('/api/admin/watchlist');
+  $('#wlCount').textContent = `(${targets.length})`;
+  const tb = $('#wlTable tbody');
+  tb.innerHTML = '';
+  for (const t of targets){
+    const tr = document.createElement('tr');
+    if (!t.enabled) tr.className = 'off';
+    const nodeSel = `<select data-act="node" data-id="${t.id}">${nodeOptions()}</select>`;
+    tr.innerHTML = `
+      <td>${esc(t.tipo)}</td><td>${esc(t.marca)}</td><td>${esc(t.modello)}</td>
+      <td>${nodeSel}</td>
+      <td><span class="pill ${t.enabled?'on':'offp'}">${t.enabled?'attivo':'spento'}</span></td>
+      <td class="muted">${fmtDate(t.last_swept)}</td>
+      <td>
+        <button class="link" data-act="toggle" data-id="${t.id}" data-en="${t.enabled?1:0}">${t.enabled?'spegni':'accendi'}</button>
+        <button class="link danger" data-act="del" data-id="${t.id}">elimina</button>
+      </td>`;
+    tr.querySelector('select[data-act=node]').value = t.assigned_node || '';
+    tb.appendChild(tr);
+  }
+}
+
+// delega eventi tabella
+$('#wlTable').addEventListener('change', async e => {
+  const sel = e.target.closest('select[data-act=node]'); if (!sel) return;
+  try { await api('/api/admin/watchlist/'+sel.dataset.id, { method:'PATCH', body: JSON.stringify({ assigned_node: sel.value || null }) }); msg('nodo aggiornato', false); refresh(); }
+  catch(err){ msg(err.message); }
+});
+$('#wlTable').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  try {
+    if (b.dataset.act === 'toggle') {
+      await api('/api/admin/watchlist/'+b.dataset.id, { method:'PATCH', body: JSON.stringify({ enabled: b.dataset.en !== '1' }) });
+    } else if (b.dataset.act === 'del') {
+      if (!confirm('Eliminare questo target dalla watch-list? (i listing già raccolti restano)')) return;
+      await api('/api/admin/watchlist/'+b.dataset.id, { method:'DELETE' });
+    }
+    msg('', false); refresh();
+  } catch(err){ msg(err.message); }
+});
+
+$('#addBtn').addEventListener('click', async () => {
+  const body = {
+    tipo: $('#addTipo').value, marca: $('#addMarca').value.trim(),
+    modello: $('#addModello').value.trim(), assigned_node: $('#addNode').value || null,
+  };
+  if (!body.marca || !body.modello) { msg('marca + modello richiesti'); return; }
+  try { await api('/api/admin/watchlist', { method:'POST', body: JSON.stringify(body) });
+    $('#addMarca').value=''; $('#addModello').value=''; msg('aggiunto', false); refresh(); }
+  catch(err){ msg(err.message); }
+});
+
+$('#refreshBtn').addEventListener('click', () => refresh());
+
+async function refresh(){
+  try {
+    await loadStatus();
+    $('#addNode').innerHTML = nodeOptions();
+    await loadWatchlist();
+    msg('', false);
+  } catch(err){ msg(err.message); }
+}
+refresh();
+</script>
+</body>
+</html>

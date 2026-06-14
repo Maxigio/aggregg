@@ -204,7 +204,10 @@ app.get('/api/crawler/health', async (req, res) => {
 app.get('/api/crawl/lease', async (req, res) => {
   try {
     const device = String(req.query.device || '').trim() || 'worker';
-    const t = await watchlistRepo.leaseTarget(device);
+    // F5 — mode-aware. Default 'fill' (preserva il worker Surface già deployato,
+    // che non passa mode). I worker nuovi passano &mode=due per il refresh giornaliero.
+    const mode = req.query.mode === 'due' ? 'due' : 'fill';
+    const t = await watchlistRepo.leaseDueTarget(device, mode);
     if (!t) return res.json({ none: true });
     // Risolvi qui mmmv AS24 + slug Moto.it (catalogo sull'iMac) → il worker non serve il catalogo.
     const as = crawler._resolveAutoscout(t);
@@ -222,11 +225,15 @@ app.get('/api/crawl/lease', async (req, res) => {
 
 app.post('/api/crawl/ingest', express.json({ limit: '10mb' }), async (req, res) => {
   try {
-    const { id, device, sources } = req.body || {};
+    const { id, device, sources, mode } = req.body || {};
     const tRow = await db.query('SELECT tipo, marca, modello FROM watchlist WHERE id=$1', [id]);
     if (!tRow || !tRow.rows.length) return res.status(400).json({ error: 'target id sconosciuto' });
     const target = tRow.rows[0];
     const node = String(device || 'worker').trim();
+    // markGone SOLO sul refresh giornaliero (mode='due'). Il 'fill' (1° backfill,
+    // anche di target già popolati dall'iMac) vede da un IP/result-set diverso →
+    // l'assenza di un URL NON è venduto. Default (mode assente) = non-due → no markGone.
+    const doMarkGone = mode === 'due';
     let written = 0;
     for (const s of (Array.isArray(sources) ? sources : [])) {
       if (!s || !s.fonte) continue;
@@ -236,16 +243,106 @@ app.post('/api/crawl/ingest', express.json({ limit: '10mb' }), async (req, res) 
       await healthRepo.record(s.fonte, { count: raw.length, node });
       // Guard anti-rumore Subito (free-text) PRIMA dell'upsert (come crawler iMac).
       const items = s.fonte === 'subito' ? raw.filter(i => crawler._titleMatchesModel(i.titolo, target.modello)) : raw;
-      // NIENTE markGone (Fix C): il worker vede il target la 1ª volta → assenza ≠
-      // venduto. Il fill SOLO aggiunge; il sold-detection resta all'iMac (daily).
       const r = await listingsRepo.upsertListings(items, target);
       written += r.written;
+      // F5 — sold-detection dai nodi remoti SOLO su 'due' (refresh giornaliero),
+      // fonte-scoped (un worker WORKER_SOURCES=moto NON tocca autoscout/subito) e
+      // solo se vista COMPLETA (!truncated). Partizione (1 target=1 nodo) + K=2.
+      if (doMarkGone && !s.truncated) await listingsRepo.markGone(target, items.map(i => i.url), { fonte: s.fonte });
     }
     await watchlistRepo.completeTarget(id);
     res.json({ written });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ─── F5 — Pannello Admin (dietro auth, via Funnel da telefono) ────────────────
+// Nodi noti = sorgenti di verità per il dropdown "assegna nodo": niente testo
+// libero → niente target orfani (un assigned_node non-NULL e senza worker
+// corrispondente non verrebbe mai crawlato).
+const KNOWN_NODES = ['imac', 'surface', 'm2'];
+const isValidNode = v => v === null || KNOWN_NODES.includes(v);
+
+// URL pulito per il pannello (dietro auth → redirect /login se non loggato).
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, '../frontend/admin.html')));
+
+app.get('/api/admin/nodes', (req, res) => res.json({ nodes: KNOWN_NODES }));
+
+app.get('/api/admin/watchlist', async (req, res) => {
+  try { res.json({ targets: await watchlistRepo.listAll() }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/admin/watchlist', express.json(), async (req, res) => {
+  try {
+    const { tipo, marca, modello } = req.body || {};
+    let assigned_node = req.body && req.body.assigned_node;
+    if (assigned_node === undefined || assigned_node === '') assigned_node = null;
+    if (!['auto', 'moto'].includes(tipo) || !marca || !modello) {
+      return res.status(400).json({ error: 'tipo (auto|moto) + marca + modello richiesti' });
+    }
+    if (!isValidNode(assigned_node)) return res.status(400).json({ error: 'assigned_node non valido' });
+    const row = await watchlistRepo.addOne({ tipo, marca, modello, assigned_node });
+    if (!row) return res.status(500).json({ error: 'inserimento fallito (DB?)' });
+    res.json({ target: row });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/admin/watchlist/:id', express.json(), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'id non valido' });
+    const patch = {};
+    if (req.body && typeof req.body.enabled === 'boolean') patch.enabled = req.body.enabled;
+    if (req.body && 'assigned_node' in req.body) {
+      let an = req.body.assigned_node;
+      if (an === undefined || an === '') an = null;
+      if (!isValidNode(an)) return res.status(400).json({ error: 'assigned_node non valido' });
+      patch.assigned_node = an;
+    }
+    const row = await watchlistRepo.updateOne(id, patch);
+    if (!row) return res.status(404).json({ error: 'target non trovato' });
+    res.json({ target: row });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/admin/watchlist/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'id non valido' });
+    const ok = await watchlistRepo.removeOne(id);
+    if (!ok) return res.status(404).json({ error: 'target non trovato' });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Dashboard stato: salute nodi/fonti + conteggi listings per fonte + summary watchlist.
+app.get('/api/admin/status', async (req, res) => {
+  try {
+    const health = await healthRepo.getHealth();
+    const wlCounts = await watchlistRepo.counts();
+    let listingsByFonte = [];
+    let wlByNode = [];
+    if (db.isEnabled()) {
+      const lf = await db.query(
+        `SELECT fonte,
+                count(*)::int total,
+                count(*) FILTER (WHERE status='active')::int active,
+                count(*) FILTER (WHERE status='gone')::int gone
+           FROM listings GROUP BY fonte ORDER BY fonte`
+      );
+      listingsByFonte = lf ? lf.rows : [];
+      const wn = await db.query(
+        `SELECT COALESCE(assigned_node, 'imac') node,
+                count(*)::int total,
+                count(*) FILTER (WHERE last_swept IS NOT NULL)::int swept
+           FROM watchlist GROUP BY COALESCE(assigned_node, 'imac') ORDER BY node`
+      );
+      wlByNode = wn ? wn.rows : [];
+    }
+    res.json({ health, watchlist: wlCounts, listingsByFonte, watchlistByNode: wlByNode, nodes: KNOWN_NODES });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Endpoint lista brand (con metadata per-sito) — alimenta il dropdown marca

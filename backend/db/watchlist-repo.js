@@ -60,34 +60,50 @@ async function activateRamp(n = 10) {
   return r ? r.rows : [];
 }
 
-async function dueTargets() {
+// F5 — partizione statica: ogni nodo spazzola SOLO i suoi target.
+// Filtro nodo: assigned_node = $device, oppure NULL (= di proprietà iMac) se device='imac'.
+const NODE_FILTER = `(assigned_node = $1 OR (assigned_node IS NULL AND $1 = 'imac'))`;
+
+async function dueTargets(device = 'imac') {
   if (!db.isEnabled()) return [];
   // Solo target NON spazzolati nelle ultime ~20h → cadenza 1×/giorno a prescindere
   // dai riavvii dell'app (un relaunch in giornata trova 0 due → sweep no-op).
+  // F5: filtrati per nodo (l'iMac vede i suoi + i NULL).
   const r = await db.query(
     `SELECT id, tipo, marca, modello FROM watchlist
-      WHERE activated_at IS NOT NULL AND enabled = true
+      WHERE ${NODE_FILTER}
+        AND activated_at IS NOT NULL AND enabled = true
         AND (last_swept IS NULL OR last_swept < now() - interval '20 hours')
         AND (leased_until IS NULL OR leased_until < now())   -- non toccare i target leasati da un worker
-      ORDER BY last_swept NULLS FIRST, id`
+      ORDER BY last_swept NULLS FIRST, id`,
+    [device]
   );
   return r ? r.rows : [];
 }
 
-// F3 — lease atomico di UN target mai crawlato (per il worker distribuito).
+// F5 — lease atomico di UN target del NODO, mode-aware. Generalizza leaseTarget.
+//  - mode='fill' (keep-ready/backfill): target mai spazzolato (last_swept IS NULL),
+//    ignora il ramp → un nodo remoto popola subito i target che gli assegni.
+//  - mode='due'  (daily refresh): target attivato e stantio (>20h) → rispetta il ramp.
 // FOR UPDATE SKIP LOCKED → due richieste concorrenti prendono target diversi.
-async function leaseTarget(device) {
+async function leaseDueTarget(device, mode = 'fill') {
   if (!db.isEnabled() || !device) return null;
+  // Condizione di candidatura secondo il mode (oltre a nodo+enabled+lease-libero).
+  const cond = mode === 'due'
+    ? `activated_at IS NOT NULL AND (last_swept IS NULL OR last_swept < now() - interval '20 hours')`
+    : `last_swept IS NULL`;
   let client;
   try { client = await db.getClient(); } catch (_) { return null; }
   try {
     await client.query('BEGIN');
     const r = await client.query(
       `SELECT id, tipo, marca, modello FROM watchlist
-        WHERE last_swept IS NULL AND enabled = true
+        WHERE ${NODE_FILTER} AND enabled = true
           AND (leased_until IS NULL OR leased_until < now())
-        ORDER BY id LIMIT 1
-        FOR UPDATE SKIP LOCKED`
+          AND (${cond})
+        ORDER BY last_swept NULLS FIRST, id LIMIT 1
+        FOR UPDATE SKIP LOCKED`,
+      [device]
     );
     if (!r.rows.length) { await client.query('COMMIT'); return null; }
     const t = r.rows[0];
@@ -99,12 +115,16 @@ async function leaseTarget(device) {
     return t;
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
-    console.error('[watchlist] leaseTarget KO:', e.message);
+    console.error('[watchlist] leaseDueTarget KO:', e.message);
     return null;
   } finally {
     client.release();
   }
 }
+
+// Retro-compat F3: leaseTarget = fill-mode (mai-spazzolati del nodo). Usato da
+// scripts/fill-moto-local.js. NB: ora è node-filtered (imac vede imac+NULL).
+function leaseTarget(device) { return leaseDueTarget(device, 'fill'); }
 
 // F3 — target completato dal worker: marca swept/attivato, libera il lease.
 async function completeTarget(id) {
@@ -124,6 +144,56 @@ async function markSwept(id) {
   await db.query('UPDATE watchlist SET last_swept = now() WHERE id = $1', [id]);
 }
 
+// ─── F5 — CRUD admin ──────────────────────────────────────────────────────────
+// Lista completa per il pannello (con stato lease/nodo).
+async function listAll() {
+  if (!db.isEnabled()) return [];
+  const r = await db.query(
+    `SELECT id, tipo, marca, modello, assigned_node, enabled,
+            activated_at, last_swept, leased_by, leased_until
+       FROM watchlist ORDER BY tipo, marca, modello`
+  );
+  return r ? r.rows : [];
+}
+
+// Aggiunge un target (idempotente su tipo+marca+modello). assigned_node opzionale.
+// Ritorna la riga creata/esistente, o null.
+async function addOne({ tipo, marca, modello, assigned_node = null }) {
+  if (!db.isEnabled() || !tipo || !marca || !modello) return null;
+  const r = await db.query(
+    `INSERT INTO watchlist (tipo, marca, modello, assigned_node)
+       VALUES ($1,$2,$3,$4)
+     ON CONFLICT (tipo, marca, modello)
+       DO UPDATE SET assigned_node = COALESCE(EXCLUDED.assigned_node, watchlist.assigned_node)
+     RETURNING id, tipo, marca, modello, assigned_node, enabled`,
+    [tipo, marca, modello, assigned_node]
+  );
+  return r && r.rows.length ? r.rows[0] : null;
+}
+
+// Aggiorna enabled e/o assigned_node. Campi assenti → invariati (COALESCE).
+// assigned_node: passare null lo azzera (= iMac) SOLO se la chiave è presente.
+async function updateOne(id, { enabled, assigned_node } = {}) {
+  if (!db.isEnabled() || !id) return null;
+  const setNode = assigned_node !== undefined;   // distingue "non passato" da "null esplicito"
+  const r = await db.query(
+    `UPDATE watchlist
+        SET enabled = COALESCE($2, enabled),
+            assigned_node = CASE WHEN $4 THEN $3 ELSE assigned_node END
+      WHERE id = $1
+      RETURNING id, tipo, marca, modello, assigned_node, enabled`,
+    [id, enabled === undefined ? null : enabled, setNode ? assigned_node : null, setNode]
+  );
+  return r && r.rows.length ? r.rows[0] : null;
+}
+
+async function removeOne(id) {
+  if (!db.isEnabled() || !id) return false;
+  // NB: nessuna FK listings→watchlist (i listing sono keyed by url) → restano.
+  const r = await db.query('DELETE FROM watchlist WHERE id = $1', [id]);
+  return !!(r && r.rowCount);
+}
+
 async function counts() {
   if (!db.isEnabled()) return { total: 0, active: 0, pending: 0 };
   const r = await db.query(
@@ -135,4 +205,8 @@ async function counts() {
   return r ? r.rows[0] : { total: 0, active: 0, pending: 0 };
 }
 
-module.exports = { insertTargets, seedFromFile, activateRamp, dueTargets, markSwept, counts, leaseTarget, completeTarget };
+module.exports = {
+  insertTargets, seedFromFile, activateRamp, dueTargets, markSwept, counts,
+  leaseTarget, leaseDueTarget, completeTarget,
+  listAll, addOne, updateOne, removeOne,
+};

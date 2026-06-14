@@ -25,6 +25,11 @@ const THROTTLE = parseInt(process.env.WORKER_THROTTLE_MS || '1500', 10);
 const PAGE_DELAY = parseInt(process.env.WORKER_PAGE_DELAY_MS || '1500', 10);   // pausa tra le pagine
 const MAX_TARGETS = parseInt(process.env.WORKER_MAX_TARGETS || '0', 10);        // 0 = illimitato (test usa un numero piccolo)
 const SOURCES = (process.env.WORKER_SOURCES || 'all').toLowerCase();            // 'all' | 'moto'
+// F5 — mode del lease: 'fill' (backfill never-swept), 'due' (refresh >20h), 'both'.
+//  - 'both' = prima drena fill (popola i target nuovi assegnati al nodo), poi due
+//    (rinfresca gli stantii) → il nodo si tiene popolato + fresco in un solo run.
+const MODE = (process.env.WORKER_MODE || 'both').toLowerCase();
+const MODES = MODE === 'fill' ? ['fill'] : MODE === 'due' ? ['due'] : ['fill', 'due'];
 
 // Scraper Moto.it caricato LAZY (richiede cheerio sul nodo). Null se manca.
 let _motoScraper;
@@ -119,66 +124,86 @@ async function withRetry(label, fn, tries = 3) {
   throw last;
 }
 
-async function run() {
-  console.log(`[worker ${DEVICE}] login a ${CENTRAL} …`);
-  const cookie = await login();
-  console.log(`[worker ${DEVICE}] connesso. Pagine/target=${PAGES}, pausa-pagina=${PAGE_DELAY}ms. Inizio fill.`);
-  // pageDelayMs = pausa TRA le pagine (anti-ban su crawl profondo).
-  const opts = { maxPages: PAGES, withMeta: true, attachRaw: false, pageDelayMs: PAGE_DELAY };
-  let done = 0, skipped = 0;
+// Crawla+ingesta UN target. Ritorna 'ok' | 'skip' | 'blocked' | 'central-down'.
+async function processTarget(cookie, t, opts, n, mode) {
+  console.log(`[${n}] ${t.tipo} ${t.marca} ${t.modello} (id ${t.id})`);
+  try {
+    const doAuto = SOURCES === 'all';
+    const doMoto = SOURCES === 'all' || SOURCES === 'moto';
+    const sources = [];
 
+    if (doAuto && t.mmmv) {
+      sources.push(await crawlSource('autoscout', () => scrapeAS({ tipo: t.tipo, mmmvAutoscout: t.mmmv }, opts)));
+      await sleep(THROTTLE);
+    } else if (doAuto) {
+      console.log('  autoscout: saltato (marca non su AS24)');
+    }
+    if (doAuto) {
+      sources.push(await crawlSource('subito', () => scrapeSub({ tipo: t.tipo, marca: t.marca, modello: t.modello }, opts)));
+    }
+    // Moto.it (solo target moto con slug dal lease)
+    if (doMoto && t.tipo === 'moto' && t.motoitBrandSlug) {
+      const sm = getMotoScraper();
+      if (sm) {
+        await sleep(THROTTLE);
+        sources.push(await crawlSource('moto', () => sm(
+          { tipo: 'moto', marca: t.marca, modello: t.modello, motoitBrandSlug: t.motoitBrandSlug, motoitModelSlug: t.motoitModelSlug },
+          { maxPages: PAGES, withMeta: true, attachRaw: false, pageDelayMs: PAGE_DELAY }
+        )));
+      }
+    }
+
+    const r = await withRetry('ingest', () => postJson(cookie, '/api/crawl/ingest', { id: t.id, device: DEVICE, sources, mode }));
+    console.log(`  → ingest: ${r.written} scritti sul centrale`);
+
+    // Tutte le fonti tentate sono bloccate → segnala stop (anti-ban).
+    const tried = sources.filter(s => s.error || s.items.length >= 0);
+    if (tried.length && tried.every(s => s.error && s.error.kind === 'blocked')) return 'blocked';
+    return 'ok';
+  } catch (e) {
+    console.error(`  target id ${t.id} SALTATO: ${e.message} (resta riprovabile dopo, il lease scade in 15min)`);
+    return 'skip';
+  }
+}
+
+// Drena tutti i target di un dato mode finché ce ne sono (o limite/blocco/centrale giù).
+// Aggiorna lo state condiviso. Ritorna true se può proseguire, false se stop globale.
+async function drain(cookie, mode, opts, state) {
+  console.log(`[worker ${DEVICE}] mode=${mode} → inizio.`);
   for (;;) {
-    if (MAX_TARGETS && done + skipped >= MAX_TARGETS) { console.log(`[worker ${DEVICE}] raggiunto WORKER_MAX_TARGETS=${MAX_TARGETS} → stop.`); break; }
+    if (MAX_TARGETS && state.done + state.skipped >= MAX_TARGETS) {
+      console.log(`[worker ${DEVICE}] raggiunto WORKER_MAX_TARGETS=${MAX_TARGETS} → stop.`);
+      return false;
+    }
     // Il lease DEVE riuscire per proseguire: se il centrale è irraggiungibile → esci pulito.
     let t;
-    try { t = await withRetry('lease', () => getJson(cookie, `/api/crawl/lease?device=${encodeURIComponent(DEVICE)}`)); }
-    catch (e) { console.error(`[worker ${DEVICE}] centrale irraggiungibile → esco. (${e.message})`); break; }
-    if (t.none) { console.log(`[worker ${DEVICE}] nessun target rimasto → FINE. Completati: ${done}, saltati: ${skipped}.`); break; }
-    console.log(`[${done + skipped + 1}] ${t.tipo} ${t.marca} ${t.modello} (id ${t.id})`);
+    try { t = await withRetry('lease', () => getJson(cookie, `/api/crawl/lease?device=${encodeURIComponent(DEVICE)}&mode=${mode}`)); }
+    catch (e) { console.error(`[worker ${DEVICE}] centrale irraggiungibile → esco. (${e.message})`); return false; }
+    if (t.none) { console.log(`[worker ${DEVICE}] mode=${mode}: nessun target rimasto.`); return true; }
 
-    // Un errore su QUESTO target non deve abbattere il loop: log + skip + avanti.
-    try {
-      const doAuto = SOURCES === 'all';
-      const doMoto = SOURCES === 'all' || SOURCES === 'moto';
-      const sources = [];
-
-      if (doAuto && t.mmmv) {
-        sources.push(await crawlSource('autoscout', () => scrapeAS({ tipo: t.tipo, mmmvAutoscout: t.mmmv }, opts)));
-        await sleep(THROTTLE);
-      } else if (doAuto) {
-        console.log('  autoscout: saltato (marca non su AS24)');
-      }
-      if (doAuto) {
-        sources.push(await crawlSource('subito', () => scrapeSub({ tipo: t.tipo, marca: t.marca, modello: t.modello }, opts)));
-      }
-      // Moto.it (solo target moto con slug dal lease)
-      if (doMoto && t.tipo === 'moto' && t.motoitBrandSlug) {
-        const sm = getMotoScraper();
-        if (sm) {
-          await sleep(THROTTLE);
-          sources.push(await crawlSource('moto', () => sm(
-            { tipo: 'moto', marca: t.marca, modello: t.modello, motoitBrandSlug: t.motoitBrandSlug, motoitModelSlug: t.motoitModelSlug },
-            { maxPages: PAGES, withMeta: true, attachRaw: false, pageDelayMs: PAGE_DELAY }
-          )));
-        }
-      }
-
-      const r = await withRetry('ingest', () => postJson(cookie, '/api/crawl/ingest', { id: t.id, device: DEVICE, sources }));
-      console.log(`  → ingest: ${r.written} scritti sul centrale`);
-      done++;
-
-      // Tutte le fonti tentate sono bloccate → fermati, non insistere (anti-ban).
-      const tried = sources.filter(s => s.error || s.items.length >= 0);
-      if (tried.length && tried.every(s => s.error && s.error.kind === 'blocked')) {
-        console.error(`[worker ${DEVICE}] tutte le fonti BLOCCATE → mi fermo per non peggiorare.`);
-        break;
-      }
-    } catch (e) {
-      skipped++;
-      console.error(`  target id ${t.id} SALTATO: ${e.message} (resta riprovabile dopo, il lease scade in 15min)`);
+    const outcome = await processTarget(cookie, t, opts, state.done + state.skipped + 1, mode);
+    if (outcome === 'ok' || outcome === 'blocked') state.done++; else state.skipped++;
+    if (outcome === 'blocked') {
+      console.error(`[worker ${DEVICE}] tutte le fonti BLOCCATE → mi fermo per non peggiorare.`);
+      return false;
     }
     await sleep(THROTTLE);
   }
+}
+
+async function run() {
+  console.log(`[worker ${DEVICE}] login a ${CENTRAL} …`);
+  const cookie = await login();
+  console.log(`[worker ${DEVICE}] connesso. Pagine/target=${PAGES}, pausa-pagina=${PAGE_DELAY}ms, modi=[${MODES.join(',')}]. Inizio.`);
+  // pageDelayMs = pausa TRA le pagine (anti-ban su crawl profondo).
+  const opts = { maxPages: PAGES, withMeta: true, attachRaw: false, pageDelayMs: PAGE_DELAY };
+  const state = { done: 0, skipped: 0 };
+
+  for (const mode of MODES) {
+    const cont = await drain(cookie, mode, opts, state);
+    if (!cont) break;   // limite/blocco/centrale giù → non passare al mode successivo
+  }
+  console.log(`[worker ${DEVICE}] FINE. Completati: ${state.done}, saltati: ${state.skipped}.`);
 }
 
 run().catch(e => { console.error(`[worker ${DEVICE}] errore fatale:`, e.message); process.exit(1); });

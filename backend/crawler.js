@@ -161,7 +161,8 @@ async function sweepAll({ withLock } = {}) {
   await wl.seedFromFile();
   await syncSavedSearches();
   const activated = await wl.activateRamp(RAMP_PER_DAY);
-  const targets = await wl.dueTargets();
+  // F5 — partizione: l'iMac spazzola SOLO i suoi target (assigned_node='imac' o NULL).
+  const targets = await wl.dueTargets('imac');
   const c = await wl.counts();
   console.log(`[crawler] sweep avvio: ${targets.length} attivi (+${activated.length} nuovi) · ${c.pending} in coda`);
 
