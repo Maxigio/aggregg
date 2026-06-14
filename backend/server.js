@@ -261,17 +261,41 @@ app.post('/api/crawl/ingest', express.json({ limit: '10mb' }), async (req, res) 
 // Nodi noti = sorgenti di verità per il dropdown "assegna nodo": niente testo
 // libero → niente target orfani (un assigned_node non-NULL e senza worker
 // corrispondente non verrebbe mai crawlato).
-const KNOWN_NODES = ['imac', 'surface', 'm2'];
+const KNOWN_NODES = ['imac', 'surface', 'm2', 'massimo'];
 const isValidNode = v => v === null || KNOWN_NODES.includes(v);
+
+// F6 — rilevamento doppioni watch-list (modulo puro/testabile).
+const { findOverlaps } = require('./watchlist-overlaps');
 
 // URL pulito per il pannello (dietro auth → redirect /login se non loggato).
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, '../frontend/admin.html')));
 
 app.get('/api/admin/nodes', (req, res) => res.json({ nodes: KNOWN_NODES }));
 
+// F6 — trigger crawl iMac on-demand (telecomando dal pannello, anche da remoto via
+// Funnel/tailnet). Fire-and-forget: lo sweep dura minuti → rispondo subito. Il guard
+// in crawler + la cadenza 20h di dueTargets rendono i trigger ripetuti no-op (anti-ban).
+app.post('/api/admin/crawl/run', (req, res) => {
+  try {
+    if (crawler.isRunning()) return res.json({ running: true });
+    crawler.sweepAll({ withLock: withSavedLock })
+      .catch(e => console.error('[crawler] trigger manuale errore:', e.message));
+    res.json({ started: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/admin/watchlist', async (req, res) => {
-  try { res.json({ targets: await watchlistRepo.listAll() }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const targets = await watchlistRepo.listAll();
+    // Conteggio annunci per target in 1 query (no N scansioni).
+    const countMap = new Map();
+    if (db.isEnabled()) {
+      const cr = await db.query(`SELECT tipo, marca, modello, count(*)::int n FROM listings GROUP BY tipo, marca, modello`);
+      for (const r of (cr ? cr.rows : [])) countMap.set(`${r.tipo}|${r.marca}|${r.modello}`, r.n);
+    }
+    for (const t of targets) t.count = countMap.get(`${t.tipo}|${t.marca}|${t.modello}`) || 0;
+    res.json({ targets, overlaps: findOverlaps(targets) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/admin/watchlist', express.json(), async (req, res) => {
@@ -341,7 +365,7 @@ app.get('/api/admin/status', async (req, res) => {
       );
       wlByNode = wn ? wn.rows : [];
     }
-    res.json({ health, watchlist: wlCounts, listingsByFonte, watchlistByNode: wlByNode, nodes: KNOWN_NODES });
+    res.json({ health, watchlist: wlCounts, listingsByFonte, watchlistByNode: wlByNode, nodes: KNOWN_NODES, crawler: crawler.status() });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -56,10 +56,21 @@
   <!-- ─── STATO ─────────────────────────────────────────────────────────── -->
   <h2>Stato</h2>
   <div class="card">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="primary" id="runBtn">▶ Avvia crawl iMac ora</button>
+      <span class="muted" id="crawlState"></span>
+    </div>
     <div class="grid" id="counts"></div>
     <div id="healthBox" style="margin-top:10px"></div>
     <div id="byNode" style="margin-top:10px"></div>
     <div id="byFonte" style="margin-top:10px"></div>
+  </div>
+
+  <!-- ─── DOPPIONI ──────────────────────────────────────────────────────── -->
+  <div class="card" id="overlapsCard" style="display:none;border-color:#f3c2c2">
+    <b>⚠️ Possibili doppioni (gonfiano il ri-crawl)</b>
+    <div class="muted" style="font-size:12px;margin:2px 0 6px">Euristica: stesso brand + modello sovrapposto. Verifica e rimuovi i ridondanti.</div>
+    <div id="overlaps"></div>
   </div>
 
   <!-- ─── WATCHLIST ─────────────────────────────────────────────────────── -->
@@ -77,7 +88,7 @@
     <table id="wlTable">
       <thead><tr>
         <th>tipo</th><th>marca</th><th>modello</th><th>nodo</th>
-        <th>stato</th><th>ultimo sweep</th><th></th>
+        <th>annunci</th><th>stato</th><th>ultimo sweep</th><th></th>
       </tr></thead>
       <tbody></tbody>
     </table>
@@ -127,11 +138,31 @@ async function loadStatus(){
   // per fonte
   const bf = (s.listingsByFonte||[]).map(r=>`<div class="health-line">🗂️ <b>${r.fonte}</b>: ${r.active} attivi · ${r.gone} venduti · ${r.total} tot</div>`).join('');
   $('#byFonte').innerHTML = bf ? '<b>Listings per fonte</b>'+bf : '';
+  // stato crawler (trigger)
+  const cr = s.crawler || {};
+  let cs;
+  if (cr.running) cs = '⏳ crawl in corso…';
+  else if (cr.lastFinishedAt) {
+    const w = cr.lastStats && (cr.lastStats.written != null) ? `${cr.lastStats.written} scritti` : (cr.lastStats && cr.lastStats.skipped ? 'no-op' : '—');
+    cs = `ultimo sweep: ${w} · ${fmtDate(cr.lastFinishedAt)}` + (cr.lastError ? ` · ⚠️ ${esc(cr.lastError)}` : '');
+  } else cs = 'mai avviato manualmente (gira comunque ogni 24h)';
+  $('#crawlState').textContent = cs;
+  $('#runBtn').disabled = !!cr.running;
+}
+
+function renderOverlaps(overlaps){
+  const box = $('#overlapsCard');
+  if (!overlaps || !overlaps.length){ box.style.display='none'; $('#overlaps').innerHTML=''; return; }
+  box.style.display='';
+  $('#overlaps').innerHTML = overlaps.map(o =>
+    `<div class="health-line">🔁 <b>${esc(o.a.marca)}</b> «${esc(o.a.modello)}» ⟷ «${esc(o.b.modello)}» <span class="muted">(${esc(o.reason)})</span></div>`
+  ).join('');
 }
 
 async function loadWatchlist(){
-  const { targets } = await api('/api/admin/watchlist');
+  const { targets, overlaps } = await api('/api/admin/watchlist');
   $('#wlCount').textContent = `(${targets.length})`;
+  renderOverlaps(overlaps);
   const tb = $('#wlTable tbody');
   tb.innerHTML = '';
   for (const t of targets){
@@ -141,6 +172,7 @@ async function loadWatchlist(){
     tr.innerHTML = `
       <td>${esc(t.tipo)}</td><td>${esc(t.marca)}</td><td>${esc(t.modello)}</td>
       <td>${nodeSel}</td>
+      <td class="muted">${t.count??0}</td>
       <td><span class="pill ${t.enabled?'on':'offp'}">${t.enabled?'attivo':'spento'}</span></td>
       <td class="muted">${fmtDate(t.last_swept)}</td>
       <td>
@@ -183,6 +215,14 @@ $('#addBtn').addEventListener('click', async () => {
 });
 
 $('#refreshBtn').addEventListener('click', () => refresh());
+
+$('#runBtn').addEventListener('click', async () => {
+  try {
+    const r = await api('/api/admin/crawl/run', { method:'POST' });
+    msg(r.running ? 'crawl già in corso' : 'crawl avviato sull\'iMac', false);
+    setTimeout(refresh, 1500);   // dà tempo al flag running di aggiornarsi
+  } catch(err){ msg(err.message); }
+});
 
 async function refresh(){
   try {

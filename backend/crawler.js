@@ -156,8 +156,36 @@ async function sweepTarget(target, stats) {
 }
 
 // ─── Sweep completa ───────────────────────────────────────────────────────────
+// Stato esposto (per il trigger remoto + dashboard admin). Il guard `running`
+// impedisce sweep concorrenti: il tick schedulato e il trigger manuale lo condividono.
+let running = false;
+let lastStartedAt = null;
+let lastFinishedAt = null;
+let lastStats = null;
+let lastError = null;
+function isRunning() { return running; }
+function status() { return { running, lastStartedAt, lastFinishedAt, lastStats, lastError }; }
+
 async function sweepAll({ withLock } = {}) {
   if (!db.isEnabled()) { console.warn('[crawler] DB non attivo → sweep saltata'); return null; }
+  if (running) { console.log('[crawler] sweep già in corso → trigger ignorato'); return { skipped: 'running' }; }
+  running = true;
+  lastStartedAt = new Date().toISOString();
+  lastError = null;
+  try {
+    const stats = await _sweepAllCore({ withLock });
+    lastStats = stats;
+    return stats;
+  } catch (e) {
+    lastError = e.message;
+    throw e;
+  } finally {
+    running = false;
+    lastFinishedAt = new Date().toISOString();
+  }
+}
+
+async function _sweepAllCore({ withLock } = {}) {
   await wl.seedFromFile();
   await syncSavedSearches();
   const activated = await wl.activateRamp(RAMP_PER_DAY);
@@ -207,4 +235,4 @@ function start({ withLock } = {}) {
   console.log(`[crawler] schedulato (ogni 24h, primo run tra ${FIRST_RUN_DELAY_MS / 1000}s, ${DEEP_PAGES} pag/target)`);
 }
 
-module.exports = { start, sweepAll, sweepTarget, _titleMatchesModel: titleMatchesModel, _resolveAutoscout: resolveAutoscout, _resolveMotoit: resolveMotoit };
+module.exports = { start, sweepAll, sweepTarget, isRunning, status, _titleMatchesModel: titleMatchesModel, _resolveAutoscout: resolveAutoscout, _resolveMotoit: resolveMotoit };
