@@ -203,6 +203,9 @@ async function run() {
     const cont = await drain(cookie, mode, opts, state);
     if (!cont) break;   // limite/blocco/centrale giù → non passare al mode successivo
   }
+  if (state.done + state.skipped === 0) {
+    console.warn(`[worker ${DEVICE}] ⚠️ 0 target per '${DEVICE}'. Nessun target assegnato a questo nodo → assegnali dal pannello admin (nodo ${DEVICE}).`);
+  }
   console.log(`[worker ${DEVICE}] FINE. Completati: ${state.done}, saltati: ${state.skipped}.`);
 }
 

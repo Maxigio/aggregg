@@ -24,5 +24,7 @@ AutoMotoRadar-Data/
 
 # Credenziali accesso remoto (hash password + secret cookie) — MAI versionare
 data/auth.json
+# Config nodo worker (contiene la password app in chiaro) — MAI versionare
+worker/node.config.json
 # Ricerche salvate utente (runtime)
 data/saved-searches.json

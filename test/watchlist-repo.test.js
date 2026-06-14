@@ -123,3 +123,41 @@ test('CRUD: addOne/updateOne/removeOne', async () => {
   assert.strictEqual(await wl.removeOne(added.id), true);
   assert.strictEqual(await wl.removeOne(added.id), false, 'già rimosso → false');
 });
+
+// ─── F8 — assignMany / autoDistribute (qui per evitare race su TRUNCATE watchlist) ──
+const SEED9 = [
+  { tipo: 'auto', marca: 'Fiat', modello: 'Panda' }, { tipo: 'auto', marca: 'Fiat', modello: '500' },
+  { tipo: 'auto', marca: 'VW', modello: 'Golf' }, { tipo: 'auto', marca: 'Ford', modello: 'Focus' },
+  { tipo: 'auto', marca: 'Audi', modello: 'A3' }, { tipo: 'auto', marca: 'BMW', modello: 'Serie 1' },
+  { tipo: 'moto', marca: 'Honda', modello: 'SH 125' }, { tipo: 'moto', marca: 'Yamaha', modello: 'TMAX' },
+  { tipo: 'moto', marca: 'Piaggio', modello: 'Vespa GTS' },
+];
+async function seed9() { await db.query('TRUNCATE watchlist RESTART IDENTITY'); await wl.insertTargets(SEED9); }
+
+test('assignMany: assegna N target a un nodo; node=null azzera', async () => {
+  await seed9();
+  const ids = (await wl.listAll()).map(t => t.id).slice(0, 3);
+  assert.strictEqual((await wl.assignMany(ids, 'surface')).updated, 3);
+  assert.strictEqual((await wl.listAll()).filter(t => t.assigned_node === 'surface').length, 3);
+  assert.strictEqual((await wl.assignMany([ids[0]], null)).updated, 1);
+  assert.strictEqual((await wl.listAll()).find(t => t.id === ids[0]).assigned_node, null);
+});
+
+test('autoDistribute: 9 target su 3 nodi → 3/3/3 con 1 moto ciascuno', async () => {
+  await seed9();
+  const r = await wl.autoDistribute(['imac', 'surface', 'massimo']);
+  assert.strictEqual(r.total, 9);
+  assert.deepStrictEqual(Object.fromEntries(r.assignments.map(a => [a.node, a.count])), { imac: 3, surface: 3, massimo: 3 });
+  const all = await wl.listAll();
+  for (const node of ['imac', 'surface', 'massimo']) {
+    assert.strictEqual(all.filter(t => t.assigned_node === node && t.tipo === 'moto').length, 1, `${node}: 1 moto (mix equo)`);
+  }
+});
+
+test('autoDistribute: subset ids', async () => {
+  await seed9();
+  const ids = (await wl.listAll()).map(t => t.id).slice(0, 4);
+  const r = await wl.autoDistribute(['surface', 'massimo'], ids);
+  assert.strictEqual(r.total, 4);
+  assert.deepStrictEqual(Object.fromEntries(r.assignments.map(a => [a.node, a.count])), { surface: 2, massimo: 2 });
+});

@@ -194,6 +194,49 @@ async function removeOne(id) {
   return !!(r && r.rowCount);
 }
 
+// F8 — assegnazione bulk: un colpo solo su molti id (node può essere null = iMac).
+async function assignMany(ids, node) {
+  if (!db.isEnabled() || !Array.isArray(ids) || !ids.length) return { updated: 0 };
+  const clean = ids.map(n => parseInt(n, 10)).filter(Number.isInteger);
+  if (!clean.length) return { updated: 0 };
+  const r = await db.query(
+    `UPDATE watchlist SET assigned_node = $2 WHERE id = ANY($1::int[]) RETURNING id`,
+    [clean, node]
+  );
+  return { updated: r ? r.rowCount : 0 };
+}
+
+// F8 — auto-distribuzione round-robin dei target tra i nodi dati. Ordine per
+// (tipo,marca,modello) → ogni nodo riceve un MIX equo auto+moto (diff ≤1). Se
+// `ids` assente → tutti i target enabled. TX: 1 UPDATE per nodo. {assignments,total}.
+async function autoDistribute(nodes, ids) {
+  if (!db.isEnabled() || !Array.isArray(nodes) || !nodes.length) return { assignments: [], total: 0 };
+  const sel = (Array.isArray(ids) && ids.length)
+    ? await db.query(`SELECT id FROM watchlist WHERE id = ANY($1::int[]) ORDER BY tipo, marca, modello`, [ids.map(n => parseInt(n, 10)).filter(Number.isInteger)])
+    : await db.query(`SELECT id FROM watchlist WHERE enabled = true ORDER BY tipo, marca, modello`);
+  const rows = sel ? sel.rows : [];
+  const buckets = nodes.map(() => []);
+  rows.forEach((r, i) => buckets[i % nodes.length].push(r.id));
+  let client;
+  try { client = await db.getClient(); } catch (_) { return { assignments: [], total: 0 }; }
+  try {
+    await client.query('BEGIN');
+    for (let i = 0; i < nodes.length; i++) {
+      if (buckets[i].length) {
+        await client.query(`UPDATE watchlist SET assigned_node = $1 WHERE id = ANY($2::int[])`, [nodes[i], buckets[i]]);
+      }
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[watchlist] autoDistribute KO:', e.message);
+    return { assignments: [], total: 0 };
+  } finally {
+    client.release();
+  }
+  return { assignments: nodes.map((n, i) => ({ node: n, count: buckets[i].length })), total: rows.length };
+}
+
 async function counts() {
   if (!db.isEnabled()) return { total: 0, active: 0, pending: 0 };
   const r = await db.query(
@@ -208,5 +251,5 @@ async function counts() {
 module.exports = {
   insertTargets, seedFromFile, activateRamp, dueTargets, markSwept, counts,
   leaseTarget, leaseDueTarget, completeTarget,
-  listAll, addOne, updateOne, removeOne,
+  listAll, addOne, updateOne, removeOne, assignMany, autoDistribute,
 };

@@ -1,0 +1,13 @@
+{
+  "centralUrl": "https://imac-di-lucas.tailc82888.ts.net",
+  "password": "LA_TUA_PASSWORD_APP",
+  "device": "surface",
+  "mode": "both",
+  "sources": "all",
+  "intervalHours": 6,
+  "pages": 30,
+  "pageDelayMs": 1500,
+  "autoPull": true,
+  "branch": "feat/ui-redesign-rating-grouping",
+  "maxMin": 30
+}

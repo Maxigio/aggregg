@@ -84,9 +84,27 @@
       <button class="primary" id="addBtn">+ aggiungi</button>
     </div>
   </div>
+
+  <!-- ─── ASSEGNAZIONE PER-NODO ─────────────────────────────────────────── -->
+  <div class="card">
+    <div class="row-add">
+      <input id="wlFilter" placeholder="🔍 filtra (marca/modello/tipo)" size="22" />
+      <span class="muted" id="selCount">0 selezionati</span>
+      <select id="bulkNode"></select>
+      <button id="bulkAssignBtn">assegna selezionati</button>
+    </div>
+    <div class="row-add" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">
+      <span class="muted">Distribuisci automaticamente:</span>
+      <span id="distNodes"></span>
+      <label style="font-size:12px"><input type="checkbox" id="distSelectedOnly" /> solo selezionati</label>
+      <button id="distributeBtn">distribuisci</button>
+    </div>
+  </div>
+
   <div class="card" style="overflow-x:auto">
     <table id="wlTable">
       <thead><tr>
+        <th><input type="checkbox" id="selAll" title="seleziona tutti (filtrati)" /></th>
         <th>tipo</th><th>marca</th><th>modello</th><th>nodo</th>
         <th>annunci</th><th>stato</th><th>ultimo sweep</th><th></th>
       </tr></thead>
@@ -168,8 +186,10 @@ async function loadWatchlist(){
   for (const t of targets){
     const tr = document.createElement('tr');
     if (!t.enabled) tr.className = 'off';
+    tr.dataset.search = `${t.tipo} ${t.marca} ${t.modello}`.toLowerCase();
     const nodeSel = `<select data-act="node" data-id="${t.id}">${nodeOptions()}</select>`;
     tr.innerHTML = `
+      <td><input type="checkbox" class="rowchk" data-id="${t.id}"></td>
       <td>${esc(t.tipo)}</td><td>${esc(t.marca)}</td><td>${esc(t.modello)}</td>
       <td>${nodeSel}</td>
       <td class="muted">${t.count??0}</td>
@@ -182,7 +202,23 @@ async function loadWatchlist(){
     tr.querySelector('select[data-act=node]').value = t.assigned_node || '';
     tb.appendChild(tr);
   }
+  applyFilter();
 }
+
+// ─── F8: filtro + selezione + bulk/distribute ─────────────────────────────────
+function applyFilter(){
+  const q = ($('#wlFilter').value || '').trim().toLowerCase();
+  document.querySelectorAll('#wlTable tbody tr').forEach(tr => {
+    const show = !q || (tr.dataset.search || '').includes(q);
+    tr.style.display = show ? '' : 'none';
+    if (!show) { const c = tr.querySelector('.rowchk'); if (c) c.checked = false; }   // nascosto → deselezionato
+  });
+  $('#selAll').checked = false;
+  updateSelCount();
+}
+function visibleChecks(){ return [...document.querySelectorAll('#wlTable tbody tr')].filter(tr => tr.style.display !== 'none').map(tr => tr.querySelector('.rowchk')); }
+function selectedIds(){ return [...document.querySelectorAll('#wlTable .rowchk')].filter(c => c.checked).map(c => parseInt(c.dataset.id,10)); }
+function updateSelCount(){ $('#selCount').textContent = `${selectedIds().length} selezionati`; }
 
 // delega eventi tabella
 $('#wlTable').addEventListener('change', async e => {
@@ -216,6 +252,43 @@ $('#addBtn').addEventListener('click', async () => {
 
 $('#refreshBtn').addEventListener('click', () => refresh());
 
+// F8 — filtro, selezione, bulk assign, distribuzione
+$('#wlFilter').addEventListener('input', applyFilter);
+$('#selAll').addEventListener('change', () => {
+  const on = $('#selAll').checked;
+  visibleChecks().forEach(c => { c.checked = on; });
+  updateSelCount();
+});
+$('#wlTable').addEventListener('change', e => { if (e.target.classList.contains('rowchk')) updateSelCount(); });
+
+$('#bulkAssignBtn').addEventListener('click', async () => {
+  const ids = selectedIds();
+  if (!ids.length) { msg('nessun target selezionato'); return; }
+  const node = $('#bulkNode').value || null;
+  try {
+    const r = await api('/api/admin/watchlist/assign', { method:'POST', body: JSON.stringify({ ids, node }) });
+    msg(`${r.updated} assegnati a ${node || 'iMac'}`, false);
+    refresh();
+  } catch(err){ msg(err.message); }
+});
+
+$('#distributeBtn').addEventListener('click', async () => {
+  const nodes = [...document.querySelectorAll('#distNodes input:checked')].map(c => c.value);
+  if (!nodes.length) { msg('scegli almeno un nodo per distribuire'); return; }
+  const body = { nodes };
+  if ($('#distSelectedOnly').checked) {
+    const ids = selectedIds();
+    if (!ids.length) { msg('“solo selezionati” attivo ma nessun target selezionato'); return; }
+    body.ids = ids;
+  }
+  if (!confirm(`Distribuire ${body.ids ? body.ids.length+' selezionati' : 'TUTTI i target'} tra: ${nodes.join(', ')}?`)) return;
+  try {
+    const r = await api('/api/admin/watchlist/distribute', { method:'POST', body: JSON.stringify(body) });
+    msg('distribuito → ' + (r.assignments||[]).map(a => `${a.node}:${a.count}`).join(' · '), false);
+    refresh();
+  } catch(err){ msg(err.message); }
+});
+
 $('#runBtn').addEventListener('click', async () => {
   try {
     const r = await api('/api/admin/crawl/run', { method:'POST' });
@@ -232,6 +305,9 @@ async function refresh(){
   try {
     await loadStatus();
     $('#addNode').innerHTML = nodeOptions();
+    $('#bulkNode').innerHTML = nodeOptions();
+    // checkbox dei nodi per la distribuzione (tutti i KNOWN_NODES, imac incluso)
+    $('#distNodes').innerHTML = NODES.map(n => `<label style="font-size:12px;margin-right:6px"><input type="checkbox" value="${esc(n)}" checked> ${esc(n)}</label>`).join('');
     await loadWatchlist();
     msg('', false);
   } catch(err){ msg(err.message); }

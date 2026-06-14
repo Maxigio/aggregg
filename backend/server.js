@@ -346,6 +346,31 @@ app.delete('/api/admin/watchlist/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// F8 — assegnazione bulk: molti target → un nodo (null = iMac).
+app.post('/api/admin/watchlist/assign', express.json(), async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids : null;
+    let node = req.body && req.body.node;
+    if (node === undefined || node === '') node = null;
+    if (!ids || !ids.length) return res.status(400).json({ error: 'ids richiesti' });
+    if (!isValidNode(node)) return res.status(400).json({ error: 'node non valido' });
+    const r = await watchlistRepo.assignMany(ids, node);
+    res.json(r);   // {updated:N}
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// F8 — auto-distribuzione round-robin dei target tra i nodi scelti.
+app.post('/api/admin/watchlist/distribute', express.json(), async (req, res) => {
+  try {
+    const nodes = Array.isArray(req.body && req.body.nodes) ? req.body.nodes : null;
+    const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids : null;   // opzionale
+    if (!nodes || !nodes.length) return res.status(400).json({ error: 'nodes richiesti' });
+    if (!nodes.every(n => KNOWN_NODES.includes(n))) return res.status(400).json({ error: 'nodes non validi' });
+    const r = await watchlistRepo.autoDistribute(nodes, ids);
+    res.json(r);   // {assignments:[{node,count}], total}
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Dashboard stato: salute nodi/fonti + conteggi listings per fonte + summary watchlist.
 app.get('/api/admin/status', async (req, res) => {
   try {
