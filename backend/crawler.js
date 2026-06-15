@@ -18,6 +18,7 @@ const db = require('./db');
 const wl = require('./db/watchlist-repo');
 const repo = require('./db/listings-repo');
 const health = require('./db/health-repo');
+const runs = require('./db/crawl-runs-repo');
 const scrapeAutoscoutGraphql = require('./scrapers/autoscout-graphql');
 const scrapeSubitoApi = require('./scrapers/subito-api');
 const scrapeMotoIt = require('./scrapers/motoit');
@@ -28,8 +29,10 @@ const { norm, makeResolver, makeModelResolver, loadAliasMap } = require('./scrap
 const modelsData = require('../data/models.json');
 
 const DEEP_PAGES   = parseInt(process.env.CRAWLER_PAGES || '10', 10);   // cap profondità/target
+const DEEP_PAGES_MAX = parseInt(process.env.CRAWLER_PAGES_MAX || '30', 10); // F13: cap esteso sui target che troncano
 const RAMP_PER_DAY = parseInt(process.env.CRAWLER_RAMP  || '10', 10);   // nuovi target/giorno
 const THROTTLE_MS  = parseInt(process.env.CRAWLER_THROTTLE_MS || '1500', 10);
+const BACKOFF_HOURS = parseInt(process.env.CRAWLER_BACKOFF_HOURS || '6', 10); // F14: salta fonte blocked per Nh
 const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FIRST_RUN_DELAY_MS = 60 * 1000;   // dopo il boot, non subito
 
@@ -89,43 +92,57 @@ function titleMatchesModel(titolo, modello) {
 }
 
 // ─── Sweep di un singolo target ───────────────────────────────────────────────
+// Ritorna {truncated, complete}: truncated=una fonte ha visto solo una parte (cap)
+// → F13 escalation cap al giro dopo + markGone spento DA SÉ. complete=tutte le
+// fonti previste viste intere e nessuna saltata per back-off → "popolato".
 async function sweepTarget(target, stats) {
-  const opts = { maxPages: DEEP_PAGES, attachRaw: true, sortByDate: true, withMeta: true };
+  // F13 — cap esteso se l'ultima sweep di questo target aveva troncato.
+  const cap = target.last_truncated ? DEEP_PAGES_MAX : DEEP_PAGES;
+  const opts = { maxPages: cap, attachRaw: true, sortByDate: true, withMeta: true };
+  let anyTrunc = false, skippedAny = false;
 
   // AS24 (solo se la marca è su AS24)
   const as = resolveAutoscout(target);
   if (as) {
-    try {
+    if (await health.isBackedOff('imac', 'autoscout', BACKOFF_HOURS)) {
+      console.log(`[crawler] AS24 in back-off (blocked recente) → salto ${target.marca} ${target.modello}`);
+      skippedAny = true;
+    } else try {
       const { items, truncated } = await scrapeAutoscoutGraphql({ tipo: target.tipo, mmmvAutoscout: as.mmmv }, opts);
       const r = await repo.upsertListings(items, target);
       // markGone SOLO con vista completa: se troncato al cap, l'assenza di un
       // annuncio non è affidabile (potrebbe essere oltre il cap) → niente venduto.
       if (!truncated) await repo.markGone(target, items.map(i => i.url), { fonte: 'autoscout' });
-      else console.log(`[crawler] AS24 ${target.marca} ${target.modello}: vista parziale (cap) → skip venduto`);
+      else { anyTrunc = true; console.log(`[crawler] AS24 ${target.marca} ${target.modello}: vista parziale (cap ${cap}) → skip venduto`); }
       stats.written += r.written;
       stats.as += items.length;
       await health.record('autoscout', { count: items.length });
     } catch (e) {
       console.warn(`[crawler] AS24 fallito ${target.marca} ${target.modello}: ${e.message}`);
+      stats.errors++;
       await health.record('autoscout', { error: e });
     }
   }
   await sleep(THROTTLE_MS);
 
   // Subito hades
-  try {
-    const { items: raw, truncated } = await scrapeSubitoApi({ tipo: target.tipo, marca: target.marca, modello: target.modello }, { maxPages: DEEP_PAGES, attachRaw: true, withMeta: true });
+  if (await health.isBackedOff('imac', 'subito', BACKOFF_HOURS)) {
+    console.log(`[crawler] Subito in back-off (blocked recente) → salto ${target.marca} ${target.modello}`);
+    skippedAny = true;
+  } else try {
+    const { items: raw, truncated } = await scrapeSubitoApi({ tipo: target.tipo, marca: target.marca, modello: target.modello }, { maxPages: cap, attachRaw: true, withMeta: true });
     const items = raw.filter(i => titleMatchesModel(i.titolo, target.modello));
     const r = await repo.upsertListings(items, target);
     // Nota: il guard sul titolo riduce `items` ma il filtro è deterministico per
     // annuncio (non è un troncamento di vista) → markGone resta valido se !truncated.
     if (!truncated) await repo.markGone(target, items.map(i => i.url), { fonte: 'subito' });
-    else console.log(`[crawler] Subito ${target.marca} ${target.modello}: vista parziale (cap) → skip venduto`);
+    else { anyTrunc = true; console.log(`[crawler] Subito ${target.marca} ${target.modello}: vista parziale (cap ${cap}) → skip venduto`); }
     stats.written += r.written;
     stats.sub += items.length;
     await health.record('subito', { count: raw.length });
   } catch (e) {
     console.warn(`[crawler] Subito fallito ${target.marca} ${target.modello}: ${e.message}`);
+    stats.errors++;
     await health.record('subito', { error: e });
   }
 
@@ -133,26 +150,32 @@ async function sweepTarget(target, stats) {
   // sequenziale con delay tra le pagine (anti-ban). Su blocco → throw taggato.
   if (target.tipo === 'moto') {
     await sleep(THROTTLE_MS);
-    try {
+    if (await health.isBackedOff('imac', 'moto', BACKOFF_HOURS)) {
+      console.log(`[crawler] Moto.it in back-off (blocked recente) → salto ${target.marca} ${target.modello}`);
+      skippedAny = true;
+    } else try {
       const mt = await resolveMotoit(target);
       if (!mt) { console.log(`[crawler] Moto.it ${target.marca}: marca non su Moto.it → skip`); }
       else {
         const { items, truncated } = await scrapeMotoIt(
           { tipo: 'moto', marca: target.marca, modello: target.modello, motoitBrandSlug: mt.brandSlug, motoitModelSlug: mt.modelSlug },
-          { maxPages: DEEP_PAGES, withMeta: true, attachRaw: true, pageDelayMs: THROTTLE_MS }
+          { maxPages: cap, withMeta: true, attachRaw: true, pageDelayMs: THROTTLE_MS }
         );
         const r = await repo.upsertListings(items, target);
         if (!truncated) await repo.markGone(target, items.map(i => i.url), { fonte: 'moto' });
-        else console.log(`[crawler] Moto.it ${target.marca} ${target.modello}: vista parziale (cap) → skip venduto`);
+        else { anyTrunc = true; console.log(`[crawler] Moto.it ${target.marca} ${target.modello}: vista parziale (cap ${cap}) → skip venduto`); }
         stats.written += r.written;
         stats.moto = (stats.moto || 0) + items.length;
         await health.record('moto', { count: items.length });
       }
     } catch (e) {
       console.warn(`[crawler] Moto.it fallito ${target.marca} ${target.modello}: ${e.message}`);
+      stats.errors++;
       await health.record('moto', { error: e });
     }
   }
+
+  return { truncated: anyTrunc, complete: !anyTrunc && !skippedAny };
 }
 
 // ─── Sweep completa ───────────────────────────────────────────────────────────
@@ -172,16 +195,22 @@ async function sweepAll({ withLock } = {}) {
   running = true;
   lastStartedAt = new Date().toISOString();
   lastError = null;
+  // F12 — log-run persistente: apre la riga ORA, la chiude nel finally (anche se
+  // _sweepAllCore crasha → niente run "appeso" con finished_at NULL per sempre).
+  const runId = await runs.startRun('imac').catch(() => null);
+  let stats = { written: 0, as: 0, sub: 0, errors: 0, targets: 0 };
   try {
-    const stats = await _sweepAllCore({ withLock });
+    stats = await _sweepAllCore({ withLock });
     lastStats = stats;
     return stats;
   } catch (e) {
     lastError = e.message;
+    stats.errors = (stats.errors || 0) + 1;
     throw e;
   } finally {
     running = false;
     lastFinishedAt = new Date().toISOString();
+    if (runId) await runs.finishRun(runId, { targets: stats.targets || 0, written: stats.written || 0, errors: stats.errors || 0 }).catch(() => {});
   }
 }
 
@@ -194,17 +223,19 @@ async function _sweepAllCore({ withLock } = {}) {
   const c = await wl.counts();
   console.log(`[crawler] sweep avvio: ${targets.length} attivi (+${activated.length} nuovi) · ${c.pending} in coda`);
 
-  const stats = { written: 0, as: 0, sub: 0 };
+  const stats = { written: 0, as: 0, sub: 0, errors: 0, targets: targets.length };
   const runOne = t => async () => {
-    await sweepTarget(t, stats);
-    await wl.markSwept(t.id);
+    const meta = await sweepTarget(t, stats);
+    // F13 — persisti truncated/complete: pilota l'escalation cap del prossimo giro
+    // e distingue "popolato" (vista completa) da "in fill" sulla dashboard.
+    await wl.markSwept(t.id, { truncated: meta.truncated, complete: meta.complete });
   };
   for (const t of targets) {
     const task = runOne(t);
     if (withLock) await withLock(task); else await task();
     await sleep(THROTTLE_MS);
   }
-  console.log(`[crawler] sweep fine: ${stats.written} scritti (AS24 ${stats.as} · Subito ${stats.sub})`);
+  console.log(`[crawler] sweep fine: ${stats.written} scritti (AS24 ${stats.as} · Subito ${stats.sub} · err ${stats.errors})`);
   return stats;
 }
 

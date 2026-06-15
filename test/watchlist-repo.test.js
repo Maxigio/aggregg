@@ -161,3 +161,42 @@ test('autoDistribute: subset ids', async () => {
   assert.strictEqual(r.total, 4);
   assert.deepStrictEqual(Object.fromEntries(r.assignments.map(a => [a.node, a.count])), { surface: 2, massimo: 2 });
 });
+
+// ─── F10 nodeStats ────────────────────────────────────────────────────────────
+test('nodeStats: breakdown stato-crawl mutuamente esclusivo per nodo', async () => {
+  const all = await wl.listAll();   // SEED = 3 auto, NULL node, non attivati
+  // t0 → surface, fresco (attivato + swept ora)
+  await wl.assignMany([all[0].id], 'surface');
+  await db.query("UPDATE watchlist SET activated_at=now(), last_swept=now() WHERE id=$1", [all[0].id]);
+  // t1 → imac, due (attivato + swept 21h fa)
+  await db.query("UPDATE watchlist SET activated_at=now(), last_swept=now()-interval '21 hours' WHERE id=$1", [all[1].id]);
+  // t2 → imac, coda (activated_at NULL, mai swept)
+  const stats = await wl.nodeStats();
+  const by = Object.fromEntries(stats.map(s => [s.node, s]));
+  assert.strictEqual(by.surface.total, 1);
+  assert.strictEqual(by.surface.fresco, 1);
+  assert.strictEqual(by.imac.total, 2);
+  assert.strictEqual(by.imac.due, 1);
+  assert.strictEqual(by.imac.coda, 1);
+  // somma dei bucket = totale (partizione pulita)
+  for (const s of stats) assert.strictEqual(s.coda + s.mai + s.due + s.fresco, s.total, `${s.node}: bucket sommano al totale`);
+});
+
+// ─── F11 addCandidates ────────────────────────────────────────────────────────
+test('addCandidates: aggiunge i nuovi e li assegna, NON tocca gli esistenti', async () => {
+  const all = await wl.listAll();
+  // Fiat/Panda è già in SEED, assegnato a massimo prima
+  await wl.assignMany([all.find(t => t.modello === 'Panda').id], 'massimo');
+  const r = await wl.addCandidates([
+    { tipo: 'auto', marca: 'Fiat', modello: 'Panda' },   // ESISTE → skip, non riassegnare
+    { tipo: 'auto', marca: 'Audi', modello: 'A3' },        // nuovo
+    { tipo: 'moto', marca: 'Honda', modello: 'SH 125' },   // nuovo
+  ], 'surface');
+  assert.strictEqual(r.added, 2, 'solo i 2 davvero nuovi');
+  const after = await wl.listAll();
+  // i nuovi su surface
+  assert.strictEqual(after.find(t => t.modello === 'A3').assigned_node, 'surface');
+  assert.strictEqual(after.find(t => t.modello === 'SH 125').assigned_node, 'surface');
+  // l'esistente NON spostato (resta su massimo)
+  assert.strictEqual(after.find(t => t.modello === 'Panda').assigned_node, 'massimo', 'no clobber sull’esistente');
+});

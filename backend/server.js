@@ -14,6 +14,8 @@ const crawler = require('./crawler');
 const listingsRepo = require('./db/listings-repo');
 const healthRepo = require('./db/health-repo');
 const watchlistRepo = require('./db/watchlist-repo');
+const runsRepo = require('./db/crawl-runs-repo');                       // F12
+const { candidates } = require('./candidate-targets');                  // F11
 const qrcode = require('qrcode-generator');
 const scrapeSubito    = require('./scrapers/subito-playwright');
 const scrapeAutoscout = require('./scrapers/autoscout-playwright');
@@ -374,6 +376,45 @@ app.post('/api/admin/watchlist/distribute', express.json(), async (req, res) => 
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── F11 — candidati nuovi target dal catalogo (catalogo − watchlist) ─────────
+// Sorgente = data/models.json (richiesto una volta, cached da require). Il modulo
+// candidate-targets è PURO: gli passo le righe watchlist grezze + i filtri.
+let _modelsCatalog = null;
+function modelsCatalog() {
+  if (!_modelsCatalog) _modelsCatalog = require('../data/models.json');
+  return _modelsCatalog;
+}
+
+app.get('/api/admin/candidates', async (req, res) => {
+  try {
+    const tipo = ['auto', 'moto'].includes(req.query.tipo) ? req.query.tipo : undefined;
+    const marca = req.query.marca ? String(req.query.marca) : undefined;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const existing = await watchlistRepo.listAll();   // {tipo,marca,modello,...}
+    const { items, total } = candidates(modelsCatalog(), existing, { tipo, marca, limit, offset });
+    res.json({ items, total, limit, offset });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Aggiunge i candidati selezionati e li assegna a `node` in un colpo (no clobber).
+app.post('/api/admin/watchlist/add-candidates', express.json(), async (req, res) => {
+  try {
+    const items = Array.isArray(req.body && req.body.items) ? req.body.items : null;
+    let node = req.body && req.body.node;
+    if (node === undefined || node === '') node = null;
+    if (!items || !items.length) return res.status(400).json({ error: 'items richiesti' });
+    if (!isValidNode(node)) return res.status(400).json({ error: 'node non valido' });
+    // Igienizza: solo tipo/marca/modello validi (no campi extra dal client).
+    const clean = items
+      .filter(i => i && ['auto', 'moto'].includes(i.tipo) && i.marca && i.modello)
+      .map(i => ({ tipo: i.tipo, marca: String(i.marca), modello: String(i.modello) }));
+    if (!clean.length) return res.status(400).json({ error: 'nessun item valido (tipo/marca/modello)' });
+    const r = await watchlistRepo.addCandidates(clean, node);
+    res.json(r);   // {added:N}
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── F9 — il centrale serve il worker come 1 file bundle (i nodi lo scaricano, niente git/npm) ──
 let workerBundleVersion = null;
 async function ensureWorkerBundle() {
@@ -422,7 +463,10 @@ app.get('/api/admin/status', async (req, res) => {
       );
       wlByNode = wn ? wn.rows : [];
     }
-    res.json({ health, watchlist: wlCounts, listingsByFonte, watchlistByNode: wlByNode, nodes: KNOWN_NODES, crawler: crawler.status() });
+    // F10/F12 — verità dal DB: breakdown stato-crawl per nodo + ultimo run iMac.
+    const nodeStats = await watchlistRepo.nodeStats();
+    const lastRun = await runsRepo.lastRun('imac').catch(() => null);
+    res.json({ health, watchlist: wlCounts, listingsByFonte, watchlistByNode: wlByNode, nodeStats, lastRun, nodes: KNOWN_NODES, crawler: crawler.status() });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

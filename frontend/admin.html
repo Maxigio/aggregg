@@ -24,6 +24,8 @@
     .stat { flex:1 1 120px; border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
     .stat .n { font-size:18px; font-weight:600; }
     .stat .l { color:var(--muted); font-size:12px; }
+    .nodecard { flex:1 1 220px; border:1px solid var(--line); border-radius:8px; padding:10px; }
+    .nodecard h3 { margin:0 0 4px; font-size:14px; }
     table { width:100%; border-collapse:collapse; }
     th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
     th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
@@ -36,25 +38,29 @@
     .pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; }
     .pill.on { background:#dcfce7; color:var(--green); }
     .pill.offp { background:#f3f4f6; color:var(--muted); }
+    .pill.blk { background:#fee2e2; color:var(--red); }
+    .pill.deg { background:#fef3c7; color:var(--amber); }
+    .cov { display:inline-block; min-width:18px; text-align:center; padding:1px 6px; border-radius:6px; background:#eef2ff; color:var(--accent); font-size:12px; font-weight:600; }
     .dot { font-size:12px; }
     .row-add { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
     .err { color:var(--red); }
     .muted { color:var(--muted); }
     .health-line { margin:2px 0; }
+    .grp-h { background:#f3f4f6; font-weight:600; }
   </style>
 </head>
 <body>
   <div class="top">
     <div>
       <h1>Admin · Auto Moto Radar</h1>
-      <div class="muted">Watch-list + stato nodi · <a href="/">← app</a></div>
+      <div class="muted">Nodi + watch-list · <a href="/">← app</a></div>
     </div>
     <button class="link" id="refreshBtn">↻ aggiorna</button>
   </div>
   <div id="msg" class="err"></div>
 
-  <!-- ─── STATO ─────────────────────────────────────────────────────────── -->
-  <h2>Stato</h2>
+  <!-- ─── STATO CRAWLER iMAC ─────────────────────────────────────────────── -->
+  <h2>Crawler iMac</h2>
   <div class="card">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
       <button class="primary" id="runBtn">▶ Avvia crawl iMac ora</button>
@@ -62,9 +68,11 @@
     </div>
     <div class="grid" id="counts"></div>
     <div id="healthBox" style="margin-top:10px"></div>
-    <div id="byNode" style="margin-top:10px"></div>
-    <div id="byFonte" style="margin-top:10px"></div>
   </div>
+
+  <!-- ─── NODI ──────────────────────────────────────────────────────────── -->
+  <h2>Nodi</h2>
+  <div class="card"><div class="grid" id="nodeCards"></div></div>
 
   <!-- ─── DOPPIONI ──────────────────────────────────────────────────────── -->
   <div class="card" id="overlapsCard" style="display:none;border-color:#f3c2c2">
@@ -73,7 +81,33 @@
     <div id="overlaps"></div>
   </div>
 
-  <!-- ─── WATCHLIST ─────────────────────────────────────────────────────── -->
+  <!-- ─── CANDIDATI NUOVI ───────────────────────────────────────────────── -->
+  <h2>Candidati nuovi <span class="muted" id="candCount"></span></h2>
+  <div class="card">
+    <div class="muted" style="font-size:12px;margin-bottom:6px">Modelli del catalogo NON ancora in watch-list. Ordine = copertura fonti (subito·autoscout·moto.it). Spunta e aggiungi a un nodo.</div>
+    <div class="row-add">
+      <select id="candTipo"><option value="">tipo: tutti</option><option value="auto">auto</option><option value="moto">moto</option></select>
+      <input id="candMarca" placeholder="marca (es. BMW)" size="14" />
+      <button id="candSearchBtn">🔍 cerca</button>
+      <span style="flex:1"></span>
+      <span class="muted" id="candSel">0 selezionati</span>
+      <select id="candNode"></select>
+      <button class="primary" id="candAddBtn">+ aggiungi a nodo</button>
+    </div>
+    <div class="card" style="overflow-x:auto;margin-top:8px;margin-bottom:0">
+      <table id="candTable">
+        <thead><tr><th><input type="checkbox" id="candSelAll" /></th><th>tipo</th><th>marca</th><th>modello</th><th>copertura</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="row-add" style="justify-content:space-between">
+      <button id="candPrev">← prec.</button>
+      <span class="muted" id="candPage"></span>
+      <button id="candNext">succ. →</button>
+    </div>
+  </div>
+
+  <!-- ─── AGGIUNTA SINGOLA ──────────────────────────────────────────────── -->
   <h2>Watch-list <span class="muted" id="wlCount"></span></h2>
   <div class="card">
     <div class="row-add">
@@ -85,7 +119,7 @@
     </div>
   </div>
 
-  <!-- ─── ASSEGNAZIONE PER-NODO ─────────────────────────────────────────── -->
+  <!-- ─── ASSEGNAZIONE / DISTRIBUZIONE ──────────────────────────────────── -->
   <div class="card">
     <div class="row-add">
       <input id="wlFilter" placeholder="🔍 filtra (marca/modello/tipo)" size="22" />
@@ -101,12 +135,13 @@
     </div>
   </div>
 
+  <!-- ─── WATCHLIST RAGGRUPPATA PER NODO ────────────────────────────────── -->
   <div class="card" style="overflow-x:auto">
     <table id="wlTable">
       <thead><tr>
         <th><input type="checkbox" id="selAll" title="seleziona tutti (filtrati)" /></th>
         <th>tipo</th><th>marca</th><th>modello</th><th>nodo</th>
-        <th>annunci</th><th>stato</th><th>ultimo sweep</th><th></th>
+        <th>annunci</th><th>stato crawl</th><th>ultimo sweep</th><th></th>
       </tr></thead>
       <tbody></tbody>
     </table>
@@ -125,14 +160,27 @@ async function api(path, opts){
   return j;
 }
 const fmtDate = s => s ? new Date(s).toLocaleString('it-IT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
-// Escape per i campi utente (marca/modello arrivano dal DB → evita self-XSS in innerHTML).
 const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const TWENTY_H = 20*3600*1000;
+
+// Stato-crawl di un target, derivato dai campi DB (no in-memory).
+function crawlState(t){
+  if (t.activated_at == null && t.last_swept == null) return { e:'⚪', l:'in coda' };
+  if (t.last_swept == null) return { e:'🔴', l:'mai' };
+  if ((t.count||0) === 0) return { e:'💀', l:'morto (0 annunci)' };
+  const age = Date.now() - new Date(t.last_swept).getTime();
+  if (age > TWENTY_H) return { e:'🟡', l:'da aggiornare' };
+  return { e:'🟢', l:'fresco' };
+}
 
 function nodeOptions(){
-  // "iMac (default)" = assigned_node NULL. Poi i nodi noti (imac escluso: già coperto dal default).
   return ['<option value="">iMac (default)</option>']
     .concat(NODES.filter(n => n !== 'imac').map(n => `<option value="${esc(n)}">${esc(n)}</option>`))
     .join('');
+}
+// Tutti i nodi noti (imac incluso) — per i dropdown "assegna candidati".
+function allNodeOptions(){
+  return NODES.map(n => `<option value="${esc(n)}">${esc(n)}${n==='imac'?' (default)':''}</option>`).join('');
 }
 
 async function loadStatus(){
@@ -143,29 +191,48 @@ async function loadStatus(){
   $('#counts').innerHTML = [
     ['target totali', c.total], ['attivi', c.active], ['in coda (ramp)', c.pending],
   ].map(([l,n])=>`<div class="stat"><div class="n">${n??'—'}</div><div class="l">${l}</div></div>`).join('');
-  // salute nodi/fonti
+  // salute generale
   const h = s.health || {};
-  const lines = [];
-  lines.push(`<div class="health-line">${h.ok?'🟢 nessun blocco':'🔴 problemi rilevati'}</div>`);
-  (h.blocked||[]).forEach(b=> lines.push(`<div class="health-line">🔴 BLOCCATO: ${b.node||'?'} / ${b.fonte||b}</div>`));
-  (h.degraded||[]).forEach(b=> lines.push(`<div class="health-line">🟠 degradato: ${b.node||'?'} / ${b.fonte||b}</div>`));
+  const lines = [`<div class="health-line">${h.ok?'🟢 nessun blocco':'🔴 problemi rilevati'}</div>`];
+  (h.blocked||[]).forEach(b=> lines.push(`<div class="health-line">🔴 BLOCCATO: ${esc(b.node||'?')} / ${esc(b.fonte||b)}</div>`));
+  (h.degraded||[]).forEach(b=> lines.push(`<div class="health-line">🟠 degradato: ${esc(b.node||'?')} / ${esc(b.fonte||b)}</div>`));
   $('#healthBox').innerHTML = '<b>Salute crawler</b>'+lines.join('');
-  // per nodo
-  const bn = (s.watchlistByNode||[]).map(r=>`<div class="health-line">📦 <b>${r.node}</b>: ${r.swept}/${r.total} swept</div>`).join('');
-  $('#byNode').innerHTML = bn ? '<b>Target per nodo</b>'+bn : '';
-  // per fonte
-  const bf = (s.listingsByFonte||[]).map(r=>`<div class="health-line">🗂️ <b>${r.fonte}</b>: ${r.active} attivi · ${r.gone} venduti · ${r.total} tot</div>`).join('');
-  $('#byFonte').innerHTML = bf ? '<b>Listings per fonte</b>'+bf : '';
-  // stato crawler (trigger)
-  const cr = s.crawler || {};
+
+  // ─── stato crawler iMac ONESTO: da crawl_runs (DB), non da var in-memory ───
+  const cr = s.crawler || {}, lr = s.lastRun;
   let cs;
-  if (cr.running) cs = '⏳ crawl in corso…';
-  else if (cr.lastFinishedAt) {
-    const w = cr.lastStats && (cr.lastStats.written != null) ? `${cr.lastStats.written} scritti` : (cr.lastStats && cr.lastStats.skipped ? 'no-op' : '—');
-    cs = `ultimo sweep: ${w} · ${fmtDate(cr.lastFinishedAt)}` + (cr.lastError ? ` · ⚠️ ${esc(cr.lastError)}` : '');
-  } else cs = 'mai avviato manualmente (gira comunque ogni 24h)';
+  if (cr.running) cs = '⏳ crawl iMac in corso…';
+  else if (lr && lr.finished_at) cs = `ultimo crawl iMac: ${lr.written} scritti su ${lr.targets} target · ${fmtDate(lr.finished_at)}` + (lr.errors ? ` · ⚠️ ${lr.errors} errori` : '');
+  else if (lr && !lr.finished_at) cs = `⏳ run avviato ${fmtDate(lr.started_at)} (non ancora chiuso)`;
+  else cs = 'mai avviato manualmente (gira comunque ogni 24h)';
   $('#crawlState').textContent = cs;
   $('#runBtn').disabled = !!cr.running;
+
+  // ─── card per nodo: stato VERO dal DB (nodeStats + crawl_health) ───
+  renderNodeCards(s.nodeStats||[], h.nodi||[]);
+}
+
+function renderNodeCards(stats, healthNodi){
+  const byNode = {};
+  stats.forEach(r => byNode[r.node] = r);
+  // includi anche nodi noti senza target (mostrano 0)
+  const names = Array.from(new Set(NODES.concat(stats.map(r=>r.node))));
+  $('#nodeCards').innerHTML = names.map(n => {
+    const st = byNode[n] || { total:0, mai:0, due:0, fresco:0, coda:0, spenti:0, last_swept:null };
+    const fonti = healthNodi.filter(x => x.node === n);
+    // ultima attività = max tra ultimo sweep dei target e ultimo evento health
+    const evTimes = fonti.map(x => x.last_event_at).filter(Boolean).map(d=>new Date(d).getTime());
+    const sweepT = st.last_swept ? new Date(st.last_swept).getTime() : 0;
+    const lastAct = Math.max(sweepT, ...(evTimes.length?evTimes:[0]));
+    const fontiBadges = fonti.length ? fonti.map(x =>
+      `<span class="pill ${x.blocked?'blk':(x.degraded?'deg':'on')}">${esc(x.fonte)}</span>`).join(' ') : '<span class="muted">nessuna attività</span>';
+    return `<div class="nodecard">
+      <h3>${esc(n)}${n==='imac'?' <span class="muted" style="font-weight:400">(centrale)</span>':''}</h3>
+      <div class="muted" style="font-size:12px">ultima attività: ${lastAct ? fmtDate(new Date(lastAct).toISOString()) : '—'}</div>
+      <div style="margin:6px 0">${st.total} target · 🔴${st.mai} 🟡${st.due} 🟢${st.fresco} ⚪${st.coda}${st.spenti?` · spenti ${st.spenti}`:''}</div>
+      <div>${fontiBadges}</div>
+    </div>`;
+  }).join('');
 }
 
 function renderOverlaps(overlaps){
@@ -177,51 +244,64 @@ function renderOverlaps(overlaps){
   ).join('');
 }
 
+// ─── Watch-list raggruppata per nodo ─────────────────────────────────────────
 async function loadWatchlist(){
   const { targets, overlaps } = await api('/api/admin/watchlist');
   $('#wlCount').textContent = `(${targets.length})`;
   renderOverlaps(overlaps);
   const tb = $('#wlTable tbody');
   tb.innerHTML = '';
-  for (const t of targets){
-    const tr = document.createElement('tr');
-    if (!t.enabled) tr.className = 'off';
-    tr.dataset.search = `${t.tipo} ${t.marca} ${t.modello}`.toLowerCase();
-    const nodeSel = `<select data-act="node" data-id="${t.id}">${nodeOptions()}</select>`;
-    tr.innerHTML = `
-      <td><input type="checkbox" class="rowchk" data-id="${t.id}"></td>
-      <td>${esc(t.tipo)}</td><td>${esc(t.marca)}</td><td>${esc(t.modello)}</td>
-      <td>${nodeSel}</td>
-      <td class="muted">${t.count??0}</td>
-      <td><span class="pill ${t.enabled?'on':'offp'}">${t.enabled?'attivo':'spento'}</span></td>
-      <td class="muted">${fmtDate(t.last_swept)}</td>
-      <td>
-        <button class="link" data-act="toggle" data-id="${t.id}" data-en="${t.enabled?1:0}">${t.enabled?'spegni':'accendi'}</button>
-        <button class="link danger" data-act="del" data-id="${t.id}">elimina</button>
-      </td>`;
-    tr.querySelector('select[data-act=node]').value = t.assigned_node || '';
-    tb.appendChild(tr);
+  // raggruppa per nodo (null = imac), nell'ordine dei nodi noti poi gli altri.
+  const groups = {};
+  for (const t of targets){ const k = t.assigned_node || 'imac'; (groups[k]=groups[k]||[]).push(t); }
+  const order = Array.from(new Set(NODES.concat(Object.keys(groups))));
+  for (const node of order){
+    const rows = groups[node]; if (!rows || !rows.length) continue;
+    const head = document.createElement('tr'); head.className='grp-h';
+    head.innerHTML = `<td colspan="9">📦 <b>${esc(node)}</b> · ${rows.length} target</td>`;
+    tb.appendChild(head);
+    for (const t of rows){
+      const tr = document.createElement('tr');
+      if (!t.enabled) tr.className = 'off';
+      tr.dataset.search = `${t.tipo} ${t.marca} ${t.modello}`.toLowerCase();
+      const cs = crawlState(t);
+      const nodeSel = `<select data-act="node" data-id="${t.id}">${nodeOptions()}</select>`;
+      tr.innerHTML = `
+        <td><input type="checkbox" class="rowchk" data-id="${t.id}"></td>
+        <td>${esc(t.tipo)}</td><td>${esc(t.marca)}</td><td>${esc(t.modello)}</td>
+        <td>${nodeSel}</td>
+        <td class="muted">${t.count??0}</td>
+        <td>${cs.e} <span class="muted">${cs.l}</span></td>
+        <td class="muted">${fmtDate(t.last_swept)}</td>
+        <td>
+          <button class="link" data-act="toggle" data-id="${t.id}" data-en="${t.enabled?1:0}">${t.enabled?'spegni':'accendi'}</button>
+          <button class="link danger" data-act="del" data-id="${t.id}">elimina</button>
+        </td>`;
+      tr.querySelector('select[data-act=node]').value = t.assigned_node || '';
+      tb.appendChild(tr);
+    }
   }
   applyFilter();
 }
 
-// ─── F8: filtro + selezione + bulk/distribute ─────────────────────────────────
+// ─── filtro + selezione + bulk/distribute ────────────────────────────────────
 function applyFilter(){
   const q = ($('#wlFilter').value || '').trim().toLowerCase();
   document.querySelectorAll('#wlTable tbody tr').forEach(tr => {
+    if (tr.classList.contains('grp-h')) return;
     const show = !q || (tr.dataset.search || '').includes(q);
     tr.style.display = show ? '' : 'none';
-    if (!show) { const c = tr.querySelector('.rowchk'); if (c) c.checked = false; }   // nascosto → deselezionato
+    if (!show) { const c = tr.querySelector('.rowchk'); if (c) c.checked = false; }
   });
   $('#selAll').checked = false;
   updateSelCount();
 }
-function visibleChecks(){ return [...document.querySelectorAll('#wlTable tbody tr')].filter(tr => tr.style.display !== 'none').map(tr => tr.querySelector('.rowchk')); }
+function visibleChecks(){ return [...document.querySelectorAll('#wlTable tbody tr')].filter(tr => tr.style.display !== 'none').map(tr => tr.querySelector('.rowchk')).filter(Boolean); }
 function selectedIds(){ return [...document.querySelectorAll('#wlTable .rowchk')].filter(c => c.checked).map(c => parseInt(c.dataset.id,10)); }
 function updateSelCount(){ $('#selCount').textContent = `${selectedIds().length} selezionati`; }
 
-// delega eventi tabella
 $('#wlTable').addEventListener('change', async e => {
+  if (e.target.classList.contains('rowchk')) { updateSelCount(); return; }
   const sel = e.target.closest('select[data-act=node]'); if (!sel) return;
   try { await api('/api/admin/watchlist/'+sel.dataset.id, { method:'PATCH', body: JSON.stringify({ assigned_node: sel.value || null }) }); msg('nodo aggiornato', false); refresh(); }
   catch(err){ msg(err.message); }
@@ -251,15 +331,8 @@ $('#addBtn').addEventListener('click', async () => {
 });
 
 $('#refreshBtn').addEventListener('click', () => refresh());
-
-// F8 — filtro, selezione, bulk assign, distribuzione
 $('#wlFilter').addEventListener('input', applyFilter);
-$('#selAll').addEventListener('change', () => {
-  const on = $('#selAll').checked;
-  visibleChecks().forEach(c => { c.checked = on; });
-  updateSelCount();
-});
-$('#wlTable').addEventListener('change', e => { if (e.target.classList.contains('rowchk')) updateSelCount(); });
+$('#selAll').addEventListener('change', () => { const on=$('#selAll').checked; visibleChecks().forEach(c => c.checked=on); updateSelCount(); });
 
 $('#bulkAssignBtn').addEventListener('click', async () => {
   const ids = selectedIds();
@@ -267,8 +340,7 @@ $('#bulkAssignBtn').addEventListener('click', async () => {
   const node = $('#bulkNode').value || null;
   try {
     const r = await api('/api/admin/watchlist/assign', { method:'POST', body: JSON.stringify({ ids, node }) });
-    msg(`${r.updated} assegnati a ${node || 'iMac'}`, false);
-    refresh();
+    msg(`${r.updated} assegnati a ${node || 'iMac'}`, false); refresh();
   } catch(err){ msg(err.message); }
 });
 
@@ -284,8 +356,7 @@ $('#distributeBtn').addEventListener('click', async () => {
   if (!confirm(`Distribuire ${body.ids ? body.ids.length+' selezionati' : 'TUTTI i target'} tra: ${nodes.join(', ')}?`)) return;
   try {
     const r = await api('/api/admin/watchlist/distribute', { method:'POST', body: JSON.stringify(body) });
-    msg('distribuito → ' + (r.assignments||[]).map(a => `${a.node}:${a.count}`).join(' · '), false);
-    refresh();
+    msg('distribuito → ' + (r.assignments||[]).map(a => `${a.node}:${a.count}`).join(' · '), false); refresh();
   } catch(err){ msg(err.message); }
 });
 
@@ -297,7 +368,52 @@ $('#runBtn').addEventListener('click', async () => {
     else if (r.started) m = `▶ avviato sull'iMac: ${r.due} target da aggiornare`;
     else m = `niente da fare: ${r.reason || 'tutti freschi (<20h)'}`;
     msg(m, false);
-    setTimeout(refresh, 1500);   // dà tempo al flag running di aggiornarsi
+    setTimeout(refresh, 1500);
+  } catch(err){ msg(err.message); }
+});
+
+// ─── F11: candidati nuovi ────────────────────────────────────────────────────
+let candOffset = 0; const CAND_LIMIT = 50; let candTotal = 0;
+async function loadCandidates(){
+  const tipo = $('#candTipo').value, marca = $('#candMarca').value.trim();
+  const qs = new URLSearchParams({ limit:String(CAND_LIMIT), offset:String(candOffset) });
+  if (tipo) qs.set('tipo', tipo);
+  if (marca) qs.set('marca', marca);
+  const { items, total } = await api('/api/admin/candidates?'+qs.toString());
+  candTotal = total;
+  $('#candCount').textContent = `(${total} disponibili)`;
+  const tb = $('#candTable tbody');
+  tb.innerHTML = items.map(it => `<tr>
+      <td><input type="checkbox" class="candchk" data-tipo="${esc(it.tipo)}" data-marca="${esc(it.marca)}" data-modello="${esc(it.modello)}"></td>
+      <td>${esc(it.tipo)}</td><td>${esc(it.marca)}</td><td>${esc(it.modello)}</td>
+      <td><span class="cov">${it.coverage}</span> <span class="muted" style="font-size:11px">${esc((it.sites||[]).join('·'))}</span></td>
+    </tr>`).join('') || `<tr><td colspan="5" class="muted">nessun candidato (filtri o tutto già in watch-list)</td></tr>`;
+  $('#candSelAll').checked = false;
+  updateCandSel();
+  const from = total ? candOffset+1 : 0, to = Math.min(candOffset+CAND_LIMIT, total);
+  $('#candPage').textContent = `${from}–${to} di ${total}`;
+  $('#candPrev').disabled = candOffset <= 0;
+  $('#candNext').disabled = candOffset+CAND_LIMIT >= total;
+}
+function candSelected(){ return [...document.querySelectorAll('.candchk')].filter(c=>c.checked).map(c=>({tipo:c.dataset.tipo,marca:c.dataset.marca,modello:c.dataset.modello})); }
+function updateCandSel(){ $('#candSel').textContent = `${candSelected().length} selezionati`; }
+
+$('#candSearchBtn').addEventListener('click', () => { candOffset=0; loadCandidates().catch(e=>msg(e.message)); });
+$('#candMarca').addEventListener('keydown', e => { if (e.key==='Enter'){ candOffset=0; loadCandidates().catch(x=>msg(x.message)); } });
+$('#candTipo').addEventListener('change', () => { candOffset=0; loadCandidates().catch(e=>msg(e.message)); });
+$('#candPrev').addEventListener('click', () => { if(candOffset>0){ candOffset-=CAND_LIMIT; loadCandidates().catch(e=>msg(e.message)); } });
+$('#candNext').addEventListener('click', () => { if(candOffset+CAND_LIMIT<candTotal){ candOffset+=CAND_LIMIT; loadCandidates().catch(e=>msg(e.message)); } });
+$('#candTable').addEventListener('change', e => { if (e.target.classList.contains('candchk')) updateCandSel(); });
+$('#candSelAll').addEventListener('change', () => { const on=$('#candSelAll').checked; document.querySelectorAll('.candchk').forEach(c=>c.checked=on); updateCandSel(); });
+$('#candAddBtn').addEventListener('click', async () => {
+  const items = candSelected();
+  if (!items.length) { msg('nessun candidato selezionato'); return; }
+  const node = $('#candNode').value || null;
+  try {
+    const r = await api('/api/admin/watchlist/add-candidates', { method:'POST', body: JSON.stringify({ items, node }) });
+    msg(`${r.added} aggiunti a ${node || 'iMac'}`, false);
+    await loadCandidates();   // i nuovi spariscono dai candidati
+    refresh();
   } catch(err){ msg(err.message); }
 });
 
@@ -306,13 +422,13 @@ async function refresh(){
     await loadStatus();
     $('#addNode').innerHTML = nodeOptions();
     $('#bulkNode').innerHTML = nodeOptions();
-    // checkbox dei nodi per la distribuzione (tutti i KNOWN_NODES, imac incluso)
+    $('#candNode').innerHTML = allNodeOptions();
     $('#distNodes').innerHTML = NODES.map(n => `<label style="font-size:12px;margin-right:6px"><input type="checkbox" value="${esc(n)}" checked> ${esc(n)}</label>`).join('');
     await loadWatchlist();
     msg('', false);
   } catch(err){ msg(err.message); }
 }
-refresh();
+refresh().then(() => loadCandidates().catch(e=>msg(e.message)));
 </script>
 </body>
 </html>

@@ -70,7 +70,7 @@ async function dueTargets(device = 'imac') {
   // dai riavvii dell'app (un relaunch in giornata trova 0 due → sweep no-op).
   // F5: filtrati per nodo (l'iMac vede i suoi + i NULL).
   const r = await db.query(
-    `SELECT id, tipo, marca, modello FROM watchlist
+    `SELECT id, tipo, marca, modello, last_truncated FROM watchlist
       WHERE ${NODE_FILTER}
         AND activated_at IS NOT NULL AND enabled = true
         AND (last_swept IS NULL OR last_swept < now() - interval '20 hours')
@@ -139,9 +139,20 @@ async function completeTarget(id) {
   );
 }
 
-async function markSwept(id) {
+// F13 — oltre a last_swept, persiste se l'ultima sweep ha troncato (pilota
+// l'escalation cap) e, se completa, timbra last_complete_at ("popolato").
+// meta opzionale: retro-compat con le chiamate senza argomenti.
+async function markSwept(id, meta = {}) {
   if (!db.isEnabled()) return;
-  await db.query('UPDATE watchlist SET last_swept = now() WHERE id = $1', [id]);
+  const { truncated, complete } = meta;
+  await db.query(
+    `UPDATE watchlist
+        SET last_swept = now(),
+            last_truncated = COALESCE($2, last_truncated),
+            last_complete_at = CASE WHEN $3 THEN now() ELSE last_complete_at END
+      WHERE id = $1`,
+    [id, truncated === undefined ? null : truncated, complete === true]
+  );
 }
 
 // ─── F5 — CRUD admin ──────────────────────────────────────────────────────────
@@ -248,8 +259,49 @@ async function counts() {
   return r ? r.rows[0] : { total: 0, active: 0, pending: 0 };
 }
 
+// F10 — riepilogo per-nodo per la dashboard onesta. NB: niente WHERE enabled →
+// il breakdown torna col totale (gli spenti hanno la loro colonna). Stato-crawl:
+// mai (mai-swept) · due (attivo+>20h) · fresco (<20h) · coda (ramp non attivato).
+async function nodeStats() {
+  if (!db.isEnabled()) return [];
+  const r = await db.query(
+    `SELECT COALESCE(assigned_node, 'imac') node,
+            count(*)::int total,
+            count(*) FILTER (WHERE activated_at IS NULL)::int coda,
+            count(*) FILTER (WHERE activated_at IS NOT NULL AND last_swept IS NULL)::int mai,
+            count(*) FILTER (WHERE activated_at IS NOT NULL AND last_swept < now() - interval '20 hours')::int due,
+            count(*) FILTER (WHERE last_swept >= now() - interval '20 hours')::int fresco,
+            count(*) FILTER (WHERE NOT enabled)::int spenti,
+            max(last_swept) last_swept
+       FROM watchlist
+      GROUP BY COALESCE(assigned_node, 'imac')
+      ORDER BY node`
+  );
+  return r ? r.rows : [];
+}
+
+// F11 — aggiunge target candidati dal catalogo e li assegna a `node` IN UN COLPO.
+// INSERT ON CONFLICT DO NOTHING → NON tocca i target già esistenti (niente
+// riassegnazione accidentale, a differenza di addOne). assignMany solo sui NUOVI.
+async function addCandidates(items, node = null) {
+  if (!db.isEnabled() || !Array.isArray(items) || !items.length) return { added: 0 };
+  const newIds = [];
+  for (const it of items) {
+    if (!it || !it.tipo || !it.marca || !it.modello) continue;
+    const r = await db.query(
+      `INSERT INTO watchlist (tipo, marca, modello) VALUES ($1,$2,$3)
+       ON CONFLICT (tipo, marca, modello) DO NOTHING
+       RETURNING id`,
+      [it.tipo, it.marca, it.modello]
+    );
+    if (r && r.rows.length) newIds.push(r.rows[0].id);   // RETURNING vuoto = già esistente → skip
+  }
+  if (newIds.length && node) await assignMany(newIds, node);
+  return { added: newIds.length };
+}
+
 module.exports = {
-  insertTargets, seedFromFile, activateRamp, dueTargets, markSwept, counts,
+  insertTargets, seedFromFile, activateRamp, dueTargets, markSwept, counts, nodeStats,
   leaseTarget, leaseDueTarget, completeTarget,
-  listAll, addOne, updateOne, removeOne, assignMany, autoDistribute,
+  listAll, addOne, updateOne, removeOne, assignMany, autoDistribute, addCandidates,
 };

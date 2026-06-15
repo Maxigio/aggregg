@@ -79,6 +79,23 @@ async function record(fonte, { error = null, count = 0, node = 'imac' } = {}) {
   return outcome;
 }
 
+// F14 — back-off adattivo: una fonte segnata `blocked` va SALTATA solo se il
+// blocco è RECENTE (< hours fa). Dopo la finestra il back-off SCADE → si RIPROVA
+// (un esito 'ok' rimette blocked=false; saltare per sempre = dead-lock). Ritorna
+// true = salta questa fonte ORA. Best-effort: su DB giù → false (non bloccare).
+async function isBackedOff(node, fonte, hours = 6) {
+  if (!db.isEnabled()) return false;
+  const r = await db.query(
+    `SELECT 1 FROM crawl_health
+      WHERE node=$1 AND fonte=$2 AND blocked = true
+        AND last_blocked_at IS NOT NULL
+        AND last_blocked_at > now() - ($3 || ' hours')::interval
+      LIMIT 1`,
+    [node, fonte, String(hours)]
+  );
+  return !!(r && r.rows.length);
+}
+
 async function getHealth() {
   if (!db.isEnabled()) return { ok: true, enabled: false, blocked: [], degraded: [], nodi: [] };
   const r = await db.query('SELECT * FROM crawl_health ORDER BY node, fonte');
@@ -89,4 +106,4 @@ async function getHealth() {
   return { ok: blocked.length === 0, enabled: true, blocked, degraded, nodi: rows };
 }
 
-module.exports = { classifyOutcome, record, getHealth };
+module.exports = { classifyOutcome, record, getHealth, isBackedOff };
