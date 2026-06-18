@@ -599,7 +599,6 @@ function parseSearchParams(query) {
   const {
     tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione,
     mmmvAutoscout, motoitBrandSlug, motoitModelSlug,
-    filtersSubito, filtersAutoscout, filtersMotoit,
   } = query;
 
   const errors = [];
@@ -613,22 +612,8 @@ function parseSearchParams(query) {
     return isNaN(n) || n < 0 ? null : n;
   };
 
-  // Filtri per-piattaforma (P10) — il client li passa come stringhe JSON
-  // separate. Es: filtersSubito='{"carburante":"2","cambio":"1"}'.
-  const parseFiltersBlob = (str, label) => {
-    if (!str) return {};
-    try {
-      const parsed = typeof str === 'string' ? JSON.parse(str) : str;
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (err) {
-      console.warn(`[parseFiltersBlob] ${label} JSON invalido: ${err.message}`);
-      return {};
-    }
-  };
-
-  // Subito non riceve più metadata per sito: cerca sempre con ?q=marca+modello.
+  // Subito cerca con ?q=marca+modello + filtri nativi (regione/prezzo/anno/km/sort).
   // Autoscout24 usa mmmvAutoscout, Moto.it usa motoitBrandSlug/motoitModelSlug.
-  // I blob filters{Subito,Autoscout,Motoit} contengono i filtri specifici del sito (P10).
   return {
     params: {
       tipo:             tipo.trim(),
@@ -644,9 +629,6 @@ function parseSearchParams(query) {
       mmmvAutoscout:    mmmvAutoscout    || null,
       motoitBrandSlug:  motoitBrandSlug  || null,
       motoitModelSlug:  motoitModelSlug  || null,
-      filtersSubito:    parseFiltersBlob(filtersSubito,    'subito'),
-      filtersAutoscout: parseFiltersBlob(filtersAutoscout, 'autoscout'),
-      filtersMotoit:    parseFiltersBlob(filtersMotoit,    'motoit'),
     }
   };
 }

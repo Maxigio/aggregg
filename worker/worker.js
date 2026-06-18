@@ -157,8 +157,7 @@ async function processTarget(cookie, t, opts, n, mode) {
     console.log(`  → ingest: ${r.written} scritti sul centrale`);
 
     // Tutte le fonti tentate sono bloccate → segnala stop (anti-ban).
-    const tried = sources.filter(s => s.error || s.items.length >= 0);
-    if (tried.length && tried.every(s => s.error && s.error.kind === 'blocked')) return 'blocked';
+    if (sources.length && sources.every(s => s.error && s.error.kind === 'blocked')) return 'blocked';
     return 'ok';
   } catch (e) {
     console.error(`  target id ${t.id} SALTATO: ${e.message} (resta riprovabile dopo, il lease scade in 15min)`);

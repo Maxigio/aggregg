@@ -21,7 +21,6 @@ const path         = require('path');
 const https        = require('https');
 const cheerio      = require('cheerio');
 const { toInt, resolveChromiumExecutable } = require('./utils');
-const filtersSchema = require('./filters-schema');
 
 // Errore taggato per la salute crawler (come AS24/Subito).
 function kindForStatus(s) {
@@ -95,7 +94,7 @@ async function getBrowser() {
 // Paginazione via /pagina-N nel path (NON come query param).
 function buildUrl(params, page = 1) {
   const { prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione,
-          motoitBrandSlug, motoitModelSlug, filtersMotoit } = params;
+          motoitBrandSlug, motoitModelSlug } = params;
 
   // Path pagina (1 = senza suffisso, >1 = /pagina-N)
   const pagePath = page > 1 ? `/pagina-${page}` : '';
@@ -126,14 +125,6 @@ function buildUrl(params, page = 1) {
 
   // Ordinamento: prezzo crescente (obiettivo "i più economici")
   qs.set('sort', 'price-a');
-
-  // Filtri specifici Moto.it (P10) — definiti in filters-schema.js
-  // Es: { categoria: 'enduro', cilindrata: {from: 600, to: 1300} }
-  //   → &category=enduro&displacement_f=600&displacement_t=1300
-  if (filtersMotoit && Object.keys(filtersMotoit).length > 0) {
-    const miSchema = filtersSchema.MOTOIT_FILTERS.filter(f => f.appliesTo.includes('moto'));
-    filtersSchema.applySiteFilters(qs, filtersMotoit, miSchema);
-  }
 
   return `${BASE}/moto-usate/ricerca${pagePath}?${qs.toString()}`;
 }
@@ -199,6 +190,7 @@ function mapCards(cards, opts = {}) {
       carburante: null,
       provincia:  c.provincia,
       venditore:  c.venditore || null,   // label nativa card (privato/concessionario)
+      immagini:   [],                     // Moto.it: card HTML senza <img> (lazy-load JS) → gap onesto
       url:        fullUrl,
       // campi DB: Moto.it HTML non li espone puliti → null
       nuovo:      null,

@@ -16,7 +16,6 @@ const { Pool } = require('pg');
 const MIGRATIONS_DIR = path.join(__dirname, '..', '..', 'db');
 
 let pool = null;
-let enabled = false;
 
 function getPool() {
   if (pool) return pool;
@@ -25,7 +24,6 @@ function getPool() {
   pool = new Pool({ connectionString: url, max: 4, idleTimeoutMillis: 30000 });
   // Un errore sul pool (es. DB riavviato) NON deve abbattere il processo.
   pool.on('error', err => console.error('[db] pool error:', err.message));
-  enabled = true;
   return pool;
 }
 
@@ -83,6 +81,6 @@ async function init() {
   return applied;
 }
 
-async function close() { if (pool) { await pool.end(); pool = null; enabled = false; } }
+async function close() { if (pool) { await pool.end(); pool = null; } }
 
 module.exports = { getPool, isEnabled, query, getClient, init, close };

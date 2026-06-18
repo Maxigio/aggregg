@@ -24,7 +24,6 @@ const { chromium } = require('playwright-extra');
 const stealth     = require('puppeteer-extra-plugin-stealth')();
 const { toInt, resolveChromiumExecutable } = require('./utils');
 const session = require('./subito-session');
-const filtersSchema = require('./filters-schema');
 
 chromium.use(stealth);
 
@@ -90,8 +89,7 @@ class SubitoBlockedError extends Error {
 // ─── Costruzione URL ──────────────────────────────────────────────────────────
 function buildUrl(params, page = 1) {
   const { tipo, marca, modello, regione: regioneParam,
-          prezzoMin, prezzoMax, annoMin, annoMax, kmMax,
-          filtersSubito } = params;
+          prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax } = params;
   const regione  = regioneParam || 'italia';
   const segmento = tipo === 'auto' ? 'auto' : 'moto-e-scooter';
   const baseUrl  = `https://www.subito.it/annunci-${regione}/vendita/${segmento}/`;
@@ -106,20 +104,8 @@ function buildUrl(params, page = 1) {
   if (prezzoMax != null) qs.set('pe', prezzoMax);
   if (annoMin   != null) qs.set('ys', annoMin);
   if (annoMax   != null) qs.set('ye', annoMax);
+  if (kmMin     != null) qs.set('ms', kmMaxToKey(kmMin));   // km min (categoria), nativo
   if (kmMax     != null) qs.set('me', kmMaxToKey(kmMax));
-
-  // Filtri specifici Subito (P10) — definiti in filters-schema.js
-  // Es: { carburante: '2', cambio: '1', tipoAnnuncio: 'p' } → &fu=2&gb=1&a=p
-  if (filtersSubito && Object.keys(filtersSubito).length > 0) {
-    const subitoSchema = filtersSchema.SUBITO_FILTERS.filter(f => f.appliesTo.includes(tipo));
-    // Caso speciale per kmMin: filtersSubito.kmMin è un numero raw, da convertire in categoria
-    const blob = { ...filtersSubito };
-    if (blob.kmMin != null && blob.kmMin !== '') {
-      const kmMinNum = parseInt(blob.kmMin, 10);
-      if (!isNaN(kmMinNum)) blob.kmMin = kmMaxToKey(kmMinNum);
-    }
-    filtersSchema.applySiteFilters(qs, blob, subitoSchema);
-  }
 
   return `${baseUrl}?${qs.toString()}`;
 }

@@ -16,7 +16,6 @@ const { chromium } = require('playwright');
 const path = require('path');
 const https = require('https');
 const { parseEuro, parseKm, REGION_AS24, resolveChromiumExecutable } = require('./utils');
-const filtersSchema = require('./filters-schema');
 
 const BASE = 'https://www.autoscout24.it';
 const NUM_PAGES = 3;   // §17.2: 5→3 (i più economici restano in cima per l'ordine prezzo)
@@ -115,19 +114,12 @@ function buildFilters({ prezzoMin, prezzoMax, annoMin, annoMax, kmMax }) {
 }
 
 function buildUrl(params, page = 1) {
-  const { tipo, autoscoutMmmv, regione, filtersAutoscout } = params;
+  const { tipo, autoscoutMmmv, regione } = params;
   if (!autoscoutMmmv) return { unsupported: true };
   const qs = buildFilters(params);
   qs.set('atype', tipo === 'moto' ? 'B' : 'C');
   qs.set('mmmv', autoscoutMmmv);
   if (page > 1) qs.set('page', String(page));
-
-  // Filtri specifici Autoscout (P10) — definiti in filters-schema.js
-  // Es: { carburante: 'D', cambio: 'M', carrozzeria: '4' } → &fuel=D&gear=M&bt=4
-  if (filtersAutoscout && Object.keys(filtersAutoscout).length > 0) {
-    const asSchema = filtersSchema.AUTOSCOUT_FILTERS.filter(f => f.appliesTo.includes(tipo));
-    filtersSchema.applySiteFilters(qs, filtersAutoscout, asSchema);
-  }
 
   // Filtro geografico regionale (verificato a mano contro l'UI di AS24):
   //   /lst?mmmv=...&zip=<Region>%20(Italy)&zipr=<km>&lat=<lat>&lon=<lon>
