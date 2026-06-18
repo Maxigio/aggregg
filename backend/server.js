@@ -105,6 +105,9 @@ const TIMEOUT_MS = 45000;
 const USE_AS24_GRAPHQL = process.env.USE_AS24_GRAPHQL !== '0';
 async function scrapeAutoscoutSmart(params) {
   if (USE_AS24_GRAPHQL) {
+    // Anno/km ora NATIVI (buildVariables: firstRegistration + mileageInKm) → pagina 1
+    // già in-range, niente più hack sort-by-date/maxPages (prima serviva perché il
+    // post-filter su una pesca cheapest-first azzerava `annoMin`).
     try { return await scrapeAutoscoutGraphql(params); }
     catch (e) { console.warn(`[AS24] GraphQL fallito (${e.message}) → fallback Playwright`); }
   }
@@ -118,7 +121,8 @@ async function scrapeAutoscoutSmart(params) {
 const USE_SUBITO_API = process.env.USE_SUBITO_API !== '0';
 async function scrapeSubitoSmart(params) {
   if (USE_SUBITO_API) {
-    try { return await scrapeSubitoApi(params); }
+    // on-search: economici in cima (sort nativo). Regione/prezzo/anno nativi via buildPath.
+    try { return await scrapeSubitoApi(params, { sort: 'priceasc' }); }
     catch (e) { console.warn(`[Subito] API hades fallita (${e.message}) → fallback Playwright`); }
   }
   return scrapeSubito(params);
@@ -148,12 +152,27 @@ function parseCookies(req) {
 app.use((req, res, next) => {
   if (!auth.isEnabled()) return next();          // nessuna password → app locale aperta
   if (AUTH_FREE.has(req.path)) return next();     // /login, /logout sempre raggiungibili
-  if (auth.checkToken(parseCookies(req).amr_auth)) return next();
-  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'non autorizzato' });
-  if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) {
-    return res.redirect(302, '/login');
+  const role = auth.checkToken(parseCookies(req).amr_auth);   // 'full' | 'demo' | null
+  if (!role) {
+    if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'non autorizzato' });
+    if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) {
+      return res.redirect(302, '/login');
+    }
+    return res.status(401).send('non autorizzato');
   }
-  return res.status(401).send('non autorizzato');
+  req.authRole = role;
+  // Gate DEMO (ospite read-only): solo GET; niente scritture, niente pannello admin
+  // (anche in lettura). /login·/logout sono già esenti via AUTH_FREE.
+  if (role === 'demo') {
+    const isAdmin = req.path === '/admin' || req.path.startsWith('/admin/') || req.path.startsWith('/api/admin/');
+    const isWrite = req.method !== 'GET' && req.method !== 'HEAD';
+    if (isAdmin || isWrite) {
+      if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'modalità demo: sola lettura' });
+      if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) return res.redirect(302, '/');
+      return res.status(403).send('modalità demo: sola lettura');
+    }
+  }
+  return next();
 });
 
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, '../frontend/login.html')));
@@ -168,7 +187,8 @@ app.post('/login', express.urlencoded({ extended: false }), async (req, res) => 
   const rec = loginAttempts.get(ip);
   if (rec && rec.until > Date.now()) return res.redirect(302, '/login?err=locked');   // lockout
 
-  if (!auth.verifyPassword(req.body && req.body.password)) {
+  const role = auth.verifyRole(req.body && req.body.password);   // 'full' | 'demo' | null
+  if (!role) {
     await new Promise(r => setTimeout(r, 1000));   // delay anti-brute
     const fails = (rec ? rec.fails : 0) + 1;
     loginAttempts.set(ip, { fails, until: fails >= LOCK_MAX ? Date.now() + LOCK_MS : 0 });
@@ -176,7 +196,7 @@ app.post('/login', express.urlencoded({ extended: false }), async (req, res) => 
   }
 
   loginAttempts.delete(ip);
-  const token  = auth.makeToken();
+  const token  = auth.makeToken(role);
   const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
   res.setHeader('Set-Cookie', `amr_auth=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(auth.TTL_MS / 1000)}${secure}`);
   res.redirect(302, '/');
@@ -185,6 +205,13 @@ app.post('/login', express.urlencoded({ extended: false }), async (req, res) => 
 app.get('/logout', (req, res) => {
   res.setHeader('Set-Cookie', 'amr_auth=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
   res.redirect(302, '/login');
+});
+
+// Ruolo della sessione corrente (per la UI: nasconde salvataggi/admin in demo).
+// Auth disattivata (app locale) → 'full'. Sotto /api/ → già protetta dal middleware.
+app.get('/api/me', (req, res) => {
+  if (!auth.isEnabled()) return res.json({ role: 'full', authDisabled: true });
+  res.json({ role: req.authRole || auth.checkToken(parseCookies(req).amr_auth) || null });
 });
 
 // Liveness per il probe di avvio Electron (waitForBackend). Auth-exempt: il
@@ -570,7 +597,7 @@ const REGIONI_VALIDE = new Set(Object.values(province).map(p => p.regione));
 // Validazione e sanitizzazione parametri ricerca
 function parseSearchParams(query) {
   const {
-    tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMax, regione,
+    tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione,
     mmmvAutoscout, motoitBrandSlug, motoitModelSlug,
     filtersSubito, filtersAutoscout, filtersMotoit,
   } = query;
@@ -612,6 +639,7 @@ function parseSearchParams(query) {
       prezzoMax:        toInt(prezzoMax),
       annoMin:          toInt(annoMin),
       annoMax:          toInt(annoMax),
+      kmMin:            toInt(kmMin),
       kmMax:            toInt(kmMax),
       mmmvAutoscout:    mmmvAutoscout    || null,
       motoitBrandSlug:  motoitBrandSlug  || null,
@@ -885,12 +913,17 @@ async function runSearchCore(params) {
     // Confine-parola su titolo space-normalizzato (vedi autoTokenRe).
     if (autoTokenRe && r.fonte === 'autoscout' && !autoTokenRe.test(normSp(r.titolo))) return false;
 
-    // 3. Filtri numerici
+    // 3. Filtri numerici. Prezzo/anno restano qui come rete ridondante: sono nativi
+    //    ed esatti su tutte le fonti (Subito ps/pe·ys/ye, AS24 price·firstRegistration,
+    //    Moto.it price_f/t·year_f/t) → questo blocco è un no-op innocuo.
+    //    KM **NON** è qui di proposito: è nativo su tutte le fonti (Subito ms/me a
+    //    categoria 5000km, AS24 mileageInKm, Moto.it km_f/km_t). Un post-filter km
+    //    ri-taglierebbe il dato nativo (es. la categoria Subito over-include 5000km) →
+    //    proibito. Si accetta la granularità-categoria nativa di Subito.
     if (params.prezzoMin != null && r.prezzo != null && r.prezzo < params.prezzoMin)   return false;
     if (params.prezzoMax != null && r.prezzo != null && r.prezzo > params.prezzoMax)   return false;
     if (params.annoMin   != null && r.anno   != null && r.anno   < params.annoMin)     return false;
     if (params.annoMax   != null && r.anno   != null && r.anno   > params.annoMax)     return false;
-    if (params.kmMax     != null && r.km     != null && r.km     > params.kmMax)       return false;
 
     // 4. Filtro geografico regione.
     //    - Subito (API hades): filtrato nello scraper via geo.region.
