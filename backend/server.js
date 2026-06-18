@@ -30,10 +30,7 @@ const { getDetail } = require('./scrapers/detail');
 const saved = require('./saved');
 const { makeResolver, makeModelResolver, loadAliasMap } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
-const comuneRegione   = require('../data/comune-regione.json');   // comune→regione (post-filtro AS24)
-const normComune = s => String(s == null ? '' : s).toLowerCase()
-  .normalize('NFD').replace(/[̀-ͯ]/g, '')
-  .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const regionCentroids = require('../data/region-centroids.json');  // capoluoghi regione {lat,lng} → raggio AS24 nativo
 const modelsData      = require('../data/models.json');
 
 const { SubitoBlockedError, keepAliveSubito } = scrapeSubito;
@@ -165,8 +162,9 @@ app.use((req, res, next) => {
   // (anche in lettura). /login·/logout sono già esenti via AUTH_FREE.
   if (role === 'demo') {
     const isAdmin = req.path === '/admin' || req.path.startsWith('/admin/') || req.path.startsWith('/api/admin/');
+    const isReport = req.path === '/api/report';   // l'utente demo DEVE poter segnalare (match esatto)
     const isWrite = req.method !== 'GET' && req.method !== 'HEAD';
-    if (isAdmin || isWrite) {
+    if ((isAdmin || isWrite) && !isReport) {
       if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'modalità demo: sola lettura' });
       if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) return res.redirect(302, '/');
       return res.status(403).send('modalità demo: sola lettura');
@@ -217,6 +215,51 @@ app.get('/api/me', (req, res) => {
 // Liveness per il probe di avvio Electron (waitForBackend). Auth-exempt: il
 // probe gira prima del login. Nessun dato sensibile.
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+// IP reale del client: dietro il Funnel Tailscale, l'ULTIMO hop di X-Forwarded-For
+// (il leftmost è spoofabile). Senza proxy (Electron locale) → remoteAddress.
+function clientIp(req) {
+  const xff = req.headers['x-forwarded-for'];
+  return (xff ? String(xff).split(',').pop().trim() : req.socket.remoteAddress) || 'unknown';
+}
+
+// ─── Segnalazioni (bug-report) — anche l'utente demo ────────────────────────
+// File in append: <USER_DATA_PATH>/reports.jsonl (Electron) o data/ (dev), come saved.js.
+// Sicurezza: dietro login (NON in AUTH_FREE), esente dal demo-gate (match esatto),
+// rate-limit dedicato (mappa separata, non lockare il login), cap 2000 char, no-echo.
+function reportsFile() {
+  const ud = process.env.USER_DATA_PATH;
+  return (ud && fs.existsSync(ud)) ? path.join(ud, 'reports.jsonl') : path.join(__dirname, '..', 'data', 'reports.jsonl');
+}
+const reportHits = new Map();   // ip → { windowStart, count } — SEPARATO da loginAttempts
+function reportRateOk(ip) {
+  const now = Date.now(), w = 10 * 60 * 1000, cap = 5;
+  const rec = reportHits.get(ip);
+  if (!rec || now - rec.windowStart >= w) { reportHits.set(ip, { windowStart: now, count: 1 }); return true; }
+  rec.count++; return rec.count <= cap;
+}
+app.post('/api/report', express.json({ limit: '32kb' }), (req, res) => {
+  if (!reportRateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe segnalazioni, riprova tra qualche minuto.' });
+  const b = req.body || {};
+  const type = b.type === 'search' ? 'search' : 'bug';
+  const message = String(b.message == null ? '' : b.message).slice(0, 2000).trim();
+  if (!message) return res.status(400).json({ error: 'messaggio obbligatorio' });
+  const rec = {
+    ts: new Date().toISOString(),
+    type,
+    message,
+    searchParams: (b.searchParams && typeof b.searchParams === 'object') ? b.searchParams : null,
+    count: Number.isFinite(b.count) ? b.count : null,
+    role: req.authRole || 'full',
+  };
+  try {
+    fs.appendFileSync(reportsFile(), JSON.stringify(rec) + '\n');
+    res.json({ ok: true });   // NO echo del contenuto
+  } catch (e) {
+    console.error('[report]', e.message);
+    res.status(500).json({ error: 'Impossibile salvare la segnalazione' });
+  }
+});
 
 app.use(express.static(path.join(__dirname, '../frontend')));
 
@@ -597,7 +640,7 @@ const REGIONI_VALIDE = new Set(Object.values(province).map(p => p.regione));
 // Validazione e sanitizzazione parametri ricerca
 function parseSearchParams(query) {
   const {
-    tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione,
+    tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione, raggio,
     mmmvAutoscout, motoitBrandSlug, motoitModelSlug,
   } = query;
 
@@ -626,6 +669,7 @@ function parseSearchParams(query) {
       annoMax:          toInt(annoMax),
       kmMin:            toInt(kmMin),
       kmMax:            toInt(kmMax),
+      raggio:           toInt(raggio),   // km raggio AS24 attorno al capoluogo regione (default 100 in runSearchCore)
       mmmvAutoscout:    mmmvAutoscout    || null,
       motoitBrandSlug:  motoitBrandSlug  || null,
       motoitModelSlug:  motoitModelSlug  || null,
@@ -668,7 +712,17 @@ async function runSubito(params, ms) {
   }
 }
 
+// Rate-limit generoso per-IP (seatbelt anti-abuso; un umano non lo tocca, uno script sì).
+// Per-IP è sensato: dietro il Funnel usiamo l'IP reale (clientIp). Mappa separata.
+const searchHits = new Map();
+function searchRateOk(ip) {
+  const now = Date.now(), w = 60 * 1000, cap = 60;
+  const rec = searchHits.get(ip);
+  if (!rec || now - rec.windowStart >= w) { searchHits.set(ip, { windowStart: now, count: 1 }); return true; }
+  rec.count++; return rec.count <= cap;
+}
 app.get('/api/search', async (req, res) => {
+  if (!searchRateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe ricerche, attendi un momento.' });
   const parsed = parseSearchParams(req.query);
   if (parsed.errors) {
     return res.status(400).json({ error: parsed.errors.join(', ') });
@@ -688,7 +742,7 @@ const SEARCH_CACHE_TTL = 3 * 60 * 1000;
 const SEARCH_CACHE_MAX = 50;
 const searchCache = new Map();   // key → { ts, data }
 function searchCacheKey(p) {
-  return ['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMax', 'regione']
+  return ['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMax', 'regione', 'raggio']
     .map(f => `${f}=${p[f] ?? ''}`).join('&').toLowerCase();
 }
 function cacheable(data) {
@@ -782,9 +836,15 @@ async function runSearchCore(params) {
   const brandOnMotoIt    = Boolean(params.motoitBrandSlug);  // slug reale risolto
 
   // Passa mmmv AS24 al scraper: livello modello > livello brand (brand-only = makeId|||).
-  // Filtro regione: gestito lato scraper con zip=<Region> (Italy)+zipr+lat/lon.
   if (asMakeId) {
     params.autoscoutMmmv = params.mmmvAutoscout || `${asMakeId}|||`;
+  }
+  // Regione AS24 NATIVA (verificato live): centroide capoluogo + raggio (default 100km,
+  // come il sito ufficiale: position{lat,lng}+radius). Sostituisce il vecchio post-filtro
+  // comune→regione su una pesca di 100 nazionali (che azzerava i risultati in-regione).
+  if (params.regione && asMakeId) {
+    const ctr = regionCentroids[String(params.regione).trim().toLowerCase()];
+    if (ctr) params.autoscoutGeo = { lat: ctr.lat, lng: ctr.lng, radius: params.raggio || 100 };
   }
 
   // ── Skip tollerante (P6) ──────────────────────────────────────────────────
@@ -907,18 +967,10 @@ async function runSearchCore(params) {
     if (params.annoMin   != null && r.anno   != null && r.anno   < params.annoMin)     return false;
     if (params.annoMax   != null && r.anno   != null && r.anno   > params.annoMax)     return false;
 
-    // 4. Filtro geografico regione.
-    //    - Subito (API hades): filtrato nello scraper via geo.region.
-    //    - Moto.it: query region=<slug> server-side.
-    //    - AS24 (API GraphQL): l'API NON filtra per regione → post-filtro qui sul
-    //      comune (r.provincia) via mappa comune→regione. Fail-open: comune ignoto
-    //      → tenuto (niente perdite silenziose; al massimo qualche fuori-regione).
-    //      (Sui risultati Playwright-AS24 r.provincia è un codice "MI" → ignoto →
-    //      tenuto: innocuo, lì la regione è già filtrata nativamente.)
-    if (params.regione && r.fonte === 'autoscout' && (r.provincia || r.zip)) {
-      const reg = comuneRegione[normComune(r.provincia)] || (r.zip && comuneRegione[String(r.zip)]);
-      if (reg && reg !== params.regione) return false;
-    }
+    // 4. Regione: ora NATIVA su tutte e 3 le fonti (Subito `r=`, Moto.it `region=`,
+    //    AS24 `position`+`radius` dal capoluogo, vedi sopra `params.autoscoutGeo`).
+    //    Rimosso il vecchio post-filtro AS24 comune→regione: girava su una pesca di
+    //    100 annunci NAZIONALI → azzerava i risultati in-regione (bug). Verificato live.
 
     return true;
   });

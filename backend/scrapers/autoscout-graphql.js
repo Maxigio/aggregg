@@ -97,6 +97,14 @@ function buildVariables(params, page, opts = {}) {
     vehicleType: [params.tipo === 'moto' ? 'Bike' : 'Car'],   // niente moto nelle ricerche auto e viceversa
   };
   const loc = { country: ['Italy'] };
+  // Regione AS24 NATIVA = location + raggio (come il sito ufficiale: per "Lombardia"
+  // manda zip="Lombardia (italy)" + zipr + lat/lon del capoluogo). `params.autoscoutGeo`
+  // è risolto da server.js dai centroidi-regione. Sostituisce il vecchio post-filtro.
+  if (params.autoscoutGeo && params.autoscoutGeo.lat != null) {
+    loc.position = { latitude: params.autoscoutGeo.lat, longitude: params.autoscoutGeo.lng };
+    if (params.autoscoutGeo.radius) loc.radius = params.autoscoutGeo.radius;
+    if (params.autoscoutGeo.zip)    loc.zip = [params.autoscoutGeo.zip];
+  }
   const m = { page, size: PAGE_SIZE };
   // Crawler: ordina per età crescente (Age Asc = più recenti prima) per non
   // sprecare le prime pagine sugli annunci-civetta a basso prezzo (sort default

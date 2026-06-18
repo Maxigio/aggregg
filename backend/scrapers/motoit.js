@@ -5,7 +5,7 @@
  * - Usa il motore di ricerca vero /moto-usate/ricerca (non la landing SEO /moto-usate/{marca})
  * - Filtri server-side supportati: brand, model, price_f/t, km_f/t, year_f/t, sort
  * - Paginazione via /moto-usate/ricerca/pagina-N
- * - 13 annunci/pagina × 5 pagine = ~65 annunci per ricerca (obiettivo: i 50 più economici)
+ * - 13 annunci/pagina × 8 pagine = ~100 annunci per ricerca (allineato a Subito/AS24)
  * - Ordinamento price-a (prezzo crescente) allineato all'obiettivo utente
  *
  * Strategia slug (SOLO slug espliciti dal catalogo, niente fallback fallaci):
@@ -34,7 +34,8 @@ function fail(msg, { status = null, kind = 'error' } = {}) {
 }
 
 const BASE = 'https://www.moto.it';
-const MAX_PAGES = 3;   // §17.2: 5→3 (ordine prezzo → i più economici restano in cima)
+const MAX_PAGES = 8;       // on-search: ~100 annunci (13/pag), allineato a Subito/AS24. HTTP parallelo → costo trascurabile.
+const FALLBACK_PAGES = 3;  // fallback browser (raro, sequenziale e lento): cap più basso di MAX_PAGES.
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 // §17.1: path HTTPS diretto (cheerio, no browser) primario, fallback Playwright. Spegnibile.
 const USE_HTTP_SCRAPE = process.env.USE_HTTP_SCRAPE !== '0';
@@ -164,7 +165,10 @@ async function extractCards(page) {
     // Venditore: label NATIVA mostrata nella card ("Privato" / "Concessionario…").
     const venditore = /concessionar/i.test(text) ? 'concessionario' : /privato/i.test(text) ? 'privato' : null;
 
-    return { titolo, priceRaw, href, anno, km, provincia, venditore };
+    // Cover: src del primo <img> CDN della card (copertina annuncio).
+    const cover = c.querySelector('img[src*="cdn-img.moto.it/images"]')?.getAttribute('src') || null;
+
+    return { titolo, priceRaw, href, anno, km, provincia, venditore, cover };
   }));
 }
 
@@ -174,6 +178,18 @@ function parsePrezzo(str) {
   const clean = str.replace(/[€\s.]/g, '').replace(/,\d+$/, '');
   const n = parseInt(clean, 10);
   return isNaN(n) ? null : n;
+}
+
+// Cover dalla card di ricerca: le `.mcard--big` mostrano già la copertina come
+// `<img src="…/images/<id>/<size>/<file>.jpg">`. Valida che sia un'immagine cdn-img
+// (scarta placeholder lazy / src non-cdn), strippa la query, ricostruisce thumb/full.
+// → la riga ha una foto SUBITO, senza attendere l'arricchimento /api/detail.
+function coverFromImg(src) {
+  if (!src) return null;
+  const m = String(src).match(/https:\/\/cdn-img\.moto\.it\/images\/\d+\/[^"'\\ )?]+?\.(?:jpe?g|webp)/i);
+  if (!m) return null;
+  const base = m[0];
+  return { thumb: `${base}?format=webp&width=300`, full: `${base}?format=webp&width=1200` };
 }
 
 // Mapping card-grezza → risultato (condiviso path browser + HTTPS).
@@ -190,7 +206,7 @@ function mapCards(cards, opts = {}) {
       carburante: null,
       provincia:  c.provincia,
       venditore:  c.venditore || null,   // label nativa card (privato/concessionario)
-      immagini:   [],                     // Moto.it: card HTML senza <img> (lazy-load JS) → gap onesto
+      immagini:   coverFromImg(c.cover) ? [coverFromImg(c.cover)] : [],  // cover dalla card → thumb immediata; galleria piena via /api/detail
       url:        fullUrl,
       // campi DB: Moto.it HTML non li espone puliti → null
       nuovo:      null,
@@ -221,7 +237,8 @@ function extractCardsHtml(html) {
     const provMatch = text.match(/\(([A-Z]{2})\)/);
     const provincia = provMatch ? provMatch[1] : null;
     const venditore = /concessionar/i.test(text) ? 'concessionario' : /privato/i.test(text) ? 'privato' : null;
-    out.push({ titolo, priceRaw, href, anno, km, provincia, venditore });
+    const cover = c.find('img[src*="cdn-img.moto.it/images"]').first().attr('src') || null;
+    out.push({ titolo, priceRaw, href, anno, km, provincia, venditore, cover });
   });
   return out;
 }
@@ -351,12 +368,13 @@ async function scrapeMotoIt(params, opts = {}) {
   const browser = await getBrowser();
   console.log(`[Moto.it-PW] Pagina 1 (browser): ${urls[0]}`);
   const pages = [];
-  for (let p = 1; p <= MAX_PAGES; p++) {
+  const fbPages = Math.min(urls.length, FALLBACK_PAGES);   // browser sequenziale e lento → cap basso
+  for (let p = 1; p <= fbPages; p++) {
     try {
       const items = await fetchPage(browser, urls[p - 1]);
       pages.push(items);
       if (items.length === 0) break; // Fine risultati
-      if (p < MAX_PAGES) await sleep(700 + Math.random() * 500);
+      if (p < fbPages) await sleep(700 + Math.random() * 500);
     } catch (err) {
       console.warn(`[Moto.it-PW] Errore pagina ${p}: ${err.message}`);
       break;

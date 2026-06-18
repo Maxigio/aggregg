@@ -74,7 +74,37 @@ function parseAutoscout(html) {
   };
 }
 
-// ─── Moto.it: scheda testuale (tag-strip + label→valore) ──────────────────────
+// Foto annuncio Moto.it dalla pagina-dettaglio. Le foto-annuncio hanno filename
+// `image.jpg` OPPURE numerico-trattino (es. `010407553-7559-332.jpg`, tipico degli
+// annunci dealer/premium — spesso quelli col video); le immagini editoriali/chrome
+// hanno slug alfabetici (`ducati-logo`, `v4-hp`, `me1-6415`) o path `SQUARE/` →
+// escluse. Cover da og:image (sempre la copertina), poi la galleria. Dedup per <id>,
+// cap 10. Hotlink verificato (no-referer → 200); `?format=webp&width=N` = thumb leggera.
+function motoitImages(html) {
+  const out = []; const seen = new Set();
+  const push = (id, base) => {
+    if (seen.has(id) || out.length >= 10) return;
+    seen.add(id);
+    out.push({ thumb: `${base}?format=webp&width=300`, full: `${base}?format=webp&width=1200` });
+  };
+  // Cover: og:image è SEMPRE la copertina dell'annuncio, qualunque sia il filename.
+  const og = html.match(/og:image"\s*content="(https:\/\/cdn-img\.moto\.it\/images\/(\d+)\/[^"?]+\.(?:jpe?g|webp))/i);
+  if (og) push(og[2], og[1]);   // base senza query (il match si ferma prima di "?")
+  // Galleria: tieni SOLO le foto-annuncio (filename `image` o numerico-trattino),
+  // scartando gli slug editoriali e i crop `SQUARE/`.
+  const re = /https:\/\/cdn-img\.moto\.it\/images\/(\d+)\/([^"'\\ )?]+?)\.(?:jpe?g|webp)/gi;
+  let m;
+  while ((m = re.exec(html)) && out.length < 10) {
+    const path = m[2];
+    if (/(?:^|\/)SQUARE(?:\/|$)/i.test(path)) continue;     // crop editoriali
+    const fname = path.split('/').pop();
+    if (!/^(?:image|[\d-]+)$/i.test(fname)) continue;       // scarta slug editoriali
+    push(m[1], m[0]);   // m[0] = URL fino all'estensione (niente query)
+  }
+  return out;
+}
+
+// ─── Moto.it: scheda testuale (tag-strip + label→valore) + foto ───────────────
 function parseMotoit(html) {
   const t = stripTags(html);
   const grab = re => { const x = t.match(re); return x ? x[1] : null; };
@@ -85,6 +115,7 @@ function parseMotoit(html) {
     proprietari:  toInt(grab(/Proprietari precedenti\s+(\d+)/i)),
     allestimento: null,
     revisione:    null,
+    immagini:     motoitImages(html),
   };
 }
 
@@ -152,4 +183,4 @@ async function getDetail(url) {
   return p;
 }
 
-module.exports = { getDetail, _hostOk: hostOk };
+module.exports = { getDetail, _hostOk: hostOk, _motoitImages: motoitImages };
