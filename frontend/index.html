@@ -53,6 +53,11 @@
     <!-- AREA DI RICERCA -->
     <section class="search">
       <form id="searchForm" class="search-form">
+        <div class="mode-toggle" id="modeToggle" role="tablist" aria-label="Modalità">
+          <button type="button" class="mode-btn active" data-mode="cerca" role="tab">Cerca</button>
+          <button type="button" class="mode-btn" data-mode="valuta" role="tab">Valuta</button>
+          <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="valuta">?</span>
+        </div>
         <div class="seg-toggle" role="radiogroup" aria-label="Tipo veicolo">
           <input type="radio" name="tipo" id="tipoAuto" value="auto" checked />
           <label for="tipoAuto">Auto</label>
@@ -85,8 +90,20 @@
           <label class="adv-field"><span>Regione <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="regione">?</span></span><select id="regione"><option value="">Tutta Italia</option></select></label>
           <label class="adv-field"><span>Raggio km (Autoscout)</span><input type="number" id="raggio" placeholder="100" min="1" /></label>
         </div>
+
+        <!-- Campi modalità VALUTA (#6): anno/km del veicolo da valutare + prezzo opzionale -->
+        <div class="valuta-fields d-none" id="valutaFields">
+          <label class="adv-field"><span>Anno</span><input type="number" id="vAnno" placeholder="2019" min="1900" /></label>
+          <label class="adv-field"><span>Km</span><input type="number" id="vKm" placeholder="45000" min="0" /></label>
+          <label class="adv-field"><span>Prezzo min annunci simili</span><input type="number" id="vPrezzoMin" placeholder="2500" min="0" title="Minimo realistico per escludere relitti/ricambi e raddrizzare la fascia sui modelli ambigui" /></label>
+          <label class="adv-field"><span>Prezzo max (opz.)</span><input type="number" id="vPrezzoMax" placeholder="20000" min="0" /></label>
+          <label class="adv-field"><span>Il tuo prezzo (opz.)</span><input type="number" id="vPrezzo" placeholder="9000" min="0" /></label>
+        </div>
       </form>
     </section>
+
+    <!-- PANNELLO VALUTAZIONE (#6) -->
+    <div id="valutaPanel" class="d-none"></div>
 
     <!-- STATO RICERCA / ERRORE / BANNER -->
     <div id="statusBox" class="d-none">
@@ -164,7 +181,7 @@
     <!-- BARRA CONFRONTO (appare con ≥1 selezionato) -->
     <div id="compareBar" class="compare-bar d-none">
       <span>Selezionati: <b id="compareCount">0</b></span>
-      <span class="help-dot help-dot-invert" tabindex="0" role="button" aria-label="Aiuto" data-help-key="confronto">?</span>
+      <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="confronto">?</span>
       <span class="cbar-spacer"></span>
       <button type="button" class="primary" id="compareOpen">Apri confronto</button>
       <button type="button" id="compareClear">Svuota</button>
@@ -176,7 +193,7 @@
         <span class="cmatrix-title" id="cmatrixTitle">Confronto</span>
         <button type="button" class="cmatrix-close" id="cmatrixClose" aria-label="Chiudi">✕</button>
       </div>
-      <div class="cmatrix-scroll"><table class="cmatrix" id="cmatrixTable"></table></div>
+      <div class="cmatrix-scroll" id="cmatrixBody"></div>
     </section>
 
     <!-- RISULTATI -->

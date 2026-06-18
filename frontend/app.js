@@ -40,7 +40,7 @@ const compareClear = document.getElementById('compareClear');
 const cmatrixPanel = document.getElementById('cmatrixPanel');
 const cmatrixTitle = document.getElementById('cmatrixTitle');
 const cmatrixClose = document.getElementById('cmatrixClose');
-const cmatrixTable = document.getElementById('cmatrixTable');
+const cmatrixBody = document.getElementById('cmatrixBody');
 
 // ─── Stato ────────────────────────────────────────────────────────────────────
 let currentResults = [];
@@ -91,6 +91,7 @@ function applyTheme(t) {
 // I .help-dot usano data-help-key; il testo viene iniettato in data-help al boot.
 const HELP = {
   ricerca:    'Scegli Auto o Moto, scrivi la marca e selezionala dalla lista, poi premi Cerca. Il modello è opzionale.',
+  valuta:     'Modo Valuta: marca + modello + anno + km → il valore di mercato (mediana e fascia) dai comparabili reali ora online. Metti "il tuo prezzo" per vedere se è sopra/in linea/sotto mercato. Niente numeri inventati: sotto soglia di campioni dice "dati insufficienti".',
   filtri:     'Prezzo, anno, km e regione sono filtri reali applicati alla fonte. Nota: su Subito i km sono a fasce (~5.000 km), quindi può includere un filo oltre il valore esatto. Lascia vuoto per non filtrare.',
   regione:    'Subito e Moto.it filtrano la regione esatta. Autoscout cerca entro un raggio dal capoluogo della regione (default 100 km, modificabile col campo "Raggio") — come fa il sito ufficiale.',
   griglia:    'Clicca le intestazioni Anno/Km/CV/Prezzo per ordinare. ℹ apre i dettagli sotto la riga, la casella ☐ aggiunge l\'annuncio al confronto, ⚑ lo salva. Nota: ordinamento e slider agiscono sui risultati caricati (i più economici), non sull\'intero mercato.',
@@ -166,9 +167,10 @@ function toast(msg) {
 // ─── Modalità demo (ospite read-only) ───────────────────────────────────────
 function applyDemoMode() {
   document.body.classList.add('demo-mode');
-  ['btnSalvaRicerca', 'btnControllaTutte'].forEach(id => {
+  ['btnSalvaRicerca', 'btnControllaTutte', 'modeToggle'].forEach(id => {   // modo Valuta = solo papà
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
+  setSearchMode('cerca');   // demo resta in Cerca (niente Valuta)
   if (!document.querySelector('.demo-banner')) {
     const bar = document.createElement('div');
     bar.className = 'demo-banner';
@@ -234,13 +236,22 @@ async function init() {
   }));
   // Responsività colonne in JS (l'inline grid-template vince sulle media-query).
   let _resizeT;
-  window.addEventListener('resize', () => { clearTimeout(_resizeT); _resizeT = setTimeout(() => { if (searchActive) renderResults(currentResults); }, 200); });
+  window.addEventListener('resize', () => { clearTimeout(_resizeT); _resizeT = setTimeout(() => {
+    if (searchActive) renderResults(currentResults);
+    if (!cmatrixPanel.classList.contains('d-none')) renderMatrix();   // tabella↔card attraversando il breakpoint
+  }, 200); });
 
   btnStatCsv.addEventListener('click', () => exportCsv(currentResults));
   btnStatPdf.addEventListener('click', () => exportPdf(currentResults));
   errorClose.addEventListener('click', hideError);
   backToSearch.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-  form.addEventListener('submit', async (e) => { e.preventDefault(); await doSearch(); });
+  form.addEventListener('submit', async (e) => { e.preventDefault(); if (searchMode === 'valuta') await doValuta(); else await doSearch(); });
+
+  // Modo Cerca / Valuta (#6): stesso form, output diverso (lista vs scheda-valutazione).
+  document.getElementById('modeToggle')?.addEventListener('click', e => {
+    const btn = e.target.closest('.mode-btn'); if (!btn) return;
+    setSearchMode(btn.dataset.mode);
+  });
 
   // Confronto / matrice
   compareOpen?.addEventListener('click', () => openCompareMatrix());
@@ -286,12 +297,19 @@ async function init() {
       if (r && Array.isArray(r.immagini) && r.immagini.length) openLightbox(r.immagini);
       return;
     }
-    if (row.dataset.detail) return;   // altri click dentro il pannello dettaglio: ignora
+    // Azioni nel pannello dettaglio (hub azioni: Salva/Confronta; "Apri annuncio" è un <a> nativo).
+    if (row.dataset.detail) {
+      if (e.target.closest('.btn-salva'))    { toggleSalva(url); return; }
+      if (e.target.closest('.btn-confronta')) { toggleConfronto(url); return; }
+      return;   // altri click nel pannello: ignora
+    }
     if (e.target.closest('.row-thumb')) {
       const r = trovaResult(url);
       if (r && Array.isArray(r.immagini) && r.immagini.length) openLightbox(r.immagini);
       return;
     }
+    // Mobile: tap sulla riga (non sulla thumb) → apre il dettaglio (azioni dentro). Desktop: titolo→annuncio, bottoni espliciti.
+    if (window.matchMedia('(max-width: 860px)').matches) { toggleDetail(row); return; }
     if (e.target.closest('.row-titolo')) { openAd(url); return; }
     if (e.target.closest('.btn-salva'))     { toggleSalva(url); return; }
     if (e.target.closest('.btn-confronta'))  { toggleConfronto(url); return; }
@@ -307,8 +325,8 @@ async function init() {
     openAd(url);
   });
 
-  // Delegation: matrice (rimuovi colonna / apri annuncio)
-  cmatrixTable.addEventListener('click', e => {
+  // Delegation: confronto (rimuovi colonna/card) — sul wrapper, vale per tabella E card.
+  cmatrixBody.addEventListener('click', e => {
     const rm = e.target.closest('.cm-rm'); if (rm) { removeMatrixCol(rm.dataset.url); return; }
   });
 
@@ -494,6 +512,82 @@ function renderFacetChips() {
   if (!facetChipsEl) return;
   facetChipsEl.innerHTML = FACET_DIMS.map(([dim, label]) =>
     `<button type="button" class="facet-chip${dim === groupDim ? ' active' : ''}" data-dim="${dim}">${label}</button>`).join('');
+}
+
+// ─── Modo Valuta (#6) ──────────────────────────────────────────────────────
+let searchMode = 'cerca';
+function setSearchMode(mode) {
+  searchMode = (mode === 'valuta') ? 'valuta' : 'cerca';
+  const valuta = searchMode === 'valuta';
+  document.querySelectorAll('#modeToggle .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === searchMode));
+  document.getElementById('valutaFields').classList.toggle('d-none', !valuta);
+  document.getElementById('advancedToggle').classList.toggle('d-none', valuta);   // i filtri-ricerca non servono per valutare
+  if (valuta) document.getElementById('advancedFilters').classList.add('d-none');
+  btnCerca.textContent = valuta ? 'Valuta' : 'Cerca';
+  document.getElementById('modello').placeholder = valuta
+    ? 'Modello — es. V-Strom 1050 (obbligatorio)'
+    : 'Modello — es. 318d (opzionale)';
+  if (valuta) hideResults(); else document.getElementById('valutaPanel').classList.add('d-none');
+}
+
+async function doValuta() {
+  const brand = matchedBrand();
+  if (!brand) { showError('Scegli una marca dalla lista.'); return; }
+  const modello = document.getElementById('modello').value.trim();
+  if (!modello) { showError('Per valutare serve il modello (es. V-Strom 1050).'); return; }
+  const tipo = currentTipo();
+  const anno = document.getElementById('vAnno').value, km = document.getElementById('vKm').value, prezzo = document.getElementById('vPrezzo').value;
+  const prezzoMin = document.getElementById('vPrezzoMin').value, prezzoMax = document.getElementById('vPrezzoMax').value;
+  const q = new URLSearchParams({ tipo, marca: brand.nome, modello });
+  if (anno) q.set('anno', anno);
+  if (km) q.set('km', km);
+  if (prezzo) q.set('prezzo', prezzo);
+  if (prezzoMin) q.set('prezzoMin', prezzoMin);   // filtro nativo → comparabili dal floor (esclude relitti/ricambi)
+  if (prezzoMax) q.set('prezzoMax', prezzoMax);
+  if (regioneSelect.value) q.set('regione', regioneSelect.value);
+
+  hideResults();
+  document.body.classList.add('has-results'); document.body.dataset.tipo = tipo;
+  const panel = document.getElementById('valutaPanel');
+  panel.classList.remove('d-none');
+  panel.innerHTML = '<div class="vp-card vp-loading">Valuto sul mercato…</div>';
+  try {
+    const d = await fetch('/api/valuta?' + q.toString()).then(r => r.json());
+    if (d.error) { panel.innerHTML = `<div class="vp-card"><div class="vp-empty">${escapeHtml(d.error)}</div></div>`; return; }
+    renderValutaCard(panel, d, { marca: brand.nome, modello, anno, km, prezzo });
+  } catch (_) { panel.innerHTML = '<div class="vp-card"><div class="vp-empty">Valutazione non disponibile.</div></div>'; }
+}
+
+function renderValutaCard(panel, d, inp) {
+  const eur = n => n == null ? 'n/d' : '€ ' + Number(n).toLocaleString('it-IT');
+  const titolo = `${escapeHtml(inp.marca)} ${escapeHtml(inp.modello)}${inp.anno ? ' · ' + inp.anno : ''}${inp.km ? ' · ' + Number(inp.km).toLocaleString('it-IT') + ' km' : ''}`;
+  if (!d.ok || !d.fascia) {
+    panel.innerHTML = `<div class="vp-card"><div class="vp-tit">${titolo}</div><div class="vp-empty">Dati insufficienti${d.n != null ? ` (${d.n} annunci simili)` : ''} — niente fascia inventata. Prova con un modello più diffuso o meno dettagli.</div></div>`;
+    return;
+  }
+  const f = d.fascia;
+  const myPrice = inp.prezzo ? Number(inp.prezzo) : null;
+  let verdict = '';
+  if (myPrice != null) {
+    const cls = myPrice > f.p75 ? 'caro' : myPrice < f.p25 ? 'basso' : 'linea';
+    const txt = cls === 'caro' ? 'sopra mercato' : cls === 'basso' ? 'sotto mercato' : 'in linea';
+    const pos = d.posizione ? ` · ${d.posizione.percentile}° percentile` : '';
+    verdict = `<div class="vp-mine">Il tuo prezzo <b>${eur(myPrice)}</b> <span class="vp-verdict vp-v-${cls}">${txt}</span>${pos}</div>`;
+  }
+  const split = d.split ? `conc ${d.split.conc.n ? eur(d.split.conc.mediana) : '—'} · privati ${d.split.priv.n ? eur(d.split.priv.mediana) : '—'}` : '';
+  const fonti = d.fonti ? Object.entries(d.fonti).filter(([, s]) => s.count).map(([k, s]) => `${k} ${s.count}`).join(' · ') : '';
+  const comp = (d.comparabili && d.comparabili.length)
+    ? `<details class="vp-comp"><summary>${d.comparabili.length} annunci comparabili (verifica)</summary>${d.comparabili.slice(0, 15).map(c => `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer">${eur(c.prezzo)} · ${c.anno || '—'} · ${c.km != null ? Number(c.km).toLocaleString('it-IT') + ' km' : '—'} · ${escapeHtml(c.fonte)}</a>`).join('')}</details>`
+    : '';
+  panel.innerHTML = `<div class="vp-card">
+    <div class="vp-tit">${titolo}</div>
+    <div class="vp-band"><span class="vp-med">${eur(f.mediana)}</span><span class="vp-lab">valore di mercato</span></div>
+    <div class="vp-range">fascia ${eur(f.p25)} – ${eur(f.p75)}</div>
+    ${verdict}
+    <div class="vp-meta">su <b>${d.n}</b> annunci simili (${escapeHtml(d.tightness)})${d.troncato ? ' · <span class="vp-trunc">fascia bassa*</span>' : ''} · ${escapeHtml(d.regione || 'Italia')}${split ? ' · ' + split : ''}${fonti ? ' · ' + fonti : ''}</div>
+    ${comp}
+    <div class="vp-note">Dati reali dagli annunci ora a mercato.${d.troncato ? ' *mercato ampio: la fascia pesa verso i più economici.' : ''} Nessun valore inventato.</div>
+  </div>`;
 }
 
 // ─── Ricerca ──────────────────────────────────────────────────────────────────
@@ -832,7 +926,7 @@ function rowHTML(item, bestSet) {
     switch (key) {
       case 'foto':    return thumbHTML;
       case 'veicolo': return `<div class="row-main">
-          <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}<span class="ext">↗</span></div>
+          <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}</div>
           ${item.variante ? `<div class="row-variante">${escapeHtml(item.variante)}</div>` : ''}
           ${sub ? `<div class="row-sub">${sub}</div>` : ''}
           <div class="row-sub-m">${escapeHtml(subM)}</div>
@@ -887,7 +981,11 @@ function renderDetailInto(panel, r) {
       ? `<div class="det-gallery">${r.immagini.slice(0, 8).map(im => `<img src="${escapeHtml(im.thumb)}" loading="lazy" referrerpolicy="no-referrer" alt="">`).join('')}</div>`
       : '';
     const openBtn = /^https?:\/\//i.test(r.url) ? `<a class="det-open" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">Apri annuncio ↗</a>` : '';
-    panel.innerHTML = `<div class="det-inner">${gallery}<div class="det-specs">${detailSpecsHTML(r)}</div><div class="det-foot">${openBtn}</div></div>`;
+    // Hub azioni nel pannello (unico accesso su mobile dove la riga non ha bottoni).
+    const isSal = salvati.some(x => x.url === r.url), inConf = confronto.some(x => x.url === r.url);
+    const salBtn  = `<button type="button" class="det-act btn-salva${isSal ? ' attivo' : ''}">${icon(isSal ? 'bookmark-filled' : 'bookmark')}<span class="ra-txt">${isSal ? 'Salvato' : 'Salva'}</span></button>`;
+    const confBtn = `<button type="button" class="det-act btn-confronta${inConf ? ' attivo' : ''}">${icon(inConf ? 'square-check' : 'square')}<span class="ra-txt">${inConf ? 'Nel confronto' : 'Confronta'}</span></button>`;
+    panel.innerHTML = `<div class="det-inner">${gallery}<div class="det-specs">${detailSpecsHTML(r)}</div><div class="det-foot">${openBtn}${salBtn}${confBtn}</div></div>`;
   };
   renderBody();   // apertura immediata (cover + dati on-search) → niente freeze del click
   // Moto.it: galleria piena + spec dalla pagina-dettaglio. Riusa enrichMotoRow (merge
@@ -1007,13 +1105,34 @@ function closeLightbox() {
 function trovaResult(url) {
   return currentResults.find(r => r.url === url) || salvati.find(r => r.url === url) || confronto.find(r => r.url === url) || null;
 }
+// Aggiorna SOLO i bottoni/stato di un URL (riga + pannello dettaglio) senza re-render
+// totale → non collassa il dettaglio aperto né perde lo scroll (flusso mobile).
+function refreshRowState(url) {
+  const isSal  = salvati.some(r => r.url === url);
+  const inConf = confronto.some(r => r.url === url);
+  // Rimpiazza SOLO l'icona (.ico) e l'eventuale label (.ra-txt) → bottoni icona-soli (riga)
+  // e icona+testo (pannello dettaglio) restano coerenti.
+  const setBtn = (b, on, onIco, offIco, onTxt, offTxt) => {
+    b.classList.toggle('attivo', on);
+    const ic = b.querySelector('.ico'); if (ic) ic.outerHTML = icon(on ? onIco : offIco);
+    const tx = b.querySelector('.ra-txt'); if (tx) tx.textContent = on ? onTxt : offTxt;
+  };
+  resultsGrid.querySelectorAll(`[data-url="${CSS.escape(url)}"]`).forEach(el => {
+    if (el.classList.contains('result-row')) el.classList.toggle('selected', inConf);
+    el.querySelectorAll('.btn-salva').forEach(b => {
+      setBtn(b, isSal, 'bookmark-filled', 'bookmark', 'Salvato', 'Salva');
+      b.title = isSal ? 'Rimuovi dai salvati' : 'Salva annuncio';
+    });
+    el.querySelectorAll('.btn-confronta').forEach(b => setBtn(b, inConf, 'square-check', 'square', 'Nel confronto', 'Confronta'));
+  });
+}
 function toggleConfronto(url) {
   const result = trovaResult(url); if (!result) return;
   const idx = confronto.findIndex(r => r.url === url);
   if (idx !== -1) confronto.splice(idx, 1);
   else if (confronto.length < COMPARE_CAP) confronto.push(result);
   else { toast(`Massimo ${COMPARE_CAP} annunci a confronto`); return; }
-  renderResults(currentResults); renderSalvati(); renderCompareBar();
+  refreshRowState(url); renderSalvati(); renderCompareBar();
   if (!cmatrixPanel.classList.contains('d-none') && matrixList.length > 1) openCompareMatrix();
 }
 function renderCompareBar() {
@@ -1028,7 +1147,7 @@ function closeMatrix() { cmatrixPanel.classList.add('d-none'); matrixList = []; 
 function removeMatrixCol(url) {
   matrixList = matrixList.filter(r => r.url !== url);
   const i = confronto.findIndex(r => r.url === url);
-  if (i !== -1) { confronto.splice(i, 1); renderResults(currentResults); renderSalvati(); renderCompareBar(); }
+  if (i !== -1) { confronto.splice(i, 1); refreshRowState(url); renderSalvati(); renderCompareBar(); }
   if (!matrixList.length) closeMatrix(); else renderMatrix();
 }
 
@@ -1062,24 +1181,57 @@ function bestIndexes(vals, mode) {
   nums.forEach((v, i) => { if (v === target) set.add(i); });
   return set;
 }
+// Responsive: desktop = matrice trasposta (densa, confronto a colpo d'occhio);
+// mobile = una card per veicolo impilata (scroll verticale naturale, leggibile).
 function renderMatrix() {
   const list = matrixList;
-  // Header: foto + titolo + Apri↗ + rimuovi
+  const fmtFonte = r => FONTE_LABEL[r.fonte] || r.fonte;
+  const fonteTag = r => ({ subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[r.fonte] || '');
+  // Indici del valore migliore del set per ogni spec (riusato da tabella e card).
+  const bestByRow = MATRIX_ROWS.map(cfg => cfg.best ? bestIndexes(list.map(r => r[cfg.key]), cfg.best) : new Set());
+
+  if (window.matchMedia('(max-width: 760px)').matches) {
+    const cards = list.map((r, ci) => {
+      const thumb = (Array.isArray(r.immagini) && r.immagini[0])
+        ? `<img class="cm-card-img" src="${escapeHtml(r.immagini[0].thumb)}" referrerpolicy="no-referrer" alt="">`
+        : `<div class="cm-card-img cm-card-noimg">—</div>`;
+      const openBtn = /^https?:\/\//i.test(r.url) ? `<a class="cm-open" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">Apri ↗</a>` : '';
+      const priceBest = bestByRow[0].has(ci);   // MATRIX_ROWS[0] = prezzo
+      const price = r.prezzo != null ? `€ ${r.prezzo.toLocaleString('it-IT')}` : 'n/d';
+      const specs = MATRIX_ROWS.map((cfg, ri) => ({ cfg, ri })).filter(x => x.cfg.key !== 'prezzo').map(({ cfg, ri }) => {
+        const best = bestByRow[ri].has(ci);
+        return `<div class="cm-card-spec"><span class="cm-card-k">${cfg.label}</span><span class="cm-card-v${best ? ' cm-best' : ''}">${escapeHtml(String(cfg.fmt(r[cfg.key])))}${best ? ' <span class="cm-star">★</span>' : ''}</span></div>`;
+      }).join('');
+      return `<div class="cm-card">
+        <div class="cm-card-head">${thumb}<div class="cm-card-tt">
+          <span class="tag ${fonteTag(r)}">${escapeHtml(fmtFonte(r))}</span>
+          <div class="cm-card-title">${escapeHtml(r.titolo || '')}</div>
+          <div class="cm-card-price${priceBest ? ' cm-best' : ''}">${price}${priceBest ? ' ★' : ''}</div>
+        </div></div>
+        <div class="cm-card-specs">${specs}</div>
+        <div class="cm-card-foot">${openBtn}<button class="cm-rm" data-url="${escapeHtml(r.url)}" title="Rimuovi dal confronto">✕ Rimuovi</button></div>
+      </div>`;
+    }).join('');
+    cmatrixBody.innerHTML = `<div class="cmatrix-cards">${cards}</div>`;
+    return;
+  }
+
+  // DESKTOP: tabella trasposta. Foto in testa; valore migliore in verde; righe con
+  // valori diversi evidenziate (label piena), righe tutte-uguali attenuate.
   const head = `<thead><tr><th class="cm-label">Annuncio</th>${list.map(r => {
     const thumb = (Array.isArray(r.immagini) && r.immagini[0]) ? `<img class="cm-thumb" src="${escapeHtml(r.immagini[0].thumb)}" referrerpolicy="no-referrer" alt="">` : `<span class="cm-thumb" style="display:flex;align-items:center;justify-content:center">—</span>`;
-    const fonte = FONTE_LABEL[r.fonte] || r.fonte;
     const openBtn = /^https?:\/\//i.test(r.url) ? `<a class="cm-open" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">Apri ↗</a>` : '';
     return `<th><div class="cm-colhead">${thumb}<div class="cm-tt"><div class="cm-coltitle">${escapeHtml(r.titolo || '')}</div><div class="cm-colactions">${openBtn}<button class="cm-rm" data-url="${escapeHtml(r.url)}" title="Rimuovi">✕</button></div></div></div></th>`;
   }).join('')}</tr></thead>`;
-  // Foto-fonte già nel header. Righe campo:
-  const rows = MATRIX_ROWS.map(cfg => {
-    const vals = list.map(r => r[cfg.key]);
-    const bestIdx = cfg.best ? bestIndexes(vals, cfg.best) : new Set();
-    const cells = list.map((r, i) => `<td class="cm-val${bestIdx.has(i) ? ' cm-best' : ''}">${escapeHtml(String(cfg.fmt(r[cfg.key])))}</td>`).join('');
-    return `<tr><td class="cm-label">${cfg.label}</td>${cells}</tr>`;
+  const rows = MATRIX_ROWS.map((cfg, ri) => {
+    const vals = list.map(r => String(cfg.fmt(r[cfg.key])));
+    const differ = new Set(vals).size > 1;
+    const bestIdx = bestByRow[ri];
+    const cells = list.map((_, i) => `<td class="cm-val${bestIdx.has(i) ? ' cm-best' : ''}">${escapeHtml(vals[i])}</td>`).join('');
+    return `<tr class="${differ ? 'cm-diff' : 'cm-same'}"><td class="cm-label">${cfg.label}</td>${cells}</tr>`;
   }).join('');
-  const fonteRow = `<tr><td class="cm-label">Fonte</td>${list.map(r => `<td class="cm-val">${escapeHtml(FONTE_LABEL[r.fonte] || r.fonte)}</td>`).join('')}</tr>`;
-  cmatrixTable.innerHTML = head + `<tbody>${rows}${fonteRow}</tbody>`;
+  const fonteRow = `<tr class="cm-same"><td class="cm-label">Fonte</td>${list.map(r => `<td class="cm-val">${escapeHtml(fmtFonte(r))}</td>`).join('')}</tr>`;
+  cmatrixBody.innerHTML = `<table class="cmatrix">${head}<tbody>${rows}${fonteRow}</tbody></table>`;
 }
 // Moto.it: spec piene solo via /api/detail (lazy). Riempie le colonne moto poi ri-rende.
 async function enrichMotoSpecs(list) {
@@ -1101,7 +1253,7 @@ function toggleSalva(url) {
   const idx = salvati.findIndex(r => r.url === url);
   if (idx !== -1) salvati.splice(idx, 1);
   else { const result = trovaResult(url); if (result) salvati.push(result); }
-  persistSalvati(); aggiornaContatoreSalvati(); renderSalvati(); renderResults(currentResults);
+  persistSalvati(); aggiornaContatoreSalvati(); renderSalvati(); refreshRowState(url);
 }
 const SALVATI_KEY = 'amr_salvati';
 const SALVATI_CAP = 200;
