@@ -56,6 +56,18 @@ function feat(ad, label) {
   return (v && (v.value != null ? v.value : v.key)) || null;
 }
 
+// Sub-valore per label dentro una feature multi-livello (es. feature 'Auto'/'Moto'
+// → values con label Marca/Modello/Versione). Solo nativo: null se assente.
+function subFeat(ad, parentLabel, subLabel) {
+  const f = (ad.features || []).find(x => x.label === parentLabel);
+  if (!f || !Array.isArray(f.values)) return null;
+  const v = f.values.find(x => x && x.label === subLabel);
+  return (v && (v.value != null ? v.value : v.key)) || null;
+}
+
+// CV dal valore nativo Potenza ("60 kW / 82 Cv" → 82). null se assente/solo-kW.
+const cvFrom = s => { const m = String(s == null ? '' : s).match(/(\d+)\s*Cv/i); return m ? parseInt(m[1], 10) : null; };
+
 const digits = s => { const m = String(s == null ? '' : s).replace(/\./g, '').match(/\d+/); return m ? parseInt(m[0], 10) : null; };
 const yearOf = s => { const y = parseInt(String(s || '').split('/').pop(), 10); return Number.isFinite(y) && y > 1900 ? y : null; };
 
@@ -67,6 +79,11 @@ function mapAd(ad, opts = {}) {
   const km = kmRaw ? digits(String(kmRaw).split('-')[0]) : null;
   // data pubblicazione: hades espone ad.date (ISO) — usata come posted_at.
   const posted = ad.date || (ad.dates && (ad.dates.display || ad.dates.created)) || null;
+  // Condizione nativa 'Condizioni del veicolo': Nuovo/Km 0 → nuovo=true, Usato → false.
+  const cond = feat(ad, 'Condizioni del veicolo');
+  const nuovo = cond == null ? null : (cond === 'Nuovo' || cond === 'Km 0');
+  // Neopatentati: 'Sì'/'No' nativo → bool; assente → null.
+  const neo = feat(ad, 'Per neopatentati');
   const out = {
     fonte: 'subito',
     titolo: ad.subject || 'Annuncio senza titolo',
@@ -77,10 +94,22 @@ function mapAd(ad, opts = {}) {
     provincia: (ad.geo && ad.geo.city && ad.geo.city.value) || null,
     cambio: feat(ad, 'Cambio'),
     cilindrata: digits(feat(ad, 'Cilindrata')),
-    variante: null,
+    // Versione/allestimento NATIVA (auto sotto 'Auto', moto sotto 'Moto'); null se assente.
+    variante: subFeat(ad, 'Auto', 'Versione') || subFeat(ad, 'Moto', 'Versione'),
+    // Venditore dal boolean nativo advertiser.company (true=conce, false=privato).
+    venditore: (ad.advertiser && typeof ad.advertiser.company === 'boolean')
+      ? (ad.advertiser.company ? 'concessionario' : 'privato') : null,
+    potenzaCv: cvFrom(feat(ad, 'Potenza')),
+    // Specs ricche NATIVE (già nel payload, zero richieste extra); null se assenti.
+    colore: feat(ad, 'Colore'),
+    carrozzeria: feat(ad, 'Carrozzeria') || feat(ad, 'Tipologia'),   // auto / moto
+    porte: feat(ad, 'Numero di porte'),       // stringa nativa "4/5"
+    posti: digits(feat(ad, 'Posti')),
+    classeEmissioni: feat(ad, 'Classe emissioni'),
+    neopatentati: neo == null ? null : neo === 'Sì',
     url,
-    // Campi per il DB (crawler); Subito non espone danni/nuovo pulito → null.
-    nuovo: null,
+    // Campi per il DB (crawler). nuovo ora nativo da 'Condizioni'; danni non esposto.
+    nuovo,
     danni: null,
     posted_at: posted,
   };
@@ -88,11 +117,57 @@ function mapAd(ad, opts = {}) {
   return out;
 }
 
+// Filtri NATIVI hades (verificati live): regione `r`, prezzo `ps`/`pe`, anno
+// `ys`/`ye`, ordinamento `sort`. Mappa friendly_name→key (== `province.json.regione`,
+// derivata iterando r=1..20 sull'API). Senza nativo, il filtro veniva applicato
+// client-side su 2 pagine NAZIONALI → economici/regione persi (vedi piano F17).
+const SUBITO_REGION_KEY = {
+  'valle-d-aosta': '1', 'piemonte': '2', 'liguria': '3', 'lombardia': '4',
+  'trentino-alto-adige': '5', 'veneto': '6', 'friuli-venezia-giulia': '7',
+  'emilia-romagna': '8', 'toscana': '9', 'umbria': '10', 'lazio': '11',
+  'marche': '12', 'abruzzo': '13', 'molise': '14', 'campania': '15',
+  'puglia': '16', 'basilicata': '17', 'calabria': '18', 'sardegna': '19',
+  'sicilia': '20',
+};
+const SORT_VALIDI = new Set(['priceasc', 'pricedesc', 'datedesc', 'relevance']);
+
+// Km NATIVO hades: param `ms`/`me` (mileage start/end) come CHIAVE CATEGORIA 1..36,
+// NON km raw (verificato live: ms/me operano sull'indice categoria, inclusivi).
+// Fonte tabella: https://hades.subito.it/v1/values/mileage/max (key→soglia).
+// `kmToKey(x)` = prima categoria il cui tetto ≥ x = la categoria che CONTIENE x →
+// usata sia per `me` (tetto km max) sia per `ms` (bound inferiore: la categoria di kmMin).
+const KM_KEY_TABLE = [
+  [4999, 1], [9999, 2], [14999, 3], [19999, 4], [24999, 5], [29999, 6], [34999, 7],
+  [39999, 8], [44999, 9], [49999, 10], [54999, 11], [59999, 12], [64999, 13], [69999, 14],
+  [74999, 15], [79999, 16], [84999, 17], [89999, 18], [94999, 19], [99999, 20], [109999, 21],
+  [119999, 22], [129999, 23], [139999, 24], [149999, 25], [159999, 26], [169999, 27],
+  [179999, 28], [189999, 29], [199999, 30], [249999, 31], [299999, 32], [349999, 33],
+  [399999, 34], [449999, 35], [499999, 36],
+];
+function kmToKey(km) {
+  for (const [limit, key] of KM_KEY_TABLE) if (limit >= km) return key;
+  return 36; // oltre 499.999 km
+}
+
 function buildPath(params, start) {
   const c = CAT[params.tipo] || CAT.auto;
   const q = [params.marca, params.modello].filter(Boolean).join(' ').trim();
   const qs = new URLSearchParams({ c, t: 's', lim: String(PAGE_SIZE), start: String(start) });
   if (q) qs.set('q', q);
+  // Regione nativa (se mappabile; altrimenti resta il post-filtro client difensivo).
+  const regKey = params.regione && SUBITO_REGION_KEY[String(params.regione).trim().toLowerCase()];
+  if (regKey) qs.set('r', regKey);
+  // Prezzo/anno nativi (i post-filtri client restano come doppia rete).
+  if (params.prezzoMin != null) qs.set('ps', String(params.prezzoMin));
+  if (params.prezzoMax != null) qs.set('pe', String(params.prezzoMax));
+  if (params.annoMin   != null) qs.set('ys', String(params.annoMin));
+  if (params.annoMax   != null) qs.set('ye', String(params.annoMax));
+  // Km nativo (categoria): ms=bound inferiore (categoria di kmMin), me=tetto (categoria di kmMax).
+  if (params.kmMin     != null) qs.set('ms', String(kmToKey(params.kmMin)));
+  if (params.kmMax     != null) qs.set('me', String(kmToKey(params.kmMax)));
+  // Ordinamento: solo se richiesto esplicitamente (on-search='priceasc'); il crawler
+  // NON lo passa → ordine naturale invariato (vista profonda/truncated intatta).
+  if (params._sort && SORT_VALIDI.has(params._sort)) qs.set('sort', params._sort);
   return `/v1/search/items?${qs.toString()}`;
 }
 
@@ -119,14 +194,17 @@ async function scrapeSubitoApi(params, opts = {}) {
   const regione = params.regione ? String(params.regione).trim().toLowerCase() : null;
   const maxPages = opts.maxPages || MAX_PAGES;
   const pageDelay = opts.pageDelayMs || 0;   // pausa tra le pagine (anti-ban su crawl profondi)
+  // Ordinamento esplicito (on-search passa 'priceasc' per le occasioni in cima).
+  // Il crawler NON passa opts.sort → ordine naturale, vista profonda invariata.
+  const reqParams = opts.sort ? { ...params, _sort: opts.sort } : params;
   const out = [];
   let truncated = false;
   for (let p = 0; p < maxPages; p++) {
     if (p > 0 && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
-    const ads = await fetchPage(params, p * PAGE_SIZE);
+    const ads = await fetchPage(reqParams, p * PAGE_SIZE);
     for (const ad of ads) {
-      // Filtro regione nativo: geo.region.friendly_name == nostra regione (stesso
-      // formato di province.json). Senza regione → tutti.
+      // Doppia rete regione: `buildPath` filtra già nativo via `r=<key>` quando la
+      // regione è mappabile; questo post-filtro client copre i casi non mappati.
       if (regione) {
         const r = ad.geo && ad.geo.region && ad.geo.region.friendly_name;
         if (r && r.toLowerCase() !== regione) continue;

@@ -94,7 +94,7 @@ async function getBrowser() {
 // Moto.it offre un motore di ricerca completo a /moto-usate/ricerca con query params.
 // Paginazione via /pagina-N nel path (NON come query param).
 function buildUrl(params, page = 1) {
-  const { prezzoMin, prezzoMax, annoMin, annoMax, kmMax, regione,
+  const { prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione,
           motoitBrandSlug, motoitModelSlug, filtersMotoit } = params;
 
   // Path pagina (1 = senza suffisso, >1 = /pagina-N)
@@ -119,6 +119,7 @@ function buildUrl(params, page = 1) {
   // Filtri numerici
   if (prezzoMin != null) qs.set('price_f', String(prezzoMin));
   if (prezzoMax != null) qs.set('price_t', String(prezzoMax));
+  if (kmMin     != null) qs.set('km_f',    String(kmMin));
   if (kmMax     != null) qs.set('km_t',    String(kmMax));
   if (annoMin   != null) qs.set('year_f',  String(annoMin));
   if (annoMax   != null) qs.set('year_t',  String(annoMax));
@@ -169,7 +170,10 @@ async function extractCards(page) {
     const provMatch = text.match(/\(([A-Z]{2})\)/);
     const provincia = provMatch ? provMatch[1] : null;
 
-    return { titolo, priceRaw, href, anno, km, provincia };
+    // Venditore: label NATIVA mostrata nella card ("Privato" / "Concessionario…").
+    const venditore = /concessionar/i.test(text) ? 'concessionario' : /privato/i.test(text) ? 'privato' : null;
+
+    return { titolo, priceRaw, href, anno, km, provincia, venditore };
   }));
 }
 
@@ -194,6 +198,7 @@ function mapCards(cards, opts = {}) {
       anno:       c.anno,
       carburante: null,
       provincia:  c.provincia,
+      venditore:  c.venditore || null,   // label nativa card (privato/concessionario)
       url:        fullUrl,
       // campi DB: Moto.it HTML non li espone puliti → null
       nuovo:      null,
@@ -223,7 +228,8 @@ function extractCardsHtml(html) {
     const km = kmMatch ? parseInt(kmMatch[1].replace(/\./g, ''), 10) : null;
     const provMatch = text.match(/\(([A-Z]{2})\)/);
     const provincia = provMatch ? provMatch[1] : null;
-    out.push({ titolo, priceRaw, href, anno, km, provincia });
+    const venditore = /concessionar/i.test(text) ? 'concessionario' : /privato/i.test(text) ? 'privato' : null;
+    out.push({ titolo, priceRaw, href, anno, km, provincia, venditore });
   });
   return out;
 }

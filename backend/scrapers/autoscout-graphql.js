@@ -39,11 +39,14 @@ const QUERY = `query Search($v:Vehicle_,$loc:Location_,$pr:Price_,$m:Metadata_){
       publication{ createdTimestampWithOffset }
       prices{ public{ amountInEUR{ raw } onRequestOnly } }
       location{ city zip }
+      seller{ type }
       vehicle{
         classification{ make{ formatted } model{ formatted } modelVersionInput }
-        condition{ mileageInKm{ raw } firstRegistrationDate{ formatted } }
-        engine{ transmissionType{ formatted } engineDisplacementInCCM{ raw } }
+        condition{ mileageInKm{ raw } firstRegistrationDate{ formatted } numberOfPreviousOwnersExtended{ raw } damage{ isCurrentlyDamaged } }
+        engine{ transmissionType{ formatted } engineDisplacementInCCM{ raw } power{ hp{ raw } } numberOfCylinders }
         fuels{ primary{ type{ raw formatted } } fuelCategory{ formatted } }
+        bodyColor{ formatted }
+        bodyType{ formatted }
         usageState
       }
     } }
@@ -99,6 +102,21 @@ function buildVariables(params, page, opts = {}) {
   // = prezzo crescente). enum passati come stringhe via variabili.
   if (opts.sortByDate) m.sort = [{ field: 'Age', order: 'Asc' }];
 
+  // Km + anno NATIVI (input Vehicle_, verificati via introspezione + query live):
+  //  - mileageInKm: IntRange {from,to} in km raw.
+  //  - firstRegistration: IntRange {from,to} in formato yyyymmdd (modelYear è vuoto
+  //    per le auto → inutile). Cosi l'anno è filtrato alla fonte: pagina 1 già in-range,
+  //    niente più hack sort-by-date + maxPages in server.js.
+  if (params.kmMin != null || params.kmMax != null) {
+    v.mileageInKm = { from: params.kmMin || 0, to: params.kmMax || 100000000 };
+  }
+  if (params.annoMin != null || params.annoMax != null) {
+    v.firstRegistration = {
+      from: (params.annoMin || 1900) * 10000 + 101,
+      to:   (params.annoMax || 2100) * 10000 + 1231,
+    };
+  }
+
   const vars = { v, loc, m };
   if (params.prezzoMin != null || params.prezzoMax != null) {
     vars.pr = { price: { from: params.prezzoMin || 1, to: params.prezzoMax || 100000000 } };
@@ -127,6 +145,19 @@ function mapListing(node, opts = {}) {
   const ccm = v.engine && v.engine.engineDisplacementInCCM ? v.engine.engineDisplacementInCCM.raw : null;
   const usage = v.usageState || null;   // New | Used | HadAccident | Wreck
 
+  // Specs ricche NATIVE (una sola query, zero richieste extra). null se assenti.
+  const eng = v.engine || {};
+  const cond = v.condition || {};
+  const hp = eng.power && eng.power.hp ? eng.power.hp.raw : null;
+  const dmg = cond.damage;                                  // { isCurrentlyDamaged } | null
+  const sellerType = (dt.seller && dt.seller.type) || '';   // 'PrivateSeller' | 'Dealer'
+  const venditore = /dealer/i.test(sellerType) ? 'concessionario'
+                  : /private/i.test(sellerType) ? 'privato' : null;
+  // danni: nativo `damage.isCurrentlyDamaged` (più affidabile), fallback al vecchio usageState.
+  const danni = dmg && typeof dmg.isCurrentlyDamaged === 'boolean'
+    ? dmg.isCurrentlyDamaged
+    : (usage ? DAMAGED.has(usage) : null);
+
   const out = {
     fonte: 'autoscout',
     titolo,
@@ -143,11 +174,18 @@ function mapListing(node, opts = {}) {
     cambio: (v.engine && v.engine.transmissionType && v.engine.transmissionType.formatted) || null,
     cilindrata: ccm ? (parseInt(String(ccm).replace(/[^\d]/g, ''), 10) || null) : null,
     variante,
+    // Specs ricche NATIVE; null se assenti (gap onesto, niente fabbricazione).
+    potenzaCv: hp,
+    cilindri: eng.numberOfCylinders ?? null,
+    proprietari: cond.numberOfPreviousOwnersExtended ? cond.numberOfPreviousOwnersExtended.raw : null,
+    colore: (v.bodyColor && v.bodyColor.formatted) || null,
+    carrozzeria: (v.bodyType && v.bodyType.formatted) || null,
+    venditore,
     zip: (dt.location && dt.location.zip) || null,   // per il post-filtro regione (fallback CAP→regione)
     url: dt.webPage || null,
     // Campi per il DB (usati dal crawler; ignorati dal path on-search legacy):
     nuovo: usage ? usage === 'New' : null,
-    danni: usage ? DAMAGED.has(usage) : null,
+    danni,   // nativo damage.isCurrentlyDamaged, fallback usageState
     posted_at: (dt.publication && dt.publication.createdTimestampWithOffset) || null,
   };
   if (opts.attachRaw) out._raw = dt;   // foto grezza per raw_json (keep-last)
