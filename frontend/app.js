@@ -1,62 +1,74 @@
 // ─── Elementi DOM ─────────────────────────────────────────────────────────────
-const form               = document.getElementById('searchForm');
-const statusBox          = document.getElementById('statusBox');
-const loadingState       = document.getElementById('loadingState');
-const errorState         = document.getElementById('errorState');
-const errorText          = document.getElementById('errorText');
-const errorClose         = document.getElementById('errorClose');
-const resultsSection     = document.getElementById('resultsSection');
-const resultsGrid        = document.getElementById('resultsGrid');
-const resultsCount       = document.getElementById('resultsCount');
-const fonteBreakdown     = document.getElementById('fonteBreakdown');
-const noResults          = document.getElementById('noResults');
-const sortSelect         = document.getElementById('sortSelect');
-const groupSelect        = document.getElementById('groupSelect');
-const marcaSelect        = document.getElementById('marca');
-const regioneSelect      = document.getElementById('regione');
-const tipoInputs         = document.querySelectorAll('input[name="tipo"]');
-const groupChips         = document.getElementById('groupChips');
-const backToSearch       = document.getElementById('backToSearch');
-const resultsNav         = document.getElementById('resultsNav');
-const isolaRow           = document.getElementById('isolaRow');
-const isolaToggle        = document.getElementById('isolaToggle');
-const isolaCount         = document.getElementById('isolaCount');
-const chipsAllNone       = document.getElementById('chipsAllNone');
-const advancedToggle     = document.getElementById('advancedToggle');
-const advancedFilters    = document.getElementById('advancedFilters');
-const logoBtn            = document.getElementById('logoBtn');
-const qrPanel            = document.getElementById('qrPanel');
-const prezzoSliderEl     = document.getElementById('prezzoSlider');
-const btnStatCsv         = document.getElementById('btnStatCsv');
-const btnStatPdf         = document.getElementById('btnStatPdf');
-const subitoBanner       = document.getElementById('subitoBootstrapBanner');
-const btnBootstrap       = document.getElementById('btnBootstrapSubito');
-const bootstrapBtnText   = document.getElementById('bootstrapBtnText');
+const form            = document.getElementById('searchForm');
+const statusBox       = document.getElementById('statusBox');
+const loadingState    = document.getElementById('loadingState');
+const errorState      = document.getElementById('errorState');
+const errorText       = document.getElementById('errorText');
+const errorClose      = document.getElementById('errorClose');
+const resultsSection  = document.getElementById('resultsSection');
+const resultsGrid     = document.getElementById('resultsGrid');
+const resultsCount    = document.getElementById('resultsCount');
+const fonteBreakdown  = document.getElementById('fonteBreakdown');
+const noResults       = document.getElementById('noResults');
+const marcaSelect     = document.getElementById('marca');
+const marcaNote       = document.getElementById('marcaNote');
+const btnCerca        = document.getElementById('btnCerca');
+const regioneSelect   = document.getElementById('regione');
+const tipoInputs      = document.querySelectorAll('input[name="tipo"]');
+const backToSearch    = document.getElementById('backToSearch');
+const resultsToolbar  = document.getElementById('resultsToolbar');
+const facetChipsEl    = document.getElementById('facetChips');
+const sortMobile      = document.getElementById('sortMobile');
+const advancedToggle  = document.getElementById('advancedToggle');
+const advancedFilters = document.getElementById('advancedFilters');
+const logoBtn         = document.getElementById('logoBtn');
+const qrPanel         = document.getElementById('qrPanel');
+const themeToggle     = document.getElementById('themeToggle');
+const helpToggle      = document.getElementById('helpToggle');
+const prezzoSliderEl  = document.getElementById('prezzoSlider');
+const btnStatCsv      = document.getElementById('btnStatCsv');
+const btnStatPdf      = document.getElementById('btnStatPdf');
+const subitoBanner    = document.getElementById('subitoBootstrapBanner');
+const btnBootstrap    = document.getElementById('btnBootstrapSubito');
+const bootstrapBtnText    = document.getElementById('bootstrapBtnText');
 const bootstrapBtnSpinner = document.getElementById('bootstrapBtnSpinner');
+// Confronto
+const compareBar   = document.getElementById('compareBar');
+const compareCount = document.getElementById('compareCount');
+const compareOpen  = document.getElementById('compareOpen');
+const compareClear = document.getElementById('compareClear');
+const cmatrixPanel = document.getElementById('cmatrixPanel');
+const cmatrixTitle = document.getElementById('cmatrixTitle');
+const cmatrixClose = document.getElementById('cmatrixClose');
+const cmatrixTable = document.getElementById('cmatrixTable');
 
 // ─── Stato ────────────────────────────────────────────────────────────────────
-let currentResults       = [];
-let confronto            = [];   // max 2 result objects per il confronto
-let salvati              = [];   // annunci salvati nella sessione corrente
-let hiddenGroups         = new Set();   // chiavi-gruppo nascoste via chip (group-by attivo)
-let lastGroupKeys        = [];          // chiavi gruppo dell'ultima resa (per Tutte/Nessuna)
-let isolaOpen            = false;       // pannello Isola aperto/chiuso (dropdown)
-let lastSources          = null;        // stato per-fonte dall'ultima ricerca
+let currentResults = [];
+let confronto      = [];                       // annunci selezionati per il confronto (cap 10)
+let matrixList     = [];                        // annunci attualmente mostrati nella matrice
+let salvati        = [];
+let groupDim       = '';                        // dimensione di raggruppamento attiva ('' = nessuna)
+let sortState      = { key: 'prezzo', dir: 'asc' };
+let visibleCols    = ['anno', 'km'];            // colonne opzionali mostrate (default dai filtri usati)
+let lastSources    = null;
 let prezzoSliderInstance = null;
-let lastSearchParams     = null;        // §11: params dell'ultima ricerca (per "Salva ricerca")
-let savedSearches        = [];          // §11: ricerche salvate (da /api/saved)
-let sliderGlobalBounds   = [0, 0];
+let lastSearchParams = null;
+let savedSearches  = [];
+let sliderGlobalBounds = [0, 0];
+let myRole         = 'full';
+let searchActive   = false;                     // true dopo una ricerca → la toolbar può apparire
+const COMPARE_CAP  = 10;
 
-// Cache brand list dal server per tipo corrente (con metadata sites)
 const brandCache = { auto: null, moto: null };
-
 const FONTE_LABEL = { subito: 'Subito.it', autoscout: 'Autoscout24', moto: 'Moto.it' };
 
-// ─── Icone Lucide (SVG inline, dependency-free / offline) ───────────────────
+// ─── Icone (SVG inline, offline) ────────────────────────────────────────────
 const ICONS = {
   bookmark:          '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>',
   'bookmark-filled': '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" fill="currentColor"/>',
-  compare:           '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/>',
+  square:            '<rect x="3" y="3" width="18" height="18" rx="2"/>',
+  'square-check':    '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 12 2 2 4-4"/>',
+  info:              '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
   chevron:           '<path d="m6 9 6 6 6-6"/>',
   x:                 '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
 };
@@ -64,16 +76,98 @@ function icon(name, cls = '') {
   return `<svg class="ico ${cls}" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 }
 
+// ─── Tema (light/dark commutabile) ──────────────────────────────────────────
+function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'light'; }
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem('amr_theme', t); } catch (_) {}
+  if (themeToggle) { themeToggle.textContent = t === 'dark' ? '☀' : '☾'; themeToggle.title = t === 'dark' ? 'Tema chiaro' : 'Tema scuro'; }
+}
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
-// Modalità demo: banner + nasconde i pulsanti che scrivono sul server (le ricerche
-// salvate sono condivise → un ospite non deve toccarle). I salvati per-annuncio sono
-// in localStorage del browser dell'ospite → innocui, restano attivi.
+// ─── Aiuti contestuali (?) ───────────────────────────────────────────────────
+// "?" discreti accanto ai controlli: in hover (desktop) o tap (mobile) spiegano.
+// Toggle globale nel topbar per nasconderli tutti (app per papà anziano).
+// Testi: UNICA sorgente = frontend/help-texts.md (l'utente la edita) → sincronizzata QUI.
+// I .help-dot usano data-help-key; il testo viene iniettato in data-help al boot.
+const HELP = {
+  ricerca:    'Scegli Auto o Moto, scrivi la marca e selezionala dalla lista, poi premi Cerca. Il modello è opzionale.',
+  filtri:     'Prezzo, anno, km e regione sono filtri reali applicati alla fonte. Nota: su Subito i km sono a fasce (~5.000 km), quindi può includere un filo oltre il valore esatto. Lascia vuoto per non filtrare.',
+  regione:    'Subito e Moto.it filtrano la regione esatta. Autoscout cerca entro un raggio dal capoluogo della regione (default 100 km, modificabile col campo "Raggio") — come fa il sito ufficiale.',
+  griglia:    'Clicca le intestazioni Anno/Km/CV/Prezzo per ordinare. ℹ apre i dettagli sotto la riga, la casella ☐ aggiunge l\'annuncio al confronto, ⚑ lo salva. Nota: ordinamento e slider agiscono sui risultati caricati (i più economici), non sull\'intero mercato.',
+  raggruppa:  'Raggruppa gli annunci per modello, fonte, anno, km o provincia. "Nessuno" = lista unica.',
+  confronto:  'Spunta la casella ☐ sugli annunci per aggiungerli qui, poi "Apri confronto" per vederli affiancati a colonne (anche molti).',
+  azioni:     'ℹ dettagli e foto · ☐ aggiungi al confronto · ⚑ salva. Il titolo apre l\'annuncio sul sito originale.',
+  controllo:  'Controlla ora questa ricerca salvata: cerca annunci nuovi e cali di prezzo dall\'ultimo controllo. Se non c\'è nulla di nuovo te lo dice.',
+  qr:         'Clicca il logo per il QR e l\'indirizzo: apri l\'app dal telefono (serve la password).',
+  export:     'Esporta i risultati: PDF report stampabile o CSV per Excel.',
+};
+function helpText(key) { return HELP[key] || ''; }
+// Span "?" per i template generati in JS (testo già risolto inline).
+function helpDot(key) {
+  return `<span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="${key}" data-help="${escapeHtml(helpText(key))}">?</span>`;
+}
+// Riempie data-help dai data-help-key (per i dot statici in index.html).
+function injectHelp(root = document) {
+  root.querySelectorAll('.help-dot[data-help-key]').forEach(el => {
+    if (!el.dataset.help) el.dataset.help = helpText(el.dataset.helpKey);
+  });
+}
+function helpOn() { try { return localStorage.getItem('amr_help') !== '0'; } catch (_) { return true; } }
+function applyHelp(on) {
+  document.body.classList.toggle('help-off', !on);
+  try { localStorage.setItem('amr_help', on ? '1' : '0'); } catch (_) {}
+  if (helpToggle) { helpToggle.classList.toggle('active', on); helpToggle.title = on ? 'Nascondi aiuti' : 'Mostra aiuti'; }
+}
+// Tooltip flottante per i .help-dot: delegazione eventi (i dot si rigenerano ad
+// ogni render), position:fixed clampato al viewport (mai overflow → mai scroll-x),
+// hover su desktop + tap su touch, nascosto su scroll/resize.
+function setupHelpTips() {
+  const tip = document.createElement('div');
+  tip.className = 'help-tip'; document.body.appendChild(tip);
+  let cur = null;
+  const show = dot => {
+    if (document.body.classList.contains('help-off')) return;
+    const txt = dot.dataset.help || helpText(dot.dataset.helpKey);
+    if (!txt) return;
+    cur = dot; tip.textContent = txt;
+    tip.style.left = '0px'; tip.style.top = '0px'; tip.classList.add('show');   // misura dopo render
+    const r = dot.getBoundingClientRect(); const tr = tip.getBoundingClientRect();
+    const m = 8;
+    let left = Math.max(m, Math.min(r.left + r.width / 2 - tr.width / 2, window.innerWidth - tr.width - m));
+    let top = r.top - tr.height - m;
+    if (top < m) top = r.bottom + m;   // flip sotto se non c'è spazio sopra
+    tip.style.left = `${Math.round(left)}px`; tip.style.top = `${Math.round(top)}px`;
+  };
+  const hide = () => { cur = null; tip.classList.remove('show'); };
+  document.addEventListener('mouseover', e => { const d = e.target.closest && e.target.closest('.help-dot'); if (d) show(d); });
+  document.addEventListener('mouseout',  e => { const d = e.target.closest && e.target.closest('.help-dot'); if (d && d === cur) hide(); });
+  document.addEventListener('focusin',   e => { const d = e.target.closest && e.target.closest('.help-dot'); if (d) show(d); });
+  document.addEventListener('focusout',  e => { const d = e.target.closest && e.target.closest('.help-dot'); if (d && d === cur) hide(); });
+  document.addEventListener('click', e => {
+    const d = e.target.closest && e.target.closest('.help-dot');
+    if (d) { e.preventDefault(); e.stopPropagation(); (cur === d) ? hide() : show(d); }
+    else if (cur) hide();
+  });
+  window.addEventListener('scroll', () => { if (cur) hide(); }, true);
+  window.addEventListener('resize', () => { if (cur) hide(); });
+}
+
+// ─── Toast leggero ──────────────────────────────────────────────────────────
+let toastTimer = null;
+function toast(msg) {
+  let el = document.querySelector('.amr-toast');
+  if (!el) { el = document.createElement('div'); el.className = 'amr-toast'; document.body.appendChild(el); }
+  el.textContent = msg;
+  requestAnimationFrame(() => el.classList.add('show'));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+// ─── Modalità demo (ospite read-only) ───────────────────────────────────────
 function applyDemoMode() {
   document.body.classList.add('demo-mode');
   ['btnSalvaRicerca', 'btnControllaTutte'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
   if (!document.querySelector('.demo-banner')) {
     const bar = document.createElement('div');
@@ -83,49 +177,64 @@ function applyDemoMode() {
   }
 }
 
+// ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
+  applyTheme(currentTheme());
   const currentYear = new Date().getFullYear();
   document.getElementById('annoMin').max = currentYear;
   document.getElementById('annoMax').max = currentYear;
   document.getElementById('annoMax').placeholder = `es. ${currentYear}`;
+  document.body.dataset.tipo = currentTipo();
 
   populateRegione();
+  renderFacetChips();
   await populateMarca('auto');
   setupMarcaAutocomplete();
-  applyUrlParams();
+  validateMarca();
+  await applyUrlParams();
 
-  // Ruolo sessione: in modalità demo (ospite read-only) nascondi le scritture
-  // server (salva ricerca / controlla tutte) — il server le blocca comunque (403).
   try {
     const me = await fetch('/api/me').then(r => (r.ok ? r.json() : null)).catch(() => null);
-    if (me && me.role === 'demo') applyDemoMode();
-  } catch (_) { /* offline/locale → accesso pieno */ }
+    if (me && me.role) myRole = me.role;
+    if (myRole === 'demo') applyDemoMode();
+  } catch (_) {}
 
-  // Cambio tipo (auto/moto): ricarica marche
+  themeToggle?.addEventListener('click', () => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
+
+  injectHelp();
+  applyHelp(helpOn());
+  helpToggle?.addEventListener('click', () => applyHelp(document.body.classList.contains('help-off')));
+  setupHelpTips();   // tooltip "?" flottante clampato (no overflow / no scroll-x)
+
   tipoInputs.forEach(input => input.addEventListener('change', async () => {
+    document.body.dataset.tipo = input.value;
     await populateMarca(input.value);
-    currentResults = [];
-    hideResults();
-    // Reset modello quando cambia tipo
+    marcaSelect.value = '';
     document.getElementById('modello').value = '';
+    validateMarca();
+    currentResults = []; hideResults();
   }));
 
-  // Chip di gruppo: isolano/nascondono un gruppo (solo con group-by attivo)
-  if (groupChips) groupChips.addEventListener('click', e => {
-    const btn = e.target.closest('.grp-chip');
-    if (!btn) return;
-    const key = btn.dataset.group;
-    if (hiddenGroups.has(key)) hiddenGroups.delete(key);
-    else                       hiddenGroups.add(key);
+  // Toolbar: sort mobile + facet
+  sortMobile?.addEventListener('change', () => {
+    const [key, dir] = sortMobile.value.split('_').length === 2
+      ? [sortMobile.value.split('_')[0], sortMobile.value.split('_')[1]] : ['prezzo', 'asc'];
+    sortState = { key, dir };
     renderResults(currentResults);
   });
-
-  sortSelect.addEventListener('change', () => renderResults(currentResults));
-  if (groupSelect) groupSelect.addEventListener('change', () => {
-    hiddenGroups.clear();                 // reset isolamento al cambio dimensione
-    isolaOpen = false;                    // pannello Isola collassato di default
+  facetChipsEl?.addEventListener('click', e => {
+    const chip = e.target.closest('.facet-chip'); if (!chip) return;
+    groupDim = chip.dataset.dim || '';
     renderResults(currentResults);
   });
+  // Menu "Colonne": toggle colonne opzionali (anno/km/carb/cv) live.
+  document.querySelectorAll('.col-toggle').forEach(cb => cb.addEventListener('change', () => {
+    visibleCols = OPTIONAL_COLS.filter(k => document.querySelector(`.col-toggle[value="${k}"]`)?.checked);
+    renderResults(currentResults);
+  }));
+  // Responsività colonne in JS (l'inline grid-template vince sulle media-query).
+  let _resizeT;
+  window.addEventListener('resize', () => { clearTimeout(_resizeT); _resizeT = setTimeout(() => { if (searchActive) renderResults(currentResults); }, 200); });
 
   btnStatCsv.addEventListener('click', () => exportCsv(currentResults));
   btnStatPdf.addEventListener('click', () => exportPdf(currentResults));
@@ -133,135 +242,118 @@ async function init() {
   backToSearch.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
   form.addEventListener('submit', async (e) => { e.preventDefault(); await doSearch(); });
 
-  // ── §11 Ricerche salvate + avvisi ────────────────────────────────────────
+  // Confronto / matrice
+  compareOpen?.addEventListener('click', () => openCompareMatrix());
+  compareClear?.addEventListener('click', () => { confronto = []; renderResults(currentResults); renderSalvati(); renderCompareBar(); closeMatrix(); });
+  cmatrixClose?.addEventListener('click', closeMatrix);
+
+  // Segnalazioni (bug-report)
+  document.getElementById('btnReport')?.addEventListener('click', () => openReport());
+  document.getElementById('reportClose')?.addEventListener('click', closeReport);
+  document.getElementById('reportSend')?.addEventListener('click', submitReport);
+  document.getElementById('reportModal')?.addEventListener('click', e => { if (e.target.id === 'reportModal') closeReport(); });
+
+  // Ricerche salvate + avvisi
   document.getElementById('btnSalvaRicerca').addEventListener('click', saveCurrentSearch);
   document.getElementById('btnControllaTutte').addEventListener('click', () => checkRicerche());
   document.getElementById('ricercheList').addEventListener('click', onRicercheClick);
-  document.getElementById('confrontoClose')?.addEventListener('click', () => {
-    confronto = [];
-    renderResults(currentResults);
-    renderSalvati();
-    hideConfrontoPanel();
-  });
   loadSavedSearches();
-  loadSalvati();   // §18: ripristina i salvati da localStorage
+  // Auto-check al boot = il server ricontrolla già le ricerche stantie (gentile, anti-ban).
+  // Qui NON facciamo una POST (sarebbe doppio scraping): ricarichiamo i salvati dopo ~13s
+  // (GET, zero scraping) per riflettere gli avvisi appena calcolati dal server.
+  setTimeout(loadSavedSearches, 13000);
+  loadSalvati();
 
-  // Thumbnail rotta → slot grigio (delegato in capture: l'evento 'error' dell'<img>
-  // non fa bubbling, niente handler inline = compatibile con eventuale CSP).
+  // Thumbnail rotta → slot grigio
   resultsGrid.addEventListener('error', e => {
     const img = e.target;
     if (img && img.tagName === 'IMG') { const t = img.closest('.row-thumb'); if (t) t.classList.add('noimg'); }
   }, true);
 
-  // ── Event delegation: card risultati ─────────────────────────────────────
+  // Delegation: griglia
   resultsGrid.addEventListener('click', e => {
-    // Collasso/espansione sezione gruppo
+    const sortBtn = e.target.closest('.gh-sort');
+    if (sortBtn) { setSort(sortBtn.dataset.key); return; }
     const groupHeader = e.target.closest('.group-header');
-    if (groupHeader) {
-      const section = groupHeader.closest('.result-group');
-      section?.classList.toggle('collapsed');
+    if (groupHeader) { groupHeader.closest('.result-group')?.classList.toggle('collapsed'); return; }
+
+    const row = e.target.closest('[data-url]');
+    if (!row) return;
+    const url = row.dataset.url;
+    // Galleria del pannello dettaglio inline → lightbox.
+    if (e.target.closest('.det-gallery')) {
+      const r = trovaResult(url);
+      if (r && Array.isArray(r.immagini) && r.immagini.length) openLightbox(r.immagini);
       return;
     }
-
-    const card = e.target.closest('[data-url]');
-    if (!card) return;
-    const url = card.dataset.url;
+    if (row.dataset.detail) return;   // altri click dentro il pannello dettaglio: ignora
     if (e.target.closest('.row-thumb')) {
       const r = trovaResult(url);
       if (r && Array.isArray(r.immagini) && r.immagini.length) openLightbox(r.immagini);
       return;
     }
-    if (e.target.closest('.btn-salva'))     { toggleSalva(url);     return; }
-    if (e.target.closest('.btn-confronta')) { toggleConfronto(url); return; }
-    // Apri/chiudi il pannello dettagli senza aprire l'annuncio
-    if (e.target.closest('.dettagli-toggle')) {
-      const detail = card.querySelector('.row-detail');
-      const toggle = card.querySelector('.dettagli-toggle');
-      const open   = detail.classList.toggle('d-none');
-      toggle.setAttribute('aria-expanded', String(!open));
-      if (!open) loadSpec(card);   // appena aperto → carica i dettagli (lazy, una sola volta)
-      return;
-    }
-    window.open(url, '_blank', 'noopener,noreferrer');
+    if (e.target.closest('.row-titolo')) { openAd(url); return; }
+    if (e.target.closest('.btn-salva'))     { toggleSalva(url); return; }
+    if (e.target.closest('.btn-confronta'))  { toggleConfronto(url); return; }
+    if (e.target.closest('.btn-info'))       { toggleDetail(row); return; }
   });
 
-  // ── Event delegation: pannello salvati ───────────────────────────────────
+  // Delegation: pannello salvati
   document.getElementById('salvatiList').addEventListener('click', e => {
-    const item = e.target.closest('[data-url]');
-    if (!item) return;
+    const item = e.target.closest('[data-url]'); if (!item) return;
     const url = item.dataset.url;
-    if (e.target.closest('.btn-rimuovi-salvato'))   { toggleSalva(url);     return; }
-    if (e.target.closest('.btn-confronta-salvato')) { toggleConfronto(url); return; }
-    window.open(url, '_blank', 'noopener,noreferrer');
+    if (e.target.closest('.btn-rimuovi-salvato'))   { toggleSalva(url); return; }
+    if (e.target.closest('.btn-confronta-salvato'))  { toggleConfronto(url); return; }
+    openAd(url);
   });
 
-  // ── Event delegation: min/max cliccabili nelle stats (navbar) ────────────
-  resultsNav.addEventListener('click', e => {
-    const btn = e.target.closest('.stat-clickable');
-    if (btn) scrollToCard(btn.dataset.url);
+  // Delegation: matrice (rimuovi colonna / apri annuncio)
+  cmatrixTable.addEventListener('click', e => {
+    const rm = e.target.closest('.cm-rm'); if (rm) { removeMatrixCol(rm.dataset.url); return; }
   });
 
-  // ── Chip Isola: Tutte / Nessuna ──────────────────────────────────────────
-  if (chipsAllNone) chipsAllNone.addEventListener('click', () => {
-    if (hiddenGroups.size >= lastGroupKeys.length && lastGroupKeys.length) {
-      hiddenGroups.clear();                       // erano tutte nascoste → mostra tutte
-    } else {
-      hiddenGroups = new Set(lastGroupKeys);      // nascondi tutte
-    }
-    renderResults(currentResults);
+  // min/max cliccabili (toolbar)
+  resultsToolbar.addEventListener('click', e => {
+    const btn = e.target.closest('.stat-clickable'); if (btn) scrollToCard(btn.dataset.url);
   });
 
-  // ── Isola: dropdown apri/chiudi ──────────────────────────────────────────
-  if (isolaToggle) isolaToggle.addEventListener('click', () => {
-    isolaOpen = !isolaOpen;
-    isolaToggle.setAttribute('aria-expanded', String(isolaOpen));
-    isolaRow.classList.toggle('d-none', !isolaOpen);
-  });
-
-  // ── Filtri avanzati (hero): apri/chiudi ──────────────────────────────────
-  if (advancedToggle) advancedToggle.addEventListener('click', () => {
+  // Filtri avanzati toggle
+  advancedToggle?.addEventListener('click', () => {
     const open = advancedFilters.classList.toggle('d-none');
     advancedToggle.setAttribute('aria-expanded', String(!open));
     advancedToggle.classList.toggle('open', !open);
   });
 
-  // ── Logo cliccabile: QR + link pubblico per aprire l'app dal telefono ────
-  if (logoBtn) logoBtn.addEventListener('click', async () => {
-    const open = qrPanel.classList.toggle('d-none');
-    logoBtn.setAttribute('aria-expanded', String(!open));
-    if (!open) await loadQrPanel();   // appena aperto → carica QR + link
+  // Logo → QR
+  logoBtn?.addEventListener('click', async () => {
+    document.getElementById('qrModal')?.classList.remove('d-none');   // p1: modal, niente scroll pagina
+    logoBtn.setAttribute('aria-expanded', 'true');
+    await loadQrPanel();
   });
+  document.getElementById('qrClose')?.addEventListener('click', closeQr);
+  document.getElementById('qrModal')?.addEventListener('click', e => { if (e.target.id === 'qrModal') closeQr(); });
+  document.getElementById('btnReportNav')?.addEventListener('click', () => openReport());   // p4: Segnala in navbar
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeQr(); closeReport(); } });
 
-  // Stato iniziale salvati (lista vuota)
   renderSalvati();
 }
 
-// Carica il QR + link pubblico (per aprire l'app dal telefono, ovunque).
+// ─── QR ──────────────────────────────────────────────────────────────────────
 async function loadQrPanel() {
   qrPanel.innerHTML = '<p class="qr-empty">Caricamento…</p>';
   try {
     const r = await fetch('/api/public-url');
     const { url, svg } = await r.json();
-    if (!url) {
-      qrPanel.innerHTML = '<p class="qr-empty">Accesso pubblico non attivo (Funnel spento).</p>';
-      return;
-    }
+    if (!url) { qrPanel.innerHTML = '<p class="qr-empty">Accesso pubblico non attivo (Funnel spento).</p>'; return; }
     qrPanel.innerHTML =
       '<p class="qr-hint">Inquadra col telefono per aprire l\'app (serve la password):</p>' +
       `<div class="qr-img">${svg}</div>` +
       `<a class="qr-link" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-  } catch (_) {
-    qrPanel.innerHTML = '<p class="qr-empty">Impossibile leggere l\'indirizzo.</p>';
-  }
+  } catch (_) { qrPanel.innerHTML = '<p class="qr-empty">Impossibile leggere l\'indirizzo.</p>'; }
 }
 
 function populateRegione() {
-  const regioni = [
-    'abruzzo','basilicata','calabria','campania','emilia-romagna',
-    'friuli-venezia-giulia','lazio','liguria','lombardia','marche',
-    'molise','piemonte','puglia','sardegna','sicilia','toscana',
-    'trentino-alto-adige','umbria','valle-d-aosta','veneto',
-  ];
+  const regioni = ['abruzzo','basilicata','calabria','campania','emilia-romagna','friuli-venezia-giulia','lazio','liguria','lombardia','marche','molise','piemonte','puglia','sardegna','sicilia','toscana','trentino-alto-adige','umbria','valle-d-aosta','veneto'];
   regioneSelect.innerHTML = '<option value="">Tutta Italia</option>';
   regioni.forEach(slug => {
     const opt = document.createElement('option');
@@ -271,97 +363,97 @@ function populateRegione() {
   });
 }
 
+function currentTipo() { return document.querySelector('input[name="tipo"]:checked')?.value || 'auto'; }
 
-// ─── Marca: input testuale + autocomplete via <datalist> (P10) ──────────────
-// Il dropdown rigido è stato rimosso: l'utente può digitare qualsiasi marca,
-// l'autocomplete dal catalogo `data/models.json` è solo un suggerimento soft.
 async function populateMarca(tipo) {
-  // Carica le marche del tipo nella cache (consumata dall'autocomplete custom).
   if (!brandCache[tipo]) {
     try {
-      const res  = await fetch(`/api/brands?tipo=${encodeURIComponent(tipo)}`);
+      const res = await fetch(`/api/brands?tipo=${encodeURIComponent(tipo)}`);
       const data = await res.json();
       brandCache[tipo] = data.brands || [];
-    } catch {
-      brandCache[tipo] = [];
-    }
+    } catch { brandCache[tipo] = []; }
   }
 }
 
-// ─── Autocomplete marca CUSTOM (sostituisce il <datalist> nativo) ───────────
-// Stilabile (chiaro, selezione visibile) + Tab/Enter completano, ↑/↓ navigano.
-function currentTipo() {
-  return document.querySelector('input[name="tipo"]:checked')?.value || 'auto';
+// ─── Marca: force-select dal catalogo ───────────────────────────────────────
+const acn = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+// Marca valida = combacia (canonica) con una voce di catalogo. '' valido finché vuoto.
+function matchedBrand() {
+  const q = acn(marcaSelect.value);
+  if (!q) return null;
+  const brands = brandCache[currentTipo()] || [];
+  return brands.find(b => acn(b.nome) === q) || null;
 }
+function isValidMarca() { return !!matchedBrand(); }
+function validateMarca() {
+  const raw = marcaSelect.value.trim();
+  const ok = isValidMarca();
+  marcaSelect.classList.toggle('invalid', raw.length > 0 && !ok);
+  btnCerca.disabled = !ok;
+  if (!raw) marcaNote.textContent = '';
+  else if (!ok) marcaNote.textContent = 'Scegli una marca dalla lista (digita e seleziona).';
+  else marcaNote.textContent = '';
+}
+
 function setupMarcaAutocomplete() {
   const list = document.getElementById('marcaAC');
   if (!marcaSelect || !list) return;
-  const acn = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
   let matches = [], active = -1;
-
   const close = () => { list.classList.add('d-none'); list.innerHTML = ''; active = -1; marcaSelect.setAttribute('aria-expanded', 'false'); };
   const render = () => {
     if (!matches.length) return close();
-    list.innerHTML = matches.map((b, i) =>
-      `<li class="ac-item${i === active ? ' active' : ''}" role="option" data-i="${i}">${escapeHtml(b.nome)}</li>`).join('');
+    list.innerHTML = matches.map((b, i) => `<li class="ac-item${i === active ? ' active' : ''}" role="option" data-i="${i}">${escapeHtml(b.nome)}</li>`).join('');
     list.classList.remove('d-none');
     marcaSelect.setAttribute('aria-expanded', 'true');
   };
-  const pick = i => { if (matches[i]) { marcaSelect.value = matches[i].nome; close(); document.getElementById('modello')?.focus(); } };
+  const pick = i => { if (matches[i]) { marcaSelect.value = matches[i].nome; close(); validateMarca(); document.getElementById('modello')?.focus(); } };
 
   marcaSelect.addEventListener('input', () => {
     const q = acn(marcaSelect.value);
     const brands = brandCache[currentTipo()] || [];
-    matches = q ? brands.filter(b => acn(b.nome).includes(q)).slice(0, 8) : [];
+    if (q) {
+      // Ranking: prefisso prima del semplice "contiene", poi posizione, poi alfabetico.
+      const scored = [];
+      for (const b of brands) {
+        const n = acn(b.nome); const i = n.indexOf(q);
+        if (i >= 0) scored.push({ b, rank: n.startsWith(q) ? 0 : 1, i, n });
+      }
+      scored.sort((a, c) => a.rank - c.rank || a.i - c.i || a.n.localeCompare(c.n));
+      matches = scored.slice(0, 8).map(s => s.b);
+    } else matches = [];
     active = matches.length ? 0 : -1;
-    render();
+    render(); validateMarca();
   });
   marcaSelect.addEventListener('keydown', e => {
     if (list.classList.contains('d-none') || !matches.length) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); active = (active + 1) % matches.length; render(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); active = (active - 1 + matches.length) % matches.length; render(); }
     else if (e.key === 'Enter') { if (active >= 0) { e.preventDefault(); pick(active); } }
-    else if (e.key === 'Tab') { if (active >= 0) { e.preventDefault(); pick(active); } }   // Tab completa
+    else if (e.key === 'Tab') { if (active >= 0) { e.preventDefault(); pick(active); } }
     else if (e.key === 'Escape') { close(); }
   });
   list.addEventListener('mousedown', e => { const li = e.target.closest('.ac-item'); if (li) { e.preventDefault(); pick(+li.dataset.i); } });
-  marcaSelect.addEventListener('blur', () => setTimeout(close, 120));
+  marcaSelect.addEventListener('blur', () => setTimeout(() => { close(); validateMarca(); }, 120));
 }
 
-// Modello è ora un input testuale libero (#modello). Niente più TomSelect.
-
-// ─── Motore di analisi: rating 0-100 + evidenziazioni ───────────────────────
-// Tutto calcolato client-side sul set di risultati, una sola volta dopo la
-// ricerca. I comparabili di ogni annuncio sono gli altri annunci dello stesso
-// CLUSTER-MODELLO (non l'intero set): così confrontiamo prezzi tra mezzi simili
-// e lo stesso annuncio mantiene sempre lo stesso punteggio a prescindere dalla
-// vista (ordinamento/raggruppamento/filtro fonti agiscono solo sulla resa).
-
-// §21: rating rimosso (vedi RATING-DESIGN.md). Resta `clusterModello` per il
-// group-by "Modello/variante" — funzione pura (era in frontend/analysis.js).
+// ─── Raggruppamento ──────────────────────────────────────────────────────────
 function clusterModello(titolo) {
   if (!titolo) return '?';
-  const norm = String(titolo).toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const norm = String(titolo).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const tokens = norm.match(/[a-z0-9]+/g) || [];
   if (!tokens.length) return '?';
-  const marca   = tokens.find(t => /[a-z]/.test(t)) || tokens[0];
-  const modello = tokens.find(t => /\d/.test(t))
-               || tokens.filter(t => t !== marca)[0]
-               || '';
+  const marca = tokens.find(t => /[a-z]/.test(t)) || tokens[0];
+  const modello = tokens.find(t => /\d/.test(t)) || tokens.filter(t => t !== marca)[0] || '';
   return (marca + (modello ? ' ' + modello : '')).trim();
 }
-
-// ─── Raggruppamento (GROUP BY) ──────────────────────────────────────────────
 function bucketKm(km) {
-  if (km == null)   return 'Km non indicati';
-  if (km < 50000)   return '< 50.000 km';
-  if (km < 100000)  return '50.000 – 100.000 km';
-  if (km < 150000)  return '100.000 – 150.000 km';
-  if (km < 200000)  return '150.000 – 200.000 km';
+  if (km == null) return 'Km non indicati';
+  if (km < 50000) return '< 50.000 km';
+  if (km < 100000) return '50.000 – 100.000 km';
+  if (km < 150000) return '100.000 – 150.000 km';
+  if (km < 200000) return '150.000 – 200.000 km';
   return '> 200.000 km';
 }
-
 function bucketAnno(anno) {
   if (anno == null) return 'Anno non indicato';
   if (anno >= 2020) return 'Dal 2020';
@@ -370,7 +462,6 @@ function bucketAnno(anno) {
   if (anno >= 2000) return '2000 – 2009';
   return 'Prima del 2000';
 }
-
 function groupKeyFn(dim) {
   switch (dim) {
     case 'fonte':      return r => FONTE_LABEL[r.fonte] || r.fonte;
@@ -382,17 +473,11 @@ function groupKeyFn(dim) {
     default:           return null;
   }
 }
-
-// Raggruppa results → [{ key, items, minPrezzo }] ordinato per prezzo minimo asc.
 function groupResults(results, dim) {
   const keyFn = groupKeyFn(dim);
   if (!keyFn) return null;
   const map = new Map();
-  for (const r of results) {
-    const k = keyFn(r);
-    if (!map.has(k)) map.set(k, []);
-    map.get(k).push(r);
-  }
+  for (const r of results) { const k = keyFn(r); if (!map.has(k)) map.set(k, []); map.get(k).push(r); }
   const groups = [...map.entries()].map(([key, items]) => {
     const prezzi = items.map(i => i.prezzo).filter(p => p != null && p > 0);
     return { key, items, minPrezzo: prezzi.length ? Math.min(...prezzi) : null };
@@ -401,98 +486,78 @@ function groupResults(results, dim) {
   return groups;
 }
 
+const FACET_DIMS = [
+  ['', 'Nessuno'], ['modello', 'Modello'], ['fonte', 'Fonte'],
+  ['carburante', 'Carburante'], ['anno', 'Anno'], ['km', 'Km'], ['provincia', 'Provincia'],
+];
+function renderFacetChips() {
+  if (!facetChipsEl) return;
+  facetChipsEl.innerHTML = FACET_DIMS.map(([dim, label]) =>
+    `<button type="button" class="facet-chip${dim === groupDim ? ' active' : ''}" data-dim="${dim}">${label}</button>`).join('');
+}
 
 // ─── Ricerca ──────────────────────────────────────────────────────────────────
 async function doSearch() {
-  const tipo  = document.querySelector('input[name="tipo"]:checked').value;
-  const marca = marcaSelect.value.trim();
+  const tipo = currentTipo();
+  const brand = matchedBrand();
+  if (!brand) { showError('Scegli una marca dalla lista prima di cercare.'); return; }
+  const marca = brand.nome;
 
-  if (!marca) { showError('Inserisci una marca prima di cercare.'); return; }
-
-  // P10: marca da input testuale (con autocomplete soft), modello completamente
-  // libero. Il server risolve mmmvAutoscout/motoitBrandSlug dal catalogo se
-  // disponibili — altrimenti fallback brand-only + post-filter (P6).
   const modelloLibero = document.getElementById('modello').value.trim();
-
   const params = {
-    tipo, marca,
-    modello:   modelloLibero,
+    tipo, marca, modello: modelloLibero,
     prezzoMin: document.getElementById('prezzoMin').value,
     prezzoMax: document.getElementById('prezzoMax').value,
     annoMin:   document.getElementById('annoMin').value,
     annoMax:   document.getElementById('annoMax').value,
     kmMin:     document.getElementById('kmMin').value,
     kmMax:     document.getElementById('kmMax').value,
+    raggio:    document.getElementById('raggio').value,   // solo AS24, ignorato senza regione (server default 100)
   };
-
   if (regioneSelect.value) params.regione = regioneSelect.value;
-
   Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });
-  lastSearchParams = { ...params };   // §11: memorizza per "Salva ricerca"
+  lastSearchParams = { ...params };
+  visibleCols = colsFromFilters(params);   // colonne default = filtri usati (anno/km); resto via menu
+  syncColMenu();
 
-  confronto = [];
-  hideConfrontoPanel();
-  document.body.classList.add('has-results');   // hero va in alto (non più centrata)
+  confronto = []; renderCompareBar(); closeMatrix();
+  document.body.classList.add('has-results');
+  document.body.dataset.tipo = tipo;
 
-  showLoading();
-  hideResults();
-
+  showLoading(); hideResults();
   try {
-    const res  = await fetch(`/api/search?${new URLSearchParams(params)}`);
+    const res = await fetch(`/api/search?${new URLSearchParams(params)}`);
     const data = await res.json();
-
     if (!res.ok) { showError(data.error || 'Errore durante la ricerca.'); return; }
 
-    // §21: niente più rating — si usano i risultati grezzi.
     currentResults = data.risultati || [];
-    lastSources    = data.sources || null;   // stato per-fonte (ok/empty/skipped/timeout/error)
+    searchActive = true;
+    lastSources = data.sources || null;
     renderSourceStatus();
 
-    // Subito bloccato da DataDome → mostra banner + aggiorna pillola
-    if (data.subitoStatus === 'needs_bootstrap') showBootstrapBanner();
-    else                                          hideBootstrapBanner();
-    // La response può aver cambiato lo state lato server (es. sbloccato dopo refresh)
+    if (data.subitoStatus === 'needs_bootstrap') showBootstrapBanner(); else hideBootstrapBanner();
     fetchSubitoStatus();
 
     initPrezzoSlider(currentResults);
-
     if (!prezzoSliderInstance) renderResults(currentResults);
-
-    if (currentResults.length > 0) {
-      resultsNav.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
+    if (currentResults.length > 0) resultsToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch {
     showError('Impossibile contattare il server. Assicurati che sia avviato con "npm start".');
-  } finally {
-    hideLoading();
-  }
+  } finally { hideLoading(); }
 }
 
-// ─── Subito session bootstrap (UI) ───────────────────────────────────────────
-function showBootstrapBanner() {
-  statusBox.classList.remove('d-none');
-  subitoBanner.classList.remove('d-none');
-  subitoBanner.classList.add('d-flex');
-}
-function hideBootstrapBanner() {
-  subitoBanner.classList.add('d-none');
-  subitoBanner.classList.remove('d-flex');
-}
-
+// ─── Subito bootstrap ─────────────────────────────────────────────────────────
+function showBootstrapBanner() { statusBox.classList.remove('d-none'); subitoBanner.classList.remove('d-none'); subitoBanner.classList.add('d-flex'); }
+function hideBootstrapBanner() { subitoBanner.classList.add('d-none'); subitoBanner.classList.remove('d-flex'); }
 async function runSubitoBootstrap() {
   bootstrapBtnText.textContent = 'Apertura finestra…';
   bootstrapBtnSpinner.classList.remove('d-none');
   btnBootstrap.disabled = true;
-
   try {
-    const res  = await fetch('/api/subito/bootstrap', { method: 'POST' });
+    const res = await fetch('/api/subito/bootstrap', { method: 'POST' });
     const data = await res.json();
-
     if (data.ok) {
-      hideBootstrapBanner();
-      showError(''); // clear
-      fetchSubitoStatus();
+      hideBootstrapBanner(); showError(''); fetchSubitoStatus();
       const note = document.createElement('div');
       note.className = 'alert alert-success';
       const hours = data.expiresInHours ? ` (valida ~${data.expiresInHours} ore)` : '';
@@ -500,15 +565,14 @@ async function runSubitoBootstrap() {
       statusBox.appendChild(note);
       setTimeout(() => note.remove(), 6000);
     } else {
-      // Messaggio dettagliato per aiutare l'utente a capire cosa fare.
       const reasonMap = {
-        window_closed:        'Hai chiuso la finestra Chrome prima del completamento.',
-        timeout:              'Tempo scaduto (5 minuti): il CAPTCHA non è stato completato.',
+        window_closed: 'Hai chiuso la finestra Chrome prima del completamento.',
+        timeout: 'Tempo scaduto (5 minuti): il CAPTCHA non è stato completato.',
         chrome_launch_failed: 'Impossibile aprire Chrome. Riprova o contatta lo sviluppatore.',
-        error:                'Errore tecnico durante il bootstrap.',
+        error: 'Errore tecnico durante il bootstrap.',
       };
       const reasonText = reasonMap[data.reason] || `Errore: ${data.reason || 'sconosciuto'}`;
-      const hint       = data.hint ? ` ${data.hint}` : '';
+      const hint = data.hint ? ` ${data.hint}` : '';
       showError(`Bootstrap Subito fallito. ${reasonText}${hint}`);
     }
   } catch (err) {
@@ -519,56 +583,38 @@ async function runSubitoBootstrap() {
     btnBootstrap.disabled = false;
   }
 }
-
 if (btnBootstrap) btnBootstrap.addEventListener('click', runSubitoBootstrap);
 
-// ─── Stato Subito → solo banner quando serve ────────────────────────────────
-// Niente più pillola persistente: lo stato viene controllato (avvio, dopo ogni
-// ricerca, ogni 60s) e mostra il banner bootstrap solo se la sessione è
-// bloccata / mai configurata.
+let subitoBlocked = false;
 async function fetchSubitoStatus() {
   try {
-    const res  = await fetch('/api/subito/status');
+    const res = await fetch('/api/subito/status');
     const data = await res.json();
-    if (data.health === 'blocked' || data.health === 'never_configured') showBootstrapBanner();
-    else                                                                  hideBootstrapBanner();
+    subitoBlocked = (data.health === 'blocked' || data.health === 'never_configured');
+    if (subitoBlocked) showBootstrapBanner(); else hideBootstrapBanner();
     return data;
-  } catch (_) {
-    return null;
-  }
+  } catch (_) { return null; }
 }
-
 const SUBITO_POLL_INTERVAL = 60 * 1000;
 fetchSubitoStatus();
 setInterval(fetchSubitoStatus, SUBITO_POLL_INTERVAL);
 
-// ─── Slider prezzo ────────────────────────────────────────────────────────────
+// ─── Slider prezzo ──────────────────────────────────────────────────────────
 function initPrezzoSlider(results) {
-  if (prezzoSliderInstance) {
-    try { prezzoSliderInstance.destroy(); } catch (_) {}
-    prezzoSliderInstance = null;
-  }
+  if (prezzoSliderInstance) { try { prezzoSliderInstance.destroy(); } catch (_) {} prezzoSliderInstance = null; }
   prezzoSliderEl.innerHTML = '';
   document.getElementById('sliderLabelMin').textContent = '';
   document.getElementById('sliderLabelMax').textContent = '';
-
   const prices = results.map(r => r.prezzo).filter(p => p != null && p > 0);
   if (prices.length < 2) return;
-
   const minP = Math.floor(Math.min(...prices) / 100) * 100;
   const maxP = Math.ceil(Math.max(...prices) / 100) * 100;
   if (minP === maxP) return;
-
   sliderGlobalBounds = [minP, maxP];
-
   prezzoSliderInstance = noUiSlider.create(prezzoSliderEl, {
-    start:   [minP, maxP],
-    connect: true,
-    range:   { min: minP, max: maxP },
-    step:    100,
-    format:  { to: v => Math.round(v), from: v => Number(v) },
+    start: [minP, maxP], connect: true, range: { min: minP, max: maxP }, step: 100,
+    format: { to: v => Math.round(v), from: v => Number(v) },
   });
-
   prezzoSliderInstance.on('update', ([sMin, sMax]) => {
     document.getElementById('sliderLabelMin').textContent = `€ ${Number(sMin).toLocaleString('it-IT')}`;
     document.getElementById('sliderLabelMax').textContent = `€ ${Number(sMax).toLocaleString('it-IT')}`;
@@ -576,304 +622,351 @@ function initPrezzoSlider(results) {
   });
 }
 
+// ─── Ordinamento ──────────────────────────────────────────────────────────────
+function setSort(key) {
+  if (sortState.key === key) sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+  else sortState = { key, dir: key === 'prezzo' || key === 'km' ? 'asc' : 'desc' };
+  if (sortMobile) sortMobile.value = `${sortState.key}_${sortState.dir}`;
+  renderResults(currentResults);
+}
+function sortResults(results) {
+  const { key, dir } = sortState;
+  const mul = dir === 'asc' ? 1 : -1;
+  const hi = dir === 'asc' ? Infinity : -Infinity;
+  return results.sort((a, b) => mul * (((a[key] ?? hi) - (b[key] ?? hi))));
+}
 
-// ─── Rendering risultati ──────────────────────────────────────────────────────
+// ─── Rendering ──────────────────────────────────────────────────────────────
 function renderResults(results) {
+  // Nessuna ricerca attiva (es. renderResults chiamato da toggleSalva dopo un reload):
+  // niente toolbar/risultati. La toolbar appare solo dopo una ricerca vera.
+  if (!searchActive) {
+    resultsToolbar.classList.add('d-none'); compareBar.classList.add('d-none');
+    resultsSection.classList.add('d-none'); noResults.classList.add('d-none');
+    return;
+  }
   let filtered = results.slice();
-
   if (prezzoSliderInstance) {
     const [sMin, sMax] = prezzoSliderInstance.get().map(Number);
     filtered = filtered.filter(r => r.prezzo == null || (r.prezzo >= sMin && r.prezzo <= sMax));
   }
+  const sorted = sortResults([...filtered]);
+  renderFacetChips();
 
-  const sorted = sortResults([...filtered], sortSelect.value);
+  resultsToolbar.classList.remove('d-none');
+  updateStats(sorted);
 
-  // Raggruppamento + chip di isolamento (solo con group-by attivo)
-  const dim = groupSelect ? groupSelect.value : '';
-  let groups = null, visible = sorted;
-  if (dim) {
-    groups  = groupResults(sorted, dim);
-    const keyOf = groupKeyFn(dim);
-    visible = sorted.filter(r => !hiddenGroups.has(keyOf(r)));
-  }
-  renderGroupChips(dim, groups);
-
-  resultsNav.classList.remove('d-none');   // navbar comandi visibile finché ci sono risultati
-  updateStats(visible);
-
-  if (visible.length === 0) {
-    noResults.classList.remove('d-none');
-    resultsSection.classList.add('d-none');
-    fonteBreakdown.textContent = '';
+  if (sorted.length === 0) {
+    noResults.classList.remove('d-none'); resultsSection.classList.add('d-none');
     return;
   }
+  noResults.classList.add('d-none'); resultsSection.classList.remove('d-none');
+  resultsCount.textContent = `${sorted.length} risultati`;
 
-  noResults.classList.add('d-none');
-  resultsSection.classList.remove('d-none');
-
-  resultsCount.textContent = `${visible.length} risultati`;
-
-  if (dim) {
-    const shown = groups.filter(g => !hiddenGroups.has(g.key));
-    resultsGrid.innerHTML = shown.map(g => groupHTML(g, dim)).join('');
+  if (groupDim) {
+    const groups = groupResults(sorted, groupDim);
+    resultsGrid.innerHTML = groups.map(g => {
+      const best = bestUrlSet(g.items);
+      return `<div class="result-group">
+        <button type="button" class="group-header" aria-expanded="true">
+          <span class="group-caret">${icon('chevron')}</span>
+          <span class="group-title">${escapeHtml(String(g.key))}</span>
+          <span class="group-meta">${g.items.length} annunci${g.minPrezzo != null ? ` · da € ${g.minPrezzo.toLocaleString('it-IT')}` : ''}</span>
+        </button>
+        <div class="group-body">${gridHeadHTML()}<div class="result-list">${g.items.map(r => rowHTML(r, best)).join('')}</div></div>
+      </div>`;
+    }).join('');
   } else {
-    resultsGrid.innerHTML = `<div class="result-list">${visible.map(r => rowHTML(r, dim)).join('')}</div>`;
+    const best = bestUrlSet(sorted);
+    resultsGrid.innerHTML = gridHeadHTML() + `<div class="result-list">${sorted.map(r => rowHTML(r, best)).join('')}</div>`;
+  }
+  observeEnrich();   // Moto.it: foto+spec reali quando la riga entra in viewport
+}
+
+// ─── Arricchimento Moto.it on-scroll (foto + spec reali dalla pagina-dettaglio) ─
+// Le card Moto.it on-search non hanno foto; la pagina-dettaglio sì. Quando una
+// riga moto entra nel viewport → fetch /api/detail (pool concorrenza 4), merge
+// immagini+spec nel result, aggiorna la thumbnail IN PLACE (niente full re-render).
+let enrichObserver = null;
+let _enrichActive = 0; const _enrichQueue = [];
+function _enrichPump() {
+  while (_enrichActive < 4 && _enrichQueue.length) {
+    const fn = _enrichQueue.shift(); _enrichActive++;
+    fn().finally(() => { _enrichActive--; _enrichPump(); });
+  }
+}
+function _enqueueEnrich(url) { _enrichQueue.push(() => enrichMotoRow(url)); _enrichPump(); }
+function observeEnrich() {
+  if (enrichObserver) enrichObserver.disconnect();
+  const targets = resultsGrid.querySelectorAll('.row-thumb[data-enrich]');
+  if (!targets.length) return;
+  if (!('IntersectionObserver' in window)) {
+    [...targets].slice(0, 12).forEach(el => { const u = el.closest('[data-url]')?.dataset.url; if (u) _enqueueEnrich(u); });
+    return;
+  }
+  enrichObserver = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      enrichObserver.unobserve(e.target);
+      const u = e.target.closest('[data-url]')?.dataset.url;
+      if (u) _enqueueEnrich(u);
+    });
+  }, { rootMargin: '300px' });
+  targets.forEach(el => enrichObserver.observe(el));
+}
+async function enrichMotoRow(url) {
+  const r = trovaResult(url);
+  if (!r || r._enriched) return;   // già arricchita (cover-only NON conta: ha solo 1 foto)
+  try {
+    const j = await fetch(`/api/detail?url=${encodeURIComponent(url)}`).then(x => x.json());
+    if (j.ok && j.detail) {
+      Object.keys(j.detail).forEach(k => {
+        const v = j.detail[k]; if (v == null) return;
+        if (k === 'immagini') { if (Array.isArray(v) && v.length) r.immagini = v; }  // galleria piena rimpiazza la cover
+        else if (r[k] == null) r[k] = v;
+      });
+      r._enriched = true;   // solo a merge riuscito: un fetch fallito resta ri-tentabile dall'apertura dettaglio
+    }
+  } catch (_) {}
+  updateRowThumb(url);
+}
+function updateRowThumb(url) {
+  const row = resultsGrid.querySelector(`.result-row[data-url="${CSS.escape(url)}"]`);
+  if (!row) return;
+  const thumb = row.querySelector('.row-thumb'); if (!thumb) return;
+  const r = trovaResult(url); const imgs = (r && Array.isArray(r.immagini)) ? r.immagini : [];
+  if (imgs.length) {
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'row-thumb'; btn.title = 'Vedi foto';
+    btn.innerHTML = `<img src="${escapeHtml(imgs[0].thumb)}" loading="lazy" referrerpolicy="no-referrer" alt="">`;
+    thumb.replaceWith(btn);
+  } else { thumb.classList.remove('enrich'); thumb.removeAttribute('data-enrich'); }
+}
+
+// Set di URL col prezzo più basso (1 per gruppo/lista) → evidenziazione "best".
+function bestUrlSet(items) {
+  let min = Infinity, url = null;
+  for (const r of items) { if (r.prezzo != null && r.prezzo > 0 && r.prezzo < min) { min = r.prezzo; url = r.url; } }
+  return new Set(url ? [url] : []);
+}
+
+// ─── Colonne griglia (dinamiche) ────────────────────────────────────────────
+// Base = sempre presenti. anno/km/carb/cv = opzionali: default dai FILTRI usati
+// in ricerca + menu "Colonne". Sotto 1180px carb/cv cadono (overflow); il template
+// è inline (vince sulle media-query) → la responsività è in JS (effVisibleCols).
+const COLS = [
+  { key: 'foto',    w: '120px',         base: true },
+  { key: 'veicolo', w: 'minmax(0,1fr)', base: true },
+  { key: 'anno',    w: '64px',  num: true, sort: 'anno',      label: 'Anno' },
+  { key: 'km',      w: '98px',  num: true, sort: 'km',        label: 'Km' },
+  { key: 'carb',    w: '92px',             label: 'Carb.' },
+  { key: 'cv',      w: '58px',  num: true, sort: 'potenzaCv', label: 'CV' },
+  { key: 'prezzo',  w: '124px', num: true, sort: 'prezzo',    label: 'Prezzo', base: true },
+  { key: 'fonte',   w: '96px',  base: true },
+  { key: 'azioni',  w: '104px', base: true },
+];
+const OPTIONAL_COLS = ['anno', 'km', 'carb', 'cv'];
+function effVisibleCols() {
+  const wide = window.innerWidth >= 1180;   // sotto: niente carb/cv (mobile <860 → stacked CSS)
+  return visibleCols.filter(k => wide || (k !== 'carb' && k !== 'cv'));
+}
+function activeCols() {
+  const vis = effVisibleCols();
+  return COLS.filter(c => c.base || vis.includes(c.key));
+}
+function gridTemplate() {
+  return activeCols().map(c => c.w).join(' ');
+}
+function colsFromFilters(p) {
+  const v = [];
+  if (p && (p.annoMin || p.annoMax)) v.push('anno');
+  if (p && (p.kmMin || p.kmMax)) v.push('km');
+  return v;
+}
+function syncColMenu() {
+  document.querySelectorAll('.col-toggle').forEach(cb => { cb.checked = visibleCols.includes(cb.value); });
+}
+
+function gridHeadHTML() {
+  const caret = key => sortState.key === key ? `<span class="sort-caret">${sortState.dir === 'asc' ? '↑' : '↓'}</span>` : '';
+  const cells = activeCols().map(c => {
+    if (c.key === 'foto')    return '<span class="gh">Foto</span>';
+    if (c.key === 'veicolo') return '<span class="gh">Veicolo</span>';
+    if (c.key === 'fonte')   return '<span class="gh">Fonte</span>';
+    if (c.key === 'azioni')  return `<span class="gh" style="text-align:right">Azioni ${helpDot('azioni')}</span>`;
+    if (c.sort) return `<span class="gh gh-num"><button type="button" class="gh-sort${sortState.key === c.sort ? ' active' : ''}" data-key="${c.sort}">${c.label} ${caret(c.sort)}</button></span>`;
+    return `<span class="gh">${c.label}</span>`;
+  }).join('');
+  return `<div class="grid-head" style="grid-template-columns:${gridTemplate()}">${cells}</div>`;
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function rowHTML(item, bestSet) {
+  const prezzoStr = item.prezzo != null ? `€ ${item.prezzo.toLocaleString('it-IT')}` : 'n/d';
+  const fonteLabel = FONTE_LABEL[item.fonte] || item.fonte;
+  const fonteTag = { subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[item.fonte] || '';
+  const urlSafe = /^https?:\/\//i.test(item.url) ? escapeHtml(item.url) : '#';
+  const isSalvato = salvati.some(r => r.url === item.url);
+  const inConfronto = confronto.some(r => r.url === item.url);
+  const isBest = bestSet && bestSet.has(item.url);
+  const imgs = Array.isArray(item.immagini) ? item.immagini : [];
+  // Foto: chi le ha → thumbnail (click=lightbox). Moto.it ha la cover dalla card
+  // (thumb subito) ma la galleria piena arriva dall'arricchimento /api/detail →
+  // la riga resta marcata `data-enrich` finché non arricchita (l'observer la fetcha).
+  // Subito/AS24 senza foto → placeholder semplice.
+  const needEnrich = item.fonte === 'moto' && !item._enriched;
+  const enrichAttr = needEnrich ? ' data-enrich="1"' : '';
+  const thumbHTML = imgs.length
+    ? `<button type="button" class="row-thumb"${enrichAttr} title="Vedi foto"><img src="${escapeHtml(imgs[0].thumb)}" loading="lazy" referrerpolicy="no-referrer" alt=""></button>`
+    : `<div class="row-thumb noimg${needEnrich ? ' enrich' : ''}"${enrichAttr} aria-hidden="true"></div>`;
+
+  const conc = item.venditore && /conc/i.test(item.venditore);
+  const vendBadge = item.venditore ? `<span class="vend-badge vend-${conc ? 'conc' : 'priv'}">${conc ? 'Conc.' : 'Privato'}</span>` : '';
+  const sub = [item.provincia ? escapeHtml(item.provincia) : '', vendBadge].filter(Boolean).join(' ');
+  const subM = [item.anno || null, item.km != null ? `${item.km.toLocaleString('it-IT')} km` : null, item.carburante || null, item.potenzaCv != null ? `${item.potenzaCv} CV` : null, fonteLabel].filter(Boolean).join(' · ');
+
+  const cell = key => {
+    switch (key) {
+      case 'foto':    return thumbHTML;
+      case 'veicolo': return `<div class="row-main">
+          <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}<span class="ext">↗</span></div>
+          ${item.variante ? `<div class="row-variante">${escapeHtml(item.variante)}</div>` : ''}
+          ${sub ? `<div class="row-sub">${sub}</div>` : ''}
+          <div class="row-sub-m">${escapeHtml(subM)}</div>
+        </div>`;
+      case 'anno':   return `<div class="row-cell num muted">${item.anno || '—'}</div>`;
+      case 'km':     return `<div class="row-cell num muted">${item.km != null ? item.km.toLocaleString('it-IT') : '—'}</div>`;
+      case 'carb':   return `<div class="row-cell muted">${item.carburante ? escapeHtml(item.carburante) : '—'}</div>`;
+      case 'cv':     return `<div class="row-cell num muted">${item.potenzaCv != null ? item.potenzaCv : '—'}</div>`;
+      case 'prezzo': return `<div class="row-prezzo">${prezzoStr}</div>`;
+      case 'fonte':  return `<div class="row-fonte"><span class="tag ${fonteTag}">${escapeHtml(fonteLabel)}</span></div>`;
+      case 'azioni': return `<div class="row-actions">
+          <button class="row-act btn-info" title="Dettagli e foto">${icon('info')}</button>
+          <button class="row-act btn-confronta${inConfronto ? ' attivo' : ''}" title="Aggiungi al confronto">${icon(inConfronto ? 'square-check' : 'square')}</button>
+          <button class="row-act btn-salva${isSalvato ? ' attivo' : ''}" title="${isSalvato ? 'Rimuovi dai salvati' : 'Salva annuncio'}">${icon(isSalvato ? 'bookmark-filled' : 'bookmark')}</button>
+        </div>`;
+      default: return '';
+    }
+  };
+  const cells = activeCols().map(c => cell(c.key)).join('');
+  // Pannello dettaglio inline (fisarmonica), sibling full-width nella .result-list.
+  return `<div class="result-row${isBest ? ' best' : ''}${inConfronto ? ' selected' : ''}" data-url="${urlSafe}" style="grid-template-columns:${gridTemplate()}">${cells}</div>` +
+    `<div class="row-detail d-none" data-url="${urlSafe}" data-detail="1"></div>`;
+}
+
+// ─── Dettaglio inline (ℹ → fisarmonica sotto la riga, niente salto in cima) ────
+function toggleDetail(rowEl) {
+  const panel = rowEl.nextElementSibling;
+  if (!panel || !panel.classList.contains('row-detail')) return;
+  const opening = panel.classList.contains('d-none');
+  panel.classList.toggle('d-none');
+  rowEl.classList.toggle('detail-open', opening);
+  if (opening && panel.dataset.loaded !== '1') {
+    const r = trovaResult(rowEl.dataset.url);
+    if (r) renderDetailInto(panel, r);
+  }
+}
+function detailSpecsHTML(r) {
+  const base = [];
+  if (r.prezzo != null) base.push(['Prezzo', `€ ${r.prezzo.toLocaleString('it-IT')}`]);
+  if (r.anno != null)   base.push(['Anno', r.anno]);
+  if (r.km != null)     base.push(['Km', `${r.km.toLocaleString('it-IT')} km`]);
+  if (r.provincia)      base.push(['Provincia', r.provincia]);
+  const extra = Object.keys(SPEC_LABELS).map(k => { const v = specVal(k, r[k]); return v ? [SPEC_LABELS[k], v] : null; }).filter(Boolean);
+  const all = base.concat(extra);
+  if (!all.length) return '<span class="spec-empty">Nessun dettaglio aggiuntivo</span>';
+  return all.map(([k, v]) => `<div class="det-spec"><span class="det-k">${escapeHtml(String(k))}</span><span class="det-v">${escapeHtml(String(v))}</span></div>`).join('');
+}
+function renderDetailInto(panel, r) {
+  panel.dataset.loaded = '1';
+  const renderBody = () => {
+    const gallery = (Array.isArray(r.immagini) && r.immagini.length)
+      ? `<div class="det-gallery">${r.immagini.slice(0, 8).map(im => `<img src="${escapeHtml(im.thumb)}" loading="lazy" referrerpolicy="no-referrer" alt="">`).join('')}</div>`
+      : '';
+    const openBtn = /^https?:\/\//i.test(r.url) ? `<a class="det-open" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">Apri annuncio ↗</a>` : '';
+    panel.innerHTML = `<div class="det-inner">${gallery}<div class="det-specs">${detailSpecsHTML(r)}</div><div class="det-foot">${openBtn}</div></div>`;
+  };
+  renderBody();   // apertura immediata (cover + dati on-search) → niente freeze del click
+  // Moto.it: galleria piena + spec dalla pagina-dettaglio. Riusa enrichMotoRow (merge
+  // immagini+spec, cache 12h server, aggiorna anche il thumb della riga); poi ri-rende.
+  if (r.fonte === 'moto' && !r._enriched && /^https?:/.test(r.url || '')) {
+    enrichMotoRow(r.url).then(() => { if (panel.isConnected) renderBody(); });
   }
 }
 
-// Stato per-fonte: dice all'utente cosa è successo per ogni sito
-// (ok+conteggio / nessun risultato / saltato+motivo / timeout / errore).
+function openAd(url) { if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener,noreferrer'); }
+
+// ─── Statistiche ──────────────────────────────────────────────────────────────
+function updateStats(results) {
+  const prices = results.map(r => r.prezzo).filter(p => p != null && p > 0).sort((a, b) => a - b);
+  const fmt = n => `€ ${n.toLocaleString('it-IT')}`;
+  if (prices.length === 0) {
+    document.getElementById('statMin').innerHTML = '—'; document.getElementById('statMax').innerHTML = '—'; return;
+  }
+  const min = prices[0], max = prices[prices.length - 1];
+  const minResult = results.find(r => r.prezzo === min);
+  const maxResult = results.find(r => r.prezzo === max);
+  const mk = (val, r) => r ? `<button class="stat-clickable" data-url="${escapeHtml(r.url)}">${fmt(val)}</button>` : fmt(val);
+  document.getElementById('statMin').innerHTML = mk(min, minResult);
+  document.getElementById('statMax').innerHTML = mk(max, maxResult);
+}
+
+function scrollToCard(url) {
+  const card = resultsGrid.querySelector(`[data-url="${CSS.escape(url)}"]`);
+  if (!card) return;
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.classList.remove('highlight-card'); void card.offsetWidth; card.classList.add('highlight-card');
+  setTimeout(() => card.classList.remove('highlight-card'), 2000);
+}
+
+// ─── Stato per-fonte ──────────────────────────────────────────────────────────
 const SOURCE_STATUS = {
-  ok:              { cls: 'src-ok' },
-  empty:           { cls: 'src-muted', txt: 'nessun risultato' },
-  skipped:         { cls: 'src-muted' },                              // usa reason
-  timeout:         { cls: 'src-bad',   txt: 'timeout' },
-  error:           { cls: 'src-bad',   txt: 'errore' },
-  needs_bootstrap: { cls: 'src-warn',  txt: 'verifica richiesta' },
+  ok: { cls: 'src-ok' }, empty: { cls: 'src-muted', txt: 'nessun risultato' },
+  skipped: { cls: 'src-muted' }, timeout: { cls: 'src-bad', txt: 'timeout' },
+  error: { cls: 'src-bad', txt: 'errore' }, needs_bootstrap: { cls: 'src-warn', txt: 'verifica richiesta' },
 };
-const SKIP_REASON_TXT = {
-  'solo moto':             'solo moto',
-  'marca non su Moto.it':  'non disponibile',
-  'marca non su Autoscout':'non disponibile',
-};
+const SKIP_REASON_TXT = { 'solo moto': 'solo moto', 'marca non su Moto.it': 'non disponibile', 'marca non su Autoscout': 'non disponibile' };
 function renderSourceStatus() {
   if (!fonteBreakdown) return;
   if (!lastSources) { fonteBreakdown.innerHTML = ''; return; }
   const order = ['subito', 'autoscout', 'moto'];
   fonteBreakdown.innerHTML = order.map(f => {
-    const s = lastSources[f];
-    if (!s) return '';
+    const s = lastSources[f]; if (!s) return '';
     const meta = SOURCE_STATUS[s.status] || { cls: 'src-muted' };
     let txt;
-    if (s.status === 'ok')           txt = `${s.count}`;
+    if (s.status === 'ok') txt = `${s.count}`;
     else if (s.status === 'skipped') txt = SKIP_REASON_TXT[s.reason] || s.reason || 'saltato';
-    else                             txt = meta.txt || s.status;
+    else txt = meta.txt || s.status;
     const dim = s.status === 'ok' ? '' : ' src-dim';
     return `<span class="src ${meta.cls}${dim}">${FONTE_LABEL[f]} <b>${txt}</b></span>`;
   }).join('');
 }
 
-// Isola (navbar, dropdown): toggle "Isola (n)" + pannello chip + Tutte/Nessuna.
-function renderGroupChips(dim, groups) {
-  if (!groupChips || !isolaRow || !isolaToggle) return;
-
-  // Nessun group-by → nascondi toggle e pannello
-  if (!dim || !groups || !groups.length) {
-    groupChips.innerHTML = '';
-    isolaRow.classList.add('d-none');
-    isolaToggle.classList.add('d-none');
-    isolaOpen = false;
-    isolaToggle.setAttribute('aria-expanded', 'false');
-    lastGroupKeys = [];
-    return;
-  }
-
-  lastGroupKeys = groups.map(g => g.key);
-
-  // Toggle visibile; conteggio = gruppi attualmente nascosti (es. "2 nascosti")
-  isolaToggle.classList.remove('d-none');
-  const nHidden = groups.filter(g => hiddenGroups.has(g.key)).length;
-  if (isolaCount) isolaCount.textContent = nHidden ? `(${nHidden} nascosti)` : `(${groups.length})`;
-
-  // Pannello: visibile solo se aperto
-  isolaRow.classList.toggle('d-none', !isolaOpen);
-  isolaToggle.setAttribute('aria-expanded', String(isolaOpen));
-
-  groupChips.innerHTML = groups.map(g => {
-    const active = !hiddenGroups.has(g.key);
-    return `<button type="button" class="grp-chip${active ? ' active' : ''}" data-group="${escapeHtml(String(g.key))}">${escapeHtml(String(g.key))} <span class="grp-chip-n">${g.items.length}</span></button>`;
-  }).join('');
-
-  if (chipsAllNone) {
-    const allHidden = hiddenGroups.size >= lastGroupKeys.length;
-    chipsAllNone.textContent = allHidden ? 'Tutte' : 'Nessuna';
-  }
-}
-
-// Sezione gruppo collassabile: header (etichetta + conteggio + prezzo min) + lista.
-function groupHTML(g, dim) {
-  const fmt  = n => n != null ? `€ ${n.toLocaleString('it-IT')}` : '—';
-  const rows = `<div class="result-list">${g.items.map(r => rowHTML(r, dim)).join('')}</div>`;
-  return `
-    <div class="result-group">
-      <button type="button" class="group-header" aria-expanded="true">
-        <span class="group-caret">${icon('chevron')}</span>
-        <span class="group-title">${escapeHtml(String(g.key))}</span>
-        <span class="group-meta">${g.items.length} annunci${g.minPrezzo != null ? ` · da ${fmt(g.minPrezzo)}` : ''}</span>
-      </button>
-      <div class="group-body">${rows}</div>
-    </div>
-  `;
-}
-
-// ─── Statistiche ──────────────────────────────────────────────────────────────
-function updateStats(results) {
-  const prices = results.map(r => r.prezzo).filter(p => p != null && p > 0).sort((a, b) => a - b);
-  const fmt    = n => `€ ${n.toLocaleString('it-IT')}`;
-
-  if (prices.length === 0) {
-    document.getElementById('statMin').innerHTML = '—';
-    document.getElementById('statMax').innerHTML = '—';
-    return;
-  }
-
-  const min = prices[0];
-  const max = prices[prices.length - 1];
-
-  // Min/Max cliccabili → scroll alla card corrispondente
-  const minResult = results.find(r => r.prezzo === min);
-  const maxResult = results.find(r => r.prezzo === max);
-
-  const makeClickable = (val, result) =>
-    result
-      ? `<button class="stat-clickable" data-url="${escapeHtml(result.url)}">${fmt(val)}</button>`
-      : fmt(val);
-
-  document.getElementById('statMin').innerHTML = makeClickable(min, minResult);
-  document.getElementById('statMax').innerHTML = makeClickable(max, maxResult);
-}
-
-// ─── Scroll & highlight card ──────────────────────────────────────────────────
-function scrollToCard(url) {
-  const card = resultsGrid.querySelector(`[data-url="${CSS.escape(url)}"]`);
-  if (!card) return;
-  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  card.classList.remove('highlight-card');
-  void card.offsetWidth; // force reflow per riavviare l'animazione
-  card.classList.add('highlight-card');
-  setTimeout(() => card.classList.remove('highlight-card'), 2000);
-}
-
-// ─── Ordinamento ──────────────────────────────────────────────────────────────
-function sortResults(results, criteria) {
-  switch (criteria) {
-    case 'prezzo_asc':  return results.sort((a, b) => (a.prezzo ?? Infinity)  - (b.prezzo ?? Infinity));
-    case 'prezzo_desc': return results.sort((a, b) => (b.prezzo ?? -Infinity) - (a.prezzo ?? -Infinity));
-    case 'anno_desc':   return results.sort((a, b) => (b.anno   ?? 0)         - (a.anno   ?? 0));
-    case 'km_asc':      return results.sort((a, b) => (a.km     ?? Infinity)  - (b.km     ?? Infinity));
-    default:            return results;
-  }
-}
-
-// ─── Card HTML ────────────────────────────────────────────────────────────────
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-// §22 — Pannello "Dettagli" on-click. Campi strutturati AS24 (cambio/cilindrata/
-// versione) sono già sull'item → render ISTANTANEO; per Subito/Moto.it fetch lazy
-// /api/detail (§15). `data-loaded` evita refetch.
+// ─── Spec (dettaglio) ────────────────────────────────────────────────────────
 const SPEC_LABELS = {
   variante: 'Versione', cambio: 'Cambio', cilindrata: 'Cilindrata', cilindri: 'Cilindri',
   potenzaCv: 'Potenza', carrozzeria: 'Carrozzeria', colore: 'Colore', porte: 'Porte', posti: 'Posti',
   classeEmissioni: 'Classe emissioni', neopatentati: 'Neopatentati', nuovo: 'Condizione', danni: 'Danni',
   venditore: 'Venditore', proprietari: 'Proprietari', allestimento: 'Allestimento', revisione: 'Revisione',
 };
-function renderSpec(obj) {
-  const fmt = (k, v) => {
-    if (v == null || v === '') return '';
-    let val;
-    if (k === 'potenzaCv')         val = `${v} CV`;
-    else if (k === 'cilindrata')   val = `${v} cc`;
-    else if (k === 'cilindri')     val = `${v}`;
-    else if (k === 'posti')        val = `${v}`;
-    else if (k === 'nuovo')        val = v ? 'Nuovo' : 'Usato';
-    else if (k === 'danni')        { if (!v) return ''; val = 'Incidentato'; }   // mostra solo se incidentato
-    else if (k === 'neopatentati') val = v ? 'Sì' : 'No';
-    else                           val = escapeHtml(String(v));
-    return `<span class="spec-item"><span class="spec-k">${SPEC_LABELS[k]}</span> ${val}</span>`;
-  };
-  const items = Object.keys(SPEC_LABELS).map(k => fmt(k, obj[k])).filter(Boolean);
-  return items.length ? items.join('') : '<span class="spec-empty">Nessun dettaglio aggiuntivo</span>';
+function specVal(k, v) {
+  if (v == null || v === '') return '';
+  if (k === 'potenzaCv') return `${v} CV`;
+  if (k === 'cilindrata') return `${v} cc`;
+  if (k === 'nuovo') return v ? 'Nuovo' : 'Usato';
+  if (k === 'danni') return v ? 'Incidentato' : 'Integro';
+  if (k === 'neopatentati') return v ? 'Sì' : 'No';
+  return String(v);
 }
-// F19 — l'item ha almeno un campo spec? Decide se mostrare il toggle "Dettagli"
-// (AS24/Subito hanno i campi sull'item da F18; Moto.it no → fetch /api/detail).
 function hasSpec(item) {
-  return ['variante', 'cambio', 'cilindrata', 'potenzaCv', 'venditore',
-          'colore', 'carrozzeria', 'porte', 'posti', 'classeEmissioni', 'proprietari', 'nuovo']
+  return ['variante', 'cambio', 'cilindrata', 'potenzaCv', 'venditore', 'colore', 'carrozzeria', 'porte', 'posti', 'classeEmissioni', 'proprietari', 'nuovo']
     .some(k => item[k] != null && item[k] !== '');
 }
 
-async function loadSpec(card) {
-  const box = card.querySelector('.row-spec');
-  if (!box || box.dataset.loaded === '1') return;
-  const item = trovaResult(card.dataset.url) || {};
-  // Campi strutturati sull'item (AS24 + Subito F18) → render immediato, niente rete.
-  if (hasSpec(item)) {
-    box.dataset.loaded = '1';
-    box.innerHTML = renderSpec(item);
-    return;
-  }
-  // Solo Moto.it (item senza spec) dipende dal dettaglio remoto. Subito non arriva
-  // più qui (ha sempre la versione nativa) → niente dropdown-errore.
-  if (item.fonte !== 'moto') { box.dataset.loaded = '1'; box.innerHTML = ''; return; }
-  box.dataset.loaded = '1';
-  const url = card.dataset.url;
-  if (!url || !/^https?:/.test(url)) { box.innerHTML = ''; return; }
-  box.innerHTML = '<span class="spec-loading">Carico dettagli…</span>';
-  try {
-    const r = await fetch(`/api/detail?url=${encodeURIComponent(url)}`);
-    const j = await r.json();
-    box.innerHTML = (j.ok && j.detail) ? renderSpec(j.detail)
-      : '<span class="spec-empty">Dettagli non disponibili</span>';
-  } catch (_) {
-    box.dataset.loaded = '0';   // errore di rete → retry alla prossima apertura
-    box.innerHTML = '<span class="spec-empty">Dettagli non disponibili</span>';
-  }
-}
-
-// Riga risultato (lista densa, §21: niente rating). Riga pulita: titolo · dati ·
-// prezzo + toggle "Dettagli" on-click.
-function rowHTML(item, dim = '') {
-  const prezzoStr = item.prezzo != null ? `€ ${item.prezzo.toLocaleString('it-IT')}` : 'n/d';
-
-  const dettagli = [
-    item.anno       ? `${item.anno}`                           : null,
-    item.km != null ? `${item.km.toLocaleString('it-IT')} km`  : null,
-    item.carburante || null,
-    item.provincia  || null,
-  ].filter(Boolean).join(' · ');
-
-  const fonteLabel  = FONTE_LABEL[item.fonte] || item.fonte;
-  const fonteClass  = { subito: 'fonte-subito', autoscout: 'fonte-autoscout', moto: 'fonte-moto' }[item.fonte] || '';
-  const urlSafe     = /^https?:\/\//i.test(item.url) ? escapeHtml(item.url) : '#';
-  const isSalvato   = salvati.some(r => r.url === item.url);
-  const inConfronto = confronto.some(r => r.url === item.url);
-  // Toggle "Dettagli" solo se c'è davvero qualcosa da mostrare (item con spec,
-  // o Moto.it che li recupera via /api/detail). Niente → niente dropdown-errore.
-  const showSpec    = hasSpec(item) || item.fonte === 'moto';
-  // Thumbnail (foto native, lazy): click → lightbox con tutte le foto. Niente foto → slot grigio.
-  const imgs        = Array.isArray(item.immagini) ? item.immagini : [];
-  const thumbHTML   = imgs.length
-    ? `<button type="button" class="row-thumb" title="Vedi foto"><img src="${escapeHtml(imgs[0].thumb)}" loading="lazy" referrerpolicy="no-referrer" alt=""></button>`
-    : `<div class="row-thumb noimg" aria-hidden="true"></div>`;
-
-  return `
-    <div class="result-row" data-url="${urlSafe}">
-      ${thumbHTML}
-      <div class="row-main">
-        <div class="row-titolo">${escapeHtml(item.titolo)}</div>
-        ${item.fonte === 'subito' && item.variante ? `<div class="row-variante">${escapeHtml(item.variante)}</div>` : ''}
-        <div class="row-dett">${dettagli ? escapeHtml(dettagli) + ' · ' : ''}<span class="fonte ${fonteClass}">${escapeHtml(fonteLabel)}</span></div>
-      </div>
-      <div class="row-right">
-        <div class="row-prezzo">${prezzoStr}</div>
-        <div class="row-actions">
-          ${showSpec ? `<button type="button" class="dettagli-toggle" aria-expanded="false" title="Mostra dettagli">Dettagli ${icon('chevron', 'chevron')}</button>` : ''}
-          <button class="btn-confronta${inConfronto ? ' attivo' : ''}" title="Confronta">${icon('compare')}</button>
-          <button class="btn-salva${isSalvato ? ' attivo' : ''}" title="${isSalvato ? 'Rimuovi dai salvati' : 'Salva annuncio'}">${icon(isSalvato ? 'bookmark-filled' : 'bookmark')}</button>
-        </div>
-      </div>
-      ${showSpec ? '<div class="row-detail d-none"><div class="row-spec" data-loaded="0"></div></div>' : ''}
-    </div>
-  `;
-}
-
-// ─── Slider/lightbox immagini ─────────────────────────────────────────────────
+// ─── Lightbox foto ────────────────────────────────────────────────────────────
 let lightboxState = null;
 function openLightbox(images) {
   closeLightbox();
@@ -886,19 +979,19 @@ function openLightbox(images) {
     <img class="lb-img" src="" alt="" referrerpolicy="no-referrer">
     <button class="lb-next" aria-label="Successiva">&#10095;</button>
     <div class="lb-count"></div>`;
-  const imgEl   = overlay.querySelector('.lb-img');
+  const imgEl = overlay.querySelector('.lb-img');
   const countEl = overlay.querySelector('.lb-count');
   const show = () => { imgEl.src = images[idx].full || images[idx].thumb; countEl.textContent = `${idx + 1} / ${images.length}`; };
-  const go   = d => { idx = (idx + d + images.length) % images.length; show(); };
+  const go = d => { idx = (idx + d + images.length) % images.length; show(); };
   overlay.querySelector('.lb-prev').addEventListener('click', e => { e.stopPropagation(); go(-1); });
   overlay.querySelector('.lb-next').addEventListener('click', e => { e.stopPropagation(); go(1); });
   overlay.querySelector('.lb-close').addEventListener('click', closeLightbox);
   overlay.addEventListener('click', e => { if (e.target === overlay) closeLightbox(); });
   const onKey = e => { if (e.key === 'Escape') closeLightbox(); else if (e.key === 'ArrowLeft') go(-1); else if (e.key === 'ArrowRight') go(1); };
   document.addEventListener('keydown', onKey);
-  let x0 = null;   // swipe touch (mobile)
+  let x0 = null;
   overlay.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
-  overlay.addEventListener('touchend',   e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); x0 = null; }, { passive: true });
+  overlay.addEventListener('touchend', e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); x0 = null; }, { passive: true });
   if (images.length < 2) { overlay.querySelector('.lb-prev').style.display = 'none'; overlay.querySelector('.lb-next').style.display = 'none'; }
   document.body.appendChild(overlay);
   lightboxState = { overlay, onKey };
@@ -907,297 +1000,210 @@ function openLightbox(images) {
 function closeLightbox() {
   if (!lightboxState) return;
   document.removeEventListener('keydown', lightboxState.onKey);
-  lightboxState.overlay.remove();
-  lightboxState = null;
+  lightboxState.overlay.remove(); lightboxState = null;
 }
 
-// ─── Confronto annunci ────────────────────────────────────────────────────────
+// ─── Confronto / matrice ──────────────────────────────────────────────────────
 function trovaResult(url) {
-  return currentResults.find(r => r.url === url)
-      || salvati.find(r => r.url === url)
-      || null;
+  return currentResults.find(r => r.url === url) || salvati.find(r => r.url === url) || confronto.find(r => r.url === url) || null;
 }
-
 function toggleConfronto(url) {
-  const result = trovaResult(url);
-  if (!result) return;
+  const result = trovaResult(url); if (!result) return;
   const idx = confronto.findIndex(r => r.url === url);
-  if (idx !== -1) {
-    confronto.splice(idx, 1);           // deseleziona
-  } else if (confronto.length < 2) {
-    confronto.push(result);             // prima o seconda selezione
-  } else {
-    confronto[0] = confronto[1];        // sostituisce il più vecchio
-    confronto[1] = result;
-  }
-  renderResults(currentResults);
-  renderSalvati();
-  renderConfrontoPanel();
+  if (idx !== -1) confronto.splice(idx, 1);
+  else if (confronto.length < COMPARE_CAP) confronto.push(result);
+  else { toast(`Massimo ${COMPARE_CAP} annunci a confronto`); return; }
+  renderResults(currentResults); renderSalvati(); renderCompareBar();
+  if (!cmatrixPanel.classList.contains('d-none') && matrixList.length > 1) openCompareMatrix();
+}
+function renderCompareBar() {
+  if (!compareBar) return;
+  compareCount.textContent = confronto.length;
+  compareBar.classList.toggle('d-none', confronto.length < 1);
 }
 
-function hideConfrontoPanel() {
-  document.getElementById('confrontoPanel')?.classList.add('d-none');
+// Apri matrice: confronto (N colonne) o singolo dettaglio (1 colonna)
+function openCompareMatrix() { matrixList = confronto.slice(); showMatrix(confronto.length > 1 ? 'Confronto annunci' : 'Dettaglio annuncio'); }
+function closeMatrix() { cmatrixPanel.classList.add('d-none'); matrixList = []; }
+function removeMatrixCol(url) {
+  matrixList = matrixList.filter(r => r.url !== url);
+  const i = confronto.findIndex(r => r.url === url);
+  if (i !== -1) { confronto.splice(i, 1); renderResults(currentResults); renderSalvati(); renderCompareBar(); }
+  if (!matrixList.length) closeMatrix(); else renderMatrix();
 }
 
-// F19 — confronto in pannello INLINE (no modale). Mostra a 2 selezionati, nasconde
-// sotto i 2. Riusa la logica `better()` per evidenziare il valore migliore.
-function renderConfrontoPanel() {
-  const panel = document.getElementById('confrontoPanel');
-  if (!panel) return;
-  if (confronto.length < 2) { panel.classList.add('d-none'); return; }
-  const [a, b] = confronto;
-  const fmt    = n => n != null ? `€ ${n.toLocaleString('it-IT')}` : '—';
-  const fmtKm  = n => n != null ? `${n.toLocaleString('it-IT')} km` : '—';
-
-  // Determina quale valore è migliore e assegna la classe CSS
-  const better = (va, vb, lowerIsBetter = true) => {
-    if (va == null && vb == null) return ['', ''];
-    if (va == null) return ['', 'confronto-val-better'];
-    if (vb == null) return ['confronto-val-better', ''];
-    if (va === vb)  return ['', ''];
-    return lowerIsBetter
-      ? (va < vb ? ['confronto-val-better', ''] : ['', 'confronto-val-better'])
-      : (va > vb ? ['confronto-val-better', ''] : ['', 'confronto-val-better']);
-  };
-
-  const [pA, pB] = better(a.prezzo, b.prezzo, true);
-  const [kA, kB] = better(a.km, b.km, true);
-  const [aA, aB] = better(a.anno, b.anno, false);
-
-  const trunc = (s, n) => s.length > n ? s.slice(0, n) + '…' : s;
-
-  document.getElementById('confrontoBody').innerHTML = `
-    <table class="confronto-table">
-      <thead>
-        <tr>
-          <th></th>
-          <th>${escapeHtml(trunc(a.titolo, 50))}</th>
-          <th>${escapeHtml(trunc(b.titolo, 50))}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Fonte</td>
-          <td>${escapeHtml(FONTE_LABEL[a.fonte] || a.fonte)}</td>
-          <td>${escapeHtml(FONTE_LABEL[b.fonte] || b.fonte)}</td>
-        </tr>
-        <tr>
-          <td>Prezzo</td>
-          <td class="${pA}">${fmt(a.prezzo)}</td>
-          <td class="${pB}">${fmt(b.prezzo)}</td>
-        </tr>
-        <tr>
-          <td>Anno</td>
-          <td class="${aA}">${a.anno || '—'}</td>
-          <td class="${aB}">${b.anno || '—'}</td>
-        </tr>
-        <tr>
-          <td>Km</td>
-          <td class="${kA}">${fmtKm(a.km)}</td>
-          <td class="${kB}">${fmtKm(b.km)}</td>
-        </tr>
-        <tr>
-          <td>Carburante</td>
-          <td>${escapeHtml(a.carburante || '—')}</td>
-          <td>${escapeHtml(b.carburante || '—')}</td>
-        </tr>
-        <tr>
-          <td>Provincia</td>
-          <td>${escapeHtml(a.provincia || '—')}</td>
-          <td>${escapeHtml(b.provincia || '—')}</td>
-        </tr>
-        <tr>
-          <td>Versione</td>
-          <td>${escapeHtml(a.variante || '—')}</td>
-          <td>${escapeHtml(b.variante || '—')}</td>
-        </tr>
-        <tr>
-          <td>Potenza</td>
-          <td>${a.potenzaCv != null ? a.potenzaCv + ' CV' : '—'}</td>
-          <td>${b.potenzaCv != null ? b.potenzaCv + ' CV' : '—'}</td>
-        </tr>
-        <tr>
-          <td>Venditore</td>
-          <td>${escapeHtml(a.venditore || '—')}</td>
-          <td>${escapeHtml(b.venditore || '—')}</td>
-        </tr>
-        <tr>
-          <td>Link</td>
-          <td><a href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary w-100">Vai ↗</a></td>
-          <td><a href="${escapeHtml(b.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary w-100">Vai ↗</a></td>
-        </tr>
-      </tbody>
-    </table>
-  `;
-
-  panel.classList.remove('d-none');
-  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+const MATRIX_ROWS = [
+  { key: 'prezzo', label: 'Prezzo', best: 'min', fmt: v => v != null ? `€ ${v.toLocaleString('it-IT')}` : '—' },
+  { key: 'anno', label: 'Anno', best: 'max', fmt: v => v != null ? v : '—' },
+  { key: 'km', label: 'Km', best: 'min', fmt: v => v != null ? `${v.toLocaleString('it-IT')} km` : '—' },
+  { key: 'carburante', label: 'Carburante', fmt: v => v || '—' },
+  { key: 'potenzaCv', label: 'Potenza', best: 'max', fmt: v => v != null ? `${v} CV` : '—' },
+  { key: 'cilindrata', label: 'Cilindrata', fmt: v => v != null ? `${v} cc` : '—' },
+  { key: 'cambio', label: 'Cambio', fmt: v => v || '—' },
+  { key: 'colore', label: 'Colore', fmt: v => v || '—' },
+  { key: 'carrozzeria', label: 'Carrozzeria', fmt: v => v || '—' },
+  { key: 'venditore', label: 'Venditore', fmt: v => v || '—' },
+  { key: 'provincia', label: 'Provincia', fmt: v => v || '—' },
+  { key: 'variante', label: 'Versione', fmt: v => v || '—' },
+];
+function showMatrix(title) {
+  cmatrixTitle.textContent = `${title} (${matrixList.length})`;
+  cmatrixPanel.classList.remove('d-none');
+  renderMatrix();
+  cmatrixPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  enrichMotoSpecs(matrixList);
+}
+function bestIndexes(vals, mode) {
+  const nums = vals.map(v => (typeof v === 'number' ? v : null));
+  const valid = nums.filter(v => v != null);
+  if (valid.length < 2) return new Set();
+  const target = mode === 'min' ? Math.min(...valid) : Math.max(...valid);
+  const set = new Set();
+  nums.forEach((v, i) => { if (v === target) set.add(i); });
+  return set;
+}
+function renderMatrix() {
+  const list = matrixList;
+  // Header: foto + titolo + Apri↗ + rimuovi
+  const head = `<thead><tr><th class="cm-label">Annuncio</th>${list.map(r => {
+    const thumb = (Array.isArray(r.immagini) && r.immagini[0]) ? `<img class="cm-thumb" src="${escapeHtml(r.immagini[0].thumb)}" referrerpolicy="no-referrer" alt="">` : `<span class="cm-thumb" style="display:flex;align-items:center;justify-content:center">—</span>`;
+    const fonte = FONTE_LABEL[r.fonte] || r.fonte;
+    const openBtn = /^https?:\/\//i.test(r.url) ? `<a class="cm-open" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">Apri ↗</a>` : '';
+    return `<th><div class="cm-colhead">${thumb}<div class="cm-tt"><div class="cm-coltitle">${escapeHtml(r.titolo || '')}</div><div class="cm-colactions">${openBtn}<button class="cm-rm" data-url="${escapeHtml(r.url)}" title="Rimuovi">✕</button></div></div></div></th>`;
+  }).join('')}</tr></thead>`;
+  // Foto-fonte già nel header. Righe campo:
+  const rows = MATRIX_ROWS.map(cfg => {
+    const vals = list.map(r => r[cfg.key]);
+    const bestIdx = cfg.best ? bestIndexes(vals, cfg.best) : new Set();
+    const cells = list.map((r, i) => `<td class="cm-val${bestIdx.has(i) ? ' cm-best' : ''}">${escapeHtml(String(cfg.fmt(r[cfg.key])))}</td>`).join('');
+    return `<tr><td class="cm-label">${cfg.label}</td>${cells}</tr>`;
+  }).join('');
+  const fonteRow = `<tr><td class="cm-label">Fonte</td>${list.map(r => `<td class="cm-val">${escapeHtml(FONTE_LABEL[r.fonte] || r.fonte)}</td>`).join('')}</tr>`;
+  cmatrixTable.innerHTML = head + `<tbody>${rows}${fonteRow}</tbody>`;
+}
+// Moto.it: spec piene solo via /api/detail (lazy). Riempie le colonne moto poi ri-rende.
+async function enrichMotoSpecs(list) {
+  const targets = list.filter(r => r.fonte === 'moto' && !hasSpec(r) && /^https?:/.test(r.url || ''));
+  if (!targets.length) return;
+  await Promise.all(targets.map(async r => {
+    if (r._detailLoaded) return;
+    r._detailLoaded = true;
+    try {
+      const j = await fetch(`/api/detail?url=${encodeURIComponent(r.url)}`).then(x => x.json());
+      if (j.ok && j.detail) Object.keys(j.detail).forEach(k => { if (r[k] == null && j.detail[k] != null) r[k] = j.detail[k]; });
+    } catch (_) {}
+  }));
+  if (!cmatrixPanel.classList.contains('d-none')) renderMatrix();
 }
 
 // ─── Annunci salvati ──────────────────────────────────────────────────────────
 function toggleSalva(url) {
   const idx = salvati.findIndex(r => r.url === url);
-  if (idx !== -1) {
-    salvati.splice(idx, 1);
-  } else {
-    const result = trovaResult(url);
-    if (result) salvati.push(result);
-  }
-  persistSalvati();   // §18: persistenza tra sessioni
-  aggiornaContatoreSalvati();
-  renderSalvati();
-  renderResults(currentResults);
+  if (idx !== -1) salvati.splice(idx, 1);
+  else { const result = trovaResult(url); if (result) salvati.push(result); }
+  persistSalvati(); aggiornaContatoreSalvati(); renderSalvati(); renderResults(currentResults);
 }
-
-// §18 — Persistenza salvati in localStorage (vive in userData Electron → segue
-// anche il SSD in modalità portatile §14). Cap per non gonfiare.
 const SALVATI_KEY = 'amr_salvati';
 const SALVATI_CAP = 200;
-function persistSalvati() {
-  try { localStorage.setItem(SALVATI_KEY, JSON.stringify(salvati.slice(-SALVATI_CAP))); }
-  catch (_) { /* quota/disabilitato → non-fatale */ }
-}
+function persistSalvati() { try { localStorage.setItem(SALVATI_KEY, JSON.stringify(salvati.slice(-SALVATI_CAP))); } catch (_) {} }
 function loadSalvati() {
-  try {
-    const raw = localStorage.getItem(SALVATI_KEY);
-    const arr = raw ? JSON.parse(raw) : [];
-    salvati = Array.isArray(arr) ? arr : [];
-  } catch (_) { salvati = []; }
-  aggiornaContatoreSalvati();
-  renderSalvati();
+  try { const raw = localStorage.getItem(SALVATI_KEY); const arr = raw ? JSON.parse(raw) : []; salvati = Array.isArray(arr) ? arr : []; }
+  catch (_) { salvati = []; }
+  aggiornaContatoreSalvati(); renderSalvati();
 }
-
+// Badge topbar "Salvati" = annunci salvati + ricerche salvate (così salvare una
+// ricerca dà riscontro: Salvati 1 → 2). I tab dell'offcanvas distinguono i due.
 function aggiornaContatoreSalvati() {
-  const c = document.getElementById('salvatiCount');     if (c) c.textContent = salvati.length;
-  const t = document.getElementById('tabSalvatiCount');  if (t) t.textContent = salvati.length;
+  const c = document.getElementById('salvatiCount'); if (c) c.textContent = salvati.length + savedSearches.length;
+  const t = document.getElementById('tabSalvatiCount'); if (t) t.textContent = salvati.length;
   updateSavedButton();
 }
-
-// Mostra l'unico bottone "Salvati" se c'è almeno un annuncio O una ricerca salvata.
 function updateSavedButton() {
+  // Bottone "Salvati" persistente nel topbar (niente più pill flottante).
   const btn = document.getElementById('btnSaved');
-  if (btn) btn.style.display = (salvati.length > 0 || savedSearches.length > 0) ? 'inline-flex' : 'none';
+  if (btn) btn.style.display = 'inline-flex';
 }
-
 function renderSalvati() {
   const container = document.getElementById('salvatiList');
-  if (salvati.length === 0) {
-    container.innerHTML = '<p class="text-muted text-center py-4">Nessun annuncio salvato.</p>';
-    return;
-  }
-  const fmt   = n => n != null ? `€ ${n.toLocaleString('it-IT')}` : '—';
+  if (salvati.length === 0) { container.innerHTML = '<p class="text-muted text-center py-4">Nessun annuncio salvato.</p>'; return; }
+  const fmt = n => n != null ? `€ ${n.toLocaleString('it-IT')}` : '—';
   const fmtKm = n => n != null ? `${n.toLocaleString('it-IT')} km` : '—';
-
   container.innerHTML = salvati.map(r => {
     const inConf = confronto.some(c => c.url === r.url);
-    return `
-      <div class="salvato-item" data-url="${escapeHtml(r.url)}">
-        <div class="salvato-info">
-          <div class="salvato-titolo">${escapeHtml(r.titolo)}</div>
-          <div class="salvato-dettagli">${fmt(r.prezzo)} · ${fmtKm(r.km)} · ${r.anno || '—'}</div>
-        </div>
-        <div class="salvato-actions">
-          <button class="btn-confronta-salvato${inConf ? ' attivo' : ''}" title="Confronta">${icon('compare')}</button>
-          <button class="btn-rimuovi-salvato" title="Rimuovi">${icon('x')}</button>
-        </div>
+    return `<div class="salvato-item" data-url="${escapeHtml(r.url)}">
+      <div class="salvato-info">
+        <div class="salvato-titolo">${escapeHtml(r.titolo)}</div>
+        <div class="salvato-dettagli">${fmt(r.prezzo)} · ${fmtKm(r.km)} · ${r.anno || '—'}</div>
       </div>
-    `;
+      <div class="salvato-actions">
+        <button class="btn-confronta-salvato${inConf ? ' attivo' : ''}" title="Confronta">${icon(inConf ? 'square-check' : 'square')}</button>
+        <button class="btn-rimuovi-salvato" title="Rimuovi">${icon('x')}</button>
+      </div>
+    </div>`;
   }).join('');
 }
 
-// ─── §11 Ricerche salvate + avvisi ──────────────────────────────────────────
+// ─── Ricerche salvate + avvisi ──────────────────────────────────────────────
 async function loadSavedSearches() {
-  try {
-    const r = await fetch('/api/saved');
-    const j = await r.json();
-    savedSearches = j.saved || [];
-  } catch (_) { savedSearches = []; }
-  renderRicerche();
-  updateNovitaBadge();
+  try { const r = await fetch('/api/saved'); const j = await r.json(); savedSearches = j.saved || []; }
+  catch (_) { savedSearches = []; }
+  renderRicerche(); updateNovitaBadge();
 }
-
+function totalNovita() { return savedSearches.reduce((a, s) => a + (s.novita || 0), 0); }
 function updateNovitaBadge() {
-  const tot = savedSearches.reduce((a, s) => a + (s.novita || 0), 0);
+  const tot = totalNovita();
   const badge = document.getElementById('novitaCount');
-  const tr    = document.getElementById('tabRicercheCount'); if (tr) tr.textContent = savedSearches.length;
-  if (badge) {
-    if (tot > 0) { badge.textContent = tot; badge.style.display = 'inline-block'; }
-    else         { badge.style.display = 'none'; }
-  }
+  const sc = document.getElementById('salvatiCount'); if (sc) sc.textContent = salvati.length + savedSearches.length;
+  const tr = document.getElementById('tabRicercheCount'); if (tr) tr.textContent = savedSearches.length;
+  if (badge) { if (tot > 0) { badge.textContent = tot; badge.style.display = 'inline-block'; } else badge.style.display = 'none'; }
   updateSavedButton();
 }
-
 async function saveCurrentSearch() {
-  if (!lastSearchParams || !lastSearchParams.marca) {
-    showError('Fai prima una ricerca, poi salvala.'); return;
-  }
+  if (!lastSearchParams || !lastSearchParams.marca) { showError('Fai prima una ricerca, poi salvala.'); return; }
   const btn = document.getElementById('btnSalvaRicerca');
   btn.disabled = true;
   try {
-    const r = await fetch('/api/saved', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ params: lastSearchParams }),
-    });
+    const r = await fetch('/api/saved', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ params: lastSearchParams }) });
     if (!r.ok) throw new Error('save failed');
     await loadSavedSearches();
     btn.textContent = '✓ Salvata';
     setTimeout(() => { btn.textContent = 'Salva ricerca'; btn.disabled = false; }, 1500);
-  } catch (_) {
-    showError('Salvataggio ricerca non riuscito.'); btn.disabled = false;
-  }
+  } catch (_) { showError('Salvataggio ricerca non riuscito.'); btn.disabled = false; }
 }
-
 async function checkRicerche(id) {
   const url = id ? `/api/saved/check?id=${encodeURIComponent(id)}` : '/api/saved/check';
   const listEl = document.getElementById('ricercheList');
-  // §19.3: disabilita solo il bottone della card interessata (o tutta la lista se "Controlla tutte").
   const btn = id ? listEl.querySelector(`.ric-card[data-id="${CSS.escape(id)}"] .ric-check`) : null;
-  if (btn) { btn.disabled = true; btn.textContent = '…'; } else { listEl.classList.add('checking'); }
+  if (btn) { btn.disabled = true; btn.textContent = '…'; } else listEl.classList.add('checking');
   try {
     const r = await fetch(url, { method: 'POST' });
     const j = await r.json();
     if (j.saved) { savedSearches = j.saved; renderRicerche(); updateNovitaBadge(); }
-  } catch (_) {
-    showError('Controllo non riuscito.');
-  } finally {
-    listEl.classList.remove('checking');   // renderRicerche ricrea il bottone (riabilitato)
-  }
+    const nuovi = Array.isArray(j.esiti) ? j.esiti.reduce((a, e) => a + (e?.nuovi || 0), 0) : 0;
+    toast(nuovi > 0 ? `${nuovi} ${nuovi === 1 ? 'novità trovata' : 'novità trovate'}` : 'Nessuna novità');
+  } catch (_) { showError('Controllo non riuscito.'); }
+  finally { listEl.classList.remove('checking'); }
 }
-
 function onRicercheClick(e) {
-  const card = e.target.closest('[data-id]');
-  if (!card) return;
+  const card = e.target.closest('[data-id]'); if (!card) return;
   const id = card.dataset.id;
-  if (e.target.closest('.ric-check'))  { checkRicerche(id); return; }
-  if (e.target.closest('.ric-del'))    { deleteRicerca(id); return; }
+  if (e.target.closest('.ric-check')) { checkRicerche(id); return; }
+  if (e.target.closest('.ric-del')) { deleteRicerca(id); return; }
   const alertEl = e.target.closest('.ric-alert[data-url]');
-  if (alertEl) {
-    markRicercaRead(id);
-    const u = alertEl.dataset.url;
-    if (/^https?:/.test(u)) window.open(u, '_blank', 'noopener,noreferrer');
-    return;
-  }
-  if (e.target.closest('.ric-head')) card.classList.toggle('open');   // espandi/chiudi avvisi
+  if (alertEl) { markRicercaRead(id); openAd(alertEl.dataset.url); return; }
+  if (e.target.closest('.ric-head')) card.classList.toggle('open');
 }
-
 async function deleteRicerca(id) {
-  try {
-    await fetch(`/api/saved/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    await loadSavedSearches();
-  } catch (_) { showError('Eliminazione non riuscita.'); }
+  try { await fetch(`/api/saved/${encodeURIComponent(id)}`, { method: 'DELETE' }); await loadSavedSearches(); }
+  catch (_) { showError('Eliminazione non riuscita.'); }
 }
-
 async function markRicercaRead(id) {
-  try { await fetch(`/api/saved/${encodeURIComponent(id)}/read`, { method: 'POST' }); }
-  catch (_) {}
+  try { await fetch(`/api/saved/${encodeURIComponent(id)}/read`, { method: 'POST' }); } catch (_) {}
   const s = savedSearches.find(x => x.id === id);
   if (s) { s.novita = 0; s.digest = {}; updateNovitaBadge(); }
-  // Feedback immediato: togli badge "N" e bordo-novità dalla card, senza
-  // collassare la lista avvisi aperta.
   const card = document.querySelector(`.ric-card[data-id="${CSS.escape(id)}"]`);
   if (card) { card.classList.remove('has-novita'); card.querySelector('.ric-badge')?.remove(); }
 }
-
 const MOTIVO_LABEL = { nuovo: 'nuovi', calo: 'cali' };
 function renderRicerche() {
   const c = document.getElementById('ricercheList');
@@ -1205,6 +1211,7 @@ function renderRicerche() {
     c.innerHTML = '<p class="text-muted text-center py-4">Nessuna ricerca salvata.<br><small>Fai una ricerca e premi "Salva ricerca".</small></p>';
     return;
   }
+  const isDemo = document.body.classList.contains('demo-mode');
   const whenTxt = ts => {
     if (!ts) return 'mai controllata';
     const min = Math.round((Date.now() - ts) / 60000);
@@ -1216,293 +1223,192 @@ function renderRicerche() {
   const fmt = n => n != null ? `€ ${n.toLocaleString('it-IT')}` : '—';
   c.innerHTML = savedSearches.map(s => {
     const novita = s.novita || 0;
-    const badge  = novita > 0 ? `<span class="ric-badge">${novita}</span>` : '';
-    // Digest: "2 nuovi · 1 calo · 1 affare"
-    const dig = Object.entries(s.digest || {})
-      .map(([m, n]) => `${n} ${MOTIVO_LABEL[m] || m}`).join(' · ');
+    const badge = novita > 0 ? `<span class="ric-badge">${novita}</span>` : '';
+    const dig = Object.entries(s.digest || {}).map(([m, n]) => `${n} ${MOTIVO_LABEL[m] || m}`).join(' · ');
     const digestLine = dig ? `<div class="ric-digest">${dig}</div>` : '';
-    // Lista avvisi (espandibile)
     const alertsHtml = (s.alerts || []).map(a => `
       <div class="ric-alert ric-${a.motivo}" data-url="${escapeHtml(a.url)}" title="Apri annuncio">
         <span class="ric-motivo">${MOTIVO_LABEL[a.motivo]?.slice(0, -1) || a.motivo}</span>
         <span class="ric-alert-tit">${escapeHtml(a.titolo || 'Annuncio')}</span>
         <span class="ric-alert-prezzo">${fmt(a.prezzo)}</span>
       </div>`).join('');
-    return `
-      <div class="ric-card${novita ? ' has-novita' : ''}" data-id="${escapeHtml(s.id)}">
-        <div class="ric-head">
-          <div class="ric-title">${escapeHtml(s.label)} ${badge}</div>
-          <div class="ric-sub">${escapeHtml(s.params?.tipo || '')} · controllata ${whenTxt(s.lastChecked)}</div>
-          ${digestLine}
-        </div>
-        <div class="ric-actions">
-          <button class="rnav-btn ric-check" title="Controlla ora">Controlla</button>
-          <button class="rnav-btn ric-del" title="Elimina">${icon('x')}</button>
-        </div>
-        ${alertsHtml ? `<div class="ric-alerts">${alertsHtml}</div>` : ''}
-      </div>`;
+    return `<div class="ric-card${novita ? ' has-novita' : ''}" data-id="${escapeHtml(s.id)}">
+      <div class="ric-head">
+        <div class="ric-title">${escapeHtml(s.label)} ${badge}</div>
+        <div class="ric-sub">${escapeHtml(s.params?.tipo || '')} · controllata ${whenTxt(s.lastChecked)}</div>
+        ${digestLine}
+      </div>
+      <div class="ric-actions">
+        ${isDemo ? '' : '<button class="rnav-btn ric-check" title="Controlla ora">Controlla</button>' + helpDot('controllo')}
+        ${isDemo ? '' : `<button class="rnav-btn ric-del" title="Elimina">${icon('x')}</button>`}
+      </div>
+      ${alertsHtml ? `<div class="ric-alerts">${alertsHtml}</div>` : ''}
+    </div>`;
   }).join('');
 }
 
-// ─── UI helpers ───────────────────────────────────────────────────────────────
-function showLoading() {
-  statusBox.classList.remove('d-none');
-  loadingState.classList.remove('d-none');
-  errorState.classList.add('d-none');
+// ─── Segnalazioni (bug-report) ───────────────────────────────────────────────
+function openReport() {
+  const m = document.getElementById('reportModal'); if (!m) return;
+  document.getElementById('reportMsg').value = '';
+  document.getElementById('reportStatus').textContent = '';
+  const att = document.getElementById('reportAttach');
+  if (att) { att.checked = false; att.parentElement.style.display = searchActive ? '' : 'none'; }
+  m.classList.remove('d-none');
+  document.getElementById('reportMsg').focus();
+}
+function closeReport() { document.getElementById('reportModal')?.classList.add('d-none'); }
+function closeQr() { document.getElementById('qrModal')?.classList.add('d-none'); }
+async function submitReport() {
+  const msg = document.getElementById('reportMsg').value.trim();
+  const status = document.getElementById('reportStatus');
+  if (!msg) { status.textContent = 'Scrivi un messaggio.'; return; }
+  const attach = document.getElementById('reportAttach')?.checked && searchActive;
+  const body = { type: attach ? 'search' : 'bug', message: msg };
+  if (attach) { body.searchParams = lastSearchParams; body.count = currentResults.length; }
+  const btn = document.getElementById('reportSend'); btn.disabled = true; status.textContent = 'Invio…';
+  try {
+    const r = await fetch('/api/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (r.ok) { closeReport(); toast('Grazie, segnalazione inviata.'); }
+    else if (r.status === 429) status.textContent = 'Troppe segnalazioni, riprova tra qualche minuto.';
+    else status.textContent = 'Invio non riuscito.';
+  } catch (_) { status.textContent = 'Errore di rete.'; }
+  finally { btn.disabled = false; }
 }
 
+// ─── UI helpers ───────────────────────────────────────────────────────────────
+function showLoading() { statusBox.classList.remove('d-none'); loadingState.classList.remove('d-none'); errorState.classList.add('d-none'); }
 function hideLoading() {
   loadingState.classList.add('d-none');
-  // Nascondiamo statusBox solo se nessun altro figlio (errore / banner Subito) è visibile.
-  const errorVisible  = !errorState.classList.contains('d-none');
+  const errorVisible = !errorState.classList.contains('d-none');
   const bannerVisible = !subitoBanner.classList.contains('d-none');
   if (!errorVisible && !bannerVisible) statusBox.classList.add('d-none');
 }
-
-function showError(msg) {
-  statusBox.classList.remove('d-none');
-  loadingState.classList.add('d-none');
-  errorState.classList.remove('d-none');
-  errorText.textContent = msg;
-}
-
-function hideError() {
-  errorState.classList.add('d-none');
-  // Mantieni statusBox aperto se il banner Subito è visibile
-  if (subitoBanner.classList.contains('d-none')) statusBox.classList.add('d-none');
-}
-
+function showError(msg) { statusBox.classList.remove('d-none'); loadingState.classList.add('d-none'); errorState.classList.remove('d-none'); errorText.textContent = msg; }
+function hideError() { errorState.classList.add('d-none'); if (subitoBanner.classList.contains('d-none')) statusBox.classList.add('d-none'); }
 function hideResults() {
-  resultsSection.classList.add('d-none');
-  noResults.classList.add('d-none');
-  resultsNav.classList.add('d-none');
-  fonteBreakdown.textContent = '';
-  resultsGrid.innerHTML = '';
+  searchActive = false;
+  document.body.classList.remove('has-results');   // torna allo stato iniziale → sfondo + search centrata
+  _enrichQueue.length = 0; if (enrichObserver) enrichObserver.disconnect();   // stop enrichment Moto.it pendente
+  resultsSection.classList.add('d-none'); noResults.classList.add('d-none'); resultsToolbar.classList.add('d-none');
+  fonteBreakdown.innerHTML = ''; resultsGrid.innerHTML = ''; compareBar.classList.add('d-none'); closeMatrix();
 }
 
 // ─── Export CSV ───────────────────────────────────────────────────────────────
 function exportCsv(results) {
   const cols = ['Fonte', 'Titolo', 'Prezzo (€)', 'Anno', 'KM', 'Carburante', 'Provincia', 'URL'];
-  const rows = results.map(r => [
-    r.fonte,
-    r.titolo,
-    r.prezzo != null ? r.prezzo : '',
-    r.anno   != null ? r.anno   : '',
-    r.km     != null ? r.km     : '',
-    r.carburante || '',
-    r.provincia  || '',
-    r.url,
-  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
-
-  const csv  = [cols.join(','), ...rows].join('\r\n');
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = Object.assign(document.createElement('a'), {
-    href:     url,
-    download: `automotoradar-${new Date().toISOString().slice(0, 10)}.csv`,
-  });
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  const rows = results.map(r => [r.fonte, r.titolo, r.prezzo != null ? r.prezzo : '', r.anno != null ? r.anno : '', r.km != null ? r.km : '', r.carburante || '', r.provincia || '', r.url].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+  const csv = [cols.join(','), ...rows].join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href: url, download: `automotoradar-${new Date().toISOString().slice(0, 10)}.csv` });
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
 // ─── Export PDF ───────────────────────────────────────────────────────────────
+// PDF "scheda tecnica": header scuro full-width + criteri + striscia metriche
+// inline + tabella pulita con chip-fonte. (Niente Top5/riepilogo — rimossi.)
 function exportPdf(results) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-
-  const today       = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
+  const today = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
   const dateFilename = new Date().toISOString().slice(0, 10);
-  const pageW       = doc.internal.pageSize.getWidth();   // 297
-  const pageH       = doc.internal.pageSize.getHeight();  // 210
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
 
-  // ─── Palette colori
-  const C_BLUE_900  = [30,  58,  138];
-  const C_BLUE_700  = [29,  78,  216];
-  const C_BLUE_100  = [219, 234, 254];
-  const C_WHITE     = [255, 255, 255];
-  const C_SLATE_500 = [100, 116, 139];
-  const C_SLATE_100 = [241, 245, 249];
+  const INK = [20, 24, 31], ACCENT = [31, 111, 235], SLATE = [91, 100, 114];
+  const LINE = [210, 216, 222], WHITE = [255, 255, 255], ZEBRA = [247, 248, 250];
+  const fmtEur = n => '€ ' + n.toLocaleString('it-IT');
+  const FONTE_LABEL_PDF = { subito: 'Subito.it', autoscout: 'Autoscout24', moto: 'Moto.it' };
+  const FONTE_COLORS = { subito: { fill: [231, 240, 253], text: [19, 87, 196] }, autoscout: { fill: [250, 240, 213], text: [138, 97, 0] }, moto: { fill: [225, 243, 232], text: [17, 122, 55] } };
 
-  // ─── Header fascia
-  doc.setFillColor(...C_BLUE_900);
-  doc.rect(0, 0, pageW, 26, 'F');
+  // ── Header band scura full-width
+  doc.setFillColor(...INK); doc.rect(0, 0, pageW, 24, 'F');
+  doc.setFillColor(...ACCENT); doc.rect(14, 8, 7, 7, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...WHITE); doc.text('AUTO MOTO RADAR', 25, 13.5);
+  const _p = lastSearchParams || {};
+  const crit = [
+    [_p.marca, _p.modello].filter(Boolean).join(' '),
+    _p.regione ? _p.regione.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Tutta Italia',
+    (_p.prezzoMin || _p.prezzoMax) ? `prezzo ${_p.prezzoMin || 0}-${_p.prezzoMax || 'max'}` : null,
+    (_p.annoMin || _p.annoMax) ? `anni ${_p.annoMin || ''}-${_p.annoMax || ''}` : null,
+    (_p.kmMin || _p.kmMax) ? `km ${_p.kmMin || 0}-${_p.kmMax || 'max'}` : null,
+  ].filter(Boolean).join('   ·   ');
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(170, 185, 210);
+  doc.text((crit + '   ·   ' + today).slice(0, 150), 25, 19);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...WHITE); doc.text(results.length + ' annunci', pageW - 14, 14, { align: 'right' });
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.setTextColor(...C_WHITE);
-  doc.text('Auto Moto Radar', 14, 12);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(180, 205, 245);
-  doc.text('Report annunci · ' + today, 14, 20);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(...C_WHITE);
-  doc.text(results.length + ' annunci totali', pageW - 14, 16, { align: 'right' });
-
-  // ─── Box statistiche
-  const prices  = results.map(r => r.prezzo).filter(p => p != null && p > 0).sort((a, b) => a - b);
-  const fmtEur  = n => '€ ' + n.toLocaleString('it-IT');
-
-  const min     = prices.length ? fmtEur(prices[0])                                                          : '—';
-  const max     = prices.length ? fmtEur(prices[prices.length - 1])                                          : '—';
-  const media   = prices.length ? fmtEur(Math.round(prices.reduce((a, b) => a + b, 0) / prices.length))      : '—';
-  const mid     = prices.length / 2;
-  const mediana = prices.length
-    ? fmtEur(prices.length % 2 === 0 ? Math.round((prices[mid - 1] + prices[mid]) / 2) : prices[Math.floor(mid)])
-    : '—';
-
-  const statsBoxes = [
-    { label: 'MINIMO',     value: min },
-    { label: 'MEDIANA',    value: mediana },
-    { label: 'MEDIA',      value: media },
-    { label: 'MASSIMO',    value: max },
-    { label: 'CON PREZZO', value: `${prices.length} / ${results.length}` },
+  // ── Striscia metriche inline
+  const prices = results.map(r => r.prezzo).filter(p => p != null && p > 0).sort((a, b) => a - b);
+  const mid = prices.length / 2;
+  const metrics = [
+    ['MIN', prices.length ? fmtEur(prices[0]) : '—'],
+    ['MEDIANA', prices.length ? fmtEur(prices.length % 2 === 0 ? Math.round((prices[mid - 1] + prices[mid]) / 2) : prices[Math.floor(mid)]) : '—'],
+    ['MEDIA', prices.length ? fmtEur(Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)) : '—'],
+    ['MAX', prices.length ? fmtEur(prices[prices.length - 1]) : '—'],
+    ['CON PREZZO', `${prices.length}/${results.length}`],
   ];
-
-  const boxW  = 51;
-  const boxH  = 18;
-  const boxY  = 31;
-  const gap   = 2.5;
-  const startX = 14;
-
-  statsBoxes.forEach((s, i) => {
-    const x = startX + i * (boxW + gap);
-    doc.setFillColor(...C_BLUE_100);
-    doc.roundedRect(x, boxY, boxW, boxH, 2.5, 2.5, 'F');
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6.5);
-    doc.setTextColor(...C_SLATE_500);
-    doc.text(s.label, x + boxW / 2, boxY + 5.5, { align: 'center' });
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(...C_BLUE_700);
-    doc.text(s.value, x + boxW / 2, boxY + 13, { align: 'center' });
+  const stripY = 31, colW = (pageW - 28) / metrics.length;
+  metrics.forEach(([label, val], i) => {
+    const x = 14 + i * colW;
+    if (i > 0) { doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(x, stripY - 1, x, stripY + 7); }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...SLATE); doc.text(label, x + 4, stripY + 1.5);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK); doc.text(String(val), x + 4, stripY + 7);
   });
 
-  // ─── Tabella
-  const FONTE_COLORS = {
-    subito:    { fill: [224, 242, 254], text: [3,  105, 161] },
-    autoscout: { fill: [254, 243, 199], text: [146, 64,  14] },
-    moto:      { fill: [220, 252, 231], text: [22,  101, 52] },
-  };
-  const FONTE_LABEL_PDF = { subito: 'Subito.it', autoscout: 'Autoscout24', moto: 'Moto.it' };
-
-  const tableBody = results.map(r => [
-    FONTE_LABEL_PDF[r.fonte] || r.fonte,
-    r.titolo,
-    r.prezzo != null ? fmtEur(r.prezzo) : '—',
-    r.anno   != null ? String(r.anno)   : '—',
-    r.km     != null ? r.km.toLocaleString('it-IT') + ' km' : '—',
-    r.carburante || '—',
-    r.provincia  || '—',
-  ]);
-
+  // ── Tabella pulita + chip fonte
+  const tableBody = results.map(r => [FONTE_LABEL_PDF[r.fonte] || r.fonte, r.titolo, r.prezzo != null ? fmtEur(r.prezzo) : '—', r.anno != null ? String(r.anno) : '—', r.km != null ? r.km.toLocaleString('it-IT') + ' km' : '—', r.carburante || '—', r.provincia || '—']);
   doc.autoTable({
-    startY: boxY + boxH + 5,
-    head:   [['Fonte', 'Titolo', 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia']],
-    body:   tableBody,
-    styles: {
-      font: 'helvetica',
-      fontSize: 7.5,
-      cellPadding: { top: 2.5, right: 3, bottom: 2.5, left: 3 },
-      valign: 'middle',
-      overflow: 'ellipsize',
-    },
-    headStyles: {
-      fillColor: C_BLUE_900,
-      textColor: C_WHITE,
-      fontStyle: 'bold',
-      fontSize: 7.5,
-    },
-    alternateRowStyles: { fillColor: C_SLATE_100 },
-    columnStyles: {
-      0: { halign: 'center', cellWidth: 24 },
-      1: { cellWidth: 'auto' },
-      2: { halign: 'right',  cellWidth: 24, fontStyle: 'bold', textColor: C_BLUE_700 },
-      3: { halign: 'center', cellWidth: 14 },
-      4: { halign: 'right',  cellWidth: 24 },
-      5: { halign: 'center', cellWidth: 22 },
-      6: { halign: 'center', cellWidth: 22 },
-    },
+    startY: stripY + 12,
+    head: [['Fonte', 'Veicolo', 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia']],
+    body: tableBody,
+    theme: 'plain',
+    styles: { font: 'helvetica', fontSize: 7.5, cellPadding: { top: 2.6, right: 3, bottom: 2.6, left: 3 }, valign: 'middle', overflow: 'ellipsize' },
+    headStyles: { fillColor: INK, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
+    alternateRowStyles: { fillColor: ZEBRA },
+    columnStyles: { 0: { halign: 'center', cellWidth: 24 }, 1: { cellWidth: 'auto' }, 2: { halign: 'right', cellWidth: 26, fontStyle: 'bold', textColor: ACCENT }, 3: { halign: 'center', cellWidth: 14 }, 4: { halign: 'right', cellWidth: 24 }, 5: { halign: 'center', cellWidth: 24 }, 6: { halign: 'center', cellWidth: 24 } },
+    didParseCell(data) { if (data.section === 'body' && data.column.index === 0) data.cell.text = [' ']; },   // chip disegnato a mano
     didDrawCell(data) {
       if (data.section !== 'body' || data.column.index !== 0) return;
-      const fonte  = results[data.row.index]?.fonte;
-      const colors = FONTE_COLORS[fonte];
-      if (!colors) return;
-      doc.setFillColor(...colors.fill);
-      doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-      doc.setTextColor(...colors.text);
-      doc.text(
-        FONTE_LABEL_PDF[fonte] || fonte,
-        data.cell.x + data.cell.width / 2,
-        data.cell.y + data.cell.height / 2,
-        { align: 'center', baseline: 'middle' }
-      );
+      const fonte = results[data.row.index]?.fonte; const colors = FONTE_COLORS[fonte]; if (!colors) return;
+      const cw = data.cell.width - 4, ch = 5, cx = data.cell.x + 2, cy = data.cell.y + (data.cell.height - ch) / 2;
+      doc.setFillColor(...colors.fill); doc.roundedRect(cx, cy, cw, ch, 1, 1, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(...colors.text);
+      doc.text(FONTE_LABEL_PDF[fonte] || fonte, cx + cw / 2, cy + ch / 2 + 0.3, { align: 'center', baseline: 'middle' });
     },
     margin: { left: 14, right: 14 },
   });
 
-  // ─── Footer su ogni pagina
+  // ── Footer per pagina
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    doc.setDrawColor(...C_BLUE_100);
-    doc.setLineWidth(0.3);
-    doc.line(14, pageH - 10, pageW - 14, pageH - 10);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor(...C_SLATE_500);
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(14, pageH - 10, pageW - 14, pageH - 10);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...SLATE);
     doc.text('Auto Moto Radar — uso personale', 14, pageH - 5.5);
     doc.text(`Pagina ${i} di ${pageCount}`, pageW - 14, pageH - 5.5, { align: 'right' });
   }
-
   doc.save(`automotoradar-${dateFilename}.pdf`);
 }
 
-// ─── Pre-fill da URL params (per test rapidi) ─────────────────────────────────
-// Uso: http://localhost:3000?tipo=auto&marca=Ford&modello=Fiesta&regione=lazio&prezzoMax=8000
-// Tutti i parametri sono opzionali. Se marca è presente, la ricerca parte automaticamente.
-function applyUrlParams() {
+// ─── Pre-fill da URL params ───────────────────────────────────────────────────
+async function applyUrlParams() {
   const p = new URLSearchParams(window.location.search);
-  if (!p.has('marca')) return; // nessun param → comportamento normale
-
-  // tipo (auto / moto)
+  if (!p.has('marca')) return;
   const tipo = p.get('tipo') || 'auto';
   const tipoInput = document.querySelector(`input[name="tipo"][value="${tipo}"]`);
-  if (tipoInput) {
-    tipoInput.checked = true;
-    tipoInput.dispatchEvent(new Event('change'));
-  }
-
-  // marca
+  if (tipoInput) { tipoInput.checked = true; document.body.dataset.tipo = tipo; }
+  await populateMarca(tipo);   // brand cache del tipo (serve al force-select per il replay)
   const marca = p.get('marca') || '';
-  if (marca) {
-    marcaSelect.value = marca;
-  }
-
-  // campi numerici e testo semplice
-  ['prezzoMin','prezzoMax','annoMin','annoMax','kmMax'].forEach(k => {
-    if (p.has(k)) document.getElementById(k).value = p.get(k);
-  });
-
-  const applyGeo = () => {
-    if (p.has('regione')) regioneSelect.value = p.get('regione');
-  };
-
-  // P10: marca + modello sono input liberi, niente più async loadModelli
+  if (marca) marcaSelect.value = marca;
+  ['prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax'].forEach(k => { if (p.has(k)) document.getElementById(k).value = p.get(k); });
   const modello = p.get('modello') || '';
   if (marca) {
-    marcaSelect.value = marca;
     if (modello) document.getElementById('modello').value = modello;
-    applyGeo();
-    doSearch();
+    if (p.has('regione')) regioneSelect.value = p.get('regione');
+    validateMarca();
+    // Replay programmatico: bypassa il force-select se la marca combacia col catalogo.
+    if (isValidMarca()) doSearch();
   }
 }
 

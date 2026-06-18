@@ -4,78 +4,124 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Auto Moto Radar — Accesso</title>
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('amr_theme')||'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
   <style>
+    :root, :root[data-theme="light"] {
+      --bg:#f3f4f6; --surface:#ffffff; --surface-2:#eceef1; --line:#d3d8de; --line2:#b6bdc7;
+      --text:#14181f; --muted:#5b6472; --accent:#1f6feb; --neg:#c2362f; --neg-bg:#fbe9e9;
+      --t-sub-fg:#1357c4; --t-sub-bg:#e7f0fd; --t-as-fg:#8a6100; --t-as-bg:#faf0d5; --t-mo-fg:#117a37; --t-mo-bg:#e1f3e8;
+    }
+    :root[data-theme="dark"] {
+      --bg:#0d1117; --surface:#161b22; --surface-2:#1b212c; --line:#2a313c; --line2:#3a434f;
+      --text:#e6edf3; --muted:#8b97a6; --accent:#4d9bff; --neg:#f0726a; --neg-bg:#2a1414;
+      --t-sub-fg:#6cb0ff; --t-sub-bg:#14233a; --t-as-fg:#e3b341; --t-as-bg:#2a2310; --t-mo-fg:#56d364; --t-mo-bg:#11271a;
+    }
     * { box-sizing: border-box; }
     body {
       margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      font-family: system-ui, -apple-system, sans-serif; background: #f6f7f9; color: #111827;
-      padding: 20px;
+      font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text);
+      padding: 20px; font-variant-numeric: tabular-nums; overflow: auto;
     }
+    /* Anteprima prodotto attenuata sullo sfondo (mockup, non dati reali) */
+    .preview { position: fixed; inset: 0; z-index: 0; display: flex; flex-direction: column; gap: 7px;
+      padding: 26px; opacity: 0.16; pointer-events: none; filter: blur(0.4px); justify-content: center; max-width: 760px; margin: 0 auto; }
+    .pv-row { display: grid; grid-template-columns: 70px 1fr 70px 90px 64px; gap: 14px; align-items: center;
+      border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; background: var(--surface); }
+    .pv-thumb { height: 40px; border-radius: 3px; background: var(--surface-2); }
+    .pv-t { font-size: 13px; font-weight: 600; }
+    .pv-s { font-size: 12px; color: var(--muted); }
+    .pv-num { text-align: right; font-size: 12px; color: var(--muted); }
+    .pv-price { text-align: right; font-weight: 700; }
+    .pv-tag { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; text-align: center; }
     .card {
-      width: 100%; max-width: 360px; background: #fff; border: 1px solid #e5e7eb;
-      border-radius: 14px; padding: 28px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      position: relative; z-index: 1; width: 100%; max-width: 370px; background: var(--surface);
+      border: 1px solid var(--line2); border-radius: 8px; padding: 26px 24px; box-shadow: 0 16px 50px rgba(0,0,0,0.22);
     }
-    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
-    .brand svg { display: block; border-radius: 8px; }
-    .brand b { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; }
-    label { display: block; font-size: 0.82rem; font-weight: 600; color: #6b7280; margin-bottom: 6px; }
-    input[type=password] {
-      width: 100%; font-size: 1rem; padding: 11px 12px; border: 1px solid #e5e7eb;
-      border-radius: 9px; background: #fff; color: #111827;
-    }
-    input[type=password]:focus { outline: none; border-color: #2563eb; }
-    button {
-      width: 100%; margin-top: 16px; font-size: 1rem; font-weight: 700; padding: 12px;
-      border: none; border-radius: 9px; background: #2563eb; color: #fff; cursor: pointer;
-    }
-    button:hover { background: #1d4ed8; }
-    .err {
-      display: none; margin-top: 14px; font-size: 0.85rem; color: #b91c1c;
-      background: #fee2e2; border: 1px solid #fca5a5; border-radius: 8px; padding: 8px 10px;
-    }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; background: none; border: none; padding: 0; cursor: pointer; font: inherit; width: 100%; }
+    .brand svg { display: block; border-radius: 6px; }
+    .brand b { font-size: 1.18rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
+    .brand:hover b { color: var(--accent); }
+    .tags { display: flex; gap: 6px; margin-bottom: 6px; }
+    .tag { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; padding: 2px 8px; border-radius: 3px; }
+    .tag-sub { background: var(--t-sub-bg); color: var(--t-sub-fg); }
+    .tag-as  { background: var(--t-as-bg);  color: var(--t-as-fg); }
+    .tag-mo  { background: var(--t-mo-bg);  color: var(--t-mo-fg); }
+    .claim { font-size: 0.8rem; color: var(--muted); margin-bottom: 18px; }
+    label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+    input[type=password] { width: 100%; font-size: 1rem; padding: 11px 12px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--text); }
+    input[type=password]:focus { outline: none; border-color: var(--accent); }
+    button.submit { width: 100%; margin-top: 16px; font-size: 1rem; font-weight: 700; padding: 12px; border: none; border-radius: 5px; background: var(--accent); color: #fff; cursor: pointer; }
+    button.submit:hover { background: #1a5fcc; }
+    .err { display: none; margin-top: 14px; font-size: 0.85rem; color: var(--neg); background: var(--neg-bg); border: 1px solid var(--neg); border-radius: 5px; padding: 8px 10px; }
     .err.show { display: block; }
-    .hint { margin-top: 16px; font-size: 0.76rem; color: #9ca3af; text-align: center; }
-    .brand { background: none; border: none; padding: 0; cursor: pointer; font: inherit; width: 100%; }
-    .brand:hover b { color: #2563eb; }
-    .qr-box { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; }
+    .foot { margin-top: 16px; display: flex; align-items: center; justify-content: space-between; }
+    .foot .hint { font-size: 0.76rem; color: var(--muted); }
+    .lhelp { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin-left: 4px;
+      border: 1px solid var(--line2); border-radius: 50%; font-size: 0.6rem; font-weight: 700; color: var(--muted);
+      cursor: help; position: relative; vertical-align: middle; }
+    .lhelp:hover { border-color: var(--accent); color: var(--accent); }
+    .lhelp-tip { position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%); width: max-content; max-width: 230px;
+      background: var(--text); color: var(--surface); padding: 7px 9px; border-radius: 5px; font-size: 0.72rem; font-weight: 400; line-height: 1.35;
+      text-align: left; opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 5; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+    .lhelp:hover .lhelp-tip, .lhelp:focus .lhelp-tip { opacity: 1; }
+    .theme-toggle { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--muted); cursor: pointer; font-size: 0.95rem; line-height: 1; }
+    .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+    .qr-box { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); text-align: center; }
     .qr-box.show { display: block; }
-    .qr-box svg { width: 190px; height: 190px; }
-    .qr-box .qr-hint { font-size: 0.78rem; color: #6b7280; margin: 0 0 10px; }
-    .qr-box .qr-link { display: inline-block; margin-top: 10px; font-size: 0.8rem; font-weight: 600; color: #2563eb; word-break: break-all; }
-    .qr-box .qr-empty { font-size: 0.82rem; color: #6b7280; font-style: italic; }
+    .qr-box svg { width: 190px; height: 190px; background: #fff; padding: 6px; border-radius: 4px; }
+    .qr-box .qr-hint { font-size: 0.78rem; color: var(--muted); margin: 0 0 10px; }
+    .qr-box .qr-link { display: inline-block; margin-top: 10px; font-size: 0.8rem; font-weight: 600; color: var(--accent); word-break: break-all; }
+    .qr-box .qr-empty { font-size: 0.82rem; color: var(--muted); font-style: italic; }
+    @media (max-width: 560px) { .preview { display: none; } }
   </style>
 </head>
 <body>
+  <div class="preview" aria-hidden="true">
+    <div class="pv-row"><div class="pv-thumb"></div><div><div class="pv-t">BMW 318d Business</div><div class="pv-s">Bologna</div></div><div class="pv-num">2016</div><div class="pv-price">€ 10.700</div><span class="pv-tag tag-sub">Subito</span></div>
+    <div class="pv-row"><div class="pv-thumb"></div><div><div class="pv-t">BMW 320d Touring</div><div class="pv-s">Milano</div></div><div class="pv-num">2017</div><div class="pv-price">€ 12.500</div><span class="pv-tag tag-sub">Subito</span></div>
+    <div class="pv-row"><div class="pv-thumb"></div><div><div class="pv-t">BMW 320d xDrive Msport</div><div class="pv-s">Torino</div></div><div class="pv-num">2019</div><div class="pv-price">€ 18.900</div><span class="pv-tag tag-as">Autoscout</span></div>
+    <div class="pv-row"><div class="pv-thumb"></div><div><div class="pv-t">Honda CB500F</div><div class="pv-s">Roma</div></div><div class="pv-num">2020</div><div class="pv-price">€ 5.400</div><span class="pv-tag tag-mo">Moto.it</span></div>
+  </div>
+
   <form class="card" method="POST" action="/login">
     <button type="button" class="brand" id="brandBtn" title="Mostra QR per il telefono">
-      <span style="display:flex;align-items:center;gap:10px;">
-        <svg width="30" height="30" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <rect width="32" height="32" rx="7" fill="#2563eb"/>
-          <circle cx="16" cy="16" r="10" fill="none" stroke="#bfdbfe" stroke-width="1.8"/>
-          <circle cx="16" cy="16" r="5.5" fill="none" stroke="#bfdbfe" stroke-width="1.8"/>
-          <circle cx="16" cy="16" r="1.8" fill="#bfdbfe"/>
-        </svg>
-        <b>Auto Moto Radar</b>
-      </span>
+      <svg width="30" height="30" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect width="32" height="32" rx="6" fill="#1f6feb"/>
+        <circle cx="16" cy="16" r="10" fill="none" stroke="#bfdbfe" stroke-width="1.8"/>
+        <circle cx="16" cy="16" r="5.5" fill="none" stroke="#bfdbfe" stroke-width="1.8"/>
+        <circle cx="16" cy="16" r="1.8" fill="#bfdbfe"/>
+      </svg>
+      <b>Auto Moto Radar</b>
     </button>
+    <div class="claim">Aggregatore prezzi auto e moto usate in tutta Italia.</div>
     <div class="qr-box" id="qrBox"></div>
-    <label for="password">Password</label>
+    <label for="password">Password <span class="lhelp" tabindex="0" role="button" aria-label="Aiuto">?<span class="lhelp-tip">Inserisci la password ricevuta. La demo è in sola lettura: cerca e naviga liberamente, i salvataggi e il pannello admin sono disattivati.</span></span></label>
     <input type="password" id="password" name="password" autocomplete="current-password" autofocus required />
-    <button type="submit">Entra</button>
+    <button type="submit" class="submit">Entra</button>
     <div class="err" id="err"></div>
-    <p class="hint">Accesso riservato</p>
+    <div class="foot">
+      <span class="hint">Demo</span>
+      <button type="button" class="theme-toggle" id="themeBtn" title="Cambia tema" aria-label="Cambia tema">☾</button>
+    </div>
   </form>
   <script>
     var e = new URLSearchParams(location.search).get('err');
     if (e) {
       var box = document.getElementById('err');
-      box.textContent = e === 'locked'
-        ? 'Troppi tentativi falliti. Riprova tra qualche minuto.'
-        : 'Password errata.';
+      box.textContent = e === 'locked' ? 'Troppi tentativi falliti. Riprova tra qualche minuto.' : 'Password errata.';
       box.classList.add('show');
     }
-
-    // Logo cliccabile → QR + link pubblico (per aprire l'app dal telefono).
+    // Toggle tema (persistito, coerente con l'app)
+    var tb = document.getElementById('themeBtn');
+    function paintTheme() { var t = document.documentElement.getAttribute('data-theme') || 'light'; tb.textContent = t === 'dark' ? '☀' : '☾'; }
+    paintTheme();
+    tb.addEventListener('click', function () {
+      var t = (document.documentElement.getAttribute('data-theme') === 'dark') ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      try { localStorage.setItem('amr_theme', t); } catch (e) {}
+      paintTheme();
+    });
+    // QR per il telefono
     var qrBox = document.getElementById('qrBox');
     var loaded = false;
     document.getElementById('brandBtn').addEventListener('click', async function () {
