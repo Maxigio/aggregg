@@ -146,6 +146,13 @@ async function init() {
   loadSavedSearches();
   loadSalvati();   // §18: ripristina i salvati da localStorage
 
+  // Thumbnail rotta → slot grigio (delegato in capture: l'evento 'error' dell'<img>
+  // non fa bubbling, niente handler inline = compatibile con eventuale CSP).
+  resultsGrid.addEventListener('error', e => {
+    const img = e.target;
+    if (img && img.tagName === 'IMG') { const t = img.closest('.row-thumb'); if (t) t.classList.add('noimg'); }
+  }, true);
+
   // ── Event delegation: card risultati ─────────────────────────────────────
   resultsGrid.addEventListener('click', e => {
     // Collasso/espansione sezione gruppo
@@ -159,6 +166,11 @@ async function init() {
     const card = e.target.closest('[data-url]');
     if (!card) return;
     const url = card.dataset.url;
+    if (e.target.closest('.row-thumb')) {
+      const r = trovaResult(url);
+      if (r && Array.isArray(r.immagini) && r.immagini.length) openLightbox(r.immagini);
+      return;
+    }
     if (e.target.closest('.btn-salva'))     { toggleSalva(url);     return; }
     if (e.target.closest('.btn-confronta')) { toggleConfronto(url); return; }
     // Apri/chiudi il pannello dettagli senza aprire l'annuncio
@@ -834,9 +846,15 @@ function rowHTML(item, dim = '') {
   // Toggle "Dettagli" solo se c'è davvero qualcosa da mostrare (item con spec,
   // o Moto.it che li recupera via /api/detail). Niente → niente dropdown-errore.
   const showSpec    = hasSpec(item) || item.fonte === 'moto';
+  // Thumbnail (foto native, lazy): click → lightbox con tutte le foto. Niente foto → slot grigio.
+  const imgs        = Array.isArray(item.immagini) ? item.immagini : [];
+  const thumbHTML   = imgs.length
+    ? `<button type="button" class="row-thumb" title="Vedi foto"><img src="${escapeHtml(imgs[0].thumb)}" loading="lazy" referrerpolicy="no-referrer" alt=""></button>`
+    : `<div class="row-thumb noimg" aria-hidden="true"></div>`;
 
   return `
     <div class="result-row" data-url="${urlSafe}">
+      ${thumbHTML}
       <div class="row-main">
         <div class="row-titolo">${escapeHtml(item.titolo)}</div>
         ${item.fonte === 'subito' && item.variante ? `<div class="row-variante">${escapeHtml(item.variante)}</div>` : ''}
@@ -853,6 +871,44 @@ function rowHTML(item, dim = '') {
       ${showSpec ? '<div class="row-detail d-none"><div class="row-spec" data-loaded="0"></div></div>' : ''}
     </div>
   `;
+}
+
+// ─── Slider/lightbox immagini ─────────────────────────────────────────────────
+let lightboxState = null;
+function openLightbox(images) {
+  closeLightbox();
+  let idx = 0;
+  const overlay = document.createElement('div');
+  overlay.className = 'img-lightbox';
+  overlay.innerHTML = `
+    <button class="lb-close" aria-label="Chiudi">&times;</button>
+    <button class="lb-prev" aria-label="Precedente">&#10094;</button>
+    <img class="lb-img" src="" alt="" referrerpolicy="no-referrer">
+    <button class="lb-next" aria-label="Successiva">&#10095;</button>
+    <div class="lb-count"></div>`;
+  const imgEl   = overlay.querySelector('.lb-img');
+  const countEl = overlay.querySelector('.lb-count');
+  const show = () => { imgEl.src = images[idx].full || images[idx].thumb; countEl.textContent = `${idx + 1} / ${images.length}`; };
+  const go   = d => { idx = (idx + d + images.length) % images.length; show(); };
+  overlay.querySelector('.lb-prev').addEventListener('click', e => { e.stopPropagation(); go(-1); });
+  overlay.querySelector('.lb-next').addEventListener('click', e => { e.stopPropagation(); go(1); });
+  overlay.querySelector('.lb-close').addEventListener('click', closeLightbox);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeLightbox(); });
+  const onKey = e => { if (e.key === 'Escape') closeLightbox(); else if (e.key === 'ArrowLeft') go(-1); else if (e.key === 'ArrowRight') go(1); };
+  document.addEventListener('keydown', onKey);
+  let x0 = null;   // swipe touch (mobile)
+  overlay.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
+  overlay.addEventListener('touchend',   e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); x0 = null; }, { passive: true });
+  if (images.length < 2) { overlay.querySelector('.lb-prev').style.display = 'none'; overlay.querySelector('.lb-next').style.display = 'none'; }
+  document.body.appendChild(overlay);
+  lightboxState = { overlay, onKey };
+  show();
+}
+function closeLightbox() {
+  if (!lightboxState) return;
+  document.removeEventListener('keydown', lightboxState.onKey);
+  lightboxState.overlay.remove();
+  lightboxState = null;
 }
 
 // ─── Confronto annunci ────────────────────────────────────────────────────────

@@ -12,6 +12,11 @@ const NODE = {
     prices: { public: { amountInEUR: { raw: 8500 }, onRequestOnly: false } },
     location: { city: 'Milano', zip: '20100' },
     seller: { type: 'Dealer' },
+    media: { images: [
+      { __typename: 'StandardImage', formats: { webp: { size420x315: 't1', size800x600: 'f1' } } },
+      { __typename: 'StandardImage', formats: { webp: { size420x315: 't2' } } },   // senza size800x600 → full=thumb
+      { __typename: 'Video' },                                                      // non-StandardImage → scartata
+    ] },
     vehicle: {
       classification: { make: { formatted: 'BMW' }, model: { formatted: '320d' }, modelVersionInput: '320d Attiva 150cv' },
       condition: {
@@ -53,6 +58,19 @@ test('mapListing: specs ricche native (potenza/cilindri/proprietari/colore/carro
   assert.strictEqual(r.carrozzeria, 'Berlina');
   assert.strictEqual(r.venditore, 'concessionario');   // seller.type 'Dealer'
   assert.strictEqual(r.danni, false);                  // damage.isCurrentlyDamaged nativo
+});
+
+test('mapListing: immagini webp native (StandardImage only, fallback full=thumb)', () => {
+  const r = mapListing(NODE);
+  assert.strictEqual(r.immagini.length, 2);                     // Video scartato
+  assert.deepStrictEqual(r.immagini[0], { thumb: 't1', full: 'f1' });
+  assert.deepStrictEqual(r.immagini[1], { thumb: 't2', full: 't2' });   // no size800 → full=thumb
+});
+
+test('mapListing: media assente → immagini [] (no fabbricazione)', () => {
+  const n = JSON.parse(JSON.stringify(NODE));
+  delete n.details.media;
+  assert.deepStrictEqual(mapListing(n).immagini, []);
 });
 
 test('mapListing: venditore privato + danni fallback usageState quando damage assente', () => {

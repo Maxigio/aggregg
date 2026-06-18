@@ -31,7 +31,7 @@ const PAGE_SIZE = 50;
 const MAX_PAGES = 2;          // 2×50 = 100 (più del path Playwright: 3×~17)
 const TIMEOUT_MS = 15000;
 
-// Query ridotta ai soli campi mappati (no leasing/media/360 → payload piccolo).
+// Query ridotta ai soli campi mappati (+ media.images webp per lo slider; no leasing/360).
 const QUERY = `query Search($v:Vehicle_,$loc:Location_,$pr:Price_,$m:Metadata_){
   search{ listings(vehicle:$v, location:$loc, price:$pr, metadata:$m, locale:it_IT){
     listings{ details(withFallbackAttributes:true){
@@ -40,6 +40,7 @@ const QUERY = `query Search($v:Vehicle_,$loc:Location_,$pr:Price_,$m:Metadata_){
       prices{ public{ amountInEUR{ raw } onRequestOnly } }
       location{ city zip }
       seller{ type }
+      media{ images(with360Images:false, first:5){ __typename ... on StandardImage{ formats{ webp{ size420x315 size800x600 } } } } }
       vehicle{
         classification{ make{ formatted } model{ formatted } modelVersionInput }
         condition{ mileageInKm{ raw } firstRegistrationDate{ formatted } numberOfPreviousOwnersExtended{ raw } damage{ isCurrentlyDamaged } }
@@ -158,6 +159,14 @@ function mapListing(node, opts = {}) {
     ? dmg.isCurrentlyDamaged
     : (usage ? DAMAGED.has(usage) : null);
 
+  // Immagini NATIVE (stessa query, zero costo extra). Solo StandardImage con webp;
+  // entry senza webp (video/360/altro) scartate.
+  const immagini = ((dt.media && dt.media.images) || []).reduce((acc, im) => {
+    const w = im && im.formats && im.formats.webp;
+    if (w && w.size420x315) acc.push({ thumb: w.size420x315, full: w.size800x600 || w.size420x315 });
+    return acc;
+  }, []);
+
   const out = {
     fonte: 'autoscout',
     titolo,
@@ -181,6 +190,7 @@ function mapListing(node, opts = {}) {
     colore: (v.bodyColor && v.bodyColor.formatted) || null,
     carrozzeria: (v.bodyType && v.bodyType.formatted) || null,
     venditore,
+    immagini,
     zip: (dt.location && dt.location.zip) || null,   // per il post-filtro regione (fallback CAP→regione)
     url: dt.webPage || null,
     // Campi per il DB (usati dal crawler; ignorati dal path on-search legacy):
@@ -188,7 +198,9 @@ function mapListing(node, opts = {}) {
     danni,   // nativo damage.isCurrentlyDamaged, fallback usageState
     posted_at: (dt.publication && dt.publication.createdTimestampWithOffset) || null,
   };
-  if (opts.attachRaw) out._raw = dt;   // foto grezza per raw_json (keep-last)
+  // raw_json (keep-last) senza `media`: gli URL immagine non vanno persistiti
+  // (servono solo al display on-search) → evita di gonfiare raw_json sui crawl profondi.
+  if (opts.attachRaw) { const { media, ...rawNoMedia } = dt; out._raw = rawNoMedia; }
   return out;
 }
 

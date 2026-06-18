@@ -107,6 +107,15 @@ function mapAd(ad, opts = {}) {
     posti: digits(feat(ad, 'Posti')),
     classeEmissioni: feat(ad, 'Classe emissioni'),
     neopatentati: neo == null ? null : neo === 'Sì',
+    // Immagini NATIVE (già nel payload, zero richieste extra): URL webp dalla CDN
+    // costruiti dal cdn_base_url + rule (thumb mobile per la lista, fullscreen per lo slider).
+    immagini: (Array.isArray(ad.images) ? ad.images : [])
+      .filter(i => i && i.cdn_base_url)
+      .slice(0, 10)
+      .map(i => ({
+        thumb: `${i.cdn_base_url}?rule=gallery-mobile-1x-auto`,
+        full:  `${i.cdn_base_url}?rule=fullscreen-1x-auto`,
+      })),
     url,
     // Campi per il DB (crawler). nuovo ora nativo da 'Condizioni'; danni non esposto.
     nuovo,

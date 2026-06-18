@@ -9,6 +9,11 @@ const adAuto = {
   subject: 'Alfa romeo Giulietta',
   urls: { default: 'https://www.subito.it/auto/giulietta-x.htm' },
   advertiser: { company: true },
+  images: [
+    { uri: 'imgid:a', cdn_base_url: 'https://images.sbito.it/api/v1/sbt-ads-images-pro/images/ab/abc' },
+    { uri: 'imgid:b', cdn_base_url: 'https://images.sbito.it/api/v1/sbt-ads-images-pro/images/cd/cde' },
+    { uri: 'imgid:nourl' },   // senza cdn_base_url → scartata (no fabbricazione)
+  ],
   features: [
     { label: 'Prezzo', values: [{ key: '5500', value: '5500 €' }] },
     { label: 'Auto', values: [
@@ -76,6 +81,17 @@ test('moto: versione sotto feature Moto + venditore privato + carrozzeria da Tip
   assert.strictEqual(m.potenzaCv, null);                 // niente Potenza → null
   assert.strictEqual(m.carrozzeria, 'Naked');            // moto: feat 'Tipologia'
   assert.strictEqual(m.nuovo, true);                     // 'Nuovo' → true
+});
+
+test('immagini: URL webp da cdn_base_url + rule; entry senza url scartata', () => {
+  const m = mapAd(adAuto);
+  assert.strictEqual(m.immagini.length, 2);   // la terza (senza cdn_base_url) scartata
+  assert.strictEqual(m.immagini[0].thumb, 'https://images.sbito.it/api/v1/sbt-ads-images-pro/images/ab/abc?rule=gallery-mobile-1x-auto');
+  assert.strictEqual(m.immagini[0].full,  'https://images.sbito.it/api/v1/sbt-ads-images-pro/images/ab/abc?rule=fullscreen-1x-auto');
+});
+
+test('immagini assenti → [] (no fabbricazione)', () => {
+  assert.deepStrictEqual(mapAd(adSpoglio).immagini, []);
 });
 
 test('campi assenti → null (nessuna fabbricazione)', () => {
