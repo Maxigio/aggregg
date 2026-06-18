@@ -90,17 +90,18 @@ function applyTheme(t) {
 // Testi: UNICA sorgente = frontend/help-texts.md (l'utente la edita) → sincronizzata QUI.
 // I .help-dot usano data-help-key; il testo viene iniettato in data-help al boot.
 const HELP = {
-  ricerca:    'Scegli Auto o Moto, scrivi la marca e selezionala dalla lista, poi premi Cerca. Il modello è opzionale.',
+  ricerca:    'Dati da fonti esposte pubblicamente. È possibile personalizzare le fonti di riferimento e quali dati sono più interessanti da ricevere.',
   valuta:     'Modo Valuta: marca + modello + anno + km → il valore di mercato (mediana e fascia) dai comparabili reali ora online. Metti "il tuo prezzo" per vedere se è sopra/in linea/sotto mercato. Niente numeri inventati: sotto soglia di campioni dice "dati insufficienti".',
-  filtri:     'Prezzo, anno, km e regione sono filtri reali applicati alla fonte. Nota: su Subito i km sono a fasce (~5.000 km), quindi può includere un filo oltre il valore esatto. Lascia vuoto per non filtrare.',
+  filtri:     'Prezzo, anno, km e regione sono filtri reali applicati alla fonte. Nota: su Subito i km sono a fasce (~5.000 km), abbiamo scelto di arrotondare per eccesso. Autoscout invece ha un sacco di filtri avanzati che le altre fonti non hanno, in questo caso li esponiamo negli annunci e non complichiamo l\'area.',
   regione:    'Subito e Moto.it filtrano la regione esatta. Autoscout cerca entro un raggio dal capoluogo della regione (default 100 km, modificabile col campo "Raggio") — come fa il sito ufficiale.',
-  griglia:    'Clicca le intestazioni Anno/Km/CV/Prezzo per ordinare. ℹ apre i dettagli sotto la riga, la casella ☐ aggiunge l\'annuncio al confronto, ⚑ lo salva. Nota: ordinamento e slider agiscono sui risultati caricati (i più economici), non sull\'intero mercato.',
-  raggruppa:  'Raggruppa gli annunci per modello, fonte, anno, km o provincia. "Nessuno" = lista unica.',
-  confronto:  'Spunta la casella ☐ sugli annunci per aggiungerli qui, poi "Apri confronto" per vederli affiancati a colonne (anche molti).',
-  azioni:     'ℹ dettagli e foto · ☐ aggiungi al confronto · ⚑ salva. Il titolo apre l\'annuncio sul sito originale.',
+  griglia:    'Area personalizzabile dedicata a controlli utili a organizzare gli annunci.',
+  raggruppa:  'È possibile racchiudere gli annunci in cartelle tematiche.',
+  confronto:  'Confronto di molteplici annunci disponibile',
+  azioni:     'ℹ Accesso ai dettagli · ☐ Confronta · ⚑ Salva. Il titolo apre l\'annuncio sul sito originale.',
   controllo:  'Controlla ora questa ricerca salvata: cerca annunci nuovi e cali di prezzo dall\'ultimo controllo. Se non c\'è nulla di nuovo te lo dice.',
   qr:         'Clicca il logo per il QR e l\'indirizzo: apri l\'app dal telefono (serve la password).',
   export:     'Esporta i risultati: PDF report stampabile o CSV per Excel.',
+  ricercheSalvate: 'Salva una ricerca o un particolare veicolo per ricevere informazioni su nuove offerte basate sui filtri desiderati. (Per salvare è necessario il login completo.)',
 };
 function helpText(key) { return HELP[key] || ''; }
 // Span "?" per i template generati in JS (testo già risolto inline).
@@ -174,7 +175,7 @@ function applyDemoMode() {
   if (!document.querySelector('.demo-banner')) {
     const bar = document.createElement('div');
     bar.className = 'demo-banner';
-    bar.textContent = 'Modalità demo — sola lettura: cerca e naviga liberamente. Salvataggi e pannello admin disattivati.';
+    bar.innerHTML = 'Demo — Esplora le icone <strong>?</strong> per maggiori informazioni. Oppure nascondile dall\'icona <strong>?</strong> in alto a destra.';
     document.body.prepend(bar);
   }
 }
