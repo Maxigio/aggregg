@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.automotoradar.backup</string>
+
+  <!-- VIA NODE: /bin/bash non ha il permesso TCC su /Volumes/MAIN sotto launchd,
+       /usr/local/bin/node sì (stesso binario del server). -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/node</string>
+    <string>/Volumes/MAIN/BananaChePrezzi-main/scripts/backup-db.js</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Volumes/MAIN/BananaChePrezzi-main</string>
+
+  <!-- Giornaliero alle 04:00 (app idle). Lo script è self-contained:
+       path assoluti pg + legge .env + mount-guard. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>4</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/aincrad/Library/Logs/automotoradar-backup.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/aincrad/Library/Logs/automotoradar-backup.log</string>
+</dict>
+</plist>

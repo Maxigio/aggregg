@@ -8,6 +8,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { buildWorkerBundle, OUTFILE: WORKER_BUNDLE } = require('../scripts/build-worker-bundle');   // F9
+const { buildFrontendSync } = require('../scripts/build-frontend');   // F39: minify (via commenti) app.js/style.css
 const auth = require('./auth');
 const db = require('./db');
 const crawler = require('./crawler');
@@ -262,6 +263,20 @@ app.post('/api/report', express.json({ limit: '32kb' }), (req, res) => {
     res.status(500).json({ error: 'Impossibile salvare la segnalazione' });
   }
 });
+
+// F39 — serve app.js/style.css MINIFICATI (commenti via) prima dello static.
+// Fallback trasparente al sorgente se la build esbuild fallisce (next()).
+let minFE = { js: null, css: null, ver: '' };
+try { minFE = buildFrontendSync(); console.log(`[frontend] minify OK v${minFE.ver}`); }
+catch (e) { console.warn('[frontend] minify fallita → servo i sorgenti:', e.message); }
+const serveMin = (kind, type) => (req, res, next) => {
+  if (!minFE[kind]) return next();                         // build fallita → sorgente via static
+  res.type(type).set('Cache-Control', 'no-cache').set('ETag', `"${minFE.ver}"`);
+  if (req.headers['if-none-match'] === `"${minFE.ver}"`) return res.status(304).end();
+  res.send(minFE[kind]);
+};
+app.get('/app.js',    serveMin('js',  'application/javascript'));
+app.get('/style.css', serveMin('css', 'text/css'));
 
 app.use(express.static(path.join(__dirname, '../frontend')));
 
@@ -744,7 +759,7 @@ app.get('/api/search', async (req, res) => {
 // login; il demo può LEGGERE (dato di mercato, non il parco privato di papà).
 // Cap on-search REALI per fonte (AS24 50×2, Subito 50×2, Moto.it 13×8): count≥cap ⟺
 // troncato (forse coda economica), count<cap = vista completa del mercato del modello.
-const VAL_SOURCE_CAP = { autoscout: 100, subito: 100, moto: 52 };   // moto on-search = MAX_PAGES 4 × 13 (F33)
+const VAL_SOURCE_CAP = { autoscout: 100, subito: 100, moto: 39 };   // moto on-search = MAX_PAGES 3 × 13 (F35, browser)
 const valNum = v => { const n = parseInt(v, 10); return isNaN(n) || n < 0 ? null : n; };
 
 app.get('/api/valuta', async (req, res) => {
@@ -873,9 +888,11 @@ async function runSearchCore(params) {
     if (!params.motoitModelSlug && modelEntry?.slugMotoIt) {
       params.motoitModelSlug = modelEntry.slugMotoIt;
     }
-    // Slug-modello ON-DEMAND dalla pagina-brand Moto.it (evita undersampling:
-    // brand-only prende solo le prime pagine → 3/28 "Alp 4.0"). Solo se manca dal
-    // catalogo e abbiamo brandSlug + modello digitato. Cache nel modulo.
+    // Slug-modello ON-DEMAND dalla pagina-brand Moto.it (catalogo incompleto: lo
+    // slug manca per molti modelli → senza, la ricerca browser sarebbe brand-only
+    // = undersampling, es. 2 Hornet su 39 honda economici). È una SINGOLA richiesta
+    // HTTP cacheable 12h (NON il burst parallelo soft-bloccato) → veloce e affidabile
+    // in uso normale. Risolto lo slug, il browser cerca server-side `model=`.
     if (!params.motoitModelSlug && params.motoitBrandSlug && params.modello) {
       try {
         params.motoitModelSlug = await resolveMotoitModelSlug(params.motoitBrandSlug, params.modello) || null;
