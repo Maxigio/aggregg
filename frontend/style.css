@@ -312,13 +312,26 @@ body {
 
 .stat-clickable:hover { color: var(--blue-600); }
 
-/* ─── Confronto modale ────────────────────────────────────────────────────── */
-.amr-modal-header {
-  background-color: var(--blue-900);
-  color: var(--white);
-  border-bottom: none;
-  border-radius: calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;
+/* ─── Confronto: pannello inline (F19, niente modale) ─────────────────────── */
+.confronto-panel {
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: var(--radius-lg);
+  background: var(--surface, #fff);
+  box-shadow: 0 4px 18px rgba(0,0,0,0.06);
+  margin-bottom: 20px;
+  overflow: hidden;
 }
+.confronto-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; background: var(--ink); color: #fff;
+}
+.confronto-title { font-weight: 700; font-size: 0.95rem; }
+.confronto-close {
+  background: none; border: none; color: #fff; font-size: 1.05rem;
+  line-height: 1; cursor: pointer; opacity: 0.8; padding: 2px 6px;
+}
+.confronto-close:hover { opacity: 1; }
+#confrontoBody { padding: 4px 10px 10px; }
 
 .confronto-table {
   width: 100%;
@@ -423,16 +436,26 @@ body {
   background-color: var(--blue-600);
   box-shadow: 0 6px 16px rgba(37,99,235,0.3);
 }
+.amr-btn-salvati .badge.bg-danger { font-size: 0.72rem; }
 
-/* ─── §11 Ricerche salvate + avvisi ─────────────────────────────────────────── */
-.amr-btn-ricerche {
-  background-color: var(--ink, #111827);
-  color: #fff; border: none; padding: 10px 18px;
-  font-size: 0.88rem; font-weight: 600; cursor: pointer; font-family: inherit;
-  transition: background-color 0.15s, box-shadow 0.15s;
+/* ─── Offcanvas salvati a tab (F19) ───────────────────────────────────────── */
+.saved-header { gap: 10px; }
+.saved-tabs { gap: 6px; flex-wrap: nowrap; margin: 0; }
+.saved-tabs .nav-link {
+  padding: 6px 14px; font-size: 0.86rem; font-weight: 600; color: var(--muted);
+  border-radius: 999px; display: inline-flex; align-items: center; gap: 6px;
 }
-.amr-btn-ricerche:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.25); }
-.amr-btn-ricerche .badge { font-size: 0.72rem; }
+.saved-tabs .nav-link.active { background: var(--ink); color: #fff; }
+.saved-tabs .badge {
+  background: var(--surface-2); color: var(--muted);
+  font-size: 0.7rem; font-weight: 700; border-radius: 999px; padding: 1px 7px;
+}
+.saved-tabs .nav-link.active .badge { background: rgba(255,255,255,0.22); color: #fff; }
+.ricerche-toolbar {
+  display: flex; justify-content: flex-end;
+  padding: 12px 16px 0;
+}
+
 
 #ricercheList.checking { opacity: 0.55; pointer-events: none; }
 
@@ -541,13 +564,6 @@ body {
 .noUi-handle::after { display: none; }
 
 /* ─── Footer ──────────────────────────────────────────────────────────────── */
-.amr-footer {
-  padding: 24px 0;
-  margin-top: 48px;
-  border-top: 1px solid var(--slate-200);
-  color: var(--slate-500);
-  font-size: 0.8rem;
-}
 
 /* ─── Card top: fonte + punteggio ─────────────────────────────────────────── */
 .card-top {
@@ -670,8 +686,6 @@ body {
   font-size: 0.95rem;
 }
 
-/* Testata sobria (slate quasi-nero invece del blu saturo) */
-.amr-modal-header { background-color: var(--ink); }
 
 /* Card più piatte */
 .amr-card { box-shadow: none; border-color: var(--line); }
@@ -723,6 +737,10 @@ body {
 .row-main { min-width: 0; }
 .row-titolo {
   font-weight: 600; font-size: 0.95rem; line-height: 1.3; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.row-variante {
+  margin-top: 1px; font-size: 0.82rem; color: var(--muted); line-height: 1.25;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .row-dett {
@@ -980,7 +998,7 @@ body {
 
 /* Hero: logo + nome (niente top bar, niente sottotitolo) */
 .hero { padding-top: 30px; }
-.hero-brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 22px; }
+.hero-brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 auto 22px; width: fit-content; }
 .hero-logo { display: block; border-radius: 8px; }
 .hero-name { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
 
@@ -1061,3 +1079,10 @@ body:not(.has-results) .hero {
 .src-bad, .src-bad b   { color: #dc2626; }
 .src-warn, .src-warn b { color: #92400e; }
 .src-dim b  { color: var(--muted); font-weight: 600; }
+
+/* Banner modalità demo (ospite read-only) */
+.demo-banner {
+  background: #fef3c7; color: #92400e; border-bottom: 1px solid #fde68a;
+  font-size: 0.85rem; font-weight: 600; text-align: center;
+  padding: 8px 14px;
+}

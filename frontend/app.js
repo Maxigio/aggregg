@@ -66,6 +66,23 @@ function icon(name, cls = '') {
 
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
+// Modalità demo: banner + nasconde i pulsanti che scrivono sul server (le ricerche
+// salvate sono condivise → un ospite non deve toccarle). I salvati per-annuncio sono
+// in localStorage del browser dell'ospite → innocui, restano attivi.
+function applyDemoMode() {
+  document.body.classList.add('demo-mode');
+  ['btnSalvaRicerca', 'btnControllaTutte'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  if (!document.querySelector('.demo-banner')) {
+    const bar = document.createElement('div');
+    bar.className = 'demo-banner';
+    bar.textContent = 'Modalità demo — sola lettura: cerca e naviga liberamente. Salvataggi e pannello admin disattivati.';
+    document.body.prepend(bar);
+  }
+}
+
 async function init() {
   const currentYear = new Date().getFullYear();
   document.getElementById('annoMin').max = currentYear;
@@ -76,6 +93,13 @@ async function init() {
   await populateMarca('auto');
   setupMarcaAutocomplete();
   applyUrlParams();
+
+  // Ruolo sessione: in modalità demo (ospite read-only) nascondi le scritture
+  // server (salva ricerca / controlla tutte) — il server le blocca comunque (403).
+  try {
+    const me = await fetch('/api/me').then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (me && me.role === 'demo') applyDemoMode();
+  } catch (_) { /* offline/locale → accesso pieno */ }
 
   // Cambio tipo (auto/moto): ricarica marche
   tipoInputs.forEach(input => input.addEventListener('change', async () => {
@@ -113,6 +137,12 @@ async function init() {
   document.getElementById('btnSalvaRicerca').addEventListener('click', saveCurrentSearch);
   document.getElementById('btnControllaTutte').addEventListener('click', () => checkRicerche());
   document.getElementById('ricercheList').addEventListener('click', onRicercheClick);
+  document.getElementById('confrontoClose')?.addEventListener('click', () => {
+    confronto = [];
+    renderResults(currentResults);
+    renderSalvati();
+    hideConfrontoPanel();
+  });
   loadSavedSearches();
   loadSalvati();   // §18: ripristina i salvati da localStorage
 
@@ -379,6 +409,7 @@ async function doSearch() {
     prezzoMax: document.getElementById('prezzoMax').value,
     annoMin:   document.getElementById('annoMin').value,
     annoMax:   document.getElementById('annoMax').value,
+    kmMin:     document.getElementById('kmMin').value,
     kmMax:     document.getElementById('kmMax').value,
   };
 
@@ -388,6 +419,7 @@ async function doSearch() {
   lastSearchParams = { ...params };   // §11: memorizza per "Salva ricerca"
 
   confronto = [];
+  hideConfrontoPanel();
   document.body.classList.add('has-results');   // hero va in alto (non più centrata)
 
   showLoading();
@@ -724,29 +756,49 @@ function escapeHtml(str) {
 // versione) sono già sull'item → render ISTANTANEO; per Subito/Moto.it fetch lazy
 // /api/detail (§15). `data-loaded` evita refetch.
 const SPEC_LABELS = {
-  variante: 'Versione', cambio: 'Cambio', cilindrata: 'Cilindrata',
-  potenzaCv: 'Potenza', proprietari: 'Proprietari', allestimento: 'Allestimento', revisione: 'Revisione',
+  variante: 'Versione', cambio: 'Cambio', cilindrata: 'Cilindrata', cilindri: 'Cilindri',
+  potenzaCv: 'Potenza', carrozzeria: 'Carrozzeria', colore: 'Colore', porte: 'Porte', posti: 'Posti',
+  classeEmissioni: 'Classe emissioni', neopatentati: 'Neopatentati', nuovo: 'Condizione', danni: 'Danni',
+  venditore: 'Venditore', proprietari: 'Proprietari', allestimento: 'Allestimento', revisione: 'Revisione',
 };
 function renderSpec(obj) {
   const fmt = (k, v) => {
     if (v == null || v === '') return '';
-    const val = k === 'potenzaCv' ? `${v} CV` : k === 'cilindrata' ? `${v} cc` : escapeHtml(String(v));
+    let val;
+    if (k === 'potenzaCv')         val = `${v} CV`;
+    else if (k === 'cilindrata')   val = `${v} cc`;
+    else if (k === 'cilindri')     val = `${v}`;
+    else if (k === 'posti')        val = `${v}`;
+    else if (k === 'nuovo')        val = v ? 'Nuovo' : 'Usato';
+    else if (k === 'danni')        { if (!v) return ''; val = 'Incidentato'; }   // mostra solo se incidentato
+    else if (k === 'neopatentati') val = v ? 'Sì' : 'No';
+    else                           val = escapeHtml(String(v));
     return `<span class="spec-item"><span class="spec-k">${SPEC_LABELS[k]}</span> ${val}</span>`;
   };
   const items = Object.keys(SPEC_LABELS).map(k => fmt(k, obj[k])).filter(Boolean);
   return items.length ? items.join('') : '<span class="spec-empty">Nessun dettaglio aggiuntivo</span>';
 }
+// F19 — l'item ha almeno un campo spec? Decide se mostrare il toggle "Dettagli"
+// (AS24/Subito hanno i campi sull'item da F18; Moto.it no → fetch /api/detail).
+function hasSpec(item) {
+  return ['variante', 'cambio', 'cilindrata', 'potenzaCv', 'venditore',
+          'colore', 'carrozzeria', 'porte', 'posti', 'classeEmissioni', 'proprietari', 'nuovo']
+    .some(k => item[k] != null && item[k] !== '');
+}
+
 async function loadSpec(card) {
   const box = card.querySelector('.row-spec');
   if (!box || box.dataset.loaded === '1') return;
   const item = trovaResult(card.dataset.url) || {};
-  // Campi strutturati già presenti (AS24) → render immediato, niente fetch.
-  if (['variante', 'cambio', 'cilindrata'].some(k => item[k] != null && item[k] !== '')) {
+  // Campi strutturati sull'item (AS24 + Subito F18) → render immediato, niente rete.
+  if (hasSpec(item)) {
     box.dataset.loaded = '1';
     box.innerHTML = renderSpec(item);
     return;
   }
-  // Altrimenti (Subito/Moto.it) → fetch lazy del dettaglio.
+  // Solo Moto.it (item senza spec) dipende dal dettaglio remoto. Subito non arriva
+  // più qui (ha sempre la versione nativa) → niente dropdown-errore.
+  if (item.fonte !== 'moto') { box.dataset.loaded = '1'; box.innerHTML = ''; return; }
   box.dataset.loaded = '1';
   const url = card.dataset.url;
   if (!url || !/^https?:/.test(url)) { box.innerHTML = ''; return; }
@@ -779,22 +831,26 @@ function rowHTML(item, dim = '') {
   const urlSafe     = /^https?:\/\//i.test(item.url) ? escapeHtml(item.url) : '#';
   const isSalvato   = salvati.some(r => r.url === item.url);
   const inConfronto = confronto.some(r => r.url === item.url);
+  // Toggle "Dettagli" solo se c'è davvero qualcosa da mostrare (item con spec,
+  // o Moto.it che li recupera via /api/detail). Niente → niente dropdown-errore.
+  const showSpec    = hasSpec(item) || item.fonte === 'moto';
 
   return `
     <div class="result-row" data-url="${urlSafe}">
       <div class="row-main">
         <div class="row-titolo">${escapeHtml(item.titolo)}</div>
+        ${item.fonte === 'subito' && item.variante ? `<div class="row-variante">${escapeHtml(item.variante)}</div>` : ''}
         <div class="row-dett">${dettagli ? escapeHtml(dettagli) + ' · ' : ''}<span class="fonte ${fonteClass}">${escapeHtml(fonteLabel)}</span></div>
       </div>
       <div class="row-right">
         <div class="row-prezzo">${prezzoStr}</div>
         <div class="row-actions">
-          <button type="button" class="dettagli-toggle" aria-expanded="false" title="Mostra dettagli">Dettagli ${icon('chevron', 'chevron')}</button>
+          ${showSpec ? `<button type="button" class="dettagli-toggle" aria-expanded="false" title="Mostra dettagli">Dettagli ${icon('chevron', 'chevron')}</button>` : ''}
           <button class="btn-confronta${inConfronto ? ' attivo' : ''}" title="Confronta">${icon('compare')}</button>
           <button class="btn-salva${isSalvato ? ' attivo' : ''}" title="${isSalvato ? 'Rimuovi dai salvati' : 'Salva annuncio'}">${icon(isSalvato ? 'bookmark-filled' : 'bookmark')}</button>
         </div>
       </div>
-      <div class="row-detail d-none"><div class="row-spec" data-loaded="0"></div></div>
+      ${showSpec ? '<div class="row-detail d-none"><div class="row-spec" data-loaded="0"></div></div>' : ''}
     </div>
   `;
 }
@@ -820,10 +876,19 @@ function toggleConfronto(url) {
   }
   renderResults(currentResults);
   renderSalvati();
-  if (confronto.length === 2) openConfrontoModal();
+  renderConfrontoPanel();
 }
 
-function openConfrontoModal() {
+function hideConfrontoPanel() {
+  document.getElementById('confrontoPanel')?.classList.add('d-none');
+}
+
+// F19 — confronto in pannello INLINE (no modale). Mostra a 2 selezionati, nasconde
+// sotto i 2. Riusa la logica `better()` per evidenziare il valore migliore.
+function renderConfrontoPanel() {
+  const panel = document.getElementById('confrontoPanel');
+  if (!panel) return;
+  if (confronto.length < 2) { panel.classList.add('d-none'); return; }
   const [a, b] = confronto;
   const fmt    = n => n != null ? `€ ${n.toLocaleString('it-IT')}` : '—';
   const fmtKm  = n => n != null ? `${n.toLocaleString('it-IT')} km` : '—';
@@ -886,6 +951,21 @@ function openConfrontoModal() {
           <td>${escapeHtml(b.provincia || '—')}</td>
         </tr>
         <tr>
+          <td>Versione</td>
+          <td>${escapeHtml(a.variante || '—')}</td>
+          <td>${escapeHtml(b.variante || '—')}</td>
+        </tr>
+        <tr>
+          <td>Potenza</td>
+          <td>${a.potenzaCv != null ? a.potenzaCv + ' CV' : '—'}</td>
+          <td>${b.potenzaCv != null ? b.potenzaCv + ' CV' : '—'}</td>
+        </tr>
+        <tr>
+          <td>Venditore</td>
+          <td>${escapeHtml(a.venditore || '—')}</td>
+          <td>${escapeHtml(b.venditore || '—')}</td>
+        </tr>
+        <tr>
           <td>Link</td>
           <td><a href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary w-100">Vai ↗</a></td>
           <td><a href="${escapeHtml(b.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary w-100">Vai ↗</a></td>
@@ -894,7 +974,8 @@ function openConfrontoModal() {
     </table>
   `;
 
-  bootstrap.Modal.getOrCreateInstance(document.getElementById('confrontoModal')).show();
+  panel.classList.remove('d-none');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 // ─── Annunci salvati ──────────────────────────────────────────────────────────
@@ -931,8 +1012,15 @@ function loadSalvati() {
 }
 
 function aggiornaContatoreSalvati() {
-  document.getElementById('salvatiCount').textContent = salvati.length;
-  document.getElementById('btnSalvati').style.display = salvati.length > 0 ? 'flex' : 'none';
+  const c = document.getElementById('salvatiCount');     if (c) c.textContent = salvati.length;
+  const t = document.getElementById('tabSalvatiCount');  if (t) t.textContent = salvati.length;
+  updateSavedButton();
+}
+
+// Mostra l'unico bottone "Salvati" se c'è almeno un annuncio O una ricerca salvata.
+function updateSavedButton() {
+  const btn = document.getElementById('btnSaved');
+  if (btn) btn.style.display = (salvati.length > 0 || savedSearches.length > 0) ? 'inline-flex' : 'none';
 }
 
 function renderSalvati() {
@@ -975,10 +1063,12 @@ async function loadSavedSearches() {
 function updateNovitaBadge() {
   const tot = savedSearches.reduce((a, s) => a + (s.novita || 0), 0);
   const badge = document.getElementById('novitaCount');
-  const btn   = document.getElementById('btnRicerche');
-  btn.style.display = savedSearches.length > 0 ? 'flex' : 'none';
-  if (tot > 0) { badge.textContent = tot; badge.style.display = 'inline-block'; }
-  else         { badge.style.display = 'none'; }
+  const tr    = document.getElementById('tabRicercheCount'); if (tr) tr.textContent = savedSearches.length;
+  if (badge) {
+    if (tot > 0) { badge.textContent = tot; badge.style.display = 'inline-block'; }
+    else         { badge.style.display = 'none'; }
+  }
+  updateSavedButton();
 }
 
 async function saveCurrentSearch() {

@@ -63,6 +63,8 @@
             <input type="number" id="annoMin" placeholder="es. 2015" min="1900" /></label>
           <label class="adv-field"><span>Anno a</span>
             <input type="number" id="annoMax" min="1900" /></label>
+          <label class="adv-field"><span>Km min</span>
+            <input type="number" id="kmMin" placeholder="es. 20000" min="0" /></label>
           <label class="adv-field"><span>Km max</span>
             <input type="number" id="kmMax" placeholder="es. 100000" min="0" /></label>
           <label class="adv-field"><span>Regione</span>
@@ -158,6 +160,15 @@
 
     <div id="fonteBreakdown" class="text-muted small mb-2"></div>
 
+    <!-- CONFRONTO (pannello inline, no modale) -->
+    <section id="confrontoPanel" class="confronto-panel d-none">
+      <div class="confronto-head">
+        <span class="confronto-title">Confronto annunci</span>
+        <button type="button" class="confronto-close" id="confrontoClose" title="Chiudi confronto" aria-label="Chiudi">✕</button>
+      </div>
+      <div id="confrontoBody"></div>
+    </section>
+
     <!-- RISULTATI -->
     <div id="resultsSection" class="d-none">
       <div id="resultsGrid"></div>
@@ -175,64 +186,42 @@
 
   </main>
 
-  <footer class="amr-footer">
-    <div class="container text-center">
-      <small>Auto Moto Radar — uso personale</small>
-    </div>
-  </footer>
-
-  <!-- BOTTONE FLOTTANTE SALVATI -->
-  <button id="btnSalvati" style="display:none"
+  <!-- BOTTONE FLOTTANTE SALVATI (unico) -->
+  <button id="btnSaved" style="display:none"
     class="amr-btn-salvati position-fixed bottom-0 end-0 m-3 rounded-pill shadow align-items-center gap-2"
-    data-bs-toggle="offcanvas" data-bs-target="#offcanvasSalvati">
+    data-bs-toggle="offcanvas" data-bs-target="#offcanvasSaved">
     Salvati <span class="badge bg-white text-primary" id="salvatiCount">0</span>
+    <span class="badge bg-danger" id="novitaCount" style="display:none">0</span>
   </button>
 
-  <!-- OFFCANVAS SALVATI -->
-  <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasSalvati"
-       aria-labelledby="offcanvasSalvatiLabel" style="width:min(360px,100vw)">
-    <div class="offcanvas-header border-bottom">
-      <h5 class="offcanvas-title fw-semibold" id="offcanvasSalvatiLabel">Annunci salvati</h5>
+  <!-- OFFCANVAS UNICO: tab Annunci salvati | Ricerche -->
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasSaved"
+       aria-labelledby="offcanvasSavedLabel" style="width:min(400px,100vw)">
+    <div class="offcanvas-header border-bottom saved-header">
+      <ul class="nav nav-pills saved-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="tabSalvatiBtn" data-bs-toggle="tab" data-bs-target="#paneSalvati" type="button" role="tab">
+            Annunci <span class="badge" id="tabSalvatiCount">0</span>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tabRicercheBtn" data-bs-toggle="tab" data-bs-target="#paneRicerche" type="button" role="tab">
+            Ricerche <span class="badge" id="tabRicercheCount">0</span>
+          </button>
+        </li>
+      </ul>
       <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Chiudi"></button>
     </div>
     <div class="offcanvas-body p-0">
-      <div id="salvatiList" class="p-3"></div>
-    </div>
-  </div>
-
-  <!-- BOTTONE FLOTTANTE RICERCHE SALVATE -->
-  <button id="btnRicerche" style="display:none"
-    class="amr-btn-ricerche position-fixed bottom-0 start-0 m-3 rounded-pill shadow align-items-center gap-2"
-    data-bs-toggle="offcanvas" data-bs-target="#offcanvasRicerche">
-    Ricerche <span class="badge bg-danger" id="novitaCount" style="display:none">0</span>
-  </button>
-
-  <!-- OFFCANVAS RICERCHE SALVATE -->
-  <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasRicerche"
-       aria-labelledby="offcanvasRicercheLabel" style="width:min(380px,100vw)">
-    <div class="offcanvas-header border-bottom">
-      <h5 class="offcanvas-title fw-semibold" id="offcanvasRicercheLabel">Ricerche salvate</h5>
-      <div class="d-flex align-items-center gap-2">
-        <button type="button" class="rnav-btn" id="btnControllaTutte">Controlla tutte</button>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Chiudi"></button>
-      </div>
-    </div>
-    <div class="offcanvas-body p-0">
-      <div id="ricercheList" class="p-3"></div>
-    </div>
-  </div>
-
-  <!-- MODAL CONFRONTO -->
-  <div class="modal fade" id="confrontoModal" tabindex="-1" aria-labelledby="confrontoModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header amr-modal-header">
-          <h5 class="modal-title fw-semibold" id="confrontoModalLabel">Confronto annunci</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+      <div class="tab-content">
+        <div class="tab-pane fade show active" id="paneSalvati" role="tabpanel" aria-labelledby="tabSalvatiBtn">
+          <div id="salvatiList" class="p-3"></div>
         </div>
-        <div class="modal-body" id="confrontoBody"></div>
-        <div class="modal-footer border-0">
-          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Chiudi</button>
+        <div class="tab-pane fade" id="paneRicerche" role="tabpanel" aria-labelledby="tabRicercheBtn">
+          <div class="ricerche-toolbar">
+            <button type="button" class="rnav-btn" id="btnControllaTutte">Controlla tutte</button>
+          </div>
+          <div id="ricercheList" class="p-3"></div>
         </div>
       </div>
     </div>
