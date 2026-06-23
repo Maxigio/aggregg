@@ -143,7 +143,9 @@ function parseCookies(req) {
   for (const part of h.split(';')) {
     const i = part.indexOf('=');
     if (i < 0) continue;
-    out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    const k = part.slice(0, i).trim();
+    const v = part.slice(i + 1).trim();
+    try { out[k] = decodeURIComponent(v); } catch { out[k] = v; }   // cookie malformato → non crashare (500 a ogni richiesta)
   }
   return out;
 }
@@ -208,7 +210,7 @@ app.get('/logout', (req, res) => {
 // Ruolo della sessione corrente (per la UI: nasconde salvataggi/admin in demo).
 // Auth disattivata (app locale) → 'full'. Sotto /api/ → già protetta dal middleware.
 app.get('/api/me', (req, res) => {
-  const valutaEnabled = !process.env.DISABLE_VALUTA;
+  const valutaEnabled = false;   // F48: Valuta nascosta in permanenza (toggle nascosto + /api/valuta 403)
   if (!auth.isEnabled()) return res.json({ role: 'full', authDisabled: true, valutaEnabled });
   res.json({ role: req.authRole || auth.checkToken(parseCookies(req).amr_auth) || null, valutaEnabled });
 });
@@ -221,7 +223,8 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 // (il leftmost è spoofabile). Senza proxy (Electron locale) → remoteAddress.
 function clientIp(req) {
   const xff = req.headers['x-forwarded-for'];
-  return (xff ? String(xff).split(',').pop().trim() : req.socket.remoteAddress) || 'unknown';
+  if (xff) { const p = String(xff).split(',').map(s => s.trim()).filter(Boolean); if (p.length) return p[p.length - 1]; }
+  return req.socket.remoteAddress || 'unknown';
 }
 
 // ─── Segnalazioni (bug-report) — anche l'utente demo ────────────────────────
@@ -814,7 +817,8 @@ const VAL_SOURCE_CAP = { autoscout: 100, subito: 100, moto: 39 };   // moto on-s
 const valNum = v => { const n = parseInt(v, 10); return isNaN(n) || n < 0 ? null : n; };
 
 app.get('/api/valuta', async (req, res) => {
-  if (process.env.DISABLE_VALUTA) return res.status(403).json({ error: 'Valutazione disattivata' });
+  return res.status(403).json({ error: 'Valutazione disattivata' });   // F48: Valuta nascosta in permanenza
+  // eslint-disable-next-line no-unreachable
   if (!searchRateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
   const parsed = parseSearchParams(req.query);
   if (parsed.errors) return res.status(400).json({ error: parsed.errors.join(', ') });
@@ -864,7 +868,7 @@ const SEARCH_CACHE_TTL = 3 * 60 * 1000;
 const SEARCH_CACHE_MAX = 50;
 const searchCache = new Map();   // key → { ts, data }
 function searchCacheKey(p) {
-  return ['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMax', 'regione', 'raggio']
+  return ['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax', 'regione', 'raggio']
     .map(f => `${f}=${p[f] ?? ''}`).join('&').toLowerCase();
 }
 function cacheable(data) {

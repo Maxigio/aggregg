@@ -129,7 +129,7 @@ function versionBase(bikeName) {
 // "(2014 - 17)"/"(2008-13)"/"(2019)" → {annoMin, annoMax}.
 function parseYears(bikeName) {
   const r = String(bikeName || '').match(/\((\d{4})\s*-\s*(\d{2,4})\)/);
-  if (r) { const a = +r[1]; let b = +r[2]; if (b < 100) b = Math.floor(a / 100) * 100 + b; return { annoMin: a, annoMax: b }; }
+  if (r) { const a = +r[1]; let b = +r[2]; if (b < 100) { b = Math.floor(a / 100) * 100 + b; if (b < a) b += 100; } return { annoMin: a, annoMax: b }; }   // "(1998-02)"→2002, "(2008-12)"→2012
   const s = String(bikeName || '').match(/\((\d{4})\)/);
   return s ? { annoMin: +s[1], annoMax: +s[1] } : { annoMin: null, annoMax: null };
 }

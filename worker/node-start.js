@@ -172,12 +172,16 @@ async function prepareScript(cfg) {
   const cfg = loadConfig();
   console.log(`[launcher] nodo '${cfg.device}' → ${cfg.centralUrl} · intervallo ${cfg.intervalHours}h · updateMode=${cfg.updateMode}`);
   for (;;) {
-    const scriptPath = await prepareScript(cfg);
-    if (scriptPath) {
-      console.log('[launcher] avvio worker …');
-      await runWorker(cfg, scriptPath);
+    try {
+      const scriptPath = await prepareScript(cfg);
+      if (scriptPath) {
+        console.log('[launcher] avvio worker …');
+        await runWorker(cfg, scriptPath);
+      }
+    } catch (e) {
+      console.error('[launcher] giro fallito (continuo):', e && e.message);   // un errore NON uccide il loop
     }
     console.log(`[launcher] giro finito. Prossimo tra ${cfg.intervalHours}h. (Ctrl-C per fermare)`);
     await sleep(cfg.intervalHours * 3600 * 1000);
   }
-})();
+})().catch(e => { console.error('[launcher] errore fatale:', e); process.exit(1); });

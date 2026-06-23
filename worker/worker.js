@@ -64,7 +64,7 @@ function req(urlStr, { method = 'GET', headers = {}, body = null } = {}) {
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: d }));
     });
     r.on('error', reject);
-    r.setTimeout(60000, () => r.destroy(new Error('timeout centrale')));
+    r.setTimeout(60000, () => { r.destroy(); reject(new Error('timeout centrale')); });   // destroy(err) non fa reject → reject esplicito (no hang)
     if (data) r.write(data);
     r.end();
   });

@@ -297,7 +297,7 @@ function applyFilter(){
   updateSelCount();
 }
 function visibleChecks(){ return [...document.querySelectorAll('#wlTable tbody tr')].filter(tr => tr.style.display !== 'none').map(tr => tr.querySelector('.rowchk')).filter(Boolean); }
-function selectedIds(){ return [...document.querySelectorAll('#wlTable .rowchk')].filter(c => c.checked).map(c => parseInt(c.dataset.id,10)); }
+function selectedIds(){ return visibleChecks().filter(c => c.checked).map(c => parseInt(c.dataset.id,10)); }   // solo righe VISIBILI (rispetta il filtro per i bulk)
 function updateSelCount(){ $('#selCount').textContent = `${selectedIds().length} selezionati`; }
 
 $('#wlTable').addEventListener('change', async e => {
