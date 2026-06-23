@@ -51,6 +51,18 @@ function toInt(val) {
   return isNaN(n) || n < 0 ? null : n;
 }
 
+// Classificazione "taggata" dello stato HTTP per la salute crawler (F1.5).
+// kind: 'blocked' (ban-class) | 'auth' | 'transient' | 'error'.
+function kindForStatus(s) {
+  if (s === 401) return 'auth';
+  if (s === 403 || s === 429) return 'blocked';
+  if (s >= 500) return 'transient';
+  return 'error';
+}
+function fail(msg, { status = null, kind = 'error' } = {}) {
+  const e = new Error(msg); e.status = status; e.kind = kind; return e;
+}
+
 // ─── Mapping regione slug → params AS24 ──────────────────────────────────────
 // AS24 non ha un filtro "regione amministrativa" in senso stretto: il path
 // /lst-*/<brand>/<model>/<Region>%20(Italy) è un alias SEO che attiva il
@@ -147,5 +159,5 @@ function resolveChromiumExecutable(pwBrowsersRoot) {
 
 module.exports = {
   HEADERS, toSlug, parseEuro, parseKm, extractNextData, toInt, REGION_AS24,
-  resolveChromiumExecutable,
+  resolveChromiumExecutable, kindForStatus, fail,
 };

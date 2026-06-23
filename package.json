@@ -125,7 +125,6 @@
     "bootstrap": "^5.3.3",
     "electron": "^35.0.0",
     "electron-builder": "^25.0.0",
-    "electron-updater": "^6.3.0",
     "esbuild": "^0.28.1",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",

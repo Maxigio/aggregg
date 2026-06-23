@@ -73,7 +73,6 @@ body {
   font-variant-numeric: tabular-nums;   /* cifre allineate ovunque (look dati professionale) */
   -webkit-font-smoothing: antialiased;
 }
-.mono { font-family: var(--num); font-variant-numeric: tabular-nums; }
 
 .container {
   max-width: 1680px !important;   /* cap su 4K/ultrawide; !important batte i max-width responsive di Bootstrap */
@@ -362,8 +361,6 @@ body.has-results .search { padding: 14px 0 12px; }
   cursor: pointer; font-family: inherit; transition: all .12s; white-space: nowrap;
 }
 .tb-btn:hover { border-color: var(--accent); color: var(--accent); }
-.tb-btn-accent { border-color: var(--accent); color: #fff; background: var(--accent); }
-.tb-btn-accent:hover { background: #1a5fcc; color: #fff; }
 .tb-sort-mobile { display: none; }
 
 /* Stato per-fonte (sotto la toolbar) */
@@ -652,7 +649,6 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
 .ric-motivo { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
 .ric-nuovo .ric-motivo { background: var(--tag-subito-bg); color: var(--tag-subito-fg); }
 .ric-calo .ric-motivo { background: var(--tag-moto-bg); color: var(--tag-moto-fg); }
-.ric-affare .ric-motivo { background: var(--tag-autoscout-bg); color: var(--tag-autoscout-fg); }
 .ric-alert-tit { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ric-alert-prezzo { font-family: var(--num); font-weight: 700; white-space: nowrap; }
 .rnav-btn, .ric-check, .ric-del {

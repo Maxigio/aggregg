@@ -13,17 +13,7 @@
  */
 const https = require('https');
 
-// Errore "taggato" per la classificazione salute crawler (F1.5).
-// kind: 'blocked' (ban-class) | 'auth' | 'transient' | 'error'.
-function kindForStatus(s) {
-  if (s === 401) return 'auth';
-  if (s === 403 || s === 429) return 'blocked';
-  if (s >= 500) return 'transient';
-  return 'error';
-}
-function fail(msg, { status = null, kind = 'error' } = {}) {
-  const e = new Error(msg); e.status = status; e.kind = kind; return e;
-}
+const { kindForStatus, fail } = require('./utils');   // classificazione salute crawler (F1.5)
 
 const HOST = 'listing-search.api.autoscout24.com';
 const AUTH = 'Basic YXMyNC1zZWFyY2gtZnVubmVsOnZucmZiYkJqSTMyT2wxV2thNnVOSFJwM0VZbjRkag==';

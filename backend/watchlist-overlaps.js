@@ -50,4 +50,4 @@ function findOverlaps(targets) {
   return pairs;
 }
 
-module.exports = { findOverlaps, _norm: norm, _lookupModelGroup: lookupModelGroup };
+module.exports = { findOverlaps };

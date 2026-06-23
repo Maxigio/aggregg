@@ -140,4 +140,4 @@ async function markGone(target, seenUrls, opts = {}) {
   }
 }
 
-module.exports = { upsertListings, markGone, _UPSERT_SQL: UPSERT_SQL };
+module.exports = { upsertListings, markGone };

@@ -157,4 +157,4 @@ async function resolveMotoitVersionEntry(brandSlug, entryName) {
   return null;
 }
 
-module.exports = { resolveMotoitModelSlug, getBrandModels, getModelBikes, resolveMotoitVersionEntry, _getBrandModels: getBrandModels };
+module.exports = { resolveMotoitModelSlug, getBrandModels, getModelBikes, resolveMotoitVersionEntry };

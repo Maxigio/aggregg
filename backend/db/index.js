@@ -83,4 +83,4 @@ async function init() {
 
 async function close() { if (pool) { await pool.end(); pool = null; } }
 
-module.exports = { getPool, isEnabled, query, getClient, init, close };
+module.exports = { isEnabled, query, getClient, init, close };

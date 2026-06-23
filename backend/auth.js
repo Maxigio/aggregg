@@ -82,12 +82,6 @@ function verifyRole(pw) {
   return null;
 }
 
-// Back-compat: true solo per la password principale (full).
-function verifyPassword(pw) {
-  const cfg = load();
-  return cfg ? matchHash(pw, cfg.salt, cfg.hash) : false;
-}
-
 // Token cookie firmato col RUOLO dentro la firma: "<exp>.<role>.<hmac(secret, exp+'.'+role)>".
 // Il ruolo è firmato → un demo non può alterare il cookie per diventare 'full'.
 function makeToken(role = 'full') {
@@ -123,6 +117,6 @@ function checkToken(v) {
 }
 
 module.exports = {
-  isEnabled, setPassword, setDemoPassword, verifyPassword, verifyRole,
-  makeToken, checkToken, _filePath: filePath, MIN_LEN, TTL_MS,
+  isEnabled, setPassword, setDemoPassword, verifyRole,
+  makeToken, checkToken, MIN_LEN, TTL_MS,
 };

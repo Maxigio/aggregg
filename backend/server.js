@@ -179,12 +179,9 @@ app.use((req, res, next) => {
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, '../frontend/login.html')));
 
 app.post('/login', express.urlencoded({ extended: false }), async (req, res) => {
-  // IP reale dietro Funnel: Tailscale è l'UNICO proxy fidato e aggiunge il client
-  // come ULTIMO hop di X-Forwarded-For → prendere il RIGHTMOST (il leftmost è
-  // spoofabile dal client). Senza proxy (Electron locale) usa remoteAddress.
-  // Senza questo, dietro Funnel ogni utente è 127.0.0.1 → lockout globale.
-  const xff = req.headers['x-forwarded-for'];
-  const ip  = (xff ? String(xff).split(',').pop().trim() : req.socket.remoteAddress) || 'unknown';
+  // IP reale dietro Funnel (RIGHTMOST X-Forwarded-For, vedi clientIp). Senza,
+  // dietro Funnel ogni utente è 127.0.0.1 → lockout globale.
+  const ip = clientIp(req);
   const rec = loginAttempts.get(ip);
   if (rec && rec.until > Date.now()) return res.redirect(302, '/login?err=locked');   // lockout
 
@@ -467,12 +464,6 @@ app.post('/api/admin/watchlist/distribute', express.json(), async (req, res) => 
 // ─── F11 — candidati nuovi target dal catalogo (catalogo − watchlist) ─────────
 // Sorgente = data/models.json (richiesto una volta, cached da require). Il modulo
 // candidate-targets è PURO: gli passo le righe watchlist grezze + i filtri.
-let _modelsCatalog = null;
-function modelsCatalog() {
-  if (!_modelsCatalog) _modelsCatalog = require('../data/models.json');
-  return _modelsCatalog;
-}
-
 app.get('/api/admin/candidates', async (req, res) => {
   try {
     const tipo = ['auto', 'moto'].includes(req.query.tipo) ? req.query.tipo : undefined;
@@ -480,7 +471,7 @@ app.get('/api/admin/candidates', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
     const existing = await watchlistRepo.listAll();   // {tipo,marca,modello,...}
-    const { items, total } = candidates(modelsCatalog(), existing, { tipo, marca, limit, offset });
+    const { items, total } = candidates(modelsData, existing, { tipo, marca, limit, offset });
     res.json({ items, total, limit, offset });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

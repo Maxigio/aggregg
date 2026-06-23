@@ -22,16 +22,7 @@
 const https        = require('https');
 const cheerio      = require('cheerio');
 
-// Errore taggato per la salute crawler (come AS24/Subito).
-function kindForStatus(s) {
-  if (s === 401) return 'auth';
-  if (s === 403 || s === 429) return 'blocked';
-  if (s >= 500) return 'transient';
-  return 'error';
-}
-function fail(msg, { status = null, kind = 'error' } = {}) {
-  const e = new Error(msg); e.status = status; e.kind = kind; return e;
-}
+const { kindForStatus, fail } = require('./utils');   // salute crawler (come AS24/Subito)
 
 const BASE = 'https://www.moto.it';
 const MAX_PAGES = 3;                  // on-search: ~30 annunci (~10-13/pag), cheapest-first.
