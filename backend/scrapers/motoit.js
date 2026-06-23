@@ -246,3 +246,4 @@ async function scrapeMotoIt(params, opts = {}) {
 }
 
 module.exports = scrapeMotoIt;
+module.exports._mapCards = mapCards;   // backfill F50: re-map della card grezza in raw_json
