@@ -27,7 +27,7 @@ const valuation       = require('./valuation');   // F32: motore valutazione (pu
 const subitoSession   = require('./scrapers/subito-session');
 const { runBootstrap } = require('./scrapers/subito-bootstrap');
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
-const { resolveMotoitModelSlug } = require('./scrapers/motoit-models');
+const { resolveMotoitModelSlug, getBrandModels, getModelBikes, resolveMotoitVersionEntry } = require('./scrapers/motoit-models');
 const { getDetail } = require('./scrapers/detail');
 const saved = require('./saved');
 const { makeResolver, makeModelResolver, loadAliasMap } = require('./scrapers/brand-match');
@@ -211,8 +211,9 @@ app.get('/logout', (req, res) => {
 // Ruolo della sessione corrente (per la UI: nasconde salvataggi/admin in demo).
 // Auth disattivata (app locale) → 'full'. Sotto /api/ → già protetta dal middleware.
 app.get('/api/me', (req, res) => {
-  if (!auth.isEnabled()) return res.json({ role: 'full', authDisabled: true });
-  res.json({ role: req.authRole || auth.checkToken(parseCookies(req).amr_auth) || null });
+  const valutaEnabled = !process.env.DISABLE_VALUTA;
+  if (!auth.isEnabled()) return res.json({ role: 'full', authDisabled: true, valutaEnabled });
+  res.json({ role: req.authRole || auth.checkToken(parseCookies(req).amr_auth) || null, valutaEnabled });
 });
 
 // Liveness per il probe di avvio Electron (waitForBackend). Auth-exempt: il
@@ -575,7 +576,11 @@ app.get('/api/brands', (req, res) => {
 });
 
 // Endpoint modelli per marca (alimenta il dropdown modello nel frontend)
-app.get('/api/models', (req, res) => {
+// Normalizzazione per match esatto-normalizzato fra cataloghi (NON testo utente).
+const normName = s => String(s || '').toLowerCase().normalize('NFD')
+  .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+app.get('/api/models', async (req, res) => {
   const { tipo, marca } = req.query;
   if (!tipo || !['auto', 'moto'].includes(tipo)) {
     return res.status(400).json({ error: 'tipo deve essere "auto" o "moto"' });
@@ -584,18 +589,68 @@ app.get('/api/models', (req, res) => {
     return res.status(400).json({ error: 'marca obbligatoria' });
   }
   const entry = modelsData[tipo]?.[marca.trim()];
-  if (!entry) return res.json({ modelli: [], sites: [] });
 
   // entry.models è sempre un array nel nuovo schema unificato (sia auto sia moto).
   // Subito usa solo ?q=marca+modello, niente più slug/key per Subito nel payload.
-  const modelli = (entry.models || []).map(m => ({
+  const modelli = ((entry && entry.models) || []).map(m => ({
     nome:           m.nome,
     sites:          m.sites || [],
     mmmvAutoscout:  m.mmmvAutoscout  || '',
     kindAS:         m.kindAS         || '',
     slugMotoIt:     m.slugMotoIt     || '',
   }));
-  res.json({ modelli, sites: entry.sites || [] });
+
+  // MOTO — F43 Fase 0' (lazy): fonde i modelli AUTOREVOLI dell'API Moto.it
+  // (`models/<brand>/Used`, cache 12h) col catalogo: riempie lo slug mancante per
+  // match esatto-normalizzato (catalogo↔API, NON testo utente) e aggiunge i modelli
+  // assenti dal catalogo. Così la force-select copre tutto Moto.it con slug reali.
+  if (tipo === 'moto') {
+    const brandSlug = (entry && entry.motoit && entry.motoit.brandSlug) || resolveMotoitSlug(marca.trim()) || null;
+    if (brandSlug) {
+      try {
+        const apiModels = await getBrandModels(brandSlug);   // [{name, slug}]
+        const byName = new Map(modelli.map(m => [normName(m.nome), m]));
+        for (const am of apiModels) {
+          const hit = byName.get(normName(am.name));
+          if (hit) { if (!hit.slugMotoIt) hit.slugMotoIt = am.slug; }
+          else {
+            const nm = { nome: am.name, sites: ['motoit'], mmmvAutoscout: '', kindAS: '', slugMotoIt: am.slug };
+            modelli.push(nm); byName.set(normName(am.name), nm);
+          }
+        }
+        modelli.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+      } catch (e) { console.warn('[api/models] merge Moto.it KO:', e.message); }
+    }
+  }
+
+  res.json({ modelli, sites: (entry && entry.sites) || (tipo === 'moto' ? ['motoit'] : []) });
+});
+
+// F43 — Versioni (allestimenti) Moto.it di un modello: per la 2ª force-select (solo moto).
+// `bikes/<brand>|<model>/Used` → [{ nome, code }]; `code` va in `motoitBikeCode` (param `bike=`).
+// Due modi (Lazy-T2):
+//  - `modelSlug` = famiglia Moto.it scelta direttamente → bikes della famiglia.
+//  - `modelNome` = voce-catalogo (es. "Dyna Fat Bob") senza slug → risolve famiglia+versioni.
+// Ritorna `{ familySlug, versioni:[{nome,code,annoMin,annoMax}] }`.
+app.get('/api/moto-versions', async (req, res) => {
+  const marca = (req.query.marca || '').trim();
+  const modelSlug = (req.query.modelSlug || '').trim();
+  const modelNome = (req.query.modelNome || '').trim();
+  if (!marca || (!modelSlug && !modelNome)) return res.json({ versioni: [], familySlug: null });
+  const entry = modelsData.moto && modelsData.moto[marca];
+  const brandSlug = (entry && entry.motoit && entry.motoit.brandSlug) || resolveMotoitSlug(marca) || null;
+  if (!brandSlug) return res.json({ versioni: [], familySlug: null });
+  try {
+    if (modelSlug) {
+      const bikes = await getModelBikes(brandSlug, modelSlug);   // [{name, code, annoMin, annoMax}]
+      return res.json({ familySlug: modelSlug, versioni: bikes.map(b => ({ nome: b.name, code: b.code, annoMin: b.annoMin, annoMax: b.annoMax })) });
+    }
+    const r = await resolveMotoitVersionEntry(brandSlug, modelNome);
+    return res.json(r ? { familySlug: r.familySlug, versioni: r.versions } : { versioni: [], familySlug: null });
+  } catch (e) {
+    console.warn('[api/moto-versions] KO:', e.message);
+    res.json({ versioni: [], familySlug: null });
+  }
 });
 
 // §15 — Arricchimento spec ON-CLICK: fetch pagina-dettaglio → { cambio, potenzaCv,
@@ -658,7 +713,7 @@ const REGIONI_VALIDE = new Set(Object.values(province).map(p => p.regione));
 function parseSearchParams(query) {
   const {
     tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione, raggio,
-    mmmvAutoscout, motoitBrandSlug, motoitModelSlug,
+    mmmvAutoscout, motoitBrandSlug, motoitModelSlug, motoitBikeCode,
   } = query;
 
   const errors = [];
@@ -690,6 +745,7 @@ function parseSearchParams(query) {
       mmmvAutoscout:    mmmvAutoscout    || null,
       motoitBrandSlug:  motoitBrandSlug  || null,
       motoitModelSlug:  motoitModelSlug  || null,
+      motoitBikeCode:   motoitBikeCode   || null,   // versione/allestimento Moto.it (param `bike=`)
     }
   };
 }
@@ -722,6 +778,9 @@ async function runSubito(params, ms) {
     return { items, status: items.length ? 'ok' : 'empty', reason: null };
   } catch (err) {
     if (err instanceof SubitoBlockedError) {
+      // Senza fallback browser (es. M2) il bootstrap non è proponibile → degrada a
+      // "vuoto" silenzioso (AS24/Moto.it portano la ricerca), niente banner-errore.
+      if (process.env.HIDE_SUBITO_BOOTSTRAP) return { items: [], status: 'empty', reason: null };
       return { items: [], status: 'needs_bootstrap', reason: err.reason };
     }
     console.warn('[WARN] ' + err.message);
@@ -763,6 +822,7 @@ const VAL_SOURCE_CAP = { autoscout: 100, subito: 100, moto: 39 };   // moto on-s
 const valNum = v => { const n = parseInt(v, 10); return isNaN(n) || n < 0 ? null : n; };
 
 app.get('/api/valuta', async (req, res) => {
+  if (process.env.DISABLE_VALUTA) return res.status(403).json({ error: 'Valutazione disattivata' });
   if (!searchRateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
   const parsed = parseSearchParams(req.query);
   if (parsed.errors) return res.status(400).json({ error: parsed.errors.join(', ') });
@@ -1188,6 +1248,12 @@ app.post('/api/subito/bootstrap', express.json(), async (req, res) => {
 });
 
 app.get('/api/subito/status', (req, res) => {
+  // Deploy senza fallback browser (es. M2): il bootstrap è impossibile e inutile →
+  // stato "ok" così il frontend non mostra il banner-errore a vuoto ogni 60s.
+  if (process.env.HIDE_SUBITO_BOOTSTRAP) {
+    return res.json({ health: 'ok', blocked: false, hasSession: true, hasDataDome: true,
+      expiresIn: null, bootstrapping: false, lastRefresh: null, lastRefreshOk: true });
+  }
   const state = subitoSession.loadStorageState();
   const info  = subitoSession.inspectSession(state);
   const last  = subitoSession.getLastRefresh();

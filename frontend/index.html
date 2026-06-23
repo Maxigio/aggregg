@@ -72,11 +72,19 @@
                    class="field-input" placeholder="Marca — scegli dalla lista (es. BMW, Honda)" required />
             <ul id="marcaAC" class="ac-list d-none" role="listbox"></ul>
           </div>
-          <input type="text" id="modello" autocomplete="off"
-                 class="field-input" placeholder="Modello — es. 318d (opzionale)" />
+          <div class="ac-wrap">
+            <input type="text" id="modello" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"
+                   class="field-input" placeholder="Modello — scegli dalla lista (opzionale)" />
+            <ul id="modelloAC" class="ac-list d-none" role="listbox"></ul>
+          </div>
           <button type="submit" class="btn-cerca" id="btnCerca">Cerca</button>
         </div>
         <div class="field-note" id="marcaNote"></div>
+        <div class="ac-wrap d-none" id="versioneRow" style="max-width:420px;margin-top:8px">
+          <input type="text" id="versione" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"
+                 class="field-input" placeholder="Versione (solo Moto.it, opzionale) — es. Fat Bob" />
+          <ul id="versioneAC" class="ac-list d-none" role="listbox"></ul>
+        </div>
 
         <button type="button" class="adv-toggle" id="advancedToggle" aria-expanded="false">Filtri avanzati</button>
         <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="filtri">?</span>

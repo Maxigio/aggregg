@@ -1,29 +1,26 @@
 /**
- * Scraper Moto.it.
+ * Scraper Moto.it — HTTP puro (cheerio), UNA sola via per on-search e crawler.
  *
- * Due path, DUE consumatori distinti:
- *  - ON-SEARCH (app, default) → **Playwright (browser reale)**. Moto.it soft-blocca
- *    l'HTTP a raffica (4 richieste parallele → serve pagine vuote: `0+0+0+13`), ma
- *    NON il browser (sessione/JS/cookie reali) → ricerca FEDELE. Zero fallback: se
- *    il browser fallisce → la fonte ritorna errore onesto (Subito/AS24 portano).
- *  - CRAWLER (deep, background) → **HTTP sequenziale-gentile** (cheerio, niente
- *    browser): paziente, con delay anti-ban; su blocco → throw taggato alla salute.
- *    Ha già popolato il DB (6891 annunci) → resta così.
+ * F41: on-search NON usa più il browser (Playwright). Il crawler prova da sempre
+ * che l'HTTP sequenziale + cheerio sulla STESSA `buildUrl` funziona (ha popolato
+ * 6891 annunci) e che `/moto-usate/ricerca?...&sort=price-a` ritorna i risultati
+ * ordinati dal più economico. Il path browser (F35) divergeva → ricerca infedele.
+ * → on-search = HTTP **sequenziale gentile** (mai parallelo: il parallelo a raffica
+ *   era l'unica cosa che soft-bloccava). Zero fallback: su blocco → fonte vuota,
+ *   Subito/AS24 portano la ricerca.
  *
- * Architettura ricerca (entrambi i path):
+ * Architettura ricerca (entrambi i consumatori):
  * - Motore /moto-usate/ricerca (non la landing SEO), filtri server-side
  *   brand/model/price_f-t/km_f-t/year_f-t/region, paginazione /pagina-N, sort=price-a.
- * - 13 annunci/pagina × 3 pagine = ~39 annunci on-search.
+ * - ~10-13 annunci/pagina × 3 pagine = ~30 annunci on-search.
  *
  * Slug: SOLO slug espliciti dal catalogo (`motoitBrandSlug`/`motoitModelSlug`).
  *   Senza `motoitBrandSlug` → bail out []. Modello non risolto → brand-only +
  *   post-filter titolo lato server.
  */
 
-const path         = require('path');
 const https        = require('https');
 const cheerio      = require('cheerio');
-const { toInt, resolveChromiumExecutable } = require('./utils');
 
 // Errore taggato per la salute crawler (come AS24/Subito).
 function kindForStatus(s) {
@@ -37,41 +34,13 @@ function fail(msg, { status = null, kind = 'error' } = {}) {
 }
 
 const BASE = 'https://www.moto.it';
-const MAX_PAGES = 3;        // on-search: ~39 annunci (13/pag), com'era prima.
+const MAX_PAGES = 3;                  // on-search: ~30 annunci (~10-13/pag), cheapest-first.
 const HTTP_TIMEOUT_DEFAULT = 15000;   // crawler (sequenziale, paziente).
+const ONSEARCH_DELAY_MS    = 1000;    // on-search: gentile tra pagine (sequenziale, mai parallelo).
+const ONSEARCH_TIMEOUT_MS  = 12000;   // on-search: non troppo stretto (8s troncava su risposte lente).
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-// ─── Path Chromium cross-platform (dev vs bundle Electron) ───────────────────
-const _respath = process.env.RESOURCES_PATH || process.resourcesPath;
-const PW_BROWSERS = _respath && require('fs').existsSync(path.join(_respath, 'pw-browsers'))
-  ? path.join(_respath, 'pw-browsers')
-  : path.join(__dirname, '../../pw-browsers');
-process.env.PLAYWRIGHT_BROWSERS_PATH = PW_BROWSERS;
-
-// ─── Browser singleton (riusato tra ricerche successive) ─────────────────────
-let browserInstance = null;
-
-async function getBrowser() {
-  if (browserInstance) {
-    try { browserInstance.contexts(); return browserInstance; } catch (_) {}
-  }
-  console.log('[Moto.it-PW] Avvio Chrome headless…');
-  const { chromium } = require('playwright');   // lazy: solo il path browser tira playwright
-  browserInstance = await chromium.launch({
-    executablePath: resolveChromiumExecutable(PW_BROWSERS),
-    headless: true,
-    args: [
-      '--disable-blink-features=AutomationControlled',
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-    ],
-  });
-  browserInstance.on('disconnected', () => { browserInstance = null; });
-  return browserInstance;
-}
 
 function httpGetText(url, hops = 0, timeoutMs = HTTP_TIMEOUT_DEFAULT) {
   return new Promise((resolve, reject) => {
@@ -96,7 +65,7 @@ function httpGetText(url, hops = 0, timeoutMs = HTTP_TIMEOUT_DEFAULT) {
 // Paginazione via /pagina-N nel path (NON come query param).
 function buildUrl(params, page = 1) {
   const { prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione,
-          motoitBrandSlug, motoitModelSlug } = params;
+          motoitBrandSlug, motoitModelSlug, motoitBikeCode } = params;
 
   // Path pagina (1 = senza suffisso, >1 = /pagina-N)
   const pagePath = page > 1 ? `/pagina-${page}` : '';
@@ -112,6 +81,12 @@ function buildUrl(params, page = 1) {
     qs.set('model', `${brandSlug}|${motoitModelSlug}`);
   }
 
+  // Versione (allestimento): codice opaco dall'API `bikes` → param `bike=`
+  // (es. "9UMy8q" = Harley 883 Iron). VERIFICATO onorato server-side nell'HTML.
+  if (motoitBikeCode) {
+    qs.set('bike', motoitBikeCode);
+  }
+
   // Regione: Moto.it accetta region=<slug> server-side (stesso formato di province.json:
   // "liguria", "emilia-romagna", "valle-d-aosta"…). Fondamentale per evitare che il
   // sort=price-a globale tagli fuori i risultati regionali dai primi 65.
@@ -125,7 +100,8 @@ function buildUrl(params, page = 1) {
   if (annoMin   != null) qs.set('year_f',  String(annoMin));
   if (annoMax   != null) qs.set('year_t',  String(annoMax));
 
-  // Ordinamento: prezzo crescente (obiettivo "i più economici")
+  // Ordinamento: prezzo crescente (obiettivo "i più economici"). VERIFICATO reale
+  // (WebFetch F41: i risultati tornano €99,€99,€150,… in ordine crescente).
   qs.set('sort', 'price-a');
 
   return `${BASE}/moto-usate/ricerca${pagePath}?${qs.toString()}`;
@@ -151,7 +127,7 @@ function coverFromImg(src) {
   return { thumb: `${base}?format=webp&width=300`, full: `${base}?format=webp&width=1200` };
 }
 
-// Mapping card-grezza → risultato (condiviso path browser + HTTPS).
+// Mapping card-grezza → risultato.
 function mapCards(cards, opts = {}) {
   return cards.map(c => {
     if (!c.href) return null;
@@ -177,61 +153,7 @@ function mapCards(cards, opts = {}) {
   }).filter(Boolean);
 }
 
-// ─── Estrazione card dal DOM (browser, on-search) ────────────────────────────
-// `page.$$eval` sulle `.mcard--big`. Stessa semantica di `extractCardsHtml`
-// (cheerio, crawler) ma sul DOM renderizzato dal browser reale.
-async function extractCards(page) {
-  return await page.$$eval('.mcard--big', cards => cards.map(c => {
-    const text = (c.innerText || '').replace(/\n+/g, ' | ').trim();
-    const titleEl = c.querySelector('h2, h3, .mcard-title, [class*="title"]');
-    const titolo = titleEl ? (titleEl.innerText || '').replace(/\s+/g, ' ').trim() : null;
-    const priceRaw = c.querySelector('[class*="price"], [class*="prezzo"]')?.innerText?.trim() || null;
-    const href = c.querySelector('a[href]')?.getAttribute('href') || null;
-    // Ultimo anno 4-cifre = anno veicolo (la prima riga è la data pubblicazione).
-    const years = [...text.matchAll(/\b(19\d{2}|20\d{2})\b/g)].map(m => m[1]);
-    const anno = years.length > 0 ? parseInt(years[years.length - 1], 10) : null;
-    const kmMatch = text.match(/([\d.]+)\s*Km/i);
-    const km = kmMatch ? parseInt(kmMatch[1].replace(/\./g, ''), 10) : null;
-    const provMatch = text.match(/\(([A-Z]{2})\)/);
-    const provincia = provMatch ? provMatch[1] : null;
-    const venditore = /concessionar/i.test(text) ? 'concessionario' : /privato/i.test(text) ? 'privato' : null;
-    const cover = c.querySelector('img[src*="cdn-img.moto.it/images"]')?.getAttribute('src') || null;
-    return { titolo, priceRaw, href, anno, km, provincia, venditore, cover };
-  }));
-}
-
-// ─── Fetch singola pagina nel browser ────────────────────────────────────────
-// Moto.it renderizza progressivamente: il DOM iniziale a volte ha 4/13 card, le
-// restanti compaiono 1-2s dopo → si attende che il count si stabilizzi.
-async function fetchPageBrowser(browser, url) {
-  const context = await browser.newContext({
-    userAgent: UA,
-    locale: 'it-IT',
-    viewport: { width: 1280, height: 900 },
-    extraHTTPHeaders: { 'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7' },
-  });
-  await context.addInitScript(() => {
-    Object.defineProperty(navigator, 'webdriver', { get: () => false });
-    window.chrome = { runtime: {} };
-  });
-  const page = await context.newPage();
-  try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    await sleep(400);
-    let prev = -1;
-    for (let i = 0; i < 15; i++) {   // count stabile (2 snapshot uguali) o max ~4.5s
-      const count = await page.$$eval('.mcard--big', els => els.length).catch(() => 0);
-      if (count > 0 && count === prev) break;
-      prev = count;
-      await sleep(300);
-    }
-    return mapCards(await extractCards(page));
-  } finally {
-    await context.close();
-  }
-}
-
-// ─── Estrazione card da HTML STATICO (cheerio, crawler) ──────────────────────
+// ─── Estrazione card da HTML (cheerio) ───────────────────────────────────────
 function extractCardsHtml(html) {
   const $ = cheerio.load(html);
   const out = [];
@@ -254,8 +176,16 @@ function extractCardsHtml(html) {
   return out;
 }
 
-// ─── Crawler (deep): tutte le pagine via HTTPS, SEQUENZIALI con delay anti-ban ─
-// On block (403/429) → throw taggato alla salute. `opts.httpTimeoutMs` per-chiamata.
+// Dedup per-url su pagine concatenate.
+function dedup(pages) {
+  const visti = new Set();
+  return pages.flat().filter(r => { if (visti.has(r.url)) return false; visti.add(r.url); return true; });
+}
+
+// ─── Fetch HTTPS sequenziale (cheerio) — on-search e crawler ─────────────────
+// SEQUENZIALE con delay anti-ban (mai parallelo: il burst a raffica è l'unica cosa
+// che soft-blocca). On block (403/429) → throw taggato alla salute. `opts.httpTimeoutMs`
+// per-chiamata, `opts.pageDelayMs` tra pagine.
 async function scrapeMotoViaHttp(urls, opts = {}) {
   const delay = opts.pageDelayMs || 0;
   const tmo = opts.httpTimeoutMs || HTTP_TIMEOUT_DEFAULT;
@@ -275,37 +205,6 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
     if (i === urls.length - 1) truncated = true;         // ultima pagina ancora piena → forse altro
   }
   return { pages, blocked: false, truncated };
-}
-
-// ─── Ricerca on-search nel browser: 3 pagine SEQUENZIALI, zero fallback ──────
-// Lo slug-modello arriva già risolto in `params.motoitModelSlug` (catalogo o
-// resolver HTTP del server) → ricerca server-side `model=`. Senza → brand-only
-// + post-filter titolo lato server.
-// SEQUENZIALE di proposito: le navigazioni in parallelo, anche nel browser, fanno
-// scattare timeout/soft-block (verificato: page-breakdown `0+13+13` → parziali).
-async function scrapeViaBrowser(params, maxPages) {
-  const browser = await getBrowser();   // throw → fonte in errore onesto (no fallback)
-  const dedup = pages => {
-    const visti = new Set();
-    return pages.flat().filter(r => { if (visti.has(r.url)) return false; visti.add(r.url); return true; });
-  };
-  const pages = [];
-  for (let p = 1; p <= maxPages; p++) {
-    const url = buildUrl(params, p);
-    try {
-      const items = await fetchPageBrowser(browser, url);
-      pages.push(items);
-      if (items.length === 0) break;   // fine risultati genuina
-    } catch (err) {
-      console.warn(`[Moto.it-PW] Errore pagina ${p}: ${err.message}`);
-      if (p === 1) throw err;          // pagina-1 KO = fonte in errore onesto
-      break;                           // pagina>1 KO = ritorna il parziale già raccolto
-    }
-    if (p < maxPages) await sleep(500 + Math.random() * 400);
-  }
-  const risultati = dedup(pages);
-  console.log(`[Moto.it-PW] ${risultati.length} annunci (${pages.map(p => p.length).join('+')})`);
-  return risultati;
 }
 
 // ─── Rate limiting: minimo 1.5s tra ricerche ─────────────────────────────────
@@ -328,16 +227,12 @@ async function scrapeMotoIt(params, opts = {}) {
 
   await throttle();
 
-  // deep = chiamata dal crawler (opts) → HTTP sequenziale paziente, throw alla salute.
+  // deep = chiamata dal crawler (opts) → HTTP paziente, throw alla salute su blocco.
   const deep = !!(opts.pageDelayMs || opts.withMeta || opts.maxPages);
+  const maxPages = deep ? (opts.maxPages || MAX_PAGES) : MAX_PAGES;
+  const urls = Array.from({ length: maxPages }, (_, i) => buildUrl(params, i + 1));
 
   if (deep) {
-    const maxPages = opts.maxPages || MAX_PAGES;
-    const urls = Array.from({ length: maxPages }, (_, i) => buildUrl(params, i + 1));
-    const dedup = pages => {
-      const visti = new Set();
-      return pages.flat().filter(r => { if (visti.has(r.url)) return false; visti.add(r.url); return true; });
-    };
     const { pages, blocked, truncated } = await scrapeMotoViaHttp(urls, { ...opts, httpTimeoutMs: HTTP_TIMEOUT_DEFAULT });
     if (blocked) throw fail('Moto.it-HTTP: sospetto blocco (pagina-1 vuota)', { kind: 'blocked' });
     const risultati = dedup(pages);
@@ -345,13 +240,18 @@ async function scrapeMotoIt(params, opts = {}) {
     return opts.withMeta ? { items: risultati, truncated } : risultati;
   }
 
-  // ON-SEARCH: SOLO browser. Moto.it non soft-blocca il browser reale → ricerca
-  // fedele. Niente fallback: se il browser fallisce, runSource segna la fonte
-  // in errore onesto e Subito/AS24 portano la ricerca.
-  return scrapeViaBrowser(params, MAX_PAGES);
+  // ON-SEARCH: HTTP sequenziale gentile (come il crawler). Niente browser, niente
+  // fallback. Su blocco → fonte vuota (Subito/AS24 portano la ricerca), NON crash.
+  const { pages, blocked, truncated } = await scrapeMotoViaHttp(urls, {
+    pageDelayMs: ONSEARCH_DELAY_MS, httpTimeoutMs: ONSEARCH_TIMEOUT_MS,
+  });
+  if (blocked) {
+    console.warn('[Moto.it] on-search: sospetto blocco (pagina-1 vuota) → fonte vuota');
+    return [];
+  }
+  const risultati = dedup(pages);
+  console.log(`[Moto.it] on-search OK ${risultati.length} annunci (${pages.map(p => p.length).join('+')})${truncated ? ' [troncato]' : ''}`);
+  return risultati;
 }
-
-// Esposto per pre-warm opzionale al boot (di default il browser parte lazy alla 1ª ricerca).
-scrapeMotoIt.warmup = async () => { await getBrowser(); };
 
 module.exports = scrapeMotoIt;

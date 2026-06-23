@@ -14,6 +14,9 @@ const marcaSelect     = document.getElementById('marca');
 const marcaNote       = document.getElementById('marcaNote');
 const btnCerca        = document.getElementById('btnCerca');
 const regioneSelect   = document.getElementById('regione');
+const modelloSelect   = document.getElementById('modello');
+const versioneRow     = document.getElementById('versioneRow');
+const versioneSelect  = document.getElementById('versione');
 const tipoInputs      = document.querySelectorAll('input[name="tipo"]');
 const backToSearch    = document.getElementById('backToSearch');
 const resultsToolbar  = document.getElementById('resultsToolbar');
@@ -48,6 +51,10 @@ let confronto      = [];                       // annunci selezionati per il con
 let matrixList     = [];                        // annunci attualmente mostrati nella matrice
 let salvati        = [];
 let groupDim       = '';                        // dimensione di raggruppamento attiva ('' = nessuna)
+let modelCache     = {};                        // `${tipo}|${marca}` → [{nome, sites, mmmvAutoscout, slugMotoIt}]
+let selectedModel  = null;                       // modello scelto dalla force-select (con _marca) o null (testo libero)
+let selectedVersion = null;                      // versione Moto.it scelta {nome, code} o null
+let versioniCorrenti = [];                       // versioni del modello attuale (per l'autocomplete)
 let sortState      = { key: 'prezzo', dir: 'asc' };
 let visibleCols    = ['anno', 'km'];            // colonne opzionali mostrate (default dai filtri usati)
 let lastSources    = null;
@@ -180,6 +187,13 @@ function applyDemoMode() {
   }
 }
 
+// Valuta disattivata via env DISABLE_VALUTA (server → /api/me valutaEnabled:false):
+// nascondi il toggle modo e forza "Cerca" per tutti i ruoli.
+function disableValuta() {
+  const el = document.getElementById('modeToggle'); if (el) el.style.display = 'none';
+  setSearchMode('cerca');
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
   applyTheme(currentTheme());
@@ -193,6 +207,8 @@ async function init() {
   renderFacetChips();
   await populateMarca('auto');
   setupMarcaAutocomplete();
+  setupModelloAutocomplete();
+  setupVersioneAutocomplete();
   validateMarca();
   await applyUrlParams();
 
@@ -200,6 +216,7 @@ async function init() {
     const me = await fetch('/api/me').then(r => (r.ok ? r.json() : null)).catch(() => null);
     if (me && me.role) myRole = me.role;
     if (myRole === 'demo') applyDemoMode();
+    if (me && me.valutaEnabled === false) disableValuta();
   } catch (_) {}
 
   themeToggle?.addEventListener('click', () => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
@@ -214,6 +231,7 @@ async function init() {
     await populateMarca(input.value);
     marcaSelect.value = '';
     document.getElementById('modello').value = '';
+    resetModelloVersione();
     validateMarca();
     currentResults = []; hideResults();
   }));
@@ -425,9 +443,10 @@ function setupMarcaAutocomplete() {
     list.classList.remove('d-none');
     marcaSelect.setAttribute('aria-expanded', 'true');
   };
-  const pick = i => { if (matches[i]) { marcaSelect.value = matches[i].nome; close(); validateMarca(); document.getElementById('modello')?.focus(); } };
+  const pick = i => { if (matches[i]) { marcaSelect.value = matches[i].nome; close(); validateMarca(); if (modelloSelect) modelloSelect.value = ''; resetModelloVersione(); document.getElementById('modello')?.focus(); } };
 
   marcaSelect.addEventListener('input', () => {
+    resetModelloVersione();
     const q = acn(marcaSelect.value);
     const brands = brandCache[currentTipo()] || [];
     if (q) {
@@ -453,6 +472,129 @@ function setupMarcaAutocomplete() {
   });
   list.addEventListener('mousedown', e => { const li = e.target.closest('.ac-item'); if (li) { e.preventDefault(); pick(+li.dataset.i); } });
   marcaSelect.addEventListener('blur', () => setTimeout(() => { close(); validateMarca(); }, 120));
+}
+
+// ─── Modello: force-select dal catalogo (∪ API Moto.it) ─────────────────────
+// F43: niente più testo libero fuzzy. L'utente SCEGLIE un modello reale; mandiamo
+// gli ID esatti (mmmvAutoscout AS24, slugMotoIt). Testo libero resta come escape
+// (Subito keyword): se non scegli, `selectedModel=null` e il server fa del suo meglio.
+async function loadModels(tipo, marca) {
+  const key = `${tipo}|${marca}`;
+  if (!modelCache[key]) {
+    try {
+      const res = await fetch(`/api/models?tipo=${encodeURIComponent(tipo)}&marca=${encodeURIComponent(marca)}`);
+      const data = await res.json();
+      modelCache[key] = data.modelli || [];
+    } catch { modelCache[key] = []; }
+  }
+  return modelCache[key];
+}
+
+function resetVersioneOnly() { selectedVersion = null; if (versioneSelect) versioneSelect.value = ''; versioneRow?.classList.add('d-none'); }
+function resetModelloVersione() { selectedModel = null; resetVersioneOnly(); }
+
+// Lazy-T2: carica le versioni-annata. Famiglia (slug) → bikes; voce-versione catalogo
+// senza slug (es. "Dyna Fat Bob") → il server risolve famiglia+versioni dal nome.
+// Salva il `_familySlug` risolto su selectedModel (= il `motoitModelSlug` da mandare).
+async function loadVersioniFor(model) {
+  const brand = matchedBrand();
+  versioniCorrenti = [];
+  if (selectedModel) selectedModel._familySlug = model.slugMotoIt || null;
+  if (!brand) { resetVersioneOnly(); return; }
+  const qs = new URLSearchParams({ marca: brand.nome });
+  if (model.slugMotoIt) qs.set('modelSlug', model.slugMotoIt);
+  else if (model.mmmvAutoscout) qs.set('modelNome', model.nome);   // voce-catalogo senza slug → risolvi
+  else { resetVersioneOnly(); return; }
+  try {
+    const res = await fetch(`/api/moto-versions?${qs}`);
+    const data = await res.json();
+    versioniCorrenti = data.versioni || [];
+    if (selectedModel && data.familySlug) selectedModel._familySlug = data.familySlug;
+  } catch { versioniCorrenti = []; }
+  if (versioniCorrenti.length) { versioneRow?.classList.remove('d-none'); if (versioneSelect) versioneSelect.value = ''; }
+  else resetVersioneOnly();
+}
+
+function setupModelloAutocomplete() {
+  const list = document.getElementById('modelloAC');
+  if (!modelloSelect || !list) return;
+  let matches = [], active = -1;
+  const close = () => { list.classList.add('d-none'); list.innerHTML = ''; active = -1; modelloSelect.setAttribute('aria-expanded', 'false'); };
+  const render = () => {
+    if (!matches.length) return close();
+    list.innerHTML = matches.map((m, i) => `<li class="ac-item${i === active ? ' active' : ''}" role="option" data-i="${i}">${escapeHtml(m.nome)}</li>`).join('');
+    list.classList.remove('d-none'); modelloSelect.setAttribute('aria-expanded', 'true');
+  };
+  const pickModel = async (m) => {
+    selectedModel = { ...m, _marca: matchedBrand()?.nome || '' };
+    selectedVersion = null;
+    modelloSelect.value = m.nome; close();
+    if (currentTipo() === 'moto') await loadVersioniFor(m);   // decide slug-famiglia / nome-voce / niente
+    else resetVersioneOnly();
+  };
+  const compute = async () => {
+    const brand = matchedBrand();
+    // testo cambiato a mano → annulla la scelta strutturata (no ID stantii)
+    if (!selectedModel || acn(selectedModel.nome) !== acn(modelloSelect.value)) { selectedModel = null; resetVersioneOnly(); }
+    if (!brand) { matches = []; return close(); }
+    const models = await loadModels(currentTipo(), brand.nome);
+    const q = acn(modelloSelect.value);
+    if (q) {
+      const scored = [];
+      for (const m of models) { const n = acn(m.nome); const i = n.indexOf(q); if (i >= 0) scored.push({ m, rank: n.startsWith(q) ? 0 : 1, i, n }); }
+      scored.sort((a, c) => a.rank - c.rank || a.i - c.i || a.n.localeCompare(c.n));
+      matches = scored.slice(0, 10).map(s => s.m);
+    } else matches = models.slice(0, 10);
+    active = matches.length ? 0 : -1; render();
+  };
+  modelloSelect.addEventListener('input', compute);
+  modelloSelect.addEventListener('focus', compute);
+  modelloSelect.addEventListener('keydown', e => {
+    if (list.classList.contains('d-none') || !matches.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); active = (active + 1) % matches.length; render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = (active - 1 + matches.length) % matches.length; render(); }
+    else if (e.key === 'Enter') { if (active >= 0) { e.preventDefault(); pickModel(matches[active]); } }
+    else if (e.key === 'Tab') { if (active >= 0) pickModel(matches[active]); }
+    else if (e.key === 'Escape') { close(); }
+  });
+  list.addEventListener('mousedown', e => { const li = e.target.closest('.ac-item'); if (li) { e.preventDefault(); pickModel(matches[+li.dataset.i]); } });
+  modelloSelect.addEventListener('blur', () => setTimeout(close, 150));
+}
+
+function setupVersioneAutocomplete() {
+  const list = document.getElementById('versioneAC');
+  if (!versioneSelect || !list) return;
+  let matches = [], active = -1;
+  const close = () => { list.classList.add('d-none'); list.innerHTML = ''; active = -1; versioneSelect.setAttribute('aria-expanded', 'false'); };
+  const render = () => {
+    if (!matches.length) return close();
+    list.innerHTML = matches.map((v, i) => `<li class="ac-item${i === active ? ' active' : ''}" role="option" data-i="${i}">${escapeHtml(v.nome)}</li>`).join('');
+    list.classList.remove('d-none'); versioneSelect.setAttribute('aria-expanded', 'true');
+  };
+  const pick = v => { selectedVersion = v; versioneSelect.value = v.nome; close(); };
+  const compute = () => {
+    if (!selectedVersion || acn(selectedVersion.nome) !== acn(versioneSelect.value)) selectedVersion = null;
+    const q = acn(versioneSelect.value);
+    if (q) {
+      const scored = [];
+      for (const v of versioniCorrenti) { const n = acn(v.nome); const i = n.indexOf(q); if (i >= 0) scored.push({ v, rank: n.startsWith(q) ? 0 : 1, i, n }); }
+      scored.sort((a, c) => a.rank - c.rank || a.i - c.i || a.n.localeCompare(c.n));
+      matches = scored.slice(0, 12).map(s => s.v);
+    } else matches = versioniCorrenti.slice(0, 12);
+    active = matches.length ? 0 : -1; render();
+  };
+  versioneSelect.addEventListener('input', compute);
+  versioneSelect.addEventListener('focus', compute);
+  versioneSelect.addEventListener('keydown', e => {
+    if (list.classList.contains('d-none') || !matches.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); active = (active + 1) % matches.length; render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = (active - 1 + matches.length) % matches.length; render(); }
+    else if (e.key === 'Enter') { if (active >= 0) { e.preventDefault(); pick(matches[active]); } }
+    else if (e.key === 'Tab') { if (active >= 0) pick(matches[active]); }
+    else if (e.key === 'Escape') { close(); }
+  });
+  list.addEventListener('mousedown', e => { const li = e.target.closest('.ac-item'); if (li) { e.preventDefault(); pick(matches[+li.dataset.i]); } });
+  versioneSelect.addEventListener('blur', () => setTimeout(close, 150));
 }
 
 // ─── Raggruppamento ──────────────────────────────────────────────────────────
@@ -610,6 +752,19 @@ async function doSearch() {
     raggio:    document.getElementById('raggio').value,   // solo AS24, ignorato senza regione (server default 100)
   };
   if (regioneSelect.value) params.regione = regioneSelect.value;
+  // F43 — modello strutturato: se l'utente ha SCELTO un modello (force-select) per
+  // questa marca, manda gli ID esatti → niente fuzzy lato server. Versione solo moto.
+  if (selectedModel && selectedModel._marca === marca && acn(selectedModel.nome) === acn(modelloLibero)) {
+    if (selectedModel.mmmvAutoscout) params.mmmvAutoscout = selectedModel.mmmvAutoscout;
+    const motoSlug = selectedModel._familySlug || selectedModel.slugMotoIt;   // famiglia risolta (Lazy-T2) o slug diretto
+    if (motoSlug) params.motoitModelSlug = motoSlug;
+    if (tipo === 'moto' && selectedVersion && acn(selectedVersion.nome) === acn(versioneSelect?.value || '')) {
+      params.motoitBikeCode = selectedVersion.code;
+      // anni della versione-annata → restringono AS24/Subito alla stessa annata (se l'utente non li ha messi)
+      if (selectedVersion.annoMin && !params.annoMin) params.annoMin = String(selectedVersion.annoMin);
+      if (selectedVersion.annoMax && !params.annoMax) params.annoMax = String(selectedVersion.annoMax);
+    }
+  }
   Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });
   lastSearchParams = { ...params };
   visibleCols = colsFromFilters(params);   // colonne default = filtri usati (anno/km); resto via menu
