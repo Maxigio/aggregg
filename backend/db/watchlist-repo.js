@@ -52,7 +52,11 @@ async function activateRamp(n = 10) {
       WHERE id IN (
         SELECT id FROM watchlist
          WHERE activated_at IS NULL AND enabled = true
-         ORDER BY id LIMIT $1
+         -- F50 Fase 2: interleave auto/moto (row_number per tipo) così entrambi i
+         -- segmenti partono insieme; dentro ogni tipo, bestseller (priority) prima.
+         -- Senza interleave la scala assoluta auto seppellirebbe i moto ~150 giorni.
+         ORDER BY row_number() OVER (PARTITION BY tipo ORDER BY priority DESC NULLS LAST, id), tipo
+         LIMIT $1
       )
       RETURNING id, tipo, marca, modello`,
     [n]
@@ -82,8 +86,10 @@ async function dueTargets(device = 'imac') {
 }
 
 // F5 — lease atomico di UN target del NODO, mode-aware. Generalizza leaseTarget.
-//  - mode='fill' (keep-ready/backfill): target mai spazzolato (last_swept IS NULL),
-//    ignora il ramp → un nodo remoto popola subito i target che gli assegni.
+//  - mode='fill' (keep-ready/backfill): target mai spazzolato (last_swept IS NULL)
+//    che sia GIÀ attivato (rispetta il ramp) OPPURE assegnato esplicitamente a un
+//    nodo → un nodo popola subito i target che gli assegni, ma la coda di catalogo
+//    bulk (assigned_node NULL, non ancora attivata da F50 Fase 2) NON viene drenata.
 //  - mode='due'  (daily refresh): target attivato e stantio (>20h) → rispetta il ramp.
 // FOR UPDATE SKIP LOCKED → due richieste concorrenti prendono target diversi.
 async function leaseDueTarget(device, mode = 'fill') {
@@ -91,7 +97,7 @@ async function leaseDueTarget(device, mode = 'fill') {
   // Condizione di candidatura secondo il mode (oltre a nodo+enabled+lease-libero).
   const cond = mode === 'due'
     ? `activated_at IS NOT NULL AND (last_swept IS NULL OR last_swept < now() - interval '20 hours')`
-    : `last_swept IS NULL`;
+    : `last_swept IS NULL AND (activated_at IS NOT NULL OR assigned_node IS NOT NULL)`;
   let client;
   try { client = await db.getClient(); } catch (_) { return null; }
   try {
