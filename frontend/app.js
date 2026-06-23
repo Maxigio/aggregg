@@ -17,6 +17,7 @@ const regioneSelect   = document.getElementById('regione');
 const modelloSelect   = document.getElementById('modello');
 const versioneRow     = document.getElementById('versioneRow');
 const versioneSelect  = document.getElementById('versione');
+const versioneNote    = document.getElementById('versioneNote');
 const tipoInputs      = document.querySelectorAll('input[name="tipo"]');
 const backToSearch    = document.getElementById('backToSearch');
 const resultsToolbar  = document.getElementById('resultsToolbar');
@@ -209,6 +210,7 @@ async function init() {
   setupMarcaAutocomplete();
   setupModelloAutocomplete();
   setupVersioneAutocomplete();
+  document.getElementById('versioneNoteClose')?.addEventListener('click', () => versioneNote?.classList.add('d-none'));
   validateMarca();
   await applyUrlParams();
 
@@ -490,7 +492,7 @@ async function loadModels(tipo, marca) {
   return modelCache[key];
 }
 
-function resetVersioneOnly() { selectedVersion = null; if (versioneSelect) versioneSelect.value = ''; versioneRow?.classList.add('d-none'); }
+function resetVersioneOnly() { selectedVersion = null; versioniCorrenti = []; if (versioneSelect) versioneSelect.value = ''; versioneRow?.classList.add('d-none'); versioneNote?.classList.add('d-none'); }
 function resetModelloVersione() { selectedModel = null; resetVersioneOnly(); }
 
 // Lazy-T2: carica le versioni-annata. Famiglia (slug) → bikes; voce-versione catalogo
@@ -511,8 +513,8 @@ async function loadVersioniFor(model) {
     versioniCorrenti = data.versioni || [];
     if (selectedModel && data.familySlug) selectedModel._familySlug = data.familySlug;
   } catch { versioniCorrenti = []; }
-  if (versioniCorrenti.length) { versioneRow?.classList.remove('d-none'); if (versioneSelect) versioneSelect.value = ''; }
-  else resetVersioneOnly();
+  if (versioniCorrenti.length) { versioneRow?.classList.remove('d-none'); versioneNote?.classList.add('d-none'); if (versioneSelect) versioneSelect.value = ''; }
+  else { resetVersioneOnly(); versioneNote?.classList.remove('d-none'); }   // niente versioni → avviso dismissibile (no sparizione muta)
 }
 
 function setupModelloAutocomplete() {
@@ -763,6 +765,8 @@ async function doSearch() {
       // anni della versione-annata → restringono AS24/Subito alla stessa annata (se l'utente non li ha messi)
       if (selectedVersion.annoMin && !params.annoMin) params.annoMin = String(selectedVersion.annoMin);
       if (selectedVersion.annoMax && !params.annoMax) params.annoMax = String(selectedVersion.annoMax);
+    } else if (tipo === 'moto' && versioniCorrenti.length) {
+      params.motoitNeedsVersion = '1';   // F47.2: versioni presenti ma nessuna scelta → salta SOLO Moto.it (Subito/AS24 girano)
     }
   }
   Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });
@@ -1182,7 +1186,7 @@ const SOURCE_STATUS = {
   skipped: { cls: 'src-muted' }, timeout: { cls: 'src-bad', txt: 'timeout' },
   error: { cls: 'src-bad', txt: 'errore' }, needs_bootstrap: { cls: 'src-warn', txt: 'verifica richiesta' },
 };
-const SKIP_REASON_TXT = { 'solo moto': 'solo moto', 'marca non su Moto.it': 'non disponibile', 'marca non su Autoscout': 'non disponibile' };
+const SKIP_REASON_TXT = { 'solo moto': 'solo moto', 'marca non su Moto.it': 'non disponibile', 'marca non su Autoscout': 'non disponibile', 'scegli versione': 'scegli versione' };
 function renderSourceStatus() {
   if (!fonteBreakdown) return;
   if (!lastSources) { fonteBreakdown.innerHTML = ''; return; }

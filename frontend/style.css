@@ -243,6 +243,10 @@ body:not(.has-results) .search {
   margin-top: 7px; font-size: 0.78rem; color: var(--neg); min-height: 1em;
 }
 .field-note:empty { display: none; }
+.versione-note { display: flex; align-items: center; gap: 8px; max-width: 420px; margin-top: 8px; padding: 7px 10px; font-size: 0.82rem; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; }
+.versione-note span { flex: 1; }
+.vn-close { flex: none; border: 0; background: transparent; color: var(--text-muted); font-size: 0.9rem; line-height: 1; cursor: pointer; padding: 2px 5px; border-radius: 4px; }
+.vn-close:hover { color: var(--text); background: var(--surface); }
 
 /* Filtri avanzati */
 .adv-toggle {

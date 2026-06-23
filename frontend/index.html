@@ -82,8 +82,12 @@
         <div class="field-note" id="marcaNote"></div>
         <div class="ac-wrap d-none" id="versioneRow" style="max-width:420px;margin-top:8px">
           <input type="text" id="versione" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"
-                 class="field-input" placeholder="Versione (solo Moto.it, opzionale) — es. Fat Bob" />
+                 class="field-input" placeholder="Versione Moto.it (obbligatoria) — es. V-Strom 1050SE" />
           <ul id="versioneAC" class="ac-list d-none" role="listbox"></ul>
+        </div>
+        <div class="versione-note d-none" id="versioneNote" role="status">
+          <span>L'input Versione di Moto.it non è disponibile per questo modello.</span>
+          <button type="button" class="vn-close" id="versioneNoteClose" aria-label="Chiudi avviso">✕</button>
         </div>
 
         <button type="button" class="adv-toggle" id="advancedToggle" aria-expanded="false">Filtri avanzati</button>

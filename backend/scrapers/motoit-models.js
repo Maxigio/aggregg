@@ -139,18 +139,34 @@ async function resolveMotoitVersionEntry(brandSlug, entryName) {
   if (!brandSlug || !entryName) return null;
   const families = await getBrandModels(brandSlug);
   const target = normN(entryName);
+  // Confine famiglia: spazio ("Dyna Fat Bob") O lettera incollata ("V-Strom 1050SE" = 1050+se),
+  // MAI una cifra (no falso "105"→"1050"). `target === nf` PRIMA: su esatto `next` è undefined.
   const cands = families
-    .filter(f => { const nf = normN(f.name); return nf && (target === nf || target.startsWith(nf + ' ')); })
+    .filter(f => {
+      const nf = normN(f.name);
+      if (!nf) return false;
+      if (target === nf) return true;
+      if (!target.startsWith(nf)) return false;
+      const next = target[nf.length];
+      return next === ' ' || /[a-z]/.test(next || '');
+    })
     .sort((a, b) => normN(b.name).length - normN(a.name).length);
   for (const fam of cands) {
-    const versionPart = target.slice(normN(fam.name).length).trim();   // "dyna fat bob" − "dyna" = "fat bob"
-    if (!versionPart) continue;
     const bikes = await getModelBikes(brandSlug, fam.slug);
+    const toV = bk => ({ nome: bk.name, code: bk.code, annoMin: bk.annoMin, annoMax: bk.annoMax });
+    const versionPart = target.slice(normN(fam.name).length).trim();   // "dyna fat bob" − "dyna" = "fat bob"
+    // Voce = famiglia esatta (famiglia Moto.it senza slug nel catalogo) → tutte le sue bike.
+    if (!versionPart) {
+      if (bikes.length) return { familySlug: fam.slug, familyName: fam.name, versions: bikes.map(toV) };
+      continue;
+    }
     const versions = [];
     for (const bk of bikes) {
-      // versione-bike senza cilindrata iniziale: "1584 Fat Bob" → "fat bob" (match esatto, no over-match su "Glide")
-      const bv = normN(versionBase(bk.name)).replace(/^\d{2,4}\s+/, '');
-      if (bv === versionPart) versions.push({ nome: bk.name, code: bk.code, annoMin: bk.annoMin, annoMax: bk.annoMax });
+      const base = normN(versionBase(bk.name));
+      // forma Harley: bike = sola versione ("1584 Fat Bob"→"fat bob"); forma Suzuki: bike RIPETE la
+      // famiglia ("V-Strom 1050SE")→ match sul nome-voce intero (`base === target`).
+      const bv = base.replace(/^\d{2,4}\s+/, '');
+      if (bv === versionPart || base === target) versions.push(toV(bk));
     }
     if (versions.length) return { familySlug: fam.slug, familyName: fam.name, versions };
   }
