@@ -83,6 +83,7 @@ function mapAd(ad, opts = {}) {
     anno: yearOf(feat(ad, 'Immatricolazione') || feat(ad, 'Anno di immatricolazione')),
     carburante: feat(ad, 'Carburante'),
     provincia: (ad.geo && ad.geo.city && ad.geo.city.value) || null,
+    regione: (ad.geo && ad.geo.region && ad.geo.region.friendly_name) || null,   // nativa (slug già giusto)
     cambio: feat(ad, 'Cambio'),
     cilindrata: digits(feat(ad, 'Cilindrata')),
     // Versione/allestimento NATIVA (auto sotto 'Auto', moto sotto 'Moto'); null se assente.

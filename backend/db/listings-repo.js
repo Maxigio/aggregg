@@ -13,7 +13,9 @@
 const db = require('./index');
 const { modelKey } = require('../model-key');
 const comuneRegione = require('../../data/comune-regione.json');  // { norm(comune)|CAP : regione-slug }
-const province      = require('../../data/province.json');        // { 'BS': { regione, ... } } (sigla → Moto.it)
+const province      = require('../../data/province.json');        // { 'BS': { regione, ... } } (sigla)
+const { normCarburante, clampCv, clampCc } = require('../normalize');
+const VALID_REG = new Set(Object.values(province).map(p => p.regione));   // {sicilia, lazio, ...}
 
 // norm coerente con scripts/build-comune-regione.js (le chiavi del JSON usano questa).
 function normComune(s) {
@@ -21,14 +23,18 @@ function normComune(s) {
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
-// regione DERIVATA (no fonte la espone): CAP (AS24) → comune (Subito/AS24) → sigla (Moto.it). null se ignoto.
+// regione DERIVATA (fallback quando la fonte non la dà nativa): CAP → sigla → "(Regione)" → comune. null se ignoto.
 function regioneFrom(provincia, cap) {
   if (cap != null && comuneRegione[String(cap).trim()]) return comuneRegione[String(cap).trim()];
   if (provincia != null) {
-    const code = String(provincia).trim().toUpperCase();
-    if (code.length === 2 && province[code]) return province[code].regione;   // sigla Moto.it (BS→lombardia)
-    const k = normComune(provincia);
-    if (k && comuneRegione[k]) return comuneRegione[k];                        // comune Subito/AS24
+    const raw = String(provincia).trim();
+    const code = raw.toUpperCase();
+    if (code.length === 2 && province[code]) return province[code].regione;             // sigla (Moto.it: BS)
+    const par = raw.match(/\(([^)]+)\)\s*$/);                                            // "Padova (Veneto)"
+    if (par) { const rs = normComune(par[1]); if (VALID_REG.has(rs)) return rs; }
+    const base = raw.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s*-\s*.*$/, '').trim();    // togli "(...)" / " - ..."
+    const k = normComune(base);
+    if (k && comuneRegione[k]) return comuneRegione[k];                                  // comune (Subito/AS24)
   }
   return null;
 }
@@ -114,7 +120,7 @@ async function upsertListings(items, target) {
       if (!it || !it.url || it.prezzo == null) continue;
       const mk = modelKey(t.tipo, t.marca, t.modello, it.anno, it.km);
       const raw = it._raw != null ? JSON.stringify(it._raw) : null;
-      const regione  = regioneFrom(it.provincia, it.zip);
+      const regione  = it.regione || regioneFrom(it.provincia, it.zip);   // it.regione = nativa (Subito geo.region)
       const immagini = (Array.isArray(it.immagini) && it.immagini.length) ? JSON.stringify(it.immagini) : null;
       try {
         await client.query(UPSERT_SQL, [
@@ -136,10 +142,10 @@ async function upsertListings(items, target) {
           it.provincia || null,                         // $16
           it.zip || null,                               // $17 cap (AS24)
           it.venditore || null,                         // $18
-          it.carburante || null,                        // $19
+          normCarburante(it.carburante),                // $19 (canonico)
           it.cambio || null,                            // $20
-          intOrNull(it.potenzaCv),                      // $21
-          intOrNull(it.cilindrata),                     // $22
+          clampCv(it.potenzaCv),                        // $21 (outlier→null)
+          clampCc(it.cilindrata),                       // $22 (outlier→null)
           intOrNull(it.cilindri),                       // $23
           it.carrozzeria || null,                       // $24
           it.colore || null,                            // $25
