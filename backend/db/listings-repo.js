@@ -12,6 +12,28 @@
  */
 const db = require('./index');
 const { modelKey } = require('../model-key');
+const comuneRegione = require('../../data/comune-regione.json');  // { norm(comune)|CAP : regione-slug }
+const province      = require('../../data/province.json');        // { 'BS': { regione, ... } } (sigla → Moto.it)
+
+// norm coerente con scripts/build-comune-regione.js (le chiavi del JSON usano questa).
+function normComune(s) {
+  return String(s == null ? '' : s).toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+// regione DERIVATA (no fonte la espone): CAP (AS24) → comune (Subito/AS24) → sigla (Moto.it). null se ignoto.
+function regioneFrom(provincia, cap) {
+  if (cap != null && comuneRegione[String(cap).trim()]) return comuneRegione[String(cap).trim()];
+  if (provincia != null) {
+    const code = String(provincia).trim().toUpperCase();
+    if (code.length === 2 && province[code]) return province[code].regione;   // sigla Moto.it (BS→lombardia)
+    const k = normComune(provincia);
+    if (k && comuneRegione[k]) return comuneRegione[k];                        // comune Subito/AS24
+  }
+  return null;
+}
+const intOrNull  = v => { if (v == null || v === '') return null; const n = parseInt(v, 10); return Number.isFinite(n) ? n : null; };
+const boolOrNull = v => (v === true ? true : (v === false ? false : null));
 
 const UPSERT_SQL = `
 WITH prev AS (
@@ -19,9 +41,13 @@ WITH prev AS (
 ),
 up AS (
   INSERT INTO listings
-    (url, fonte, tipo, marca, modello, model_key, anno, km, nuovo, danni, posted_at, last_price, raw_json)
+    (url, fonte, tipo, marca, modello, model_key, anno, km, nuovo, danni, posted_at, last_price, raw_json,
+     versione, regione, provincia, cap, venditore, carburante, cambio, potenza_cv, cilindrata, cilindri,
+     carrozzeria, colore, porte, posti, classe_emissioni, neopatentati, proprietari, allestimento, revisione, immagini)
   VALUES
-    ($1,  $2,    $3,   $4,    $5,      $6,        $7,   $8, $9,    $10,   $11,       $12,        $13::jsonb)
+    ($1,  $2,    $3,   $4,    $5,      $6,        $7,   $8, $9,    $10,   $11,       $12,        $13::jsonb,
+     $14, $15, $16, $17, $18, $19, $20, $21, $22, $23,
+     $24, $25, $26, $27, $28, $29, $30, $31, $32, $33::jsonb)
   ON CONFLICT (url) DO UPDATE SET
     fonte      = EXCLUDED.fonte,
     tipo       = EXCLUDED.tipo,
@@ -36,6 +62,26 @@ up AS (
     last_seen  = now(),
     last_price = EXCLUDED.last_price,
     raw_json   = COALESCE(EXCLUDED.raw_json, listings.raw_json),
+    versione         = COALESCE(EXCLUDED.versione, listings.versione),
+    regione          = COALESCE(EXCLUDED.regione, listings.regione),
+    provincia        = COALESCE(EXCLUDED.provincia, listings.provincia),
+    cap              = COALESCE(EXCLUDED.cap, listings.cap),
+    venditore        = COALESCE(EXCLUDED.venditore, listings.venditore),
+    carburante       = COALESCE(EXCLUDED.carburante, listings.carburante),
+    cambio           = COALESCE(EXCLUDED.cambio, listings.cambio),
+    potenza_cv       = COALESCE(EXCLUDED.potenza_cv, listings.potenza_cv),
+    cilindrata       = COALESCE(EXCLUDED.cilindrata, listings.cilindrata),
+    cilindri         = COALESCE(EXCLUDED.cilindri, listings.cilindri),
+    carrozzeria      = COALESCE(EXCLUDED.carrozzeria, listings.carrozzeria),
+    colore           = COALESCE(EXCLUDED.colore, listings.colore),
+    porte            = COALESCE(EXCLUDED.porte, listings.porte),
+    posti            = COALESCE(EXCLUDED.posti, listings.posti),
+    classe_emissioni = COALESCE(EXCLUDED.classe_emissioni, listings.classe_emissioni),
+    neopatentati     = COALESCE(EXCLUDED.neopatentati, listings.neopatentati),
+    proprietari      = COALESCE(EXCLUDED.proprietari, listings.proprietari),
+    allestimento     = COALESCE(EXCLUDED.allestimento, listings.allestimento),
+    revisione        = COALESCE(EXCLUDED.revisione, listings.revisione),
+    immagini         = COALESCE(EXCLUDED.immagini, listings.immagini),
     status     = 'active',
     gone_at    = NULL,
     miss_count = 0
@@ -68,6 +114,8 @@ async function upsertListings(items, target) {
       if (!it || !it.url || it.prezzo == null) continue;
       const mk = modelKey(t.tipo, t.marca, t.modello, it.anno, it.km);
       const raw = it._raw != null ? JSON.stringify(it._raw) : null;
+      const regione  = regioneFrom(it.provincia, it.zip);
+      const immagini = (Array.isArray(it.immagini) && it.immagini.length) ? JSON.stringify(it.immagini) : null;
       try {
         await client.query(UPSERT_SQL, [
           it.url,
@@ -83,6 +131,26 @@ async function upsertListings(items, target) {
           it.posted_at || null,
           it.prezzo,
           raw,
+          it.variante || null,                          // $14 versione
+          regione,                                      // $15 regione (derivata)
+          it.provincia || null,                         // $16
+          it.zip || null,                               // $17 cap (AS24)
+          it.venditore || null,                         // $18
+          it.carburante || null,                        // $19
+          it.cambio || null,                            // $20
+          intOrNull(it.potenzaCv),                      // $21
+          intOrNull(it.cilindrata),                     // $22
+          intOrNull(it.cilindri),                       // $23
+          it.carrozzeria || null,                       // $24
+          it.colore || null,                            // $25
+          it.porte != null ? String(it.porte) : null,   // $26
+          intOrNull(it.posti),                          // $27
+          it.classeEmissioni || null,                   // $28
+          boolOrNull(it.neopatentati),                  // $29
+          intOrNull(it.proprietari),                    // $30
+          it.allestimento || null,                      // $31
+          it.revisione || null,                         // $32
+          immagini,                                     // $33
         ]);
         written++;
         if (raw) withRaw++;
@@ -140,4 +208,4 @@ async function markGone(target, seenUrls, opts = {}) {
   }
 }
 
-module.exports = { upsertListings, markGone };
+module.exports = { upsertListings, markGone, regioneFrom };
