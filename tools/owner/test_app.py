@@ -61,7 +61,47 @@ def test_headless_mount() -> None:
     print("✔ headless mount/refresh/render OK")
 
 
+def test_watchlist_screen() -> None:
+    """Apre la schermata watchlist (tasto w), carica le righe, applica un filtro."""
+    from amradmin.db import Db
+    try:
+        Db().conn()
+    except Exception as e:
+        print(f"⤼ SKIP watchlist screen: DB non raggiungibile ({e})")
+        return
+
+    from textual.widgets import Input
+
+    from amradmin.app import AmrAdminApp
+    from amradmin.screens import WatchlistScreen
+
+    async def run() -> None:
+        app = AmrAdminApp()
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            await pilot.press("w")                       # apre WatchlistScreen
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            scr = app.screen
+            assert isinstance(scr, WatchlistScreen), f"schermata inattesa: {type(scr).__name__}"
+            assert len(scr.rows) > 0, "watchlist screen senza righe"
+            # filtro server-side
+            scr.query_one("#filter", Input).value = "Fiat"
+            scr.reload()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert scr.rows, "filtro Fiat: nessuna riga"
+            assert all("fiat" in r["marca"].lower() or "fiat" in r["modello"].lower() for r in scr.rows), \
+                "filtro non applicato"
+
+    asyncio.run(run())
+    print("✔ watchlist screen (push/load/filtro) OK")
+
+
 if __name__ == "__main__":
     test_render_handles_nulls()
     test_headless_mount()
+    test_watchlist_screen()
     print("\nTEST OK")

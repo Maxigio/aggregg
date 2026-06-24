@@ -14,6 +14,7 @@ from textual.widgets import Footer, Header, Static
 from . import queries as Q
 from . import render as R
 from .db import Db
+from .screens import WatchlistScreen
 
 REFRESH_SECONDS = 5
 
@@ -29,6 +30,7 @@ class AmrAdminApp(App):
     #status { dock: bottom; height: 1; color: $text-muted; }
     """
     BINDINGS = [
+        ("w", "watchlist", "Watchlist"),
         ("r", "refresh", "Aggiorna"),
         ("q", "quit", "Esci"),
     ]
@@ -57,6 +59,9 @@ class AmrAdminApp(App):
 
     def action_refresh(self) -> None:
         self.refresh_data()
+
+    def action_watchlist(self) -> None:
+        self.push_screen(WatchlistScreen())
 
     @work(exclusive=True)
     async def refresh_data(self) -> None:

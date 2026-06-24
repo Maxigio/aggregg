@@ -7,12 +7,29 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from .constants import KNOWN_NODES
+from .constants import KNOWN_NODES, STALE_HOURS
 
 
 def _num(v) -> str:
     """Formatta un intero con separatore migliaia; None → '—' (priority è nullable)."""
     return f"{v:,}" if v is not None else "—"
+
+
+def node_label(row: dict) -> str:
+    return row.get("assigned_node") or "imac"
+
+
+def state_label(row: dict) -> str:
+    """Stato-crawl derivato per la riga watchlist (come crawlState dell'admin)."""
+    if not row.get("enabled"):
+        return "[dim]spento[/]"
+    if row.get("activated_at") is None:
+        return "[dim]⚪ coda[/]"
+    ls = row.get("last_swept")
+    if ls is None:
+        return "[red]🔴 mai[/]"
+    age_h = (datetime.now(timezone.utc) - ls).total_seconds() / 3600
+    return "[green]🟢 fresco[/]" if age_h < STALE_HOURS else "[yellow]🟡 da agg.[/]"
 
 
 def _ago(ts) -> str:

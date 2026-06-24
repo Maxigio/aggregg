@@ -131,6 +131,37 @@ def ramp_progress(db, limit: int = 12) -> dict:
     return {"total": c["total"], "active": c["active"], "queue": c["pending"], "next": nxt}
 
 
+def watchlist_rows(db, *, q: str | None = None, tipo: str | None = None,
+                   node: str | None = None, limit: int = 500) -> list[dict]:
+    """NUOVO: griglia watchlist FILTRABILE server-side (l'admin caricava tutto
+    client-side: con 14k righe non regge). `annunci` via subquery correlata
+    sull'indice idx_listings_browse (no GROUP BY su 200k). count(*) OVER() = totale
+    che matcha PRIMA del LIMIT. node 'imac' = assigned_node NULL o 'imac' (COALESCE)."""
+    where = ["TRUE"]
+    params: dict = {"limit": limit}
+    if q:
+        where.append("(w.marca ILIKE %(q)s OR w.modello ILIKE %(q)s)")
+        params["q"] = f"%{q}%"
+    if tipo:
+        where.append("w.tipo = %(tipo)s")
+        params["tipo"] = tipo
+    if node:
+        where.append("COALESCE(w.assigned_node, 'imac') = %(node)s")
+        params["node"] = node
+    return db.rows(
+        f"""SELECT w.id, w.tipo, w.marca, w.modello, w.assigned_node, w.enabled,
+                   w.activated_at, w.last_swept, w.priority, w.leased_until,
+                   (SELECT count(*) FROM listings l
+                      WHERE l.tipo=w.tipo AND l.marca=w.marca AND l.modello=w.modello)::int annunci,
+                   count(*) OVER()::int total
+              FROM watchlist w
+             WHERE {' AND '.join(where)}
+             ORDER BY w.tipo, w.marca, w.modello
+             LIMIT %(limit)s""",
+        params,
+    )
+
+
 def price_distribution(db, tipo: str, marca: str, modello: str) -> dict | None:
     """NUOVO: distribuzione prezzo (n, p25, mediana, p75, min, max) sugli annunci
     ATTIVI di un modello. Nessuna analitica simile nell'admin."""
