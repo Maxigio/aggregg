@@ -1296,7 +1296,15 @@ const server = app.listen(PORT, () => {
     db.init()
       .then(applied => {
         if (applied.length) console.log(`[db] migrazioni applicate: ${applied.join(', ')}`);
-        crawler.start({ withLock: withSavedLock });
+        // F60 — scheduler 24h DISATTIVATO di default: il crawl si avvia MANUALMENTE
+        // dalla TUI owner (coda crawl_queue + drainer scripts/crawl-once.js). Per
+        // riattivare lo scheduler automatico: CRAWLER_AUTO=1.
+        if (process.env.CRAWLER_AUTO === '1') {
+          crawler.start({ withLock: withSavedLock });
+          console.log('[crawler] auto-scheduler ON (CRAWLER_AUTO=1)');
+        } else {
+          console.log('[crawler] auto-scheduler OFF (CRAWLER_AUTO≠1) → crawl manuale dalla TUI');
+        }
       })
       .catch(e => console.error('[db] init KO (crawler OFF):', e.message));
   } else {
