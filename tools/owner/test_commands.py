@@ -23,6 +23,15 @@ def test_parse() -> None:
     assert p(":run auto bmw 320")["modello"] == "320" and p(":run auto bmw 320")["pages"] is None
     assert p(":run auto fiat 500")["modello"] == "500" and p(":run auto fiat 500")["pages"] is None
     assert p(":run auto audi a3")["pages"] is None             # default
+    # 'pN' confligge con modelli REALI 'P50'/'P1800' (data/models.json): se restano solo
+    # marca+modello (len 2) il token È il modello, NON la profondità (Peel P50 crawlabile)
+    assert p(":run auto peel p50") == {"cmd": "run", "tipo": "auto", "marca": "peel", "modello": "p50", "pages": None}
+    assert p(":run auto volvo p1800")["modello"] == "p1800" and p(":run auto volvo p1800")["pages"] is None
+    # ...ma con marca + ≥1 parola di modello + token, 'pN' torna profondità
+    assert p(":run auto fiat 500 p10")["modello"] == "500" and p(":run auto fiat 500 p10")["pages"] == 10
+    # 'full' è SEMPRE profondità (nessun modello reale 'full'); da solo → manca il modello
+    assert p(":run auto audi a3 full")["pages"] == 9999
+    assert p(":run auto bmw full")["cmd"] == "error"           # 'full' consumato → modello mancante
     # due
     assert p(":run due")["cmd"] == "run_due"
     # errori

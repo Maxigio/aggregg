@@ -185,7 +185,8 @@ def enqueue(db, tipo: str, marca: str, modello: str, *,
     if watchlist_id is None:
         cat = db.one(
             "SELECT id, marca, modello, last_truncated FROM watchlist "
-            "WHERE tipo = %s AND lower(marca) = lower(%s) AND lower(modello) = lower(%s) LIMIT 1",
+            "WHERE tipo = %s AND lower(marca) = lower(%s) AND lower(modello) = lower(%s) "
+            "ORDER BY id LIMIT 1",   # ORDER BY: deterministico se esistono dup case-variant (UNIQUE è case-sensitive)
             (tipo, marca, modello))
         if cat:
             marca, modello, watchlist_id = cat["marca"], cat["modello"], cat["id"]
@@ -197,7 +198,18 @@ def enqueue(db, tipo: str, marca: str, modello: str, *,
            ON CONFLICT DO NOTHING RETURNING id""",
         (tipo, marca, modello, watchlist_id, last_truncated, priority, pages),
     )
-    return row["id"] if row else None
+    if row:
+        return row["id"]
+    # Già in coda (ON CONFLICT). Se è 'pending' e arriva un override di profondità,
+    # aggiornalo: l'ultima richiesta esplicita vince (no più drop muto del depth — un
+    # ':run … full' su un job pending shallow deve approfondirlo). Non tocco i 'running'
+    # (profondità già fissata allo sweep in corso). marca/modello qui sono i CANONICI.
+    if pages is not None:
+        db.execute(
+            "UPDATE crawl_queue SET pages = %s "
+            "WHERE tipo = %s AND marca = %s AND modello = %s AND status = 'pending'",
+            (pages, tipo, marca, modello))
+    return None
 
 
 def enqueue_rows(db, rows, *, priority: int = 0) -> dict:

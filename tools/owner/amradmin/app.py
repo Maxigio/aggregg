@@ -134,9 +134,12 @@ class AmrAdminApp(App):
             if cmd == "run":
                 pg = parsed.get("pages")
                 rid = A.enqueue(db, parsed["tipo"], parsed["marca"], parsed["modello"], pages=pg)
+                depth = R.depth_label(pg)
                 if not rid:
-                    return f"già in coda: {parsed['marca']} {parsed['modello']}"
-                depth = "full" if (pg and pg >= 200) else (f"{pg}p" if pg else "default")
+                    # già attivo: se 'pending', enqueue ha AGGIORNATO la profondità (override
+                    # esplicito) → dillo, non far credere che il depth sia stato ignorato.
+                    extra = f" — profondità → {depth}" if pg is not None else ""
+                    return f"già in coda: {parsed['marca']} {parsed['modello']}{extra}"
                 return f"in coda: {parsed['tipo']} {parsed['marca']} {parsed['modello']} ({depth}) · drainer {drainer()}"
             if cmd == "run_due":
                 res = A.enqueue_rows(db, Q2.due_targets(db))

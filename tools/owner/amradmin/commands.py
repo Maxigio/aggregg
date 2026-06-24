@@ -9,7 +9,7 @@ Ritorna un dict {cmd, …}. cmd='error' con msg per input invalido; cmd='noop' p
 """
 from __future__ import annotations
 
-from .constants import TIPI
+from .constants import FULL_SENTINEL, TIPI
 
 
 def parse_command(text: str) -> dict:
@@ -28,15 +28,18 @@ def parse_command(text: str) -> dict:
         if args[0].lower() not in TIPI:
             return {"cmd": "error",
                     "msg": f"manca il tipo ({'/'.join(TIPI)}) — es. :run auto bmw serie 3"}
-        # Profondità OPZIONALE = ULTIMO token, solo se 'full' o 'pN' (prefisso 'p' per non
-        # confonderla con un modello numerico tipo '320'/'500'). default = None (cap medio).
+        # Profondità OPZIONALE = ULTIMO token. 'full' non è MAI un modello reale → sempre
+        # profondità (il check finale len<2 segnala comunque il modello mancante). 'pN'
+        # invece confligge con modelli REALI 'P50'/'P1800'/'P51' (data/models.json): lo
+        # consumo solo se restano marca + ≥1 parola di modello (len(rest) > 2), così con
+        # marca+modello soli ('peel p50') il token resta il MODELLO, non la profondità.
         rest = args[1:]                       # marca + modello (+ profondità)
         pages = None
         last = rest[-1].lower() if rest else ""
         if last == "full":
-            pages = 9999                      # crawler clampa al safety cap (= full-depth)
+            pages = FULL_SENTINEL             # crawler clampa al safety cap (= full-depth)
             rest = rest[:-1]
-        elif last.startswith("p") and last[1:].isdigit() and int(last[1:]) > 0:
+        elif last.startswith("p") and last[1:].isdigit() and int(last[1:]) > 0 and len(rest) > 2:
             pages = int(last[1:])
             rest = rest[:-1]
         if len(rest) < 2:                     # serve marca + almeno una parola di modello

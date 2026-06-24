@@ -179,7 +179,7 @@ def watchlist_rows(db, *, q: str | None = None, tipo: str | None = None,
         params["node"] = node
     return db.rows(
         f"""SELECT w.id, w.tipo, w.marca, w.modello, w.assigned_node, w.enabled,
-                   w.activated_at, w.last_swept, w.last_truncated, w.priority, w.leased_until,
+                   w.last_swept, w.last_truncated, w.priority, w.leased_until,
                    (SELECT count(*) FROM listings l
                       WHERE l.tipo=w.tipo AND l.marca=w.marca AND l.modello=w.modello)::int annunci,
                    count(*) OVER()::int total

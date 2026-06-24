@@ -31,7 +31,7 @@ const modelsData = require('../data/models.json');
 
 const DEEP_PAGES   = parseInt(process.env.CRAWLER_PAGES || '10', 10);   // cap profondità/target
 const DEEP_PAGES_MAX = parseInt(process.env.CRAWLER_PAGES_MAX || '30', 10); // F13: cap esteso sui target che troncano
-const FULL_PAGES_MAX = parseInt(process.env.CRAWLER_PAGES_FULL || '200', 10); // M-C/2: tetto di sicurezza full-depth (anti-runaway)
+const FULL_PAGES_MAX = parseInt(process.env.CRAWLER_PAGES_FULL || '200', 10) || 200; // M-C/2: tetto di sicurezza full-depth (anti-runaway). `|| 200`: env non-numerico → NaN → fallback (NaN romperebbe Math.min e il full crawlerebbe a depth di default, muto)
 const RAMP_PER_DAY = parseInt(process.env.CRAWLER_RAMP  || '10', 10);   // nuovi target/giorno
 const THROTTLE_MS  = parseInt(process.env.CRAWLER_THROTTLE_MS || '1500', 10);
 const BACKOFF_HOURS = parseInt(process.env.CRAWLER_BACKOFF_HOURS || '6', 10); // F14: salta fonte blocked per Nh
@@ -97,12 +97,17 @@ function titleMatchesModel(titolo, modello) {
 // Ritorna {truncated, complete}: truncated=una fonte ha visto solo una parte (cap)
 // → F13 escalation cap al giro dopo + markGone spento DA SÉ. complete=tutte le
 // fonti previste viste intere e nessuna saltata per back-off → "popolato".
-async function sweepTarget(target, stats) {
-  // M-C/2 — profondità per-run: se il job porta `maxPages` (dalla coda) usa quello
-  // (clampato al tetto di sicurezza); altrimenti F13 default (esteso se troncò l'ultima volta).
-  const cap = target.maxPages
+// M-C/2 — profondità per-run (PURO → testabile): se il job porta `maxPages` (dalla coda)
+// usa quello clampato al tetto di sicurezza FULL_PAGES_MAX (anti-runaway: 'full'=9999 → 200);
+// altrimenti F13 default (esteso a DEEP_PAGES_MAX se l'ultima sweep aveva troncato).
+function capForTarget(target) {
+  return target.maxPages
     ? Math.min(target.maxPages, FULL_PAGES_MAX)
     : (target.last_truncated ? DEEP_PAGES_MAX : DEEP_PAGES);
+}
+
+async function sweepTarget(target, stats) {
+  const cap = capForTarget(target);
   const opts = { maxPages: cap, attachRaw: true, sortByDate: true, withMeta: true };
   let anyTrunc = false, skippedAny = false;
 
@@ -279,4 +284,4 @@ function start({ withLock } = {}) {
   console.log(`[crawler] schedulato (ogni 24h, primo run tra ${FIRST_RUN_DELAY_MS / 1000}s, ${DEEP_PAGES} pag/target)`);
 }
 
-module.exports = { start, sweepAll, sweepTarget, isRunning, status, _titleMatchesModel: titleMatchesModel, _resolveAutoscout: resolveAutoscout, _resolveMotoit: resolveMotoit };
+module.exports = { start, sweepAll, sweepTarget, isRunning, status, _titleMatchesModel: titleMatchesModel, _resolveAutoscout: resolveAutoscout, _resolveMotoit: resolveMotoit, _capForTarget: capForTarget };

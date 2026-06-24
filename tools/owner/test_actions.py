@@ -187,6 +187,10 @@ def test_queue_scratch() -> None:
         # pages (profondità per-run) propagata nel DB
         pid = A.enqueue(db, "auto", SENT, "__qpg__", pages=42)
         assert db.one("SELECT pages FROM crawl_queue WHERE id=%s", (pid,))["pages"] == 42
+        # re-enqueue dello STESSO target pending con override profondità → None (dedupe) MA
+        # la profondità del job pending viene AGGIORNATA (no drop muto del depth: ':run full' vince)
+        assert A.enqueue(db, "auto", SENT, "__qpg__", pages=9999) is None, "dup → None"
+        assert db.one("SELECT pages FROM crawl_queue WHERE id=%s", (pid,))["pages"] == 9999, "depth aggiornato sul pending"
         # un fail REALE (errore scraper) per distinguerlo dalle cancellazioni
         db.one("INSERT INTO crawl_queue (tipo,marca,modello,status,error) "
                "VALUES ('auto',%s,'__qf__','fail','boom scraper') RETURNING id", (SENT,))

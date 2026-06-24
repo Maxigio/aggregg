@@ -8,7 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from .constants import KNOWN_NODES, STALE_HOURS
+from .constants import FULL_PAGES, KNOWN_NODES, STALE_HOURS
 
 
 def safe(v) -> str:
@@ -47,6 +47,15 @@ def cov_label(pct) -> str:
     p = float(pct)
     color = "red" if p < 30 else ("yellow" if p < 70 else "green")
     return f"[{color}]{p:.0f}%[/]"
+
+
+def depth_label(pages) -> str:
+    """Profondità per-run di un job: None→'default', ≥FULL_PAGES→'full', altrimenti 'Np'.
+    UNICA fonte della soglia (app.py + screens.py la usano) → niente 200 sparso a mano.
+    crawl_queue.pages tiene FULL_SENTINEL (9999) per 'full' → ricade in ≥FULL_PAGES."""
+    if pages is None:
+        return "default"
+    return "full" if pages >= FULL_PAGES else f"{pages}p"
 
 
 def qstate_label(status) -> str:
