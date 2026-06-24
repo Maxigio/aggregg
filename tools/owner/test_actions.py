@@ -207,8 +207,9 @@ def test_queue_scratch() -> None:
 
 
 def test_suggestions_ranking() -> None:
-    """suggestions(): 'da completare' (gap noto) PRIMA dei mai-crawlati; coverage_pct
-    e manca corretti. Scratch tx rolled-back."""
+    """suggestions() M-E 'tronca, NON manca': truncated (da completare) PRIMA del
+    mai-crawlato; soddisfatto (crawlato non-truncated) ESCLUSO; recency esclude
+    l'appena-crawlato (anche se truncated). Scratch tx rolled-back."""
     try:
         conn = psycopg.connect(read_database_url(), autocommit=False, row_factory=dict_row)
     except Exception as e:
@@ -216,25 +217,50 @@ def test_suggestions_ranking() -> None:
         return
     db = Db()
     db._conn = conn
+    old = "now() - interval '30 hours'"   # oltre STALE_HOURS → passa la recency
     try:
-        # GAP: crawlato, tetto 100, 30 ingeriti attivi → manca 70, coverage 30%
-        db.one("INSERT INTO watchlist (tipo,marca,modello,priority,last_swept) "
-               "VALUES ('auto',%s,'gap',999999, now()) RETURNING id", (SENT,))
-        db.execute("INSERT INTO market_size (tipo,marca,modello,fonte,total) "
-                   "VALUES ('auto',%s,'gap','subito',100)", (SENT,))
-        for k in range(30):
-            db.execute("INSERT INTO listings (url,fonte,tipo,marca,modello,status) "
-                       "VALUES (%s,'subito','auto',%s,'gap','active')", (f"__sgurl__{k}", SENT))
-        # MAI crawlato, priority altissima (ma deve venire DOPO il gap)
+        # TRUNCATED, swept VECCHIO, priority BASSA → 'da completare' (deve venire PRIMO)
+        db.one(f"INSERT INTO watchlist (tipo,marca,modello,priority,last_swept,last_truncated) "
+               f"VALUES ('auto',%s,'trunc',10, {old}, true) RETURNING id", (SENT,))
+        # MAI crawlato, priority altissima → 'da scoprire' (DOPO il truncated)
         db.one("INSERT INTO watchlist (tipo,marca,modello,priority) "
                "VALUES ('auto',%s,'fresh',999999) RETURNING id", (SENT,))
+        # SODDISFATTO: crawlato VECCHIO, non-truncated → ESCLUSO (preso tutto il matchabile)
+        db.one(f"INSERT INTO watchlist (tipo,marca,modello,priority,last_swept,last_truncated) "
+               f"VALUES ('auto',%s,'sodd',999999, {old}, false) RETURNING id", (SENT,))
+        # RECENTE truncated (<STALE_HOURS) → ESCLUSO dalla recency (appena crawlato)
+        db.one("INSERT INTO watchlist (tipo,marca,modello,priority,last_swept,last_truncated) "
+               "VALUES ('auto',%s,'recent',999999, now(), true) RETURNING id", (SENT,))
 
         mine = [r for r in Q.suggestions(db, q=SENT, limit=50) if r["marca"] == SENT]
-        assert len(mine) == 2, f"attesi 2 sentinel, {len(mine)}"
-        assert mine[0]["modello"] == "gap", f"gap-known PRIMA del mai: {[m['modello'] for m in mine]}"
-        assert mine[0]["tetto"] == 100 and mine[0]["manca"] == 70 and mine[0]["coverage_pct"] == 30, mine[0]
-        assert mine[1]["modello"] == "fresh" and mine[1]["manca"] is None and mine[1]["mai"] is True, mine[1]
-        print("✔ suggestions ranking OK (gap-first + coverage/manca, rollback)")
+        mods = [m["modello"] for m in mine]
+        assert mods == ["trunc", "fresh"], f"atteso [trunc, fresh] (soddisfatto/recente esclusi), {mods}"
+        assert mine[0]["last_truncated"] is True, mine[0]
+        assert mine[1]["mai"] is True, mine[1]
+        print("✔ suggestions M-E OK (tronca-first · soddisfatto/recente esclusi, rollback)")
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+def test_watchlist_interleave() -> None:
+    """watchlist_rows() M-E: ORDER BY interleave PARTITION BY tipo → auto e moto
+    ALTERNATI (no più tutti-auto poi tutti-moto). Scratch tx rolled-back."""
+    try:
+        conn = psycopg.connect(read_database_url(), autocommit=False, row_factory=dict_row)
+    except Exception as e:
+        print(f"⤼ SKIP watchlist interleave: DB non raggiungibile ({e})")
+        return
+    db = Db()
+    db._conn = conn
+    try:
+        for tipo, mod in [("auto", "a1"), ("auto", "a2"), ("moto", "m1"), ("moto", "m2")]:
+            db.one("INSERT INTO watchlist (tipo,marca,modello,enabled) VALUES (%s,%s,%s,true) RETURNING id",
+                   (tipo, SENT, mod))
+        mine = [r for r in Q.watchlist_rows(db, q=SENT, limit=500)]
+        tipos = [r["tipo"] for r in mine]
+        assert tipos == ["auto", "moto", "auto", "moto"], f"non interleavato: {tipos}"
+        print("✔ watchlist interleave OK (auto/moto alternati, rollback)")
     finally:
         conn.rollback()
         conn.close()
@@ -276,5 +302,6 @@ if __name__ == "__main__":
     test_autocommit_paths()
     test_queue_scratch()
     test_suggestions_ranking()
+    test_watchlist_interleave()
     test_enqueue_canonicalize()
     print("\nTEST OK")

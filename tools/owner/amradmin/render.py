@@ -170,14 +170,30 @@ def fonti_panel(rows: list[dict]) -> Panel:
 
 
 def sugg_state(row: dict) -> str:
-    """Stato di un suggerimento. Con coverage (market_size): X% + manca. Senza
-    ground-truth: 'da crawlare' (+ '(mai)' se proprio mai toccato; altrimenti era
-    un vecchio crawl pre-copertura)."""
+    """Stato suggerimento (M-E 'tronca, NON manca'): mai-crawlato → 'da crawlare';
+    tronca (cap pagine colpito = c'è davvero altro) → 'tronca → full'; altrimenti
+    soddisfatto. coverage% è solo INFO (il gap count_all è rumore free-text, non il driver)."""
+    if row.get("mai"):
+        return "[dim]da crawlare (mai)[/]"
     pct = row.get("coverage_pct")
-    if pct is not None:
-        col = "red" if pct < 30 else ("yellow" if pct < 70 else "green")
-        return f"[{col}]{pct}%[/] · manca {_num(row.get('manca'))}"
-    return "[dim]da crawlare[/]" + (" [dim](mai)[/]" if row.get("mai") else "")
+    cov = f" · {pct}%" if pct is not None else ""
+    if row.get("last_truncated"):
+        return f"[yellow]tronca → full[/]{cov}"
+    return f"[green]✓ soddisfatto[/]{cov}"
+
+
+def cov_state(row: dict) -> str:
+    """Badge copertura M-E: 'soddisfatto' (crawl completo = preso tutto il matchabile,
+    il gap è rumore free-text di Subito) vs 'tronca → full' (cap pagine colpito = c'è
+    altro) vs 'mai'. NB: last_truncated è per-TARGET (flag se QUALCHE fonte ha troncato)."""
+    if row.get("last_swept") is None:
+        return "[dim]mai[/]"
+    if row.get("last_truncated"):
+        return "[yellow]tronca → full[/]"
+    pct = row.get("coverage_pct")
+    if pct is not None and float(pct) >= 99.5:
+        return "[green]✓ 100%[/]"
+    return "[green]✓ soddisfatto[/]"
 
 
 def suggester_panel(rows: list[dict]) -> Panel:
@@ -195,6 +211,12 @@ def last_run_line(lr: dict | None) -> Text:
     if not lr:
         return Text("ultimo crawl iMac: mai avviato", style="dim")
     err = f" · ⚠️ {lr['errors']} errori" if lr.get("errors") else ""
-    return Text(f"ultimo crawl iMac: {lr['written']:,} scritti su {lr['targets']} target "
+    written = lr.get("written") or 0
+    nuovi = lr.get("inserted")
+    # M-E onestà: "X nuovi · Y aggiornati" (Y = upsert non-nuovi). Run pre-M-E (inserted
+    # NULL) → fallback al vecchio "N scritti" (non sappiamo quanti erano nuovi).
+    body = (f"{nuovi:,} nuovi · {max(written - nuovi, 0):,} aggiornati"
+            if nuovi is not None else f"{written:,} scritti")
+    return Text(f"ultimo crawl iMac: {body} su {lr['targets']} target "
                 f"· {_ago(lr.get('finished_at') or lr.get('started_at'))}{err}",
                 style="green" if not lr.get("errors") else "yellow")

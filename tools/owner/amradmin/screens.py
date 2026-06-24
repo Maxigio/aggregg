@@ -89,6 +89,7 @@ class WatchlistScreen(Screen):
         ("r", "reload", "Aggiorna"),
         ("e", "toggle_enabled", "On/Off"),
         ("n", "cycle_node", "Nodo→"),
+        ("t", "cycle_tipo", "Tipo→"),
         ("d", "delete_row", "Elimina"),
         ("g", "enqueue_one", "Coda"),
         ("G", "enqueue_all", "Coda tutte"),
@@ -100,6 +101,7 @@ class WatchlistScreen(Screen):
         self._owns_db = db is None  # se l'ho creata io, la chiudo su unmount
         self.rows: list[dict] = []
         self._confirming = False    # guard anti-stacking del modale di conferma
+        self._tipo: str | None = None   # filtro tipo: None=tutti (interleave) → auto → moto
 
     def on_unmount(self) -> None:
         if self._owns_db:
@@ -122,7 +124,7 @@ class WatchlistScreen(Screen):
 
     # ── helper sincroni (girano in thread via to_thread) ───────────────────
     def _load(self, q: str) -> list[dict]:
-        return Q.watchlist_rows(self.db, q=q or None, limit=500)
+        return Q.watchlist_rows(self.db, q=q or None, tipo=self._tipo, limit=500)
 
     def _populate(self, rows: list[dict]) -> None:
         self.rows = rows
@@ -133,9 +135,10 @@ class WatchlistScreen(Screen):
                       R.state_label(r), str(r["annunci"]), R._num(r["priority"]),
                       R._ago(r["last_swept"]), key=str(r["id"]))
         total = rows[0]["total"] if rows else 0
+        tipo_lbl = self._tipo or "tutti"
         self.query_one("#wstatus", Static).update(
-            f"{len(rows)} mostrati / {total} totali · [e] on/off · [n] nodo · [d] elimina "
-            f"· [r] aggiorna · [esc] indietro")
+            f"{len(rows)} mostrati / {total} totali · [b]tipo: {tipo_lbl}[/] · [e] on/off · [n] nodo "
+            f"· [t] tipo→ · [d] elimina · [r] aggiorna · [esc] indietro")
 
     def _current(self) -> dict | None:
         t = self.query_one("#grid", DataTable)
@@ -177,6 +180,11 @@ class WatchlistScreen(Screen):
         r = self._current()
         if r:
             self._apply(A.cycle_node, r["id"])
+
+    def action_cycle_tipo(self) -> None:
+        # filtro VISTA (non muta il DB): tutti (interleave auto+moto) → auto → moto → tutti
+        self._tipo = {None: "auto", "auto": "moto", "moto": None}[self._tipo]
+        self.reload()
 
     def action_delete_row(self) -> None:
         if self._confirming:        # un modale è già aperto → non impilarne altri
@@ -334,7 +342,7 @@ class CoverageScreen(Screen):
 
     def on_mount(self) -> None:
         self.query_one("#cov", DataTable).add_columns(
-            "tipo", "marca", "modello", "fonte", "tetto", "ingeriti", "copertura", "manca")
+            "tipo", "marca", "modello", "fonte", "tetto", "ingeriti", "copertura", "manca", "stato")
         self.reload()
         self.set_interval(10, self.reload)
 
@@ -354,7 +362,7 @@ class CoverageScreen(Screen):
         for r in rows:
             t.add_row(r["tipo"], R.safe(r["marca"]), R.safe(r["modello"]), R.safe(r["fonte"]),
                       R._num(r["tetto"]), R._num(r["ingeriti"]), R.cov_label(r["coverage_pct"]),
-                      R._num(r["manca"]))
+                      R._num(r["manca"]), R.cov_state(r))
         self.query_one("#cstatus", Static).update(
             f"{len(rows)} (target,fonte) · ordinati per copertura PEGGIORE · "
             f"filtro fonte (subito/autoscout/moto) · [r] aggiorna · [esc] indietro")
@@ -431,7 +439,7 @@ class CrawlQueueScreen(Screen):
 
     def on_mount(self) -> None:
         self.query_one("#q", DataTable).add_columns(
-            "id", "stato", "tipo", "marca", "modello", "prio", "scritti", "info")
+            "id", "stato", "tipo", "marca", "modello", "prio", "nuovi/scritti", "info")
         self.reload()
         self.set_interval(3, self.reload)   # live: la coda si svuota mentre il drainer gira
 
@@ -448,9 +456,11 @@ class CrawlQueueScreen(Screen):
             info = R.safe(r["error"]) if r["status"] == "fail" and r.get("error") else R._ago(when)
             pg = r.get("pages")
             mod = R.safe(r["modello"]) + ("" if pg is None else f" [dim]·{R.depth_label(pg)}[/]")
+            ins, wr = r.get("inserted"), r.get("written")
+            ns = R._num(wr) if ins is None else f"{ins:,}/{wr:,}"   # nuovi/scritti (M-E onestà)
             t.add_row(str(r["id"]), R.qstate_label(r["status"]), r["tipo"],
                       R.safe(r["marca"]), mod, R._num(r["priority"]),
-                      R._num(r["written"]), info, key=str(r["id"]))
+                      ns, info, key=str(r["id"]))
         eta = counts["pending"] * 27
         eta_s = f"~{eta // 60}m{eta % 60:02d}s" if eta else "0"
         drn = "[green]drainer attivo[/]" if alive else "[dim]drainer fermo[/]"

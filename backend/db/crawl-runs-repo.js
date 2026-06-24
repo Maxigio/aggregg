@@ -18,20 +18,20 @@ async function startRun(node = 'imac') {
   return r && r.rows.length ? r.rows[0].id : null;
 }
 
-async function finishRun(id, { targets = 0, written = 0, errors = 0 } = {}) {
+async function finishRun(id, { targets = 0, written = 0, inserted = 0, errors = 0 } = {}) {
   if (!db.isEnabled() || !id) return;
   await db.query(
     `UPDATE crawl_runs
-        SET finished_at = now(), targets = $2, written = $3, errors = $4
+        SET finished_at = now(), targets = $2, written = $3, errors = $4, inserted = $5
       WHERE id = $1`,
-    [id, targets, written, errors]
+    [id, targets, written, errors, inserted]
   );
 }
 
 async function lastRun(node = 'imac') {
   if (!db.isEnabled()) return null;
   const r = await db.query(
-    `SELECT id, node, started_at, finished_at, targets, written, errors
+    `SELECT id, node, started_at, finished_at, targets, written, inserted, errors
        FROM crawl_runs WHERE node = $1 ORDER BY started_at DESC LIMIT 1`,
     [node]
   );

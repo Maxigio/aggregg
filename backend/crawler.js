@@ -125,6 +125,7 @@ async function sweepTarget(target, stats) {
       if (!truncated) await repo.markGone(target, items.map(i => i.url), { fonte: 'autoscout' });
       else { anyTrunc = true; console.log(`[crawler] AS24 ${target.marca} ${target.modello}: vista parziale (cap ${cap}) → skip venduto`); }
       stats.written += r.written;
+      stats.inserted = (stats.inserted || 0) + r.inserted;   // M-E: righe NUOVE (onestà written)
       stats.as += items.length;
       await health.record('autoscout', { count: items.length });
       // F50 copertura: AS24 non espone il totale nella search → +1 count-query cheap.
@@ -154,6 +155,7 @@ async function sweepTarget(target, stats) {
     if (!truncated) await repo.markGone(target, items.map(i => i.url), { fonte: 'subito' });
     else { anyTrunc = true; console.log(`[crawler] Subito ${target.marca} ${target.modello}: vista parziale (cap ${cap}) → skip venduto`); }
     stats.written += r.written;
+    stats.inserted = (stats.inserted || 0) + r.inserted;   // M-E: righe NUOVE
     stats.sub += items.length;
     await health.record('subito', { count: raw.length });
     await marketSize.record(target, 'subito', total);   // F50 copertura: count_all (gratis)
@@ -182,6 +184,7 @@ async function sweepTarget(target, stats) {
         if (!truncated) await repo.markGone(target, items.map(i => i.url), { fonte: 'moto' });
         else { anyTrunc = true; console.log(`[crawler] Moto.it ${target.marca} ${target.modello}: vista parziale (cap ${cap}) → skip venduto`); }
         stats.written += r.written;
+        stats.inserted = (stats.inserted || 0) + r.inserted;   // M-E: righe NUOVE
         stats.moto = (stats.moto || 0) + items.length;
         await health.record('moto', { count: items.length });
         await marketSize.record(target, 'moto', total);   // F50 copertura: "N annunci" (gratis)

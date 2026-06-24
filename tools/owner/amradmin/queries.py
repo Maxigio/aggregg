@@ -89,12 +89,12 @@ def runs_history(db, node: str | None = None, limit: int = 20) -> list[dict]:
     """NUOVO: storico run (l'admin mostra solo l'ultimo iMac). idx_crawl_runs_node_started."""
     if node:
         return db.rows(
-            """SELECT id, node, started_at, finished_at, targets, written, errors
+            """SELECT id, node, started_at, finished_at, targets, written, inserted, errors
                  FROM crawl_runs WHERE node=%s ORDER BY started_at DESC LIMIT %s""",
             (node, limit),
         )
     return db.rows(
-        """SELECT id, node, started_at, finished_at, targets, written, errors
+        """SELECT id, node, started_at, finished_at, targets, written, inserted, errors
              FROM crawl_runs ORDER BY started_at DESC LIMIT %s""",
         (limit,),
     )
@@ -117,10 +117,12 @@ def coverage_marca_regione(db, tipo: str | None = None, limit: int = 30) -> list
 
 
 def suggestions(db, *, q: str | None = None, limit: int = 300) -> list[dict]:
-    """NUOVO (ex-ramp → SUGGERITORE): prossimi target da crawlare. 'Da completare'
-    (gap noto da market_size, manca>0) PRIMA, ordinati per `manca` desc; poi 'da
-    scoprire' (mai-crawlati) per liquidità brand (priority). Esclude i completi
-    (manca=0) e i già in coda. Tasto g/G per accodarli. Coverage-driven, dati veri."""
+    """NUOVO (ex-ramp → SUGGERITORE): prossimi target da crawlare. Driver = **tronca,
+    NON manca**: 'da completare' = `last_truncated` (il crawl ha colpito il cap pagine =
+    c'è davvero altro), 'da scoprire' = mai-crawlato. NON usa il gap `count_all` come
+    to-do (su Subito è free-text → conta rumore, manca permanente → loop). Recency guard:
+    non ri-suggerisce l'appena-crawlato (<STALE_HOURS). tetto/manca/coverage = solo DISPLAY.
+    Esclude i già in coda. Tasto g/G per accodarli."""
     where = ["w.enabled"]
     params: dict = {"limit": limit}
     if q:
@@ -148,12 +150,13 @@ def suggestions(db, *, q: str | None = None, limit: int = 300) -> list[dict]:
               FROM watchlist w
               LEFT JOIN ms ON ms.tipo = w.tipo AND ms.marca = w.marca AND ms.modello = w.modello
              WHERE {' AND '.join(where)}
-               AND COALESCE(ms.manca, 1) > 0          -- escludi i completi (manca=0); i mai-crawlati (ms NULL) restano
+               AND (w.last_swept IS NULL OR w.last_truncated = true)   -- da scoprire OPPURE c'è altro (tronca)
+               AND (w.last_swept IS NULL                               -- recency: non ri-suggerire l'appena-crawlato
+                    OR w.last_swept < now() - interval '{STALE_HOURS} hours')
                AND NOT EXISTS (SELECT 1 FROM crawl_queue cq
                                 WHERE cq.tipo = w.tipo AND cq.marca = w.marca AND cq.modello = w.modello
                                   AND cq.status IN ('pending','running','cancel_requested'))
-             ORDER BY (ms.manca IS NOT NULL) DESC,     -- da completare (gap noto) prima
-                      ms.manca DESC NULLS LAST,
+             ORDER BY (w.last_truncated = true) DESC NULLS LAST,        -- da completare (tronca) prima
                       w.priority DESC NULLS LAST, w.id
              LIMIT %(limit)s""",
         params,
@@ -185,7 +188,7 @@ def watchlist_rows(db, *, q: str | None = None, tipo: str | None = None,
                    count(*) OVER()::int total
               FROM watchlist w
              WHERE {' AND '.join(where)}
-             ORDER BY w.tipo, w.marca, w.modello
+             ORDER BY row_number() OVER (PARTITION BY w.tipo ORDER BY w.marca, w.modello), w.tipo
              LIMIT %(limit)s""",
         params,
     )
@@ -234,13 +237,15 @@ def coverage(db, *, fonte: str | None = None, limit: int = 200) -> list[dict]:
             SELECT m.tipo, m.marca, m.modello, m.fonte, m.total AS tetto, m.ts,
                    i.n AS ingeriti,
                    CASE WHEN m.total > 0 THEN least(round(100.0 * i.n / m.total, 1), 100) END AS coverage_pct,
-                   greatest(m.total - i.n, 0) AS manca
+                   greatest(m.total - i.n, 0) AS manca,
+                   w.last_truncated, w.last_swept   -- M-E: badge soddisfatto (non-tronca) vs tronca
               FROM latest m
               CROSS JOIN LATERAL (
                    SELECT count(*)::int n FROM listings l
                     WHERE l.fonte = m.fonte AND l.tipo = m.tipo
                       AND l.marca = m.marca AND l.modello = m.modello
                       AND l.status = 'active') i
+              LEFT JOIN watchlist w ON w.tipo = m.tipo AND w.marca = m.marca AND w.modello = m.modello
               {where}
              ORDER BY coverage_pct ASC NULLS LAST, m.total DESC
              LIMIT %(limit)s""",
@@ -254,7 +259,7 @@ def crawl_queue(db, *, limit: int = 200) -> list[dict]:
     (enqueue) + drainer (scripts/crawl-once.js)."""
     return db.rows(
         """SELECT id, tipo, marca, modello, status, priority, watchlist_id, pages,
-                  enqueued_at, started_at, finished_at, written, error
+                  enqueued_at, started_at, finished_at, written, inserted, error
              FROM crawl_queue
             ORDER BY CASE status WHEN 'running' THEN 0 WHEN 'pending' THEN 1
                                  WHEN 'cancel_requested' THEN 1 ELSE 2 END,

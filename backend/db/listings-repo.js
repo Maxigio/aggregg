@@ -91,29 +91,32 @@ up AS (
     status     = 'active',
     gone_at    = NULL,
     miss_count = 0
-  RETURNING url
+  RETURNING (xmax = 0) AS inserted   -- xmax=0 = vero INSERT; ≠0 = UPDATE (ON CONFLICT). Ceiling: un UPDATE concorrente potrebbe falsare il flag, accettabile per una metrica.
+),
+pp AS (
+  INSERT INTO price_points (url, prezzo)
+  SELECT $1, $12
+  WHERE $12 IS NOT NULL
+    AND (NOT EXISTS (SELECT 1 FROM prev)
+         OR (SELECT last_price FROM prev) IS DISTINCT FROM $12)
 )
-INSERT INTO price_points (url, prezzo)
-SELECT $1, $12
-WHERE $12 IS NOT NULL
-  AND (NOT EXISTS (SELECT 1 FROM prev)
-       OR (SELECT last_price FROM prev) IS DISTINCT FROM $12);
+SELECT inserted FROM up;   -- pp è data-modifying → Postgres lo esegue comunque (non referenziato qui)
 `;
 
 /**
  * @param items array forma-standard scraper {fonte,prezzo,km,anno,url,...,_raw,danni,nuovo,posted_at}
  * @param target {tipo, marca, modello} (watch-list o params ricerca)
- * @returns {written, withRaw} conteggi (best-effort: 0 se DB giù)
+ * @returns {written, inserted, withRaw} conteggi (best-effort: 0 se DB giù). inserted = righe NUOVE (xmax=0).
  */
 async function upsertListings(items, target) {
-  if (!db.isEnabled() || !Array.isArray(items) || !items.length) return { written: 0, withRaw: 0 };
+  if (!db.isEnabled() || !Array.isArray(items) || !items.length) return { written: 0, inserted: 0, withRaw: 0 };
   const t = target || {};
-  let written = 0, withRaw = 0;
+  let written = 0, inserted = 0, withRaw = 0;
   let client;
   try {
     client = await db.getClient();
   } catch (_) {
-    return { written: 0, withRaw: 0 };   // DB non configurato → no-op
+    return { written: 0, inserted: 0, withRaw: 0 };   // DB non configurato → no-op
   }
   try {
     for (const it of items) {
@@ -123,7 +126,7 @@ async function upsertListings(items, target) {
       const regione  = it.regione || regioneFrom(it.provincia, it.zip);   // it.regione = nativa (Subito geo.region)
       const immagini = (Array.isArray(it.immagini) && it.immagini.length) ? JSON.stringify(it.immagini) : null;
       try {
-        await client.query(UPSERT_SQL, [
+        const up = await client.query(UPSERT_SQL, [
           it.url,
           it.fonte || null,
           t.tipo || null,
@@ -159,6 +162,7 @@ async function upsertListings(items, target) {
           immagini,                                     // $33
         ]);
         written++;
+        if (up.rows[0] && up.rows[0].inserted) inserted++;   // riga NUOVA (xmax=0) vs ri-aggiornata
         if (raw) withRaw++;
       } catch (e) {
         console.error('[listings-repo] upsert fallita per', it.url, '-', e.message);
@@ -167,7 +171,7 @@ async function upsertListings(items, target) {
   } finally {
     client.release();
   }
-  return { written, withRaw };
+  return { written, inserted, withRaw };
 }
 
 /**

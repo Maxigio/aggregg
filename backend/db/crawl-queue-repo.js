@@ -45,11 +45,11 @@ async function pickNext() {
   return r && r.rows.length ? r.rows[0] : null;
 }
 
-async function markDone(id, { written = 0 } = {}) {
+async function markDone(id, { written = 0, inserted = 0 } = {}) {
   if (!db.isEnabled() || !id) return;
   await db.query(
-    `UPDATE crawl_queue SET status='done', finished_at=now(), heartbeat=now(), written=$2 WHERE id=$1`,
-    [id, written]);
+    `UPDATE crawl_queue SET status='done', finished_at=now(), heartbeat=now(), written=$2, inserted=$3 WHERE id=$1`,
+    [id, written, inserted]);
 }
 
 async function markFail(id, error) {

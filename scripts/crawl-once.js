@@ -32,7 +32,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
  * crawler.sweepTarget) — iniettabile per i test. Ritorna {targets, written, errors}.
  */
 async function drainQueue({ sweep, throttleMs = THROTTLE_MS, pollMs = POLL_MS, log = () => {} } = {}) {
-  const tot = { targets: 0, written: 0, errors: 0 };
+  const tot = { targets: 0, written: 0, inserted: 0, errors: 0 };
   await queue.reclaimStale();
   let emptyPolls = 0;
   for (;;) {
@@ -51,7 +51,7 @@ async function drainQueue({ sweep, throttleMs = THROTTLE_MS, pollMs = POLL_MS, l
     }
 
     log(`${job.tipo} ${job.marca} ${job.modello}${job.watchlist_id ? '' : ' (ad-hoc)'}…`);
-    const stats = { written: 0, as: 0, sub: 0, errors: 0 };
+    const stats = { written: 0, inserted: 0, as: 0, sub: 0, errors: 0 };
     try {
       const meta = await sweep(
         { tipo: job.tipo, marca: job.marca, modello: job.modello, last_truncated: job.last_truncated,
@@ -63,10 +63,11 @@ async function drainQueue({ sweep, throttleMs = THROTTLE_MS, pollMs = POLL_MS, l
         await queue.markFail(job.id, 'annullato (a sweep finito)');
         log(`  → annullato (sweep completato, ${stats.written} scritti)`);
       } else {
-        await queue.markDone(job.id, { written: stats.written });
-        log(`  → ${stats.written} scritti (AS24 ${stats.as} · Subito ${stats.sub} · err ${stats.errors})`);
+        await queue.markDone(job.id, { written: stats.written, inserted: stats.inserted });
+        log(`  → ${stats.written} scritti, ${stats.inserted} nuovi (AS24 ${stats.as} · Subito ${stats.sub} · err ${stats.errors})`);
       }
       tot.written += stats.written;
+      tot.inserted += stats.inserted;
     } catch (e) {
       await queue.markFail(job.id, e.message);
       log(`  → FALLITO: ${e.message}`);
@@ -93,7 +94,7 @@ async function main() {
   let tot = { targets: 0, written: 0, errors: 0 };
   try {
     tot = await drainQueue({ sweep: (t, s) => crawler.sweepTarget(t, s), log: m => console.log(`[drainer] ${m}`) });
-    console.log(`[drainer] coda vuota → FINE. target: ${tot.targets}, scritti: ${tot.written}, errori: ${tot.errors}.`);
+    console.log(`[drainer] coda vuota → FINE. target: ${tot.targets}, scritti: ${tot.written} (${tot.inserted} nuovi), errori: ${tot.errors}.`);
   } finally {
     if (runId) await runs.finishRun(runId, tot).catch(() => {});
     await lockClient.query('SELECT pg_advisory_unlock($1)', [LOCK_KEY]).catch(() => {});
