@@ -119,7 +119,11 @@ async function sweepTarget(target, stats) {
       stats.as += items.length;
       await health.record('autoscout', { count: items.length });
       // F50 copertura: AS24 non espone il totale nella search → +1 count-query cheap.
-      await marketSize.record(target, 'autoscout', await scrapeAutoscoutGraphql.fetchTotalCount({ mmmv: as.mmmv, tipo: target.tipo }));
+      // try ANNIDATO: un errore della count-query NON deve cadere nel catch dei dati
+      // (sennò salute AS24 sporcata + back-off spurio per una semplice metrica).
+      try {
+        await marketSize.record(target, 'autoscout', await scrapeAutoscoutGraphql.fetchTotalCount({ mmmv: as.mmmv, tipo: target.tipo }));
+      } catch (_) { /* la copertura non tocca mai il crawl */ }
     } catch (e) {
       console.warn(`[crawler] AS24 fallito ${target.marca} ${target.modello}: ${e.message}`);
       stats.errors++;

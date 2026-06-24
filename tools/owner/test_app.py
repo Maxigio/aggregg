@@ -167,8 +167,9 @@ def test_accesslog_screen() -> None:
 
 
 def test_coverage_screen() -> None:
-    """Apre la copertura (tasto c) su una riga market_size sentinel (tetto 10,
-    0 ingeriti → 0%) e verifica caricamento + calcolo."""
+    """Apre la copertura (tasto c). Copre: calcolo base (tetto 10/0 ingeriti → 0%),
+    CLAMP a 100 quando ingeriti>tetto, filtro status='active' (un `gone` NON conta),
+    markup-injection nella marca (R.safe non crasha), e il filtro fonte."""
     import psycopg
 
     from amradmin.db import Db, read_database_url
@@ -178,14 +179,26 @@ def test_coverage_screen() -> None:
         print(f"⤼ SKIP coverage screen: DB non raggiungibile ({e})")
         return
 
-    SENT = "__covtest__"
+    SENT = "__covtest__"               # autoscout, 0 ingeriti → 0%, manca=10
+    CLAMP = "__cov[red]hack[/]__"      # subito, ingeriti>tetto + markup → clamp 100, render-safe
     conn = psycopg.connect(read_database_url(), autocommit=True)
     try:
         conn.execute("INSERT INTO market_size (tipo,marca,modello,fonte,total) VALUES (%s,%s,%s,%s,%s)",
                      ("auto", SENT, "x", "autoscout", 10))
+        conn.execute("INSERT INTO market_size (tipo,marca,modello,fonte,total) VALUES (%s,%s,%s,%s,%s)",
+                     ("auto", CLAMP, "x", "subito", 4))
+        for k in range(6):            # 6 ingeriti ATTIVI > tetto 4 → clamp 100
+            conn.execute("INSERT INTO listings (url,fonte,tipo,marca,modello,status) "
+                         "VALUES (%s,%s,%s,%s,%s,'active')",
+                         (f"__covurl__{k}", "subito", "auto", CLAMP, "x"))
+        # rumore: un 'gone' NON deve contare (verifica il filtro status='active')
+        conn.execute("INSERT INTO listings (url,fonte,tipo,marca,modello,status) "
+                     "VALUES (%s,%s,%s,%s,%s,'gone')",
+                     ("__covurl__gone", "subito", "auto", CLAMP, "x"))
 
         from amradmin.app import AmrAdminApp
         from amradmin.screens import CoverageScreen
+        from textual.widgets import Input
 
         async def run() -> None:
             app = AmrAdminApp()
@@ -198,17 +211,29 @@ def test_coverage_screen() -> None:
                 await pilot.pause()
                 scr = app.screen
                 assert isinstance(scr, CoverageScreen), f"schermata inattesa: {type(scr).__name__}"
-                mine = [r for r in scr.rows if r["marca"] == SENT]
-                assert mine, "riga sentinel non caricata"
-                r = mine[0]
-                assert r["tetto"] == 10 and r["ingeriti"] == 0 and float(r["coverage_pct"]) == 0.0 \
-                    and r["manca"] == 10, f"calcolo copertura errato: {r}"
-                assert isinstance(app.export_screenshot(), str)
+                # REGRESSION markup-injection: marca con tag Rich → il render NON crasha
+                assert isinstance(app.export_screenshot(), str), "render fallito (markup marca?)"
+                by = {r["marca"]: r for r in scr.rows}
+                a = by.get(SENT)
+                assert a and a["tetto"] == 10 and a["ingeriti"] == 0 \
+                    and float(a["coverage_pct"]) == 0.0 and a["manca"] == 10, f"base 0% errato: {a}"
+                c = by.get(CLAMP)
+                # 6 ATTIVI (il 'gone' NON conta) su tetto 4 → coverage CLAMP 100, manca 0
+                assert c and c["ingeriti"] == 6 and float(c["coverage_pct"]) == 100.0 \
+                    and c["manca"] == 0, f"clamp/status-active errato: {c}"
+                # filtro fonte 'subito' → resta CLAMP (subito), sparisce SENT (autoscout)
+                scr.query_one("#cfilter", Input).value = "subito"
+                scr.reload()
+                await app.workers.wait_for_complete()
+                await pilot.pause()
+                marcas = {r["marca"] for r in scr.rows}
+                assert CLAMP in marcas and SENT not in marcas, "filtro fonte non applicato"
 
         asyncio.run(run())
-        print("✔ coverage screen (push/load/calcolo) OK")
+        print("✔ coverage screen (0% + clamp + status-active + markup + filtro) OK")
     finally:
-        conn.execute("DELETE FROM market_size WHERE marca=%s", (SENT,))
+        conn.execute("DELETE FROM listings WHERE url LIKE %s", ("__covurl__%",))
+        conn.execute("DELETE FROM market_size WHERE marca IN (%s,%s)", (SENT, CLAMP))
         conn.close()
 
 

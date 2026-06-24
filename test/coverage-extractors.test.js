@@ -20,13 +20,27 @@ test('Subito _extractTotal: count_all dalla risposta hades reale', () => {
   assert.equal(subito._extractTotal({ count_all: 'x' }), null);
 });
 
-test('Moto.it _extractTotal: "N annunci" dalla pagina reale (punto = migliaia)', () => {
+test('Moto.it _extractTotal: "N annunci" dallo span titolo-lista (ancorato, punto=migliaia)', () => {
   const n = motoit._extractTotal(fx('motoit-count-snippet.html'));
   assert.equal(n, 4323, `atteso 4323, ottenuto ${n}`);
-  assert.equal(motoit._extractTotal('0 annunci'), 0);       // pagina 0-risultati
+  const span = v => `<span class="plist-head-title-info">${v}</span>`;
+  assert.equal(motoit._extractTotal(span('0 annunci')), 0);             // pagina 0-risultati
+  // ANTI-tetto-sbagliato: un "N annunci" di marketing PRIMA dello span NON vince.
+  assert.equal(motoit._extractTotal('<p>oltre 100.000 annunci su Moto.it</p>' + span('4.323 annunci')), 4323);
+  assert.equal(motoit._extractTotal(span('4.323&nbsp;annunci')), 4323);  // entity ammessa
+  assert.equal(motoit._extractTotal('0 annunci'), null);                 // fuori dallo span → miss (non 0)
   assert.equal(motoit._extractTotal('class="mkt-head-meta-item--annunci"'), null);  // CSS, niente cifra
   assert.equal(motoit._extractTotal(''), null);
   assert.equal(motoit._extractTotal(null), null);
+});
+
+test('Subito _extractTotal: non muta l’input → additività degli items garantita', () => {
+  // Il rischio di regressione (finder): "total calcolato consumando la stessa lista".
+  // La cattura del tetto NON deve toccare `ads` (da cui si costruiscono gli items).
+  const j = { count_all: 4874, ads: [{ urls: { default: 'x' } }] };
+  const before = JSON.stringify(j);
+  subito._extractTotal(j);
+  assert.equal(JSON.stringify(j), before);
 });
 
 test('AS24 _countQueryString: mmmv → queryString (atype C auto / B moto)', () => {
@@ -37,4 +51,15 @@ test('AS24 _countQueryString: mmmv → queryString (atype C auto / B moto)', () 
   assert.equal(as24._countQueryString('29|||', 'auto'),     // brand-only
     'sort=standard&desc=0&ustate=N,U&atype=C&cy=I&mmm=29||');
   assert.equal(as24._countQueryString('', 'auto'), null);   // senza make → null
+});
+
+test('AS24 _parseTotalCount: legge totalItems dalla risposta (0/mancante/stringa)', () => {
+  const wrap = ti => ({ data: { search: { listingsByQueryString: { metadata: { totalItems: ti } } } } });
+  assert.equal(as24._parseTotalCount(wrap(33)), 33);        // Ford Bronco provato live
+  assert.equal(as24._parseTotalCount(wrap(0)), 0);          // 0 valido (modello delistato)
+  assert.equal(as24._parseTotalCount(wrap('33')), null);    // stringa: scartata (mai valore non-numerico)
+  assert.equal(as24._parseTotalCount({ data: { search: { listingsByQueryString: { metadata: {} } } } }), null);
+  assert.equal(as24._parseTotalCount({ data: {} }), null);  // shape parziale
+  assert.equal(as24._parseTotalCount({}), null);
+  assert.equal(as24._parseTotalCount(null), null);
 });

@@ -259,6 +259,13 @@ function countQueryString(mmmv, tipo) {
   return `sort=standard&desc=0&ustate=N,U&atype=${atype}&cy=I&mmm=${make}|${model || ''}|`;
 }
 
+// PURO: estrae totalItems dalla risposta GraphQL (o null). Testabile senza rete.
+function parseTotalCount(j) {
+  const n = j && j.data && j.data.search && j.data.search.listingsByQueryString
+    && j.data.search.listingsByQueryString.metadata && j.data.search.listingsByQueryString.metadata.totalItems;
+  return Number.isFinite(n) ? n : null;
+}
+
 // Ritorna il totale AS24 per (mmmv,tipo) o null. Best-effort: mai throw (non rompe la sweep).
 async function fetchTotalCount({ mmmv, tipo } = {}) {
   const qs = countQueryString(mmmv, tipo);
@@ -266,10 +273,7 @@ async function fetchTotalCount({ mmmv, tipo } = {}) {
   try {
     const res = await httpPost(JSON.stringify({ query: COUNT_QUERY, variables: { queryString: qs, locale: 'it_IT' } }), COUNT_AUTH);
     if (res.status !== 200) return null;
-    const j = JSON.parse(res.body);
-    const n = j && j.data && j.data.search && j.data.search.listingsByQueryString
-      && j.data.search.listingsByQueryString.metadata && j.data.search.listingsByQueryString.metadata.totalItems;
-    return Number.isFinite(n) ? n : null;
+    return parseTotalCount(JSON.parse(res.body));
   } catch (_) {
     return null;
   }
@@ -280,3 +284,4 @@ module.exports._mapListing = mapListing;
 module.exports._buildVariables = buildVariables;
 module.exports.fetchTotalCount = fetchTotalCount;       // F50 copertura (chiamato dal crawler)
 module.exports._countQueryString = countQueryString;    // PURO, testabile senza rete
+module.exports._parseTotalCount = parseTotalCount;      // PURO, testabile senza rete

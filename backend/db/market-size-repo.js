@@ -9,6 +9,10 @@ const db = require('./index');
 
 async function record(target, fonte, total) {
   if (!db.isEnabled() || !target || !fonte) return;
+  // Chiave copertura COMPLETA: il join coverage è su (fonte,tipo,marca,modello) con `=`;
+  // una riga con tipo/marca/modello NULL non sarebbe mai agganciabile ai listings
+  // (NULL = NULL → NULL) → niente riga orfana (e niente NULL-key che rompe il `=`).
+  if (!target.tipo || !target.marca || !target.modello) return;
   if (!Number.isInteger(total)) return;   // null/assente → niente riga (no rumore)
   try {
     await db.query(

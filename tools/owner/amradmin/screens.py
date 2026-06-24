@@ -294,7 +294,7 @@ class CoverageScreen(Screen):
         t = self.query_one("#cov", DataTable)
         t.clear()
         for r in rows:
-            t.add_row(r["tipo"], R.safe(r["marca"]), R.safe(r["modello"]), r["fonte"],
+            t.add_row(r["tipo"], R.safe(r["marca"]), R.safe(r["modello"]), R.safe(r["fonte"]),
                       R._num(r["tetto"]), R._num(r["ingeriti"]), R.cov_label(r["coverage_pct"]),
                       R._num(r["manca"]))
         self.query_one("#cstatus", Static).update(

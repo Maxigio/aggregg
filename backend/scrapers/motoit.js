@@ -169,10 +169,12 @@ function extractCardsHtml(html) {
 
 // F50 — totale per-query = "N annunci" nella pagina (es. "4.323 annunci"; il punto è
 // separatore migliaia). = quanti annunci Moto.it HA per la query (tetto copertura).
-// Appare una volta sola nell'head. null se assente/blocco. Best-effort: non rompe la sweep.
+// ANCORATO allo span del titolo-lista `plist-head-title-info`: un "N annunci" di
+// marketing/nav altrove nella pagina darebbe un tetto SBAGLIATO — meglio null (miss)
+// che un numero errato. `&nbsp;` ammesso (markup IT server-rendered). Best-effort.
 function extractTotal(html) {
   if (!html) return null;
-  const m = String(html).match(/([\d][\d.]*)\s*annunci/i);   // "--annunci" (CSS) non matcha: niente cifra prima
+  const m = String(html).match(/plist-head-title-info[^>]*>\s*([\d][\d.]*)(?:&nbsp;|\s)*annunci/i);
   if (!m) return null;
   const n = parseInt(m[1].replace(/\./g, ''), 10);
   return Number.isFinite(n) ? n : null;

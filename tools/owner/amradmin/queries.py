@@ -187,8 +187,10 @@ def access_log(db, *, role: str | None = None, event: str | None = None,
 
 def coverage(db, *, fonte: str | None = None, limit: int = 200) -> list[dict]:
     """NUOVO: copertura ground-truth per (target,fonte). Tetto = latest `market_size`
-    (scritto dal crawler), ingeriti = `count(listings)` per fonte, % e quanto MANCA.
-    Ordinato per copertura PEGGIORE (dove siamo più incompleti)."""
+    (scritto dal crawler, = annunci VIVI sulla fonte ora), ingeriti = `count(listings
+    ATTIVI)` per fonte → confronto omogeneo: i `gone` archiviati NON gonfiano la copertura
+    né azzerano `manca`. coverage_pct clampato a 100 (residua staleness del tetto). Ordinato
+    per copertura PEGGIORE; i tetto=0 (niente da crawlare) vanno in CODA (NULLS LAST)."""
     where = ""
     params: dict = {"limit": limit}
     if fonte:
@@ -202,15 +204,16 @@ def coverage(db, *, fonte: str | None = None, limit: int = 200) -> list[dict]:
                ORDER BY tipo, marca, modello, fonte, ts DESC)
             SELECT m.tipo, m.marca, m.modello, m.fonte, m.total AS tetto, m.ts,
                    i.n AS ingeriti,
-                   CASE WHEN m.total > 0 THEN round(100.0 * i.n / m.total, 1) END AS coverage_pct,
+                   CASE WHEN m.total > 0 THEN least(round(100.0 * i.n / m.total, 1), 100) END AS coverage_pct,
                    greatest(m.total - i.n, 0) AS manca
               FROM latest m
               CROSS JOIN LATERAL (
                    SELECT count(*)::int n FROM listings l
                     WHERE l.fonte = m.fonte AND l.tipo = m.tipo
-                      AND l.marca = m.marca AND l.modello = m.modello) i
+                      AND l.marca = m.marca AND l.modello = m.modello
+                      AND l.status = 'active') i
               {where}
-             ORDER BY coverage_pct ASC NULLS FIRST, m.total DESC
+             ORDER BY coverage_pct ASC NULLS LAST, m.total DESC
              LIMIT %(limit)s""",
         params,
     )
