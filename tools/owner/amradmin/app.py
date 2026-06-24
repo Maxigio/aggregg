@@ -14,7 +14,7 @@ from textual.widgets import Footer, Header, Static
 from . import queries as Q
 from . import render as R
 from .db import Db
-from .screens import WatchlistScreen
+from .screens import AccessLogScreen, WatchlistScreen
 
 REFRESH_SECONDS = 5
 
@@ -31,6 +31,7 @@ class AmrAdminApp(App):
     """
     BINDINGS = [
         ("w", "watchlist", "Watchlist"),
+        ("l", "accesslog", "Accessi"),
         ("r", "refresh", "Aggiorna"),
         ("q", "quit", "Esci"),
     ]
@@ -62,6 +63,9 @@ class AmrAdminApp(App):
 
     def action_watchlist(self) -> None:
         self.push_screen(WatchlistScreen())
+
+    def action_accesslog(self) -> None:
+        self.push_screen(AccessLogScreen())
 
     @work(exclusive=True)
     async def refresh_data(self) -> None:

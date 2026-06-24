@@ -62,8 +62,13 @@ class WatchlistScreen(Screen):
     def __init__(self, db: Db | None = None):
         super().__init__()
         self.db = db or Db()        # connessione propria → no contesa con la dashboard
+        self._owns_db = db is None  # se l'ho creata io, la chiudo su unmount
         self.rows: list[dict] = []
         self._confirming = False    # guard anti-stacking del modale di conferma
+
+    def on_unmount(self) -> None:
+        if self._owns_db:
+            self.db.close()
 
     def compose(self):
         yield Header(show_clock=True)
@@ -89,9 +94,9 @@ class WatchlistScreen(Screen):
         t = self.query_one("#grid", DataTable)
         t.clear()
         for r in rows:
-            t.add_row(r["tipo"], r["marca"], r["modello"], R.node_label(r), R.state_label(r),
-                      str(r["annunci"]), R._num(r["priority"]), R._ago(r["last_swept"]),
-                      key=str(r["id"]))
+            t.add_row(r["tipo"], R.safe(r["marca"]), R.safe(r["modello"]), R.node_label(r),
+                      R.state_label(r), str(r["annunci"]), R._num(r["priority"]),
+                      R._ago(r["last_swept"]), key=str(r["id"]))
         total = rows[0]["total"] if rows else 0
         self.query_one("#wstatus", Static).update(
             f"{len(rows)} mostrati / {total} totali · [e] on/off · [n] nodo · [d] elimina "
@@ -155,3 +160,84 @@ class WatchlistScreen(Screen):
             self._confirming = False
         if ok:
             self._apply(A.remove_one, r["id"])
+
+
+class AccessLogScreen(Screen):
+    """Log eventi/accessi (sola lettura, live): chi si connette + cosa cerca.
+    Scritto dal server Node in access_log; qui solo letto (DB-puro)."""
+
+    CSS = """
+    #afilter { dock: top; }
+    #astatus { dock: bottom; height: 1; color: $text-muted; }
+    DataTable { height: 1fr; }
+    """
+    BINDINGS = [
+        ("escape", "app.pop_screen", "Indietro"),
+        ("r", "reload", "Aggiorna"),
+    ]
+
+    def __init__(self, db: Db | None = None):
+        super().__init__()
+        self.db = db or Db()
+        self._owns_db = db is None
+        self.rows: list[dict] = []
+
+    def on_unmount(self) -> None:
+        if self._owns_db:
+            self.db.close()
+
+    def compose(self):
+        yield Header(show_clock=True)
+        yield Input(placeholder="filtro: demo | full | search | login   (Invio)", id="afilter")
+        yield DataTable(id="alog", cursor_type="row", zebra_stripes=True)
+        yield Static(id="astatus")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#alog", DataTable).add_columns("quando", "chi", "evento", "ip", "dettaglio")
+        self.reload()
+        self.set_interval(5, self.reload)   # live: nuovi accessi/ricerche compaiono
+
+    def on_input_submitted(self, _e: Input.Submitted) -> None:
+        self.reload()
+
+    @staticmethod
+    def _filters(token: str) -> dict:
+        t = (token or "").strip().lower()
+        if t in ("full", "demo"):
+            return {"role": t}
+        if t == "search":
+            return {"event": "search"}
+        if t == "login":
+            return {"event_like": "login%"}
+        return {}
+
+    def _load(self, token: str) -> list[dict]:
+        return Q.access_log(self.db, limit=200, **self._filters(token))
+
+    def _populate(self, rows: list[dict]) -> None:
+        self.rows = rows
+        t = self.query_one("#alog", DataTable)
+        t.clear()
+        for r in rows:
+            quando = r["ts"].strftime("%d/%m %H:%M:%S") if r.get("ts") else "—"
+            if r["event"] == "search":
+                det = R.search_label(r.get("query"))
+                if r.get("result_count") is not None:
+                    det += f"  [dim]→ {r['result_count']}[/]"
+            else:
+                det = f"[dim]{R.safe((r.get('user_agent') or '')[:48])}[/]"
+            t.add_row(quando, R.who_label(r.get("role")), R.event_label(r["event"]),
+                      R.safe(r.get("ip") or "—"), det)
+        self.query_one("#astatus", Static).update(
+            f"{len(rows)} eventi · filtri: demo/full/search/login · [r] aggiorna · [esc] indietro")
+
+    @work(exclusive=True, group="alog-reload")
+    async def reload(self) -> None:
+        token = self.query_one("#afilter", Input).value
+        try:
+            rows = await asyncio.to_thread(self._load, token)
+        except Exception as e:
+            self.query_one("#astatus", Static).update(f"[red]errore DB:[/] {e}")
+            return
+        self._populate(rows)

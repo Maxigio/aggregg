@@ -16,6 +16,7 @@ const listingsRepo = require('./db/listings-repo');
 const healthRepo = require('./db/health-repo');
 const watchlistRepo = require('./db/watchlist-repo');
 const runsRepo = require('./db/crawl-runs-repo');                       // F12
+const accessLog = require('./db/access-log-repo');                      // F50 Fase 4 — log eventi/accessi
 const { candidates } = require('./candidate-targets');                  // F11
 const qrcode = require('qrcode-generator');
 const scrapeSubito    = require('./scrapers/subito-playwright');
@@ -192,10 +193,12 @@ app.post('/login', express.urlencoded({ extended: false }), async (req, res) => 
     await new Promise(r => setTimeout(r, 1000));   // delay anti-brute
     const fails = (rec ? rec.fails : 0) + 1;
     loginAttempts.set(ip, { fails, until: fails >= LOCK_MAX ? Date.now() + LOCK_MS : 0 });
+    accessLog.record('login_fail', { ip, ua: req.headers['user-agent'] });   // best-effort
     return res.redirect(302, '/login?err=1');
   }
 
   loginAttempts.delete(ip);
+  accessLog.record('login_ok', { role, ip, ua: req.headers['user-agent'] });   // best-effort
   const token  = auth.makeToken(role);
   const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
   res.setHeader('Set-Cookie', `amr_auth=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(auth.TTL_MS / 1000)}${secure}`);
@@ -799,7 +802,15 @@ app.get('/api/search', async (req, res) => {
     return res.status(400).json({ error: parsed.errors.join(', ') });
   }
   try {
-    res.json(await runSearch(parsed.params));
+    const out = await runSearch(parsed.params);
+    accessLog.record('search', {                                   // best-effort, fire-and-forget
+      role: req.authRole || (auth.isEnabled() ? null : 'full'),
+      ip: clientIp(req),
+      ua: req.headers['user-agent'],
+      query: parsed.params,
+      resultCount: Array.isArray(out && out.risultati) ? out.risultati.length : null,
+    });
+    res.json(out);
   } catch (e) {
     console.error('[runSearch]', e.message);
     res.status(500).json({ error: 'Errore interno durante la ricerca' });

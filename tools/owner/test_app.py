@@ -100,8 +100,75 @@ def test_watchlist_screen() -> None:
     print("✔ watchlist screen (push/load/filtro) OK")
 
 
+def test_accesslog_screen() -> None:
+    """Apre il log accessi (tasto l), carica righe sentinel, prova il filtro 'demo'."""
+    import json
+
+    import psycopg
+
+    from amradmin.db import Db, read_database_url
+    try:
+        Db().conn()
+    except Exception as e:
+        print(f"⤼ SKIP access log screen: DB non raggiungibile ({e})")
+        return
+
+    TOKEN = "amrtestlogUA"   # marcatore per il cleanup (LIKE), robusto al LIMIT 200
+    conn = psycopg.connect(read_database_url(), autocommit=True)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO access_log (event,role,ip,user_agent,query,result_count) "
+                        "VALUES (%s,%s,%s,%s,%s::jsonb,%s)",
+                        ("search", "demo", "1.2.3.4", f"probe {TOKEN}",
+                         json.dumps({"tipo": "moto", "marca": "Suzuki", "modello": "V-Strom 1050"}), 7))
+            cur.execute("INSERT INTO access_log (event,role,ip,user_agent) VALUES (%s,%s,%s,%s)",
+                        ("login_ok", "full", "127.0.0.1", f"probe {TOKEN}"))
+            # MALEVOLO: markup Rich in query/user-agent/ip → senza escape rompe il render
+            cur.execute("INSERT INTO access_log (event,role,ip,user_agent,query) "
+                        "VALUES (%s,%s,%s,%s,%s::jsonb)",
+                        ("search", "demo", "[/]", f"ev[/]il {TOKEN}",
+                         json.dumps({"tipo": "moto", "marca": "Suzuki[/]", "modello": "X[bold]"})))
+
+        from amradmin.app import AmrAdminApp
+        from amradmin.screens import AccessLogScreen
+
+        async def run() -> None:
+            app = AmrAdminApp()
+            async with app.run_test(size=(140, 40)) as pilot:
+                await pilot.pause()
+                await app.workers.wait_for_complete()
+                await pilot.press("l")
+                await pilot.pause()
+                await app.workers.wait_for_complete()
+                await pilot.pause()
+                scr = app.screen
+                assert isinstance(scr, AccessLogScreen), f"schermata inattesa: {type(scr).__name__}"
+                # REGRESSION markup-injection: il render NON deve sollevare MarkupError
+                assert isinstance(app.export_screenshot(), str), "render fallito (markup?)"
+                # filtro demo: tra le righe mostrate col nostro token, nessuna 'full'
+                from textual.widgets import Input
+                scr.query_one("#afilter", Input).value = "demo"
+                scr.reload()
+                await app.workers.wait_for_complete()
+                await pilot.pause()
+                app.export_screenshot()   # ancora nessun crash col malevolo presente
+                mine = [r for r in scr.rows if TOKEN in (r.get("user_agent") or "")]
+                assert mine and all(r["role"] == "demo" for r in mine), "filtro demo non applicato"
+
+        asyncio.run(run())
+        # i sentinel ci sono nel DB (a prescindere dalla finestra LIMIT 200 della UI)
+        with conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM access_log WHERE user_agent LIKE %s", (f"%{TOKEN}%",))
+            assert cur.fetchone()[0] == 3
+        print("✔ access log screen (push/load/filtro + regression markup) OK")
+    finally:
+        conn.execute("DELETE FROM access_log WHERE user_agent LIKE %s", (f"%{TOKEN}%",))
+        conn.close()
+
+
 if __name__ == "__main__":
     test_render_handles_nulls()
     test_headless_mount()
     test_watchlist_screen()
+    test_accesslog_screen()
     print("\nTEST OK")

@@ -162,6 +162,29 @@ def watchlist_rows(db, *, q: str | None = None, tipo: str | None = None,
     )
 
 
+def access_log(db, *, role: str | None = None, event: str | None = None,
+               event_like: str | None = None, limit: int = 200) -> list[dict]:
+    """NUOVO: log eventi/accessi (scritti dal server, tabella access_log). Eventi
+    recenti filtrabili per ruolo/evento. `query` torna come dict (JSONB)."""
+    where = ["TRUE"]
+    params: dict = {"limit": limit}
+    if role:
+        where.append("role = %(role)s")
+        params["role"] = role
+    if event:
+        where.append("event = %(event)s")
+        params["event"] = event
+    if event_like:
+        where.append("event LIKE %(el)s")
+        params["el"] = event_like
+    return db.rows(
+        f"""SELECT id, ts, event, role, ip, user_agent, query, result_count
+              FROM access_log WHERE {' AND '.join(where)}
+             ORDER BY ts DESC LIMIT %(limit)s""",
+        params,
+    )
+
+
 def price_distribution(db, tipo: str, marca: str, modello: str) -> dict | None:
     """NUOVO: distribuzione prezzo (n, p25, mediana, p75, min, max) sugli annunci
     ATTIVI di un modello. Nessuna analitica simile nell'admin."""

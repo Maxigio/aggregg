@@ -3,11 +3,19 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
 from .constants import KNOWN_NODES, STALE_HOURS
+
+
+def safe(v) -> str:
+    """Escapa una stringa NON fidata per renderla letterale nel markup Rich.
+    Senza, un valore utente con un tag (es. '[/]') solleva MarkupError e rompe la
+    schermata (i campi del log — query/IP/user-agent — sono controllati dall'utente)."""
+    return escape(str(v if v is not None else ""))
 
 
 def _num(v) -> str:
@@ -30,6 +38,36 @@ def state_label(row: dict) -> str:
         return "[red]🔴 mai[/]"
     age_h = (datetime.now(timezone.utc) - ls).total_seconds() / 3600
     return "[green]🟢 fresco[/]" if age_h < STALE_HOURS else "[yellow]🟡 da agg.[/]"
+
+
+def who_label(role) -> str:
+    """role → chi (l'account demo non ha nome nel sistema: lo etichettiamo provademo2026)."""
+    return {"full": "[bold]tu (owner)[/]", "demo": "[magenta]provademo2026[/]"}.get(role, "[dim]—[/]")
+
+
+def event_label(event) -> str:
+    return {"login_ok": "[green]login[/]", "login_fail": "[red]login KO[/]",
+            "search": "[cyan]ricerca[/]"}.get(event, event or "—")
+
+
+def search_label(query) -> str:
+    """Rende leggibili i parametri di ricerca (robusto: non assume i nomi-chiave)."""
+    if not isinstance(query, dict):
+        return ""
+    # i valori sono input utente → escape (no markup injection)
+    head = " ".join(safe(query[k]) for k in ("marca", "modello", "versione") if query.get(k))
+    tipo = query.get("tipo")
+    rest = {k: v for k, v in query.items()
+            if k not in ("marca", "modello", "versione", "tipo") and v not in (None, "", [])}
+    tail = " · ".join(f"{safe(k)}={safe(v)}" for k, v in rest.items())
+    out = []
+    if tipo:
+        out.append(f"[dim]{safe(tipo)}[/]")
+    if head:
+        out.append(head)
+    if tail:
+        out.append(f"[dim]{tail}[/]")
+    return "  ".join(out) or "[dim](tutti)[/]"
 
 
 def _ago(ts) -> str:
