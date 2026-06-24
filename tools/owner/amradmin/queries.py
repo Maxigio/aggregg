@@ -116,22 +116,48 @@ def coverage_marca_regione(db, tipo: str | None = None, limit: int = 30) -> list
     )
 
 
-def ramp_progress(db, limit: int = 12) -> dict:
-    """NUOVO: avanzamento ramp. Coda/attivi globali + i prossimi target NELL'ORDINE
-    in cui activateRamp li prenderebbe (MIRROR del suo ORDER BY interleave per tipo).
-    NB: activateRamp ha una guardia 1×/20h (watchlist-repo.js:46) → in un giorno in
-    cui ha già attivato, NON attiverebbe questi finché non scade la finestra; qui è
-    una PREVIEW dell'ordine, non una promessa di attivazione imminente."""
-    c = counts(db)
-    nxt = db.rows(
-        """SELECT tipo, marca, modello, priority
-             FROM watchlist
-            WHERE activated_at IS NULL AND enabled
-            ORDER BY row_number() OVER (PARTITION BY tipo ORDER BY priority DESC NULLS LAST, id), tipo
-            LIMIT %s""",
-        (limit,),
+def suggestions(db, *, q: str | None = None, limit: int = 300) -> list[dict]:
+    """NUOVO (ex-ramp → SUGGERITORE): prossimi target da crawlare. 'Da completare'
+    (gap noto da market_size, manca>0) PRIMA, ordinati per `manca` desc; poi 'da
+    scoprire' (mai-crawlati) per liquidità brand (priority). Esclude i completi
+    (manca=0) e i già in coda. Tasto g/G per accodarli. Coverage-driven, dati veri."""
+    where = ["w.enabled"]
+    params: dict = {"limit": limit}
+    if q:
+        where.append("(w.marca ILIKE %(q)s OR w.modello ILIKE %(q)s)")
+        params["q"] = f"%{q}%"
+    return db.rows(
+        f"""WITH latest AS (
+              SELECT DISTINCT ON (tipo, marca, modello, fonte) tipo, marca, modello, fonte, total
+                FROM market_size ORDER BY tipo, marca, modello, fonte, ts DESC),
+            ms AS (
+              SELECT l.tipo, l.marca, l.modello,
+                     sum(l.total)::int tetto,
+                     sum(greatest(l.total - COALESCE(i.n, 0), 0))::int manca
+                FROM latest l
+                CROSS JOIN LATERAL (
+                     SELECT count(*)::int n FROM listings li
+                      WHERE li.fonte = l.fonte AND li.tipo = l.tipo
+                        AND li.marca = l.marca AND li.modello = l.modello
+                        AND li.status = 'active') i
+               GROUP BY l.tipo, l.marca, l.modello)
+            SELECT w.id, w.tipo, w.marca, w.modello, w.priority, w.last_swept, w.last_truncated,
+                   ms.tetto, ms.manca,
+                   CASE WHEN ms.tetto > 0 THEN round(100.0 * (ms.tetto - ms.manca) / ms.tetto)::int END coverage_pct,
+                   (w.last_swept IS NULL) AS mai
+              FROM watchlist w
+              LEFT JOIN ms ON ms.tipo = w.tipo AND ms.marca = w.marca AND ms.modello = w.modello
+             WHERE {' AND '.join(where)}
+               AND COALESCE(ms.manca, 1) > 0          -- escludi i completi (manca=0); i mai-crawlati (ms NULL) restano
+               AND NOT EXISTS (SELECT 1 FROM crawl_queue cq
+                                WHERE cq.tipo = w.tipo AND cq.marca = w.marca AND cq.modello = w.modello
+                                  AND cq.status IN ('pending','running','cancel_requested'))
+             ORDER BY (ms.manca IS NOT NULL) DESC,     -- da completare (gap noto) prima
+                      ms.manca DESC NULLS LAST,
+                      w.priority DESC NULLS LAST, w.id
+             LIMIT %(limit)s""",
+        params,
     )
-    return {"total": c["total"], "active": c["active"], "queue": c["pending"], "next": nxt}
 
 
 def watchlist_rows(db, *, q: str | None = None, tipo: str | None = None,

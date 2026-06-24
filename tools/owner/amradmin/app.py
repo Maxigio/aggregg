@@ -14,7 +14,7 @@ from textual.widgets import Footer, Header, Input, Static
 from . import queries as Q
 from . import render as R
 from .db import Db
-from .screens import AccessLogScreen, CoverageScreen, CrawlQueueScreen, WatchlistScreen
+from .screens import AccessLogScreen, CoverageScreen, CrawlQueueScreen, SuggesterScreen, WatchlistScreen
 
 REFRESH_SECONDS = 5
 
@@ -33,6 +33,7 @@ class AmrAdminApp(App):
     BINDINGS = [
         ("w", "watchlist", "Watchlist"),
         ("c", "coverage", "Copertura"),
+        ("s", "suggester", "Suggeriti"),
         ("k", "crawl_queue", "Coda"),
         ("l", "accesslog", "Accessi"),
         (":", "command", "Comando"),
@@ -77,6 +78,9 @@ class AmrAdminApp(App):
 
     def action_crawl_queue(self) -> None:
         self.push_screen(CrawlQueueScreen())
+
+    def action_suggester(self) -> None:
+        self.push_screen(SuggesterScreen())
 
     def action_command(self) -> None:
         """Mostra/nasconde la barra comandi `:` (toggle)."""
@@ -171,7 +175,7 @@ class AmrAdminApp(App):
             "lastrun": R.last_run_line(Q.last_run(db, "imac")),
             "nodes": R.nodes_panel(Q.node_stats(db), Q.health(db)),
             "fonti": R.fonti_panel(Q.listings_by_fonte(db)),
-            "ramp": R.ramp_panel(Q.ramp_progress(db)),
+            "ramp": R.suggester_panel(Q.suggestions(db, limit=50)),
         }
 
 

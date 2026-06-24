@@ -159,16 +159,26 @@ def fonti_panel(rows: list[dict]) -> Panel:
     return Panel(t, title="Annunci per fonte · spariti = non più online", border_style="blue")
 
 
-def ramp_panel(rp: dict) -> Panel:
+def sugg_state(row: dict) -> str:
+    """Stato di un suggerimento. Con coverage (market_size): X% + manca. Senza
+    ground-truth: 'da crawlare' (+ '(mai)' se proprio mai toccato; altrimenti era
+    un vecchio crawl pre-copertura)."""
+    pct = row.get("coverage_pct")
+    if pct is not None:
+        col = "red" if pct < 30 else ("yellow" if pct < 70 else "green")
+        return f"[{col}]{pct}%[/] · manca {_num(row.get('manca'))}"
+    return "[dim]da crawlare[/]" + (" [dim](mai)[/]" if row.get("mai") else "")
+
+
+def suggester_panel(rows: list[dict]) -> Panel:
+    """Ex-ramp → SUGGERITORE: prossimi da crawlare (gap noto prima, poi liquidità)."""
     t = Table(expand=True, show_edge=False)
     t.add_column("tipo", style="dim", width=5)
-    t.add_column("prossimo target")
-    t.add_column("priority", justify="right", style="cyan")
-    for r in rp["next"][:8]:
-        t.add_row(r["tipo"], f"{r['marca']} {r['modello']}", _num(r["priority"]))
-    pct = (rp["active"] / rp["total"] * 100) if rp["total"] else 0
-    title = f"Ramp · attivi {rp['active']:,}/{rp['total']:,} ({pct:.1f}%) · coda {rp['queue']:,}"
-    return Panel(t, title=title, border_style="yellow")
+    t.add_column("prossimo da crawlare")
+    t.add_column("stato", justify="right")
+    for r in rows[:8]:
+        t.add_row(r["tipo"], f"{safe(r['marca'])} {safe(r['modello'])}", sugg_state(r))
+    return Panel(t, title=f"Da crawlare · {len(rows)} suggeriti · [s] tutti", border_style="yellow")
 
 
 def last_run_line(lr: dict | None) -> Text:

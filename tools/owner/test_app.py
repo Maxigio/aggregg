@@ -27,11 +27,13 @@ def test_render_handles_nulls() -> None:
         {"nodi": [{"node": "imac", "fonte": "subito", "blocked": False, "degraded": True}]},
     ))
     con.print(R.fonti_panel([{"fonte": "subito", "total": 9, "active": 8, "gone": 1}]))
-    # il caso critico: priority None NON deve sollevare TypeError
-    con.print(R.ramp_panel({"total": 10, "active": 3, "queue": 7, "next": [
-        {"tipo": "auto", "marca": "Fiat", "modello": "Panda", "priority": None},
-        {"tipo": "moto", "marca": "BMW", "modello": "R 1200", "priority": 4762},
-    ]}))
+    # il caso critico: campi None (priority/tetto/manca/coverage_pct) NON sollevano
+    con.print(R.suggester_panel([
+        {"tipo": "auto", "marca": "Fiat", "modello": "Panda", "mai": True,
+         "priority": None, "tetto": None, "manca": None, "coverage_pct": None},
+        {"tipo": "moto", "marca": "BMW", "modello": "R 1200", "mai": False,
+         "priority": 4762, "tetto": 6821, "manca": 6348, "coverage_pct": 7},
+    ]))
     print("✔ render-test (None-safe) OK")
 
 
@@ -54,7 +56,7 @@ def test_headless_mount() -> None:
             await pilot.pause()
             assert app.last_error is None, f"errore al mount: {app.last_error}"
             svg = app.export_screenshot()
-            for needed in ("Watchlist", "Nodi", "Ramp"):
+            for needed in ("Watchlist", "Nodi", "crawlare"):   # ex-Ramp → suggeritore "Da crawlare"
                 assert needed in svg, f"pannello mancante: {needed}"
 
     asyncio.run(run())
@@ -283,6 +285,44 @@ def test_crawl_queue_screen() -> None:
         conn.close()
 
 
+def test_suggester_screen() -> None:
+    """Apre il suggeritore (tasto s), carica righe live, applica un filtro."""
+    from amradmin.db import Db
+    try:
+        Db().conn()
+    except Exception as e:
+        print(f"⤼ SKIP suggester screen: DB non raggiungibile ({e})")
+        return
+
+    from textual.widgets import Input
+
+    from amradmin.app import AmrAdminApp
+    from amradmin.screens import SuggesterScreen
+
+    async def run() -> None:
+        app = AmrAdminApp()
+        async with app.run_test(size=(150, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            await pilot.press("s")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            scr = app.screen
+            assert isinstance(scr, SuggesterScreen), f"schermata inattesa: {type(scr).__name__}"
+            assert len(scr.rows) > 0, "suggeritore senza righe (catalogo 14k attivo → atteso >0)"
+            assert isinstance(app.export_screenshot(), str)
+            scr.query_one("#sfilter", Input).value = "audi"
+            scr.reload()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert scr.rows and all("audi" in r["marca"].lower() or "audi" in r["modello"].lower()
+                                    for r in scr.rows), "filtro audi non applicato"
+
+    asyncio.run(run())
+    print("✔ suggester screen (push/load/filtro) OK")
+
+
 if __name__ == "__main__":
     test_render_handles_nulls()
     test_headless_mount()
@@ -290,4 +330,5 @@ if __name__ == "__main__":
     test_accesslog_screen()
     test_coverage_screen()
     test_crawl_queue_screen()
+    test_suggester_screen()
     print("\nTEST OK")

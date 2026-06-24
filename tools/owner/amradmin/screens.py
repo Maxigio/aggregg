@@ -508,3 +508,97 @@ class CrawlQueueScreen(Screen):
                 spawn_drainer()   # idempotente (lock): se uno è già attivo, il nuovo esce subito
                 return "drainer avviato"
         return ""
+
+
+class SuggesterScreen(Screen):
+    """Suggeritore (ex-ramp): prossimi target da crawlare — 'da completare' (gap noto
+    da market_size) prima, poi 'da scoprire' (mai-crawlati) per liquidità brand.
+    [g] accoda riga · [G] accoda tutte le mostrate. Coverage-driven, dati veri."""
+
+    CSS = """
+    #sfilter { dock: top; }
+    #sstatus { dock: bottom; height: 1; color: $text-muted; }
+    DataTable { height: 1fr; }
+    """
+    BINDINGS = [
+        ("escape", "app.pop_screen", "Indietro"),
+        ("r", "reload", "Aggiorna"),
+        ("g", "enqueue_one", "Coda"),
+        ("G", "enqueue_all", "Coda tutte"),
+    ]
+
+    def __init__(self, db: Db | None = None):
+        super().__init__()
+        self.db = db or Db()
+        self._owns_db = db is None
+        self.rows: list[dict] = []
+
+    def on_unmount(self) -> None:
+        if self._owns_db:
+            self.db.close()
+
+    def compose(self):
+        yield Header(show_clock=True)
+        yield Input(placeholder="filtro marca/modello… (Invio)", id="sfilter")
+        yield DataTable(id="sugg", cursor_type="row", zebra_stripes=True)
+        yield Static(id="sstatus")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#sugg", DataTable).add_columns(
+            "tipo", "marca", "modello", "stato", "tetto", "manca", "priority")
+        self.reload()
+
+    def on_input_submitted(self, _e: Input.Submitted) -> None:
+        self.reload()
+
+    def _load(self, q: str) -> list[dict]:
+        return Q.suggestions(self.db, q=q or None, limit=500)
+
+    def _populate(self, rows: list[dict]) -> None:
+        self.rows = rows
+        t = self.query_one("#sugg", DataTable)
+        t.clear()
+        for r in rows:
+            t.add_row(r["tipo"], R.safe(r["marca"]), R.safe(r["modello"]),
+                      R.sugg_state(r), R._num(r.get("tetto")), R._num(r.get("manca")),
+                      R._num(r.get("priority")), key=str(r["id"]))
+        self.query_one("#sstatus", Static).update(
+            f"{len(rows)} suggeriti · 'da completare' (gap) prima, poi liquidità · "
+            f"[g] accoda · [G] tutte · [r] aggiorna · [esc] indietro")
+
+    def _current(self) -> dict | None:
+        t = self.query_one("#sugg", DataTable)
+        i = t.cursor_row
+        return self.rows[i] if self.rows and 0 <= i < len(self.rows) else None
+
+    def action_enqueue_one(self) -> None:
+        r = self._current()
+        if r:
+            self._enqueue([_wl_payload(r)])
+
+    def action_enqueue_all(self) -> None:
+        if self.rows:
+            self._enqueue([_wl_payload(r) for r in self.rows])
+
+    @work(exclusive=True, group="sugg-reload")
+    async def reload(self) -> None:
+        q = self.query_one("#sfilter", Input).value
+        try:
+            rows = await asyncio.to_thread(self._load, q)
+        except Exception as e:
+            self.query_one("#sstatus", Static).update(f"[red]errore DB:[/] {R.safe(e)}")
+            return
+        self._populate(rows)
+
+    @work(exclusive=True, group="sugg-enqueue")
+    async def _enqueue(self, rows) -> None:
+        try:
+            res = await asyncio.to_thread(_enqueue_and_drain, rows)
+        except Exception as e:
+            self.query_one("#sstatus", Static).update(f"[red]coda errore:[/] {R.safe(e)}")
+            return
+        self.query_one("#sstatus", Static).update(
+            f"in coda: {res['queued']} · dup {res['skipped']} · drainer {res['drainer']} "
+            f"· [k] vedi coda · [esc] indietro")
+        self.reload()   # gli accodati spariscono dai suggerimenti (NOT EXISTS sulla coda)

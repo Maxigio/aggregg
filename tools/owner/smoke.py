@@ -35,10 +35,11 @@ def main() -> None:
         for r in Q.coverage_marca_regione(db, tipo="auto", limit=5):
             print(f"  {r['marca']:<14} {r['regione']:<12} {r['n']}")
 
-        rp = Q.ramp_progress(db, limit=6)
-        print(f"ramp: attivi={rp['active']} coda={rp['queue']} · prossimi:")
-        for r in rp["next"]:
-            print(f"  {r['tipo']:<4} {r['marca']:<12} {r['modello']:<16} pri={r['priority']}")
+        sg = Q.suggestions(db, limit=6)
+        print(f"suggeriti da crawlare: {len(sg)} · primi:")
+        for r in sg:
+            stato = "mai" if r.get("mai") else (f"{r['coverage_pct']}%" if r.get("coverage_pct") is not None else "-")
+            print(f"  {r['tipo']:<4} {r['marca']:<12} {r['modello']:<16} {stato:<6} pri={r['priority']}")
 
         pd = Q.price_distribution(db, "auto", "Fiat", "500")
         if pd and pd["n"]:
