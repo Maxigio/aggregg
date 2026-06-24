@@ -19,6 +19,7 @@ const wl = require('./db/watchlist-repo');
 const repo = require('./db/listings-repo');
 const health = require('./db/health-repo');
 const runs = require('./db/crawl-runs-repo');
+const marketSize = require('./db/market-size-repo');   // F50 copertura: tetto per (target,fonte)
 const scrapeAutoscoutGraphql = require('./scrapers/autoscout-graphql');
 const scrapeSubitoApi = require('./scrapers/subito-api');
 const scrapeMotoIt = require('./scrapers/motoit');
@@ -117,6 +118,8 @@ async function sweepTarget(target, stats) {
       stats.written += r.written;
       stats.as += items.length;
       await health.record('autoscout', { count: items.length });
+      // F50 copertura: AS24 non espone il totale nella search → +1 count-query cheap.
+      await marketSize.record(target, 'autoscout', await scrapeAutoscoutGraphql.fetchTotalCount({ mmmv: as.mmmv, tipo: target.tipo }));
     } catch (e) {
       console.warn(`[crawler] AS24 fallito ${target.marca} ${target.modello}: ${e.message}`);
       stats.errors++;
@@ -130,7 +133,7 @@ async function sweepTarget(target, stats) {
     console.log(`[crawler] Subito in back-off (blocked recente) → salto ${target.marca} ${target.modello}`);
     skippedAny = true;
   } else try {
-    const { items: raw, truncated } = await scrapeSubitoApi({ tipo: target.tipo, marca: target.marca, modello: target.modello }, { maxPages: cap, attachRaw: true, withMeta: true });
+    const { items: raw, truncated, total } = await scrapeSubitoApi({ tipo: target.tipo, marca: target.marca, modello: target.modello }, { maxPages: cap, attachRaw: true, withMeta: true });
     const items = raw.filter(i => titleMatchesModel(i.titolo, target.modello));
     const r = await repo.upsertListings(items, target);
     // Nota: il guard sul titolo riduce `items` ma il filtro è deterministico per
@@ -140,6 +143,7 @@ async function sweepTarget(target, stats) {
     stats.written += r.written;
     stats.sub += items.length;
     await health.record('subito', { count: raw.length });
+    await marketSize.record(target, 'subito', total);   // F50 copertura: count_all (gratis)
   } catch (e) {
     console.warn(`[crawler] Subito fallito ${target.marca} ${target.modello}: ${e.message}`);
     stats.errors++;
@@ -157,7 +161,7 @@ async function sweepTarget(target, stats) {
       const mt = await resolveMotoit(target);
       if (!mt) { console.log(`[crawler] Moto.it ${target.marca}: marca non su Moto.it → skip`); }
       else {
-        const { items, truncated } = await scrapeMotoIt(
+        const { items, truncated, total } = await scrapeMotoIt(
           { tipo: 'moto', marca: target.marca, modello: target.modello, motoitBrandSlug: mt.brandSlug, motoitModelSlug: mt.modelSlug },
           { maxPages: cap, withMeta: true, attachRaw: true, pageDelayMs: THROTTLE_MS }
         );
@@ -167,6 +171,7 @@ async function sweepTarget(target, stats) {
         stats.written += r.written;
         stats.moto = (stats.moto || 0) + items.length;
         await health.record('moto', { count: items.length });
+        await marketSize.record(target, 'moto', total);   // F50 copertura: "N annunci" (gratis)
       }
     } catch (e) {
       console.warn(`[crawler] Moto.it fallito ${target.marca} ${target.modello}: ${e.message}`);

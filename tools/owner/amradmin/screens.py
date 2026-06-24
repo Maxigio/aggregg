@@ -241,3 +241,72 @@ class AccessLogScreen(Screen):
             self.query_one("#astatus", Static).update(f"[red]errore DB:[/] {e}")
             return
         self._populate(rows)
+
+
+class CoverageScreen(Screen):
+    """Copertura ground-truth (sola lettura, live): per (target,fonte) tetto vs
+    ingeriti vs %, ordinato per copertura peggiore. Il tetto lo scrive il crawler."""
+
+    CSS = """
+    #cfilter { dock: top; }
+    #cstatus { dock: bottom; height: 1; color: $text-muted; }
+    DataTable { height: 1fr; }
+    """
+    BINDINGS = [
+        ("escape", "app.pop_screen", "Indietro"),
+        ("r", "reload", "Aggiorna"),
+    ]
+
+    def __init__(self, db: Db | None = None):
+        super().__init__()
+        self.db = db or Db()
+        self._owns_db = db is None
+        self.rows: list[dict] = []
+
+    def on_unmount(self) -> None:
+        if self._owns_db:
+            self.db.close()
+
+    def compose(self):
+        yield Header(show_clock=True)
+        yield Input(placeholder="filtro fonte: subito | autoscout | moto   (Invio)", id="cfilter")
+        yield DataTable(id="cov", cursor_type="row", zebra_stripes=True)
+        yield Static(id="cstatus")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#cov", DataTable).add_columns(
+            "tipo", "marca", "modello", "fonte", "tetto", "ingeriti", "copertura", "manca")
+        self.reload()
+        self.set_interval(10, self.reload)
+
+    def on_input_submitted(self, _e: Input.Submitted) -> None:
+        self.reload()
+
+    def _load(self, token: str) -> list[dict]:
+        f = (token or "").strip().lower() or None
+        if f not in (None, "subito", "autoscout", "moto"):
+            f = None
+        return Q.coverage(self.db, fonte=f, limit=300)
+
+    def _populate(self, rows: list[dict]) -> None:
+        self.rows = rows
+        t = self.query_one("#cov", DataTable)
+        t.clear()
+        for r in rows:
+            t.add_row(r["tipo"], R.safe(r["marca"]), R.safe(r["modello"]), r["fonte"],
+                      R._num(r["tetto"]), R._num(r["ingeriti"]), R.cov_label(r["coverage_pct"]),
+                      R._num(r["manca"]))
+        self.query_one("#cstatus", Static).update(
+            f"{len(rows)} (target,fonte) · ordinati per copertura PEGGIORE · "
+            f"filtro fonte (subito/autoscout/moto) · [r] aggiorna · [esc] indietro")
+
+    @work(exclusive=True, group="cov-reload")
+    async def reload(self) -> None:
+        token = self.query_one("#cfilter", Input).value
+        try:
+            rows = await asyncio.to_thread(self._load, token)
+        except Exception as e:
+            self.query_one("#cstatus", Static).update(f"[red]errore DB:[/] {e}")
+            return
+        self._populate(rows)

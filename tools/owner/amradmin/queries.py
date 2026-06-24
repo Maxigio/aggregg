@@ -185,6 +185,37 @@ def access_log(db, *, role: str | None = None, event: str | None = None,
     )
 
 
+def coverage(db, *, fonte: str | None = None, limit: int = 200) -> list[dict]:
+    """NUOVO: copertura ground-truth per (target,fonte). Tetto = latest `market_size`
+    (scritto dal crawler), ingeriti = `count(listings)` per fonte, % e quanto MANCA.
+    Ordinato per copertura PEGGIORE (dove siamo più incompleti)."""
+    where = ""
+    params: dict = {"limit": limit}
+    if fonte:
+        where = "WHERE m.fonte = %(fonte)s"
+        params["fonte"] = fonte
+    return db.rows(
+        f"""WITH latest AS (
+              SELECT DISTINCT ON (tipo, marca, modello, fonte)
+                     tipo, marca, modello, fonte, total, ts
+                FROM market_size
+               ORDER BY tipo, marca, modello, fonte, ts DESC)
+            SELECT m.tipo, m.marca, m.modello, m.fonte, m.total AS tetto, m.ts,
+                   i.n AS ingeriti,
+                   CASE WHEN m.total > 0 THEN round(100.0 * i.n / m.total, 1) END AS coverage_pct,
+                   greatest(m.total - i.n, 0) AS manca
+              FROM latest m
+              CROSS JOIN LATERAL (
+                   SELECT count(*)::int n FROM listings l
+                    WHERE l.fonte = m.fonte AND l.tipo = m.tipo
+                      AND l.marca = m.marca AND l.modello = m.modello) i
+              {where}
+             ORDER BY coverage_pct ASC NULLS FIRST, m.total DESC
+             LIMIT %(limit)s""",
+        params,
+    )
+
+
 def price_distribution(db, tipo: str, marca: str, modello: str) -> dict | None:
     """NUOVO: distribuzione prezzo (n, p25, mediana, p75, min, max) sugli annunci
     ATTIVI di un modello. Nessuna analitica simile nell'admin."""

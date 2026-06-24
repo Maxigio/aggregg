@@ -166,9 +166,56 @@ def test_accesslog_screen() -> None:
         conn.close()
 
 
+def test_coverage_screen() -> None:
+    """Apre la copertura (tasto c) su una riga market_size sentinel (tetto 10,
+    0 ingeriti → 0%) e verifica caricamento + calcolo."""
+    import psycopg
+
+    from amradmin.db import Db, read_database_url
+    try:
+        Db().conn()
+    except Exception as e:
+        print(f"⤼ SKIP coverage screen: DB non raggiungibile ({e})")
+        return
+
+    SENT = "__covtest__"
+    conn = psycopg.connect(read_database_url(), autocommit=True)
+    try:
+        conn.execute("INSERT INTO market_size (tipo,marca,modello,fonte,total) VALUES (%s,%s,%s,%s,%s)",
+                     ("auto", SENT, "x", "autoscout", 10))
+
+        from amradmin.app import AmrAdminApp
+        from amradmin.screens import CoverageScreen
+
+        async def run() -> None:
+            app = AmrAdminApp()
+            async with app.run_test(size=(140, 40)) as pilot:
+                await pilot.pause()
+                await app.workers.wait_for_complete()
+                await pilot.press("c")
+                await pilot.pause()
+                await app.workers.wait_for_complete()
+                await pilot.pause()
+                scr = app.screen
+                assert isinstance(scr, CoverageScreen), f"schermata inattesa: {type(scr).__name__}"
+                mine = [r for r in scr.rows if r["marca"] == SENT]
+                assert mine, "riga sentinel non caricata"
+                r = mine[0]
+                assert r["tetto"] == 10 and r["ingeriti"] == 0 and float(r["coverage_pct"]) == 0.0 \
+                    and r["manca"] == 10, f"calcolo copertura errato: {r}"
+                assert isinstance(app.export_screenshot(), str)
+
+        asyncio.run(run())
+        print("✔ coverage screen (push/load/calcolo) OK")
+    finally:
+        conn.execute("DELETE FROM market_size WHERE marca=%s", (SENT,))
+        conn.close()
+
+
 if __name__ == "__main__":
     test_render_handles_nulls()
     test_headless_mount()
     test_watchlist_screen()
     test_accesslog_screen()
+    test_coverage_screen()
     print("\nTEST OK")

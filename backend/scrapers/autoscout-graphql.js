@@ -44,13 +44,13 @@ const QUERY = `query Search($v:Vehicle_,$loc:Location_,$pr:Price_,$m:Metadata_){
   } }
 }`.replace(/\s+/g, ' ');
 
-function httpPost(body) {
+function httpPost(body, auth = AUTH) {
   return new Promise((resolve, reject) => {
     const data = Buffer.from(body, 'utf8');
     const req = https.request({
       host: HOST, path: '/graphql', method: 'POST',
       headers: {
-        'authorization': AUTH,
+        'authorization': auth,
         'content-type': 'application/json',
         'accept': '*/*',
         'origin': 'https://www.autoscout24.it',
@@ -244,6 +244,39 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
   return opts.withMeta ? { items: out, truncated } : out;
 }
 
+// ─── F50 copertura: conteggio totale per-query (count-query LEGGERA, separata) ───
+// La query di RICERCA (sopra) NON espone metadata.totalItems (validation-fail
+// verificato). Questa usa `listingsByQueryString` (curl utente provato) con l'auth
+// del client `home-feed-js`. La chiama il CRAWLER (NON la ricerca) → +1 richiesta cheap.
+const COUNT_AUTH = 'Basic aG9tZS1mZWVkLWpzOnAzNVBLeUZCNG5VREtFTllKNG9HUTVJYjFTM0NieQ==';
+const COUNT_QUERY = `query GET_TOTAL_LISTING_COUNT_BY_QUERY_STRING($queryString:String!,$locale:Locale_){ search{ listingsByQueryString(queryString:$queryString, locale:$locale){ metadata{ totalItems } } } }`;
+
+// PURO: mmmv "make|model|..." → queryString. atype=C auto / B moto (entrambi provati).
+function countQueryString(mmmv, tipo) {
+  const [make, model] = String(mmmv || '').split('|');
+  if (!make) return null;
+  const atype = tipo === 'moto' ? 'B' : 'C';
+  return `sort=standard&desc=0&ustate=N,U&atype=${atype}&cy=I&mmm=${make}|${model || ''}|`;
+}
+
+// Ritorna il totale AS24 per (mmmv,tipo) o null. Best-effort: mai throw (non rompe la sweep).
+async function fetchTotalCount({ mmmv, tipo } = {}) {
+  const qs = countQueryString(mmmv, tipo);
+  if (!qs) return null;
+  try {
+    const res = await httpPost(JSON.stringify({ query: COUNT_QUERY, variables: { queryString: qs, locale: 'it_IT' } }), COUNT_AUTH);
+    if (res.status !== 200) return null;
+    const j = JSON.parse(res.body);
+    const n = j && j.data && j.data.search && j.data.search.listingsByQueryString
+      && j.data.search.listingsByQueryString.metadata && j.data.search.listingsByQueryString.metadata.totalItems;
+    return Number.isFinite(n) ? n : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 module.exports = scrapeAutoscoutGraphql;
 module.exports._mapListing = mapListing;
 module.exports._buildVariables = buildVariables;
+module.exports.fetchTotalCount = fetchTotalCount;       // F50 copertura (chiamato dal crawler)
+module.exports._countQueryString = countQueryString;    // PURO, testabile senza rete

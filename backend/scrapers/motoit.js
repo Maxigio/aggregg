@@ -167,6 +167,17 @@ function extractCardsHtml(html) {
   return out;
 }
 
+// F50 — totale per-query = "N annunci" nella pagina (es. "4.323 annunci"; il punto è
+// separatore migliaia). = quanti annunci Moto.it HA per la query (tetto copertura).
+// Appare una volta sola nell'head. null se assente/blocco. Best-effort: non rompe la sweep.
+function extractTotal(html) {
+  if (!html) return null;
+  const m = String(html).match(/([\d][\d.]*)\s*annunci/i);   // "--annunci" (CSS) non matcha: niente cifra prima
+  if (!m) return null;
+  const n = parseInt(m[1].replace(/\./g, ''), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
 // Dedup per-url su pagine concatenate.
 function dedup(pages) {
   const visti = new Set();
@@ -182,6 +193,7 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
   const tmo = opts.httpTimeoutMs || HTTP_TIMEOUT_DEFAULT;
   const pages = [];
   let truncated = false;
+  let total = null;                          // F50 "N annunci" (tetto), dalla 1ª pagina
   for (let i = 0; i < urls.length; i++) {
     if (i > 0 && delay) await sleep(delay);
     const { status, body } = await httpGetText(urls[i], 0, tmo);
@@ -190,12 +202,13 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
       if (i === 0) return { pages: [], blocked: true, truncated: false };  // pagina-1 sospetta
       break;                                                               // pagina dopo non-200 = fine
     }
+    if (i === 0) total = extractTotal(body);             // tetto dalla 1ª pagina (anche se 0 card)
     const items = mapCards(extractCardsHtml(body), opts);
     if (items.length === 0) break;                       // esaurito (fine risultati genuina)
     pages.push(items);
     if (i === urls.length - 1) truncated = true;         // ultima pagina ancora piena → forse altro
   }
-  return { pages, blocked: false, truncated };
+  return { pages, blocked: false, truncated, total };
 }
 
 // ─── Rate limiting: minimo 1.5s tra ricerche ─────────────────────────────────
@@ -224,11 +237,11 @@ async function scrapeMotoIt(params, opts = {}) {
   const urls = Array.from({ length: maxPages }, (_, i) => buildUrl(params, i + 1));
 
   if (deep) {
-    const { pages, blocked, truncated } = await scrapeMotoViaHttp(urls, { ...opts, httpTimeoutMs: HTTP_TIMEOUT_DEFAULT });
+    const { pages, blocked, truncated, total } = await scrapeMotoViaHttp(urls, { ...opts, httpTimeoutMs: HTTP_TIMEOUT_DEFAULT });
     if (blocked) throw fail('Moto.it-HTTP: sospetto blocco (pagina-1 vuota)', { kind: 'blocked' });
     const risultati = dedup(pages);
     console.log(`[Moto.it-HTTP] OK ${risultati.length} annunci (${pages.map(p => p.length).join('+')})${truncated ? ' [troncato]' : ''}`);
-    return opts.withMeta ? { items: risultati, truncated } : risultati;
+    return opts.withMeta ? { items: risultati, truncated, total } : risultati;
   }
 
   // ON-SEARCH: HTTP sequenziale gentile (come il crawler). Niente browser, niente
@@ -247,3 +260,4 @@ async function scrapeMotoIt(params, opts = {}) {
 
 module.exports = scrapeMotoIt;
 module.exports._mapCards = mapCards;   // backfill F50: re-map della card grezza in raw_json
+module.exports._extractTotal = extractTotal;   // F50 copertura

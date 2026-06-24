@@ -172,13 +172,20 @@ function buildPath(params, start) {
   return `/v1/search/items?${qs.toString()}`;
 }
 
+// F50 — totale per-query = `count_all` della risposta hades (oggi ignorato).
+// = quanti annunci Subito HA per la query (tetto copertura). null se assente.
+function extractTotal(j) {
+  const n = j && j.count_all;
+  return Number.isFinite(n) ? n : null;
+}
+
 async function fetchPage(params, start) {
   const res = await httpGetJson(buildPath(params, start));
   if (res.status !== 200) throw fail(`Subito hades HTTP ${res.status}`, { status: res.status, kind: kindForStatus(res.status) });
   let j;
   try { j = JSON.parse(res.body); } catch (_) { throw fail('Subito hades: body non-JSON (blocco?)', { status: res.status, kind: 'blocked' }); }
   if (j.errors) throw fail('Subito hades errors: ' + JSON.stringify(j.errors).slice(0, 100), { kind: 'error' });
-  return Array.isArray(j.ads) ? j.ads : [];
+  return { ads: Array.isArray(j.ads) ? j.ads : [], total: extractTotal(j) };
 }
 
 /**
@@ -200,10 +207,12 @@ async function scrapeSubitoApi(params, opts = {}) {
   const reqParams = opts.sort ? { ...params, _sort: opts.sort } : params;
   const out = [];
   let truncated = false;
+  let total = null;                          // F50 count_all (tetto), additivo
   for (let p = 0; p < maxPages; p++) {
     if (p > 0 && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
-    const ads = await fetchPage(reqParams, p * PAGE_SIZE);
-    for (const ad of ads) {
+    const page = await fetchPage(reqParams, p * PAGE_SIZE);
+    if (p === 0) total = page.total;         // count_all dalla 1ª pagina (uguale su tutte)
+    for (const ad of page.ads) {
       // Doppia rete regione: `buildPath` filtra già nativo via `r=<key>` quando la
       // regione è mappabile; questo post-filtro client copre i casi non mappati.
       if (regione) {
@@ -213,12 +222,13 @@ async function scrapeSubitoApi(params, opts = {}) {
       const m = mapAd(ad, opts);
       if (m && m.prezzo != null) out.push(m);
     }
-    if (ads.length < PAGE_SIZE) break;       // lista esaurita = vista completa
+    if (page.ads.length < PAGE_SIZE) break;  // lista esaurita = vista completa
     if (p === maxPages - 1) truncated = true; // ultima pagina piena al cap → forse altro
   }
-  return opts.withMeta ? { items: out, truncated } : out;
+  return opts.withMeta ? { items: out, truncated, total } : out;
 }
 
 module.exports = scrapeSubitoApi;
 module.exports._mapAd = mapAd;
 module.exports._buildPath = buildPath;
+module.exports._extractTotal = extractTotal;   // F50 copertura

@@ -40,6 +40,15 @@ def state_label(row: dict) -> str:
     return "[green]🟢 fresco[/]" if age_h < STALE_HOURS else "[yellow]🟡 da agg.[/]"
 
 
+def cov_label(pct) -> str:
+    """Percentuale copertura colorata: rosso <30, giallo <70, verde ≥70; None → —."""
+    if pct is None:
+        return "[dim]—[/]"
+    p = float(pct)
+    color = "red" if p < 30 else ("yellow" if p < 70 else "green")
+    return f"[{color}]{p:.0f}%[/]"
+
+
 def who_label(role) -> str:
     """role → chi (l'account demo non ha nome nel sistema: lo etichettiamo provademo2026)."""
     return {"full": "[bold]tu (owner)[/]", "demo": "[magenta]provademo2026[/]"}.get(role, "[dim]—[/]")
