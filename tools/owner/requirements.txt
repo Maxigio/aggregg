@@ -1,0 +1,4 @@
+# Cap sul maggiore: 9.x di Textual romperebbe l'API (compose/Static/set_interval).
+# Verificati: textual 8.2.7, psycopg 3.3.4 su Python 3.14.6.
+psycopg[binary]>=3.3,<4
+textual>=8.2,<9
