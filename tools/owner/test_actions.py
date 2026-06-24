@@ -199,9 +199,44 @@ def test_queue_scratch() -> None:
         conn.close()
 
 
+def test_suggestions_ranking() -> None:
+    """suggestions(): 'da completare' (gap noto) PRIMA dei mai-crawlati; coverage_pct
+    e manca corretti. Scratch tx rolled-back."""
+    try:
+        conn = psycopg.connect(read_database_url(), autocommit=False, row_factory=dict_row)
+    except Exception as e:
+        print(f"⤼ SKIP suggestions ranking: DB non raggiungibile ({e})")
+        return
+    db = Db()
+    db._conn = conn
+    try:
+        # GAP: crawlato, tetto 100, 30 ingeriti attivi → manca 70, coverage 30%
+        db.one("INSERT INTO watchlist (tipo,marca,modello,priority,last_swept) "
+               "VALUES ('auto',%s,'gap',999999, now()) RETURNING id", (SENT,))
+        db.execute("INSERT INTO market_size (tipo,marca,modello,fonte,total) "
+                   "VALUES ('auto',%s,'gap','subito',100)", (SENT,))
+        for k in range(30):
+            db.execute("INSERT INTO listings (url,fonte,tipo,marca,modello,status) "
+                       "VALUES (%s,'subito','auto',%s,'gap','active')", (f"__sgurl__{k}", SENT))
+        # MAI crawlato, priority altissima (ma deve venire DOPO il gap)
+        db.one("INSERT INTO watchlist (tipo,marca,modello,priority) "
+               "VALUES ('auto',%s,'fresh',999999) RETURNING id", (SENT,))
+
+        mine = [r for r in Q.suggestions(db, q=SENT, limit=50) if r["marca"] == SENT]
+        assert len(mine) == 2, f"attesi 2 sentinel, {len(mine)}"
+        assert mine[0]["modello"] == "gap", f"gap-known PRIMA del mai: {[m['modello'] for m in mine]}"
+        assert mine[0]["tetto"] == 100 and mine[0]["manca"] == 70 and mine[0]["coverage_pct"] == 30, mine[0]
+        assert mine[1]["modello"] == "fresh" and mine[1]["manca"] is None and mine[1]["mai"] is True, mine[1]
+        print("✔ suggestions ranking OK (gap-first + coverage/manca, rollback)")
+    finally:
+        conn.rollback()
+        conn.close()
+
+
 if __name__ == "__main__":
     test_validation()
     test_actions_scratch()
     test_autocommit_paths()
     test_queue_scratch()
+    test_suggestions_ranking()
     print("\nTEST OK")

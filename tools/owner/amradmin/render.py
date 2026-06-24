@@ -108,12 +108,12 @@ def counts_panel(c: dict) -> Panel:
     t.add_column(justify="center", ratio=1)
     t.add_row(
         Text(f"{c['total']:,}", style="bold cyan"),
-        Text(f"{c['active']:,}", style="bold green"),
-        Text(f"{c['pending']:,}", style="bold yellow"),
+        Text(f"{c['crawlati']:,}", style="bold green"),
+        Text(f"{c['mai']:,}", style="bold yellow"),
     )
-    t.add_row(Text("target totali", style="dim"), Text("attivi", style="dim"),
-              Text("in coda (ramp)", style="dim"))
-    return Panel(t, title="Watchlist", border_style="cyan")
+    t.add_row(Text("modelli totali", style="dim"), Text("crawlati", style="dim"),
+              Text("mai crawlati", style="dim"))
+    return Panel(t, title="Catalogo", border_style="cyan")
 
 
 def nodes_panel(stats: list[dict], health: dict) -> Panel:
@@ -132,7 +132,7 @@ def nodes_panel(stats: list[dict], health: dict) -> Panel:
         s = stat_by.get(node, {})
         tot = s.get("total", 0)
         state = (f"[green]🟢{s.get('fresco',0)}[/] [yellow]🟡{s.get('due',0)}[/] "
-                 f"[red]🔴{s.get('mai',0)}[/] [dim]⚪{s.get('coda',0)}[/]")
+                 f"[red]🔴{s.get('mai',0)}[/]")
         pills = []
         for hr in by_node.get(node, []):
             color = "red" if hr.get("blocked") else ("yellow" if hr.get("degraded") else "green")
@@ -177,8 +177,8 @@ def suggester_panel(rows: list[dict]) -> Panel:
     t.add_column("prossimo da crawlare")
     t.add_column("stato", justify="right")
     for r in rows[:8]:
-        t.add_row(r["tipo"], f"{safe(r['marca'])} {safe(r['modello'])}", sugg_state(r))
-    return Panel(t, title=f"Da crawlare · {len(rows)} suggeriti · [s] tutti", border_style="yellow")
+        t.add_row(safe(r["tipo"]), f"{safe(r['marca'])} {safe(r['modello'])}", sugg_state(r))
+    return Panel(t, title=f"Da crawlare · top {min(len(rows), 8)} · [s] tutti", border_style="yellow")
 
 
 def last_run_line(lr: dict | None) -> Text:

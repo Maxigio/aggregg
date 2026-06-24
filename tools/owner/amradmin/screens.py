@@ -548,6 +548,7 @@ class SuggesterScreen(Screen):
         self.query_one("#sugg", DataTable).add_columns(
             "tipo", "marca", "modello", "stato", "tetto", "manca", "priority")
         self.reload()
+        self.set_interval(15, self.reload)   # live: gli accodati/crawlati spariscono da soli (15s: query più grande)
 
     def on_input_submitted(self, _e: Input.Submitted) -> None:
         self.reload()

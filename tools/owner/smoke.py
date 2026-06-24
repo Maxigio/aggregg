@@ -8,13 +8,13 @@ from amradmin.db import Db
 def main() -> None:
     with Db() as db:
         c = Q.counts(db)
-        print(f"counts: total={c['total']} active={c['active']} pending={c['pending']}")
-        assert c["total"] == c["active"] + c["pending"], "invariante counts rotta"
+        print(f"counts: total={c['total']} crawlati={c['crawlati']} mai={c['mai']}")
+        assert c["total"] == c["crawlati"] + c["mai"], "invariante counts rotta"
 
         print("nodeStats:")
         for r in Q.node_stats(db):
-            print(f"  {r['node']:<8} tot={r['total']:<6} coda={r['coda']:<6} "
-                  f"mai={r['mai']} due={r['due']} fresco={r['fresco']} spenti={r['spenti']}")
+            print(f"  {r['node']:<8} tot={r['total']:<6} mai={r['mai']} due={r['due']} "
+                  f"fresco={r['fresco']} spenti={r['spenti']} ultimo_crawl={r.get('last_run')}")
 
         print("listingsByFonte:")
         for r in Q.listings_by_fonte(db):

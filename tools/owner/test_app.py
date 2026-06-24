@@ -18,7 +18,7 @@ from amradmin import render as R
 def test_render_handles_nulls() -> None:
     """I renderable reggono None (priority nullable, last_swept mai) — fix review #1."""
     con = Console(record=True, width=100, file=open("/dev/null", "w"))
-    con.print(R.counts_panel({"total": 10, "active": 3, "pending": 7}))
+    con.print(R.counts_panel({"total": 10, "crawlati": 3, "mai": 7}))
     con.print(R.last_run_line(None))                       # mai avviato
     con.print(R.last_run_line({"written": 5, "targets": 2, "errors": 0, "finished_at": None}))
     con.print(R.nodes_panel(

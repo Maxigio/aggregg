@@ -12,27 +12,27 @@ from .constants import STALE_HOURS
 
 
 def counts(db) -> dict:
-    """MIRROR backend/db/watchlist-repo.js counts(): {total, active, pending}."""
+    """Conteggi catalogo (coverage-driven): total, crawlati (last_swept NOT NULL),
+    mai-crawlati. Ex {active/pending} basati su activated_at = senza senso nel nuovo
+    modello (niente ramp) → ora misurano la copertura REALE del catalogo."""
     return db.one(
         """SELECT count(*)::int total,
-                  count(*) FILTER (WHERE activated_at IS NOT NULL)::int active,
-                  count(*) FILTER (WHERE activated_at IS NULL)::int pending
+                  count(*) FILTER (WHERE last_swept IS NOT NULL)::int crawlati,
+                  count(*) FILTER (WHERE last_swept IS NULL)::int mai
              FROM watchlist"""
-    ) or {"total": 0, "active": 0, "pending": 0}
+    ) or {"total": 0, "crawlati": 0, "mai": 0}
 
 
 def node_stats(db) -> list[dict]:
-    """MIRROR watchlist-repo.js nodeStats(): per-nodo coda/mai/due/fresco/spenti.
-
-    La finestra 20h è legata a STALE_HOURS via make_interval (= interval '20 hours').
-    """
+    """Per-nodo: mai/due/fresco/spenti su `last_swept` (coverage-driven) + `last_run`
+    (ultimo crawl reale da crawl_runs). Ex bucket 'coda' su activated_at RIMOSSO: nel
+    nuovo modello (crawl via coda+markSwept, che NON setta activated_at) contava come
+    'coda' anche i target già crawlati. Finestra 20h = STALE_HOURS (make_interval)."""
     return db.rows(
         """SELECT COALESCE(w.assigned_node, 'imac') node,
                   count(*)::int total,
-                  count(*) FILTER (WHERE w.activated_at IS NULL)::int coda,
-                  count(*) FILTER (WHERE w.activated_at IS NOT NULL AND w.last_swept IS NULL)::int mai,
-                  count(*) FILTER (WHERE w.activated_at IS NOT NULL
-                                   AND w.last_swept < now() - make_interval(hours => %(h)s))::int due,
+                  count(*) FILTER (WHERE w.last_swept IS NULL)::int mai,
+                  count(*) FILTER (WHERE w.last_swept < now() - make_interval(hours => %(h)s))::int due,
                   count(*) FILTER (WHERE w.last_swept >= now() - make_interval(hours => %(h)s))::int fresco,
                   count(*) FILTER (WHERE NOT w.enabled)::int spenti,
                   max(w.last_swept) last_swept,

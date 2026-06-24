@@ -175,7 +175,7 @@ class AmrAdminApp(App):
             "lastrun": R.last_run_line(Q.last_run(db, "imac")),
             "nodes": R.nodes_panel(Q.node_stats(db), Q.health(db)),
             "fonti": R.fonti_panel(Q.listings_by_fonte(db)),
-            "ramp": R.suggester_panel(Q.suggestions(db, limit=50)),
+            "ramp": R.suggester_panel(Q.suggestions(db, limit=8)),   # preview: solo 8 (no query pesante ogni 5s)
         }
 
 
