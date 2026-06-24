@@ -6,7 +6,7 @@ import asyncio
 from textual import work
 from textual.containers import Container, Horizontal
 from textual.screen import ModalScreen, Screen
-from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Static
+from textual.widgets import Button, DataTable, Footer, Header, Input, Label, RichLog, Static
 
 from . import actions as A
 from . import queries as Q
@@ -615,3 +615,82 @@ class SuggesterScreen(Screen):
             f"in coda: {res['queued']} · dup {res['skipped']} · drainer {res['drainer']} "
             f"· [k] vedi coda · [esc] indietro")
         self.reload()   # gli accodati spariscono dai suggerimenti (NOT EXISTS sulla coda)
+
+
+# ── M-D: schermata Comandi dedicata ─────────────────────────────────────────
+class CommandScreen(Screen):
+    """Centro comandi: input + storia/output persistente + cheatsheet. Riusa
+    commands.parse_command + dispatch.dispatch (gli STESSI della vecchia barra `:`).
+    Input sempre a fuoco; ↑/↓ richiamano i comandi digitati; l'output RESTA (a
+    differenza del toast effimero della dashboard). DB-puro: il dispatch apre una Db
+    propria a vita breve e spawna il drainer (idempotente via advisory lock)."""
+
+    CSS = """
+    #cheat { dock: top; height: auto; }
+    #cmdin { dock: bottom; }
+    #out { height: 1fr; }
+    """
+    BINDINGS = [
+        ("escape", "app.pop_screen", "Indietro"),
+        ("up", "hist_prev", "Comando ↑"),
+        ("down", "hist_next", "Comando ↓"),
+    ]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._history: list[str] = []
+        self._hidx = 0   # cursore nella storia; == len(history) = "riga nuova vuota"
+
+    def compose(self):
+        yield Header(show_clock=True)
+        yield Static(R.command_cheatsheet(), id="cheat")
+        yield RichLog(id="out", markup=True, wrap=True, highlight=False)
+        yield Input(id="cmdin",
+                    placeholder=":run auto bmw serie 3 [full|pN]  ·  :run due  ·  :clear  ·  :cancel <id>")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#out", RichLog).write(
+            "[dim]Centro comandi — digita un comando e Invio · ↑/↓ storia · esc indietro[/]")
+        self.query_one("#cmdin", Input).focus()
+
+    def action_hist_prev(self) -> None:
+        if self._history:
+            self._hidx = max(0, self._hidx - 1)
+            self.query_one("#cmdin", Input).value = self._history[self._hidx]
+
+    def action_hist_next(self) -> None:
+        if not self._history:
+            return
+        self._hidx = min(len(self._history), self._hidx + 1)
+        self.query_one("#cmdin", Input).value = (
+            self._history[self._hidx] if self._hidx < len(self._history) else "")
+
+    def on_input_submitted(self, e: Input.Submitted) -> None:
+        from . import commands as C
+        text = e.value
+        e.input.value = ""
+        if not text.strip():
+            return
+        self._history.append(text)
+        self._hidx = len(self._history)
+        out = self.query_one("#out", RichLog)
+        out.write(f"[cyan]› {R.safe(text)}[/]")
+        parsed = C.parse_command(text)
+        if parsed["cmd"] == "noop":
+            return
+        if parsed["cmd"] == "error":
+            out.write(f"  [yellow]{R.safe(parsed['msg'])}[/]")
+            return
+        self._run(parsed)
+
+    @work(exclusive=True, group="cmd-screen")
+    async def _run(self, parsed: dict) -> None:
+        # dispatch è BLOCCANTE (psycopg) → to_thread; la write torna sul loop (worker async).
+        from .dispatch import dispatch
+        out = self.query_one("#out", RichLog)
+        try:
+            msg = await asyncio.to_thread(dispatch, parsed)
+            out.write(f"  [green]{R.safe(msg)}[/]")
+        except Exception as e:   # validazione/DB → riga rossa, niente crash
+            out.write(f"  [red]{R.safe(e)}[/]")

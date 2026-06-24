@@ -9,12 +9,14 @@ import asyncio
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
-from textual.widgets import Footer, Header, Input, Static
+from textual.widgets import Footer, Header, Static
 
 from . import queries as Q
 from . import render as R
 from .db import Db
-from .screens import AccessLogScreen, CoverageScreen, CrawlQueueScreen, SuggesterScreen, WatchlistScreen
+from .screens import (
+    AccessLogScreen, CommandScreen, CoverageScreen, CrawlQueueScreen, SuggesterScreen, WatchlistScreen,
+)
 
 REFRESH_SECONDS = 5
 
@@ -28,7 +30,6 @@ class AmrAdminApp(App):
     #nodes { height: auto; }
     .col { width: 1fr; }
     #status { dock: bottom; height: 1; color: $text-muted; }
-    #cmd { dock: bottom; display: none; }
     """
     BINDINGS = [
         ("w", "watchlist", "Watchlist"),
@@ -56,7 +57,6 @@ class AmrAdminApp(App):
             with Horizontal():
                 yield Static(id="fonti", classes="col")
                 yield Static(id="ramp", classes="col")
-        yield Input(id="cmd", placeholder=":run auto bmw serie 3   ·   :run due   ·   :clear   ·   :cancel <id>")
         yield Static(id="status")
         yield Footer()
 
@@ -83,75 +83,8 @@ class AmrAdminApp(App):
         self.push_screen(SuggesterScreen())
 
     def action_command(self) -> None:
-        """Mostra/nasconde la barra comandi `:` (toggle)."""
-        inp = self.query_one("#cmd", Input)
-        if inp.display:
-            inp.display = False
-            return
-        inp.display = True
-        inp.value = ":"
-        inp.focus()
-
-    def on_input_submitted(self, e: Input.Submitted) -> None:
-        if e.input.id != "cmd":
-            return
-        text = e.input.value
-        e.input.value = ""
-        e.input.display = False
-        self.run_command(text)
-
-    @work(exclusive=True, group="cmd")
-    async def run_command(self, text: str) -> None:
-        from . import commands as C
-        parsed = C.parse_command(text)
-        if parsed["cmd"] == "noop":
-            return
-        if parsed["cmd"] == "error":
-            self.notify(R.safe(parsed["msg"]), title="comando", severity="warning")
-            return
-        try:
-            msg = await asyncio.to_thread(self._dispatch, parsed)
-            # R.safe: il toast Rich rende il markup DOPO (sul compositor, fuori da questo
-            # try) → marca/modello con un tag (es. 'serie[/]') romperebbero il render.
-            self.notify(R.safe(msg), title="coda crawl")
-        except Exception as e:   # validazione (es. tipo) o DB → toast, non crashare
-            self.notify(R.safe(str(e)), title="comando", severity="error")
-
-    def _dispatch(self, parsed: dict) -> str:
-        """Esegue il comando (gira in thread). Db PROPRIA → no contesa con refresh_data."""
-        from . import actions as A
-        from . import queries as Q2
-        from .drainer import spawn_drainer
-        cmd = parsed["cmd"]
-        with Db() as db:
-            def drainer() -> str:
-                # spawn SEMPRE (idempotente via advisory lock) → chiude la race di uscita
-                try:
-                    spawn_drainer()
-                    return "attivo"
-                except Exception as e:
-                    return f"spawn KO ({e})"
-            if cmd == "run":
-                pg = parsed.get("pages")
-                rid = A.enqueue(db, parsed["tipo"], parsed["marca"], parsed["modello"], pages=pg)
-                depth = R.depth_label(pg)
-                if not rid:
-                    # già attivo: se 'pending', enqueue ha AGGIORNATO la profondità (override
-                    # esplicito) → dillo, non far credere che il depth sia stato ignorato.
-                    extra = f" — profondità → {depth}" if pg is not None else ""
-                    return f"già in coda: {parsed['marca']} {parsed['modello']}{extra}"
-                return f"in coda: {parsed['tipo']} {parsed['marca']} {parsed['modello']} ({depth}) · drainer {drainer()}"
-            if cmd == "run_due":
-                res = A.enqueue_rows(db, Q2.due_targets(db))
-                if not res["queued"]:
-                    return f"niente di 'due' ora (dup {res['skipped']})"
-                return f"due in coda: {res['queued']} (dup {res['skipped']}) · drainer {drainer()}"
-            if cmd == "clear":
-                return f"coda svuotata: {A.clear_pending(db)} pending annullati"
-            if cmd == "cancel":
-                st = A.cancel(db, parsed["id"])
-                return f"job {parsed['id']}: {st or 'non trovato/non attivo'}"
-        return "comando ignoto"
+        """Apre la schermata Comandi dedicata (M-D): input + storia + output + cheatsheet."""
+        self.push_screen(CommandScreen())
 
     @work(exclusive=True)
     async def refresh_data(self) -> None:

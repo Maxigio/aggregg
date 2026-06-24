@@ -323,6 +323,47 @@ def test_suggester_screen() -> None:
     print("✔ suggester screen (push/load/filtro) OK")
 
 
+def test_command_screen() -> None:
+    """Apre la schermata Comandi (M-D, tasto :): push + parse-error + storia ↑.
+    Niente DB-write/spawn (usa un comando ERRATO) → side-effect free anche su prod."""
+    from amradmin.db import Db
+    try:
+        Db().conn()
+    except Exception as e:
+        print(f"⤼ SKIP command screen: DB non raggiungibile ({e})")
+        return
+
+    from textual.widgets import Input
+
+    from amradmin.app import AmrAdminApp
+    from amradmin.screens import CommandScreen
+
+    async def run() -> None:
+        app = AmrAdminApp()
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            await pilot.press("colon")                     # ':' apre la schermata Comandi
+            await pilot.pause()
+            scr = app.screen
+            assert isinstance(scr, CommandScreen), f"schermata inattesa: {type(scr).__name__}"
+            assert isinstance(app.export_screenshot(), str), "render KO (cheatsheet markup?)"
+            # comando ERRATO → riga d'errore nel log, nessuna scrittura/spawn
+            inp = scr.query_one("#cmdin", Input)
+            inp.value = ":comandoinesistente"
+            await pilot.press("enter")
+            await pilot.pause()
+            assert scr._history == [":comandoinesistente"], f"storia non registrata: {scr._history}"
+            # ↑ richiama l'ultimo comando digitato
+            inp.value = ""
+            scr.action_hist_prev()
+            assert inp.value == ":comandoinesistente", f"storia ↑ non richiamata: {inp.value!r}"
+            assert isinstance(app.export_screenshot(), str), "render KO dopo submit"
+
+    asyncio.run(run())
+    print("✔ command screen (push/parse-error/storia) OK")
+
+
 if __name__ == "__main__":
     test_render_handles_nulls()
     test_headless_mount()
@@ -331,4 +372,5 @@ if __name__ == "__main__":
     test_coverage_screen()
     test_crawl_queue_screen()
     test_suggester_screen()
+    test_command_screen()
     print("\nTEST OK")

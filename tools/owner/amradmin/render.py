@@ -110,6 +110,21 @@ def _ago(ts) -> str:
     return f"{s // 86400}g fa"
 
 
+def command_cheatsheet() -> Panel:
+    """Cheatsheet della schermata Comandi (M-D); tasto [?] per mostrarla/nasconderla."""
+    t = Table.grid(padding=(0, 2))
+    t.add_column(style="bold cyan", no_wrap=True)
+    t.add_column()
+    t.add_row(":run <auto|moto> <marca> <modello> [full|pN]",
+              "accoda un crawl (ad-hoc anche fuori catalogo) · full=fino al cap · pN=N pagine")
+    t.add_row(":run due", "accoda tutti i target 'due' (stantii)")
+    t.add_row(":clear   ·   :stop", "svuota i pending della coda")
+    t.add_row(":cancel <id>", "annulla un job (pending o in corso, tra un target e l'altro)")
+    t.add_row("↑ / ↓", "richiama i comandi digitati")
+    t.add_row("?   ·   esc", "mostra/nascondi questo aiuto · indietro")
+    return Panel(t, title="Comandi disponibili", border_style="cyan")
+
+
 def counts_panel(c: dict) -> Panel:
     t = Table.grid(expand=True)
     t.add_column(justify="center", ratio=1)
