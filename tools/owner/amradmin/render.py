@@ -58,6 +58,16 @@ def depth_label(pages) -> str:
     return "full" if pages >= FULL_PAGES else f"{pages}p"
 
 
+def health_state(row: dict) -> str:
+    """Stato salute di una (node,fonte) da crawl_health: bloccato (back-off attivo) /
+    degradato (transient consecutivi) / ok. Rosso SOLO per blocco reale (429/403/non-JSON)."""
+    if row.get("blocked"):
+        return "[red]🔴 bloccato[/]"
+    if row.get("degraded"):
+        return "[yellow]🟡 degradato[/]"
+    return "[green]🟢 ok[/]"
+
+
 def qstate_label(status) -> str:
     """Stato job della coda crawl, colorato."""
     return {"pending": "[yellow]⏳ in coda[/]", "running": "[cyan]▶ in corso[/]",

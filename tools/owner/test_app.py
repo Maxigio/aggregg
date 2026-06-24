@@ -323,6 +323,52 @@ def test_suggester_screen() -> None:
     print("✔ suggester screen (push/load/filtro) OK")
 
 
+def test_health_screen() -> None:
+    """Apre la Salute crawler (tasto h) con una riga sentinel BLOCCATA (+ markup nella
+    fonte → R.safe). Verifica push/load/colore-stato + render markup-safe."""
+    import psycopg
+
+    from amradmin.db import Db, read_database_url
+    try:
+        Db().conn()
+    except Exception as e:
+        print(f"⤼ SKIP health screen: DB non raggiungibile ({e})")
+        return
+
+    NODE = "__htest__"
+    conn = psycopg.connect(read_database_url(), autocommit=True)
+    try:
+        # sentinel: bloccata + markup malevolo nella fonte → senza R.safe romperebbe il render
+        conn.execute("INSERT INTO crawl_health (node, fonte, blocked, last_blocked_at, blocked_count) "
+                     "VALUES (%s,'subito[bold]',true, now(), 3) "
+                     "ON CONFLICT (node,fonte) DO UPDATE SET blocked=true, blocked_count=3", (NODE,))
+
+        from amradmin.app import AmrAdminApp
+        from amradmin.screens import HealthScreen
+
+        async def run() -> None:
+            app = AmrAdminApp()
+            async with app.run_test(size=(150, 40)) as pilot:
+                await pilot.pause()
+                await app.workers.wait_for_complete()
+                await pilot.press("h")
+                await pilot.pause()
+                await app.workers.wait_for_complete()
+                await pilot.pause()
+                scr = app.screen
+                assert isinstance(scr, HealthScreen), f"schermata inattesa: {type(scr).__name__}"
+                assert isinstance(app.export_screenshot(), str), "render KO (markup fonte?)"
+                mine = [r for r in scr.rows if r["node"] == NODE]
+                assert mine and mine[0]["blocked"] is True, f"riga sentinel bloccata non caricata: {mine}"
+                assert len(scr.rows) >= 9, "attese le 9 fonti reali + sentinel"
+
+        asyncio.run(run())
+        print("✔ health screen (push/load/blocked + markup) OK")
+    finally:
+        conn.execute("DELETE FROM crawl_health WHERE node=%s", (NODE,))
+        conn.close()
+
+
 def test_command_screen() -> None:
     """Apre la schermata Comandi (M-D, tasto :): push + parse-error + storia ↑.
     Niente DB-write/spawn (usa un comando ERRATO) → side-effect free anche su prod."""
@@ -372,5 +418,6 @@ if __name__ == "__main__":
     test_coverage_screen()
     test_crawl_queue_screen()
     test_suggester_screen()
+    test_health_screen()
     test_command_screen()
     print("\nTEST OK")

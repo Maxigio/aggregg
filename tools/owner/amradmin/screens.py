@@ -694,3 +694,69 @@ class CommandScreen(Screen):
             out.write(f"  [green]{R.safe(msg)}[/]")
         except Exception as e:   # validazione/DB → riga rossa, niente crash
             out.write(f"  [red]{R.safe(e)}[/]")
+
+
+# ── M-G: schermata Salute crawler (crawl_health) ────────────────────────────
+class HealthScreen(Screen):
+    """Salute crawler per (nodo,fonte) da crawl_health: blocco/degrado + contatori, live.
+    Riusa Q.health (= getHealth JS). Il blocco scatta su 429/403/body-non-JSON (scraper
+    taggano kind='blocked') → back-off 6h. 'mai' in ultimo blocco = mai bloccato (bene)."""
+
+    CSS = """
+    #hstatus { dock: bottom; height: 1; color: $text-muted; }
+    DataTable { height: 1fr; }
+    """
+    BINDINGS = [
+        ("escape", "app.pop_screen", "Indietro"),
+        ("r", "reload", "Aggiorna"),
+    ]
+
+    def __init__(self, db: Db | None = None):
+        super().__init__()
+        self.db = db or Db()
+        self._owns_db = db is None
+        self.rows: list[dict] = []
+
+    def on_unmount(self) -> None:
+        if self._owns_db:
+            self.db.close()
+
+    def compose(self):
+        yield Header(show_clock=True)
+        yield DataTable(id="health", cursor_type="row", zebra_stripes=True)
+        yield Static(id="hstatus")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#health", DataTable).add_columns(
+            "nodo", "fonte", "stato", "ultimo ok", "ultimo blocco", "consec", "ok", "vuoti", "err", "blk")
+        self.reload()
+        self.set_interval(5, self.reload)   # live: un blocco compare in tempo reale
+
+    def _load(self) -> dict:
+        return Q.health(self.db)
+
+    def _populate(self, data: dict) -> None:
+        rows = data["nodi"]
+        self.rows = rows
+        t = self.query_one("#health", DataTable)
+        t.clear()
+        for r in rows:
+            t.add_row(R.safe(r["node"]), R.safe(r["fonte"]), R.health_state(r),
+                      R._ago(r.get("last_ok")), R._ago(r.get("last_blocked_at")),
+                      R._num(r.get("consec_fail")), R._num(r.get("ok_count")),
+                      R._num(r.get("empty_count")), R._num(r.get("error_count")),
+                      R._num(r.get("blocked_count")), key=f"{r['node']}/{r['fonte']}")
+        nb, nd = len(data["blocked"]), len(data["degraded"])
+        self.query_one("#hstatus", Static).update(
+            f"{len(rows)} fonti · [red]{nb} bloccate[/] · [yellow]{nd} degradate[/] · "
+            f"blocco = 429/403/non-JSON → back-off 6h · [r] aggiorna · [esc] indietro")
+
+    @work(exclusive=True, group="health-reload")
+    async def reload(self) -> None:
+        try:
+            data = await asyncio.to_thread(self._load)
+        except Exception as e:
+            self.query_one("#hstatus", Static).update(f"[red]errore DB:[/] {R.safe(e)}")
+            return
+        self._populate(data)

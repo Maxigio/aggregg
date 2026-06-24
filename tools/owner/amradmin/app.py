@@ -15,7 +15,8 @@ from . import queries as Q
 from . import render as R
 from .db import Db
 from .screens import (
-    AccessLogScreen, CommandScreen, CoverageScreen, CrawlQueueScreen, SuggesterScreen, WatchlistScreen,
+    AccessLogScreen, CommandScreen, CoverageScreen, CrawlQueueScreen, HealthScreen,
+    SuggesterScreen, WatchlistScreen,
 )
 
 REFRESH_SECONDS = 5
@@ -36,6 +37,7 @@ class AmrAdminApp(App):
         ("c", "coverage", "Copertura"),
         ("s", "suggester", "Suggeriti"),
         ("k", "crawl_queue", "Coda"),
+        ("h", "health", "Salute"),
         ("l", "accesslog", "Accessi"),
         (":", "command", "Comando"),
         ("r", "refresh", "Aggiorna"),
@@ -78,6 +80,9 @@ class AmrAdminApp(App):
 
     def action_crawl_queue(self) -> None:
         self.push_screen(CrawlQueueScreen())
+
+    def action_health(self) -> None:
+        self.push_screen(HealthScreen())
 
     def action_suggester(self) -> None:
         self.push_screen(SuggesterScreen())
