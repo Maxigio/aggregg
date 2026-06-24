@@ -49,6 +49,13 @@ def cov_label(pct) -> str:
     return f"[{color}]{p:.0f}%[/]"
 
 
+def qstate_label(status) -> str:
+    """Stato job della coda crawl, colorato."""
+    return {"pending": "[yellow]⏳ in coda[/]", "running": "[cyan]▶ in corso[/]",
+            "done": "[green]✓ fatto[/]", "fail": "[red]✗ errore[/]",
+            "cancel_requested": "[magenta]✋ annullo[/]"}.get(status, safe(status) if status else "—")
+
+
 def who_label(role) -> str:
     """role → chi (l'account demo non ha nome nel sistema: lo etichettiamo provademo2026)."""
     return {"full": "[bold]tu (owner)[/]", "demo": "[magenta]provademo2026[/]"}.get(role, "[dim]—[/]")

@@ -147,8 +147,51 @@ def test_autocommit_paths() -> None:
         db.execute("DELETE FROM watchlist WHERE marca=%s", (SENT2,))
 
 
+def test_queue_scratch() -> None:
+    """Scritture coda (enqueue/dedupe/cancel/clear) su righe scratch in tx rolled-back."""
+    try:
+        conn = psycopg.connect(read_database_url(), autocommit=False, row_factory=dict_row)
+    except Exception as e:
+        print(f"⤼ SKIP queue scratch: DB non raggiungibile ({e})")
+        return
+    db = Db()
+    db._conn = conn
+    try:
+        # validazione: tipo errato → ValueError PRIMA del DB
+        try:
+            A.enqueue(db, "camion", "x", "y"); assert False, "atteso ValueError"
+        except ValueError:
+            pass
+        # enqueue + dedupe (unique parziale: 1 job attivo per tipo,marca,modello)
+        id1 = A.enqueue(db, "auto", SENT, "__q1__")
+        assert id1
+        assert A.enqueue(db, "auto", SENT, "__q1__") is None, "dup attivo → None"
+        # enqueue_rows: 1 valida + 1 dup (__q1__ ancora pending) + 1 invalida
+        res = A.enqueue_rows(db, [
+            {"tipo": "moto", "marca": SENT, "modello": "__q2__"},
+            {"tipo": "auto", "marca": SENT, "modello": "__q1__"},      # dup
+            {"tipo": "camion", "marca": SENT, "modello": "__q3__"},    # invalida
+        ])
+        assert res == {"queued": 1, "skipped": 2}, res
+        # cancel pending → 'fail'
+        assert A.cancel(db, id1) == "fail"
+        # cancel di un running → 'cancel_requested'
+        rid = db.one("INSERT INTO crawl_queue (tipo,marca,modello,status) "
+                     "VALUES ('auto',%s,'__qr__','running') RETURNING id", (SENT,))["id"]
+        assert A.cancel(db, rid) == "cancel_requested"
+        # clear_pending: __q2__ (pending) → annullato
+        assert A.clear_pending(db) >= 1
+        assert db.one("SELECT status FROM crawl_queue WHERE marca=%s AND modello='__q2__'",
+                      (SENT,))["status"] == "fail"
+        print("✔ queue scratch OK (enqueue/dedupe/cancel/clear, rollback)")
+    finally:
+        conn.rollback()
+        conn.close()
+
+
 if __name__ == "__main__":
     test_validation()
     test_actions_scratch()
     test_autocommit_paths()
+    test_queue_scratch()
     print("\nTEST OK")

@@ -14,6 +14,34 @@ from . import render as R
 from .db import Db
 
 
+# ── coda crawl (F60): helper condivisi ──────────────────────────────────────
+# Girano in thread (to_thread). Usano una Db PROPRIA a vita breve → niente contesa
+# con la self.db (live-reload) dello schermo che li chiama.
+def _enqueue_and_drain(rows: list[dict]) -> dict:
+    """Enqueue di righe + avvio drainer se serve. Ritorna {queued, skipped, drainer}."""
+    with Db() as db:
+        res = A.enqueue_rows(db, rows)
+        if not res["queued"]:
+            res["drainer"] = "—"
+        elif Q.drainer_alive(db):
+            res["drainer"] = "già attivo"
+        else:
+            from .drainer import spawn_drainer
+            res["drainer"] = f"avviato pid {spawn_drainer()}"
+    return res
+
+
+def _wl_payload(r: dict) -> dict:
+    """Riga watchlist → job coda (watchlist_id valorizzato → markSwept dopo)."""
+    return {"tipo": r["tipo"], "marca": r["marca"], "modello": r["modello"],
+            "watchlist_id": r.get("id"), "last_truncated": r.get("last_truncated")}
+
+
+def _cov_payload(r: dict) -> dict:
+    """Riga copertura → job coda AD-HOC (per (target,fonte) non c'è un id watchlist)."""
+    return {"tipo": r["tipo"], "marca": r["marca"], "modello": r["modello"]}
+
+
 class ConfirmScreen(ModalScreen[bool]):
     """Modale Sì/No. Ritorna True/False via dismiss."""
 
@@ -57,6 +85,8 @@ class WatchlistScreen(Screen):
         ("e", "toggle_enabled", "On/Off"),
         ("n", "cycle_node", "Nodo→"),
         ("d", "delete_row", "Elimina"),
+        ("g", "enqueue_one", "Coda"),
+        ("G", "enqueue_all", "Coda tutte"),
     ]
 
     def __init__(self, db: Db | None = None):
@@ -161,6 +191,27 @@ class WatchlistScreen(Screen):
         if ok:
             self._apply(A.remove_one, r["id"])
 
+    # ── coda crawl: accoda la riga sotto il cursore o tutte le mostrate ────────
+    def action_enqueue_one(self) -> None:
+        r = self._current()
+        if r:
+            self._enqueue([_wl_payload(r)])
+
+    def action_enqueue_all(self) -> None:
+        if self.rows:
+            self._enqueue([_wl_payload(r) for r in self.rows])
+
+    @work(exclusive=True, group="wl-enqueue")
+    async def _enqueue(self, rows) -> None:
+        try:
+            res = await asyncio.to_thread(_enqueue_and_drain, rows)
+        except Exception as e:
+            self.query_one("#wstatus", Static).update(f"[red]coda errore:[/] {R.safe(e)}")
+            return
+        self.query_one("#wstatus", Static).update(
+            f"in coda: {res['queued']} · dup {res['skipped']} · drainer {res['drainer']} "
+            f"· [k] vedi coda · [esc] indietro")
+
 
 class AccessLogScreen(Screen):
     """Log eventi/accessi (sola lettura, live): chi si connette + cosa cerca.
@@ -255,6 +306,8 @@ class CoverageScreen(Screen):
     BINDINGS = [
         ("escape", "app.pop_screen", "Indietro"),
         ("r", "reload", "Aggiorna"),
+        ("g", "enqueue_one", "Coda"),
+        ("G", "enqueue_all", "Coda tutte"),
     ]
 
     def __init__(self, db: Db | None = None):
@@ -310,3 +363,143 @@ class CoverageScreen(Screen):
             self.query_one("#cstatus", Static).update(f"[red]errore DB:[/] {e}")
             return
         self._populate(rows)
+
+    # ── coda crawl: accoda (ad-hoc) i target più scoperti ─────────────────────
+    def _current(self) -> dict | None:
+        t = self.query_one("#cov", DataTable)
+        i = t.cursor_row
+        return self.rows[i] if self.rows and 0 <= i < len(self.rows) else None
+
+    def action_enqueue_one(self) -> None:
+        r = self._current()
+        if r:
+            self._enqueue([_cov_payload(r)])
+
+    def action_enqueue_all(self) -> None:
+        if self.rows:
+            self._enqueue([_cov_payload(r) for r in self.rows])
+
+    @work(exclusive=True, group="cov-enqueue")
+    async def _enqueue(self, rows) -> None:
+        try:
+            res = await asyncio.to_thread(_enqueue_and_drain, rows)
+        except Exception as e:
+            self.query_one("#cstatus", Static).update(f"[red]coda errore:[/] {R.safe(e)}")
+            return
+        self.query_one("#cstatus", Static).update(
+            f"in coda: {res['queued']} · dup {res['skipped']} · drainer {res['drainer']} "
+            f"· [k] vedi coda · [esc] indietro")
+
+
+class CrawlQueueScreen(Screen):
+    """Coda crawl (live): la TUI enqueue, il drainer (scripts/crawl-once.js) drena.
+    1 IP → sequenziale (~27s/target). [g] avvia drainer · [c] annulla riga ·
+    [x] svuota i pending · [r] aggiorna. I crawl popolano anche la copertura."""
+
+    CSS = """
+    #qstatus { dock: bottom; height: 1; color: $text-muted; }
+    DataTable { height: 1fr; }
+    """
+    BINDINGS = [
+        ("escape", "app.pop_screen", "Indietro"),
+        ("r", "reload", "Aggiorna"),
+        ("g", "start", "Avvia drainer"),
+        ("c", "cancel_row", "Annulla"),
+        ("x", "clear", "Svuota coda"),
+    ]
+
+    def __init__(self, db: Db | None = None):
+        super().__init__()
+        self.db = db or Db()          # usata SOLO dalla reload live (q-reload)
+        self._owns_db = db is None
+        self.rows: list[dict] = []
+
+    def on_unmount(self) -> None:
+        if self._owns_db:
+            self.db.close()
+
+    def compose(self):
+        yield Header(show_clock=True)
+        yield DataTable(id="q", cursor_type="row", zebra_stripes=True)
+        yield Static(id="qstatus")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#q", DataTable).add_columns(
+            "id", "stato", "tipo", "marca", "modello", "prio", "scritti", "info")
+        self.reload()
+        self.set_interval(3, self.reload)   # live: la coda si svuota mentre il drainer gira
+
+    def _load(self) -> tuple:
+        return (Q.crawl_queue(self.db, limit=200), Q.queue_counts(self.db), Q.drainer_alive(self.db))
+
+    def _populate(self, data) -> None:
+        rows, counts, alive = data
+        self.rows = rows
+        t = self.query_one("#q", DataTable)
+        t.clear()
+        for r in rows:
+            when = r["finished_at"] or r["started_at"] or r["enqueued_at"]
+            info = R.safe(r["error"]) if r["status"] == "fail" and r.get("error") else R._ago(when)
+            t.add_row(str(r["id"]), R.qstate_label(r["status"]), r["tipo"],
+                      R.safe(r["marca"]), R.safe(r["modello"]), R._num(r["priority"]),
+                      R._num(r["written"]), info, key=str(r["id"]))
+        eta = counts["pending"] * 27
+        eta_s = f"~{eta // 60}m{eta % 60:02d}s" if eta else "0"
+        drn = "[green]drainer attivo[/]" if alive else "[dim]drainer fermo[/]"
+        self.query_one("#qstatus", Static).update(
+            f"[cyan]{counts['running']} in corso[/] · [yellow]{counts['pending']} in attesa[/] "
+            f"(ETA {eta_s}) · {counts['done']} fatti · {counts['fail']} ko · {drn} · "
+            f"[g] avvia · [c] annulla · [x] svuota · [esc] indietro")
+
+    def _current(self) -> dict | None:
+        t = self.query_one("#q", DataTable)
+        i = t.cursor_row
+        return self.rows[i] if self.rows and 0 <= i < len(self.rows) else None
+
+    @work(exclusive=True, group="q-reload")
+    async def reload(self) -> None:
+        try:
+            data = await asyncio.to_thread(self._load)
+        except Exception as e:
+            self.query_one("#qstatus", Static).update(f"[red]errore DB:[/] {R.safe(e)}")
+            return
+        self._populate(data)
+
+    # azioni: Db PROPRIA (no contesa con la reload live su self.db)
+    def action_start(self) -> None:
+        self._act("start")
+
+    def action_clear(self) -> None:
+        self._act("clear")
+
+    def action_cancel_row(self) -> None:
+        r = self._current()
+        if r:
+            self._act("cancel", r["id"])
+
+    @work(exclusive=True, group="q-act")
+    async def _act(self, op, *args) -> None:
+        try:
+            msg = await asyncio.to_thread(self._do_op, op, args)
+        except Exception as e:
+            self.notify(f"errore: {e}", severity="error")
+            return
+        if msg:
+            self.notify(msg)
+        self.reload()
+
+    @staticmethod
+    def _do_op(op, args) -> str:
+        with Db() as db:
+            if op == "cancel":
+                st = A.cancel(db, args[0])
+                return f"job {args[0]}: {st or 'non attivo'}"
+            if op == "clear":
+                return f"coda svuotata: {A.clear_pending(db)} pending annullati"
+            if op == "start":
+                if Q.drainer_alive(db):
+                    return "drainer già attivo"
+                from .drainer import spawn_drainer
+                return f"drainer avviato (pid {spawn_drainer()})"
+        return ""

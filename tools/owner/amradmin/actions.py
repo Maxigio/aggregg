@@ -165,3 +165,64 @@ def add_candidates(db, items, node=None) -> dict:
     if new_ids and node:
         assign_many(db, new_ids, node)
     return {"added": len(new_ids)}
+
+
+# ─────────────────────────── coda crawl (F60) ──────────────────────────────
+# La TUI ENQUEUE; il drainer (scripts/crawl-once.js) DRENA. SQL rispecchiato da
+# backend/db/crawl-queue-repo.js (enqueue: ON CONFLICT DO NOTHING = 1 job attivo).
+
+def enqueue(db, tipo: str, marca: str, modello: str, *,
+            watchlist_id=None, last_truncated=None, priority: int = 0) -> int | None:
+    """Mette in coda un target. MIRROR crawl-queue-repo.enqueue. Ritorna l'id, o
+    None se già in coda/in corso (dedupe via unique parziale). Ad-hoc = watchlist_id None."""
+    if tipo not in TIPI:
+        raise ValueError(f"tipo non valido: {tipo!r} (ammessi {TIPI})")
+    if not marca or not modello:
+        raise ValueError("marca e modello obbligatori")
+    row = db.one(
+        """INSERT INTO crawl_queue (tipo, marca, modello, watchlist_id, last_truncated, priority)
+               VALUES (%s,%s,%s,%s,%s,%s)
+           ON CONFLICT DO NOTHING RETURNING id""",
+        (tipo, marca, modello, watchlist_id, last_truncated, priority),
+    )
+    return row["id"] if row else None
+
+
+def enqueue_rows(db, rows, *, priority: int = 0) -> dict:
+    """Enqueue di molte righe (cursore/tutte-mostrate/due). Ogni riga: dict con
+    tipo/marca/modello (+ watchlist_id/last_truncated opzionali). Ritorna
+    {queued, skipped} (skipped = invalide o duplicati già in coda)."""
+    queued = skipped = 0
+    for r in rows or []:
+        tipo, marca, modello = r.get("tipo"), r.get("marca"), r.get("modello")
+        if tipo not in TIPI or not marca or not modello:
+            skipped += 1
+            continue
+        rid = enqueue(db, tipo, marca, modello,
+                      watchlist_id=r.get("watchlist_id"),
+                      last_truncated=r.get("last_truncated"), priority=priority)
+        queued += 1 if rid else 0
+        skipped += 0 if rid else 1
+    return {"queued": queued, "skipped": skipped}
+
+
+def cancel(db, id) -> str | None:
+    """Annulla un job: pending → 'fail' subito; running → 'cancel_requested' (il
+    drainer lo chiude tra un target e l'altro). Ritorna il nuovo stato o None."""
+    row = db.one(
+        """UPDATE crawl_queue
+              SET status = CASE WHEN status='pending' THEN 'fail' ELSE 'cancel_requested' END,
+                  error = COALESCE(error, 'annullato'),
+                  finished_at = CASE WHEN status='pending' THEN now() ELSE finished_at END
+            WHERE id = %s AND status IN ('pending','running')
+            RETURNING status""",
+        (id,),
+    )
+    return row["status"] if row else None
+
+
+def clear_pending(db) -> int:
+    """Svuota i pending (stop della coda non ancora partita; il running corrente
+    finisce). Ritorna quanti annullati."""
+    return db.execute(
+        "UPDATE crawl_queue SET status='fail', error='annullato', finished_at=now() WHERE status='pending'")

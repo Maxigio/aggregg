@@ -219,6 +219,62 @@ def coverage(db, *, fonte: str | None = None, limit: int = 200) -> list[dict]:
     )
 
 
+def crawl_queue(db, *, limit: int = 200) -> list[dict]:
+    """NUOVO: coda crawl manuale. Attivi (running, poi pending per priorità/FIFO) in
+    cima, poi i conclusi recenti. Per la CrawlQueueScreen live. Scritta da TUI
+    (enqueue) + drainer (scripts/crawl-once.js)."""
+    return db.rows(
+        """SELECT id, tipo, marca, modello, status, priority, watchlist_id,
+                  enqueued_at, started_at, finished_at, written, error
+             FROM crawl_queue
+            ORDER BY CASE status WHEN 'running' THEN 0 WHEN 'pending' THEN 1
+                                 WHEN 'cancel_requested' THEN 1 ELSE 2 END,
+                     priority DESC,
+                     COALESCE(finished_at, started_at, enqueued_at) DESC
+            LIMIT %(limit)s""",
+        {"limit": limit},
+    )
+
+
+def queue_counts(db) -> dict:
+    """Conteggi coda per stato (pending → ETA = pending × ~27s)."""
+    return db.one(
+        """SELECT count(*) FILTER (WHERE status='pending')::int AS pending,
+                  count(*) FILTER (WHERE status='running')::int AS running,
+                  count(*) FILTER (WHERE status='done')::int    AS done,
+                  count(*) FILTER (WHERE status='fail')::int    AS fail
+             FROM crawl_queue"""
+    ) or {"pending": 0, "running": 0, "done": 0, "fail": 0}
+
+
+def due_targets(db, *, limit: int = 1000) -> list[dict]:
+    """MIRROR backend/db/watchlist-repo.js dueTargets('imac'): attivati, enabled,
+    mai-swept o >STALE_HOURS, non leased, nodo imac/NULL. Per il comando `:run due`."""
+    return db.rows(
+        f"""SELECT id AS watchlist_id, tipo, marca, modello, last_truncated
+              FROM watchlist
+             WHERE activated_at IS NOT NULL AND enabled = true
+               AND (last_swept IS NULL OR last_swept < now() - interval '{STALE_HOURS} hours')
+               AND (leased_until IS NULL OR leased_until < now())
+               AND (assigned_node = 'imac' OR assigned_node IS NULL)
+             ORDER BY last_swept NULLS FIRST, id
+             LIMIT %(limit)s""",
+        {"limit": limit},
+    )
+
+
+def drainer_alive(db) -> bool:
+    """True se un drainer tiene l'advisory lock (key 414260060). Best-effort:
+    per advisory bigint < 2^32, pg_locks → classid=0, objid=key, objsubid=1."""
+    try:
+        r = db.one(
+            "SELECT 1 FROM pg_locks WHERE locktype='advisory' AND classid=0 "
+            "AND objid=414260060 AND objsubid=1 LIMIT 1")
+        return r is not None
+    except Exception:
+        return False
+
+
 def price_distribution(db, tipo: str, marca: str, modello: str) -> dict | None:
     """NUOVO: distribuzione prezzo (n, p25, mediana, p75, min, max) sugli annunci
     ATTIVI di un modello. Nessuna analitica simile nell'admin."""

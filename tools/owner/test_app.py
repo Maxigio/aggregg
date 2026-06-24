@@ -237,10 +237,57 @@ def test_coverage_screen() -> None:
         conn.close()
 
 
+def test_crawl_queue_screen() -> None:
+    """Apre la coda (tasto k) con job sentinel (incl. markup nel modello → R.safe)."""
+    import psycopg
+
+    from amradmin.db import Db, read_database_url
+    try:
+        Db().conn()
+    except Exception as e:
+        print(f"⤼ SKIP crawl queue screen: DB non raggiungibile ({e})")
+        return
+
+    SENT = "__qtest__"
+    conn = psycopg.connect(read_database_url(), autocommit=True)
+    try:
+        conn.execute("INSERT INTO crawl_queue (tipo,marca,modello,status,written) "
+                     "VALUES ('auto',%s,'x','done',5)", (SENT,))
+        # MALEVOLO: markup Rich nel modello → senza R.safe romperebbe il render
+        conn.execute("INSERT INTO crawl_queue (tipo,marca,modello,status) "
+                     "VALUES ('auto',%s,'[bold]y[/]','pending')", (SENT,))
+
+        from amradmin.app import AmrAdminApp
+        from amradmin.screens import CrawlQueueScreen
+
+        async def run() -> None:
+            app = AmrAdminApp()
+            async with app.run_test(size=(140, 40)) as pilot:
+                await pilot.pause()
+                await app.workers.wait_for_complete()
+                await pilot.press("k")
+                await pilot.pause()
+                await app.workers.wait_for_complete()
+                await pilot.pause()
+                scr = app.screen
+                assert isinstance(scr, CrawlQueueScreen), f"schermata inattesa: {type(scr).__name__}"
+                # REGRESSION markup: il render NON deve sollevare MarkupError
+                assert isinstance(app.export_screenshot(), str), "render fallito (markup modello?)"
+                mine = [r for r in scr.rows if r["marca"] == SENT]
+                assert len(mine) == 2, f"job sentinel non caricati: {mine}"
+
+        asyncio.run(run())
+        print("✔ crawl queue screen (push/load/markup) OK")
+    finally:
+        conn.execute("DELETE FROM crawl_queue WHERE marca=%s", (SENT,))
+        conn.close()
+
+
 if __name__ == "__main__":
     test_render_handles_nulls()
     test_headless_mount()
     test_watchlist_screen()
     test_accesslog_screen()
     test_coverage_screen()
+    test_crawl_queue_screen()
     print("\nTEST OK")

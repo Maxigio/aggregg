@@ -19,6 +19,7 @@ data/models.json.bak
 
 # Artefatti runtime (non versionare)
 data/bootstrap.log
+data/crawl-once.log
 data/chrome-profile/
 AutoMotoRadar-Data/
 
