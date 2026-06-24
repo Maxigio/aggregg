@@ -9,6 +9,8 @@ from amradmin.commands import parse_command as p
 def test_parse() -> None:
     assert p("")["cmd"] == "noop"
     assert p(":")["cmd"] == "noop"
+    assert p("::")["cmd"] == "noop"
+    assert p("::run auto fiat panda")["cmd"] == "run"   # '::' iniziale tollerato
     # run ad-hoc, modello multi-parola
     assert p(":run auto bmw serie 3") == {"cmd": "run", "tipo": "auto", "marca": "bmw", "modello": "serie 3"}
     assert p("run moto ducati monster")["tipo"] == "moto"      # senza ':' iniziale

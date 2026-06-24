@@ -1,6 +1,8 @@
 'use strict';
-// F60 — coda crawl manuale. Gated su DATABASE_URL_TEST. crawl_queue è toccata SOLO
-// da questo file → TRUNCATE sicuro (no race con altri test).
+// F60 — coda crawl manuale. Gated su DATABASE_URL_TEST. ⚠️ DATABASE_URL_TEST deve
+// puntare a un DB SCRATCH, NON a prod: il beforeEach fa `TRUNCATE crawl_queue`. La
+// guard in `before` rifiuta un DB con dati reali (listings>1000) per non azzerare la
+// coda di produzione per errore di configurazione.
 const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert');
 
@@ -13,7 +15,13 @@ process.env.DATABASE_URL = TEST_URL;
 const db = require('../backend/db');
 const q = require('../backend/db/crawl-queue-repo');
 
-before(async () => { await db.init(); });
+before(async () => {
+  await db.init();
+  const r = await db.query('SELECT count(*)::int n FROM listings');
+  if (r && r.rows[0].n > 1000) {
+    throw new Error('DATABASE_URL_TEST punta a un DB con dati reali (listings>1000) — usa un DB scratch, NON prod');
+  }
+});
 after(async () => { await db.close(); });
 beforeEach(async () => { await db.query('TRUNCATE crawl_queue RESTART IDENTITY'); });
 
@@ -81,6 +89,15 @@ test('isCancelRequested: true solo per status cancel_requested', async () => {
   assert.strictEqual(await q.isCancelRequested(id), false);
   await db.query(`UPDATE crawl_queue SET status='cancel_requested' WHERE id=$1`, [id]);
   assert.strictEqual(await q.isCancelRequested(id), true);
+});
+
+test('dedupe include cancel_requested (mig 015): no doppione mentre si annulla', async () => {
+  const id = await q.enqueue(T());
+  await q.pickNext();                                            // → running
+  await db.query("UPDATE crawl_queue SET status='cancel_requested' WHERE id=$1", [id]);
+  assert.strictEqual(await q.enqueue(T()), null, 'cancel_requested ancora attivo → dedupe blocca il doppione');
+  await db.query("UPDATE crawl_queue SET status='fail' WHERE id=$1", [id]);   // finalizzato
+  assert.ok(await q.enqueue(T()), 'dopo il fail il target è di nuovo accodabile');
 });
 
 test('advisory lock: singleton drainer (2ª connessione non prende il lock)', async () => {

@@ -8,9 +8,10 @@
  * SINGLETON: advisory lock di SESSIONE su una connessione DEDICATA, tenuta per tutto
  *   il drain. NON via db.query (il Pool la riciclerebbe e perderebbe il lock). Un 2º
  *   drainer esce subito. Crash → l'OS chiude il socket → Postgres rilascia il lock.
- * CRASH dei job: heartbeat + reclaimStale(15min) all'avvio (= lease worker). Doppio
- *   crawl da reclaim = data-safe (upsert idempotente ON CONFLICT url), solo traffico.
+ * CRASH dei job: reclaimStale(15min) all'avvio (= lease worker). Doppio crawl da
+ *   reclaim = data-safe (upsert idempotente ON CONFLICT url), solo traffico.
  *
+ * Il LOOP è in `drainQueue` (esportato, sweep iniettabile) → testabile senza rete.
  * Run manuale: node scripts/crawl-once.js
  */
 const path = require('path');
@@ -23,9 +24,60 @@ const runs = require('../backend/db/crawl-runs-repo');
 
 const LOCK_KEY = 414260060;   // chiave fissa singleton (int4 → pg_try_advisory_lock(bigint))
 const THROTTLE_MS = parseInt(process.env.CRAWLER_THROTTLE_MS || '1500', 10);
+const POLL_MS = 1500;         // attesa tra due poll vuoti (chiude la finestra di re-spawn)
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-(async () => {
+/**
+ * Drena la coda finché vuota. `sweep(target, stats)` esegue il crawl (default:
+ * crawler.sweepTarget) — iniettabile per i test. Ritorna {targets, written, errors}.
+ */
+async function drainQueue({ sweep, throttleMs = THROTTLE_MS, pollMs = POLL_MS, log = () => {} } = {}) {
+  const tot = { targets: 0, written: 0, errors: 0 };
+  await queue.reclaimStale();
+  let emptyPolls = 0;
+  for (;;) {
+    const job = await queue.pickNext();
+    if (!job) {
+      if (++emptyPolls >= 2) break;     // doppio poll vuoto prima di uscire
+      await sleep(pollMs);
+      continue;
+    }
+    emptyPolls = 0;
+
+    if (await queue.isCancelRequested(job.id)) {   // annullato tra pickNext e qui (raro)
+      await queue.markFail(job.id, 'annullato');
+      log(`${job.marca} ${job.modello} → annullato`);
+      continue;
+    }
+
+    log(`${job.tipo} ${job.marca} ${job.modello}${job.watchlist_id ? '' : ' (ad-hoc)'}…`);
+    const stats = { written: 0, as: 0, sub: 0, errors: 0 };
+    try {
+      const meta = await sweep(
+        { tipo: job.tipo, marca: job.marca, modello: job.modello, last_truncated: job.last_truncated }, stats);
+      if (job.watchlist_id) await wl.markSwept(job.watchlist_id, { truncated: meta && meta.truncated, complete: meta && meta.complete });
+      // re-check DOPO lo sweep: se l'utente ha annullato mentre crawlava, NON timbrare done
+      // (lo sweep non si può interrompere a metà → il dato c'è, ma onoriamo l'annullo).
+      if (await queue.isCancelRequested(job.id)) {
+        await queue.markFail(job.id, 'annullato (a sweep finito)');
+        log(`  → annullato (sweep completato, ${stats.written} scritti)`);
+      } else {
+        await queue.markDone(job.id, { written: stats.written });
+        log(`  → ${stats.written} scritti (AS24 ${stats.as} · Subito ${stats.sub} · err ${stats.errors})`);
+      }
+      tot.written += stats.written;
+    } catch (e) {
+      await queue.markFail(job.id, e.message);
+      log(`  → FALLITO: ${e.message}`);
+      tot.errors++;
+    }
+    tot.targets++;
+    await sleep(throttleMs);
+  }
+  return tot;
+}
+
+async function main() {
   if (!db.isEnabled()) { console.error('[drainer] DB non configurato (DATABASE_URL).'); process.exit(1); }
 
   // SINGLETON: lock di SESSIONE su connessione dedicata (NON db.query → il pool la riciclerebbe).
@@ -37,44 +89,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   }
 
   const runId = await runs.startRun('imac').catch(() => null);
-  const tot = { targets: 0, written: 0, errors: 0 };
+  let tot = { targets: 0, written: 0, errors: 0 };
   try {
-    const reclaimed = await queue.reclaimStale();
-    if (reclaimed) console.log(`[drainer] reclaim di ${reclaimed} job 'running' orfani (drainer crashato).`);
-
-    let emptyPolls = 0;
-    for (;;) {
-      const job = await queue.pickNext();
-      if (!job) {
-        if (++emptyPolls >= 2) break;      // doppio poll vuoto prima di uscire (chiude la finestra di re-spawn)
-        await sleep(1500);
-        continue;
-      }
-      emptyPolls = 0;
-
-      if (await queue.isCancelRequested(job.id)) {
-        await queue.markFail(job.id, 'annullato');
-        console.log(`[drainer] ${job.marca} ${job.modello} → annullato`);
-        continue;
-      }
-
-      console.log(`[drainer] ${job.tipo} ${job.marca} ${job.modello}${job.watchlist_id ? '' : ' (ad-hoc)'}…`);
-      const stats = { written: 0, as: 0, sub: 0, errors: 0 };
-      try {
-        const meta = await crawler.sweepTarget(
-          { tipo: job.tipo, marca: job.marca, modello: job.modello, last_truncated: job.last_truncated }, stats);
-        if (job.watchlist_id) await wl.markSwept(job.watchlist_id, { truncated: meta.truncated, complete: meta.complete });
-        await queue.markDone(job.id, { written: stats.written });
-        console.log(`  → ${stats.written} scritti (AS24 ${stats.as} · Subito ${stats.sub} · err ${stats.errors})`);
-        tot.written += stats.written;
-      } catch (e) {
-        await queue.markFail(job.id, e.message);
-        console.warn(`  → FALLITO: ${e.message}`);
-        tot.errors++;
-      }
-      tot.targets++;
-      await sleep(THROTTLE_MS);
-    }
+    tot = await drainQueue({ sweep: (t, s) => crawler.sweepTarget(t, s), log: m => console.log(`[drainer] ${m}`) });
     console.log(`[drainer] coda vuota → FINE. target: ${tot.targets}, scritti: ${tot.written}, errori: ${tot.errors}.`);
   } finally {
     if (runId) await runs.finishRun(runId, tot).catch(() => {});
@@ -82,4 +99,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     lockClient.release();
     await db.close().catch(() => {});
   }
-})().catch(e => { console.error('[drainer] FATAL', e.message); process.exit(1); });
+}
+
+if (require.main === module) {
+  main().catch(e => { console.error('[drainer] FATAL', e.message); process.exit(1); });
+}
+
+module.exports = { drainQueue };

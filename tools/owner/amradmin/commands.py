@@ -13,9 +13,7 @@ from .constants import TIPI
 
 
 def parse_command(text: str) -> dict:
-    s = (text or "").strip()
-    if s.startswith(":"):
-        s = s[1:].strip()
+    s = (text or "").strip().lstrip(":").strip()   # tollera ':' e '::' iniziali
     if not s:
         return {"cmd": "noop"}
     parts = s.split()

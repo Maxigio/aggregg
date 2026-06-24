@@ -150,7 +150,7 @@ def watchlist_rows(db, *, q: str | None = None, tipo: str | None = None,
         params["node"] = node
     return db.rows(
         f"""SELECT w.id, w.tipo, w.marca, w.modello, w.assigned_node, w.enabled,
-                   w.activated_at, w.last_swept, w.priority, w.leased_until,
+                   w.activated_at, w.last_swept, w.last_truncated, w.priority, w.leased_until,
                    (SELECT count(*) FROM listings l
                       WHERE l.tipo=w.tipo AND l.marca=w.marca AND l.modello=w.modello)::int annunci,
                    count(*) OVER()::int total
@@ -237,14 +237,17 @@ def crawl_queue(db, *, limit: int = 200) -> list[dict]:
 
 
 def queue_counts(db) -> dict:
-    """Conteggi coda per stato (pending → ETA = pending × ~27s)."""
+    """Conteggi coda per stato (pending → ETA = pending × ~27s). Le cancellazioni
+    (status='fail' con error 'annullato…') sono contate a parte da `fail` reali → conteggi onesti."""
     return db.one(
-        """SELECT count(*) FILTER (WHERE status='pending')::int AS pending,
-                  count(*) FILTER (WHERE status='running')::int AS running,
-                  count(*) FILTER (WHERE status='done')::int    AS done,
-                  count(*) FILTER (WHERE status='fail')::int    AS fail
-             FROM crawl_queue"""
-    ) or {"pending": 0, "running": 0, "done": 0, "fail": 0}
+        """SELECT count(*) FILTER (WHERE status='pending')::int                  AS pending,
+                  count(*) FILTER (WHERE status IN ('running','cancel_requested'))::int AS running,
+                  count(*) FILTER (WHERE status='done')::int                     AS done,
+                  count(*) FILTER (WHERE status='fail' AND error LIKE %(canc)s)::int AS annullati,
+                  count(*) FILTER (WHERE status='fail' AND (error IS NULL OR error NOT LIKE %(canc)s))::int AS fail
+             FROM crawl_queue""",
+        {"canc": "annullato%"},
+    ) or {"pending": 0, "running": 0, "done": 0, "fail": 0, "annullati": 0}
 
 
 def due_targets(db, *, limit: int = 1000) -> list[dict]:

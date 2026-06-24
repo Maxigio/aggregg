@@ -157,6 +157,7 @@ def test_queue_scratch() -> None:
     db = Db()
     db._conn = conn
     try:
+        base = Q.queue_counts(db)   # delta sui conteggi → robusto a righe prod preesistenti
         # validazione: tipo errato → ValueError PRIMA del DB
         try:
             A.enqueue(db, "camion", "x", "y"); assert False, "atteso ValueError"
@@ -183,7 +184,16 @@ def test_queue_scratch() -> None:
         assert A.clear_pending(db) >= 1
         assert db.one("SELECT status FROM crawl_queue WHERE marca=%s AND modello='__q2__'",
                       (SENT,))["status"] == "fail"
-        print("✔ queue scratch OK (enqueue/dedupe/cancel/clear, rollback)")
+        # un fail REALE (errore scraper) per distinguerlo dalle cancellazioni
+        db.one("INSERT INTO crawl_queue (tipo,marca,modello,status,error) "
+               "VALUES ('auto',%s,'__qf__','fail','boom scraper') RETURNING id", (SENT,))
+        # queue_counts ONESTO: annullati (id1 + __q2__) separati dal fail reale (__qf__);
+        # rid è cancel_requested → conta come 'running'. Delta vs base = contributo del test.
+        now = Q.queue_counts(db)
+        assert now["annullati"] - base["annullati"] == 2, (base, now)
+        assert now["fail"] - base["fail"] == 1, (base, now)
+        assert now["running"] - base["running"] == 1, (base, now)
+        print("✔ queue scratch OK (enqueue/dedupe/cancel/clear + conteggi onesti, rollback)")
     finally:
         conn.rollback()
         conn.close()

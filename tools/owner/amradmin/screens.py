@@ -18,16 +18,21 @@ from .db import Db
 # Girano in thread (to_thread). Usano una Db PROPRIA a vita breve → niente contesa
 # con la self.db (live-reload) dello schermo che li chiama.
 def _enqueue_and_drain(rows: list[dict]) -> dict:
-    """Enqueue di righe + avvio drainer se serve. Ritorna {queued, skipped, drainer}."""
+    """Enqueue di righe + avvio drainer. Ritorna {queued, skipped, drainer}.
+    Spawn SEMPRE quando qualcosa è in coda — idempotente (il singolo drainer è
+    garantito dall'advisory lock: un 2º esce subito). Così si chiude la race in cui
+    un drainer in uscita farebbe saltare il re-spawn lasciando il job orfano."""
     with Db() as db:
         res = A.enqueue_rows(db, rows)
         if not res["queued"]:
             res["drainer"] = "—"
-        elif Q.drainer_alive(db):
-            res["drainer"] = "già attivo"
-        else:
+            return res
+        try:
             from .drainer import spawn_drainer
-            res["drainer"] = f"avviato pid {spawn_drainer()}"
+            spawn_drainer()
+            res["drainer"] = "attivo"
+        except Exception as e:
+            res["drainer"] = f"spawn KO ({e})"
     return res
 
 
@@ -449,7 +454,8 @@ class CrawlQueueScreen(Screen):
         drn = "[green]drainer attivo[/]" if alive else "[dim]drainer fermo[/]"
         self.query_one("#qstatus", Static).update(
             f"[cyan]{counts['running']} in corso[/] · [yellow]{counts['pending']} in attesa[/] "
-            f"(ETA {eta_s}) · {counts['done']} fatti · {counts['fail']} ko · {drn} · "
+            f"(ETA {eta_s}) · {counts['done']} fatti · {counts['fail']} ko · "
+            f"{counts.get('annullati', 0)} annullati · {drn} · "
             f"[g] avvia · [c] annulla · [x] svuota · [esc] indietro")
 
     def _current(self) -> dict | None:
@@ -498,8 +504,7 @@ class CrawlQueueScreen(Screen):
             if op == "clear":
                 return f"coda svuotata: {A.clear_pending(db)} pending annullati"
             if op == "start":
-                if Q.drainer_alive(db):
-                    return "drainer già attivo"
                 from .drainer import spawn_drainer
-                return f"drainer avviato (pid {spawn_drainer()})"
+                spawn_drainer()   # idempotente (lock): se uno è già attivo, il nuovo esce subito
+                return "drainer avviato"
         return ""

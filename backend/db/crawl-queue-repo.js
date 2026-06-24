@@ -69,15 +69,10 @@ async function reclaimStale(minutes = STALE_MIN) {
   return r ? r.rowCount : 0;
 }
 
-async function beat(id) {
-  if (!db.isEnabled() || !id) return;
-  await db.query(`UPDATE crawl_queue SET heartbeat=now() WHERE id=$1`, [id]);
-}
-
 async function isCancelRequested(id) {
   if (!db.isEnabled() || !id) return false;
   const r = await db.query(`SELECT 1 FROM crawl_queue WHERE id=$1 AND status='cancel_requested'`, [id]);
   return !!(r && r.rows.length);
 }
 
-module.exports = { enqueue, pickNext, markDone, markFail, reclaimStale, beat, isCancelRequested, STALE_MIN };
+module.exports = { enqueue, pickNext, markDone, markFail, reclaimStale, isCancelRequested, STALE_MIN };

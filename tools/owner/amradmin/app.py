@@ -103,13 +103,15 @@ class AmrAdminApp(App):
         if parsed["cmd"] == "noop":
             return
         if parsed["cmd"] == "error":
-            self.notify(parsed["msg"], title="comando", severity="warning")
+            self.notify(R.safe(parsed["msg"]), title="comando", severity="warning")
             return
         try:
             msg = await asyncio.to_thread(self._dispatch, parsed)
-            self.notify(msg, title="coda crawl")
+            # R.safe: il toast Rich rende il markup DOPO (sul compositor, fuori da questo
+            # try) → marca/modello con un tag (es. 'serie[/]') romperebbero il render.
+            self.notify(R.safe(msg), title="coda crawl")
         except Exception as e:   # validazione (es. tipo) o DB → toast, non crashare
-            self.notify(str(e), title="comando", severity="error")
+            self.notify(R.safe(str(e)), title="comando", severity="error")
 
     def _dispatch(self, parsed: dict) -> str:
         """Esegue il comando (gira in thread). Db PROPRIA → no contesa con refresh_data."""
@@ -119,7 +121,12 @@ class AmrAdminApp(App):
         cmd = parsed["cmd"]
         with Db() as db:
             def drainer() -> str:
-                return "già attivo" if Q2.drainer_alive(db) else f"avviato pid {spawn_drainer()}"
+                # spawn SEMPRE (idempotente via advisory lock) → chiude la race di uscita
+                try:
+                    spawn_drainer()
+                    return "attivo"
+                except Exception as e:
+                    return f"spawn KO ({e})"
             if cmd == "run":
                 rid = A.enqueue(db, parsed["tipo"], parsed["marca"], parsed["modello"])
                 if not rid:
