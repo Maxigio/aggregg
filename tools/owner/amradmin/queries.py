@@ -27,17 +27,20 @@ def node_stats(db) -> list[dict]:
     La finestra 20h è legata a STALE_HOURS via make_interval (= interval '20 hours').
     """
     return db.rows(
-        """SELECT COALESCE(assigned_node, 'imac') node,
+        """SELECT COALESCE(w.assigned_node, 'imac') node,
                   count(*)::int total,
-                  count(*) FILTER (WHERE activated_at IS NULL)::int coda,
-                  count(*) FILTER (WHERE activated_at IS NOT NULL AND last_swept IS NULL)::int mai,
-                  count(*) FILTER (WHERE activated_at IS NOT NULL
-                                   AND last_swept < now() - make_interval(hours => %(h)s))::int due,
-                  count(*) FILTER (WHERE last_swept >= now() - make_interval(hours => %(h)s))::int fresco,
-                  count(*) FILTER (WHERE NOT enabled)::int spenti,
-                  max(last_swept) last_swept
-             FROM watchlist
-            GROUP BY COALESCE(assigned_node, 'imac')
+                  count(*) FILTER (WHERE w.activated_at IS NULL)::int coda,
+                  count(*) FILTER (WHERE w.activated_at IS NOT NULL AND w.last_swept IS NULL)::int mai,
+                  count(*) FILTER (WHERE w.activated_at IS NOT NULL
+                                   AND w.last_swept < now() - make_interval(hours => %(h)s))::int due,
+                  count(*) FILTER (WHERE w.last_swept >= now() - make_interval(hours => %(h)s))::int fresco,
+                  count(*) FILTER (WHERE NOT w.enabled)::int spenti,
+                  max(w.last_swept) last_swept,
+                  max(cr.last_run) last_run            -- ultimo CRAWL reale del nodo (crawl_runs), non la freschezza catalogo
+             FROM watchlist w
+             LEFT JOIN (SELECT node, max(started_at) last_run FROM crawl_runs GROUP BY node) cr
+               ON cr.node = COALESCE(w.assigned_node, 'imac')
+            GROUP BY COALESCE(w.assigned_node, 'imac')
             ORDER BY node""",
         {"h": STALE_HOURS},
     )

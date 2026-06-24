@@ -125,7 +125,7 @@ def nodes_panel(stats: list[dict], health: dict) -> Panel:
 
     t = Table(expand=True, show_edge=False, pad_edge=False)
     t.add_column("nodo", style="bold")
-    t.add_column("attività", justify="right")
+    t.add_column("ultimo crawl", justify="right")
     t.add_column("stato crawl", justify="left")
     t.add_column("fonti", justify="left")
     for node in KNOWN_NODES:
@@ -138,7 +138,10 @@ def nodes_panel(stats: list[dict], health: dict) -> Panel:
             color = "red" if hr.get("blocked") else ("yellow" if hr.get("degraded") else "green")
             pills.append(f"[{color}]{hr['fonte']}[/]")
         label = node + (" [dim](centrale)[/]" if node == "imac" else "")
-        t.add_row(label, _ago(s.get("last_swept")) if tot else "—",
+        # "ultimo crawl" = evento reale da crawl_runs (coerente col last_run_line in alto),
+        # NON max(last_swept) (= freschezza catalogo, che un :run ad-hoc non muove).
+        lr = s.get("last_run")
+        t.add_row(label, _ago(lr) if lr else "—",
                   state if tot else "[dim]0 target[/]", " ".join(pills) or "[dim]—[/]")
     return Panel(t, title="Nodi", border_style="magenta")
 
@@ -147,11 +150,13 @@ def fonti_panel(rows: list[dict]) -> Panel:
     t = Table(expand=True)
     t.add_column("fonte", style="bold")
     t.add_column("attivi", justify="right", style="green")
-    t.add_column("venduti", justify="right", style="dim")
+    t.add_column("spariti", justify="right", style="dim")
     t.add_column("totale", justify="right")
     for r in rows:
         t.add_row(r["fonte"], f"{r['active']:,}", f"{r['gone']:,}", f"{r['total']:,}")
-    return Panel(t, title="Annunci per fonte", border_style="blue")
+    # "spariti" = non più online (≠ venduti): le fonti filtrano i venduti lato server,
+    # noi vediamo solo presente/assente → è churn, non vendite.
+    return Panel(t, title="Annunci per fonte · spariti = non più online", border_style="blue")
 
 
 def ramp_panel(rp: dict) -> Panel:
