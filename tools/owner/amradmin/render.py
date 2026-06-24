@@ -28,14 +28,14 @@ def node_label(row: dict) -> str:
 
 
 def state_label(row: dict) -> str:
-    """Stato-crawl derivato per la riga watchlist (come crawlState dell'admin)."""
+    """Stato-crawl della riga watchlist su `last_swept` (coverage-driven). 'mai
+    crawlato' = ⚪ to-do, NON 🔴 rosso (non è un errore!). `activated_at` (campo
+    morto: niente più ramp) non più usato."""
     if not row.get("enabled"):
         return "[dim]spento[/]"
-    if row.get("activated_at") is None:
-        return "[dim]⚪ coda[/]"
     ls = row.get("last_swept")
     if ls is None:
-        return "[red]🔴 mai[/]"
+        return "[dim]⚪ mai[/]"
     age_h = (datetime.now(timezone.utc) - ls).total_seconds() / 3600
     return "[green]🟢 fresco[/]" if age_h < STALE_HOURS else "[yellow]🟡 da agg.[/]"
 
@@ -131,8 +131,9 @@ def nodes_panel(stats: list[dict], health: dict) -> Panel:
     for node in KNOWN_NODES:
         s = stat_by.get(node, {})
         tot = s.get("total", 0)
+        # 🟢 fresco · 🟡 da agg. · ⚪ mai (to-do, NON rosso: "mai crawlato" non è un errore).
         state = (f"[green]🟢{s.get('fresco',0)}[/] [yellow]🟡{s.get('due',0)}[/] "
-                 f"[red]🔴{s.get('mai',0)}[/]")
+                 f"[dim]⚪{s.get('mai',0)}[/]")
         pills = []
         for hr in by_node.get(node, []):
             color = "red" if hr.get("blocked") else ("yellow" if hr.get("degraded") else "green")
