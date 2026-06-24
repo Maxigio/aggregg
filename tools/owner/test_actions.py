@@ -296,6 +296,65 @@ def test_enqueue_canonicalize() -> None:
         conn.close()
 
 
+def test_enqueue_autofull() -> None:
+    """coverage-driven: enqueue di un target TRONCATO senza profondità → AUTO-FULL
+    (pages=FULL_SENTINEL); esplicito vince; non-troncato → default (None). Scratch rollback."""
+    from amradmin.constants import FULL_SENTINEL
+    try:
+        conn = psycopg.connect(read_database_url(), autocommit=False, row_factory=dict_row)
+    except Exception as e:
+        print(f"⤼ SKIP enqueue autofull: DB non raggiungibile ({e})")
+        return
+    db = Db()
+    db._conn = conn
+    try:
+        db.one("INSERT INTO watchlist (tipo,marca,modello,last_truncated) "
+               "VALUES ('auto',%s,'trunc',true) RETURNING id", (SENT,))
+        qid = A.enqueue(db, "auto", SENT, "trunc")              # no profondità → auto-full
+        assert db.one("SELECT pages FROM crawl_queue WHERE id=%s", (qid,))["pages"] == FULL_SENTINEL, \
+            "target troncato senza depth → auto-full"
+        # esplicito pN su target già pending → dedup (None) ma aggiorna pages a 5 (esplicito vince)
+        assert A.enqueue(db, "auto", SENT, "trunc", pages=5) is None
+        assert db.one("SELECT pages FROM crawl_queue WHERE id=%s", (qid,))["pages"] == 5, \
+            "profondità esplicita sovrascrive l'auto-full sul pending"
+        # target NON troncato → default (pages None)
+        db.one("INSERT INTO watchlist (tipo,marca,modello,last_truncated) "
+               "VALUES ('auto',%s,'okk',false) RETURNING id", (SENT,))
+        qid3 = A.enqueue(db, "auto", SENT, "okk")
+        assert db.one("SELECT pages FROM crawl_queue WHERE id=%s", (qid3,))["pages"] is None, \
+            "non-troncato → default (no auto-full)"
+        print("✔ enqueue auto-full OK (tronca→full · esplicito vince · non-tronca→default, rollback)")
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+def test_suggestions_saturation() -> None:
+    """coverage-driven: il suggeritore SALTA i target saturi (saturated_at recente) e li
+    RI-CONTROLLA dopo SATURATED_DAYS. Scratch rollback."""
+    try:
+        conn = psycopg.connect(read_database_url(), autocommit=False, row_factory=dict_row)
+    except Exception as e:
+        print(f"⤼ SKIP suggestions saturation: DB non raggiungibile ({e})")
+        return
+    db = Db()
+    db._conn = conn
+    old = "now() - interval '30 hours'"   # passa la recency
+    try:
+        # truncated + swept vecchio + SATURO ora → ESCLUSO
+        db.one(f"INSERT INTO watchlist (tipo,marca,modello,last_swept,last_truncated,saturated_at) "
+               f"VALUES ('auto',%s,'sat',{old},true, now()) RETURNING id", (SENT,))
+        # truncated + swept vecchio + saturo VECCHIO (>SATURATED_DAYS) → RI-INCLUSO (richeck)
+        db.one(f"INSERT INTO watchlist (tipo,marca,modello,last_swept,last_truncated,saturated_at) "
+               f"VALUES ('auto',%s,'sat_old',{old},true, now() - interval '10 days') RETURNING id", (SENT,))
+        mods = [r["modello"] for r in Q.suggestions(db, q=SENT, limit=50) if r["marca"] == SENT]
+        assert mods == ["sat_old"], f"saturo escluso, vecchio ri-incluso: {mods}"
+        print("✔ suggestions saturation OK (saturo escluso · richeck dopo N giorni, rollback)")
+    finally:
+        conn.rollback()
+        conn.close()
+
+
 if __name__ == "__main__":
     test_validation()
     test_actions_scratch()
@@ -304,4 +363,6 @@ if __name__ == "__main__":
     test_suggestions_ranking()
     test_watchlist_interleave()
     test_enqueue_canonicalize()
+    test_enqueue_autofull()
+    test_suggestions_saturation()
     print("\nTEST OK")

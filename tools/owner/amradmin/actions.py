@@ -7,7 +7,7 @@ scratch in transazione rolled-back. Validazione nodo/tipo come fa il server JS
 """
 from __future__ import annotations
 
-from .constants import KNOWN_NODES, TIPI
+from .constants import FULL_SENTINEL, KNOWN_NODES, TIPI
 
 _UNSET = object()
 
@@ -192,6 +192,10 @@ def enqueue(db, tipo: str, marca: str, modello: str, *,
             marca, modello, watchlist_id = cat["marca"], cat["modello"], cat["id"]
             if last_truncated is None:
                 last_truncated = cat["last_truncated"]
+    # coverage-driven AUTO-FULL: un target che ha TRONCATO l'ultima volta, se accodato
+    # SENZA profondità esplicita, va a FULL (per completarlo). Esplicito (pN/full) vince.
+    if pages is None and last_truncated:
+        pages = FULL_SENTINEL
     row = db.one(
         """INSERT INTO crawl_queue (tipo, marca, modello, watchlist_id, last_truncated, priority, pages)
                VALUES (%s,%s,%s,%s,%s,%s,%s)

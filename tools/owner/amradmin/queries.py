@@ -6,7 +6,7 @@ non ha (coverage marca×regione, gap, ramp ETA, distribuzione prezzi, storico ru
 """
 from __future__ import annotations
 
-from .constants import STALE_HOURS
+from .constants import SATURATED_DAYS, STALE_HOURS
 
 # ─────────────────────────── MIRROR dei repo JS ────────────────────────────
 
@@ -153,6 +153,8 @@ def suggestions(db, *, q: str | None = None, limit: int = 300) -> list[dict]:
                AND (w.last_swept IS NULL OR w.last_truncated = true)   -- da scoprire OPPURE c'è altro (tronca)
                AND (w.last_swept IS NULL                               -- recency: non ri-suggerire l'appena-crawlato
                     OR w.last_swept < now() - interval '{STALE_HOURS} hours')
+               AND (w.saturated_at IS NULL                             -- saturo (0 nuovi): salta, richeck dopo N giorni
+                    OR w.saturated_at < now() - interval '{SATURATED_DAYS} days')
                AND NOT EXISTS (SELECT 1 FROM crawl_queue cq
                                 WHERE cq.tipo = w.tipo AND cq.marca = w.marca AND cq.modello = w.modello
                                   AND cq.status IN ('pending','running','cancel_requested'))
@@ -238,7 +240,7 @@ def coverage(db, *, fonte: str | None = None, limit: int = 200) -> list[dict]:
                    i.n AS ingeriti,
                    CASE WHEN m.total > 0 THEN least(round(100.0 * i.n / m.total, 1), 100) END AS coverage_pct,
                    greatest(m.total - i.n, 0) AS manca,
-                   w.last_truncated, w.last_swept   -- M-E: badge soddisfatto (non-tronca) vs tronca
+                   w.last_truncated, w.last_swept, w.saturated_at   -- badge: soddisfatto/tronca/saturo
               FROM latest m
               CROSS JOIN LATERAL (
                    SELECT count(*)::int n FROM listings l

@@ -198,11 +198,14 @@ def sugg_state(row: dict) -> str:
 
 
 def cov_state(row: dict) -> str:
-    """Badge copertura M-E: 'soddisfatto' (crawl completo = preso tutto il matchabile,
-    il gap è rumore free-text di Subito) vs 'tronca → full' (cap pagine colpito = c'è
-    altro) vs 'mai'. NB: last_truncated è per-TARGET (flag se QUALCHE fonte ha troncato)."""
+    """Badge copertura: 'saturo' (coverage-driven: ultimo crawl 0 nuovi → re-crawl
+    inutile, il suggeritore lo salta) vs 'tronca → full' (cap pagine → c'è altro) vs
+    'soddisfatto' (preso tutto il matchabile, il gap è rumore free-text) vs 'mai'.
+    NB: last_truncated/saturated_at sono per-TARGET (qualunque fonte)."""
     if row.get("last_swept") is None:
         return "[dim]mai[/]"
+    if row.get("saturated_at") is not None:
+        return "[blue]≈ saturo[/]"            # stabile: 0 nuovi all'ultimo crawl
     if row.get("last_truncated"):
         return "[yellow]tronca → full[/]"
     pct = row.get("coverage_pct")

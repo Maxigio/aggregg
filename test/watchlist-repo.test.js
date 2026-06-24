@@ -200,3 +200,36 @@ test('addCandidates: aggiunge i nuovi e li assegna, NON tocca gli esistenti', as
   // l'esistente NON spostato (resta su massimo)
   assert.strictEqual(after.find(t => t.modello === 'Panda').assigned_node, 'massimo', 'no clobber sull’esistente');
 });
+
+// ─── coverage-driven — markSwept timbra/azzera saturated_at (mig 018) ───────────
+// Qui (stesso file) per evitare la race su TRUNCATE watchlist coi test concorrenti.
+// La beforeEach semina Panda → presente a ogni test.
+const pandaId = async () => (await db.query("SELECT id FROM watchlist WHERE modello='Panda'")).rows[0].id;
+const satOf = async id => (await db.query('SELECT saturated_at FROM watchlist WHERE id=$1', [id])).rows[0].saturated_at;
+
+test('markSwept saturazione: written>0 & inserted=0 → saturo (timbrato)', async () => {
+  const id = await pandaId();
+  await wl.markSwept(id, { truncated: false, complete: true, written: 7, inserted: 0 });
+  assert.ok(await satOf(id), '0 nuovi su 7 scritti → saturated_at timbrato');
+});
+
+test('markSwept saturazione: inserted>0 → reset (NULL)', async () => {
+  const id = await pandaId();
+  await db.query('UPDATE watchlist SET saturated_at = now() WHERE id=$1', [id]);
+  await wl.markSwept(id, { written: 7, inserted: 3 });
+  assert.strictEqual(await satOf(id), null, 'materiale nuovo → non più saturo');
+});
+
+test('markSwept saturazione: written=0 (vuoto/errore) → INVARIATO', async () => {
+  const id = await pandaId();
+  await db.query('UPDATE watchlist SET saturated_at = now() WHERE id=$1', [id]);
+  await wl.markSwept(id, { written: 0, inserted: 0 });
+  assert.ok(await satOf(id), 'written=0 non azzera (no falsa-saturazione)');
+});
+
+test('markSwept saturazione: senza meta (legacy) → INVARIATO', async () => {
+  const id = await pandaId();
+  await db.query('UPDATE watchlist SET saturated_at = now() WHERE id=$1', [id]);
+  await wl.markSwept(id);
+  assert.ok(await satOf(id), 'la chiamata legacy non tocca saturated_at');
+});

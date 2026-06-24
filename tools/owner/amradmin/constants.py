@@ -12,6 +12,11 @@ KNOWN_NODES = ["imac", "surface", "m2", "massimo"]
 # "interval '20 hours'") e backend/crawler.js.
 STALE_HOURS = 20
 
+# Coverage-driven: un target SATURO (ultimo crawl 0 righe nuove) viene saltato dal
+# suggeritore per SATURATED_DAYS, poi ri-controllato (può essere apparso inventario nuovo).
+# Fonte: watchlist.saturated_at (mig 018), timbrato da watchlist-repo.markSwept.
+SATURATED_DAYS = 7
+
 # Tipi veicolo ammessi. Fonte: backend/server.js (validazione tipo auto|moto).
 TIPI = ["auto", "moto"]
 

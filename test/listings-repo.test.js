@@ -60,6 +60,19 @@ test('prezzo cambiato: append price_point + last_price aggiornato', async () => 
   assert.strictEqual((await row('u1')).last_price, 9500);
 });
 
+// M-E onestà "written": upsertListings ritorna `inserted` (righe NUOVE = xmax=0) oltre a
+// `written` (righe toccate). Guarda anche che la ristrutturazione UPSERT_SQL (pp = CTE
+// data-modifying) non abbia rotto il conteggio.
+test('inserted: nuovi=N al 1° upsert, 0 al re-upsert (onestà written)', async () => {
+  const items = [mkItem('u1', 10000), mkItem('u2', 12000)];
+  const r1 = await repo.upsertListings(items, TARGET);
+  assert.strictEqual(r1.written, 2);
+  assert.strictEqual(r1.inserted, 2, 'entrambe NUOVE (xmax=0)');
+  const r2 = await repo.upsertListings(items, TARGET);
+  assert.strictEqual(r2.written, 2, 're-upsert riscrive (ON CONFLICT)');
+  assert.strictEqual(r2.inserted, 0, 'nessuna NUOVA → 0 nuovi');
+});
+
 test('markGone: venduto solo dopo 2 assenze (K=2)', async () => {
   await repo.upsertListings([mkItem('u1', 10000), mkItem('u2', 8000)], TARGET);
   // sweep 1: u2 assente → miss_count 1, ancora active

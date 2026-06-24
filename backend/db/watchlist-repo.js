@@ -150,14 +150,22 @@ async function completeTarget(id) {
 // meta opzionale: retro-compat con le chiamate senza argomenti.
 async function markSwept(id, meta = {}) {
   if (!db.isEnabled()) return;
-  const { truncated, complete } = meta;
+  const { truncated, complete, inserted, written } = meta;
+  // coverage-driven SATURAZIONE: written>0 & inserted=0 = ri-preso l'esistente, 0 nuovi
+  // → saturo (timbra saturated_at). inserted>0 = materiale nuovo → reset (NULL).
+  // written=0 (vuoto/errore) → NON tocca saturated_at (guard anti falsa-saturazione).
+  // I chiamanti vecchi (senza written/inserted) → 0/0 → ELSE → invariato.
   await db.query(
     `UPDATE watchlist
         SET last_swept = now(),
             last_truncated = COALESCE($2, last_truncated),
-            last_complete_at = CASE WHEN $3 THEN now() ELSE last_complete_at END
+            last_complete_at = CASE WHEN $3 THEN now() ELSE last_complete_at END,
+            saturated_at = CASE WHEN $4 > 0 AND $5 = 0 THEN now()
+                                WHEN $5 > 0 THEN NULL
+                                ELSE saturated_at END
       WHERE id = $1`,
-    [id, truncated === undefined ? null : truncated, complete === true]
+    [id, truncated === undefined ? null : truncated, complete === true,
+     written == null ? 0 : written, inserted == null ? 0 : inserted]
   );
 }
 
