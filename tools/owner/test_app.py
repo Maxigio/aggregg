@@ -360,7 +360,7 @@ def test_health_screen() -> None:
                 assert isinstance(app.export_screenshot(), str), "render KO (markup fonte?)"
                 mine = [r for r in scr.rows if r["node"] == NODE]
                 assert mine and mine[0]["blocked"] is True, f"riga sentinel bloccata non caricata: {mine}"
-                assert len(scr.rows) >= 9, "attese le 9 fonti reali + sentinel"
+                assert len(scr.rows) >= 1, "almeno la sentinel (no accoppiamento allo stato prod)"
 
         asyncio.run(run())
         print("✔ health screen (push/load/blocked + markup) OK")

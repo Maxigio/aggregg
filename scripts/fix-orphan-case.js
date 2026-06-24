@@ -19,28 +19,42 @@ async function main() {
   if (!db.isEnabled()) { console.error('[fix-orphan] DB non configurato (DATABASE_URL).'); process.exit(1); }
   await db.init();
 
+  // `n_canon` = quanti canonici case-equivalenti esistono in watchlist per la chiave.
+  // La UNIQUE watchlist è case-sensitive → potrebbero coesistere 'Audi A3' e 'audi a3':
+  // in quel caso il canonico è AMBIGUO → NON auto-rietichetto (salto + warn), niente
+  // tiebreak arbitrario. Quasi impossibile (:add è idempotente case-insensitive), ma
+  // lo script committato dev'essere safe-by-construction.
   const orphans = (await db.query(`
     WITH keys AS (
       SELECT DISTINCT tipo, marca, modello FROM market_size
       UNION
       SELECT DISTINCT tipo, marca, modello FROM listings
+    ),
+    matches AS (
+      SELECT k.tipo, k.marca, k.modello, w.marca AS canon_marca, w.modello AS canon_modello, w.id AS canon_id,
+             count(*) OVER (PARTITION BY k.tipo, k.marca, k.modello) AS n_canon
+        FROM keys k
+        JOIN watchlist w
+          ON w.tipo = k.tipo
+         AND lower(w.marca) = lower(k.marca)
+         AND lower(w.modello) = lower(k.modello)
+         AND (w.marca <> k.marca OR w.modello <> k.modello)   -- canonico DIVERSO (solo case)
+       WHERE NOT EXISTS (SELECT 1 FROM watchlist w2
+                          WHERE w2.tipo = k.tipo AND w2.marca = k.marca AND w2.modello = k.modello)
     )
-    SELECT DISTINCT ON (k.tipo, k.marca, k.modello)
-           k.tipo, k.marca, k.modello, w.marca AS canon_marca, w.modello AS canon_modello
-      FROM keys k
-      JOIN watchlist w
-        ON w.tipo = k.tipo
-       AND lower(w.marca) = lower(k.marca)
-       AND lower(w.modello) = lower(k.modello)
-       AND (w.marca <> k.marca OR w.modello <> k.modello)   -- canonico DIVERSO (solo case)
-     WHERE NOT EXISTS (SELECT 1 FROM watchlist w2
-                        WHERE w2.tipo = k.tipo AND w2.marca = k.marca AND w2.modello = k.modello)
-     ORDER BY k.tipo, k.marca, k.modello, w.id`)).rows;
+    SELECT DISTINCT ON (tipo, marca, modello) tipo, marca, modello, canon_marca, canon_modello, n_canon
+      FROM matches
+     ORDER BY tipo, marca, modello, canon_id`)).rows;
 
   if (!orphans.length) { console.log('[fix-orphan] nessun orfano case-variant. Niente da fare.'); await db.close(); return; }
 
-  let totL = 0, totM = 0;
+  let totL = 0, totM = 0, skipped = 0;
   for (const o of orphans) {
+    if (o.n_canon > 1) {   // canonico ambiguo → non indovinare, segnala
+      skipped++;
+      console.warn(`  ⚠️ ${o.tipo} ${o.marca}/${o.modello}: ${o.n_canon} canonici case-equivalenti in watchlist → AMBIGUO, salto (rietichetta a mano).`);
+      continue;
+    }
     const lr = await db.query('UPDATE listings SET marca=$1, modello=$2 WHERE tipo=$3 AND marca=$4 AND modello=$5',
       [o.canon_marca, o.canon_modello, o.tipo, o.marca, o.modello]);
     const mr = await db.query('UPDATE market_size SET marca=$1, modello=$2 WHERE tipo=$3 AND marca=$4 AND modello=$5',
@@ -48,7 +62,7 @@ async function main() {
     totL += lr.rowCount; totM += mr.rowCount;
     console.log(`  ${o.tipo} ${o.marca}/${o.modello} -> ${o.canon_marca}/${o.canon_modello}  (listings ${lr.rowCount}, market_size ${mr.rowCount})`);
   }
-  console.log(`[fix-orphan] FATTO. orfani: ${orphans.length} · listings ri-etichettati: ${totL} · market_size: ${totM}.`);
+  console.log(`[fix-orphan] FATTO. orfani: ${orphans.length} · rietichettati: ${orphans.length - skipped} (listings ${totL}, market_size ${totM}) · ambigui saltati: ${skipped}.`);
   await db.close();
 }
 
