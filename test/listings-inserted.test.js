@@ -36,3 +36,23 @@ test('upsertListings: re-upsert stessi url → inserted 0, written invariato', a
   assert.strictEqual(r.written, 2, 'riscritte (upsert ON CONFLICT)');
   assert.strictEqual(r.inserted, 0, 'nessuna NUOVA → 0 nuovi (onestà written)');
 });
+
+// La ristrutturazione UPSERT_SQL (pp = CTE data-modifying NON referenziata) deve
+// continuare a scrivere price_points: 1 punto al 1° insert, NESSUN doppione a prezzo
+// invariato, +1 a prezzo cambiato (regressione = storia prezzi rotta in silenzio).
+test('upsertListings: price_points scritto + dedup prezzo (CTE pp ancora attiva)', async () => {
+  await db.query('DELETE FROM price_points WHERE url=$1', [URLS[0]]);   // self-contained (no dip. ordine)
+  await db.query('DELETE FROM listings WHERE url=$1', [URLS[0]]);
+  const one = [{ url: URLS[0], fonte: 'subito', prezzo: 1000, anno: 2020, km: 100 }];
+  await repo.upsertListings(one, TARGET);
+  const n1 = (await db.query('SELECT count(*)::int n FROM price_points WHERE url=$1', [URLS[0]])).rows[0].n;
+  assert.strictEqual(n1, 1, '1° insert → 1 price_point');
+  await repo.upsertListings(one, TARGET);   // stesso prezzo → niente doppione
+  const n2 = (await db.query('SELECT count(*)::int n FROM price_points WHERE url=$1', [URLS[0]])).rows[0].n;
+  assert.strictEqual(n2, 1, 'prezzo invariato → nessun price_point in più');
+  await repo.upsertListings([{ ...one[0], prezzo: 1200 }], TARGET);   // prezzo nuovo → +1
+  const n3 = (await db.query('SELECT count(*)::int n FROM price_points WHERE url=$1', [URLS[0]])).rows[0].n;
+  const lp = (await db.query('SELECT last_price FROM listings WHERE url=$1', [URLS[0]])).rows[0].last_price;
+  assert.strictEqual(n3, 2, 'prezzo cambiato → +1 price_point');
+  assert.strictEqual(lp, 1200, 'last_price aggiornato');
+});

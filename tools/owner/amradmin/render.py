@@ -111,7 +111,7 @@ def _ago(ts) -> str:
 
 
 def command_cheatsheet() -> Panel:
-    """Cheatsheet della schermata Comandi (M-D); tasto [?] per mostrarla/nasconderla."""
+    """Cheatsheet della schermata Comandi (M-D), sempre visibile in cima alla schermata."""
     t = Table.grid(padding=(0, 2))
     t.add_column(style="bold cyan", no_wrap=True)
     t.add_column()
@@ -121,7 +121,7 @@ def command_cheatsheet() -> Panel:
     t.add_row(":clear   ·   :stop", "svuota i pending della coda")
     t.add_row(":cancel <id>", "annulla un job (pending o in corso, tra un target e l'altro)")
     t.add_row("↑ / ↓", "richiama i comandi digitati")
-    t.add_row("?   ·   esc", "mostra/nascondi questo aiuto · indietro")
+    t.add_row("esc", "torna indietro")
     return Panel(t, title="Comandi disponibili", border_style="cyan")
 
 
