@@ -323,7 +323,16 @@ def test_enqueue_autofull() -> None:
         qid3 = A.enqueue(db, "auto", SENT, "okk")
         assert db.one("SELECT pages FROM crawl_queue WHERE id=%s", (qid3,))["pages"] is None, \
             "non-troncato → default (no auto-full)"
-        print("✔ enqueue auto-full OK (tronca→full · esplicito vince · non-tronca→default, rollback)")
+        # esplicito-PRIMA poi implicito: p5 esplicito, poi ri-enqueue implicito su troncato
+        # APPROFONDISCE il pending a full (solo-deepening, coverage-safe — comportamento atteso)
+        db.one("INSERT INTO watchlist (tipo,marca,modello,last_truncated) "
+               "VALUES ('auto',%s,'tr2',true) RETURNING id", (SENT,))
+        q5 = A.enqueue(db, "auto", SENT, "tr2", pages=5)
+        assert db.one("SELECT pages FROM crawl_queue WHERE id=%s", (q5,))["pages"] == 5, "p5 esplicito rispettato"
+        assert A.enqueue(db, "auto", SENT, "tr2") is None, "ri-enqueue → dedup"
+        assert db.one("SELECT pages FROM crawl_queue WHERE id=%s", (q5,))["pages"] == FULL_SENTINEL, \
+            "ri-enqueue implicito su troncato APPROFONDISCE a full (solo-deepening)"
+        print("✔ enqueue auto-full OK (tronca→full · esplicito vince · deepening · non-tronca→default, rollback)")
     finally:
         conn.rollback()
         conn.close()

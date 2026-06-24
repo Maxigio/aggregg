@@ -196,7 +196,7 @@ async function sweepTarget(target, stats) {
     }
   }
 
-  return { truncated: anyTrunc, complete: !anyTrunc && !skippedAny };
+  return { truncated: anyTrunc, complete: !anyTrunc && !skippedAny, skipped: skippedAny };
 }
 
 // ─── Sweep completa ───────────────────────────────────────────────────────────
@@ -244,6 +244,11 @@ async function _sweepAllCore({ withLock } = {}) {
   const c = await wl.counts();
   console.log(`[crawler] sweep avvio: ${targets.length} attivi (+${activated.length} nuovi) · ${c.pending} in coda`);
 
+  // ⚠️ `stats` è CONDIVISO tra tutti i target di questa sweep (accumula). Va bene perché
+  // qui markSwept è la forma LEGACY (no written/inserted) → la saturazione NON si attiva.
+  // NON aggiungere inserted/written a questo markSwept senza prima dare a ogni target uno
+  // `stats` proprio: altrimenti la saturazione vedrebbe i conteggi cumulativi (target N =
+  // somma 1..N) e sbaglierebbe. Il drainer (crawl-once.js) usa già uno stats per-job.
   const stats = { written: 0, as: 0, sub: 0, errors: 0, targets: targets.length };
   const runOne = t => async () => {
     const meta = await sweepTarget(t, stats);

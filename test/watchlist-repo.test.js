@@ -233,3 +233,13 @@ test('markSwept saturazione: senza meta (legacy) → INVARIATO', async () => {
   await wl.markSwept(id);
   assert.ok(await satOf(id), 'la chiamata legacy non tocca saturated_at');
 });
+
+test('markSwept saturazione: skipped (fonte in back-off) → NON satura', async () => {
+  const id = await pandaId();
+  // written>0 & inserted=0 saturerebbe, MA una fonte è stata saltata → non l'abbiamo vista
+  await wl.markSwept(id, { written: 7, inserted: 0, skipped: true });
+  assert.strictEqual(await satOf(id), null, 'fonte skippata → niente falsa-saturazione');
+  // truncated invece DEVE ancora saturare (mega-target cappato)
+  await wl.markSwept(id, { written: 7, inserted: 0, truncated: true, skipped: false });
+  assert.ok(await satOf(id), 'troncato (non skippato) → satura ancora');
+});

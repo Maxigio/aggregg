@@ -193,7 +193,9 @@ def enqueue(db, tipo: str, marca: str, modello: str, *,
             if last_truncated is None:
                 last_truncated = cat["last_truncated"]
     # coverage-driven AUTO-FULL: un target che ha TRONCATO l'ultima volta, se accodato
-    # SENZA profondità esplicita, va a FULL (per completarlo). Esplicito (pN/full) vince.
+    # SENZA profondità esplicita IN QUESTO comando, va a FULL (per completarlo). Un pN/full
+    # esplicito qui lo evita; ma un ri-enqueue implicito (es. 'g' su riga troncata) può
+    # APPROFONDIRE un job pending già esistente fino a full (solo-deepening, coverage-safe).
     if pages is None and last_truncated:
         pages = FULL_SENTINEL
     row = db.one(
