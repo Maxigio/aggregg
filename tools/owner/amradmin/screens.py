@@ -646,7 +646,7 @@ class CommandScreen(Screen):
         yield Static(R.command_cheatsheet(), id="cheat")
         yield RichLog(id="out", markup=True, wrap=True, highlight=False)
         yield Input(id="cmdin",
-                    placeholder=":run auto bmw serie 3 [full|pN]  ·  :run due  ·  :clear  ·  :cancel <id>")
+                    placeholder=":run auto bmw serie 3 [full|pN]  ·  :add  ·  :run due  ·  :clear  ·  :cancel <id>")
         yield Footer()
 
     def on_mount(self) -> None:

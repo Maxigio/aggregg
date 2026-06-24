@@ -40,6 +40,13 @@ def dispatch(parsed: dict) -> str:
             if not res["queued"]:
                 return f"niente di 'due' ora (dup {res['skipped']})"
             return f"due in coda: {res['queued']} (dup {res['skipped']}) · drainer {drainer()}"
+        if cmd == "add":
+            # aggiunge al catalogo watchlist (no crawl, no drainer). Idempotente: se c'è già
+            # ON CONFLICT ritorna la riga esistente. Poi :run la crawla.
+            row = A.add_one(db, parsed["tipo"], parsed["marca"], parsed["modello"])
+            if not row:
+                return "errore: target non aggiunto"
+            return f"in watchlist: {row['tipo']} {row['marca']} {row['modello']} (id {row['id']}) · ':run' per crawlarlo"
         if cmd == "clear":
             return f"coda svuotata: {A.clear_pending(db)} pending annullati"
         if cmd == "cancel":

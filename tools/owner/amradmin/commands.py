@@ -47,6 +47,15 @@ def parse_command(text: str) -> dict:
         return {"cmd": "run", "tipo": args[0].lower(), "marca": rest[0],
                 "modello": " ".join(rest[1:]), "pages": pages}
 
+    if verb == "add":
+        # :add <auto|moto> <marca> <modello…> → aggiunge un target al catalogo watchlist
+        # (NON crawla; idempotente). Rimpiazza il vecchio pannello admin "+ aggiungi".
+        if not args or args[0].lower() not in TIPI:
+            return {"cmd": "error", "msg": f"uso: :add <{'/'.join(TIPI)}> <marca> <modello>"}
+        if len(args) < 3:
+            return {"cmd": "error", "msg": "uso: :add <auto|moto> <marca> <modello>"}
+        return {"cmd": "add", "tipo": args[0].lower(), "marca": args[1], "modello": " ".join(args[2:])}
+
     if verb in ("clear", "stop"):
         return {"cmd": "clear"}
 

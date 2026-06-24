@@ -38,6 +38,11 @@ def test_parse() -> None:
     assert p(":run")["cmd"] == "error"            # senza args
     assert p(":run bmw 320")["cmd"] == "error"    # tipo mancante (bmw ∉ auto/moto)
     assert p(":run auto bmw")["cmd"] == "error"   # senza modello
+    # add (→ watchlist, no crawl)
+    assert p(":add auto bmw serie 3") == {"cmd": "add", "tipo": "auto", "marca": "bmw", "modello": "serie 3"}
+    assert p(":add moto ducati monster")["cmd"] == "add"
+    assert p(":add auto bmw")["cmd"] == "error"        # senza modello
+    assert p(":add bmw 320")["cmd"] == "error"         # tipo mancante
     # clear / cancel
     assert p(":clear")["cmd"] == "clear"
     assert p(":stop")["cmd"] == "clear"

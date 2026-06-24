@@ -117,6 +117,7 @@ def command_cheatsheet() -> Panel:
     t.add_column()
     t.add_row(":run <auto|moto> <marca> <modello> [full|pN]",
               "accoda un crawl (ad-hoc anche fuori catalogo) · full=fino al cap · pN=N pagine")
+    t.add_row(":add <auto|moto> <marca> <modello>", "aggiunge un target al catalogo watchlist (no crawl)")
     t.add_row(":run due", "accoda tutti i target 'due' (stantii)")
     t.add_row(":clear   ·   :stop", "svuota i pending della coda")
     t.add_row(":cancel <id>", "annulla un job (pending o in corso, tra un target e l'altro)")

@@ -17,7 +17,6 @@ const healthRepo = require('./db/health-repo');
 const watchlistRepo = require('./db/watchlist-repo');
 const runsRepo = require('./db/crawl-runs-repo');                       // F12
 const accessLog = require('./db/access-log-repo');                      // F50 Fase 4 — log eventi/accessi
-const { candidates } = require('./candidate-targets');                  // F11
 const qrcode = require('qrcode-generator');
 const scrapeSubito    = require('./scrapers/subito-playwright');
 const scrapeAutoscout = require('./scrapers/autoscout-playwright');
@@ -163,14 +162,14 @@ app.use((req, res, next) => {
     return res.status(401).send('non autorizzato');
   }
   req.authRole = role;
-  // Gate DEMO (ospite read-only): solo GET; niente scritture, niente pannello admin
-  // (anche in lettura). /login·/logout sono già esenti via AUTH_FREE.
+  // Gate DEMO (ospite read-only): solo GET; niente scritture, niente modo Valuta.
+  // /login·/logout sono già esenti via AUTH_FREE. (Il pannello admin non esiste più →
+  // l'owner-tool DB-puro lo sostituisce; nessuna route /admin da gateare qui.)
   if (role === 'demo') {
-    const isAdmin = req.path === '/admin' || req.path.startsWith('/admin/') || req.path.startsWith('/api/admin/');
     const isValuta = req.path === '/api/valuta';   // modo Valuta = solo papà (full), non demo
     const isReport = req.path === '/api/report';   // l'utente demo DEVE poter segnalare (match esatto)
     const isWrite = req.method !== 'GET' && req.method !== 'HEAD';
-    if ((isAdmin || isValuta || isWrite) && !isReport) {
+    if ((isValuta || isWrite) && !isReport) {
       if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'modalità demo: sola lettura' });
       if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) return res.redirect(302, '/');
       return res.status(403).send('modalità demo: sola lettura');
@@ -353,153 +352,6 @@ app.post('/api/crawl/ingest', express.json({ limit: '10mb' }), async (req, res) 
   }
 });
 
-// ─── F5 — Pannello Admin (dietro auth, via Funnel da telefono) ────────────────
-// Nodi noti = sorgenti di verità per il dropdown "assegna nodo": niente testo
-// libero → niente target orfani (un assigned_node non-NULL e senza worker
-// corrispondente non verrebbe mai crawlato).
-const KNOWN_NODES = ['imac', 'surface', 'm2', 'massimo'];
-const isValidNode = v => v === null || KNOWN_NODES.includes(v);
-
-// F6 — rilevamento doppioni watch-list (modulo puro/testabile).
-const { findOverlaps } = require('./watchlist-overlaps');
-
-// URL pulito per il pannello (dietro auth → redirect /login se non loggato).
-app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, '../frontend/admin.html')));
-
-app.get('/api/admin/nodes', (req, res) => res.json({ nodes: KNOWN_NODES }));
-
-// F6 — trigger crawl iMac on-demand (telecomando dal pannello, anche da remoto via
-// Funnel/tailnet). Fire-and-forget: lo sweep dura minuti → rispondo subito. Il guard
-// in crawler + la cadenza 20h di dueTargets rendono i trigger ripetuti no-op (anti-ban).
-app.post('/api/admin/crawl/run', async (req, res) => {
-  try {
-    if (crawler.isRunning()) return res.json({ running: true });
-    // F6.1 — feedback ONESTO: conta i target due PRIMA di lanciare. Se 0 → non
-    // fingere "avviato" (era il bottone-placebo). NB: il ramp può attivarne ≤10
-    // nuovi nello sweep → il conteggio è quello "stantii adesso" (onesto: ≥N).
-    const due = await watchlistRepo.dueTargets('imac');
-    if (!due.length) return res.json({ started: false, due: 0, reason: 'tutti freschi (<20h)' });
-    crawler.sweepAll({ withLock: withSavedLock })
-      .catch(e => console.error('[crawler] trigger manuale errore:', e.message));
-    res.json({ started: true, due: due.length });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get('/api/admin/watchlist', async (req, res) => {
-  try {
-    const targets = await watchlistRepo.listAll();
-    // Conteggio annunci per target in 1 query (no N scansioni).
-    const countMap = new Map();
-    if (db.isEnabled()) {
-      const cr = await db.query(`SELECT tipo, marca, modello, count(*)::int n FROM listings GROUP BY tipo, marca, modello`);
-      for (const r of (cr ? cr.rows : [])) countMap.set(`${r.tipo}|${r.marca}|${r.modello}`, r.n);
-    }
-    for (const t of targets) t.count = countMap.get(`${t.tipo}|${t.marca}|${t.modello}`) || 0;
-    res.json({ targets, overlaps: findOverlaps(targets) });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/admin/watchlist', express.json(), async (req, res) => {
-  try {
-    const { tipo, marca, modello } = req.body || {};
-    let assigned_node = req.body && req.body.assigned_node;
-    if (assigned_node === undefined || assigned_node === '') assigned_node = null;
-    if (!['auto', 'moto'].includes(tipo) || !marca || !modello) {
-      return res.status(400).json({ error: 'tipo (auto|moto) + marca + modello richiesti' });
-    }
-    if (!isValidNode(assigned_node)) return res.status(400).json({ error: 'assigned_node non valido' });
-    const row = await watchlistRepo.addOne({ tipo, marca, modello, assigned_node });
-    if (!row) return res.status(500).json({ error: 'inserimento fallito (DB?)' });
-    res.json({ target: row });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.patch('/api/admin/watchlist/:id', express.json(), async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (!id) return res.status(400).json({ error: 'id non valido' });
-    const patch = {};
-    if (req.body && typeof req.body.enabled === 'boolean') patch.enabled = req.body.enabled;
-    if (req.body && 'assigned_node' in req.body) {
-      let an = req.body.assigned_node;
-      if (an === undefined || an === '') an = null;
-      if (!isValidNode(an)) return res.status(400).json({ error: 'assigned_node non valido' });
-      patch.assigned_node = an;
-    }
-    const row = await watchlistRepo.updateOne(id, patch);
-    if (!row) return res.status(404).json({ error: 'target non trovato' });
-    res.json({ target: row });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.delete('/api/admin/watchlist/:id', async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (!id) return res.status(400).json({ error: 'id non valido' });
-    const ok = await watchlistRepo.removeOne(id);
-    if (!ok) return res.status(404).json({ error: 'target non trovato' });
-    res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// F8 — assegnazione bulk: molti target → un nodo (null = iMac).
-app.post('/api/admin/watchlist/assign', express.json(), async (req, res) => {
-  try {
-    const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids : null;
-    let node = req.body && req.body.node;
-    if (node === undefined || node === '') node = null;
-    if (!ids || !ids.length) return res.status(400).json({ error: 'ids richiesti' });
-    if (!isValidNode(node)) return res.status(400).json({ error: 'node non valido' });
-    const r = await watchlistRepo.assignMany(ids, node);
-    res.json(r);   // {updated:N}
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// F8 — auto-distribuzione round-robin dei target tra i nodi scelti.
-app.post('/api/admin/watchlist/distribute', express.json(), async (req, res) => {
-  try {
-    const nodes = Array.isArray(req.body && req.body.nodes) ? req.body.nodes : null;
-    const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids : null;   // opzionale
-    if (!nodes || !nodes.length) return res.status(400).json({ error: 'nodes richiesti' });
-    if (!nodes.every(n => KNOWN_NODES.includes(n))) return res.status(400).json({ error: 'nodes non validi' });
-    const r = await watchlistRepo.autoDistribute(nodes, ids);
-    res.json(r);   // {assignments:[{node,count}], total}
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ─── F11 — candidati nuovi target dal catalogo (catalogo − watchlist) ─────────
-// Sorgente = data/models.json (richiesto una volta, cached da require). Il modulo
-// candidate-targets è PURO: gli passo le righe watchlist grezze + i filtri.
-app.get('/api/admin/candidates', async (req, res) => {
-  try {
-    const tipo = ['auto', 'moto'].includes(req.query.tipo) ? req.query.tipo : undefined;
-    const marca = req.query.marca ? String(req.query.marca) : undefined;
-    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
-    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
-    const existing = await watchlistRepo.listAll();   // {tipo,marca,modello,...}
-    const { items, total } = candidates(modelsData, existing, { tipo, marca, limit, offset });
-    res.json({ items, total, limit, offset });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Aggiunge i candidati selezionati e li assegna a `node` in un colpo (no clobber).
-app.post('/api/admin/watchlist/add-candidates', express.json(), async (req, res) => {
-  try {
-    const items = Array.isArray(req.body && req.body.items) ? req.body.items : null;
-    let node = req.body && req.body.node;
-    if (node === undefined || node === '') node = null;
-    if (!items || !items.length) return res.status(400).json({ error: 'items richiesti' });
-    if (!isValidNode(node)) return res.status(400).json({ error: 'node non valido' });
-    // Igienizza: solo tipo/marca/modello validi (no campi extra dal client).
-    const clean = items
-      .filter(i => i && ['auto', 'moto'].includes(i.tipo) && i.marca && i.modello)
-      .map(i => ({ tipo: i.tipo, marca: String(i.marca), modello: String(i.modello) }));
-    if (!clean.length) return res.status(400).json({ error: 'nessun item valido (tipo/marca/modello)' });
-    const r = await watchlistRepo.addCandidates(clean, node);
-    res.json(r);   // {added:N}
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 // ─── F9 — il centrale serve il worker come 1 file bundle (i nodi lo scaricano, niente git/npm) ──
 let workerBundleVersion = null;
 async function ensureWorkerBundle() {
@@ -522,37 +374,6 @@ app.get('/api/worker/bundle/version', (req, res) => res.json({ version: workerBu
 app.get('/api/worker/bundle.js', (req, res) => {
   if (!workerBundleVersion) return res.status(503).json({ error: 'bundle non pronto' });
   res.type('application/javascript').sendFile(WORKER_BUNDLE);
-});
-
-// Dashboard stato: salute nodi/fonti + conteggi listings per fonte + summary watchlist.
-app.get('/api/admin/status', async (req, res) => {
-  try {
-    const health = await healthRepo.getHealth();
-    const wlCounts = await watchlistRepo.counts();
-    let listingsByFonte = [];
-    let wlByNode = [];
-    if (db.isEnabled()) {
-      const lf = await db.query(
-        `SELECT fonte,
-                count(*)::int total,
-                count(*) FILTER (WHERE status='active')::int active,
-                count(*) FILTER (WHERE status='gone')::int gone
-           FROM listings GROUP BY fonte ORDER BY fonte`
-      );
-      listingsByFonte = lf ? lf.rows : [];
-      const wn = await db.query(
-        `SELECT COALESCE(assigned_node, 'imac') node,
-                count(*)::int total,
-                count(*) FILTER (WHERE last_swept IS NOT NULL)::int swept
-           FROM watchlist GROUP BY COALESCE(assigned_node, 'imac') ORDER BY node`
-      );
-      wlByNode = wn ? wn.rows : [];
-    }
-    // F10/F12 — verità dal DB: breakdown stato-crawl per nodo + ultimo run iMac.
-    const nodeStats = await watchlistRepo.nodeStats();
-    const lastRun = await runsRepo.lastRun('imac').catch(() => null);
-    res.json({ health, watchlist: wlCounts, listingsByFonte, watchlistByNode: wlByNode, nodeStats, lastRun, nodes: KNOWN_NODES, crawler: crawler.status() });
-  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Endpoint lista brand (con metadata per-sito) — alimenta il dropdown marca
