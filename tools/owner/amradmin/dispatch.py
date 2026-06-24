@@ -41,9 +41,18 @@ def dispatch(parsed: dict) -> str:
                 return f"niente di 'due' ora (dup {res['skipped']})"
             return f"due in coda: {res['queued']} (dup {res['skipped']}) · drainer {drainer()}"
         if cmd == "add":
-            # aggiunge al catalogo watchlist (no crawl, no drainer). Idempotente: se c'è già
-            # ON CONFLICT ritorna la riga esistente. Poi :run la crawla.
-            row = A.add_one(db, parsed["tipo"], parsed["marca"], parsed["modello"])
+            # aggiunge al catalogo watchlist (no crawl, no drainer).
+            tipo, marca, modello = parsed["tipo"], parsed["marca"], parsed["modello"]
+            # idempotenza CASE-insensitive: la UNIQUE(tipo,marca,modello) è case-sensitive →
+            # 'Audi A3' e 'audi a3' sarebbero 2 righe. Se esiste già una variante-maiuscole,
+            # NON creare il doppione: riporta il canonico (come fa la canonicalizzazione di :run).
+            cat = db.one(
+                "SELECT id, marca, modello FROM watchlist "
+                "WHERE tipo=%s AND lower(marca)=lower(%s) AND lower(modello)=lower(%s) "
+                "ORDER BY id LIMIT 1", (tipo, marca, modello))
+            if cat:
+                return f"già in watchlist: {tipo} {cat['marca']} {cat['modello']} (id {cat['id']}) · ':run' per crawlarlo"
+            row = A.add_one(db, tipo, marca, modello)
             if not row:
                 return "errore: target non aggiunto"
             return f"in watchlist: {row['tipo']} {row['marca']} {row['modello']} (id {row['id']}) · ':run' per crawlarlo"

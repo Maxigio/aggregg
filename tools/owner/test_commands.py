@@ -43,6 +43,8 @@ def test_parse() -> None:
     assert p(":add moto ducati monster")["cmd"] == "add"
     assert p(":add auto bmw")["cmd"] == "error"        # senza modello
     assert p(":add bmw 320")["cmd"] == "error"         # tipo mancante
+    assert p(":add")["cmd"] == "error"                 # nudo
+    assert p(":add auto")["cmd"] == "error"            # solo tipo
     # clear / cancel
     assert p(":clear")["cmd"] == "clear"
     assert p(":stop")["cmd"] == "clear"

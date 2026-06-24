@@ -15,7 +15,6 @@ const crawler = require('./crawler');
 const listingsRepo = require('./db/listings-repo');
 const healthRepo = require('./db/health-repo');
 const watchlistRepo = require('./db/watchlist-repo');
-const runsRepo = require('./db/crawl-runs-repo');                       // F12
 const accessLog = require('./db/access-log-repo');                      // F50 Fase 4 — log eventi/accessi
 const qrcode = require('qrcode-generator');
 const scrapeSubito    = require('./scrapers/subito-playwright');
