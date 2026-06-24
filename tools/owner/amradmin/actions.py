@@ -179,6 +179,18 @@ def enqueue(db, tipo: str, marca: str, modello: str, *,
         raise ValueError(f"tipo non valido: {tipo!r} (ammessi {TIPI})")
     if not marca or not modello:
         raise ValueError("marca e modello obbligatori")
+    # Canonicalizzazione: se l'ad-hoc combacia (case-insensitive) con una riga catalogo,
+    # usa i suoi nomi CANONICI + watchlist_id → la copertura si aggancia al catalogo (no
+    # orfani come 'audi a3' minuscolo che non matchava 'Audi A3'). markSwept dopo il crawl.
+    if watchlist_id is None:
+        cat = db.one(
+            "SELECT id, marca, modello, last_truncated FROM watchlist "
+            "WHERE tipo = %s AND lower(marca) = lower(%s) AND lower(modello) = lower(%s) LIMIT 1",
+            (tipo, marca, modello))
+        if cat:
+            marca, modello, watchlist_id = cat["marca"], cat["modello"], cat["id"]
+            if last_truncated is None:
+                last_truncated = cat["last_truncated"]
     row = db.one(
         """INSERT INTO crawl_queue (tipo, marca, modello, watchlist_id, last_truncated, priority)
                VALUES (%s,%s,%s,%s,%s,%s)

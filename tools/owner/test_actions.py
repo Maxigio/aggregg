@@ -233,10 +233,41 @@ def test_suggestions_ranking() -> None:
         conn.close()
 
 
+def test_enqueue_canonicalize() -> None:
+    """enqueue ad-hoc che combacia col catalogo (case-insensitive) → nome CANONICO +
+    watchlist_id agganciato; novel (non in catalogo) → resta ad-hoc. Scratch rollback."""
+    try:
+        conn = psycopg.connect(read_database_url(), autocommit=False, row_factory=dict_row)
+    except Exception as e:
+        print(f"⤼ SKIP enqueue canonicalize: DB non raggiungibile ({e})")
+        return
+    db = Db()
+    db._conn = conn
+    try:
+        M = "TestCanon"   # marca mixed-case → prova il match case-insensitive
+        wid = db.one("INSERT INTO watchlist (tipo,marca,modello,last_truncated) "
+                     "VALUES ('auto',%s,'Canon',true) RETURNING id", (M,))["id"]
+        # ad-hoc MINUSCOLO → deve agganciarsi alla riga catalogo (nome canonico + id + last_truncated)
+        qid = A.enqueue(db, "auto", "testcanon", "canon")
+        r = db.one("SELECT marca,modello,watchlist_id,last_truncated FROM crawl_queue WHERE id=%s", (qid,))
+        assert r["marca"] == M and r["modello"] == "Canon", f"nome non canonicalizzato: {r}"
+        assert r["watchlist_id"] == wid, f"watchlist_id non agganciato: {r}"
+        assert r["last_truncated"] is True, f"last_truncated dal catalogo non propagato: {r}"
+        # NON in catalogo → resta ad-hoc (watchlist_id NULL, nomi as-typed)
+        qid2 = A.enqueue(db, "auto", "__novelbrand__", "__novelmod__")
+        r2 = db.one("SELECT marca,watchlist_id FROM crawl_queue WHERE id=%s", (qid2,))
+        assert r2["marca"] == "__novelbrand__" and r2["watchlist_id"] is None, f"novel non ad-hoc: {r2}"
+        print("✔ enqueue canonicalize OK (catalogo → canonico+watchlist_id · novel → ad-hoc)")
+    finally:
+        conn.rollback()
+        conn.close()
+
+
 if __name__ == "__main__":
     test_validation()
     test_actions_scratch()
     test_autocommit_paths()
     test_queue_scratch()
     test_suggestions_ranking()
+    test_enqueue_canonicalize()
     print("\nTEST OK")
