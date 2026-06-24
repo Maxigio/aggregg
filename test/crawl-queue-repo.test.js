@@ -91,6 +91,15 @@ test('isCancelRequested: true solo per status cancel_requested', async () => {
   assert.strictEqual(await q.isCancelRequested(id), true);
 });
 
+test('enqueue/pickNext: pages (profondità per-run) propagata, NULL di default', async () => {
+  await q.enqueue(T({ modello: 'deep' }), { pages: 75 });
+  const job = await q.pickNext();
+  assert.strictEqual(job.modello, 'deep');
+  assert.strictEqual(job.pages, 75);
+  await q.enqueue(T({ modello: 'def' }));
+  assert.strictEqual((await q.pickNext()).pages, null, 'pages opzionale → NULL');
+});
+
 test('dedupe include cancel_requested (mig 015): no doppione mentre si annulla', async () => {
   const id = await q.enqueue(T());
   await q.pickNext();                                            // → running

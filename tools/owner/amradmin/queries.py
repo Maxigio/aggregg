@@ -253,7 +253,7 @@ def crawl_queue(db, *, limit: int = 200) -> list[dict]:
     cima, poi i conclusi recenti. Per la CrawlQueueScreen live. Scritta da TUI
     (enqueue) + drainer (scripts/crawl-once.js)."""
     return db.rows(
-        """SELECT id, tipo, marca, modello, status, priority, watchlist_id,
+        """SELECT id, tipo, marca, modello, status, priority, watchlist_id, pages,
                   enqueued_at, started_at, finished_at, written, error
              FROM crawl_queue
             ORDER BY CASE status WHEN 'running' THEN 0 WHEN 'pending' THEN 1

@@ -132,10 +132,12 @@ class AmrAdminApp(App):
                 except Exception as e:
                     return f"spawn KO ({e})"
             if cmd == "run":
-                rid = A.enqueue(db, parsed["tipo"], parsed["marca"], parsed["modello"])
+                pg = parsed.get("pages")
+                rid = A.enqueue(db, parsed["tipo"], parsed["marca"], parsed["modello"], pages=pg)
                 if not rid:
                     return f"già in coda: {parsed['marca']} {parsed['modello']}"
-                return f"in coda: {parsed['tipo']} {parsed['marca']} {parsed['modello']} · drainer {drainer()}"
+                depth = "full" if (pg and pg >= 200) else (f"{pg}p" if pg else "default")
+                return f"in coda: {parsed['tipo']} {parsed['marca']} {parsed['modello']} ({depth}) · drainer {drainer()}"
             if cmd == "run_due":
                 res = A.enqueue_rows(db, Q2.due_targets(db))
                 if not res["queued"]:

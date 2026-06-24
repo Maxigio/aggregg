@@ -184,6 +184,9 @@ def test_queue_scratch() -> None:
         assert A.clear_pending(db) >= 1
         assert db.one("SELECT status FROM crawl_queue WHERE marca=%s AND modello='__q2__'",
                       (SENT,))["status"] == "fail"
+        # pages (profondità per-run) propagata nel DB
+        pid = A.enqueue(db, "auto", SENT, "__qpg__", pages=42)
+        assert db.one("SELECT pages FROM crawl_queue WHERE id=%s", (pid,))["pages"] == 42
         # un fail REALE (errore scraper) per distinguerlo dalle cancellazioni
         db.one("INSERT INTO crawl_queue (tipo,marca,modello,status,error) "
                "VALUES ('auto',%s,'__qf__','fail','boom scraper') RETURNING id", (SENT,))

@@ -446,8 +446,11 @@ class CrawlQueueScreen(Screen):
         for r in rows:
             when = r["finished_at"] or r["started_at"] or r["enqueued_at"]
             info = R.safe(r["error"]) if r["status"] == "fail" and r.get("error") else R._ago(when)
+            pg = r.get("pages")
+            mod = R.safe(r["modello"]) + ("" if pg is None
+                                          else " [dim]·full[/]" if pg >= 200 else f" [dim]·{pg}p[/]")
             t.add_row(str(r["id"]), R.qstate_label(r["status"]), r["tipo"],
-                      R.safe(r["marca"]), R.safe(r["modello"]), R._num(r["priority"]),
+                      R.safe(r["marca"]), mod, R._num(r["priority"]),
                       R._num(r["written"]), info, key=str(r["id"]))
         eta = counts["pending"] * 27
         eta_s = f"~{eta // 60}m{eta % 60:02d}s" if eta else "0"

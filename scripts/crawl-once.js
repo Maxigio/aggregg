@@ -54,7 +54,8 @@ async function drainQueue({ sweep, throttleMs = THROTTLE_MS, pollMs = POLL_MS, l
     const stats = { written: 0, as: 0, sub: 0, errors: 0 };
     try {
       const meta = await sweep(
-        { tipo: job.tipo, marca: job.marca, modello: job.modello, last_truncated: job.last_truncated }, stats);
+        { tipo: job.tipo, marca: job.marca, modello: job.modello, last_truncated: job.last_truncated,
+          maxPages: job.pages || undefined }, stats);   // M-C/2: profondità per-run dalla coda
       if (job.watchlist_id) await wl.markSwept(job.watchlist_id, { truncated: meta && meta.truncated, complete: meta && meta.complete });
       // re-check DOPO lo sweep: se l'utente ha annullato mentre crawlava, NON timbrare done
       // (lo sweep non si può interrompere a metà → il dato c'è, ma onoriamo l'annullo).

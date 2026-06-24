@@ -22,15 +22,27 @@ def parse_command(text: str) -> dict:
 
     if verb in ("run", "r"):
         if not args:
-            return {"cmd": "error", "msg": "uso: :run <auto|moto> <marca> <modello>  ·  :run due"}
+            return {"cmd": "error", "msg": "uso: :run <auto|moto> <marca> <modello> [full|pN] · :run due"}
         if args[0].lower() == "due":
             return {"cmd": "run_due"}
         if args[0].lower() not in TIPI:
             return {"cmd": "error",
                     "msg": f"manca il tipo ({'/'.join(TIPI)}) — es. :run auto bmw serie 3"}
-        if len(args) < 3:
-            return {"cmd": "error", "msg": "uso: :run <auto|moto> <marca> <modello>"}
-        return {"cmd": "run", "tipo": args[0].lower(), "marca": args[1], "modello": " ".join(args[2:])}
+        # Profondità OPZIONALE = ULTIMO token, solo se 'full' o 'pN' (prefisso 'p' per non
+        # confonderla con un modello numerico tipo '320'/'500'). default = None (cap medio).
+        rest = args[1:]                       # marca + modello (+ profondità)
+        pages = None
+        last = rest[-1].lower() if rest else ""
+        if last == "full":
+            pages = 9999                      # crawler clampa al safety cap (= full-depth)
+            rest = rest[:-1]
+        elif last.startswith("p") and last[1:].isdigit() and int(last[1:]) > 0:
+            pages = int(last[1:])
+            rest = rest[:-1]
+        if len(rest) < 2:                     # serve marca + almeno una parola di modello
+            return {"cmd": "error", "msg": "uso: :run <auto|moto> <marca> <modello> [full|pN]"}
+        return {"cmd": "run", "tipo": args[0].lower(), "marca": rest[0],
+                "modello": " ".join(rest[1:]), "pages": pages}
 
     if verb in ("clear", "stop"):
         return {"cmd": "clear"}

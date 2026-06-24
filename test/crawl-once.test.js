@@ -65,6 +65,14 @@ test('drainQueue: cancel DURANTE lo sweep → markFail annullato (non done)', as
   assert.match(row.rows[0].error, /annullato/);
 });
 
+test('drainQueue: job.pages → maxPages passato allo sweep (profondità per-run)', async () => {
+  await q.enqueue(T({ modello: 'depth' }), { pages: 60 });
+  let seen;
+  const sweep = async (t, s) => { seen = t.maxPages; s.written = 1; return { truncated: false, complete: true }; };
+  await drainQueue({ sweep, ...FAST });
+  assert.strictEqual(seen, 60, 'maxPages dal job.pages');
+});
+
 test('drainQueue: coda vuota → 0 target, esce (double-empty-poll)', async () => {
   let n = 0;
   const tot = await drainQueue({ sweep: async () => { n++; return {}; }, ...FAST });

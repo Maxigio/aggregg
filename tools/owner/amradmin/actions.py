@@ -172,7 +172,7 @@ def add_candidates(db, items, node=None) -> dict:
 # backend/db/crawl-queue-repo.js (enqueue: ON CONFLICT DO NOTHING = 1 job attivo).
 
 def enqueue(db, tipo: str, marca: str, modello: str, *,
-            watchlist_id=None, last_truncated=None, priority: int = 0) -> int | None:
+            watchlist_id=None, last_truncated=None, priority: int = 0, pages=None) -> int | None:
     """Mette in coda un target. MIRROR crawl-queue-repo.enqueue. Ritorna l'id, o
     None se già in coda/in corso (dedupe via unique parziale). Ad-hoc = watchlist_id None."""
     if tipo not in TIPI:
@@ -192,10 +192,10 @@ def enqueue(db, tipo: str, marca: str, modello: str, *,
             if last_truncated is None:
                 last_truncated = cat["last_truncated"]
     row = db.one(
-        """INSERT INTO crawl_queue (tipo, marca, modello, watchlist_id, last_truncated, priority)
-               VALUES (%s,%s,%s,%s,%s,%s)
+        """INSERT INTO crawl_queue (tipo, marca, modello, watchlist_id, last_truncated, priority, pages)
+               VALUES (%s,%s,%s,%s,%s,%s,%s)
            ON CONFLICT DO NOTHING RETURNING id""",
-        (tipo, marca, modello, watchlist_id, last_truncated, priority),
+        (tipo, marca, modello, watchlist_id, last_truncated, priority, pages),
     )
     return row["id"] if row else None
 

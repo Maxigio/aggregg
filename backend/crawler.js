@@ -31,6 +31,7 @@ const modelsData = require('../data/models.json');
 
 const DEEP_PAGES   = parseInt(process.env.CRAWLER_PAGES || '10', 10);   // cap profondità/target
 const DEEP_PAGES_MAX = parseInt(process.env.CRAWLER_PAGES_MAX || '30', 10); // F13: cap esteso sui target che troncano
+const FULL_PAGES_MAX = parseInt(process.env.CRAWLER_PAGES_FULL || '200', 10); // M-C/2: tetto di sicurezza full-depth (anti-runaway)
 const RAMP_PER_DAY = parseInt(process.env.CRAWLER_RAMP  || '10', 10);   // nuovi target/giorno
 const THROTTLE_MS  = parseInt(process.env.CRAWLER_THROTTLE_MS || '1500', 10);
 const BACKOFF_HOURS = parseInt(process.env.CRAWLER_BACKOFF_HOURS || '6', 10); // F14: salta fonte blocked per Nh
@@ -97,8 +98,11 @@ function titleMatchesModel(titolo, modello) {
 // → F13 escalation cap al giro dopo + markGone spento DA SÉ. complete=tutte le
 // fonti previste viste intere e nessuna saltata per back-off → "popolato".
 async function sweepTarget(target, stats) {
-  // F13 — cap esteso se l'ultima sweep di questo target aveva troncato.
-  const cap = target.last_truncated ? DEEP_PAGES_MAX : DEEP_PAGES;
+  // M-C/2 — profondità per-run: se il job porta `maxPages` (dalla coda) usa quello
+  // (clampato al tetto di sicurezza); altrimenti F13 default (esteso se troncò l'ultima volta).
+  const cap = target.maxPages
+    ? Math.min(target.maxPages, FULL_PAGES_MAX)
+    : (target.last_truncated ? DEEP_PAGES_MAX : DEEP_PAGES);
   const opts = { maxPages: cap, attachRaw: true, sortByDate: true, withMeta: true };
   let anyTrunc = false, skippedAny = false;
 

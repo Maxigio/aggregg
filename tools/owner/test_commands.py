@@ -12,8 +12,17 @@ def test_parse() -> None:
     assert p("::")["cmd"] == "noop"
     assert p("::run auto fiat panda")["cmd"] == "run"   # '::' iniziale tollerato
     # run ad-hoc, modello multi-parola
-    assert p(":run auto bmw serie 3") == {"cmd": "run", "tipo": "auto", "marca": "bmw", "modello": "serie 3"}
+    assert p(":run auto bmw serie 3") == {"cmd": "run", "tipo": "auto", "marca": "bmw", "modello": "serie 3", "pages": None}
     assert p("run moto ducati monster")["tipo"] == "moto"      # senza ':' iniziale
+    # profondità per-run (ultimo token: 'full' o 'pN')
+    assert p(":run auto audi a3 full") == {"cmd": "run", "tipo": "auto", "marca": "audi", "modello": "a3", "pages": 9999}
+    assert p(":run auto audi a3 p50") == {"cmd": "run", "tipo": "auto", "marca": "audi", "modello": "a3", "pages": 50}
+    assert p(":run auto bmw serie 3 full")["modello"] == "serie 3" and p(":run auto bmw serie 3 full")["pages"] == 9999
+    assert p(":run auto bmw serie 3 p20")["modello"] == "serie 3" and p(":run auto bmw serie 3 p20")["pages"] == 20
+    # numero SENZA 'p' = parte del modello, NON profondità (disambiguazione)
+    assert p(":run auto bmw 320")["modello"] == "320" and p(":run auto bmw 320")["pages"] is None
+    assert p(":run auto fiat 500")["modello"] == "500" and p(":run auto fiat 500")["pages"] is None
+    assert p(":run auto audi a3")["pages"] is None             # default
     # due
     assert p(":run due")["cmd"] == "run_due"
     # errori

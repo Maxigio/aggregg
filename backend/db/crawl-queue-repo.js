@@ -11,17 +11,18 @@ const STALE_MIN = 15;   // heartbeat oltre cui un 'running' è considerato morto
 
 // Enqueue idempotente: un solo job ATTIVO per (tipo,marca,modello) via uq_crawl_queue_active
 // (ON CONFLICT DO NOTHING senza target → cattura anche l'indice unico PARZIALE).
-async function enqueue(target, { priority = 0 } = {}) {
+async function enqueue(target, { priority = 0, pages = null } = {}) {
   if (!db.isEnabled() || !target || !target.tipo || !target.marca || !target.modello) return null;
   const r = await db.query(
-    `INSERT INTO crawl_queue (tipo, marca, modello, watchlist_id, last_truncated, priority)
-     VALUES ($1,$2,$3,$4,$5,$6)
+    `INSERT INTO crawl_queue (tipo, marca, modello, watchlist_id, last_truncated, priority, pages)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
      ON CONFLICT DO NOTHING
      RETURNING id`,
     [target.tipo, target.marca, target.modello,
      target.watchlist_id != null ? target.watchlist_id : null,
      target.last_truncated != null ? target.last_truncated : null,
-     priority]
+     priority,
+     Number.isInteger(pages) ? pages : null]
   );
   return r && r.rows.length ? r.rows[0].id : null;
 }
@@ -39,7 +40,7 @@ async function pickNext() {
      UPDATE crawl_queue q
         SET status = 'running', started_at = now(), heartbeat = now()
        FROM next WHERE q.id = next.id
-     RETURNING q.id, q.tipo, q.marca, q.modello, q.watchlist_id, q.last_truncated`
+     RETURNING q.id, q.tipo, q.marca, q.modello, q.watchlist_id, q.last_truncated, q.pages`
   );
   return r && r.rows.length ? r.rows[0] : null;
 }
