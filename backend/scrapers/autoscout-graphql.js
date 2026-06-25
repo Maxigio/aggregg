@@ -302,17 +302,25 @@ async function fetchTotalCount({ mmmv, tipo, annoMin, annoMax, prezzoMin, prezzo
 // lista di range-foglia {annoMin,annoMax[,prezzoMin,prezzoMax]}; `[{}]` = una sola sweep
 // piena (totale ≤ soglia o count KO → comportamento attuale).
 const SPLIT_OVER = 1500;            // margine sotto il ceiling ~1629
-const SPLIT_PRICE_MAX = 1000000;    // tetto prezzo per la bisezione (auto/moto usato)
+const SPLIT_PRICE_MAX = 1000000;    // bound della bisezione prezzo; il bucket TOP è APERTO
+                                    // (prezzoMax=null) → le auto > MAX (supercar) NON si perdono
 
 async function planBuckets(countFn, opts = {}) {
   const splitOver = opts.splitOver || SPLIT_OVER;
-  const yMin = opts.yearMin || 1985;
-  const yMax = opts.yearMax || (new Date().getFullYear() + 1);
+  // F1 (review): yMin BASSO (1900) + yMax con buffer (+2) → la bisezione copre TUTTI gli anni
+  // reali (epoca inclusa) e i futuri-datati; niente cade fuori dai bucket (countFn({}) = Σ foglie,
+  // partizione esatta). yMin=1985 droppava silenziosamente l'usato pre-1985 dei modelli d'epoca.
+  const yMin = opts.yearMin || 1900;
+  const yMax = opts.yearMax || (new Date().getFullYear() + 2);
   const maxLeaves = opts.maxLeaves || 24;   // anti-runaway (best-seller ≈ 6-10 foglie)
   const leaves = [];
 
   async function recurPrice(year, lo, hi) {
-    const range = { annoMin: year, annoMax: year, prezzoMin: lo, prezzoMax: hi };
+    // bordi APERTI agli estremi: prezzoMin=0→null (nessun pricefrom), prezzoMax=MAX→null
+    // (nessun priceto → cattura > MAX). Così la partizione prezzo copre [0, +∞) senza buchi.
+    const range = { annoMin: year, annoMax: year,
+                    prezzoMin: lo <= 0 ? null : lo,
+                    prezzoMax: hi >= SPLIT_PRICE_MAX ? null : hi };
     const n = await countFn(range);
     if (n == null || n <= splitOver || hi - lo <= 1000 || leaves.length >= maxLeaves) {
       leaves.push(range); return;
@@ -342,8 +350,7 @@ module.exports = scrapeAutoscoutGraphql;
 module.exports._mapListing = mapListing;
 module.exports._buildVariables = buildVariables;
 module.exports.fetchTotalCount = fetchTotalCount;       // F50 copertura (chiamato dal crawler)
-module.exports.planBuckets = planBuckets;               // M-K split (chiamato dal crawler)
+module.exports.planBuckets = planBuckets;               // M-K split (crawler + test; countFn iniettata = puro)
 module.exports.SPLIT_OVER = SPLIT_OVER;
 module.exports._countQueryString = countQueryString;    // PURO, testabile senza rete
 module.exports._parseTotalCount = parseTotalCount;      // PURO, testabile senza rete
-module.exports._planBuckets = planBuckets;              // PURO (countFn iniettata), testabile
