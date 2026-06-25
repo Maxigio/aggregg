@@ -258,11 +258,20 @@ const COUNT_QUERY = `query GET_TOTAL_LISTING_COUNT_BY_QUERY_STRING($queryString:
 // listings() per-fetta. NB: il GROSSO buco sui best-seller (Audi A3: ~5300 usate vere vs
 // 1629 ingerite = 31%) NON sono auto nuove — è il TETTO DI PAGINAZIONE di `listings()`
 // (~1629/query): si recupera spezzando la query per anno/prezzo (vedi M-K), non qui.
-function countQueryString(mmmv, tipo) {
+function countQueryString(mmmv, tipo, range = {}) {
   const [make, model] = String(mmmv || '').split('|');
   if (!make) return null;
   const atype = tipo === 'moto' ? 'B' : 'C';
-  return `sort=standard&desc=0&ustate=U&atype=${atype}&cy=I&mmm=${make}|${model || ''}|`;
+  let qs = `sort=standard&desc=0&ustate=U&atype=${atype}&cy=I&mmm=${make}|${model || ''}|`;
+  // M-K split: range opzionali per stare sotto il tetto di paginazione AS24 (~1629/query).
+  // anno = fregfrom/fregto (PROVATO live: fregto=2015→1417 + fregfrom=2016→3887 = totale 5304).
+  // prezzo = pricefrom/priceto (usato solo se un singolo anno sfora; da verificare live).
+  const { annoMin, annoMax, prezzoMin, prezzoMax } = range || {};
+  if (annoMin != null) qs += `&fregfrom=${annoMin}`;
+  if (annoMax != null) qs += `&fregto=${annoMax}`;
+  if (prezzoMin != null) qs += `&pricefrom=${prezzoMin}`;
+  if (prezzoMax != null) qs += `&priceto=${prezzoMax}`;
+  return qs;
 }
 
 // PURO: estrae totalItems dalla risposta GraphQL (o null). Testabile senza rete.
@@ -272,9 +281,9 @@ function parseTotalCount(j) {
   return Number.isFinite(n) ? n : null;
 }
 
-// Ritorna il totale AS24 per (mmmv,tipo) o null. Best-effort: mai throw (non rompe la sweep).
-async function fetchTotalCount({ mmmv, tipo } = {}) {
-  const qs = countQueryString(mmmv, tipo);
+// Ritorna il totale AS24 per (mmmv,tipo[,range anno/prezzo]) o null. Best-effort: mai throw.
+async function fetchTotalCount({ mmmv, tipo, annoMin, annoMax, prezzoMin, prezzoMax } = {}) {
+  const qs = countQueryString(mmmv, tipo, { annoMin, annoMax, prezzoMin, prezzoMax });
   if (!qs) return null;
   try {
     const res = await httpPost(JSON.stringify({ query: COUNT_QUERY, variables: { queryString: qs, locale: 'it_IT' } }), COUNT_AUTH);
@@ -285,9 +294,56 @@ async function fetchTotalCount({ mmmv, tipo } = {}) {
   }
 }
 
+// ─── M-K: pianifica i bucket per superare il tetto di paginazione AS24 ───────────
+// `listings()` serve ~1629 risultati/query poi si ferma. Per i best-seller (Audi A3
+// ~5300 usate) spezziamo per ANNO (poi per PREZZO se un singolo anno sfora), così ogni
+// sotto-query sta sotto il tetto ed è paginabile per intero. PURO rispetto alla rete:
+// `countFn(range)->Promise<number|null>` è INIETTATA → testabile senza HTTP. Ritorna una
+// lista di range-foglia {annoMin,annoMax[,prezzoMin,prezzoMax]}; `[{}]` = una sola sweep
+// piena (totale ≤ soglia o count KO → comportamento attuale).
+const SPLIT_OVER = 1500;            // margine sotto il ceiling ~1629
+const SPLIT_PRICE_MAX = 1000000;    // tetto prezzo per la bisezione (auto/moto usato)
+
+async function planBuckets(countFn, opts = {}) {
+  const splitOver = opts.splitOver || SPLIT_OVER;
+  const yMin = opts.yearMin || 1985;
+  const yMax = opts.yearMax || (new Date().getFullYear() + 1);
+  const maxLeaves = opts.maxLeaves || 24;   // anti-runaway (best-seller ≈ 6-10 foglie)
+  const leaves = [];
+
+  async function recurPrice(year, lo, hi) {
+    const range = { annoMin: year, annoMax: year, prezzoMin: lo, prezzoMax: hi };
+    const n = await countFn(range);
+    if (n == null || n <= splitOver || hi - lo <= 1000 || leaves.length >= maxLeaves) {
+      leaves.push(range); return;
+    }
+    const mid = Math.floor((lo + hi) / 2);
+    await recurPrice(year, lo, mid);
+    await recurPrice(year, mid + 1, hi);
+  }
+
+  async function recurYear(a, b) {
+    const n = await countFn({ annoMin: a, annoMax: b });
+    if (n == null || n <= splitOver) { leaves.push({ annoMin: a, annoMax: b }); return; }
+    if (a >= b) { await recurPrice(a, 0, SPLIT_PRICE_MAX); return; }   // singolo anno troppo grande → prezzo
+    if (leaves.length >= maxLeaves) { leaves.push({ annoMin: a, annoMax: b }); return; }
+    const mid = (a + b) >> 1;
+    await recurYear(a, mid);
+    await recurYear(mid + 1, b);
+  }
+
+  const total = await countFn({});                       // {} = nessun range = query piena
+  if (total == null || total <= splitOver) return [{}];  // sweep singola (comportamento attuale)
+  await recurYear(yMin, yMax);
+  return leaves.length ? leaves : [{}];
+}
+
 module.exports = scrapeAutoscoutGraphql;
 module.exports._mapListing = mapListing;
 module.exports._buildVariables = buildVariables;
 module.exports.fetchTotalCount = fetchTotalCount;       // F50 copertura (chiamato dal crawler)
+module.exports.planBuckets = planBuckets;               // M-K split (chiamato dal crawler)
+module.exports.SPLIT_OVER = SPLIT_OVER;
 module.exports._countQueryString = countQueryString;    // PURO, testabile senza rete
 module.exports._parseTotalCount = parseTotalCount;      // PURO, testabile senza rete
+module.exports._planBuckets = planBuckets;              // PURO (countFn iniettata), testabile

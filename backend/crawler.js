@@ -118,22 +118,45 @@ async function sweepTarget(target, stats) {
       console.log(`[crawler] AS24 in back-off (blocked recente) → salto ${target.marca} ${target.modello}`);
       skippedAny = true;
     } else try {
-      const { items, truncated } = await scrapeAutoscoutGraphql({ tipo: target.tipo, mmmvAutoscout: as.mmmv }, opts);
+      // M-K: AS24 `listings()` si ferma a ~1629/query → per i target grandi spezziamo la
+      // query (per anno, poi prezzo) così ogni sotto-sweep sta sotto il tetto ed è
+      // paginabile per intero. La count-query (cheap) serve sia a decidere lo split sia
+      // al tetto copertura → 1 sola chiamata. Le fette dedupano nell'upsert (url = PK).
+      const countFn = (range) => scrapeAutoscoutGraphql.fetchTotalCount({ mmmv: as.mmmv, tipo: target.tipo, ...range });
+      let total = null;
+      try { total = await countFn({}); } catch (_) { /* count KO → sweep singola */ }
+      const buckets = (total != null && total > scrapeAutoscoutGraphql.SPLIT_OVER)
+        ? await scrapeAutoscoutGraphql.planBuckets(countFn, {})
+        : [{}];
+      // sweep-fetta: servono ≥ SPLIT_OVER/PAGE_SIZE pagine (≈30) altrimenti un bucket
+      // grande tronca col cap default (DEEP_PAGES=10) → maxPages alzato + delay gentile.
+      const sweepOpts = buckets.length > 1
+        ? { ...opts, maxPages: Math.max(cap, 34), pageDelayMs: THROTTLE_MS }
+        : opts;
+      const items = [];
+      let truncated = false;
+      for (let i = 0; i < buckets.length; i++) {
+        if (i > 0) await sleep(THROTTLE_MS);   // gentile tra le fette
+        const b = buckets[i];
+        const part = await scrapeAutoscoutGraphql({
+          tipo: target.tipo, mmmvAutoscout: as.mmmv,
+          annoMin: b.annoMin, annoMax: b.annoMax, prezzoMin: b.prezzoMin, prezzoMax: b.prezzoMax,
+        }, sweepOpts);
+        items.push(...part.items);
+        if (part.truncated) truncated = true;
+      }
       const r = await repo.upsertListings(items, target);
-      // markGone SOLO con vista completa: se troncato al cap, l'assenza di un
-      // annuncio non è affidabile (potrebbe essere oltre il cap) → niente venduto.
+      // markGone SOLO con vista completa (nessuna fetta troncata): con lo split le fette
+      // stanno sotto il tetto → di norma complete; se una tronca, niente venduto.
       if (!truncated) await repo.markGone(target, items.map(i => i.url), { fonte: 'autoscout' });
-      else { anyTrunc = true; console.log(`[crawler] AS24 ${target.marca} ${target.modello}: vista parziale (cap ${cap}) → skip venduto`); }
+      else { anyTrunc = true; console.log(`[crawler] AS24 ${target.marca} ${target.modello}: vista parziale → skip venduto`); }
       stats.written += r.written;
       stats.inserted = (stats.inserted || 0) + r.inserted;   // M-E: righe NUOVE (onestà written)
       stats.as += items.length;
+      if (buckets.length > 1) console.log(`[crawler] AS24 ${target.marca} ${target.modello}: split ${buckets.length} fette (tot ~${total}) → ${items.length} raccolti`);
       await health.record('autoscout', { count: items.length });
-      // F50 copertura: AS24 non espone il totale nella search → +1 count-query cheap.
-      // try ANNIDATO: un errore della count-query NON deve cadere nel catch dei dati
-      // (sennò salute AS24 sporcata + back-off spurio per una semplice metrica).
-      try {
-        await marketSize.record(target, 'autoscout', await scrapeAutoscoutGraphql.fetchTotalCount({ mmmv: as.mmmv, tipo: target.tipo }));
-      } catch (_) { /* la copertura non tocca mai il crawl */ }
+      // F50 copertura: tetto = count totale (usato-only), già preso sopra per lo split.
+      try { await marketSize.record(target, 'autoscout', total); } catch (_) { /* la copertura non tocca mai il crawl */ }
     } catch (e) {
       console.warn(`[crawler] AS24 fallito ${target.marca} ${target.modello}: ${e.message}`);
       stats.errors++;
