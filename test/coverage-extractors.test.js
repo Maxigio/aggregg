@@ -43,13 +43,14 @@ test('Subito _extractTotal: non muta l’input → additività degli items garan
   assert.equal(JSON.stringify(j), before);
 });
 
-test('AS24 _countQueryString: mmmv → queryString (atype C auto / B moto)', () => {
+test('AS24 _countQueryString: mmmv → queryString (atype C auto / B moto · ustate=U usato-only)', () => {
+  // ustate=U: il tetto conta SOLO usato (= ciò che ingeriamo); le nuove gonfiavano la copertura.
   assert.equal(as24._countQueryString('29|1768||', 'auto'),
-    'sort=standard&desc=0&ustate=N,U&atype=C&cy=I&mmm=29|1768|');
+    'sort=standard&desc=0&ustate=U&atype=C&cy=I&mmm=29|1768|');
   assert.equal(as24._countQueryString('2120|71635||', 'moto'),
-    'sort=standard&desc=0&ustate=N,U&atype=B&cy=I&mmm=2120|71635|');
+    'sort=standard&desc=0&ustate=U&atype=B&cy=I&mmm=2120|71635|');
   assert.equal(as24._countQueryString('29|||', 'auto'),     // brand-only
-    'sort=standard&desc=0&ustate=N,U&atype=C&cy=I&mmm=29||');
+    'sort=standard&desc=0&ustate=U&atype=C&cy=I&mmm=29||');
   assert.equal(as24._countQueryString('', 'auto'), null);   // senza make → null
 });
 

@@ -252,11 +252,15 @@ const COUNT_AUTH = 'Basic aG9tZS1mZWVkLWpzOnAzNVBLeUZCNG5VREtFTllKNG9HUTVJYjFTM0
 const COUNT_QUERY = `query GET_TOTAL_LISTING_COUNT_BY_QUERY_STRING($queryString:String!,$locale:Locale_){ search{ listingsByQueryString(queryString:$queryString, locale:$locale){ metadata{ totalItems } } } }`;
 
 // PURO: mmmv "make|model|..." → queryString. atype=C auto / B moto (entrambi provati).
+// ustate=U (solo USATO): il tetto deve combaciare con ciò che INGERIAMO. L'endpoint
+// `listings()` ci dà solo usato (0 nuove su 87k AS24 in DB) → contare anche le nuove
+// (ustate=N,U) gonfiava il tetto e dava copertura fittizia (Audi A3: 5738 N+U vs 1629
+// usate = 28% falso; manca 4109 = nuove/km0 che NON crawliamo). È un DB dell'usato.
 function countQueryString(mmmv, tipo) {
   const [make, model] = String(mmmv || '').split('|');
   if (!make) return null;
   const atype = tipo === 'moto' ? 'B' : 'C';
-  return `sort=standard&desc=0&ustate=N,U&atype=${atype}&cy=I&mmm=${make}|${model || ''}|`;
+  return `sort=standard&desc=0&ustate=U&atype=${atype}&cy=I&mmm=${make}|${model || ''}|`;
 }
 
 // PURO: estrae totalItems dalla risposta GraphQL (o null). Testabile senza rete.

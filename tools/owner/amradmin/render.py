@@ -257,21 +257,39 @@ def sugg_state(row: dict) -> str:
     return f"[green]✓ soddisfatto[/]{cov}"
 
 
+# Fonti col tetto AFFIDABILE = query strutturata (make|model) → la copertura% è vera.
+# autoscout (listingsByQueryString, ustate=U) è strutturato → un % basso = buco VERO
+# (provato: Audi A3 usato 5555 ma ingeriti 1629 = 29%, tetto-paginazione AS24). subito/moto
+# usano count_all/regex free-text (rumoroso: Audi A3 Subito 7194>6830) → NON allarmare.
+COVERAGE_TRUSTED_FONTI = {"autoscout"}
+COVERAGE_OK_PCT = 85.0   # ≥ soglia = preso il grosso del matchabile → soddisfatto
+
+
 def cov_state(row: dict) -> str:
-    """Badge copertura: 'saturo' (coverage-driven: ultimo crawl 0 nuovi → re-crawl
-    inutile, il suggeritore lo salta) vs 'tronca → full' (cap pagine → c'è altro) vs
-    'soddisfatto' (preso tutto il matchabile, il gap è rumore free-text) vs 'mai'.
-    NB: last_truncated/saturated_at sono per-TARGET (qualunque fonte)."""
+    """Badge copertura PER-FONTE (M-J): usa la coverage_pct della RIGA (fonte), non solo
+    i flag del target. 'mai' / 'saturo' / 'tronca → full' / '100%' / 'soddisfatto' come
+    prima, MA se una fonte AFFIDABILE (autoscout) è davvero bassa e non troncata →
+    'parziale N%' (buco vero da indagare, es. tetto-paginazione su un usato enorme).
+    Per subito/moto (tetto free-text rumoroso) resta tollerante. NB: last_truncated/
+    saturated_at restano per-TARGET; coverage_pct è per-fonte."""
     if row.get("last_swept") is None:
         return "[dim]mai[/]"
     if row.get("saturated_at") is not None:
         return "[blue]≈ saturo[/]"            # stabile: 0 nuovi all'ultimo crawl
     if row.get("last_truncated"):
-        return "[yellow]tronca → full[/]"
+        return "[yellow]tronca → full[/]"     # cap pagine colpito → c'è altro (re-crawl full)
     pct = row.get("coverage_pct")
-    if pct is not None and float(pct) >= 99.5:
+    if pct is None:
+        return "[green]✓ soddisfatto[/]"      # nessun tetto noto → niente da segnalare
+    p = float(pct)
+    if p >= 99.5:
         return "[green]✓ 100%[/]"
-    return "[green]✓ soddisfatto[/]"
+    if p >= COVERAGE_OK_PCT:
+        return "[green]✓ soddisfatto[/]"      # preso il grosso del matchabile
+    # copertura BASSA: allarme solo se il tetto della fonte è affidabile (strutturato).
+    if row.get("fonte") in COVERAGE_TRUSTED_FONTI:
+        return f"[yellow]⚠ parziale {p:.0f}%[/]"
+    return "[green]✓ soddisfatto[/]"          # subito/moto: tetto rumoroso → non allarmare
 
 
 def suggester_panel(rows: list[dict]) -> Panel:
