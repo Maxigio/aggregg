@@ -27,6 +27,8 @@ class AmrAdminApp(App):
 
     TITLE = "Auto Moto Radar — Owner"
     CSS = """
+    #menu { dock: top; height: 1; }
+    #ops { height: 1; }
     #counts, #lastrun { height: auto; }
     #nodes { height: auto; }
     .col { width: 1fr; }
@@ -52,13 +54,15 @@ class AmrAdminApp(App):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
+        yield Static(R.menu_bar("home"), id="menu")
         with VerticalScroll():
+            yield Static(id="ops")            # M-H: riga ops live (drainer/coda/bloccate)
             yield Static(id="counts")
             yield Static(id="lastrun")
             yield Static(id="nodes")
             with Horizontal():
                 yield Static(id="fonti", classes="col")
-                yield Static(id="ramp", classes="col")
+                yield Static(id="suggester", classes="col")   # ex-#ramp (nome morto)
         yield Static(id="status")
         yield Footer()
 
@@ -69,27 +73,38 @@ class AmrAdminApp(App):
     def action_refresh(self) -> None:
         self.refresh_data()
 
+    def _go(self, screen_type) -> None:
+        """Nav laterale (M-H): già su quel tipo → no-op; su una sotto-schermata →
+        switch (stack resta ≤1, esc torna sempre alla dashboard); sulla dashboard → push.
+        Così i tasti gruppo (w/c/s/k/h/l/:) navigano da OVUNQUE senza impilare."""
+        if isinstance(self.screen, screen_type):
+            return
+        if len(self.screen_stack) > 1:
+            self.switch_screen(screen_type())
+        else:
+            self.push_screen(screen_type())
+
     def action_watchlist(self) -> None:
-        self.push_screen(WatchlistScreen())
+        self._go(WatchlistScreen)
 
     def action_accesslog(self) -> None:
-        self.push_screen(AccessLogScreen())
+        self._go(AccessLogScreen)
 
     def action_coverage(self) -> None:
-        self.push_screen(CoverageScreen())
+        self._go(CoverageScreen)
 
     def action_crawl_queue(self) -> None:
-        self.push_screen(CrawlQueueScreen())
+        self._go(CrawlQueueScreen)
 
     def action_health(self) -> None:
-        self.push_screen(HealthScreen())
+        self._go(HealthScreen)
 
     def action_suggester(self) -> None:
-        self.push_screen(SuggesterScreen())
+        self._go(SuggesterScreen)
 
     def action_command(self) -> None:
         """Apre la schermata Comandi dedicata (M-D): input + storia + output + cheatsheet."""
-        self.push_screen(CommandScreen())
+        self._go(CommandScreen)
 
     @work(exclusive=True)
     async def refresh_data(self) -> None:
@@ -104,21 +119,23 @@ class AmrAdminApp(App):
             return
         # update widget sul loop (i renderable sono già pronti dal thread)
         self.last_error = None
-        for wid, key in (("#counts", "counts"), ("#lastrun", "lastrun"), ("#nodes", "nodes"),
-                         ("#fonti", "fonti"), ("#ramp", "ramp")):
+        for wid, key in (("#ops", "ops"), ("#counts", "counts"), ("#lastrun", "lastrun"),
+                         ("#nodes", "nodes"), ("#fonti", "fonti"), ("#suggester", "suggester")):
             self.query_one(wid, Static).update(panels[key])
-        self.last_status = f"DB ok · refresh {REFRESH_SECONDS}s · [r] aggiorna  [q] esci"
+        self.last_status = f"DB ok · refresh {REFRESH_SECONDS}s  ·  tasti in fondo ↓"
         self.query_one("#status", Static).update(self.last_status)
 
     def _collect(self) -> dict:
         """Esegue tutte le query e costruisce i renderable (gira in un thread)."""
         db = self.db
+        health = Q.health(db)   # una sola volta: serve sia alla riga ops sia ai nodi
         return {
+            "ops": R.ops_line(Q.drainer_alive(db), Q.queue_counts(db), health),
             "counts": R.counts_panel(Q.counts(db)),
             "lastrun": R.last_run_line(Q.last_run(db, "imac")),
-            "nodes": R.nodes_panel(Q.node_stats(db), Q.health(db)),
+            "nodes": R.nodes_panel(Q.node_stats(db), health),
             "fonti": R.fonti_panel(Q.listings_by_fonte(db)),
-            "ramp": R.suggester_panel(Q.suggestions(db, limit=8)),   # preview: solo 8 (no query pesante ogni 5s)
+            "suggester": R.suggester_panel(Q.suggestions(db, limit=8)),   # preview: solo 8 (no query pesante ogni 5s)
         }
 
 

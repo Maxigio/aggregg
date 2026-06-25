@@ -76,16 +76,57 @@ class ConfirmScreen(ModalScreen[bool]):
         self.dismiss(False)
 
 
-class WatchlistScreen(Screen):
+class FilterTableScreen(Screen):
+    """Base 'filtro + tabella' (M-H). La DataTable ha il focus al mount → i tasti
+    azione per-riga e la nav globale funzionano SUBITO (niente Tab nascosto). '/'
+    porta il focus al filtro; Invio/esc lo riportano alla tabella (i tasti tornano
+    vivi). Le sottoclassi definiscono TABLE_ID/FILTER_ID/MENU_KEY + reload()/_populate().
+
+    Prima del fix: l'Input filtro rubava il focus al mount → 'e/g/d/…' finivano come
+    testo nel filtro e le azioni NON scattavano (provato headless). Ora il filtro è
+    esplicito (`/`), tutto il resto è azione/navigazione."""
+
+    DEFAULT_CSS = """
+    #menu { dock: top; height: 1; }
+    """
+    BINDINGS = [
+        ("escape", "back", "Indietro"),
+        ("slash", "focus_filter", "Filtra"),
+    ]
+    TABLE_ID = "#grid"
+    FILTER_ID = "#filter"
+    MENU_KEY = ""
+
+    def _focus_table(self) -> None:
+        self.query_one(self.TABLE_ID, DataTable).focus()
+
+    def action_focus_filter(self) -> None:
+        self.query_one(self.FILTER_ID, Input).focus()
+
+    def action_back(self) -> None:
+        # esc 'smart': dal filtro torna alla tabella; dalla tabella esce dalla schermata.
+        if isinstance(self.app.focused, Input):
+            self._focus_table()
+        else:
+            self.app.pop_screen()
+
+    def on_input_submitted(self, _e: Input.Submitted) -> None:
+        # reload() è definita dalla sottoclasse (worker); poi ri-do il focus alla
+        # tabella così i tasti globali/azione tornano attivi senza un Tab.
+        self.reload()
+        self._focus_table()
+
+
+class WatchlistScreen(FilterTableScreen):
     """Gestione watchlist: tabella filtrabile + azioni per-riga (off-loop)."""
 
     CSS = """
+    #menu { dock: top; height: 1; }
     #filter { dock: top; }
     #wstatus { dock: bottom; height: 1; color: $text-muted; }
     DataTable { height: 1fr; }
     """
     BINDINGS = [
-        ("escape", "app.pop_screen", "Indietro"),
         ("r", "reload", "Aggiorna"),
         ("e", "toggle_enabled", "On/Off"),
         ("n", "cycle_node", "Nodo→"),
@@ -94,6 +135,9 @@ class WatchlistScreen(Screen):
         ("g", "enqueue_one", "Coda"),
         ("G", "enqueue_all", "Coda tutte"),
     ]
+    TABLE_ID = "#grid"
+    FILTER_ID = "#filter"
+    MENU_KEY = "watchlist"
 
     def __init__(self, db: Db | None = None):
         super().__init__()
@@ -109,6 +153,7 @@ class WatchlistScreen(Screen):
 
     def compose(self):
         yield Header(show_clock=True)
+        yield Static(R.menu_bar(self.MENU_KEY), id="menu")
         yield Input(placeholder="filtro marca/modello… (Invio per aggiornare)", id="filter")
         yield DataTable(id="grid", cursor_type="row", zebra_stripes=True)
         yield Static(id="wstatus")
@@ -118,9 +163,7 @@ class WatchlistScreen(Screen):
         self.query_one("#grid", DataTable).add_columns(
             "tipo", "marca", "modello", "nodo", "stato", "annunci", "priority", "ultimo sweep")
         self.reload()
-
-    def on_input_submitted(self, _e: Input.Submitted) -> None:
-        self.reload()
+        self._focus_table()   # M-H: focus alla tabella (non al filtro) → azioni vive subito
 
     # ── helper sincroni (girano in thread via to_thread) ───────────────────
     def _load(self, q: str) -> list[dict]:
@@ -137,8 +180,7 @@ class WatchlistScreen(Screen):
         total = rows[0]["total"] if rows else 0
         tipo_lbl = self._tipo or "tutti"
         self.query_one("#wstatus", Static).update(
-            f"{len(rows)} mostrati / {total} totali · [b]tipo: {tipo_lbl}[/] · [e] on/off · [n] nodo "
-            f"· [t] tipo→ · [d] elimina · [r] aggiorna · [esc] indietro")
+            f"{len(rows)} mostrati / {total} totali · [b]tipo: {tipo_lbl}[/]  ·  tasti in fondo ↓")
 
     def _current(self) -> dict | None:
         t = self.query_one("#grid", DataTable)
@@ -222,23 +264,25 @@ class WatchlistScreen(Screen):
             self.query_one("#wstatus", Static).update(f"[red]coda errore:[/] {R.safe(e)}")
             return
         self.query_one("#wstatus", Static).update(
-            f"in coda: {res['queued']} · dup {res['skipped']} · drainer {res['drainer']} "
-            f"· [k] vedi coda · [esc] indietro")
+            f"in coda: {res['queued']} · dup {res['skipped']} · drainer {res['drainer']}  ·  [b]k[/] coda")
 
 
-class AccessLogScreen(Screen):
+class AccessLogScreen(FilterTableScreen):
     """Log eventi/accessi (sola lettura, live): chi si connette + cosa cerca.
     Scritto dal server Node in access_log; qui solo letto (DB-puro)."""
 
     CSS = """
+    #menu { dock: top; height: 1; }
     #afilter { dock: top; }
     #astatus { dock: bottom; height: 1; color: $text-muted; }
     DataTable { height: 1fr; }
     """
     BINDINGS = [
-        ("escape", "app.pop_screen", "Indietro"),
         ("r", "reload", "Aggiorna"),
     ]
+    TABLE_ID = "#alog"
+    FILTER_ID = "#afilter"
+    MENU_KEY = "accesslog"
 
     def __init__(self, db: Db | None = None):
         super().__init__()
@@ -252,6 +296,7 @@ class AccessLogScreen(Screen):
 
     def compose(self):
         yield Header(show_clock=True)
+        yield Static(R.menu_bar(self.MENU_KEY), id="menu")
         yield Input(placeholder="filtro: demo | full | search | login   (Invio)", id="afilter")
         yield DataTable(id="alog", cursor_type="row", zebra_stripes=True)
         yield Static(id="astatus")
@@ -261,9 +306,7 @@ class AccessLogScreen(Screen):
         self.query_one("#alog", DataTable).add_columns("quando", "chi", "evento", "ip", "dettaglio")
         self.reload()
         self.set_interval(5, self.reload)   # live: nuovi accessi/ricerche compaiono
-
-    def on_input_submitted(self, _e: Input.Submitted) -> None:
-        self.reload()
+        self._focus_table()   # M-H: focus alla tabella, filtro via '/'
 
     @staticmethod
     def _filters(token: str) -> dict:
@@ -294,7 +337,7 @@ class AccessLogScreen(Screen):
             t.add_row(quando, R.who_label(r.get("role")), R.event_label(r["event"]),
                       R.safe(r.get("ip") or "—"), det)
         self.query_one("#astatus", Static).update(
-            f"{len(rows)} eventi · filtri: demo/full/search/login · [r] aggiorna · [esc] indietro")
+            f"{len(rows)} eventi · filtri: demo/full/search/login  ·  tasti in fondo ↓")
 
     @work(exclusive=True, group="alog-reload")
     async def reload(self) -> None:
@@ -307,21 +350,24 @@ class AccessLogScreen(Screen):
         self._populate(rows)
 
 
-class CoverageScreen(Screen):
+class CoverageScreen(FilterTableScreen):
     """Copertura ground-truth (sola lettura, live): per (target,fonte) tetto vs
     ingeriti vs %, ordinato per copertura peggiore. Il tetto lo scrive il crawler."""
 
     CSS = """
+    #menu { dock: top; height: 1; }
     #cfilter { dock: top; }
     #cstatus { dock: bottom; height: 1; color: $text-muted; }
     DataTable { height: 1fr; }
     """
     BINDINGS = [
-        ("escape", "app.pop_screen", "Indietro"),
         ("r", "reload", "Aggiorna"),
         ("g", "enqueue_one", "Coda"),
         ("G", "enqueue_all", "Coda tutte"),
     ]
+    TABLE_ID = "#cov"
+    FILTER_ID = "#cfilter"
+    MENU_KEY = "coverage"
 
     def __init__(self, db: Db | None = None):
         super().__init__()
@@ -335,6 +381,7 @@ class CoverageScreen(Screen):
 
     def compose(self):
         yield Header(show_clock=True)
+        yield Static(R.menu_bar(self.MENU_KEY), id="menu")
         yield Input(placeholder="filtro fonte: subito | autoscout | moto   (Invio)", id="cfilter")
         yield DataTable(id="cov", cursor_type="row", zebra_stripes=True)
         yield Static(id="cstatus")
@@ -345,9 +392,7 @@ class CoverageScreen(Screen):
             "tipo", "marca", "modello", "fonte", "tetto", "ingeriti", "copertura", "manca", "stato")
         self.reload()
         self.set_interval(10, self.reload)
-
-    def on_input_submitted(self, _e: Input.Submitted) -> None:
-        self.reload()
+        self._focus_table()   # M-H: focus alla tabella, filtro via '/'
 
     def _load(self, token: str) -> list[dict]:
         f = (token or "").strip().lower() or None
@@ -365,7 +410,7 @@ class CoverageScreen(Screen):
                       R._num(r["manca"]), R.cov_state(r))
         self.query_one("#cstatus", Static).update(
             f"{len(rows)} (target,fonte) · ordinati per copertura PEGGIORE · "
-            f"filtro fonte (subito/autoscout/moto) · [r] aggiorna · [esc] indietro")
+            f"filtro fonte: subito/autoscout/moto  ·  tasti in fondo ↓")
 
     @work(exclusive=True, group="cov-reload")
     async def reload(self) -> None:
@@ -400,23 +445,23 @@ class CoverageScreen(Screen):
             self.query_one("#cstatus", Static).update(f"[red]coda errore:[/] {R.safe(e)}")
             return
         self.query_one("#cstatus", Static).update(
-            f"in coda: {res['queued']} · dup {res['skipped']} · drainer {res['drainer']} "
-            f"· [k] vedi coda · [esc] indietro")
+            f"in coda: {res['queued']} · dup {res['skipped']} · drainer {res['drainer']}  ·  [b]k[/] coda")
 
 
 class CrawlQueueScreen(Screen):
     """Coda crawl (live): la TUI enqueue, il drainer (scripts/crawl-once.js) drena.
-    1 IP → sequenziale (~27s/target). [g] avvia drainer · [c] annulla riga ·
+    1 IP → sequenziale (~27s/target). [a] avvia drainer · [c] annulla riga ·
     [x] svuota i pending · [r] aggiorna. I crawl popolano anche la copertura."""
 
     CSS = """
+    #menu { dock: top; height: 1; }
     #qstatus { dock: bottom; height: 1; color: $text-muted; }
     DataTable { height: 1fr; }
     """
     BINDINGS = [
         ("escape", "app.pop_screen", "Indietro"),
         ("r", "reload", "Aggiorna"),
-        ("g", "start", "Avvia drainer"),
+        ("a", "start", "Avvia drainer"),   # M-H: 'g' liberato (= accoda altrove); qui 'a' = avvia
         ("c", "cancel_row", "Annulla"),
         ("x", "clear", "Svuota coda"),
     ]
@@ -433,6 +478,7 @@ class CrawlQueueScreen(Screen):
 
     def compose(self):
         yield Header(show_clock=True)
+        yield Static(R.menu_bar("queue"), id="menu")
         yield DataTable(id="q", cursor_type="row", zebra_stripes=True)
         yield Static(id="qstatus")
         yield Footer()
@@ -467,8 +513,7 @@ class CrawlQueueScreen(Screen):
         self.query_one("#qstatus", Static).update(
             f"[cyan]{counts['running']} in corso[/] · [yellow]{counts['pending']} in attesa[/] "
             f"(ETA {eta_s}) · {counts['done']} fatti · {counts['fail']} ko · "
-            f"{counts.get('annullati', 0)} annullati · {drn} · "
-            f"[g] avvia · [c] annulla · [x] svuota · [esc] indietro")
+            f"{counts.get('annullati', 0)} annullati · {drn}  ·  tasti in fondo ↓")
 
     def _current(self) -> dict | None:
         t = self.query_one("#q", DataTable)
@@ -522,22 +567,25 @@ class CrawlQueueScreen(Screen):
         return ""
 
 
-class SuggesterScreen(Screen):
+class SuggesterScreen(FilterTableScreen):
     """Suggeritore (ex-ramp): prossimi target da crawlare — 'da completare' (gap noto
     da market_size) prima, poi 'da scoprire' (mai-crawlati) per liquidità brand.
     [g] accoda riga · [G] accoda tutte le mostrate. Coverage-driven, dati veri."""
 
     CSS = """
+    #menu { dock: top; height: 1; }
     #sfilter { dock: top; }
     #sstatus { dock: bottom; height: 1; color: $text-muted; }
     DataTable { height: 1fr; }
     """
     BINDINGS = [
-        ("escape", "app.pop_screen", "Indietro"),
         ("r", "reload", "Aggiorna"),
         ("g", "enqueue_one", "Coda"),
         ("G", "enqueue_all", "Coda tutte"),
     ]
+    TABLE_ID = "#sugg"
+    FILTER_ID = "#sfilter"
+    MENU_KEY = "suggester"
 
     def __init__(self, db: Db | None = None):
         super().__init__()
@@ -551,6 +599,7 @@ class SuggesterScreen(Screen):
 
     def compose(self):
         yield Header(show_clock=True)
+        yield Static(R.menu_bar(self.MENU_KEY), id="menu")
         yield Input(placeholder="filtro marca/modello… (Invio)", id="sfilter")
         yield DataTable(id="sugg", cursor_type="row", zebra_stripes=True)
         yield Static(id="sstatus")
@@ -561,9 +610,7 @@ class SuggesterScreen(Screen):
             "tipo", "marca", "modello", "stato", "tetto", "manca", "priority")
         self.reload()
         self.set_interval(15, self.reload)   # live: gli accodati/crawlati spariscono da soli (15s: query più grande)
-
-    def on_input_submitted(self, _e: Input.Submitted) -> None:
-        self.reload()
+        self._focus_table()   # M-H: focus alla tabella, filtro via '/'
 
     def _load(self, q: str) -> list[dict]:
         return Q.suggestions(self.db, q=q or None, limit=500)
@@ -577,8 +624,7 @@ class SuggesterScreen(Screen):
                       R.sugg_state(r), R._num(r.get("tetto")), R._num(r.get("manca")),
                       R._num(r.get("priority")), key=str(r["id"]))
         self.query_one("#sstatus", Static).update(
-            f"{len(rows)} suggeriti · 'da completare' (gap) prima, poi liquidità · "
-            f"[g] accoda · [G] tutte · [r] aggiorna · [esc] indietro")
+            f"{len(rows)} suggeriti · 'da completare' (gap) prima, poi liquidità  ·  tasti in fondo ↓")
 
     def _current(self) -> dict | None:
         t = self.query_one("#sugg", DataTable)
@@ -612,8 +658,7 @@ class SuggesterScreen(Screen):
             self.query_one("#sstatus", Static).update(f"[red]coda errore:[/] {R.safe(e)}")
             return
         self.query_one("#sstatus", Static).update(
-            f"in coda: {res['queued']} · dup {res['skipped']} · drainer {res['drainer']} "
-            f"· [k] vedi coda · [esc] indietro")
+            f"in coda: {res['queued']} · dup {res['skipped']} · drainer {res['drainer']}  ·  [b]k[/] coda")
         self.reload()   # gli accodati spariscono dai suggerimenti (NOT EXISTS sulla coda)
 
 
@@ -626,6 +671,7 @@ class CommandScreen(Screen):
     propria a vita breve e spawna il drainer (idempotente via advisory lock)."""
 
     CSS = """
+    #menu { dock: top; height: 1; }
     #cheat { dock: top; height: auto; }
     #cmdin { dock: bottom; }
     #out { height: 1fr; }
@@ -643,6 +689,7 @@ class CommandScreen(Screen):
 
     def compose(self):
         yield Header(show_clock=True)
+        yield Static(R.menu_bar("command"), id="menu")
         yield Static(R.command_cheatsheet(), id="cheat")
         yield RichLog(id="out", markup=True, wrap=True, highlight=False)
         yield Input(id="cmdin",
@@ -703,6 +750,7 @@ class HealthScreen(Screen):
     taggano kind='blocked') → back-off 6h. 'mai' in ultimo blocco = mai bloccato (bene)."""
 
     CSS = """
+    #menu { dock: top; height: 1; }
     #hstatus { dock: bottom; height: 1; color: $text-muted; }
     DataTable { height: 1fr; }
     """
@@ -723,6 +771,7 @@ class HealthScreen(Screen):
 
     def compose(self):
         yield Header(show_clock=True)
+        yield Static(R.menu_bar("health"), id="menu")
         yield DataTable(id="health", cursor_type="row", zebra_stripes=True)
         yield Static(id="hstatus")
         yield Footer()
@@ -750,7 +799,7 @@ class HealthScreen(Screen):
         nb, nd = len(data["blocked"]), len(data["degraded"])
         self.query_one("#hstatus", Static).update(
             f"{len(rows)} fonti · [red]{nb} bloccate[/] · [yellow]{nd} degradate[/] · "
-            f"blocco = 429/403/non-JSON → back-off 6h · [r] aggiorna · [esc] indietro")
+            f"blocco = 429/403/non-JSON → back-off 6h")
 
     @work(exclusive=True, group="health-reload")
     async def reload(self) -> None:

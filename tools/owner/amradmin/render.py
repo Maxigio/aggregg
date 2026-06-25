@@ -120,6 +120,49 @@ def _ago(ts) -> str:
     return f"{s // 86400}g fa"
 
 
+# ── nav raggruppata (M-H): UNA mappa = fonte sia della legenda sia dei gruppi ──
+# (k, etichetta, chiave-attiva). 'home' = dashboard (esc). Tenere allineata alle
+# BINDINGS in app.py (stessi tasti) — questa è la sola lista da cui nasce la legenda.
+MENU_GROUPS = [
+    ("STATO", [("esc", "home", "home"), ("h", "salute", "health"), ("l", "accessi", "accesslog")]),
+    ("CRAWLA", [("s", "suggeriti", "suggester"), ("c", "copertura", "coverage"),
+                ("w", "watchlist", "watchlist"), ("k", "coda", "queue")]),
+    ("GESTISCI", [(":", "comandi", "command")]),
+]
+
+
+def menu_bar(active: str | None = None) -> Text:
+    """Legenda di navigazione a 3 gruppi (docked in cima a ogni schermata). Evidenzia
+    la voce attiva (reverse). I tasti sono i binding globali App: premerli da qualsiasi
+    schermata naviga (i binding bubblano da una tabella a fuoco)."""
+    out = Text(no_wrap=True, overflow="ellipsis")
+    for gi, (group, items) in enumerate(MENU_GROUPS):
+        if gi:
+            out.append("   ")
+        out.append(f"{group} ", style="bold magenta")
+        for k, label, key in items:
+            on = key is not None and key == active
+            out.append(f" {k}", style="reverse cyan" if on else "bold cyan")
+            out.append(f":{label}", style="white" if on else "dim")
+    return out
+
+
+def ops_line(alive: bool, counts: dict, health: dict) -> Text:
+    """Riga ops live della dashboard: drainer on/off · coda+ETA · fonti bloccate.
+    I 2 fatti operativi che prima costringevano ad andare in `k`/`h`."""
+    drn = "[green]● drainer attivo[/]" if alive else "[dim]○ drainer fermo[/]"
+    pend, run = counts.get("pending", 0), counts.get("running", 0)
+    eta = pend * 27   # ~27s/target (1 IP, sequenziale)
+    eta_s = f" (ETA ~{eta // 60}m{eta % 60:02d}s)" if eta else ""
+    qpart = (f"[cyan]{run} in corso[/] · [yellow]{pend} in coda[/]{eta_s}"
+             if (run or pend) else "[dim]coda vuota[/]")
+    nb, nd = len(health.get("blocked", [])), len(health.get("degraded", []))
+    hpart = f"[red]{nb} bloccate[/]" if nb else "[green]0 bloccate[/]"
+    if nd:
+        hpart += f" · [yellow]{nd} degradate[/]"
+    return Text.from_markup(f"{drn}  ·  {qpart}  ·  fonti: {hpart}")
+
+
 def command_cheatsheet() -> Panel:
     """Cheatsheet della schermata Comandi (M-D), sempre visibile in cima alla schermata."""
     t = Table.grid(padding=(0, 2))
@@ -163,9 +206,12 @@ def nodes_panel(stats: list[dict], health: dict) -> Panel:
     t.add_column("ultimo crawl", justify="right")
     t.add_column("stato crawl", justify="left")
     t.add_column("fonti", justify="left")
-    for node in KNOWN_NODES:
+    # M-H: mostra SOLO i nodi con target (oggi solo 'imac' — assigned_node azzerato).
+    # Gli altri KNOWN_NODES sono placeholder vuoti finché non c'è la Fase 3 (multi-nodo):
+    # riassunti in una riga dim invece di 3 righe "0 target".
+    active = [n for n in KNOWN_NODES if stat_by.get(n, {}).get("total", 0)] or ["imac"]
+    for node in active:
         s = stat_by.get(node, {})
-        tot = s.get("total", 0)
         # 🟢 fresco · 🟡 da agg. · ⚪ mai (to-do, NON rosso: "mai crawlato" non è un errore).
         state = (f"[green]🟢{s.get('fresco',0)}[/] [yellow]🟡{s.get('due',0)}[/] "
                  f"[dim]⚪{s.get('mai',0)}[/]")
@@ -178,7 +224,10 @@ def nodes_panel(stats: list[dict], health: dict) -> Panel:
         # NON max(last_swept) (= freschezza catalogo, che un :run ad-hoc non muove).
         lr = s.get("last_run")
         t.add_row(label, _ago(lr) if lr else "—",
-                  state if tot else "[dim]0 target[/]", " ".join(pills) or "[dim]—[/]")
+                  state, " ".join(pills) or "[dim]—[/]")
+    others = len(KNOWN_NODES) - len(active)
+    if others:
+        t.add_row(f"[dim]+{others} nodi[/]", "", "[dim]spenti (Fase 3)[/]", "")
     return Panel(t, title="Nodi", border_style="magenta")
 
 
@@ -233,7 +282,7 @@ def suggester_panel(rows: list[dict]) -> Panel:
     t.add_column("stato", justify="right")
     for r in rows[:8]:
         t.add_row(safe(r["tipo"]), f"{safe(r['marca'])} {safe(r['modello'])}", sugg_state(r))
-    return Panel(t, title=f"Da crawlare · top {min(len(rows), 8)} · [s] tutti", border_style="yellow")
+    return Panel(t, title=f"Da crawlare · top {min(len(rows), 8)} · [b]s[/] tutti", border_style="yellow")
 
 
 def last_run_line(lr: dict | None) -> Text:
