@@ -56,50 +56,62 @@ def test_headless_mount() -> None:
             await pilot.pause()
             assert app.last_error is None, f"errore al mount: {app.last_error}"
             svg = app.export_screenshot()
-            for needed in ("Watchlist", "Nodi", "crawlare"):   # ex-Ramp → suggeritore "Da crawlare"
+            for needed in ("Nodi", "crawlare", "Copertura"):   # M-L: 'Da crawlare' (ex Watchlist+Suggeriti)
                 assert needed in svg, f"pannello mancante: {needed}"
 
     asyncio.run(run())
     print("✔ headless mount/refresh/render OK")
 
 
-def test_watchlist_screen() -> None:
-    """Apre la schermata watchlist (tasto w), carica le righe, applica un filtro."""
+def test_crawllist_screen() -> None:
+    """Pannello UNICO 'Da crawlare' (M-L, tasto w): worklist coverage-driven + toggle
+    catalogo (f) + filtro server-side + sort/group colonne (render markup-safe)."""
     from amradmin.db import Db
     try:
         Db().conn()
     except Exception as e:
-        print(f"⤼ SKIP watchlist screen: DB non raggiungibile ({e})")
+        print(f"⤼ SKIP crawllist screen: DB non raggiungibile ({e})")
         return
 
     from textual.widgets import Input
 
     from amradmin.app import AmrAdminApp
-    from amradmin.screens import WatchlistScreen
+    from amradmin.screens import CrawlListScreen
 
     async def run() -> None:
         app = AmrAdminApp()
-        async with app.run_test(size=(140, 40)) as pilot:
+        async with app.run_test(size=(150, 40)) as pilot:
             await pilot.pause()
             await app.workers.wait_for_complete()
-            await pilot.press("w")                       # apre WatchlistScreen
+            await pilot.press("w")                       # apre il pannello unico
             await pilot.pause()
             await app.workers.wait_for_complete()
             await pilot.pause()
             scr = app.screen
-            assert isinstance(scr, WatchlistScreen), f"schermata inattesa: {type(scr).__name__}"
-            assert len(scr.rows) > 0, "watchlist screen senza righe"
-            # filtro server-side
+            assert isinstance(scr, CrawlListScreen), f"schermata inattesa: {type(scr).__name__}"
+            assert scr._mode == "worklist", "default deve essere la worklist (buchi copertura)"
+            # toggle a CATALOGO completo (f) → filtro 'Fiat' deterministico (il catalogo ha Fiat)
+            scr.action_toggle_mode()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert scr._mode == "all"
             scr.query_one("#filter", Input).value = "Fiat"
             scr.reload()
             await app.workers.wait_for_complete()
             await pilot.pause()
-            assert scr.rows, "filtro Fiat: nessuna riga"
-            assert all("fiat" in r["marca"].lower() or "fiat" in r["modello"].lower() for r in scr.rows), \
-                "filtro non applicato"
+            assert scr._rows_raw, "filtro Fiat: nessuna riga"
+            assert all("fiat" in r["marca"].lower() or "fiat" in r["modello"].lower()
+                       for r in scr._rows_raw), "filtro non applicato"
+            # colonne: ordina + raggruppa → niente crash + rowmap coerente (header gruppo = None)
+            scr.action_sort_next()
+            scr.action_cycle_group()
+            await pilot.pause()
+            assert isinstance(app.export_screenshot(), str), "render KO dopo sort/group"
+            assert len(scr._rowmap) >= len(scr._rows_raw), "rowmap deve includere gli header di gruppo"
+            assert all((rm is None) or ("id" in rm) for rm in scr._rowmap), "rowmap malformato"
 
     asyncio.run(run())
-    print("✔ watchlist screen (push/load/filtro) OK")
+    print("✔ crawllist screen (worklist/toggle/filtro/sort/group) OK")
 
 
 def test_accesslog_screen() -> None:
@@ -285,44 +297,6 @@ def test_crawl_queue_screen() -> None:
         conn.close()
 
 
-def test_suggester_screen() -> None:
-    """Apre il suggeritore (tasto s), carica righe live, applica un filtro."""
-    from amradmin.db import Db
-    try:
-        Db().conn()
-    except Exception as e:
-        print(f"⤼ SKIP suggester screen: DB non raggiungibile ({e})")
-        return
-
-    from textual.widgets import Input
-
-    from amradmin.app import AmrAdminApp
-    from amradmin.screens import SuggesterScreen
-
-    async def run() -> None:
-        app = AmrAdminApp()
-        async with app.run_test(size=(150, 40)) as pilot:
-            await pilot.pause()
-            await app.workers.wait_for_complete()
-            await pilot.press("s")
-            await pilot.pause()
-            await app.workers.wait_for_complete()
-            await pilot.pause()
-            scr = app.screen
-            assert isinstance(scr, SuggesterScreen), f"schermata inattesa: {type(scr).__name__}"
-            assert len(scr.rows) > 0, "suggeritore senza righe (catalogo 14k attivo → atteso >0)"
-            assert isinstance(app.export_screenshot(), str)
-            scr.query_one("#sfilter", Input).value = "audi"
-            scr.reload()
-            await app.workers.wait_for_complete()
-            await pilot.pause()
-            assert scr.rows and all("audi" in r["marca"].lower() or "audi" in r["modello"].lower()
-                                    for r in scr.rows), "filtro audi non applicato"
-
-    asyncio.run(run())
-    print("✔ suggester screen (push/load/filtro) OK")
-
-
 def test_health_screen() -> None:
     """Apre la Salute crawler (tasto h) con una riga sentinel BLOCCATA (+ markup nella
     fonte → R.safe). Verifica push/load/colore-stato + render markup-safe."""
@@ -413,11 +387,10 @@ def test_command_screen() -> None:
 if __name__ == "__main__":
     test_render_handles_nulls()
     test_headless_mount()
-    test_watchlist_screen()
+    test_crawllist_screen()
     test_accesslog_screen()
     test_coverage_screen()
     test_crawl_queue_screen()
-    test_suggester_screen()
     test_health_screen()
     test_command_screen()
     print("\nTEST OK")

@@ -15,8 +15,8 @@ from . import queries as Q
 from . import render as R
 from .db import Db
 from .screens import (
-    AccessLogScreen, CommandScreen, CoverageScreen, CrawlQueueScreen, HealthScreen,
-    SuggesterScreen, WatchlistScreen,
+    AccessLogScreen, CommandScreen, CoverageScreen, CrawlListScreen, CrawlQueueScreen,
+    HealthScreen,
 )
 
 REFRESH_SECONDS = 5
@@ -35,9 +35,8 @@ class AmrAdminApp(App):
     #status { dock: bottom; height: 1; color: $text-muted; }
     """
     BINDINGS = [
-        ("w", "watchlist", "Watchlist"),
+        ("w", "crawllist", "Da crawlare"),
         ("c", "coverage", "Copertura"),
-        ("s", "suggester", "Suggeriti"),
         ("k", "crawl_queue", "Coda"),
         ("h", "health", "Salute"),
         ("l", "accesslog", "Accessi"),
@@ -84,8 +83,8 @@ class AmrAdminApp(App):
         else:
             self.push_screen(screen_type())
 
-    def action_watchlist(self) -> None:
-        self._go(WatchlistScreen)
+    def action_crawllist(self) -> None:
+        self._go(CrawlListScreen)
 
     def action_accesslog(self) -> None:
         self._go(AccessLogScreen)
@@ -98,9 +97,6 @@ class AmrAdminApp(App):
 
     def action_health(self) -> None:
         self._go(HealthScreen)
-
-    def action_suggester(self) -> None:
-        self._go(SuggesterScreen)
 
     def action_command(self) -> None:
         """Apre la schermata Comandi dedicata (M-D): input + storia + output + cheatsheet."""
@@ -135,7 +131,7 @@ class AmrAdminApp(App):
             "lastrun": R.last_run_line(Q.last_run(db, "imac")),
             "nodes": R.nodes_panel(Q.node_stats(db), health),
             "fonti": R.fonti_panel(Q.listings_by_fonte(db)),
-            "suggester": R.suggester_panel(Q.suggestions(db, limit=8)),   # preview: solo 8 (no query pesante ogni 5s)
+            "suggester": R.suggester_panel(Q.to_crawl(db, limit=8)),   # preview worklist coverage (top 8)
         }
 
 

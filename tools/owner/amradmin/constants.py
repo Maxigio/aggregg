@@ -17,6 +17,11 @@ STALE_HOURS = 20
 # Fonte: watchlist.saturated_at (mig 018), timbrato da watchlist-repo.markSwept.
 SATURATED_DAYS = 7
 
+# Coverage-driven (M-J/M-L): soglia % sotto cui una fonte AFFIDABILE (autoscout) è "parziale"
+# = buco vero da crawlare. Usata da render.cov_state (badge) e queries.to_crawl (worklist) →
+# UNA sola fonte per non andare in drift.
+COVERAGE_OK_PCT = 85.0
+
 # Tipi veicolo ammessi. Fonte: backend/server.js (validazione tipo auto|moto).
 TIPI = ["auto", "moto"]
 

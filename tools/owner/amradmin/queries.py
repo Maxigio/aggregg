@@ -6,7 +6,7 @@ non ha (coverage marca×regione, gap, ramp ETA, distribuzione prezzi, storico ru
 """
 from __future__ import annotations
 
-from .constants import SATURATED_DAYS, STALE_HOURS
+from .constants import COVERAGE_OK_PCT, SATURATED_DAYS, STALE_HOURS
 
 # ─────────────────────────── MIRROR dei repo JS ────────────────────────────
 
@@ -160,6 +160,79 @@ def suggestions(db, *, q: str | None = None, limit: int = 300) -> list[dict]:
                                   AND cq.status IN ('pending','running','cancel_requested'))
              ORDER BY (w.last_truncated = true) DESC NULLS LAST,        -- da completare (tronca) prima
                       w.priority DESC NULLS LAST, w.id
+             LIMIT %(limit)s""",
+        params,
+    )
+
+
+def to_crawl(db, *, mode: str = "worklist", q: str | None = None, tipo: str | None = None,
+             node: str | None = None, limit: int = 500) -> list[dict]:
+    """M-L: worklist UNICA 'Da crawlare' (fonde suggeritore + watchlist), guidata dai BUCHI
+    di Copertura, per-TARGET. `mode='worklist'` (default): solo target con un buco reale —
+    mai-crawlato OPPURE last_truncated OPPURE autoscout coverage < COVERAGE_OK_PCT ('parziale',
+    come cov_state) — esclusi saturati(<SATURATED_DAYS)/in-coda/appena-crawlati(<STALE_HOURS),
+    enabled; ORDER peggiori-prima (come il pannello Copertura): crawlati-incompleti per % peggiore,
+    poi mai-crawlati per liquidità. `mode='all'`: catalogo intero (gestione on/off/elimina).
+    Riusa le CTE di coverage(); as_pct = copertura autoscout (fonte affidabile). sort/group lato TUI."""
+    where: list[str] = []
+    params: dict = {"limit": limit}
+    if q:
+        where.append("(w.marca ILIKE %(q)s OR w.modello ILIKE %(q)s)")
+        params["q"] = f"%{q}%"
+    if tipo:
+        where.append("w.tipo = %(tipo)s")
+        params["tipo"] = tipo
+    if node:
+        where.append("COALESCE(w.assigned_node, 'imac') = %(node)s")
+        params["node"] = node
+    if mode == "worklist":
+        where += [
+            "w.enabled",
+            f"(w.last_swept IS NULL OR w.last_truncated = true OR (ms.as_tetto > 0 AND ms.as_pct < {COVERAGE_OK_PCT}))",
+            f"(w.last_swept IS NULL OR w.last_swept < now() - interval '{STALE_HOURS} hours')",
+            f"(w.saturated_at IS NULL OR w.saturated_at < now() - interval '{SATURATED_DAYS} days')",
+            ("NOT EXISTS (SELECT 1 FROM crawl_queue cq WHERE cq.tipo=w.tipo AND cq.marca=w.marca"
+             " AND cq.modello=w.modello AND cq.status IN ('pending','running','cancel_requested'))"),
+        ]
+        # peggiori prima = come Copertura: crawlati-incompleti (per % peggiore) prima, mai dopo (liquidità).
+        order = ("(w.last_swept IS NULL) ASC, COALESCE(ms.as_pct, ms.coverage_pct, 100) ASC, "
+                 "(w.last_truncated = true) DESC NULLS LAST, w.priority DESC NULLS LAST, w.id")
+    else:                                  # 'all' = catalogo intero per la gestione
+        order = "row_number() OVER (PARTITION BY w.tipo ORDER BY w.marca, w.modello), w.tipo"
+    where_sql = " AND ".join(where) or "TRUE"
+    return db.rows(
+        f"""WITH latest AS (
+              SELECT DISTINCT ON (tipo, marca, modello, fonte) tipo, marca, modello, fonte, total
+                FROM market_size ORDER BY tipo, marca, modello, fonte, ts DESC),
+            ms0 AS (
+              SELECT l.tipo, l.marca, l.modello,
+                     sum(l.total)::int tetto,
+                     sum(greatest(l.total - COALESCE(i.n, 0), 0))::int manca,
+                     sum(l.total) FILTER (WHERE l.fonte='autoscout')::int as_tetto,
+                     sum(COALESCE(i.n, 0)) FILTER (WHERE l.fonte='autoscout')::int as_ing
+                FROM latest l
+                CROSS JOIN LATERAL (
+                     SELECT count(*)::int n FROM listings li
+                      WHERE li.fonte = l.fonte AND li.tipo = l.tipo
+                        AND li.marca = l.marca AND li.modello = l.modello
+                        AND li.status = 'active') i
+               GROUP BY l.tipo, l.marca, l.modello),
+            ms AS (
+              SELECT *,
+                     CASE WHEN tetto > 0 THEN round(100.0 * (tetto - manca) / tetto)::int END coverage_pct,
+                     CASE WHEN as_tetto > 0 THEN round(100.0 * as_ing / as_tetto, 1) END as_pct
+                FROM ms0)
+            SELECT w.id, w.tipo, w.marca, w.modello, w.assigned_node, w.enabled,
+                   w.last_swept, w.last_truncated, w.saturated_at, w.priority,
+                   (SELECT count(*) FROM listings l
+                      WHERE l.tipo=w.tipo AND l.marca=w.marca AND l.modello=w.modello)::int annunci,
+                   ms.tetto, ms.manca, ms.coverage_pct, ms.as_pct,
+                   (w.last_swept IS NULL) AS mai,
+                   count(*) OVER()::int total
+              FROM watchlist w
+              LEFT JOIN ms ON ms.tipo = w.tipo AND ms.marca = w.marca AND ms.modello = w.modello
+             WHERE {where_sql}
+             ORDER BY {order}
              LIMIT %(limit)s""",
         params,
     )

@@ -8,7 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from .constants import FULL_PAGES, KNOWN_NODES, STALE_HOURS
+from .constants import COVERAGE_OK_PCT, FULL_PAGES, KNOWN_NODES, STALE_HOURS
 
 
 def safe(v) -> str:
@@ -125,8 +125,8 @@ def _ago(ts) -> str:
 # BINDINGS in app.py (stessi tasti) — questa è la sola lista da cui nasce la legenda.
 MENU_GROUPS = [
     ("STATO", [("esc", "home", "home"), ("h", "salute", "health"), ("l", "accessi", "accesslog")]),
-    ("CRAWLA", [("s", "suggeriti", "suggester"), ("c", "copertura", "coverage"),
-                ("w", "watchlist", "watchlist"), ("k", "coda", "queue")]),
+    ("CRAWLA", [("w", "da crawlare", "crawllist"), ("c", "copertura", "coverage"),
+                ("k", "coda", "queue")]),
     ("GESTISCI", [(":", "comandi", "command")]),
 ]
 
@@ -261,8 +261,7 @@ def sugg_state(row: dict) -> str:
 # autoscout (listingsByQueryString, ustate=U) è strutturato → un % basso = buco VERO
 # (provato: Audi A3 usato 5555 ma ingeriti 1629 = 29%, tetto-paginazione AS24). subito/moto
 # usano count_all/regex free-text (rumoroso: Audi A3 Subito 7194>6830) → NON allarmare.
-COVERAGE_TRUSTED_FONTI = {"autoscout"}
-COVERAGE_OK_PCT = 85.0   # ≥ soglia = preso il grosso del matchabile → soddisfatto
+COVERAGE_TRUSTED_FONTI = {"autoscout"}   # COVERAGE_OK_PCT è in constants (condivisa con queries.to_crawl)
 
 
 def cov_state(row: dict) -> str:
@@ -299,7 +298,7 @@ def suggester_panel(rows: list[dict]) -> Panel:
     t.add_column("stato", justify="right")
     for r in rows[:8]:
         t.add_row(safe(r["tipo"]), f"{safe(r['marca'])} {safe(r['modello'])}", sugg_state(r))
-    return Panel(t, title=f"Da crawlare · top {min(len(rows), 8)} · [b]s[/] tutti", border_style="yellow")
+    return Panel(t, title=f"Da crawlare · top {min(len(rows), 8)} · [b]w[/] tutti", border_style="yellow")
 
 
 def last_run_line(lr: dict | None) -> Text:
