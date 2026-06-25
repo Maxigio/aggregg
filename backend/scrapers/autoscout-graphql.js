@@ -252,10 +252,12 @@ const COUNT_AUTH = 'Basic aG9tZS1mZWVkLWpzOnAzNVBLeUZCNG5VREtFTllKNG9HUTVJYjFTM0
 const COUNT_QUERY = `query GET_TOTAL_LISTING_COUNT_BY_QUERY_STRING($queryString:String!,$locale:Locale_){ search{ listingsByQueryString(queryString:$queryString, locale:$locale){ metadata{ totalItems } } } }`;
 
 // PURO: mmmv "make|model|..." → queryString. atype=C auto / B moto (entrambi provati).
-// ustate=U (solo USATO): il tetto deve combaciare con ciò che INGERIAMO. L'endpoint
-// `listings()` ci dà solo usato (0 nuove su 87k AS24 in DB) → contare anche le nuove
-// (ustate=N,U) gonfiava il tetto e dava copertura fittizia (Audi A3: 5738 N+U vs 1629
-// usate = 28% falso; manca 4109 = nuove/km0 che NON crawliamo). È un DB dell'usato.
+// ustate=U: il tetto deve combaciare con lo SCOPE che ingeriamo. `listings()` ci dà il
+// "non-nuovo" (usato + km0/demo; 0 `nuovo=true` su 87k AS24 in DB), ed `ustate=U` conta
+// lo stesso insieme (escludendo solo le Neu). Verificato live (Audi A3): ustate=U=5553 ≈
+// listings() per-fetta. NB: il GROSSO buco sui best-seller (Audi A3: ~5300 usate vere vs
+// 1629 ingerite = 31%) NON sono auto nuove — è il TETTO DI PAGINAZIONE di `listings()`
+// (~1629/query): si recupera spezzando la query per anno/prezzo (vedi M-K), non qui.
 function countQueryString(mmmv, tipo) {
   const [make, model] = String(mmmv || '').split('|');
   if (!make) return null;
