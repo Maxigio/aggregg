@@ -40,7 +40,8 @@ async function pickNext() {
      UPDATE crawl_queue q
         SET status = 'running', started_at = now(), heartbeat = now()
        FROM next WHERE q.id = next.id
-     RETURNING q.id, q.tipo, q.marca, q.modello, q.watchlist_id, q.last_truncated, q.pages`
+     RETURNING q.id, q.tipo, q.marca, q.modello, q.watchlist_id, q.last_truncated, q.pages,
+               (SELECT w.saturated_at FROM watchlist w WHERE w.id = q.watchlist_id) AS saturated_at`
   );
   return r && r.rows.length ? r.rows[0] : null;
 }

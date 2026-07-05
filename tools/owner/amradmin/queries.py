@@ -166,7 +166,7 @@ def suggestions(db, *, q: str | None = None, limit: int = 300) -> list[dict]:
 
 
 def to_crawl(db, *, mode: str = "worklist", q: str | None = None, tipo: str | None = None,
-             node: str | None = None, limit: int = 500) -> list[dict]:
+             limit: int = 500) -> list[dict]:
     """M-L: worklist UNICA 'Da crawlare' (fonde suggeritore + watchlist), guidata dai BUCHI
     di Copertura, per-TARGET. `mode='worklist'` (default): solo target con un buco reale —
     mai-crawlato OPPURE last_truncated OPPURE autoscout coverage < COVERAGE_OK_PCT ('parziale',
@@ -182,9 +182,6 @@ def to_crawl(db, *, mode: str = "worklist", q: str | None = None, tipo: str | No
     if tipo:
         where.append("w.tipo = %(tipo)s")
         params["tipo"] = tipo
-    if node:
-        where.append("COALESCE(w.assigned_node, 'imac') = %(node)s")
-        params["node"] = node
     if mode == "worklist":
         where += [
             "w.enabled",

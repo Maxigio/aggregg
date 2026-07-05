@@ -220,6 +220,24 @@ test('markSwept saturazione: inserted>0 → reset (NULL)', async () => {
   assert.strictEqual(await satOf(id), null, 'materiale nuovo → non più saturo');
 });
 
+// M-M — corsia refresh: pagina-1 trova 0 nuovi quasi sempre → NON ri-timbrare saturated_at
+// (la finestra deve scorrere verso la scadenza → deep crawl per il venduto). Reset-su-nuovi resta.
+test('markSwept refresh + 0 nuovi → NON ri-timbra saturated_at (finestra scorre)', async () => {
+  const id = await pandaId();
+  await db.query("UPDATE watchlist SET saturated_at = now() - interval '3 days' WHERE id=$1", [id]);
+  const before = await satOf(id);
+  await wl.markSwept(id, { refresh: true, written: 67, inserted: 0 });
+  assert.strictEqual((await satOf(id)).getTime(), before.getTime(),
+    'refresh+0nuovi non deve spostare saturated_at (sennò non scade mai → niente deep crawl venduto)');
+});
+
+test('markSwept refresh + nuovi → reset saturated_at = NULL (→ deep crawl)', async () => {
+  const id = await pandaId();
+  await db.query("UPDATE watchlist SET saturated_at = now() - interval '3 days' WHERE id=$1", [id]);
+  await wl.markSwept(id, { refresh: true, written: 67, inserted: 5 });
+  assert.strictEqual(await satOf(id), null, 'nuovi trovati in refresh → reset → torna in worklist (deep)');
+});
+
 test('markSwept saturazione: written=0 (vuoto/errore) → INVARIATO', async () => {
   const id = await pandaId();
   await db.query('UPDATE watchlist SET saturated_at = now() WHERE id=$1', [id]);

@@ -1,4 +1,4 @@
-"""Schermate secondarie del TUI. v1: WatchlistScreen (gestione target) + conferma."""
+"""Schermate secondarie del TUI: CrawlListScreen ('Da crawlare') + conferma + coda + salute."""
 from __future__ import annotations
 
 import asyncio
@@ -238,12 +238,13 @@ class CrawlListScreen(FilterTableScreen):
         t.clear()
         self._rowmap = []
         if self._group:
+            glabel = "stato" if self._group == "__stato" else self._group   # nome interno → etichetta
             rows.sort(key=lambda r: str(self._group_val(r)).lower())   # stabile: preserva il sort sopra
             last = object()
             for r in rows:
                 g = self._group_val(r)
                 if g != last:
-                    t.add_row(f"[bold dim]▾ {self._group}: {R.safe(g)}[/]", "", "", "", "", "", "", "", "")
+                    t.add_row(f"[bold dim]▾ {glabel}: {R.safe(g)}[/]", "", "", "", "", "", "", "", "")
                     self._rowmap.append(None)
                     last = g
                 self._add_data_row(t, r)

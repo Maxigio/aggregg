@@ -150,25 +150,29 @@ async function completeTarget(id) {
 // meta opzionale: retro-compat con le chiamate senza argomenti.
 async function markSwept(id, meta = {}) {
   if (!db.isEnabled()) return;
-  const { truncated, complete, inserted, written, skipped } = meta;
+  const { truncated, complete, inserted, written, skipped, refresh } = meta;
   // coverage-driven SATURAZIONE: written>0 & inserted=0 = ri-preso l'esistente, 0 nuovi
   // → saturo (timbra saturated_at). inserted>0 = materiale nuovo → reset (NULL).
   // written=0 (vuoto/errore) → NON tocca saturated_at (guard anti falsa-saturazione).
   // skipped (una fonte in back-off non crawlata) → NON saturare: non l'abbiamo vista, il
   // suo inventario nuovo ci sfuggirebbe per SATURATED_DAYS. NB: truncated SÌ satura ancora
   // (è il mega-target cappato che il feature deve smettere di ri-crawlare). reset sempre.
-  // I chiamanti vecchi (senza written/inserted/skipped) → 0/0/false → ELSE → invariato.
+  // M-M refresh ($7): la corsia refresh (pagina-1) trova 0 nuovi quasi sempre → NON ri-timbrare
+  //   saturated_at (lasciarlo scorrere verso la scadenza → deep crawl per il venduto); trova nuovi
+  //   → reset come sempre (→ deep crawl). Quindi in refresh l'unico effetto è il reset-su-nuovi.
+  // I chiamanti vecchi (senza written/inserted/skipped/refresh) → 0/0/false → ELSE → invariato.
   await db.query(
     `UPDATE watchlist
         SET last_swept = now(),
             last_truncated = COALESCE($2, last_truncated),
             last_complete_at = CASE WHEN $3 THEN now() ELSE last_complete_at END,
-            saturated_at = CASE WHEN $4 > 0 AND $5 = 0 AND NOT $6 THEN now()
-                                WHEN $5 > 0 THEN NULL
+            saturated_at = CASE WHEN $5 > 0 THEN NULL
+                                WHEN $7 THEN saturated_at
+                                WHEN $4 > 0 AND NOT $6 THEN now()
                                 ELSE saturated_at END
       WHERE id = $1`,
     [id, truncated === undefined ? null : truncated, complete === true,
-     written == null ? 0 : written, inserted == null ? 0 : inserted, skipped === true]
+     written == null ? 0 : written, inserted == null ? 0 : inserted, skipped === true, refresh === true]
   );
 }
 

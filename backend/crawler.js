@@ -35,6 +35,7 @@ const FULL_PAGES_MAX = parseInt(process.env.CRAWLER_PAGES_FULL || '200', 10) || 
 const RAMP_PER_DAY = parseInt(process.env.CRAWLER_RAMP  || '10', 10);   // nuovi target/giorno
 const THROTTLE_MS  = parseInt(process.env.CRAWLER_THROTTLE_MS || '1500', 10);
 const BACKOFF_HOURS = parseInt(process.env.CRAWLER_BACKOFF_HOURS || '6', 10); // F14: salta fonte blocked per Nh
+const REFRESH_PAGES = parseInt(process.env.CRAWLER_REFRESH_PAGES || '1', 10) || 1; // M-M: corsia refresh (pagina-1) per i target saturi → freschezza cheap, niente re-crawl pieno a vuoto
 const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FIRST_RUN_DELAY_MS = 60 * 1000;   // dopo il boot, non subito
 
@@ -106,8 +107,11 @@ function capForTarget(target) {
     : (target.last_truncated ? DEEP_PAGES_MAX : DEEP_PAGES);
 }
 
-async function sweepTarget(target, stats) {
-  const cap = capForTarget(target);
+async function sweepTarget(target, stats, { refresh = false } = {}) {
+  // M-M corsia refresh: target saturo (0 nuovi all'ultimo crawl pieno) → solo pagina-1
+  // sortByDate (i nuovi stanno in cima), niente split/markGone/marketSize. Decide il drainer
+  // (shouldRefresh). `:run …full|pN` (target.maxPages) e i tronca NON sono refresh.
+  const cap = refresh ? REFRESH_PAGES : capForTarget(target);
   const opts = { maxPages: cap, attachRaw: true, sortByDate: true, withMeta: true };
   let anyTrunc = false, skippedAny = false;
 
@@ -117,6 +121,20 @@ async function sweepTarget(target, stats) {
     if (await health.isBackedOff('imac', 'autoscout', BACKOFF_HOURS)) {
       console.log(`[crawler] AS24 in back-off (blocked recente) → salto ${target.marca} ${target.modello}`);
       skippedAny = true;
+    } else if (refresh) try {
+      // M-M corsia refresh: 1 pagina sortByDate → prende i nuovi in cima. Niente count/split
+      // (un saturo grande spaccherebbe in 34pp/fetta = non più cheap), niente markGone (vista
+      // parziale → il venduto lo ripiglia il deep crawl a saturazione scaduta), niente marketSize.
+      const part = await scrapeAutoscoutGraphql({ tipo: target.tipo, mmmvAutoscout: as.mmmv }, opts);
+      const r = await repo.upsertListings(part.items, target);
+      stats.written += r.written;
+      stats.inserted = (stats.inserted || 0) + r.inserted;
+      stats.as += part.items.length;
+      await health.record('autoscout', { count: part.items.length });
+    } catch (e) {
+      console.warn(`[crawler] AS24 refresh fallito ${target.marca} ${target.modello}: ${e.message}`);
+      stats.errors++;
+      await health.record('autoscout', { error: e });
     } else try {
       // M-K: AS24 `listings()` si ferma a ~1629/query → per i target grandi spezziamo la
       // query (per anno, poi prezzo) così ogni sotto-sweep sta sotto il tetto ed è

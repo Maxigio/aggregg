@@ -73,6 +73,18 @@ test('drainQueue: job.pages → maxPages passato allo sweep (profondità per-run
   assert.strictEqual(seen, 60, 'maxPages dal job.pages');
 });
 
+test('drainQueue: job senza watchlist → sweep riceve {refresh:false} (glue M-M)', async () => {
+  // Copre il GLUE drainer→sweepTarget (shouldRefresh + 3° argomento) senza dipendere da
+  // watchlist (TRUNCATEd da watchlist-repo.test.js in parallelo → sarebbe race). Il ramo
+  // refresh:true e2e è coperto per componenti: shouldRefresh (refresh-lane, puro) +
+  // markSwept refresh (watchlist-repo) + pickNext.saturated_at (sub-select su PK).
+  await q.enqueue(T({ modello: 'glue' }));
+  let seen = null;
+  const sweep = async (t, s, o) => { seen = o; s.written = 1; return { truncated: false, complete: true }; };
+  await drainQueue({ sweep, ...FAST });
+  assert.deepStrictEqual(seen, { refresh: false }, 'ad-hoc/mai-saturato → corsia piena, 3° arg presente');
+});
+
 test('drainQueue: coda vuota → 0 target, esce (double-empty-poll)', async () => {
   let n = 0;
   const tot = await drainQueue({ sweep: async () => { n++; return {}; }, ...FAST });

@@ -25,11 +25,28 @@ const runs = require('../backend/db/crawl-runs-repo');
 const LOCK_KEY = 414260060;   // chiave fissa singleton (int4 → pg_try_advisory_lock(bigint))
 const THROTTLE_MS = parseInt(process.env.CRAWLER_THROTTLE_MS || '1500', 10);
 const POLL_MS = 1500;         // attesa tra due poll vuoti (chiude la finestra di re-spawn)
+const SATURATED_DAYS = 7;     // = tools/owner/amradmin/constants.py SATURATED_DAYS (finestra saturazione)
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /**
- * Drena la coda finché vuota. `sweep(target, stats)` esegue il crawl (default:
- * crawler.sweepTarget) — iniettabile per i test. Ritorna {targets, written, errors}.
+ * M-M — decide la CORSIA di crawl per un job. Un target saturo DI RECENTE (0 nuovi all'ultimo
+ * crawl pieno, <SATURATED_DAYS) e senza gap reale → REFRESH pagina-1 (cheap: prende solo i nuovi
+ * in cima) invece del crawl pieno che riscrive tutto per 0 nuovi. Escluso: `:run …full|pN`
+ * (job.pages = override esplicito), i tronca (gap reale → deep crawl), i mai-saturati. PURO →
+ * testabile senza rete/DB. saturated_at arriva da crawl_queue.pickNext (sub-select su watchlist).
+ */
+function shouldRefresh(job, nowMs = Date.now()) {
+  if (job.pages) return false;            // profondità esplicita → l'utente vuole il crawl pieno
+  if (job.last_truncated) return false;   // gap reale (cap pagine colpito) → deep, non refresh
+  if (!job.saturated_at) return false;    // mai saturato (o ad-hoc senza watchlist) → crawl pieno
+  const ageMs = nowMs - new Date(job.saturated_at).getTime();
+  return ageMs >= 0 && ageMs < SATURATED_DAYS * 86400000;   // saturo di recente → refresh
+}
+
+/**
+ * Drena la coda finché vuota. `sweep(target, stats, {refresh})` esegue il crawl (default:
+ * crawler.sweepTarget; refresh = corsia pagina-1 M-M, decisa da shouldRefresh) —
+ * iniettabile per i test. Ritorna {targets, written, errors}.
  */
 async function drainQueue({ sweep, throttleMs = THROTTLE_MS, pollMs = POLL_MS, log = () => {} } = {}) {
   const tot = { targets: 0, written: 0, inserted: 0, errors: 0 };
@@ -50,15 +67,20 @@ async function drainQueue({ sweep, throttleMs = THROTTLE_MS, pollMs = POLL_MS, l
       continue;
     }
 
-    log(`${job.tipo} ${job.marca} ${job.modello}${job.watchlist_id ? '' : ' (ad-hoc)'}…`);
+    const refresh = shouldRefresh(job);   // M-M: saturo recente → corsia refresh (pagina-1)
+    log(`${job.tipo} ${job.marca} ${job.modello}${job.watchlist_id ? '' : ' (ad-hoc)'}${refresh ? ' [refresh]' : ''}…`);
     const stats = { written: 0, inserted: 0, as: 0, sub: 0, errors: 0 };
     try {
       const meta = await sweep(
         { tipo: job.tipo, marca: job.marca, modello: job.modello, last_truncated: job.last_truncated,
-          maxPages: job.pages || undefined }, stats);   // M-C/2: profondità per-run dalla coda
+          maxPages: job.pages || undefined }, stats, { refresh });   // M-C/2 profondità + M-M corsia
+      // M-M: in refresh la vista è parziale (pagina-1) → NON propagare truncated (sennò poison
+      // last_truncated = falso gap) né complete; il flag `refresh` dice a markSwept di non
+      // ri-timbrare saturated_at (la finestra scorre → deep crawl a scadenza per il venduto).
       if (job.watchlist_id) await wl.markSwept(job.watchlist_id, {
-        truncated: meta && meta.truncated, complete: meta && meta.complete, skipped: meta && meta.skipped,
-        inserted: stats.inserted, written: stats.written });   // coverage-driven: saturazione (skipped → non saturare)
+        truncated: refresh ? undefined : (meta && meta.truncated),
+        complete: refresh ? false : (meta && meta.complete),
+        skipped: meta && meta.skipped, inserted: stats.inserted, written: stats.written, refresh });
       // re-check DOPO lo sweep: se l'utente ha annullato mentre crawlava, NON timbrare done
       // (lo sweep non si può interrompere a metà → il dato c'è, ma onoriamo l'annullo).
       if (await queue.isCancelRequested(job.id)) {
@@ -66,7 +88,7 @@ async function drainQueue({ sweep, throttleMs = THROTTLE_MS, pollMs = POLL_MS, l
         log(`  → annullato (sweep completato, ${stats.written} scritti)`);
       } else {
         await queue.markDone(job.id, { written: stats.written, inserted: stats.inserted });
-        log(`  → ${stats.written} scritti, ${stats.inserted} nuovi (AS24 ${stats.as} · Subito ${stats.sub} · err ${stats.errors})`);
+        log(`  → ${refresh ? 'refresh ' : ''}${stats.written} scritti, ${stats.inserted} nuovi (AS24 ${stats.as} · Subito ${stats.sub} · err ${stats.errors})`);
       }
       tot.written += stats.written;
       tot.inserted += stats.inserted;
@@ -95,7 +117,7 @@ async function main() {
   const runId = await runs.startRun('imac').catch(() => null);
   let tot = { targets: 0, written: 0, errors: 0 };
   try {
-    tot = await drainQueue({ sweep: (t, s) => crawler.sweepTarget(t, s), log: m => console.log(`[drainer] ${m}`) });
+    tot = await drainQueue({ sweep: (t, s, o) => crawler.sweepTarget(t, s, o), log: m => console.log(`[drainer] ${m}`) });
     console.log(`[drainer] coda vuota → FINE. target: ${tot.targets}, scritti: ${tot.written} (${tot.inserted} nuovi), errori: ${tot.errors}.`);
   } finally {
     if (runId) await runs.finishRun(runId, tot).catch(() => {});
@@ -109,4 +131,4 @@ if (require.main === module) {
   main().catch(e => { console.error('[drainer] FATAL', e.message); process.exit(1); });
 }
 
-module.exports = { drainQueue };
+module.exports = { drainQueue, shouldRefresh };
