@@ -32,8 +32,10 @@ def dispatch(parsed: dict) -> str:
             if not rid:
                 # già attivo: se 'pending', enqueue ha AGGIORNATO la profondità (override
                 # esplicito) → dillo, non far credere che il depth sia stato ignorato.
+                # review: rilancia comunque il drainer (idempotente via advisory lock): se il job
+                # è 'pending' ma il drainer precedente è morto, senza questo resterebbe fermo.
                 extra = f" — profondità → {depth}" if pg is not None else ""
-                return f"già in coda: {parsed['marca']} {parsed['modello']}{extra}"
+                return f"già in coda: {parsed['marca']} {parsed['modello']}{extra} · drainer {drainer()}"
             return f"in coda: {parsed['tipo']} {parsed['marca']} {parsed['modello']} ({depth}) · drainer {drainer()}"
         if cmd == "run_due":
             res = A.enqueue_rows(db, Q.due_targets(db))

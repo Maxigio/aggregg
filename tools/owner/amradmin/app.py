@@ -111,7 +111,7 @@ class AmrAdminApp(App):
             panels = await asyncio.to_thread(self._collect)
         except Exception as e:  # DB giù / query KO → mostra l'errore, non crashare
             self.last_error = str(e)
-            self.query_one("#status", Static).update(f"[red]errore DB:[/] {e}")
+            self.query_one("#status", Static).update(f"[red]errore DB:[/] {R.safe(e)}")   # review: escape markup (un ] crasherebbe Rich mentre si mostra un errore)
             return
         # update widget sul loop (i renderable sono già pronti dal thread)
         self.last_error = None

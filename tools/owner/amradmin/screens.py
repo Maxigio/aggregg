@@ -449,7 +449,7 @@ class AccessLogScreen(FilterTableScreen):
         try:
             rows = await asyncio.to_thread(self._load, token)
         except Exception as e:
-            self.query_one("#astatus", Static).update(f"[red]errore DB:[/] {e}")
+            self.query_one("#astatus", Static).update(f"[red]errore DB:[/] {R.safe(e)}")   # review: escape markup (un ] nell'errore crasherebbe Rich)
             return
         self._populate(rows)
 
@@ -522,7 +522,7 @@ class CoverageScreen(FilterTableScreen):
         try:
             rows = await asyncio.to_thread(self._load, token)
         except Exception as e:
-            self.query_one("#cstatus", Static).update(f"[red]errore DB:[/] {e}")
+            self.query_one("#cstatus", Static).update(f"[red]errore DB:[/] {R.safe(e)}")   # review: escape markup
             return
         self._populate(rows)
 
