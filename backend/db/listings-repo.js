@@ -186,8 +186,15 @@ async function markGone(target, seenUrls, opts = {}) {
   if (!db.isEnabled()) return { missed: 0, gone: 0 };
   const t = target || {};
   if (!t.tipo || !t.marca || !t.modello) return { missed: 0, gone: 0 };
-  const urls = Array.isArray(seenUrls) ? seenUrls : [];
+  // review: un elemento NULL in `url <> ALL($4)` rende NULL l'intero confronto per OGNI
+  // riga → markGone diventa un no-op silenzioso. Filtra i null prima.
+  const urls = (Array.isArray(seenUrls) ? seenUrls : []).filter(u => u != null);
   const fonte = opts.fonte || null;
+  // review: sweep AS24 splittata per anno → gli annunci senza data immatricolazione (anno=NULL,
+  // km0/demo) NON compaiono in nessuna fetta (il filtro firstRegistration li esclude) → senza
+  // questa guard verrebbero incrementati e marcati venduti pur vivi. onlyDated li lascia intatti
+  // (li rivede una sweep non-splittata o il refresh pagina-1, entrambi senza filtro anno).
+  const onlyDated = opts.onlyDated === true;
   let client;
   try { client = await db.getClient(); } catch (_) { return { missed: 0, gone: 0 }; }
   try {
@@ -197,15 +204,18 @@ async function markGone(target, seenUrls, opts = {}) {
       `UPDATE listings SET miss_count = miss_count + 1
         WHERE tipo=$1 AND marca=$2 AND modello=$3 AND status='active'
           AND ($5::text IS NULL OR fonte=$5)
+          AND (NOT $6 OR anno IS NOT NULL)
           AND url <> ALL($4::text[])`,
-      [t.tipo, t.marca, t.modello, urls, fonte]
+      [t.tipo, t.marca, t.modello, urls, fonte, onlyDated]
     );
     // 2) marca venduti quelli a 2+ assenze consecutive
     const gone = await client.query(
       `UPDATE listings SET status='gone', gone_at=now()
         WHERE tipo=$1 AND marca=$2 AND modello=$3 AND status='active'
-          AND ($4::text IS NULL OR fonte=$4) AND miss_count >= 2`,
-      [t.tipo, t.marca, t.modello, fonte]
+          AND ($4::text IS NULL OR fonte=$4)
+          AND (NOT $5 OR anno IS NOT NULL)
+          AND miss_count >= 2`,
+      [t.tipo, t.marca, t.modello, fonte, onlyDated]
     );
     await client.query('COMMIT');
     return { missed: miss.rowCount || 0, gone: gone.rowCount || 0 };

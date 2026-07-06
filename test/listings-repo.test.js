@@ -89,6 +89,31 @@ test('markGone: venduto solo dopo 2 assenze (K=2)', async () => {
   assert.strictEqual(r2.gone, 1);
 });
 
+test('markGone onlyDated: gli anno=NULL NON vengono toccati (fix split AS24)', async () => {
+  // u1 dated visto, uNull senza anno NON visto (fuori dalle fette per-anno dello split)
+  await repo.upsertListings([mkItem('u1', 10000), mkItem('uNull', 8000, { anno: null })], TARGET);
+  await repo.upsertListings([mkItem('u1', 10000), mkItem('uNull', 8000, { anno: null })], TARGET);
+  // due sweep splittate (onlyDated) con uNull assente: NON deve né incrementare né marcare gone
+  await repo.markGone(TARGET, ['u1'], { fonte: 'autoscout', onlyDated: true });
+  await repo.markGone(TARGET, ['u1'], { fonte: 'autoscout', onlyDated: true });
+  const n = await row('uNull');
+  assert.strictEqual(n.status, 'active', 'anno=NULL non deve diventare gone sotto split');
+  assert.strictEqual(n.miss_count, 0, 'anno=NULL non deve accumulare assenze sotto split');
+  // controprova: senza onlyDated (sweep non-splittata) uNull viene marcato come sempre
+  await repo.markGone(TARGET, ['u1'], { fonte: 'autoscout' });
+  await repo.markGone(TARGET, ['u1'], { fonte: 'autoscout' });
+  assert.strictEqual((await row('uNull')).status, 'gone', 'senza onlyDated torna la logica normale');
+});
+
+test('markGone: un url NULL nel set visto non annulla il rilevamento', async () => {
+  await repo.upsertListings([mkItem('u1', 10000), mkItem('u2', 8000)], TARGET);
+  await repo.upsertListings([mkItem('u1', 10000), mkItem('u2', 8000)], TARGET);
+  // seenUrls con un null in mezzo (un item senza url): u2 deve comunque contare come assente
+  await repo.markGone(TARGET, ['u1', null]);
+  await repo.markGone(TARGET, ['u1', null]);
+  assert.strictEqual((await row('u2')).status, 'gone', 'il null non deve rendere markGone un no-op');
+});
+
 test('annuncio ricomparso: torna active, miss_count azzerato', async () => {
   await repo.upsertListings([mkItem('u1', 10000), mkItem('u2', 8000)], TARGET);
   await repo.markGone(TARGET, ['u1']);          // u2 miss 1

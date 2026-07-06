@@ -208,7 +208,16 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
     const items = mapCards(extractCardsHtml(body), opts);
     if (items.length === 0) break;                       // esaurito (fine risultati genuina)
     pages.push(items);
-    if (i === urls.length - 1) truncated = true;         // ultima pagina ancora piena → forse altro
+  }
+  // review: prima truncated=true su QUALSIASI ultima pagina non vuota (Moto.it non ha un
+  // PAGE_SIZE fisso: ~10-13/pag → niente check raw<PAGE_SIZE come Subito/AS24) → un target
+  // esaurito ESATTAMENTE al cap restava "troncato" per sempre (escalation cap + markGone mai +
+  // 'in fill' perenne). Ora: troncato solo se abbiamo usato TUTTE le pagine richieste E il sito
+  // dichiara più annunci di quanti ne abbiamo presi. Se il tetto è ignoto → conservativo (assume
+  // altro, così non si marca falsamente 'venduto'). got>=total = provato completo → markGone sicuro.
+  if (pages.length === urls.length) {
+    const got = pages.reduce((n, p) => n + p.length, 0);
+    if (total == null || got < total) truncated = true;
   }
   return { pages, blocked: false, truncated, total };
 }

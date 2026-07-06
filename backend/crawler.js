@@ -133,6 +133,7 @@ async function sweepTarget(target, stats, { refresh = false } = {}) {
       await health.record('autoscout', { count: part.items.length });
     } catch (e) {
       console.warn(`[crawler] AS24 refresh fallito ${target.marca} ${target.modello}: ${e.message}`);
+      skippedAny = true;   // review: fonte non vista → NON dichiarare complete/saturo
       stats.errors++;
       await health.record('autoscout', { error: e });
     } else try {
@@ -166,7 +167,9 @@ async function sweepTarget(target, stats, { refresh = false } = {}) {
       const r = await repo.upsertListings(items, target);
       // markGone SOLO con vista completa (nessuna fetta troncata): con lo split le fette
       // stanno sotto il tetto → di norma complete; se una tronca, niente venduto.
-      if (!truncated) await repo.markGone(target, items.map(i => i.url), { fonte: 'autoscout' });
+      // onlyDated sui crawl splittati: le fette filtrano per anno → gli annunci anno=NULL non
+      // sono in nessuna fetta e NON vanno marcati venduti (li rivede una sweep non-splittata).
+      if (!truncated) await repo.markGone(target, items.map(i => i.url), { fonte: 'autoscout', onlyDated: buckets.length > 1 });
       else { anyTrunc = true; console.log(`[crawler] AS24 ${target.marca} ${target.modello}: vista parziale → skip venduto`); }
       stats.written += r.written;
       stats.inserted = (stats.inserted || 0) + r.inserted;   // M-E: righe NUOVE (onestà written)
@@ -177,6 +180,7 @@ async function sweepTarget(target, stats, { refresh = false } = {}) {
       try { await marketSize.record(target, 'autoscout', total); } catch (_) { /* la copertura non tocca mai il crawl */ }
     } catch (e) {
       console.warn(`[crawler] AS24 fallito ${target.marca} ${target.modello}: ${e.message}`);
+      skippedAny = true;   // review: AS24 non spazzolato → il target NON è complete né saturabile
       stats.errors++;
       await health.record('autoscout', { error: e });
     }
@@ -202,6 +206,7 @@ async function sweepTarget(target, stats, { refresh = false } = {}) {
     await marketSize.record(target, 'subito', total);   // F50 copertura: count_all (gratis)
   } catch (e) {
     console.warn(`[crawler] Subito fallito ${target.marca} ${target.modello}: ${e.message}`);
+    skippedAny = true;   // review: Subito non spazzolato → NON complete/saturo
     stats.errors++;
     await health.record('subito', { error: e });
   }
@@ -216,6 +221,13 @@ async function sweepTarget(target, stats, { refresh = false } = {}) {
     } else try {
       const mt = await resolveMotoit(target);
       if (!mt) { console.log(`[crawler] Moto.it ${target.marca}: marca non su Moto.it → skip`); }
+      else if (!mt.modelSlug) {
+        // review: senza modelSlug la query è brand-only → Moto.it torna TUTTI gli annunci del
+        // brand e upsertListings li etichetta col modello del target (nessun guard-titolo come
+        // Subito) → dati inquinati. Skip la fonte e segnala 'non completo' (non è un no-op sano).
+        console.log(`[crawler] Moto.it ${target.marca} ${target.modello}: modello non risolto → skip (niente brand-only)`);
+        skippedAny = true;
+      }
       else {
         const { items, truncated, total } = await scrapeMotoIt(
           { tipo: 'moto', marca: target.marca, modello: target.modello, motoitBrandSlug: mt.brandSlug, motoitModelSlug: mt.modelSlug },
@@ -232,6 +244,7 @@ async function sweepTarget(target, stats, { refresh = false } = {}) {
       }
     } catch (e) {
       console.warn(`[crawler] Moto.it fallito ${target.marca} ${target.modello}: ${e.message}`);
+      skippedAny = true;   // review: Moto.it non spazzolato → NON complete/saturo
       stats.errors++;
       await health.record('moto', { error: e });
     }
