@@ -44,11 +44,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         await health.record('moto', { count: items.length, node: 'imac' });
       }
       done++;
+      await wl.completeTarget(t.id);   // review: SOLO su successo (prima dopo il catch → last_swept timbrato su scrape fallito)
     } catch (e) {
       console.warn(`  Moto.it errore: ${e.message}`);
       await health.record('moto', { error: e, node: 'imac' });
     }
-    await wl.completeTarget(t.id);
     await sleep(THROTTLE);
   }
   await db.close();

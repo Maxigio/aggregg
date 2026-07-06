@@ -59,15 +59,18 @@ function fetchToFile(url, destPath) {
   return new Promise((resolve, reject) => {
     const req = net.request({ url, redirect: 'follow' });
     const out = fs.createWriteStream(destPath);
+    // review: senza handler 'error' sul WriteStream un errore di scrittura (disco pieno/permessi)
+    // crashava il processo con un throw non gestito. fail() pulisce anche il file parziale.
+    let done = false;
+    const fail = err => { if (done) return; done = true; out.destroy(); fs.unlink(destPath, () => reject(err)); };
+    out.on('error', fail);
     req.on('response', res => {
-      if (res.statusCode !== 200) {
-        reject(new Error(`HTTP ${res.statusCode} su ${url}`));
-        return;
-      }
+      if (res.statusCode !== 200) { fail(new Error(`HTTP ${res.statusCode} su ${url}`)); return; }
+      res.on('error', fail);
       res.pipe(out);
-      out.on('finish', () => out.close(() => resolve()));
+      out.on('finish', () => { if (!done) { done = true; out.close(() => resolve()); } });
     });
-    req.on('error', reject);
+    req.on('error', fail);
     req.end();
   });
 }

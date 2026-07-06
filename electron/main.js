@@ -205,15 +205,27 @@ app.whenReady().then(() => {
   if (app.isPackaged && !PORTABLE) scheduleUpdateCheck(mainWindow);
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      // review: riaprendo dal Dock, se il backend è morto (crash/exit) riavvialo, sennò la
+      // finestra caricherebbe un server inesistente ('Il backend non si è avviato').
+      if (!serverProcess || serverProcess.killed || serverProcess.exitCode !== null) startServer();
+      createWindow();
+    }
   });
 });
 
+// review: su macOS chiudere la finestra NON deve uccidere il backend (l'app resta viva nel
+// Dock): tenendolo vivo, 'activate' ritrova un server funzionante e il Funnel resta valido.
+// La pulizia vera avviene al quit (before-quit). Su Win/Linux chiudere l'ultima finestra = quit.
 app.on('window-all-closed', () => {
-  disableFunnel();   // server muore qui → spegni il Funnel (niente proxy verso backend morto)
-  if (serverProcess) serverProcess.kill();
   if (process.platform !== 'darwin') app.quit();
 });
 
-// Cmd-Q diretto: assicura lo spegnimento del Funnel anche se la finestra resta aperta.
-app.on('before-quit', disableFunnel);
+// review: Cmd-Q / menu Quit → uccidi ANCHE il backend, non solo il Funnel. Prima il node forked
+// restava orfano su :47321 → EADDRINUSE al riavvio + l'app parlava col server VECCHIO (codice
+// pre-update). shutdown() spegne Funnel e backend.
+function shutdown() {
+  disableFunnel();
+  if (serverProcess) { try { serverProcess.kill(); } catch (_) {} serverProcess = null; }
+}
+app.on('before-quit', shutdown);

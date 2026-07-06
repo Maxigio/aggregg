@@ -55,7 +55,11 @@ const UPDATE_SQL = `UPDATE listings SET
         try { m = mapByFonte(r.fonte, r.raw_json); } catch (e) { errs++; continue; }
         if (!m) continue;
         const immagini = (Array.isArray(m.immagini) && m.immagini.length) ? JSON.stringify(m.immagini) : null;
+        // review: SAVEPOINT per riga — senza, una query fallita aborta l'INTERA transazione e
+        // tutte le righe successive del batch falliscono ('current transaction is aborted') fino
+        // al COMMIT (che diventa ROLLBACK) → interi blocchi da 500 persi silenziosamente.
         try {
+          await client.query('SAVEPOINT s');
           const res = await client.query(UPDATE_SQL, [
             r.url, m.variante || null, regioneFrom(m.provincia, m.zip), m.provincia || null,
             m.zip || null, m.venditore || null, m.carburante || null, m.cambio || null,
@@ -64,8 +68,9 @@ const UPDATE_SQL = `UPDATE listings SET
             intOrNull(m.posti), m.classeEmissioni || null, boolOrNull(m.neopatentati),
             intOrNull(m.proprietari), m.allestimento || null, m.revisione || null, immagini,
           ]);
+          await client.query('RELEASE SAVEPOINT s');
           updated += res.rowCount || 0;
-        } catch (e) { errs++; }
+        } catch (e) { errs++; await client.query('ROLLBACK TO SAVEPOINT s').catch(() => {}); }
       }
       await client.query('COMMIT');
       if (seen % 10000 < 500) console.log(`[backfill] viste ${seen}, aggiornate ${updated}, errori ${errs}`);

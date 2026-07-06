@@ -23,7 +23,7 @@ const crawler = require('../backend/crawler');
 const runs = require('../backend/db/crawl-runs-repo');
 
 const LOCK_KEY = 414260060;   // chiave fissa singleton (int4 → pg_try_advisory_lock(bigint))
-const THROTTLE_MS = parseInt(process.env.CRAWLER_THROTTLE_MS || '1500', 10);
+const THROTTLE_MS = parseInt(process.env.CRAWLER_THROTTLE_MS || '1500', 10) || 1500;   // review: env malformato → NaN → sleep(NaN)=0 = crawl senza freno
 const POLL_MS = 1500;         // attesa tra due poll vuoti (chiude la finestra di re-spawn)
 const SATURATED_DAYS = 7;     // = tools/owner/amradmin/constants.py SATURATED_DAYS (finestra saturazione)
 const sleep = ms => new Promise(r => setTimeout(r, ms));
