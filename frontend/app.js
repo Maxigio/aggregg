@@ -1608,8 +1608,16 @@ function hideResults() {
 
 // ─── Export CSV ───────────────────────────────────────────────────────────────
 function exportCsv(results) {
+  // review: i titoli arrivano da siti esterni → anti formula-injection. Un valore che inizia
+  // con = + - @ (o tab/CR) viene eseguito come formula da Excel/Sheets nonostante le virgolette
+  // (che sono solo quoting CSV): lo neutralizziamo con un apostrofo iniziale (OWASP).
+  const cell = v => {
+    let s = String(v == null ? '' : v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return `"${s.replace(/"/g, '""')}"`;
+  };
   const cols = ['Fonte', 'Titolo', 'Prezzo (€)', 'Anno', 'KM', 'Carburante', 'Provincia', 'URL'];
-  const rows = results.map(r => [r.fonte, r.titolo, r.prezzo != null ? r.prezzo : '', r.anno != null ? r.anno : '', r.km != null ? r.km : '', r.carburante || '', r.provincia || '', r.url].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+  const rows = results.map(r => [r.fonte, r.titolo, r.prezzo != null ? r.prezzo : '', r.anno != null ? r.anno : '', r.km != null ? r.km : '', r.carburante || '', r.provincia || '', r.url].map(cell).join(','));
   const csv = [cols.join(','), ...rows].join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);

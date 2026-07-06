@@ -168,7 +168,13 @@ app.use((req, res, next) => {
     const isValuta = req.path === '/api/valuta';   // modo Valuta = solo papà (full), non demo
     const isReport = req.path === '/api/report';   // l'utente demo DEVE poter segnalare (match esatto)
     const isWrite = req.method !== 'GET' && req.method !== 'HEAD';
-    if ((isValuta || isWrite) && !isReport) {
+    // review: il gate method-based NON basta. Alcune GET MUTANO (GET /api/crawl/lease scrive
+    // leased_by/until) o espongono dati PRIVATI dell'owner (GET /api/saved = ricerche/avvisi di
+    // papà). Blocca il demo da questi prefissi a prescindere dal metodo. (/api/saved/check è POST,
+    // già coperto da isWrite; qui copriamo la GET di lista e le route di coordinamento crawl.)
+    const isPrivate = req.path === '/api/saved' || req.path.startsWith('/api/saved/')
+      || req.path.startsWith('/api/crawl/');
+    if ((isValuta || isWrite || isPrivate) && !isReport) {
       if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'modalità demo: sola lettura' });
       if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) return res.redirect(302, '/');
       return res.status(403).send('modalità demo: sola lettura');
