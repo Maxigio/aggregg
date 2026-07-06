@@ -111,6 +111,11 @@ class FilterTableScreen(Screen):
         else:
             self.app.pop_screen()
 
+    def action_reload(self) -> None:
+        # review: il binding ('r','reload') cercava action_reload (inesistente) → 'r' cadeva
+        # sull'App (refresh dashboard nascosta). reload() è il worker della sottoclasse.
+        self.reload()
+
     def on_input_submitted(self, _e: Input.Submitted) -> None:
         # reload() è definita dalla sottoclasse (worker); poi ri-do il focus alla
         # tabella così i tasti globali/azione tornano attivi senza un Tab.
@@ -348,7 +353,9 @@ class CrawlListScreen(FilterTableScreen):
             self._enqueue([_wl_payload(r)])
 
     def action_enqueue_all(self) -> None:
-        rows = [r for r in self._rowmap if r]      # esclude le righe-header di gruppo
+        # review: in modo catalogo (f) le righe includono i disabilitati → escludili (un target
+        # 'spento' = l'utente non lo vuole crawlare). In worklist la query filtra già enabled.
+        rows = [r for r in self._rowmap if r and r.get("enabled", True)]   # + salta gli header di gruppo (None)
         if rows:
             self._enqueue([_wl_payload(r) for r in rows])
 
@@ -617,6 +624,9 @@ class CrawlQueueScreen(Screen):
         i = t.cursor_row
         return self.rows[i] if self.rows and 0 <= i < len(self.rows) else None
 
+    def action_reload(self) -> None:
+        self.reload()   # review: binding 'r' cercava action_reload (mancava) → no-op
+
     @work(exclusive=True, group="q-reload")
     async def reload(self) -> None:
         try:
@@ -802,6 +812,9 @@ class HealthScreen(Screen):
         self.query_one("#hstatus", Static).update(
             f"{len(rows)} fonti · [red]{nb} bloccate[/] · [yellow]{nd} degradate[/] · "
             f"blocco = 429/403/non-JSON → back-off 6h")
+
+    def action_reload(self) -> None:
+        self.reload()   # review: binding 'r' cercava action_reload (mancava) → no-op
 
     @work(exclusive=True, group="health-reload")
     async def reload(self) -> None:

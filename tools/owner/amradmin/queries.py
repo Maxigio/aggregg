@@ -31,9 +31,9 @@ def node_stats(db) -> list[dict]:
     return db.rows(
         """SELECT COALESCE(w.assigned_node, 'imac') node,
                   count(*)::int total,
-                  count(*) FILTER (WHERE w.last_swept IS NULL)::int mai,
-                  count(*) FILTER (WHERE w.last_swept < now() - make_interval(hours => %(h)s))::int due,
-                  count(*) FILTER (WHERE w.last_swept >= now() - make_interval(hours => %(h)s))::int fresco,
+                  count(*) FILTER (WHERE w.enabled AND w.last_swept IS NULL)::int mai,
+                  count(*) FILTER (WHERE w.enabled AND w.last_swept < now() - make_interval(hours => %(h)s))::int due,
+                  count(*) FILTER (WHERE w.enabled AND w.last_swept >= now() - make_interval(hours => %(h)s))::int fresco,
                   count(*) FILTER (WHERE NOT w.enabled)::int spenti,
                   max(w.last_swept) last_swept,
                   max(cr.last_run) last_run            -- ultimo CRAWL reale del nodo (crawl_runs), non la freschezza catalogo
@@ -357,13 +357,17 @@ def queue_counts(db) -> dict:
 
 
 def due_targets(db, *, limit: int = 1000) -> list[dict]:
-    """MIRROR backend/db/watchlist-repo.js dueTargets('imac'): attivati, enabled,
-    mai-swept o >STALE_HOURS, non leased, nodo imac/NULL. Per il comando `:run due`."""
+    """`:run due` = RINFRESCA i target già crawlati e ora stantii (>STALE_HOURS), enabled,
+    non leased, nodo imac/NULL. review: prima richiedeva `activated_at IS NOT NULL` (mirror del
+    vecchio ramp) — MAI settato nel modello a coda+markSwept → `:run due` tornava sempre vuoto
+    mentre la dashboard mostrava 'due=N' (node_stats non filtra activated_at). Ora combaciano.
+    NB: NON include i mai-swept (last_swept NULL = 14k del catalogo): quelli si crawlano dalla
+    worklist 'Da crawlare', non da `:run due` (che è un refresh dei già-visti)."""
     return db.rows(
         f"""SELECT id AS watchlist_id, tipo, marca, modello, last_truncated
               FROM watchlist
-             WHERE activated_at IS NOT NULL AND enabled = true
-               AND (last_swept IS NULL OR last_swept < now() - interval '{STALE_HOURS} hours')
+             WHERE enabled = true
+               AND last_swept IS NOT NULL AND last_swept < now() - interval '{STALE_HOURS} hours'
                AND (leased_until IS NULL OR leased_until < now())
                AND (assigned_node = 'imac' OR assigned_node IS NULL)
              ORDER BY last_swept NULLS FIRST, id

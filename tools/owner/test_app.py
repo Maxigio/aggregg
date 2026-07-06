@@ -37,6 +37,20 @@ def test_render_handles_nulls() -> None:
     print("✔ render-test (None-safe) OK")
 
 
+def test_reload_bindings() -> None:
+    """review: ogni schermata col binding ('r','reload') DEVE avere action_reload, sennò
+    Textual non dispatcha e 'r' cade sull'App (refresh dashboard nascosta). DB-indipendente."""
+    from amradmin.screens import (
+        AccessLogScreen, CoverageScreen, CrawlListScreen, CrawlQueueScreen, HealthScreen,
+    )
+    for cls in (CrawlListScreen, AccessLogScreen, CoverageScreen, CrawlQueueScreen, HealthScreen):
+        has_binding = any((getattr(b, "action", None) or (isinstance(b, tuple) and b[1])) == "reload"
+                          for b in cls.BINDINGS)
+        if has_binding:
+            assert hasattr(cls, "action_reload"), f"{cls.__name__}: binding 'reload' senza action_reload"
+    print("✔ reload bindings (action_reload presente) OK")
+
+
 def test_headless_mount() -> None:
     """Monta l'app headless. DB-gated: SKIP se Postgres non raggiungibile."""
     from amradmin.db import Db
@@ -386,6 +400,7 @@ def test_command_screen() -> None:
 
 if __name__ == "__main__":
     test_render_handles_nulls()
+    test_reload_bindings()
     test_headless_mount()
     test_crawllist_screen()
     test_accesslog_screen()

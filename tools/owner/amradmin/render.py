@@ -250,6 +250,11 @@ def sugg_state(row: dict) -> str:
     soddisfatto. coverage% è solo INFO (il gap count_all è rumore free-text, non il driver)."""
     if row.get("mai"):
         return "[dim]da crawlare (mai)[/]"
+    # review: la worklist include i 'parziali' (autoscout as_pct < soglia) → non mostrarli come
+    # 'soddisfatto'. as_pct assente (righe suggestions legacy) → salta, comportamento invariato.
+    ap = row.get("as_pct")
+    if ap is not None and float(ap) < COVERAGE_OK_PCT:
+        return f"[yellow]⚠ parziale {float(ap):.0f}%[/]"
     pct = row.get("coverage_pct")
     cov = f" · {pct}%" if pct is not None else ""
     if row.get("last_truncated"):
