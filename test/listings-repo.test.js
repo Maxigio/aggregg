@@ -22,7 +22,13 @@ const mkItem = (url, prezzo, extra = {}) => ({
   fonte: 'autoscout', url, prezzo, km: 120000, anno: 2015, ...extra,
 });
 
-before(async () => { await db.init(); });
+before(async () => {
+  await db.init();
+  // review: guard anti-prod — il beforeEach fa TRUNCATE ...CASCADE (distruttivo). Se
+  // DATABASE_URL_TEST punta a prod (copia-incolla da .env) cancellerebbe l'intero dataset.
+  const r = await db.query('SELECT count(*)::int n FROM listings');
+  if (r && r.rows[0].n > 1000) throw new Error('DATABASE_URL_TEST punta a dati reali — usa un DB scratch');
+});
 after(async () => { await db.close(); });
 beforeEach(async () => {
   await db.query('TRUNCATE listings, price_points RESTART IDENTITY CASCADE');

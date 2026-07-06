@@ -19,7 +19,12 @@ const SEED = [
   { tipo: 'auto', marca: 'Ford', modello: 'Focus' },
 ];
 
-before(async () => { await db.init(); });
+before(async () => {
+  await db.init();
+  // review: guard anti-prod (il beforeEach fa TRUNCATE watchlist) — vedi listings-repo.test.js.
+  const r = await db.query('SELECT count(*)::int n FROM listings');
+  if (r && r.rows[0].n > 1000) throw new Error('DATABASE_URL_TEST punta a dati reali — usa un DB scratch');
+});
 after(async () => { await db.close(); });
 beforeEach(async () => {
   await db.query('TRUNCATE watchlist RESTART IDENTITY');
