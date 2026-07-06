@@ -408,9 +408,10 @@ async function populateMarca(tipo) {
   if (!brandCache[tipo]) {
     try {
       const res = await fetch(`/api/brands?tipo=${encodeURIComponent(tipo)}`);
+      if (!res.ok) return;                       // review: non cachare su errore (sennò marca rotta per sempre)
       const data = await res.json();
       brandCache[tipo] = data.brands || [];
-    } catch { brandCache[tipo] = []; }
+    } catch { /* transitorio: lascia brandCache[tipo] undefined → ritenta al prossimo giro */ }
   }
 }
 
@@ -736,6 +737,7 @@ function renderValutaCard(panel, d, inp) {
 }
 
 // ─── Ricerca ──────────────────────────────────────────────────────────────────
+let searchGen = 0;   // review: token di generazione — solo la ricerca PIÙ RECENTE applica i risultati
 async function doSearch() {
   const tipo = currentTipo();
   const brand = matchedBrand();
@@ -778,10 +780,12 @@ async function doSearch() {
   document.body.classList.add('has-results');
   document.body.dataset.tipo = tipo;
 
+  const myGen = ++searchGen;   // review: se ne parte un'altra mentre questa è in volo, la stantia si scarta
   showLoading(); hideResults();
   try {
     const res = await fetch(`/api/search?${new URLSearchParams(params)}`);
     const data = await res.json();
+    if (myGen !== searchGen) return;   // una ricerca più recente ha già preso il posto → non sovrascrivere
     if (!res.ok) { showError(data.error || 'Errore durante la ricerca.'); return; }
 
     currentResults = data.risultati || [];
@@ -796,8 +800,8 @@ async function doSearch() {
     if (!prezzoSliderInstance) renderResults(currentResults);
     if (currentResults.length > 0) resultsToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch {
-    showError('Impossibile contattare il server. Assicurati che sia avviato con "npm start".');
-  } finally { hideLoading(); }
+    if (myGen === searchGen) showError('Impossibile contattare il server. Assicurati che sia avviato con "npm start".');
+  } finally { if (myGen === searchGen) hideLoading(); }
 }
 
 // ─── Subito bootstrap ─────────────────────────────────────────────────────────
@@ -811,7 +815,7 @@ async function runSubitoBootstrap() {
     const res = await fetch('/api/subito/bootstrap', { method: 'POST' });
     const data = await res.json();
     if (data.ok) {
-      hideBootstrapBanner(); showError(''); fetchSubitoStatus();
+      hideBootstrapBanner(); hideError(); fetchSubitoStatus();   // review: showError('') mostrava un alert rosso VUOTO
       const note = document.createElement('div');
       note.className = 'alert alert-success';
       const hours = data.expiresInHours ? ` (valida ~${data.expiresInHours} ore)` : '';
@@ -1399,10 +1403,10 @@ async function enrichMotoSpecs(list) {
   if (!targets.length) return;
   await Promise.all(targets.map(async r => {
     if (r._detailLoaded) return;
-    r._detailLoaded = true;
     try {
       const j = await fetch(`/api/detail?url=${encodeURIComponent(r.url)}`).then(x => x.json());
-      if (j.ok && j.detail) Object.keys(j.detail).forEach(k => { if (r[k] == null && j.detail[k] != null) r[k] = j.detail[k]; });
+      // review: marca _detailLoaded SOLO sul successo, sennò un errore transitorio blocca per sempre l'arricchimento
+      if (j.ok && j.detail) { Object.keys(j.detail).forEach(k => { if (r[k] == null && j.detail[k] != null) r[k] = j.detail[k]; }); r._detailLoaded = true; }
     } catch (_) {}
   }));
   if (!cmatrixPanel.classList.contains('d-none')) renderMatrix();
@@ -1489,12 +1493,13 @@ async function checkRicerche(id) {
   if (btn) { btn.disabled = true; btn.textContent = '…'; } else listEl.classList.add('checking');
   try {
     const r = await fetch(url, { method: 'POST' });
-    const j = await r.json();
-    if (j.saved) { savedSearches = j.saved; renderRicerche(); updateNovitaBadge(); }
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'Controllo non riuscito');   // review: prima un 500 dava "Nessuna novità" (falso negativo)
+    if (j.saved) { savedSearches = j.saved; updateNovitaBadge(); }
     const nuovi = Array.isArray(j.esiti) ? j.esiti.reduce((a, e) => a + (e?.nuovi || 0), 0) : 0;
     toast(nuovi > 0 ? `${nuovi} ${nuovi === 1 ? 'novità trovata' : 'novità trovate'}` : 'Nessuna novità');
-  } catch (_) { showError('Controllo non riuscito.'); }
-  finally { listEl.classList.remove('checking'); }
+  } catch (e) { showError(e.message || 'Controllo non riuscito.'); }
+  finally { listEl.classList.remove('checking'); renderRicerche(); }   // ripristina i bottoni ('…' bloccato) in OGNI esito
 }
 function onRicercheClick(e) {
   const card = e.target.closest('[data-id]'); if (!card) return;
