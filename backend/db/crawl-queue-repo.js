@@ -63,12 +63,19 @@ async function markFail(id, error) {
 // Avvio drainer: i 'running' con heartbeat vecchio = job di un drainer crashato → ripristina pending.
 async function reclaimStale(minutes = STALE_MIN) {
   if (!db.isEnabled()) return 0;
-  const r = await db.query(
-    `UPDATE crawl_queue
-        SET status='pending', started_at=NULL, heartbeat=NULL
-      WHERE status='running' AND (heartbeat IS NULL OR heartbeat < now() - ($1 * interval '1 minute'))`,
-    [minutes]);
-  return r ? r.rowCount : 0;
+  const stale = `(heartbeat IS NULL OR heartbeat < now() - ($1 * interval '1 minute'))`;
+  // running stantio (drainer morto) → torna pending, ri-crawlabile
+  const r1 = await db.query(
+    `UPDATE crawl_queue SET status='pending', started_at=NULL, heartbeat=NULL
+      WHERE status='running' AND ${stale}`, [minutes]);
+  // review: cancel_requested stantio = drainer morto DURANTE l'annullo (un cancel_requested viene
+  // SOLO da un running → ha sempre heartbeat). Senza questo resta 'attivo' nell'indice unico
+  // uq_crawl_queue_active e né cancel() né clear_pending lo toccano → re-enqueue del target
+  // bloccato per sempre. L'utente voleva annullarlo → chiudilo 'fail', non ri-eseguirlo.
+  const r2 = await db.query(
+    `UPDATE crawl_queue SET status='fail', finished_at=now(), error='annullato (drainer interrotto)'
+      WHERE status='cancel_requested' AND ${stale}`, [minutes]);
+  return (r1 ? r1.rowCount : 0) + (r2 ? r2.rowCount : 0);
 }
 
 async function isCancelRequested(id) {

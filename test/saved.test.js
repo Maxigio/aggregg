@@ -23,10 +23,15 @@ test('computeAlerts: floor anti-scam scarta il prezzo-spazzatura', () => {
   assert.ok(!alerts.some(a => a.url === 'scam'), 'lo scam 500 non deve generare avvisi');
 });
 
-test('computeAlerts: dati incompleti (no anno/km) scartati', () => {
-  const search = { seen: { x: 10000 }, alerted: [] };
-  const { alerts } = saved.computeAlerts(search, [R('new1', 9000, { anno: null })]);
-  assert.strictEqual(alerts.length, 0);
+test('computeAlerts: nuovo con km/anno mancante avvisa lo stesso (fix soppressione permanente)', () => {
+  // prima: km/anno null → NIENTE avviso, ma recordCheck lo scriveva in seen → 'nuovo' perso per
+  // sempre (Moto.it ha spesso km=null). Ora un annuncio nuovo con prezzo valido avvisa comunque.
+  const search = { seen: { x: 10000 }, alerted: [] };   // baseline stabilita → non-baseline
+  const noKm = saved.computeAlerts(search, [R('new1', 9000, { km: null })]);
+  assert.strictEqual(noKm.alerts.length, 1, 'nuovo con km=null deve avvisare');
+  assert.strictEqual(noKm.alerts[0].motivo, 'nuovo');
+  const noAnno = saved.computeAlerts(search, [R('new2', 9000, { anno: null })]);
+  assert.strictEqual(noAnno.alerts.length, 1, 'nuovo con anno=null deve avvisare');
 });
 
 test('computeAlerts: nuovo + calo', () => {

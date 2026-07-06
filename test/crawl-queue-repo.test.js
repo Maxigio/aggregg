@@ -84,6 +84,19 @@ test('reclaimStale: running con heartbeat vecchio → pending; fresco resta', as
   assert.strictEqual(fresh.rows[0].status, 'running');
 });
 
+test('reclaimStale: cancel_requested stantio (drainer morto) → fail, sblocca il re-enqueue', async () => {
+  await db.query(`INSERT INTO crawl_queue (tipo,marca,modello,status,started_at,heartbeat)
+                  VALUES ('auto','A','stuck','cancel_requested', now()-interval '30 min', now()-interval '30 min')`);
+  await db.query(`INSERT INTO crawl_queue (tipo,marca,modello,status,started_at,heartbeat)
+                  VALUES ('auto','A','cancelling','cancel_requested', now(), now())`);
+  const n = await q.reclaimStale(15);
+  assert.strictEqual(n, 1, 'solo il cancel_requested vecchio chiuso');
+  assert.strictEqual((await db.query(`SELECT status FROM crawl_queue WHERE modello='stuck'`)).rows[0].status, 'fail');
+  assert.strictEqual((await db.query(`SELECT status FROM crawl_queue WHERE modello='cancelling'`)).rows[0].status, 'cancel_requested', 'il fresco (drainer vivo) resta');
+  // il target sbloccato può ri-entrare in coda (l'indice unico non lo vede più attivo)
+  assert.ok(await q.enqueue({ tipo: 'auto', marca: 'A', modello: 'stuck' }), 're-enqueue possibile dopo il reclaim');
+});
+
 test('isCancelRequested: true solo per status cancel_requested', async () => {
   const id = await q.enqueue(T());
   assert.strictEqual(await q.isCancelRequested(id), false);

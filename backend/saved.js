@@ -146,7 +146,10 @@ function computeAlerts(search, results) {
 
   for (const r of results) {
     if (!r.url || r.prezzo == null || r.prezzo <= 0) continue;
-    if (r.anno == null || r.km == null) continue;   // dati incompleti → niente avviso (rumore)
+    // review: NON gateare su anno/km null. recordCheck (sotto) registra COMUNQUE l'annuncio in
+    // `seen` → col vecchio gate un annuncio nuovo con km=null (comune su Moto.it/Subito) non
+    // avvisava MAI e restava soppresso per sempre (prev != null al giro dopo). Il rumore è già
+    // contenuto da prezzo>0 + floor anti-scam + soglie di calo; un annuncio nuovo È nuovo.
     if (r.prezzo < floor) continue;                 // floor anti-scam (price-based)
 
     const prev = seen[r.url];

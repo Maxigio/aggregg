@@ -705,7 +705,11 @@ const SEARCH_CACHE_TTL = 3 * 60 * 1000;
 const SEARCH_CACHE_MAX = 50;
 const searchCache = new Map();   // key → { ts, data }
 function searchCacheKey(p) {
-  return ['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax', 'regione', 'raggio']
+  // review: includere i param-VARIANTE (mmmv AS24, slug/versione Moto.it). Senza, due ricerche
+  // che differiscono SOLO per versione Moto.it o mmmv restituivano la cache l'una dell'altra
+  // (es. 'Honda CBR' senza versione poi con versione scelta → payload sbagliato per 3 min).
+  return ['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax',
+          'regione', 'raggio', 'mmmvAutoscout', 'motoitBrandSlug', 'motoitModelSlug', 'motoitBikeCode', 'motoitNeedsVersion']
     .map(f => `${f}=${p[f] ?? ''}`).join('&').toLowerCase();
 }
 function cacheable(data) {
