@@ -2,6 +2,9 @@ const path = require('path');
 // .env dalla ROOT della repo con path ASSOLUTO: dotenv di default cerca in
 // process.cwd(), che sotto Electron può non essere la repo → DATABASE_URL perso.
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+// Logger centralizzato: install SUBITO dopo dotenv → tee dei console.* + file rotante +
+// handler uncaught. Cattura anche il boot dei moduli sotto (che loggano al require).
+const logger = require('./logger').install();
 const express = require('express');
 const os = require('os');
 const fs = require('fs');
@@ -133,7 +136,7 @@ async function scrapeSubitoSmart(params) {
 const loginAttempts = new Map();   // ip → { fails, until }
 const LOCK_MAX = 8;
 const LOCK_MS  = 10 * 60 * 1000;
-const AUTH_FREE = new Set(['/login', '/logout', '/api/public-url', '/api/health']);
+const AUTH_FREE = new Set(['/login', '/logout', '/api/public-url', '/api/health', '/api/whatsapp/webhook']);
 
 function parseCookies(req) {
   const out = {};
@@ -225,6 +228,16 @@ app.get('/api/me', (req, res) => {
 // Liveness per il probe di avvio Electron (waitForBackend). Auth-exempt: il
 // probe gira prima del login. Nessun dato sensibile.
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+// Log applicativi — SOLO owner (full): le ultime righe del ring-buffer (segreti redatti dal logger).
+// ?n=200 righe, ?level=error filtra. Utile per diagnosticare errori-fonte (es. "Web error") senza SSH.
+app.get('/api/logs', (req, res) => {
+  if (auth.isEnabled() && req.authRole !== 'full') return res.status(403).json({ error: 'solo owner' });
+  const n = Math.min(parseInt(req.query.n, 10) || 200, 500);
+  let lines = logger.tail(n);
+  if (req.query.level) { const L = String(req.query.level).toUpperCase(); lines = lines.filter(l => l.includes(' ' + L + ' ')); }
+  res.type('text/plain').send(lines.join('\n'));
+});
 
 // IP reale del client: dietro il Funnel Tailscale, l'ULTIMO hop di X-Forwarded-For
 // (il leftmost è spoofabile). Senza proxy (Electron locale) → remoteAddress.
@@ -531,6 +544,12 @@ app.get('/api/public-url', (req, res) => {
 
 // Set di regioni valide (derivato da province.json)
 const REGIONI_VALIDE = new Set(Object.values(province).map(p => p.regione));
+// Match tollerante: mappa normalizzata (lowercase + solo alfanumerici) → slug canonico.
+// Il <select> del web manda già lo slug ('lombardia'); il bot manda forma naturale
+// ('Lombardia', 'Emilia Romagna') → qui entrambe risolvono allo stesso slug (idempotente).
+const normReg = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const REGIONE_BY_NORM = new Map([...REGIONI_VALIDE].map(slug => [normReg(slug), slug]));
+const canonRegione = s => REGIONE_BY_NORM.get(normReg(s)) || null;
 
 // Validazione e sanitizzazione parametri ricerca
 function parseSearchParams(query) {
@@ -542,7 +561,7 @@ function parseSearchParams(query) {
   const errors = [];
   if (!tipo || !['auto', 'moto'].includes(tipo)) errors.push('tipo deve essere "auto" o "moto"');
   if (!marca || typeof marca !== 'string' || marca.trim().length === 0) errors.push('marca obbligatoria');
-  if (regione && !REGIONI_VALIDE.has(regione.trim())) errors.push(`regione non valida: ${regione}`);
+  if (regione && !canonRegione(regione)) errors.push(`regione non valida: ${regione}`);
   if (errors.length) return { errors };
 
   const toInt = (val) => {
@@ -557,7 +576,7 @@ function parseSearchParams(query) {
       tipo:             tipo.trim(),
       marca:            marca.trim(),
       modello:          modello ? modello.trim() : '',
-      regione:          regione ? regione.trim() : '',
+      regione:          regione ? (canonRegione(regione) || '') : '',
       prezzoMin:        toInt(prezzoMin),
       prezzoMax:        toInt(prezzoMax),
       annoMin:          toInt(annoMin),
@@ -642,6 +661,9 @@ app.get('/api/search', async (req, res) => {
     res.status(500).json({ error: 'Errore interno durante la ricerca' });
   }
 });
+
+// ─── Ricambi: codice OEM → articoli (auto-doc via stealth) — vedi ricambi-route.js ──
+require('./ricambi-route').mount(app, { clientIp });
 
 // ─── F32 Fase 1: valutazione (#1/#6) ─────────────────────────────────────────
 // Motore puro in `valuation.js`; qui l'orchestrazione LIVE: riusa `runSearchCore`
@@ -1112,6 +1134,22 @@ app.get('/api/subito/status', (req, res) => {
 app.post('/api/subito/keep-alive', express.json(), async (req, res) => {
   const result = await keepAliveSubito();
   res.json(result);
+});
+
+// ─── Webhook WhatsApp (Meta Cloud API) ────────────────────────────────────────
+// In AUTH_FREE (Meta non ha cookie → firma HMAC). searchFn = closure su runSearch/
+// parseSearchParams (funzioni locali non esportate): il bot cerca senza HTTP hop.
+require('./whatsapp/webhook').mount(app, {
+  searchFn: async (input) => {
+    // il modello LLM può omettere tipo (schema tool: "default auto") o passare una regione
+    // libera non valida → normalizza prima di parseSearchParams (che li rigetterebbe).
+    const q = { ...input, tipo: input.tipo || 'auto' };
+    let parsed = parseSearchParams(q);
+    if (parsed.errors && q.regione) { delete q.regione; parsed = parseSearchParams(q); }   // regione invalida → droppa e riprova
+    if (parsed.errors) return { error: parsed.errors.join(', ') };
+    const data = await runSearch(parsed.params);
+    return { params: parsed.params, risultati: data.risultati || [], sources: data.sources || {} };
+  },
 });
 
 const server = app.listen(PORT, () => {

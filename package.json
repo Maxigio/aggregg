@@ -101,8 +101,6 @@
       "!node_modules/bootstrap",
       "!node_modules/nouislider",
       "!node_modules/tom-select",
-      "!node_modules/jspdf",
-      "!node_modules/jspdf-autotable",
       "data/**",
       "!pw-browsers/**"
     ]
@@ -112,9 +110,12 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
     "cheerio": "^1.2.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.2",
     "pg": "^8.21.0",
     "playwright": "^1.59.1",
     "playwright-extra": "^4.3.6",
@@ -126,8 +127,6 @@
     "electron": "^35.0.0",
     "electron-builder": "^25.0.0",
     "esbuild": "^0.28.1",
-    "jspdf": "^2.5.1",
-    "jspdf-autotable": "^3.8.2",
     "nouislider": "^15.8.1",
     "tom-select": "^2.4.3"
   }

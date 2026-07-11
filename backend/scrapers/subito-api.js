@@ -18,7 +18,8 @@ const https = require('https');
 const { kindForStatus, fail } = require('./utils');   // classificazione salute crawler (F1.5)
 
 const HOST = 'hades.subito.it';
-const CAT = { auto: '2', moto: '3' };
+// Categorie hades (macro Motori=1). accessoriAuto/Moto scoperti live 2026-07-07 per la sezione Ricambi.
+const CAT = { auto: '2', moto: '3', accessoriAuto: '5', accessoriMoto: '36' };
 const PAGE_SIZE = 50;
 const MAX_PAGES = 2;            // 2×50 = 100
 const TIMEOUT_MS = 12000;
@@ -228,7 +229,28 @@ async function scrapeSubitoApi(params, opts = {}) {
   return opts.withMeta ? { items: out, truncated, total } : out;
 }
 
+// Ricerca ACCESSORI/RICAMBI per keyword libera (OEM o nome pezzo) nelle categorie
+// Accessori Auto (c=5) + Accessori Moto (c=36). Riusa scrapeSubitoApi (path API, no CAPTCHA).
+// La keyword viaggia su `marca` (buildPath fa q=marca+modello). Ritorna item mapAd (shape Subito).
+// opts.cat = 'auto' | 'moto' → interroga SOLO quella categoria (un ricambio è per auto O per moto).
+// Lancia solo se TUTTE le categorie interrogate falliscono (una KO → torna quel che c'è).
+async function searchAccessori(keyword, opts = {}) {
+  const kw = String(keyword || '').trim();
+  if (!kw) return [];
+  const { cat, ...rest } = opts;
+  const cats = cat === 'auto' ? ['accessoriAuto'] : cat === 'moto' ? ['accessoriMoto'] : ['accessoriAuto', 'accessoriMoto'];
+  const res = await Promise.allSettled(cats.map(tipo =>
+    scrapeSubitoApi({ marca: kw, tipo }, { maxPages: 1, sort: 'priceasc', ...rest })));
+  const items = res.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
+  const rejected = res.find(r => r.status === 'rejected');
+  // 0 item MA almeno una categoria bloccata → propaga (runSource → 'error', non cachato come 'empty').
+  // both-fulfilled con 0 item = vuoto legittimo → return [].
+  if (!items.length && rejected) throw rejected.reason;
+  return items;
+}
+
 module.exports = scrapeSubitoApi;
+module.exports.searchAccessori = searchAccessori;
 module.exports._mapAd = mapAd;
 module.exports._buildPath = buildPath;
 module.exports._extractTotal = extractTotal;   // F50 copertura

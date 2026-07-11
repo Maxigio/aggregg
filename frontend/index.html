@@ -54,11 +54,12 @@
     <section class="search">
       <form id="searchForm" class="search-form">
         <div class="mode-toggle" id="modeToggle" role="tablist" aria-label="Modalità">
-          <button type="button" class="mode-btn active" data-mode="cerca" role="tab">Cerca</button>
-          <button type="button" class="mode-btn" data-mode="valuta" role="tab">Valuta</button>
-          <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="valuta">?</span>
+          <button type="button" class="mode-btn active" data-mode="auto" role="tab">Auto</button>
+          <button type="button" class="mode-btn" data-mode="moto" role="tab">Moto</button>
+          <button type="button" class="mode-btn" data-mode="ricambi" role="tab">Ricambi</button>
         </div>
-        <div class="seg-toggle" role="radiogroup" aria-label="Tipo veicolo">
+        <!-- Tipo veicolo: radio nascosti, source-of-truth per currentTipo(); pilotati dai bottoni Auto/Moto -->
+        <div class="seg-toggle" role="radiogroup" aria-label="Tipo veicolo" style="display:none">
           <input type="radio" name="tipo" id="tipoAuto" value="auto" checked />
           <label for="tipoAuto">Auto</label>
           <input type="radio" name="tipo" id="tipoMoto" value="moto" />
@@ -111,11 +112,36 @@
           <label class="adv-field"><span>Prezzo max (opz.)</span><input type="number" id="vPrezzoMax" placeholder="20000" min="0" /></label>
           <label class="adv-field"><span>Il tuo prezzo (opz.)</span><input type="number" id="vPrezzo" placeholder="9000" min="0" /></label>
         </div>
+
+        <!-- Campi modalità RICAMBI: veicolo (auto|moto) + 3 tab con input DEDICATI (valori persistenti) -->
+        <div class="ricambi-fields d-none" id="ricambiFields">
+          <div class="rc-topline">
+            <div class="rc-mode-toggle" id="rcVeicoloToggle" role="radiogroup" aria-label="Veicolo">
+              <button type="button" class="rc-mode-btn active" data-rcveicolo="auto">Auto</button>
+              <button type="button" class="rc-mode-btn" data-rcveicolo="moto">Moto</button>
+            </div>
+            <div class="rc-mode-toggle" id="ricambiModeToggle" role="tablist" aria-label="Tipo ricerca ricambio">
+              <button type="button" class="rc-mode-btn active" data-rcmode="oem" role="tab">Codice OE / OEM / OEN</button>
+              <button type="button" class="rc-mode-btn" data-rcmode="prodotto" role="tab">Codice prodotto</button>
+              <button type="button" class="rc-mode-btn" data-rcmode="nome" role="tab">Nome</button>
+            </div>
+          </div>
+          <div class="rc-input-row">
+            <input type="text" id="rcInputOem" class="field-input rc-input" data-rcfor="oem" autocomplete="off" placeholder="Codice OE / OEM / OEN — es. 1K0905851B" />
+            <input type="text" id="rcInputProdotto" class="field-input rc-input d-none" data-rcfor="prodotto" autocomplete="off" placeholder="Codice articolo produttore — es. 09.A758.11, 114 221" />
+            <input type="text" id="rcInputNome" class="field-input rc-input d-none" data-rcfor="nome" autocomplete="off" placeholder="Nome del ricambio — es. pastiglie freni Golf" />
+            <button type="submit" class="btn-cerca" id="btnRicambi">Cerca ricambio</button>
+          </div>
+          <div class="rc-fonti-line" id="rcFontiLine"></div>
+        </div>
       </form>
     </section>
 
     <!-- PANNELLO VALUTAZIONE (#6) -->
     <div id="valutaPanel" class="d-none"></div>
+
+    <!-- PANNELLO RICAMBI (multi-fonte, full-width) -->
+    <div id="ricambiPanel" class="d-none"></div>
 
     <!-- STATO RICERCA / ERRORE / BANNER -->
     <div id="statusBox" class="d-none">
@@ -267,6 +293,11 @@
             Ricerche <span class="badge" id="tabRicercheCount">0</span>
           </button>
         </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tabRicambiBtn" data-bs-toggle="tab" data-bs-target="#paneRicambi" type="button" role="tab">
+            Ricambi <span class="badge" id="tabRicambiCount">0</span>
+          </button>
+        </li>
       </ul>
       <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Chiudi"></button>
     </div>
@@ -281,6 +312,9 @@
             <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="ricercheSalvate">?</span>
           </div>
           <div id="ricercheList" class="p-3"></div>
+        </div>
+        <div class="tab-pane fade" id="paneRicambi" role="tabpanel" aria-labelledby="tabRicambiBtn">
+          <div id="ricambiFavList" class="p-3"></div>
         </div>
       </div>
     </div>

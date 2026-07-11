@@ -217,6 +217,107 @@ body:not(.has-results) .search {
 .vp-empty { color: var(--text-faint); font-size: 0.9rem; font-style: italic; margin-top: 6px; }
 .vp-note { margin-top: 12px; font-size: 0.72rem; color: var(--text-faint); border-top: 1px solid var(--line); padding-top: 8px; }
 
+/* Campi ricambi: toggle OEM/Nome + input */
+.ricambi-fields { margin-top: 4px; }
+.rc-mode-toggle { display: inline-flex; gap: 2px; background: var(--surface-2, #f2f3f5); border-radius: 9px; padding: 2px; margin-bottom: 8px; }
+.rc-mode-btn { border: none; background: transparent; padding: 5px 12px; border-radius: 7px; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); cursor: pointer; }
+.rc-mode-btn.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.rc-input-row { display: flex; gap: 10px; align-items: stretch; }
+.rc-topline { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.rc-fonti-line { margin-top: 6px; font-size: 0.74rem; color: var(--text-faint); }
+.rc-nome-link { color: inherit; text-decoration: none; }
+.rc-nome-link:hover { color: var(--accent); text-decoration: underline; }
+
+/* Ricambi — pipeline parti full-width */
+#ricambiPanel { margin-bottom: 16px; }
+.rc-wrap { margin-inline: calc(-1 * clamp(14px, 2.4vw, 40px)); padding-inline: 12px; }
+.rc-head { padding: 4px 4px 10px; }
+.rc-loading, .rc-empty { color: var(--text-faint); font-style: italic; padding: 14px 4px; }
+.rc-loading-box { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 24px 14px; color: var(--text-muted); animation: amr-pulse 1.6s ease-in-out infinite; }
+.rc-tit { font-weight: 700; font-size: 1rem; color: var(--text); }
+.rc-code { font-family: var(--num); color: var(--accent); }
+/* riga fonti: SOLO diagnostica errori (pill rossa) */
+.rc-srcline { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+.rc-src { font-size: 0.74rem; padding: 2px 8px; border-radius: 9px; }
+.rc-src-bad { background: var(--neg-bg); color: var(--neg); }
+/* SCHEDA RICAMBIO — a blocchi: [img+prezzo] | [titolo · dati tecnici · compatibilità · OE] */
+.rc-scheda { display: flex; gap: 18px; align-items: flex-start; border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface); padding: 16px; }
+.rc-sch-left { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; align-items: center; width: 130px; }
+.rc-sch-img { width: 130px; height: 130px; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+.rc-sch-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.rc-sch-tit { font-weight: 700; font-size: 1.1rem; color: var(--text); }
+.rc-sch-price { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.rc-sch-price-lab { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.rc-sch-price .rc-prezzo { font-size: 1.25rem; }
+.rc-sch-price a { color: var(--accent); font-weight: 600; font-size: 0.78rem; }
+.rc-sch-src { color: var(--text-muted); font-size: 0.78rem; }
+.rc-sch-sec { display: flex; flex-direction: column; gap: 5px; }
+.rc-sch-sechd { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.rc-sch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 2px 20px; }
+.rc-sch-fits { font-size: 0.82rem; color: var(--text); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rc-oechips { display: flex; flex-wrap: wrap; gap: 6px; }
+/* lista annunci — righe a tutta larghezza (mirror .result-row auto) */
+.rc-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r2); overflow: hidden; background: var(--surface); }
+.rc-item { display: flex; gap: 12px; align-items: center; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--line); min-height: 62px; }
+.rc-item:last-of-type { border-bottom: none; }
+.rc-item:hover { background: var(--surface-2, #f7f8fa); }
+.rc-item[data-sel="1"] { box-shadow: 0 0 0 2px var(--accent) inset; }
+.rc-item.rc-best { box-shadow: 0 0 0 2px var(--pos) inset; }
+.rc-img-wrap { width: 48px; height: 48px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 4px; background: #fff; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.rc-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* placeholder immagine come auto (emoji dal veicolo della ricerca) */
+.rc-img-ph { background: var(--surface-2, #f2f3f5); }
+.rc-img-wrap.rc-img-ph::after, .rc-sch-img.rc-img-ph::after { content: '🚗'; font-size: 1.3rem; opacity: 0.5; display: flex; align-items: center; justify-content: center; height: 100%; }
+#ricambiPanel[data-veicolo="moto"] .rc-img-ph::after { content: '🏍'; }
+.rc-sch-img.rc-img-ph { display: flex; align-items: center; justify-content: center; }
+.rc-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; justify-content: center; }
+.rc-nome { font-size: 0.88rem; color: var(--text); line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rc-best-badge { font-size: 0.58rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; color: #fff; background: var(--pos); padding: 1px 5px; border-radius: 5px; margin-right: 5px; vertical-align: middle; }
+.rc-meta { font-size: 0.78rem; color: var(--text-muted); }
+.rc-price-cell { flex: 0 0 auto; text-align: right; min-width: 90px; }
+.rc-prezzo { font-family: var(--num); font-weight: 800; color: var(--pos); font-size: 1rem; }
+.rc-noprice { color: var(--text-muted); font-weight: 600; font-size: 0.82rem; }
+.rc-listino { font-family: var(--num); color: var(--text-faint); text-decoration: line-through; font-size: 0.8rem; }
+.rc-sconto { background: var(--neg-bg); color: var(--neg); font-size: 0.7rem; font-weight: 700; padding: 1px 6px; border-radius: 8px; }
+/* azioni riga — IDENTICHE alla ricerca auto (.row-act) */
+.rc-rowact { display: flex; gap: 4px; flex: 0 0 auto; }
+.rc-act { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: var(--surface); border-radius: 7px; width: 30px; height: 30px; cursor: pointer; color: var(--text-muted); }
+.rc-act:hover { border-color: var(--accent); color: var(--accent); }
+.rc-act.on { background: var(--accent-weak); color: var(--accent); border-color: var(--accent); }
+/* gruppi collassabili a cartella (mirror auto) */
+.rc-group { border: 1px solid var(--line); border-radius: var(--r2); margin-bottom: 10px; overflow: hidden; }
+.rc-group-head { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: var(--surface-2, #f7f8fa); border: none; border-bottom: 1px solid var(--line); padding: 9px 12px; cursor: pointer; font-family: inherit; }
+.rc-gcaret { display: inline-flex; color: var(--text-muted); }
+.rc-gcaret .ico { transition: transform .12s; }
+.rc-group.collapsed .rc-gcaret .ico { transform: rotate(-90deg); }
+.rc-group.collapsed .rc-group-head { border-bottom: none; }
+.rc-group-title { font-weight: 700; font-size: 0.85rem; color: var(--text); }
+.rc-group-meta { margin-left: auto; font-size: 0.78rem; color: var(--text-muted); font-family: var(--num); }
+.rc-group.collapsed .rc-group-body { display: none; }
+.rc-group-body { padding: 8px; }
+.rc-group .rc-list { border: none; }
+/* dettaglio — accordion inline full-width sotto la riga (mirror .row-detail auto) */
+.rc-detail { background: var(--surface-2, #f7f8fa); border-bottom: 1px solid var(--line); }
+.rc-det-inner { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; padding: 12px 14px; }
+.rc-det-img { width: 88px; height: 88px; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 6px; flex: 0 0 auto; }
+.rc-det-specs { flex: 1; min-width: 220px; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 18px; }
+.rc-det-row { display: flex; justify-content: space-between; gap: 10px; font-size: 0.82rem; padding: 3px 0; border-bottom: 1px dotted var(--line); }
+.rc-det-k { color: var(--text-muted); }
+.rc-det-v { color: var(--text); font-weight: 600; text-align: right; }
+.rc-det-open { align-self: center; color: var(--accent); font-weight: 600; font-size: 0.84rem; white-space: nowrap; }
+.rc-det-empty { color: var(--text-faint); font-style: italic; font-size: 0.82rem; }
+/* confronto parti */
+.rc-cmp-scroll { overflow-x: auto; }
+.rc-cmp { border-collapse: collapse; width: 100%; font-size: 0.84rem; }
+.rc-cmp th, .rc-cmp td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+.rc-cmp-lab { font-weight: 700; color: var(--text-muted); background: var(--surface-2, #f7f8fa); white-space: nowrap; }
+.rc-cmp-h { display: flex; flex-direction: column; gap: 4px; max-width: 200px; }
+.rc-cmp-h img { width: 48px; height: 48px; object-fit: contain; }
+.rc-cmp-remove { align-self: flex-start; border: none; background: transparent; color: var(--text-faint); cursor: pointer; font-size: 0.8rem; }
+/* codici OE equivalenti (chip nella scheda) */
+.rc-oe { border: 1px solid var(--line); background: var(--surface-2, #f2f3f5); color: var(--text); border-radius: 7px; padding: 2px 8px; font-family: var(--num); font-size: 0.76rem; cursor: pointer; }
+.rc-oe:hover { border-color: var(--accent); color: var(--accent); }
+
 /* Campi protagonisti */
 .search-fields { display: flex; gap: 10px; align-items: stretch; }
 .field-input {

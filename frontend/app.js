@@ -188,13 +188,6 @@ function applyDemoMode() {
   }
 }
 
-// Valuta disattivata via env DISABLE_VALUTA (server → /api/me valutaEnabled:false):
-// nascondi il toggle modo e forza "Cerca" per tutti i ruoli.
-function disableValuta() {
-  const el = document.getElementById('modeToggle'); if (el) el.style.display = 'none';
-  setSearchMode('cerca');
-}
-
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
   applyTheme(currentTheme());
@@ -218,7 +211,6 @@ async function init() {
     const me = await fetch('/api/me').then(r => (r.ok ? r.json() : null)).catch(() => null);
     if (me && me.role) myRole = me.role;
     if (myRole === 'demo') applyDemoMode();
-    if (me && me.valutaEnabled === false) disableValuta();
   } catch (_) {}
 
   themeToggle?.addEventListener('click', () => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
@@ -266,12 +258,13 @@ async function init() {
   btnStatPdf.addEventListener('click', () => exportPdf(currentResults));
   errorClose.addEventListener('click', hideError);
   backToSearch.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-  form.addEventListener('submit', async (e) => { e.preventDefault(); if (searchMode === 'valuta') await doValuta(); else await doSearch(); });
+  form.addEventListener('submit', async (e) => { e.preventDefault(); if (searchMode === 'valuta') await doValuta(); else if (searchMode === 'ricambi') await doRicambi(); else await doSearch(); });
 
-  // Modo Cerca / Valuta (#6): stesso form, output diverso (lista vs scheda-valutazione).
+  // Nav primaria Auto · Moto · Ricambi (data-mode). Auto/Moto = ricerca veicolo (pilota il
+  // radio tipo nascosto); Ricambi = pipeline parti. 'Valuta' non è più nella UI (dormiente).
   document.getElementById('modeToggle')?.addEventListener('click', e => {
     const btn = e.target.closest('.mode-btn'); if (!btn) return;
-    setSearchMode(btn.dataset.mode);
+    selectPrimary(btn.dataset.mode);
   });
 
   // Confronto / matrice
@@ -662,18 +655,38 @@ function renderFacetChips() {
 
 // ─── Modo Valuta (#6) ──────────────────────────────────────────────────────
 let searchMode = 'cerca';
+// Nav primaria: 'auto'|'moto' → ricerca veicolo (modo Cerca), 'ricambi' → pipeline parti.
+// Pilota il radio tipo nascosto (che via il suo change-handler rinfresca marche/placeholder)
+// e lo stato attivo dei bottoni. 'Valuta' non è più esposta (setSearchMode la gestisce ancora).
+function selectPrimary(mode) {
+  const primary = ['auto', 'moto', 'ricambi'].includes(mode) ? mode : 'auto';
+  document.querySelectorAll('#modeToggle .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === primary));
+  if (primary === 'ricambi') { setSearchMode('ricambi'); return; }
+  const radio = document.getElementById(primary === 'moto' ? 'tipoMoto' : 'tipoAuto');
+  if (radio && !radio.checked) { radio.checked = true; radio.dispatchEvent(new Event('change')); }
+  setSearchMode('cerca');
+}
 function setSearchMode(mode) {
-  searchMode = (mode === 'valuta') ? 'valuta' : 'cerca';
+  searchMode = ['valuta', 'ricambi'].includes(mode) ? mode : 'cerca';
   const valuta = searchMode === 'valuta';
-  document.querySelectorAll('#modeToggle .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === searchMode));
+  const ricambi = searchMode === 'ricambi';
+  // Ricambi ha i suoi campi (OEM) e nasconde i campi auto (marca/modello + tipo); Valuta li tiene.
+  document.getElementById('ricambiFields').classList.toggle('d-none', !ricambi);
+  document.querySelector('.search-fields').classList.toggle('d-none', ricambi);
+  document.querySelector('.seg-toggle').classList.toggle('d-none', ricambi);
+  // #marca è required: se resta hidden+required il submit nativo si blocca ("not focusable") → togli required in ricambi.
+  document.getElementById('marca').required = !ricambi;
   document.getElementById('valutaFields').classList.toggle('d-none', !valuta);
-  document.getElementById('advancedToggle').classList.toggle('d-none', valuta);   // i filtri-ricerca non servono per valutare
-  if (valuta) document.getElementById('advancedFilters').classList.add('d-none');
+  document.getElementById('advancedToggle').classList.toggle('d-none', valuta || ricambi);   // i filtri-ricerca non servono per valutare/ricambi
+  if (valuta || ricambi) document.getElementById('advancedFilters').classList.add('d-none');
   btnCerca.textContent = valuta ? 'Valuta' : 'Cerca';
   document.getElementById('modello').placeholder = valuta
     ? 'Modello — es. V-Strom 1050 (obbligatorio)'
     : 'Modello — es. 318d (opzionale)';
-  if (valuta) hideResults(); else document.getElementById('valutaPanel').classList.add('d-none');
+  // Pannelli output: mostra solo quello del modo attivo (lo popola il rispettivo do*()).
+  if (!ricambi) document.getElementById('ricambiPanel').classList.add('d-none');
+  if (!valuta) document.getElementById('valutaPanel').classList.add('d-none');
+  if (valuta || ricambi) hideResults();   // i modi-scheda nascondono la lista auto
 }
 
 async function doValuta() {
@@ -735,6 +748,465 @@ function renderValutaCard(panel, d, inp) {
     <div class="vp-note">Dati reali dagli annunci ora a mercato.${d.troncato ? ' *mercato ampio: la fascia pesa verso i più economici.' : ''} Nessun valore inventato.</div>
   </div>`;
 }
+
+// ═══ Modo Ricambi — pipeline parti SEPARATA (multi-fonte, full-width) ═══════════
+// Isolata dal path auto: stato/funzioni proprie (prefisso rc/Ricambi), non tocca
+// currentResults/COLS/MATRIX_ROWS/exportCsv/renderResults.
+const RC_FONTE = { autodoc: 'Autodoc', cmsnl: 'CMSNL', subito: 'Subito', ebay: 'eBay', web: 'Web' };
+const RC_GROUP_DIMS = [['', 'Nessuno'], ['fonte', 'Fonte'], ['marca', 'Marca'], ['venditore', 'Venditore']];
+const RC_SALVATI_KEY = 'amr_salvati_ricambi', RC_SALVATI_CAP = 200, RC_COMPARE_CAP = 6;
+const RC_FAV_KEY = 'amr_oem_preferiti', RC_FAV_CAP = 30;   // codici OE/OEM/OEN preferiti (quick-launch)
+
+let rcData = null;            // ultimo envelope {articoli, sources, tipoPezzo, veicoli, oen, mode, veicolo, oeAlternativi}
+let ricambiMode = 'oem';
+let rcVeicolo = 'auto';       // 'auto' | 'moto' — un ricambio è per auto O per moto
+let rcGroupDim = '';
+let rcView = 'grid';         // 'grid' | 'compare' | 'salvati'
+let rcSort = 'prezzo-asc';    // prezzo-asc | prezzo-desc | stelle | sconto
+let rcCollapsed = new Set();  // chiavi-gruppo collassate (persistono al re-render, meglio di auto)
+let rcOpenDetails = new Set();// chiavi articolo con accordion info aperto (persistono al re-render)
+let confrontoRicambi = [];
+let salvatiRicambi = rcLoadSalvati();
+let oemFav = rcLoadFav();   // codici OE/OEM/OEN preferiti
+
+function rcLoadSalvati() { try { const a = JSON.parse(localStorage.getItem(RC_SALVATI_KEY)); return Array.isArray(a) ? a : []; } catch { return []; } }
+function rcPersistSalvati() { try { localStorage.setItem(RC_SALVATI_KEY, JSON.stringify(salvatiRicambi.slice(0, RC_SALVATI_CAP))); } catch {} }
+
+// ── Codici ricambio salvati (tab "Ricambi" dell'offcanvas Salvati, mirror di annunci/ricerche).
+// Item = {q, mode}. Retro-compat: le vecchie voci stringa diventano {q, mode:'oem'}.
+function rcLoadFav() {
+  try {
+    const a = JSON.parse(localStorage.getItem(RC_FAV_KEY));
+    if (!Array.isArray(a)) return [];
+    return a.map(x => (typeof x === 'string' ? { q: x, mode: 'oem' } : x)).filter(x => x && typeof x.q === 'string');
+  } catch { return []; }
+}
+function rcPersistFav() { try { localStorage.setItem(RC_FAV_KEY, JSON.stringify(oemFav.slice(0, RC_FAV_CAP))); } catch {} }
+const rcFavNorm = s => String(s || '').replace(/[^a-z0-9]/gi, '').toUpperCase();   // chiave di dedup
+const rcFavHas = (q) => oemFav.some(f => rcFavNorm(f.q) === rcFavNorm(q));
+function rcToggleFav(q, mode, veicolo) {
+  const disp = String(q || '').trim();
+  const key = rcFavNorm(disp);
+  if (!key) return;
+  if (rcFavHas(disp)) oemFav = oemFav.filter(f => rcFavNorm(f.q) !== key);
+  else {
+    oemFav.unshift({ q: mode === 'oem' ? disp.toUpperCase() : disp, mode: mode || 'oem', veicolo: veicolo === 'moto' ? 'moto' : 'auto' });
+    if (oemFav.length > RC_FAV_CAP) oemFav.length = RC_FAV_CAP;
+  }
+  rcPersistFav(); renderRicambiFavTab();
+  if (rcData) renderRicambiPanel();   // rinfresca lo stato del bottone "Salva codice"
+}
+const RC_MODE_LABEL = { oem: 'OEM', prodotto: 'Prodotto', nome: 'Nome' };
+function renderRicambiFavTab() {
+  const t = document.getElementById('tabRicambiCount'); if (t) t.textContent = oemFav.length;
+  const box = document.getElementById('ricambiFavList'); if (!box) return;
+  if (!oemFav.length) { box.innerHTML = '<p class="text-muted text-center py-4">Nessun codice salvato. Cerca un ricambio e usa "Salva codice" nella barra.</p>'; return; }
+  box.innerHTML = oemFav.map(f => `<div class="salvato-item" data-q="${escapeHtml(f.q)}" data-mode="${escapeHtml(f.mode || 'oem')}" data-veicolo="${escapeHtml(f.veicolo || 'auto')}">
+      <div class="salvato-info">
+        <div class="salvato-titolo">${escapeHtml(f.q)}</div>
+        <div class="salvato-dettagli">${RC_MODE_LABEL[f.mode] || 'OEM'} · ${f.veicolo === 'moto' ? 'Moto' : 'Auto'} · clicca per cercare</div>
+      </div>
+      <div class="salvato-actions"><button class="btn-rimuovi-salvato" title="Rimuovi">${icon('x')}</button></div>
+    </div>`).join('');
+}
+const rcKey = a => a._rk || `${a.fonte}:${a.url || a.articleId || a.nome}`;   // _rk assegnato in doRicambi (evita collisioni nome)
+const rcHas = (arr, a) => arr.some(x => rcKey(x) === rcKey(a));
+const rcEur = n => (typeof n === 'number' ? '€ ' + n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null);
+const rcSafeUrl = u => (/^https?:\/\//i.test(u || '') ? u : null);   // solo http/https: blocca javascript:/data: (XSS)
+function rcCurrentList() { return rcView === 'salvati' ? salvatiRicambi : rcView === 'compare' ? confrontoRicambi : rcVisibleArts(); }
+function rcPriceText(a) { const p = rcEur(a.prezzo); return p || (a.fonte === 'subito' ? 'trattabile' : 'prezzo sul sito'); }
+function rcArt(key) { return (rcData && rcData.articoli || []).find(a => rcKey(a) === key) || salvatiRicambi.find(a => rcKey(a) === key) || confrontoRicambi.find(a => rcKey(a) === key); }
+
+// Lista visibile in griglia = articoli ordinati. La fonte si filtra col group-by "Fonte" (non più pill).
+function rcVisibleArts() {
+  return rcSortArts((rcData && rcData.articoli) || []);
+}
+function rcSortArts(arts) {
+  const p = a => (typeof a.prezzo === 'number' ? a.prezzo : null);
+  const byPrice = (a, b, dir) => { const pa = p(a), pb = p(b); if (pa == null && pb == null) return 0; if (pa == null) return 1; if (pb == null) return -1; return dir * (pa - pb); };
+  const arr = arts.slice();
+  if (rcSort === 'prezzo-desc') arr.sort((a, b) => byPrice(a, b, -1));
+  else if (rcSort === 'stelle') arr.sort((a, b) => (Number(b.stelle) || 0) - (Number(a.stelle) || 0));
+  else if (rcSort === 'sconto') arr.sort((a, b) => (Number(b.sconto) || 0) - (Number(a.sconto) || 0));
+  else arr.sort((a, b) => byPrice(a, b, 1));   // prezzo-asc default
+  return arr;
+}
+const rcMedian = nums => { if (!nums.length) return null; const s = [...nums].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+function rcStats(arts) {
+  const prices = arts.map(a => a.prezzo).filter(n => typeof n === 'number');
+  if (!prices.length) return null;
+  return { n: prices.length, min: Math.min(...prices), max: Math.max(...prices), mediana: rcMedian(prices) };
+}
+function rcBestKey(arts) {   // rcKey del più economico visibile (badge "più economico")
+  let best = null;
+  for (const a of arts) if (typeof a.prezzo === 'number' && (!best || a.prezzo < best.prezzo)) best = a;
+  return best ? rcKey(best) : null;
+}
+
+async function doRicambi() {
+  const q = rcActiveInput().value.trim();
+  if (!q) { showError(ricambiMode === 'oem' ? 'Inserisci un codice OEM (es. 1K0905851B).' : ricambiMode === 'prodotto' ? 'Inserisci il codice articolo del produttore.' : 'Inserisci il nome del ricambio.'); return; }
+  hideError(); hideResults();
+  document.body.classList.add('has-results');
+  const panel = document.getElementById('ricambiPanel');
+  panel.classList.remove('d-none');
+  panel.innerHTML = '<div class="rc-loading-box"><div class="spinner-border text-primary" role="status" style="width:1.1rem;height:1.1rem;border-width:2px"></div><span>Cerco il ricambio su più fonti…</span></div>';
+  try {
+    const res = await fetch(`/api/ricambi?q=${encodeURIComponent(q)}&mode=${ricambiMode}&veicolo=${rcVeicolo}`);
+    const d = await res.json();
+    if (!res.ok) { panel.innerHTML = `<div class="rc-wrap"><div class="rc-empty">${escapeHtml(d.error || 'Errore durante il lookup.')}</div></div>`; return; }
+    // id stabile per articolo (gli item web possono non avere url/articleId → il nome collide) → indice per unicità
+    (d.articoli || []).forEach((a, i) => { if (!a._rk) a._rk = `${a.fonte}:${a.url || a.articleId || (a.nome + '#' + i)}`; });
+    rcData = d; rcView = 'grid';
+    rcCollapsed = new Set(); rcOpenDetails = new Set();   // nuova ricerca → reset gruppi/dettagli aperti
+    renderRicambiPanel();
+  } catch (_) {
+    panel.innerHTML = '<div class="rc-wrap"><div class="rc-empty">Servizio ricambi non raggiungibile.</div></div>';
+  }
+}
+
+function rcGroupKey(a, dim) {
+  if (dim === 'fonte') return RC_FONTE[a.fonte] || a.fonte;
+  if (dim === 'marca') return a.marca || a.venditore || 'Non indicato';
+  if (dim === 'venditore') return a.venditore || (a.fonte === 'autodoc' ? 'Autodoc' : 'Non indicato');
+  return null;
+}
+function rcGroups(arts, dim) {
+  const m = new Map();
+  for (const a of arts) { const k = rcGroupKey(a, dim); if (!m.has(k)) m.set(k, []); m.get(k).push(a); }
+  return [...m.entries()].map(([key, items]) => ({ key, items })).sort((x, y) => y.items.length - x.items.length);
+}
+
+// Riga annuncio a tutta larghezza (mirror .result-row auto: thumb · titolo-link · meta · prezzo · azioni)
+// + fratello .rc-detail (accordion, aperto dal bottone info). Icone IDENTICHE alla ricerca auto.
+function rcRowHTML(a, bestKey) {
+  const key = rcKey(a);
+  const isBest = bestKey && key === bestKey;
+  const bestBadge = isBest ? '<span class="rc-best-badge">min</span>' : '';
+  const img = a.immagine ? `<span class="rc-img-wrap"><img class="rc-img" src="${escapeHtml(a.immagine)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>` : '<span class="rc-img-wrap rc-img-ph"></span>';
+  // nome cliccabile → apre l'annuncio DIRETTAMENTE (mirror .row-titolo→openAd della ricerca auto)
+  const rowUrl = rcSafeUrl(a.url);
+  const nomeTxt = `${a.marca ? '<b>' + escapeHtml(a.marca) + '</b> ' : ''}${escapeHtml(a.nome)}`;
+  const nome = bestBadge + (rowUrl
+    ? `<a class="rc-nome-link" href="${escapeHtml(rowUrl)}" target="_blank" rel="noopener noreferrer" title="Apri annuncio">${nomeTxt}</a>`
+    : nomeTxt);
+  const metaBits = [a.venditore, a.provincia, RC_FONTE[a.fonte] || a.fonte].filter(Boolean).map(escapeHtml).join(' · ');
+  const prezzo = rcEur(a.prezzo);
+  const priceBlock = prezzo ? `<span class="rc-prezzo">${prezzo}</span>` : `<span class="rc-prezzo rc-noprice">${rcPriceText(a)}</span>`;
+  const inCmp = rcHas(confrontoRicambi, a), inSave = rcHas(salvatiRicambi, a);
+  const openDet = rcOpenDetails.has(key);
+  const row = `<div class="rc-item${isBest ? ' rc-best' : ''}"${inCmp ? ' data-sel="1"' : ''}>${img}
+    <div class="rc-body"><div class="rc-nome">${nome}</div><div class="rc-meta">${metaBits}</div></div>
+    <div class="rc-price-cell">${priceBlock}</div>
+    <div class="rc-rowact">
+      <button type="button" class="rc-act rc-btn-info" data-key="${escapeHtml(key)}" title="Dettagli e foto">${icon('info')}</button>
+      <button type="button" class="rc-act rc-btn-cmp${inCmp ? ' on' : ''}" data-key="${escapeHtml(key)}" title="Aggiungi al confronto">${icon(inCmp ? 'square-check' : 'square')}</button>
+      <button type="button" class="rc-act rc-btn-save${inSave ? ' on' : ''}" data-key="${escapeHtml(key)}" title="${inSave ? 'Rimuovi dai salvati' : 'Salva ricambio'}">${icon(inSave ? 'bookmark-filled' : 'bookmark')}</button>
+    </div></div>`;
+  const detail = `<div class="rc-detail${openDet ? '' : ' d-none'}" data-key="${escapeHtml(key)}">${openDet ? rcDetailHTML(a) : ''}</div>`;
+  return row + detail;
+}
+
+// Contenuto dell'accordion info: tutti i campi extra della fonte (assenti → riga omessa).
+function rcDetailHTML(a) {
+  const rows = [];
+  const push = (k, v) => { if (v != null && v !== '') rows.push(`<div class="rc-det-row"><span class="rc-det-k">${k}</span><span class="rc-det-v">${escapeHtml(String(v))}</span></div>`); };
+  push('Fonte', RC_FONTE[a.fonte] || a.fonte);
+  push('Prezzo', rcPriceText(a));
+  if (a.prezzoListino && a.sconto) push('Listino', `${rcEur(a.prezzoListino)} (-${a.sconto}%)`);
+  push('Marca', a.marca);
+  push('N° articolo', a.articolo);
+  push('Codice CMSNL', a.codiceCmsnl);
+  push('Variante', a.variante);
+  push('Condizione', a.condizione);
+  push('Spedizione', a.spedizione);
+  push('Disponibilità', a.disponibile == null ? null : (a.disponibile ? 'Disponibile' : 'Non disponibile'));
+  push('Valutazione', a.stelle ? `★ ${a.stelle}/10 (${a.recensioni || 0} recensioni)` : null);
+  push('Venditore', a.venditore);
+  push('Provincia', a.provincia);
+  const u = rcSafeUrl(a.url);
+  const gal = a.immagine ? `<img class="rc-det-img" src="${escapeHtml(a.immagine)}" referrerpolicy="no-referrer" alt="">` : '';
+  const foot = u ? `<a class="rc-det-open" href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">apri annuncio ↗</a>` : '';
+  return `<div class="rc-det-inner">${gal}<div class="rc-det-specs">${rows.join('') || '<span class="rc-det-empty">Nessun dettaglio aggiuntivo</span>'}</div>${foot}</div>`;
+}
+
+// Card "scheda ricambio": identità certa dal catalogo (dati tecnici + prezzo NUOVO).
+// Sostituisce il titolone; la lista sotto contiene solo le OFFERTE (Subito/web).
+function rcSchedaHTML(d) {
+  const s = d.scheda;
+  if (!s) {   // nessun catalogo → head compatto (identità dal web se c'è)
+    const idParts = [d.tipoPezzo, d.veicoli].filter(Boolean).map(escapeHtml);
+    return `<div class="rc-tit">${idParts.join(' · ').slice(0, 160) || 'Ricambio'} · <span class="rc-code">${escapeHtml(d.oen || '')}</span></div>`;
+  }
+  const img = s.immagine ? `<img class="rc-sch-img" src="${escapeHtml(s.immagine)}" alt="" referrerpolicy="no-referrer">` : '<div class="rc-sch-img rc-img-ph"></div>';
+  const pn = s.prezzoNuovo;
+  const pnUrl = pn && rcSafeUrl(pn.url);
+  const prezzoRow = pn ? `<div class="rc-sch-price">
+      <span class="rc-sch-price-lab">Prezzo nuovo</span>
+      <span class="rc-prezzo">${rcEur(pn.valore)}</span>
+      ${pn.listino && pn.sconto ? `<span class="rc-listino">${rcEur(pn.listino)}</span><span class="rc-sconto">-${escapeHtml(String(pn.sconto))}%</span>` : ''}
+      ${pnUrl ? `<a href="${escapeHtml(pnUrl)}" target="_blank" rel="noopener noreferrer">su ${escapeHtml(RC_FONTE[pn.fonte] || pn.fonte)} ↗</a>` : `<span class="rc-sch-src">(${escapeHtml(RC_FONTE[pn.fonte] || pn.fonte)})</span>`}
+    </div>` : '';
+  // DATI TECNICI: merge dati catalogo (precedenza) + Item specifics eBay (già in italiano)
+  const dt = {};
+  if (s.marca) dt['Marca'] = s.marca;
+  if (s.condizione) dt['Condizione'] = s.condizione;
+  if (s.disponibile != null) dt['Disponibilità'] = s.disponibile ? 'Disponibile' : 'Non disponibile';
+  if (s.spedizione) dt['Spedizione'] = s.spedizione;
+  if (s.stelle) dt['Valutazione'] = `★ ${s.stelle}/10${s.recensioni ? ` (${s.recensioni})` : ''}`;
+  for (const [k, v] of Object.entries(s.datiTecnici || {})) if (!(k in dt)) dt[k] = v;
+  const dtRows = Object.entries(dt).slice(0, 10)
+    .map(([k, v]) => `<div class="rc-det-row"><span class="rc-det-k">${escapeHtml(k)}</span><span class="rc-det-v">${escapeHtml(String(v)).slice(0, 70)}</span></div>`).join('');
+  const dtBlock = dtRows ? `<div class="rc-sch-sec"><div class="rc-sch-sechd">Dati tecnici</div><div class="rc-sch-grid">${dtRows}</div></div>` : '';
+  const compat = s.compatibilita ? `<div class="rc-sch-sec"><div class="rc-sch-sechd">Compatibilità</div><div class="rc-sch-fits" title="${escapeHtml(s.compatibilita)}">${escapeHtml(s.compatibilita)}</div></div>` : '';
+  const oe = (s.oeAlternativi && s.oeAlternativi.length)
+    ? `<div class="rc-sch-sec"><div class="rc-sch-sechd">Codici OE equivalenti</div><div class="rc-oechips">${s.oeAlternativi.slice(0, 14).map(c => `<button type="button" class="rc-oe" data-oe="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`
+    : '';
+  return `<div class="rc-scheda">
+    <div class="rc-sch-left">${img}${prezzoRow}</div>
+    <div class="rc-sch-body">
+      <div class="rc-sch-tit">${escapeHtml(s.tipoPezzo || 'Ricambio')} <span class="rc-code">${escapeHtml(s.codice || d.oen || '')}</span></div>
+      ${dtBlock}${compat}${oe}
+    </div></div>`;
+}
+
+function renderRicambiPanel() {
+  const panel = document.getElementById('ricambiPanel');
+  const d = rcData || { articoli: [], sources: {} };
+  panel.dataset.veicolo = d.veicolo || rcVeicolo;   // pilota il placeholder immagine 🚗/🏍
+  const rawArts = d.articoli || [];
+  const testa = `${escapeHtml(d.tipoPezzo || 'Ricambio')} · <span class="rc-code">${escapeHtml(d.oen || '')}</span>`;
+  // SOLO fonti in errore (diagnostica) — le pill "ok" ridondano col group-by Fonte, via.
+  const badSrc = Object.entries(d.sources || {}).filter(([, s]) => ['blocked', 'error', 'timeout'].includes(s.status));
+  const statusLine = badSrc.length
+    ? `<div class="rc-srcline">${badSrc.map(([k, s]) => `<span class="rc-src rc-src-bad"${s.reason ? ` title="${escapeHtml(s.reason)}"` : ''}>${escapeHtml(RC_FONTE[k] || k)}: ${s.status === 'blocked' ? 'bloccato' : escapeHtml(s.status)}</span>`).join('')}</div>`
+    : '';
+  const head = `<div class="rc-head">${rcSchedaHTML(d)}${statusLine}</div>`;
+
+  // vista compare / salvati — head+toolbar a larghezza-container, corpo in .rc-wrap (come auto)
+  if (rcView === 'compare') { panel.innerHTML = `<div class="rc-head"><div class="rc-tit">${testa}</div></div>${rcToolbarHTML()}<div class="rc-wrap">${rcCompareHTML()}</div>`; return; }
+  if (rcView === 'salvati') { panel.innerHTML = `<div class="rc-head"><div class="rc-tit">Ricambi salvati</div></div>${rcToolbarHTML()}<div class="rc-wrap">${rcSalvatiHTML()}</div>`; return; }
+
+  if (!rawArts.length) {
+    const allEmpty = Object.values(d.sources || {}).length && Object.values(d.sources).every(s => s.status === 'empty');
+    const msg = d.scheda ? 'Nessun annuncio sul mercato per questo ricambio (vedi prezzo nuovo nella scheda).'
+      : allEmpty ? 'Nessun ricambio trovato. Verifica il codice/nome.' : 'Fonti non disponibili al momento. Riprova tra poco.';
+    panel.innerHTML = `${head}${rcToolbarHTML()}<div class="rc-wrap"><div class="rc-empty">${msg}</div></div>`;
+    return;
+  }
+
+  const arts = rcVisibleArts();          // ordinati
+  const bestKey = rcBestKey(arts);
+
+  let body;
+  if (rcGroupDim) {
+    body = rcGroups(arts, rcGroupDim).map(g => {
+      const gkey = String(g.key);
+      const collapsed = rcCollapsed.has(gkey);
+      const prezzi = g.items.map(i => i.prezzo).filter(n => typeof n === 'number');
+      const meta = `${g.items.length} ricambi${prezzi.length ? ' · da ' + rcEur(Math.min(...prezzi)) : ''}`;
+      return `<div class="rc-group${collapsed ? ' collapsed' : ''}" data-gkey="${escapeHtml(gkey)}">
+        <button type="button" class="rc-group-head"><span class="rc-gcaret">${icon('chevron')}</span><span class="rc-group-title">${escapeHtml(gkey)}</span><span class="rc-group-meta">${meta}</span></button>
+        <div class="rc-group-body"><div class="rc-list">${g.items.map(a => rcRowHTML(a, bestKey)).join('')}</div></div>
+      </div>`;
+    }).join('');
+  } else {
+    body = `<div class="rc-list">${arts.map(a => rcRowHTML(a, bestKey)).join('')}</div>`;
+  }
+  // head + toolbar a larghezza-container (come auto); SOLO la lista in .rc-wrap (full-bleed)
+  panel.innerHTML = `${head}${rcToolbarHTML()}<div class="rc-wrap">${body}</div>`;
+}
+
+// Toolbar rispecchiata su quella auto/moto (.results-toolbar a sezioni .tb-group / .tb-sep).
+function rcToolbarHTML() {
+  const inGrid = rcView === 'grid';
+  const list = rcCurrentList();
+  const stats = inGrid ? rcStats(list) : null;
+  const nCmp = confrontoRicambi.length, nSave = salvatiRicambi.length;
+  // sez.1 — conteggio + statistiche prezzo
+  const statsHTML = `<span class="tb-count">${list.length} ricambi</span>` + (stats
+    ? `<span class="tb-stat"><span class="tb-stat-label">min</span><b>${rcEur(stats.min)}</b></span>
+       <span class="tb-stat"><span class="tb-stat-label">med</span><b>${rcEur(stats.mediana)}</b></span>
+       <span class="tb-stat"><span class="tb-stat-label">max</span><b>${rcEur(stats.max)}</b></span>` : '');
+  // sez.2 — raggruppa (facet-chips, "Fonte" è QUI)
+  const facets = RC_GROUP_DIMS.map(([dim, lab]) => `<button type="button" class="facet-chip${rcGroupDim === dim ? ' active' : ''}" data-dim="${dim}">${escapeHtml(lab)}</button>`).join('');
+  // sez.3 — ordina (solo griglia)
+  const opt = (v, lab) => `<option value="${v}"${rcSort === v ? ' selected' : ''}>${lab}</option>`;
+  const sortSel = inGrid ? `<select id="rcSortSel" class="tb-btn" aria-label="Ordina">${opt('prezzo-asc', 'Prezzo ↑')}${opt('prezzo-desc', 'Prezzo ↓')}${opt('stelle', 'Valutazione')}${opt('sconto', 'Sconto %')}</select>` : '';
+  // "Salva codice" — mirror di "Salva ricerca" auto: mette il termine corrente nella tab Ricambi dei Salvati
+  const term = rcData && rcData.oen;
+  const saved = term && rcFavHas(term);
+  const saveBtn = (inGrid && term) ? `<button type="button" class="tb-btn${saved ? ' active' : ''}" id="rcSaveCode" title="Salva il codice nei Salvati → Ricambi">${saved ? '✓ Codice salvato' : 'Salva codice'}</button>` : '';
+  return `<div class="results-toolbar rc-tbar">
+    <div class="tb-group">${statsHTML}</div>
+    <span class="tb-sep"></span>
+    <div class="tb-group"><span class="tb-label">Raggruppa</span><div class="facet-chips">${facets}</div></div>
+    <span class="tb-sep"></span>
+    <div class="tb-group">
+      ${sortSel}
+      ${saveBtn}
+      ${rcView !== 'grid' ? '<button type="button" class="tb-btn" id="rcBackGrid">← risultati</button>' : ''}
+      <button type="button" class="tb-btn${rcView === 'compare' ? ' active' : ''}" id="rcOpenCompare"${nCmp ? '' : ' disabled'}>Confronto (${nCmp})</button>
+      <button type="button" class="tb-btn${rcView === 'salvati' ? ' active' : ''}" id="rcOpenSaved"${nSave ? '' : ' disabled'}>♥ Preferiti (${nSave})</button>
+      <button type="button" class="tb-btn" id="rcCsv">CSV</button>
+      <button type="button" class="tb-btn" id="rcPdf">PDF</button>
+    </div></div>`;
+}
+
+const RC_CMP_ROWS = [
+  ['Prezzo', a => rcPriceText(a)],
+  ['Marca', a => a.marca || '—'],
+  ['Venditore', a => a.venditore || (a.fonte === 'autodoc' ? 'Autodoc' : '—')],
+  ['Fonte', a => RC_FONTE[a.fonte] || a.fonte],
+  ['Valutazione', a => a.stelle ? `★ ${a.stelle}/10 (${a.recensioni || 0})` : '—'],
+  ['Disponibilità', a => a.disponibile == null ? '—' : (a.disponibile ? 'Disponibile' : 'No')],
+];
+function rcCompareHTML() {
+  if (!confrontoRicambi.length) return '<div class="rc-empty">Nessun ricambio selezionato. Usa ⇄ sulle righe.</div>';
+  const cols = confrontoRicambi;
+  const head = `<tr><th></th>${cols.map(a => `<th><div class="rc-cmp-h">${a.immagine ? `<img src="${escapeHtml(a.immagine)}" referrerpolicy="no-referrer" alt="">` : ''}<span>${escapeHtml((a.marca ? a.marca + ' ' : '') + a.nome).slice(0, 60)}</span><button type="button" class="rc-cmp-remove" data-key="${escapeHtml(rcKey(a))}">✕</button></div></th>`).join('')}</tr>`;
+  const rows = RC_CMP_ROWS.map(([lab, fn]) => `<tr><td class="rc-cmp-lab">${lab}</td>${cols.map(a => `<td>${escapeHtml(String(fn(a)))}</td>`).join('')}</tr>`).join('');
+  const links = `<tr><td class="rc-cmp-lab">Link</td>${cols.map(a => { const u = rcSafeUrl(a.url); return `<td>${u ? `<a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">apri →</a>` : '—'}</td>`; }).join('')}</tr>`;
+  return `<div class="rc-cmp-scroll"><table class="rc-cmp">${head}${rows}${links}</table></div>`;
+}
+
+function rcSalvatiHTML() {
+  if (!salvatiRicambi.length) return '<div class="rc-empty">Nessun ricambio salvato. Usa ♡ sulle righe.</div>';
+  // le righe mostrano ♥ (già salvate); cliccarlo le rimuove (toggle).
+  return `<div class="rc-list">${salvatiRicambi.map(a => rcRowHTML(a)).join('')}</div>`;
+}
+
+function rcToggleCmp(key) {
+  const a = rcArt(key); if (!a) return;
+  const i = confrontoRicambi.findIndex(x => rcKey(x) === key);
+  if (i >= 0) confrontoRicambi.splice(i, 1);
+  else { if (confrontoRicambi.length >= RC_COMPARE_CAP) { showError(`Massimo ${RC_COMPARE_CAP} ricambi a confronto.`); return; } confrontoRicambi.push(a); }
+  if (rcView === 'compare' && !confrontoRicambi.length) rcView = 'grid';
+  renderRicambiPanel();
+}
+function rcToggleSave(key, remove) {
+  const a = rcArt(key); if (!a) return;
+  const i = salvatiRicambi.findIndex(x => rcKey(x) === key);
+  if (i >= 0 || remove) { if (i >= 0) salvatiRicambi.splice(i, 1); }
+  else { salvatiRicambi.unshift(a); if (salvatiRicambi.length > RC_SALVATI_CAP) salvatiRicambi.length = RC_SALVATI_CAP; }   // cap live = cap persistito
+  rcPersistSalvati();
+  if (rcView === 'salvati' && !salvatiRicambi.length) rcView = 'grid';
+  renderRicambiPanel();
+}
+
+function exportCsvRicambi() {
+  const arts = rcCurrentList(); if (!arts.length) { showError('Niente da esportare.'); return; }
+  const cell = v => { let s = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
+  const cols = ['Fonte', 'Ricambio', 'Marca', 'Prezzo (€)', 'Venditore', 'URL'];
+  const rows = arts.map(a => [RC_FONTE[a.fonte] || a.fonte, a.nome, a.marca || '', a.prezzo != null ? a.prezzo : '', a.venditore || '', a.url || ''].map(cell).join(','));
+  const csv = ['﻿' + cols.join(','), ...rows].join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: `ricambi-${(rcData && rcData.oen || 'export')}-${new Date().toISOString().slice(0, 10)}.csv` });
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+function exportPdfRicambi() {
+  const arts = rcCurrentList(); if (!arts.length) { showError('Niente da esportare.'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { showError('Export PDF non disponibile (libreria non caricata).'); return; }
+  try {
+  const { jsPDF } = window.jspdf; const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  doc.setFillColor(20, 24, 31); doc.rect(0, 0, pageW, 20, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(255, 255, 255); doc.text('AUTO MOTO RADAR — Ricambi', 14, 12);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(170, 185, 210);
+  const meta = rcData || {};
+  doc.text(`${[meta.tipoPezzo, meta.veicoli].filter(Boolean).join(' · ').slice(0, 110)}  ·  ${meta.oen || ''}`, 14, 17);
+  doc.autoTable({
+    startY: 26,
+    head: [['Fonte', 'Ricambio', 'Marca', 'Prezzo', 'Venditore']],
+    body: arts.map(a => [RC_FONTE[a.fonte] || a.fonte, a.nome, a.marca || '—', rcPriceText(a), a.venditore || '—']),
+    styles: { font: 'helvetica', fontSize: 8, cellPadding: 2, overflow: 'ellipsize' },
+    headStyles: { fillColor: [20, 24, 31], textColor: [255, 255, 255], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [247, 248, 250] },
+    columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 30 }, 3: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }, 4: { cellWidth: 40 } },
+    margin: { left: 14, right: 14 },
+  });
+  doc.save(`ricambi-${meta.oen || 'export'}-${new Date().toISOString().slice(0, 10)}.pdf`);
+  } catch (e) { console.error('[ricambi pdf]', e); showError('Export PDF non riuscito.'); }
+}
+
+// 3 input DEDICATI (uno per modo, valore persistente al cambio tab) + selettore veicolo.
+const rcActiveInput = () => document.querySelector(`.rc-input[data-rcfor="${ricambiMode}"]`);
+function setRicambiMode(m) {
+  ricambiMode = ['nome', 'prodotto'].includes(m) ? m : 'oem';
+  document.querySelectorAll('#ricambiModeToggle .rc-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.rcmode === ricambiMode));
+  document.querySelectorAll('.rc-input').forEach(i => i.classList.toggle('d-none', i.dataset.rcfor !== ricambiMode));
+  renderRcFontiLine();
+}
+function setRcVeicolo(v) {
+  rcVeicolo = v === 'moto' ? 'moto' : 'auto';
+  document.querySelectorAll('#rcVeicoloToggle .rc-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.rcveicolo === rcVeicolo));
+  renderRcFontiLine();
+}
+// riga "Fonti:" sotto l'input — dichiara cosa verrà interrogato per (modo, veicolo)
+function renderRcFontiLine() {
+  const el = document.getElementById('rcFontiLine'); if (!el) return;
+  const catalogo = rcVeicolo === 'moto' ? 'CMSNL' : 'Autodoc';
+  const fonti = ricambiMode === 'oem' ? [catalogo, 'Subito', 'eBay'] : ['Subito', 'eBay'];
+  el.textContent = `Fonti: ${fonti.join(' · ')} — se nessuna trova il pezzo, parte la ricerca web`;
+}
+
+// wiring (delegazione, una volta)
+(function wireRicambi() {
+  const toggle = document.getElementById('ricambiModeToggle');
+  toggle?.addEventListener('click', e => { const b = e.target.closest('.rc-mode-btn'); if (b) setRicambiMode(b.dataset.rcmode); });
+  // tab "Ricambi" nell'offcanvas Salvati: click item → rilancia la ricerca; ✕ → rimuove
+  document.getElementById('ricambiFavList')?.addEventListener('click', e => {
+    const item = e.target.closest('.salvato-item'); if (!item) return;
+    if (e.target.closest('.btn-rimuovi-salvato')) { oemFav = oemFav.filter(f => rcFavNorm(f.q) !== rcFavNorm(item.dataset.q)); rcPersistFav(); renderRicambiFavTab(); return; }
+    // riapre ESATTAMENTE la sua ricerca: modo → il SUO input, veicolo, poi cerca
+    selectPrimary('ricambi');
+    setRicambiMode(item.dataset.mode || 'oem');
+    setRcVeicolo(item.dataset.veicolo || 'auto');
+    rcActiveInput().value = item.dataset.q;
+    bootstrap.Offcanvas.getInstance(document.getElementById('offcanvasSaved'))?.hide();
+    doRicambi();
+  });
+  document.getElementById('rcVeicoloToggle')?.addEventListener('click', e => { const b = e.target.closest('.rc-mode-btn'); if (b) setRcVeicolo(b.dataset.rcveicolo); });
+  renderRcFontiLine();
+  renderRicambiFavTab();
+  const panel = document.getElementById('ricambiPanel');
+  panel?.addEventListener('click', e => {
+    const t = e.target;
+    const chip = t.closest('.facet-chip'); if (chip) { rcGroupDim = chip.dataset.dim; if (rcView !== 'grid') rcView = 'grid'; renderRicambiPanel(); return; }
+    // collapse gruppo: toggle diretto (niente re-render → no scroll jump); rcCollapsed persiste
+    const gh = t.closest('.rc-group-head'); if (gh) { const g = gh.closest('.rc-group'), k = g.dataset.gkey; g.classList.toggle('collapsed'); rcCollapsed.has(k) ? rcCollapsed.delete(k) : rcCollapsed.add(k); return; }
+    // accordion info: toggle diretto + lazy content; rcOpenDetails persiste al re-render
+    const info = t.closest('.rc-btn-info'); if (info) {
+      const k = info.dataset.key, det = info.closest('.rc-item').nextElementSibling;
+      if (det && det.classList.contains('rc-detail')) {
+        const opening = det.classList.contains('d-none');
+        det.classList.toggle('d-none');
+        if (opening) { const art = rcArt(k); if (art) det.innerHTML = rcDetailHTML(art); rcOpenDetails.add(k); } else rcOpenDetails.delete(k);
+      }
+      return;
+    }
+    if (t.closest('#rcBackGrid')) { rcView = 'grid'; renderRicambiPanel(); return; }
+    if (t.closest('#rcOpenCompare')) { rcView = 'compare'; renderRicambiPanel(); return; }
+    if (t.closest('#rcOpenSaved')) { rcView = 'salvati'; renderRicambiPanel(); return; }
+    if (t.closest('#rcCsv')) { exportCsvRicambi(); return; }
+    if (t.closest('#rcPdf')) { exportPdfRicambi(); return; }
+    if (t.closest('#rcSaveCode')) { if (rcData && rcData.oen) rcToggleFav(rcData.oen, rcData.mode, rcData.veicolo); return; }
+    const oe = t.closest('.rc-oe'); if (oe) { setRicambiMode('oem'); rcActiveInput().value = oe.dataset.oe; doRicambi(); return; }
+    const cmp = t.closest('.rc-btn-cmp'); if (cmp) { rcToggleCmp(cmp.dataset.key); return; }
+    const sv = t.closest('.rc-btn-save'); if (sv) { rcToggleSave(sv.dataset.key, sv.dataset.rm === '1'); return; }
+    const rm = t.closest('.rc-cmp-remove'); if (rm) { rcToggleCmp(rm.dataset.key); return; }
+  });
+  panel?.addEventListener('change', e => { if (e.target.id === 'rcSortSel') { rcSort = e.target.value; renderRicambiPanel(); } });
+  // immagine rotta → placeholder 🚗/🏍 (mirror del listener auto su resultsGrid)
+  panel?.addEventListener('error', e => {
+    const img = e.target;
+    if (!img || img.tagName !== 'IMG') return;
+    const wrap = img.closest('.rc-img-wrap');
+    if (wrap) { wrap.classList.add('rc-img-ph'); img.remove(); return; }
+    if (img.classList.contains('rc-sch-img')) { const ph = document.createElement('div'); ph.className = 'rc-sch-img rc-img-ph'; img.replaceWith(ph); }
+  }, true);
+})();
 
 // ─── Ricerca ──────────────────────────────────────────────────────────────────
 let searchGen = 0;   // review: token di generazione — solo la ricerca PIÙ RECENTE applica i risultati

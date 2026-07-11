@@ -33,3 +33,6 @@ worker/dist/
 data/saved-searches.json
 # Segnalazioni bug-report utenti (runtime, può contenere testo libero) — MAI versionare
 data/reports.jsonl
+
+# app log (runtime)
+data/logs/
