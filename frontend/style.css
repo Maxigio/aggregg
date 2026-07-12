@@ -274,7 +274,6 @@ body:not(.has-results) .search {
 .rc-var-marca { font-weight: 700; color: var(--text); }
 .rc-var-nota { flex: 1; color: var(--text-muted); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rc-var-prezzo { font-family: var(--num); font-weight: 800; color: var(--pos); }
-.rc-var-prompt { color: var(--text-muted); font-size: 0.9rem; padding: 6px 2px; }
 .rc-tipo-match { display: inline-block; font-size: 0.62rem; font-weight: 700; color: var(--pos); border: 1px solid var(--pos); border-radius: 3px; padding: 0 4px; margin-right: 6px; vertical-align: middle; }
 .rc-sch-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 12px; }
 .rc-sch-tit { font-weight: 700; font-size: 1.1rem; color: var(--text); }
@@ -972,6 +971,10 @@ body.help-off .help-dot { display: none; }
   .btn-cerca { padding: 12px; }
   #resultsSection { padding-bottom: 80px; }
   .row-act { width: 38px; height: 38px; }
+  /* Riga ricambi: la grid a colonne px (~440px min, inline style) non ci sta e .rc-list ha
+     overflow:hidden → azioni tagliate. Torna flex-wrap: foto+nome sulla 1ª riga, resto sotto. */
+  .rc-item { display: flex !important; flex-wrap: wrap; row-gap: 4px; }
+  .rc-item .rc-nome { flex: 1 1 calc(100% - 64px); min-width: 0; }
 }
 @media (max-width: 640px) {
   .tb-sep { display: none; }

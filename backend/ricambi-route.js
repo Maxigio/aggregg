@@ -83,7 +83,10 @@ function mount(app, deps = {}) {
     const url = String(req.query.url || '').trim();
     if (!/^https:\/\/www\.ebay\.\w+\/itm\/\d+/.test(url)) return res.status(400).json({ error: 'URL eBay item non valido' });
     const hit = ebayCache.get(url);
-    if (hit && Date.now() - hit.ts < RICAMBI_TTL) return res.json(hit.data);
+    if (hit && Date.now() - hit.ts < RICAMBI_TTL) {
+      ebayCache.delete(url); ebayCache.set(url, hit);   // LRU touch (come la cache ricerche)
+      return res.json(hit.data);
+    }
     try {
       const data = await fetchEbayItemDetails(url);
       ebayCache.set(url, { ts: Date.now(), data });
@@ -102,10 +105,16 @@ function mount(app, deps = {}) {
     const url = String(req.query.url || '').trim();
     if (!/^https?:\/\/(www\.)?auto-doc\.it\//i.test(url)) return res.status(400).json({ error: 'URL Autodoc non valido' });
     const hit = autodocCache.get(url);
-    if (hit && Date.now() - hit.ts < RICAMBI_TTL) return res.json(hit.data);
+    if (hit && Date.now() - hit.ts < (hit.ttl || RICAMBI_TTL)) {
+      autodocCache.delete(url); autodocCache.set(url, hit);   // LRU touch
+      return res.json(hit.data);
+    }
     try {
       const data = await fetchAutodocSpecs(url);
-      autodocCache.set(url, { ts: Date.now(), data });
+      // fetchAutodocSpecs non lancia mai (CF block/HTTP>=400 → shape vuoto): un vuoto è spesso un
+      // blocco transitorio → TTL breve (come RICAMBI_EMPTY_TTL), non congelarlo 1h.
+      const vuoto = !data || ((!data.datiTecnici || !Object.keys(data.datiTecnici).length) && !(data.compatibilita && data.compatibilita.length));
+      autodocCache.set(url, { ts: Date.now(), ttl: vuoto ? RICAMBI_EMPTY_TTL : RICAMBI_TTL, data });
       if (autodocCache.size > RICAMBI_CACHE_MAX) autodocCache.delete(autodocCache.keys().next().value);
       res.json(data);
     } catch (e) {

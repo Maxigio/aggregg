@@ -181,7 +181,8 @@ function baseTipo(nome, marca) {
   const n = String(nome || '').replace(/\s+/g, ' ').trim();
   if (!n) return 'Ricambio';
   const brand = String(marca || '').split(/\s+/)[0];
-  if (brand && brand.length > 1) { const i = n.indexOf(brand); if (i > 0) return n.slice(0, i).trim() || n; }
+  // match case-insensitive: l'alt del logo ("Febi Bilstein") può differire per casing dal nome ("FEBI BILSTEIN")
+  if (brand && brand.length > 1) { const i = n.toUpperCase().indexOf(brand.toUpperCase()); if (i > 0) return n.slice(0, i).trim() || n; }
   const m = n.match(/^(.*?)\s+[0-9][\w .-]*$/);   // fallback: taglia dal 1° token che inizia con cifra (codice)
   return (m && m[1]) ? m[1].trim() : n;
 }
@@ -211,7 +212,7 @@ function buildScheda(res, term) {
   else if (cItems.length) { fonte = 'cmsnl'; items = cItems; fits = res.cmsnl.meta?.veicoli || null; }
   else return null;
 
-  const byTipo = new Map();
+  const byTipo = new Map();   // chiave UPPERCASE (raggruppamento case-insensitive), display = 1ª occorrenza
   items.forEach((a, idx) => {
     const tipo = fonte === 'cmsnl' ? (res.cmsnl.meta?.tipoPezzo || a.nome || 'Ricambio') : baseTipo(a.nome, a.marca);
     const v = {
@@ -225,10 +226,11 @@ function buildScheda(res, term) {
       compatibilita: fonte === 'cmsnl' ? fits : null,   // cmsnl porta i fits embedded; autodoc → specs LAZY
       spedizione: a.spedizione || null, condizione: a.condizione || null,
     };
-    if (!byTipo.has(tipo)) byTipo.set(tipo, []);
-    byTipo.get(tipo).push(v);
+    const k = tipo.toUpperCase();
+    if (!byTipo.has(k)) byTipo.set(k, { tipo, articoli: [] });
+    byTipo.get(k).articoli.push(v);
   });
-  const tipi = [...byTipo.entries()].map(([tipo, articoli]) => ({ tipo, articoli }))
+  const tipi = [...byTipo.values()]
     .sort((x, y) => y.articoli.length - x.articoli.length);   // dominante = più varianti
   const multiTipo = tipi.length > 1;
   return {

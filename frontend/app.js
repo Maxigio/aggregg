@@ -772,6 +772,7 @@ let rcOpenDetails = new Set();// chiavi articolo con accordion info aperto (pers
 let confrontoRicambi = [];
 let salvatiRicambi = rcLoadSalvati();
 let oemFav = rcLoadFav();   // codici OE/OEM/OEN preferiti
+let rcGen = 0;               // generation token ricerche ricambi (mirror searchGen auto: la risposta vecchia non sovrascrive la nuova)
 
 function rcLoadSalvati() { try { const a = JSON.parse(localStorage.getItem(RC_SALVATI_KEY)); return Array.isArray(a) ? a : []; } catch { return []; } }
 function rcPersistSalvati() { try { localStorage.setItem(RC_SALVATI_KEY, JSON.stringify(salvatiRicambi.slice(0, RC_SALVATI_CAP))); } catch {} }
@@ -901,9 +902,11 @@ async function doRicambi() {
   const panel = document.getElementById('ricambiPanel');
   panel.classList.remove('d-none');
   panel.innerHTML = '<div class="rc-loading-box"><div class="spinner-border text-primary" role="status" style="width:1.1rem;height:1.1rem;border-width:2px"></div><span>Cerco il ricambio su più fonti…</span></div>';
+  const myGen = ++rcGen;   // due ricerche in volo → vince l'ultima lanciata, la vecchia si scarta
   try {
     const res = await fetch(`/api/ricambi?q=${encodeURIComponent(q)}&mode=${ricambiMode}&veicolo=${rcVeicolo}`);
     const d = await res.json();
+    if (myGen !== rcGen) return;   // ricerca superata da una più recente
     if (!res.ok) { panel.innerHTML = `<div class="rc-wrap"><div class="rc-empty">${escapeHtml(d.error || 'Errore durante il lookup.')}</div></div>`; return; }
     // id stabile per articolo (gli item web possono non avere url/articleId → il nome collide) → indice per unicità
     (d.articoli || []).forEach((a, i) => { if (!a._rk) a._rk = `${a.fonte}:${a.url || a.articleId || (a.nome + '#' + i)}`; });
@@ -915,6 +918,7 @@ async function doRicambi() {
     renderRicambiPanel();
     if (cat && cat.defaultArticleId) rcFetchVariantSpecs(rcSelectedVariant());
   } catch (_) {
+    if (myGen !== rcGen) return;
     panel.innerHTML = '<div class="rc-wrap"><div class="rc-empty">Servizio ricambi non raggiungibile.</div></div>';
   }
 }
@@ -1112,7 +1116,9 @@ function rcVariantDetailHTML(v, s) {
     `<div class="rc-sch-priceline"><span class="rc-prezzo">${v.prezzo != null ? rcEur(v.prezzo) : 'n/d'}</span>${v.prezzoListino && v.sconto ? `<span class="rc-listino">${rcEur(v.prezzoListino)}</span><span class="rc-sconto">-${escapeHtml(String(v.sconto))}%</span>` : ''}</div>` +
     `${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">su ${escapeHtml(RC_FONTE[v.fonte] || v.fonte)} ↗</a>` : ''}</div>`;
   const lazy = rcVariantSpecs[v.articleId];
-  const loading = v.fonte === 'autodoc' && (!lazy || lazy.loading);
+  // loading SOLO se il fetch lazy può davvero partire (stessa guardia di rcFetchVariantSpecs):
+  // variante senza url prodotto → nessun fetch → niente spinner eterno
+  const loading = v.fonte === 'autodoc' && !!rcSafeUrl(v.url) && (!lazy || lazy.loading);
   const datiTecnici = { ...(s.datiTecniciEbay || {}), ...(v.datiTecnici || {}), ...((lazy && !lazy.loading && lazy.datiTecnici) || {}) };
   const compat = v.compatibilita || (lazy && !lazy.loading && lazy.compatibilita) || null;
   const dtBlock = rcDtGridHTML(datiTecnici);
@@ -1174,6 +1180,14 @@ function renderRicambiPanel() {
   const panel = document.getElementById('ricambiPanel');
   const d = rcData || { articoli: [], sources: {} };
   panel.dataset.veicolo = d.veicolo || rcVeicolo;   // pilota il placeholder immagine 🚗/🏍
+  // i <details> aperti (dropdown varianti / Colonne) sopravvivono all'innerHTML replace —
+  // altrimenti il re-render asincrono delle specs li richiude sotto il cursore
+  const ddOpen = !!panel.querySelector('.rc-var-dd[open]');
+  const colsOpen = !!panel.querySelector('.tb-cols[open]');
+  const restoreOpen = () => {
+    if (ddOpen) panel.querySelector('.rc-var-dd')?.setAttribute('open', '');
+    if (colsOpen) panel.querySelector('.tb-cols')?.setAttribute('open', '');
+  };
   const rawArts = d.articoli || [];
   // SOLO fonti in errore (diagnostica) — le pill "ok" ridondano col group-by Fonte, via.
   const badSrc = Object.entries(d.sources || {}).filter(([, s]) => ['blocked', 'error', 'timeout'].includes(s.status));
@@ -1190,6 +1204,7 @@ function renderRicambiPanel() {
     const msg = d.scheda ? 'Nessun annuncio sul mercato per questo ricambio (vedi prezzo nuovo nella scheda).'
       : allEmpty ? 'Nessun ricambio trovato. Verifica il codice/nome.' : 'Fonti non disponibili al momento. Riprova tra poco.';
     panel.innerHTML = `${head}${rcToolbarHTML()}${bar}${cmp}<div class="rc-wrap"><div class="rc-empty">${msg}</div></div>`;
+    restoreOpen();
     return;
   }
 
@@ -1213,6 +1228,7 @@ function renderRicambiPanel() {
   }
   // head + toolbar a larghezza-container (come auto); SOLO la lista in .rc-wrap (full-bleed)
   panel.innerHTML = `${head}${rcToolbarHTML()}${bar}${cmp}<div class="rc-wrap">${rcGridHeadHTML()}${body}</div>`;
+  restoreOpen();
 }
 
 // Toolbar rispecchiata su quella auto/moto (.results-toolbar a sezioni .tb-group / .tb-sep).
@@ -1373,16 +1389,20 @@ function setRcVeicolo(v) {
     if (imgWrap) { const im = imgWrap.querySelector('img'); if (im && im.src) openLightbox([{ full: im.src }]); return; }
     const detGal = t.closest('.det-gallery'); if (detGal && t.tagName === 'IMG') { openLightbox([...detGal.querySelectorAll('img')].map(i => ({ full: i.src }))); return; }
     const cp = t.closest('.rc-copy'); if (cp) { e.preventDefault(); rcCopy(cp.dataset.copy, cp); return; }   // preventDefault: non togglare il <details> quando il copy-button è nel summary
-    // selettore varianti v7: scegli tipo → scegli variante → specs lazy
+    // selettore varianti v7: scegli tipo → scegli variante → specs lazy.
+    // La selezione chiude il dropdown: tolgo open dal DOM vivo PRIMA del re-render, così
+    // il capture in renderRicambiPanel non lo ripristina (persiste solo per i re-render passivi).
     const tc = t.closest('.rc-tipo-chip'); if (tc) {
       const tObj = (rcCatalogo()?.tipi || []).find(x => x.tipo === tc.dataset.tipo);
       const auto = tObj && tObj.articoli.length === 1 ? tObj.articoli[0].articleId : null;   // tipo mono-variante → auto-select (niente vicolo cieco)
       rcVariantSel = { tipo: tc.dataset.tipo, articleId: auto };
+      panel.querySelector('.rc-var-dd')?.removeAttribute('open');
       renderRicambiPanel(); if (auto) rcFetchVariantSpecs(rcSelectedVariant()); return;
     }
     const vr = t.closest('.rc-var-row'); if (vr) {
       const id = vr.dataset.artid;
       rcVariantSel.articleId = rcVariantSel.articleId === id ? null : id;   // toggle-off al re-click
+      panel.querySelector('.rc-var-dd')?.removeAttribute('open');
       renderRicambiPanel(); if (rcVariantSel.articleId) rcFetchVariantSpecs(rcSelectedVariant()); return;
     }
     const chip = t.closest('.facet-chip'); if (chip) { rcGroupDim = chip.dataset.dim; renderRicambiPanel(); return; }

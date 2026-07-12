@@ -65,6 +65,17 @@ test('scheda AUTO: tipo singolo → default = variante PIÙ RECENSITA (non min-p
   assert.strictEqual(r.scheda.catalogo.defaultArticleId, 'S2');   // più recensita, non il min-prezzo S3 (€20)
 });
 
+test('scheda AUTO: casing marca/nome divergente → stesso tipo, niente gruppi fasulli', async () => {
+  const mixed = async (oen) => ({ oen, articoli: [
+    { fonte: 'autodoc', nome: 'Bloccasterzo TOPRAN 1K0', marca: 'TOPRAN', prezzo: 40, articleId: 'M1', recensioni: 1 },
+    { fonte: 'autodoc', nome: 'BLOCCASTERZO Febi Bilstein 1K0', marca: 'FEBI BILSTEIN', prezzo: 30, articleId: 'M2', recensioni: 3 },
+  ], count: 2 });
+  const r = await searchRicambi('1K0905851B', stubs({ autodoc: mixed }));
+  assert.strictEqual(r.scheda.catalogo.multiTipo, false);          // un solo tipo nonostante il casing
+  assert.strictEqual(r.scheda.catalogo.tipi[0].articoli.length, 2);
+  assert.strictEqual(r.scheda.catalogo.defaultArticleId, 'M2');    // più recensita
+});
+
 test('OEM moto: CMSNL+Subito, Autodoc mai; veicoli dai fits CMSNL', async () => {
   let autodocCalled = false;
   const spyA = async () => { autodocCalled = true; return { articoli: [] }; };

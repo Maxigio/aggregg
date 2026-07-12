@@ -107,8 +107,10 @@ async function lookupOem(oenRaw) {
         // URL PRODOTTO: il link del nome, se valido; altrimenti il primo link col pattern product-page
         // /{brand-slug}/{id-numerico}. Scarta i badge servizio (/services/, consegna, checkout) che
         // altrimenti mandavano fetchAutodocSpecs su una pagina sbagliata → compatibilità persa.
+        // Esclusione ancorata al SEGMENTO path (non substring: 'cart' bocciava /cartechnic/123, brand reale);
+        // ammesso anche il fragment dopo l'id (/ridex/123#reviews).
         const nameHref = nameEl && nameEl.getAttribute('href');
-        const isProd = h => /\/[a-z0-9-]+\/\d+(?:$|[/?])/i.test(h) && !/\/services\/|consegna|checkout|cart/i.test(h);
+        const isProd = h => /\/[a-z0-9-]+\/\d+(?:$|[/?#])/i.test(h) && !/(?:^|\/)(?:services|consegna|checkout|cart)(?:\/|$|\?)/i.test(h);
         const links = [...it.querySelectorAll('a[href]')].map(a => a.getAttribute('href')).filter(Boolean);
         const href = (nameHref && isProd(nameHref)) ? nameHref : (links.find(isProd) || null);
         const url = href ? (href.startsWith('http') ? href : 'https://www.auto-doc.it' + href) : null;

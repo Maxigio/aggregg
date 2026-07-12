@@ -12,6 +12,7 @@ const path = require('node:path');
 const { Anthropic } = require('@anthropic-ai/sdk');
 const { renderReportPdf, reportStats } = require('../report-pdf');
 const { searchRicambi } = require('../ricambi-core');   // multi-fonte: Autodoc + Web + Subito
+const { fetchAutodocSpecs } = require('../oem-lookup');  // compat veicoli (l'envelope v7 è lazy)
 const { renderRicambiPdf, ricambiStats } = require('../report-pdf-ricambi');
 const waClient = require('./client');
 
@@ -114,6 +115,18 @@ async function runOemLookup(input, ctx) {
   if (!articoli.length) {
     const srcs = Object.entries(r.sources || {}).map(([k, s]) => `${k}:${s.status}`).join(' ');
     return `Nessun articolo per il codice ${r.oen} (fonti — ${srcs}). Chiedi di verificare il codice oppure prova a cercare il nome del pezzo.`;
+  }
+  // veicoli compatibili: l'envelope v7 li tiene lazy (Autodoc) → 1 nav sulla variante default,
+  // SOLO se il tipo è univoco (multi-tipo = compat ambigua) e c'è l'url prodotto. Best-effort.
+  if (!r.veicoli && r.scheda?.catalogo?.defaultArticleId) {
+    const cat = r.scheda.catalogo;
+    const v = cat.tipi.flatMap(t => t.articoli).find(a => a.articleId === cat.defaultArticleId);
+    if (v && v.fonte === 'autodoc' && v.url) {
+      try {
+        const s = await fetchAutodocSpecs(v.url);
+        if (s?.compatibilita?.length) r.veicoli = s.compatibilita.join(', ');
+      } catch (e) { console.error('[wa] specs veicoli KO:', e.message); }
+    }
   }
   const stats = ricambiStats(articoli);
   const price = p => (typeof p === 'number' ? '€ ' + p.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
