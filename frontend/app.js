@@ -761,9 +761,10 @@ let rcData = null;            // ultimo envelope {articoli, sources, tipoPezzo, 
 let ricambiMode = 'oem';
 let rcVeicolo = 'auto';       // 'auto' | 'moto' — un ricambio è per auto O per moto
 let rcGroupDim = '';
-let rcView = 'grid';         // 'grid' | 'salvati'
+let rcView = 'grid';         // 'grid' (i salvati vivono nell'offcanvas, come auto)
 let rcCompareOpen = false;   // confronto = sezione separata (come auto), la lista resta navigabile
-let rcSort = 'prezzo-asc';    // prezzo-asc | prezzo-desc | stelle | sconto
+let rcSortState = { key: 'prezzo', dir: 'asc' };   // ordinamento via header colonne (mirror auto)
+let rcVisibleCols = [];      // colonne opzionali mostrate (marca/venditore/valutazione)
 let rcCollapsed = new Set();  // chiavi-gruppo collassate (persistono al re-render, meglio di auto)
 let rcOpenDetails = new Set();// chiavi articolo con accordion info aperto (persistono al re-render)
 let confrontoRicambi = [];
@@ -798,23 +799,23 @@ function rcToggleFav(q, mode, veicolo) {
   if (rcData) renderRicambiPanel();   // rinfresca lo stato del bottone "Salva codice"
 }
 const RC_MODE_LABEL = { oem: 'OEM', prodotto: 'Prodotto', nome: 'Nome' };
+// Tab "Ricambi" dell'offcanvas: DUE sezioni come auto — Articoli salvati (♡) + Ricerche salvate (codice/OEM/nome).
 function renderRicambiFavTab() {
-  const t = document.getElementById('tabRicambiCount'); if (t) t.textContent = oemFav.length;
+  const t = document.getElementById('tabRicambiCount'); if (t) t.textContent = salvatiRicambi.length + oemFav.length;
   const box = document.getElementById('ricambiFavList'); if (!box) return;
-  if (!oemFav.length) { box.innerHTML = '<p class="text-muted text-center py-4">Nessun codice salvato. Cerca un ricambio e usa "Salva codice" nella barra.</p>'; return; }
-  box.innerHTML = oemFav.map(f => `<div class="salvato-item" data-q="${escapeHtml(f.q)}" data-mode="${escapeHtml(f.mode || 'oem')}" data-veicolo="${escapeHtml(f.veicolo || 'auto')}">
-      <div class="salvato-info">
-        <div class="salvato-titolo">${escapeHtml(f.q)}</div>
-        <div class="salvato-dettagli">${RC_MODE_LABEL[f.mode] || 'OEM'} · ${f.veicolo === 'moto' ? 'Moto' : 'Auto'} · clicca per cercare</div>
-      </div>
-      <div class="salvato-actions"><button class="btn-rimuovi-salvato" title="Rimuovi">${icon('x')}</button></div>
-    </div>`).join('');
+  const artItems = salvatiRicambi.length ? salvatiRicambi.map(a => {
+    const u = rcSafeUrl(a.url);
+    const titolo = u ? `<a class="salvato-titolo" href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.nome)}</a>` : `<div class="salvato-titolo">${escapeHtml(a.nome)}</div>`;
+    return `<div class="salvato-item" data-rk="${escapeHtml(rcKey(a))}"><div class="salvato-info">${titolo}<div class="salvato-dettagli">${rcPriceText(a)} · ${escapeHtml(RC_FONTE[a.fonte] || a.fonte)}${a.marca ? ' · ' + escapeHtml(a.marca) : ''}</div></div><div class="salvato-actions"><button class="btn-rimuovi-art" data-rk="${escapeHtml(rcKey(a))}" title="Rimuovi">${icon('x')}</button></div></div>`;
+  }).join('') : '<p class="text-muted small px-1 mb-2">Nessun articolo salvato. Usa il segnalibro sulle righe.</p>';
+  const favItems = oemFav.length ? oemFav.map(f => `<div class="salvato-item" data-q="${escapeHtml(f.q)}" data-mode="${escapeHtml(f.mode || 'oem')}" data-veicolo="${escapeHtml(f.veicolo || 'auto')}"><div class="salvato-info"><div class="salvato-titolo">${escapeHtml(f.q)}</div><div class="salvato-dettagli">${RC_MODE_LABEL[f.mode] || 'OEM'} · ${f.veicolo === 'moto' ? 'Moto' : 'Auto'} · clicca per cercare</div></div><div class="salvato-actions"><button class="btn-rimuovi-salvato" title="Rimuovi">${icon('x')}</button></div></div>`).join('') : '<p class="text-muted small px-1 mb-0">Nessuna ricerca salvata. Usa "Salva ricerca" in toolbar.</p>';
+  box.innerHTML = `<div class="rc-fav-sec"><div class="rc-fav-hd">Articoli salvati</div>${artItems}</div><div class="rc-fav-sec"><div class="rc-fav-hd">Ricerche salvate</div>${favItems}</div>`;
 }
 const rcKey = a => a._rk || `${a.fonte}:${a.url || a.articleId || a.nome}`;   // _rk assegnato in doRicambi (evita collisioni nome)
 const rcHas = (arr, a) => arr.some(x => rcKey(x) === rcKey(a));
 const rcEur = n => (typeof n === 'number' ? '€ ' + n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null);
 const rcSafeUrl = u => (/^https?:\/\//i.test(u || '') ? u : null);   // solo http/https: blocca javascript:/data: (XSS)
-function rcCurrentList() { return rcView === 'salvati' ? salvatiRicambi : rcVisibleArts(); }
+function rcCurrentList() { return rcVisibleArts(); }
 function rcPriceText(a) { const p = rcEur(a.prezzo); return p || (a.fonte === 'subito' ? 'trattabile' : 'prezzo sul sito'); }
 function rcArt(key) { return (rcData && rcData.articoli || []).find(a => rcKey(a) === key) || salvatiRicambi.find(a => rcKey(a) === key) || confrontoRicambi.find(a => rcKey(a) === key); }
 
@@ -822,14 +823,40 @@ function rcArt(key) { return (rcData && rcData.articoli || []).find(a => rcKey(a
 function rcVisibleArts() {
   return rcSortArts((rcData && rcData.articoli) || []);
 }
+// Colonne della lista ricambi (mirror COLS auto): base sempre, opzionali via dropdown "Colonne".
+const RC_COLS = [
+  { key: 'foto',        w: '52px',          base: true },
+  { key: 'nome',        w: 'minmax(0,1fr)', base: true },
+  { key: 'marca',       w: '120px', sort: 'marca',  label: 'Marca' },
+  { key: 'venditore',   w: '150px',                 label: 'Venditore' },
+  { key: 'valutazione', w: '78px',  sort: 'stelle', label: 'Voto' },
+  { key: 'prezzo',      w: '112px', sort: 'prezzo', label: 'Prezzo', base: true },
+  { key: 'fonte',       w: '96px',          base: true },
+  { key: 'azioni',      w: '108px',         base: true },
+];
+const RC_OPTIONAL_COLS = ['marca', 'venditore', 'valutazione'];
+function rcActiveCols() { return RC_COLS.filter(c => c.base || rcVisibleCols.includes(c.key)); }
+function rcGridTemplate() { return rcActiveCols().map(c => c.w).join(' '); }
+function rcGridHeadHTML() {   // header colonne ordinabili (mirror gridHeadHTML auto)
+  const caret = key => rcSortState.key === key ? `<span class="sort-caret">${rcSortState.dir === 'asc' ? '↑' : '↓'}</span>` : '';
+  const cells = rcActiveCols().map(c => {
+    if (c.key === 'foto') return '<span class="gh">Foto</span>';
+    if (c.key === 'nome') return '<span class="gh">Ricambio</span>';
+    if (c.key === 'fonte') return '<span class="gh">Fonte</span>';
+    if (c.key === 'azioni') return '<span class="gh" style="text-align:right">Azioni</span>';
+    if (c.sort) return `<span class="gh"><button type="button" class="gh-sort${rcSortState.key === c.sort ? ' active' : ''}" data-rckey="${c.sort}">${c.label} ${caret(c.sort)}</button></span>`;
+    return `<span class="gh">${c.label}</span>`;
+  }).join('');
+  return `<div class="grid-head rc-grid-head" style="grid-template-columns:${rcGridTemplate()}">${cells}</div>`;
+}
 function rcSortArts(arts) {
-  const p = a => (typeof a.prezzo === 'number' ? a.prezzo : null);
-  const byPrice = (a, b, dir) => { const pa = p(a), pb = p(b); if (pa == null && pb == null) return 0; if (pa == null) return 1; if (pb == null) return -1; return dir * (pa - pb); };
+  const dir = rcSortState.dir === 'desc' ? -1 : 1;
+  const cmpNum = (a, b, f) => { const va = f(a), vb = f(b); if (va == null && vb == null) return 0; if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb); };
+  const cmpStr = (a, b, f) => { const va = f(a), vb = f(b); if (!va && !vb) return 0; if (!va) return 1; if (!vb) return -1; return dir * va.localeCompare(vb); };
   const arr = arts.slice();
-  if (rcSort === 'prezzo-desc') arr.sort((a, b) => byPrice(a, b, -1));
-  else if (rcSort === 'stelle') arr.sort((a, b) => (Number(b.stelle) || 0) - (Number(a.stelle) || 0));
-  else if (rcSort === 'sconto') arr.sort((a, b) => (Number(b.sconto) || 0) - (Number(a.sconto) || 0));
-  else arr.sort((a, b) => byPrice(a, b, 1));   // prezzo-asc default
+  if (rcSortState.key === 'stelle') arr.sort((a, b) => cmpNum(a, b, x => Number(x.stelle) || null));
+  else if (rcSortState.key === 'marca') arr.sort((a, b) => cmpStr(a, b, x => x.marca || ''));
+  else arr.sort((a, b) => cmpNum(a, b, x => (typeof x.prezzo === 'number' ? x.prezzo : null)));   // prezzo default
   return arr;
 }
 const rcMedian = nums => { if (!nums.length) return null; const s = [...nums].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
@@ -842,6 +869,21 @@ function rcBestKey(arts) {   // rcKey del più economico visibile (badge "più e
   let best = null;
   for (const a of arts) if (typeof a.prezzo === 'number' && (!best || a.prezzo < best.prezzo)) best = a;
   return best ? rcKey(best) : null;
+}
+// P4: click su min/max in toolbar → scroll + flash sull'annuncio di riferimento (apre il gruppo se collassato)
+function rcJumpToStat(which) {
+  const arts = rcVisibleArts().filter(a => typeof a.prezzo === 'number');
+  if (!arts.length) return;
+  const target = arts.reduce((m, a) => (which === 'max' ? (a.prezzo > m.prezzo ? a : m) : (a.prezzo < m.prezzo ? a : m)));
+  const key = rcKey(target);
+  const panel = document.getElementById('ricambiPanel');
+  const sel = `.rc-item[data-rk="${CSS.escape(key)}"]`;
+  let el = panel.querySelector(sel);
+  const group = el && el.closest('.rc-group');
+  if (group && group.classList.contains('collapsed')) { group.classList.remove('collapsed'); rcCollapsed.delete(group.dataset.gkey); el = panel.querySelector(sel); }
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('rc-flash'); setTimeout(() => el && el.classList.remove('rc-flash'), 1500);
 }
 
 async function doRicambi() {
@@ -883,27 +925,31 @@ function rcGroups(arts, dim) {
 function rcRowHTML(a, bestKey) {
   const key = rcKey(a);
   const isBest = bestKey && key === bestKey;
-  const bestBadge = isBest ? '<span class="rc-best-badge">min</span>' : '';
-  const img = a.immagine ? `<span class="rc-img-wrap"><img class="rc-img" src="${escapeHtml(a.immagine)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>` : '<span class="rc-img-wrap rc-img-ph"></span>';
-  // nome cliccabile → apre l'annuncio DIRETTAMENTE (mirror .row-titolo→openAd della ricerca auto)
   const rowUrl = rcSafeUrl(a.url);
-  const nomeTxt = `${a.marca ? '<b>' + escapeHtml(a.marca) + '</b> ' : ''}${escapeHtml(a.nome)}`;
-  const nome = bestBadge + (rowUrl
-    ? `<a class="rc-nome-link" href="${escapeHtml(rowUrl)}" target="_blank" rel="noopener noreferrer" title="Apri annuncio">${nomeTxt}</a>`
-    : nomeTxt);
-  const metaBits = [a.venditore, a.provincia, RC_FONTE[a.fonte] || a.fonte].filter(Boolean).map(escapeHtml).join(' · ');
-  const prezzo = rcEur(a.prezzo);
-  const priceBlock = prezzo ? `<span class="rc-prezzo">${prezzo}</span>` : `<span class="rc-prezzo rc-noprice">${rcPriceText(a)}</span>`;
   const inCmp = rcHas(confrontoRicambi, a), inSave = rcHas(salvatiRicambi, a);
   const openDet = rcOpenDetails.has(key);
-  const row = `<div class="rc-item${isBest ? ' rc-best' : ''}"${inCmp ? ' data-sel="1"' : ''}>${img}
-    <div class="rc-body"><div class="rc-nome">${nome}</div><div class="rc-meta">${metaBits}</div></div>
-    <div class="rc-price-cell">${priceBlock}</div>
-    <div class="rc-rowact">
-      <button type="button" class="rc-act rc-btn-info" data-key="${escapeHtml(key)}" title="Dettagli e foto">${icon('info')}</button>
-      <button type="button" class="rc-act rc-btn-cmp${inCmp ? ' on' : ''}" data-key="${escapeHtml(key)}" title="Aggiungi al confronto">${icon(inCmp ? 'square-check' : 'square')}</button>
-      <button type="button" class="rc-act rc-btn-save${inSave ? ' on' : ''}" data-key="${escapeHtml(key)}" title="${inSave ? 'Rimuovi dai salvati' : 'Salva ricambio'}">${icon(inSave ? 'bookmark-filled' : 'bookmark')}</button>
-    </div></div>`;
+  const cell = c => {
+    switch (c.key) {
+      case 'foto': return a.immagine ? `<span class="rc-img-wrap"><img class="rc-img" src="${escapeHtml(a.immagine)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>` : '<span class="rc-img-wrap rc-img-ph"></span>';
+      case 'nome': {
+        const nomeTxt = escapeHtml(a.nome);
+        const nome = rowUrl ? `<a class="rc-nome-link" href="${escapeHtml(rowUrl)}" target="_blank" rel="noopener noreferrer" title="Apri annuncio">${nomeTxt}</a>` : nomeTxt;
+        return `<div class="rc-nome">${isBest ? '<span class="rc-best-badge">min</span>' : ''}${nome}</div>`;
+      }
+      case 'marca': return `<span class="rc-cell-txt">${a.marca ? escapeHtml(a.marca) : '—'}</span>`;
+      case 'venditore': return `<span class="rc-cell-txt">${escapeHtml(a.venditore || (a.fonte === 'autodoc' ? 'Autodoc' : '—'))}</span>`;
+      case 'valutazione': return `<span class="rc-cell-txt">${a.stelle ? '★ ' + escapeHtml(String(a.stelle)) : '—'}</span>`;
+      case 'prezzo': { const prezzo = rcEur(a.prezzo); return prezzo ? `<span class="rc-prezzo">${prezzo}</span>` : `<span class="rc-prezzo rc-noprice">${rcPriceText(a)}</span>`; }
+      case 'fonte': return `<span class="rc-cell-txt">${escapeHtml(RC_FONTE[a.fonte] || a.fonte)}</span>`;
+      case 'azioni': return `<div class="rc-rowact">
+        <button type="button" class="rc-act rc-btn-info" data-key="${escapeHtml(key)}" title="Dettagli e foto">${icon('info')}</button>
+        <button type="button" class="rc-act rc-btn-cmp${inCmp ? ' on' : ''}" data-key="${escapeHtml(key)}" title="Aggiungi al confronto">${icon(inCmp ? 'square-check' : 'square')}</button>
+        <button type="button" class="rc-act rc-btn-save${inSave ? ' on' : ''}" data-key="${escapeHtml(key)}" title="${inSave ? 'Rimuovi dai salvati' : 'Salva ricambio'}">${icon(inSave ? 'bookmark-filled' : 'bookmark')}</button></div>`;
+      default: return '';
+    }
+  };
+  const cells = rcActiveCols().map(cell).join('');
+  const row = `<div class="rc-item${isBest ? ' rc-best' : ''}"${inCmp ? ' data-sel="1"' : ''} data-rk="${escapeHtml(key)}" style="grid-template-columns:${rcGridTemplate()}">${cells}</div>`;
   const detail = `<div class="rc-detail${openDet ? '' : ' d-none'}" data-key="${escapeHtml(key)}">${openDet ? rcDetailHTML(a) : ''}</div>`;
   return row + detail;
 }
@@ -1079,17 +1125,15 @@ function renderRicambiPanel() {
     ? `<div class="rc-srcline">${badSrc.map(([k, s]) => `<span class="rc-src rc-src-bad"${s.reason ? ` title="${escapeHtml(s.reason)}"` : ''}>${escapeHtml(RC_FONTE[k] || k)}: ${s.status === 'blocked' ? 'bloccato' : escapeHtml(s.status)}</span>`).join('')}</div>`
     : '';
   const head = `<div class="rc-head">${rcSchedaHTML(d)}${statusLine}</div>`;
-  // confronto = sezione separata (come auto): la lista sotto resta sempre navigabile
+  // barra confronto (mirror auto: "Selezionati N · Apri confronto · Svuota") + sezione matrice separata
+  const bar = confrontoRicambi.length ? rcCompareBarHTML() : '';
   const cmp = (rcCompareOpen && confrontoRicambi.length) ? rcCompareSection() : '';
-
-  // vista salvati — head+toolbar a larghezza-container, corpo in .rc-wrap (come auto)
-  if (rcView === 'salvati') { panel.innerHTML = `<div class="rc-head"><div class="rc-tit">Ricambi salvati</div></div>${rcToolbarHTML()}${cmp}<div class="rc-wrap">${rcSalvatiHTML()}</div>`; return; }
 
   if (!rawArts.length) {
     const allEmpty = Object.values(d.sources || {}).length && Object.values(d.sources).every(s => s.status === 'empty');
     const msg = d.scheda ? 'Nessun annuncio sul mercato per questo ricambio (vedi prezzo nuovo nella scheda).'
       : allEmpty ? 'Nessun ricambio trovato. Verifica il codice/nome.' : 'Fonti non disponibili al momento. Riprova tra poco.';
-    panel.innerHTML = `${head}${rcToolbarHTML()}${cmp}<div class="rc-wrap"><div class="rc-empty">${msg}</div></div>`;
+    panel.innerHTML = `${head}${rcToolbarHTML()}${bar}${cmp}<div class="rc-wrap"><div class="rc-empty">${msg}</div></div>`;
     return;
   }
 
@@ -1112,53 +1156,52 @@ function renderRicambiPanel() {
     body = `<div class="rc-list">${arts.map(a => rcRowHTML(a, bestKey)).join('')}</div>`;
   }
   // head + toolbar a larghezza-container (come auto); SOLO la lista in .rc-wrap (full-bleed)
-  panel.innerHTML = `${head}${rcToolbarHTML()}${cmp}<div class="rc-wrap">${body}</div>`;
+  panel.innerHTML = `${head}${rcToolbarHTML()}${bar}${cmp}<div class="rc-wrap">${rcGridHeadHTML()}${body}</div>`;
 }
 
 // Toolbar rispecchiata su quella auto/moto (.results-toolbar a sezioni .tb-group / .tb-sep).
 function rcToolbarHTML() {
-  const inGrid = rcView === 'grid';
-  const list = rcCurrentList();
-  const stats = inGrid ? rcStats(list) : null;
-  const nCmp = confrontoRicambi.length, nSave = salvatiRicambi.length;
-  // sez.1 — conteggio + statistiche prezzo
+  const list = rcVisibleArts();
+  const stats = rcStats(list);
+  // sez.1 — conteggio + statistiche prezzo (min/max cliccabili → annuncio di riferimento)
+  const statJump = (which, val) => `<button type="button" class="tb-stat rc-stat-jump" data-which="${which}" title="Vai all'annuncio ${which === 'min' ? 'più economico' : 'più caro'}"><span class="tb-stat-label">${which}</span><b>${rcEur(val)}</b></button>`;
   const statsHTML = `<span class="tb-count">${list.length} ricambi</span>` + (stats
-    ? `<span class="tb-stat"><span class="tb-stat-label">min</span><b>${rcEur(stats.min)}</b></span>
-       <span class="tb-stat"><span class="tb-stat-label">med</span><b>${rcEur(stats.mediana)}</b></span>
-       <span class="tb-stat"><span class="tb-stat-label">max</span><b>${rcEur(stats.max)}</b></span>` : '');
+    ? `${statJump('min', stats.min)}<span class="tb-stat"><span class="tb-stat-label">med</span><b>${rcEur(stats.mediana)}</b></span>${statJump('max', stats.max)}` : '');
   // sez.2 — raggruppa (facet-chips, "Fonte" è QUI)
   const facets = RC_GROUP_DIMS.map(([dim, lab]) => `<button type="button" class="facet-chip${rcGroupDim === dim ? ' active' : ''}" data-dim="${dim}">${escapeHtml(lab)}</button>`).join('');
-  // sez.3 — ordina (solo griglia)
-  const opt = (v, lab) => `<option value="${v}"${rcSort === v ? ' selected' : ''}>${lab}</option>`;
-  const sortSel = inGrid ? `<select id="rcSortSel" class="tb-btn" aria-label="Ordina">${opt('prezzo-asc', 'Prezzo ↑')}${opt('prezzo-desc', 'Prezzo ↓')}${opt('stelle', 'Valutazione')}${opt('sconto', 'Sconto %')}</select>` : '';
-  // "Salva codice" — mirror di "Salva ricerca" auto: mette il termine corrente nella tab Ricambi dei Salvati
+  // sez.3 — colonne (dropdown come auto) + salva ricerca + export
+  const colsMenu = RC_OPTIONAL_COLS.map(k => { const c = RC_COLS.find(x => x.key === k); return `<label><input type="checkbox" class="rc-col-toggle" value="${k}"${rcVisibleCols.includes(k) ? ' checked' : ''}> ${escapeHtml(c.label || k)}</label>`; }).join('');
+  const colsDropdown = `<details class="tb-cols"><summary class="tb-btn">Colonne ▾</summary><div class="tb-cols-menu">${colsMenu}</div></details>`;
   const term = rcData && rcData.oen;
   const saved = term && rcFavHas(term);
-  const saveBtn = (inGrid && term) ? `<button type="button" class="tb-btn${saved ? ' active' : ''}" id="rcSaveCode" title="Salva il codice nei Salvati → Ricambi">${saved ? '✓ Codice salvato' : 'Salva codice'}</button>` : '';
+  const saveBtn = term ? `<button type="button" class="tb-btn${saved ? ' active' : ''}" id="rcSaveCode" title="Salva la ricerca nei Salvati → Ricambi">${saved ? '✓ Ricerca salvata' : 'Salva ricerca'}</button>` : '';
   return `<div class="results-toolbar rc-tbar">
     <div class="tb-group">${statsHTML}</div>
     <span class="tb-sep"></span>
     <div class="tb-group"><span class="tb-label">Raggruppa</span><div class="facet-chips">${facets}</div></div>
     <span class="tb-sep"></span>
     <div class="tb-group">
-      ${sortSel}
+      ${colsDropdown}
       ${saveBtn}
-      ${rcView !== 'grid' ? '<button type="button" class="tb-btn" id="rcBackGrid">← risultati</button>' : ''}
-      <button type="button" class="tb-btn${rcCompareOpen ? ' active' : ''}" id="rcOpenCompare"${nCmp ? '' : ' disabled'}>Confronto (${nCmp})</button>
-      <button type="button" class="tb-btn${rcView === 'salvati' ? ' active' : ''}" id="rcOpenSaved"${nSave ? '' : ' disabled'}>♥ Preferiti (${nSave})</button>
       <button type="button" class="tb-btn" id="rcCsv">CSV</button>
       <button type="button" class="tb-btn" id="rcPdf">PDF</button>
     </div></div>`;
 }
 
 const RC_CMP_ROWS = [
-  ['Prezzo', a => rcPriceText(a)],
-  ['Marca', a => a.marca || '—'],
-  ['Venditore', a => a.venditore || (a.fonte === 'autodoc' ? 'Autodoc' : '—')],
-  ['Fonte', a => RC_FONTE[a.fonte] || a.fonte],
-  ['Valutazione', a => a.stelle ? `★ ${a.stelle}/10 (${a.recensioni || 0})` : '—'],
-  ['Disponibilità', a => a.disponibile == null ? '—' : (a.disponibile ? 'Disponibile' : 'No')],
+  { label: 'Prezzo', fmt: a => rcPriceText(a), val: a => (typeof a.prezzo === 'number' ? a.prezzo : null), best: 'min' },
+  { label: 'Marca', fmt: a => a.marca || '—' },
+  { label: 'Venditore', fmt: a => a.venditore || (a.fonte === 'autodoc' ? 'Autodoc' : '—') },
+  { label: 'Fonte', fmt: a => RC_FONTE[a.fonte] || a.fonte },
+  { label: 'Valutazione', fmt: a => a.stelle ? `★ ${a.stelle}/10 (${a.recensioni || 0})` : '—', val: a => Number(a.stelle) || null, best: 'max' },
+  { label: 'Disponibilità', fmt: a => a.disponibile == null ? '—' : (a.disponibile ? 'Disponibile' : 'No') },
 ];
+// Barra confronto persistente (mirror #compareBar auto): "Selezionati N · Apri confronto · Svuota".
+function rcCompareBarHTML() {
+  return `<div class="compare-bar rc-compare-bar"><span>Selezionati: <b>${confrontoRicambi.length}</b></span><span class="cbar-spacer"></span>` +
+    `<button type="button" class="primary${rcCompareOpen ? ' active' : ''}" id="rcOpenCompare">${rcCompareOpen ? 'Chiudi confronto' : 'Apri confronto'}</button>` +
+    `<button type="button" id="rcCompareClear">Svuota</button></div>`;
+}
 // Sezione confronto separata (mirror #cmatrixPanel auto): non sostituisce la lista, ci sta accanto.
 function rcCompareSection() {   // riuso le classi .cmatrix-* della ricerca auto (stesso look)
   return `<section class="cmatrix-panel"><div class="cmatrix-head"><span class="cmatrix-title">Confronto (${confrontoRicambi.length})</span>` +
@@ -1168,15 +1211,13 @@ function rcCompareHTML() {
   if (!confrontoRicambi.length) return '<div class="rc-empty">Nessun ricambio selezionato. Usa ⇄ sulle righe.</div>';
   const cols = confrontoRicambi;
   const head = `<tr><th></th>${cols.map(a => `<th><div class="rc-cmp-h">${a.immagine ? `<img src="${escapeHtml(a.immagine)}" referrerpolicy="no-referrer" alt="">` : ''}<span>${escapeHtml((a.marca ? a.marca + ' ' : '') + a.nome).slice(0, 60)}</span><button type="button" class="rc-cmp-remove" data-key="${escapeHtml(rcKey(a))}">✕</button></div></th>`).join('')}</tr>`;
-  const rows = RC_CMP_ROWS.map(([lab, fn]) => `<tr><td class="rc-cmp-lab">${lab}</td>${cols.map(a => `<td>${escapeHtml(String(fn(a)))}</td>`).join('')}</tr>`).join('');
+  const rows = RC_CMP_ROWS.map(cfg => {   // celle migliori in verde (mirror .cm-best auto)
+    const bestSet = cfg.best ? bestIndexes(cols.map(cfg.val), cfg.best) : new Set();
+    const cells = cols.map((a, i) => `<td class="${bestSet.has(i) ? 'cm-best' : ''}">${escapeHtml(String(cfg.fmt(a)))}${bestSet.has(i) ? ' <span class="cm-star">★</span>' : ''}</td>`).join('');
+    return `<tr><td class="rc-cmp-lab">${cfg.label}</td>${cells}</tr>`;
+  }).join('');
   const links = `<tr><td class="rc-cmp-lab">Link</td>${cols.map(a => { const u = rcSafeUrl(a.url); return `<td>${u ? `<a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">apri →</a>` : '—'}</td>`; }).join('')}</tr>`;
   return `<div class="rc-cmp-scroll"><table class="rc-cmp">${head}${rows}${links}</table></div>`;
-}
-
-function rcSalvatiHTML() {
-  if (!salvatiRicambi.length) return '<div class="rc-empty">Nessun ricambio salvato. Usa ♡ sulle righe.</div>';
-  // le righe mostrano ♥ (già salvate); cliccarlo le rimuove (toggle).
-  return `<div class="rc-list">${salvatiRicambi.map(a => rcRowHTML(a)).join('')}</div>`;
 }
 
 function rcToggleCmp(key) {
@@ -1193,7 +1234,7 @@ function rcToggleSave(key, remove) {
   if (i >= 0 || remove) { if (i >= 0) salvatiRicambi.splice(i, 1); }
   else { salvatiRicambi.unshift(a); if (salvatiRicambi.length > RC_SALVATI_CAP) salvatiRicambi.length = RC_SALVATI_CAP; }   // cap live = cap persistito
   rcPersistSalvati();
-  if (rcView === 'salvati' && !salvatiRicambi.length) rcView = 'grid';
+  renderRicambiFavTab();   // gli articoli salvati vivono nell'offcanvas (come gli annunci auto)
   renderRicambiPanel();
 }
 
@@ -1251,8 +1292,12 @@ function setRcVeicolo(v) {
   toggle?.addEventListener('click', e => { const b = e.target.closest('.rc-mode-btn'); if (b) setRicambiMode(b.dataset.rcmode); });
   // tab "Ricambi" nell'offcanvas Salvati: click item → rilancia la ricerca; ✕ → rimuove
   document.getElementById('ricambiFavList')?.addEventListener('click', e => {
+    // rimozione articolo salvato
+    const rmArt = e.target.closest('.btn-rimuovi-art');
+    if (rmArt) { const k = rmArt.dataset.rk; salvatiRicambi = salvatiRicambi.filter(a => rcKey(a) !== k); rcPersistSalvati(); renderRicambiFavTab(); if (rcData) renderRicambiPanel(); return; }
     const item = e.target.closest('.salvato-item'); if (!item) return;
     if (e.target.closest('.btn-rimuovi-salvato')) { oemFav = oemFav.filter(f => rcFavNorm(f.q) !== rcFavNorm(item.dataset.q)); rcPersistFav(); renderRicambiFavTab(); return; }
+    if (!item.dataset.q) return;   // articolo salvato: il click sul titolo apre già l'annuncio (link)
     // riapre ESATTAMENTE la sua ricerca: modo → il SUO input, veicolo, poi cerca
     selectPrimary('ricambi');
     setRicambiMode(item.dataset.mode || 'oem');
@@ -1272,7 +1317,11 @@ function setRcVeicolo(v) {
     if (imgWrap) { const im = imgWrap.querySelector('img'); if (im && im.src) openLightbox([{ full: im.src }]); return; }
     const detGal = t.closest('.det-gallery'); if (detGal && t.tagName === 'IMG') { openLightbox([...detGal.querySelectorAll('img')].map(i => ({ full: i.src }))); return; }
     const cp = t.closest('.rc-copy'); if (cp) { e.preventDefault(); rcCopy(cp.dataset.copy, cp); return; }   // preventDefault: non togglare il <details> quando il copy-button è nel summary
-    const chip = t.closest('.facet-chip'); if (chip) { rcGroupDim = chip.dataset.dim; if (rcView !== 'grid') rcView = 'grid'; renderRicambiPanel(); return; }
+    const chip = t.closest('.facet-chip'); if (chip) { rcGroupDim = chip.dataset.dim; renderRicambiPanel(); return; }
+    // ordinamento via header colonna (mirror .gh-sort auto)
+    const gs = t.closest('.gh-sort'); if (gs) { const k = gs.dataset.rckey; if (rcSortState.key === k) rcSortState.dir = rcSortState.dir === 'asc' ? 'desc' : 'asc'; else rcSortState = { key: k, dir: k === 'stelle' ? 'desc' : 'asc' }; renderRicambiPanel(); return; }
+    // prezzo min/max in toolbar → vai all'annuncio di riferimento
+    const sj = t.closest('.rc-stat-jump'); if (sj) { rcJumpToStat(sj.dataset.which); return; }
     // collapse gruppo: toggle diretto (niente re-render → no scroll jump); rcCollapsed persiste
     const gh = t.closest('.rc-group-head'); if (gh) { const g = gh.closest('.rc-group'), k = g.dataset.gkey; g.classList.toggle('collapsed'); rcCollapsed.has(k) ? rcCollapsed.delete(k) : rcCollapsed.add(k); return; }
     // accordion info: toggle diretto + lazy content; rcOpenDetails persiste al re-render
@@ -1285,10 +1334,9 @@ function setRcVeicolo(v) {
       }
       return;
     }
-    if (t.closest('#rcBackGrid')) { rcView = 'grid'; renderRicambiPanel(); return; }
     if (t.closest('#rcOpenCompare')) { rcCompareOpen = !rcCompareOpen; renderRicambiPanel(); return; }
     if (t.closest('#rcCompareClose')) { rcCompareOpen = false; renderRicambiPanel(); return; }
-    if (t.closest('#rcOpenSaved')) { rcView = 'salvati'; renderRicambiPanel(); return; }
+    if (t.closest('#rcCompareClear')) { confrontoRicambi = []; rcCompareOpen = false; renderRicambiPanel(); return; }
     if (t.closest('#rcCsv')) { exportCsvRicambi(); return; }
     if (t.closest('#rcPdf')) { exportPdfRicambi(); return; }
     if (t.closest('#rcSaveCode')) { if (rcData && rcData.oen) rcToggleFav(rcData.oen, rcData.mode, rcData.veicolo); return; }
@@ -1297,7 +1345,13 @@ function setRcVeicolo(v) {
     const sv = t.closest('.rc-btn-save'); if (sv) { rcToggleSave(sv.dataset.key, sv.dataset.rm === '1'); return; }
     const rm = t.closest('.rc-cmp-remove'); if (rm) { rcToggleCmp(rm.dataset.key); return; }
   });
-  panel?.addEventListener('change', e => { if (e.target.id === 'rcSortSel') { rcSort = e.target.value; renderRicambiPanel(); } });
+  // dropdown "Colonne": toggle colonne opzionali live (mirror .col-toggle auto)
+  panel?.addEventListener('change', e => {
+    if (e.target.classList.contains('rc-col-toggle')) {
+      rcVisibleCols = RC_OPTIONAL_COLS.filter(k => panel.querySelector(`.rc-col-toggle[value="${k}"]`)?.checked);
+      renderRicambiPanel();
+    }
+  });
   // immagine rotta → placeholder 🚗/🏍 (mirror del listener auto su resultsGrid)
   panel?.addEventListener('error', e => {
     const img = e.target;

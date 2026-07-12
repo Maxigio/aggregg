@@ -277,11 +277,20 @@ body:not(.has-results) .search {
 .rc-oechips { display: flex; flex-wrap: wrap; gap: 6px; }
 /* lista annunci — righe a tutta larghezza (mirror .result-row auto) */
 .rc-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r2); overflow: hidden; background: var(--surface); }
-.rc-item { display: flex; gap: 12px; align-items: center; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--line); border-left: 3px solid transparent; min-height: 62px; }
+.rc-item { display: grid; gap: 12px; align-items: center; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--line); border-left: 3px solid transparent; min-height: 56px; }
 .rc-item:last-of-type { border-bottom: none; }
 .rc-item:hover { background: var(--surface-2, #f7f8fa); }
 .rc-item[data-sel="1"] { border-left-color: var(--accent); background: var(--accent-weak); }
 .rc-item.rc-best { border-left-color: var(--pos); }
+.rc-cell-txt { font-size: 0.82rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-compare-bar { position: static; }   /* barra confronto in alto (non sticky come auto) */
+.rc-fav-sec { margin-bottom: 14px; }
+.rc-fav-hd { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 2px 2px 6px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+/* header colonne connesso alla lista piatta (mirror auto) */
+.rc-grid-head { border-radius: var(--r2) var(--r2) 0 0; }
+.rc-wrap > .rc-grid-head + .rc-list { border-top: none; border-radius: 0 0 var(--r2) var(--r2); }
+@keyframes rcFlash { 0%,100% { background: var(--surface); } 30% { background: var(--accent-weak); } }
+.rc-item.rc-flash { animation: rcFlash 1.4s ease; }
 .rc-img-wrap { width: 48px; height: 48px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 4px; background: #fff; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .rc-img-wrap:not(.rc-img-ph) { cursor: zoom-in; }
 .rc-img { width: 100%; height: 100%; object-fit: contain; display: block; }
