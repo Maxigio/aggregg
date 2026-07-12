@@ -1142,11 +1142,18 @@ function rcSchedaHTML(d) {
   // chip tipi (solo multi-tipo) — evita di spacciare un tipo per un altro (il bug del €8.29)
   const tipiChips = cat.multiTipo ? `<div class="rc-var-tipi"><span class="rc-var-lab">Questo codice ha ${cat.tipi.length} tipi:</span>${cat.tipi.map(t => `<button type="button" class="rc-tipo-chip${rcVariantSel.tipo === t.tipo ? ' active' : ''}" data-tipo="${escapeHtml(t.tipo)}">${escapeHtml(t.tipo)} <span class="rc-tipo-n">${t.articoli.length}</span></button>`).join('')}</div>` : '';
   const arts = rcActiveTipoArticoli();
-  const varList = arts.length > 1 ? `<div class="rc-var-list"><div class="rc-var-lab">Scegli la variante:</div>${arts.map(rcVariantRowHTML).join('')}</div>` : '';
   const sel = rcSelectedVariant();
+  const selInTipo = sel && arts.some(v => v.articleId === sel.articleId) ? sel : null;
+  // dropdown scrollabile (sempre, anche con 1 variante) — chiuso se c'è una scelta, aperto se no
+  const summaryTxt = selInTipo
+    ? `${escapeHtml(selInTipo.marca || 'Variante')}${selInTipo.variante ? ' · ' + escapeHtml(selInTipo.variante) : ''} · ${selInTipo.prezzo != null ? rcEur(selInTipo.prezzo) : '—'}`
+    : `Scegli variante · ${arts.length}`;
+  const varDropdown = arts.length
+    ? `<details class="rc-var-dd"${selInTipo ? '' : ' open'}><summary class="rc-var-sum">${summaryTxt}</summary><div class="rc-var-menu">${arts.map(rcVariantRowHTML).join('')}</div></details>`
+    : '';
   const body = sel ? rcVariantDetailHTML(sel, s)
     : `<div class="rc-var-prompt">${cat.multiTipo ? 'Scegli il tipo giusto e la variante per questo codice.' : 'Scegli una variante.'}</div>`;
-  return `<div class="rc-scheda">${head}${tipiChips}${varList}${body}</div>`;
+  return `<div class="rc-scheda">${head}${tipiChips}${varDropdown}${body}</div>`;
 }
 
 // Specs LAZY della variante Autodoc selezionata (datiTecnici + compatibilità) — 1 nav on-demand, cache client.
@@ -1364,8 +1371,17 @@ function setRcVeicolo(v) {
     const detGal = t.closest('.det-gallery'); if (detGal && t.tagName === 'IMG') { openLightbox([...detGal.querySelectorAll('img')].map(i => ({ full: i.src }))); return; }
     const cp = t.closest('.rc-copy'); if (cp) { e.preventDefault(); rcCopy(cp.dataset.copy, cp); return; }   // preventDefault: non togglare il <details> quando il copy-button è nel summary
     // selettore varianti v7: scegli tipo → scegli variante → specs lazy
-    const tc = t.closest('.rc-tipo-chip'); if (tc) { rcVariantSel = { tipo: tc.dataset.tipo, articleId: null }; renderRicambiPanel(); return; }
-    const vr = t.closest('.rc-var-row'); if (vr) { rcVariantSel.articleId = vr.dataset.artid; renderRicambiPanel(); rcFetchVariantSpecs(rcSelectedVariant()); return; }
+    const tc = t.closest('.rc-tipo-chip'); if (tc) {
+      const tObj = (rcCatalogo()?.tipi || []).find(x => x.tipo === tc.dataset.tipo);
+      const auto = tObj && tObj.articoli.length === 1 ? tObj.articoli[0].articleId : null;   // tipo mono-variante → auto-select (niente vicolo cieco)
+      rcVariantSel = { tipo: tc.dataset.tipo, articleId: auto };
+      renderRicambiPanel(); if (auto) rcFetchVariantSpecs(rcSelectedVariant()); return;
+    }
+    const vr = t.closest('.rc-var-row'); if (vr) {
+      const id = vr.dataset.artid;
+      rcVariantSel.articleId = rcVariantSel.articleId === id ? null : id;   // toggle-off al re-click
+      renderRicambiPanel(); if (rcVariantSel.articleId) rcFetchVariantSpecs(rcSelectedVariant()); return;
+    }
     const chip = t.closest('.facet-chip'); if (chip) { rcGroupDim = chip.dataset.dim; renderRicambiPanel(); return; }
     // ordinamento via header colonna (mirror .gh-sort auto)
     const gs = t.closest('.gh-sort'); if (gs) { const k = gs.dataset.rckey; if (rcSortState.key === k) rcSortState.dir = rcSortState.dir === 'asc' ? 'desc' : 'asc'; else rcSortState = { key: k, dir: k === 'stelle' ? 'desc' : 'asc' }; renderRicambiPanel(); return; }

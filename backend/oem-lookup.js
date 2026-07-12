@@ -104,7 +104,13 @@ async function lookupOem(oenRaw) {
           nome = clone.textContent.replace(/\s+/g, ' ').trim();
         }
         const variante = txt(nameSpan) || null;
-        const href = (nameEl && nameEl.getAttribute('href')) || (it.querySelector('a[href]')?.getAttribute('href'));
+        // URL PRODOTTO: il link del nome, se valido; altrimenti il primo link col pattern product-page
+        // /{brand-slug}/{id-numerico}. Scarta i badge servizio (/services/, consegna, checkout) che
+        // altrimenti mandavano fetchAutodocSpecs su una pagina sbagliata → compatibilità persa.
+        const nameHref = nameEl && nameEl.getAttribute('href');
+        const isProd = h => /\/[a-z0-9-]+\/\d+(?:$|[/?])/i.test(h) && !/\/services\/|consegna|checkout|cart/i.test(h);
+        const links = [...it.querySelectorAll('a[href]')].map(a => a.getAttribute('href')).filter(Boolean);
+        const href = (nameHref && isProd(nameHref)) ? nameHref : (links.find(isProd) || null);
         const url = href ? (href.startsWith('http') ? href : 'https://www.auto-doc.it' + href) : null;
         // marca dal logo brand (alt = "TOPRAN 114 221" → tolgo i token numerici)
         const brandAlt = (it.querySelector('.listing-item__image-brand img')?.getAttribute('alt') || '').trim();
