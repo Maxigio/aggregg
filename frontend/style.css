@@ -261,7 +261,7 @@ body:not(.has-results) .search {
 .rc-tipo-chip:hover { border-color: var(--accent); }
 .rc-tipo-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .rc-tipo-n { font-size: 0.7rem; opacity: 0.75; font-weight: 700; }
-.rc-var-dd { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); max-width: 520px; }
+.rc-var-dd { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
 .rc-var-sum { cursor: pointer; list-style: none; padding: 8px 12px; font-size: 0.86rem; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; }
 .rc-var-sum::-webkit-details-marker { display: none; }
 .rc-var-sum::after { content: '▾'; margin-left: auto; color: var(--text-muted); transition: transform .15s; }
@@ -484,6 +484,8 @@ body.has-results .search { padding: 14px 0 12px; }
 .tb-sep { width: 1px; align-self: stretch; min-height: 24px; background: var(--line); }
 .tb-count { font-family: var(--num); font-size: 0.8rem; color: var(--text-muted); font-weight: 600; }
 .tb-stat { display: inline-flex; align-items: baseline; gap: 5px; font-size: 0.82rem; }
+.rc-stat-jump { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+.rc-stat-jump:hover b { color: var(--accent); text-decoration: underline; }
 .tb-stat-label { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
 .tb-stat b { font-family: var(--num); font-weight: 700; color: var(--text); }
 .tb-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }

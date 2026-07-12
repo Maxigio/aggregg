@@ -1151,8 +1151,7 @@ function rcSchedaHTML(d) {
   const varDropdown = arts.length
     ? `<details class="rc-var-dd"${selInTipo ? '' : ' open'}><summary class="rc-var-sum">${summaryTxt}</summary><div class="rc-var-menu">${arts.map(rcVariantRowHTML).join('')}</div></details>`
     : '';
-  const body = sel ? rcVariantDetailHTML(sel, s)
-    : `<div class="rc-var-prompt">${cat.multiTipo ? 'Scegli il tipo giusto e la variante per questo codice.' : 'Scegli una variante.'}</div>`;
+  const body = sel ? rcVariantDetailHTML(sel, s) : '';   // nessuna scelta → il dropdown basta (niente prompt testuale)
   return `<div class="rc-scheda">${head}${tipiChips}${varDropdown}${body}</div>`;
 }
 
