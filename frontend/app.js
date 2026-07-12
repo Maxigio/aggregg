@@ -765,6 +765,8 @@ let rcView = 'grid';         // 'grid' (i salvati vivono nell'offcanvas, come au
 let rcCompareOpen = false;   // confronto = sezione separata (come auto), la lista resta navigabile
 let rcSortState = { key: 'prezzo', dir: 'asc' };   // ordinamento via header colonne (mirror auto)
 let rcVisibleCols = [];      // colonne opzionali mostrate (marca/venditore/valutazione)
+let rcVariantSel = { tipo: null, articleId: null };   // selezione nel selettore varianti catalogo (v7)
+let rcVariantSpecs = {};     // cache specs lazy Autodoc per articleId ({loading}|{datiTecnici,compatibilita})
 let rcCollapsed = new Set();  // chiavi-gruppo collassate (persistono al re-render, meglio di auto)
 let rcOpenDetails = new Set();// chiavi articolo con accordion info aperto (persistono al re-render)
 let confrontoRicambi = [];
@@ -819,9 +821,14 @@ function rcCurrentList() { return rcVisibleArts(); }
 function rcPriceText(a) { const p = rcEur(a.prezzo); return p || (a.fonte === 'subito' ? 'trattabile' : 'prezzo sul sito'); }
 function rcArt(key) { return (rcData && rcData.articoli || []).find(a => rcKey(a) === key) || salvatiRicambi.find(a => rcKey(a) === key) || confrontoRicambi.find(a => rcKey(a) === key); }
 
-// Lista visibile in griglia = articoli ordinati. La fonte si filtra col group-by "Fonte" (non più pill).
+// Lista visibile in griglia = articoli ordinati. Se c'è un tipo scelto nel selettore varianti,
+// gli annunci coerenti col tipo (titolo contiene i token) vanno PRIMA (soft, nessuno nascosto).
 function rcVisibleArts() {
-  return rcSortArts((rcData && rcData.articoli) || []);
+  const arts = rcSortArts((rcData && rcData.articoli) || []);
+  const tokens = String(rcVariantSel.tipo || '').toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  if (!tokens.length) { arts.forEach(a => { a._tipoMatch = false; }); return arts; }
+  arts.forEach(a => { const n = String(a.nome || '').toLowerCase(); a._tipoMatch = tokens.some(w => n.includes(w)); });
+  return [...arts.filter(a => a._tipoMatch), ...arts.filter(a => !a._tipoMatch)];
 }
 // Colonne della lista ricambi (mirror COLS auto): base sempre, opzionali via dropdown "Colonne".
 const RC_COLS = [
@@ -902,7 +909,11 @@ async function doRicambi() {
     (d.articoli || []).forEach((a, i) => { if (!a._rk) a._rk = `${a.fonte}:${a.url || a.articleId || (a.nome + '#' + i)}`; });
     rcData = d; rcView = 'grid';
     rcCollapsed = new Set(); rcOpenDetails = new Set();   // nuova ricerca → reset gruppi/dettagli aperti
+    rcVariantSpecs = {};
+    const cat = d.scheda && d.scheda.catalogo;   // v7: selettore varianti — dominante pre-aperto, default variante se tipo singolo
+    rcVariantSel = cat ? { tipo: cat.tipoDominante, articleId: cat.defaultArticleId } : { tipo: null, articleId: null };
     renderRicambiPanel();
+    if (cat && cat.defaultArticleId) rcFetchVariantSpecs(rcSelectedVariant());
   } catch (_) {
     panel.innerHTML = '<div class="rc-wrap"><div class="rc-empty">Servizio ricambi non raggiungibile.</div></div>';
   }
@@ -934,7 +945,7 @@ function rcRowHTML(a, bestKey) {
       case 'nome': {
         const nomeTxt = escapeHtml(a.nome);
         const nome = rowUrl ? `<a class="rc-nome-link" href="${escapeHtml(rowUrl)}" target="_blank" rel="noopener noreferrer" title="Apri annuncio">${nomeTxt}</a>` : nomeTxt;
-        return `<div class="rc-nome">${isBest ? '<span class="rc-best-badge">min</span>' : ''}${nome}</div>`;
+        return `<div class="rc-nome">${isBest ? '<span class="rc-best-badge">min</span>' : ''}${a._tipoMatch ? '<span class="rc-tipo-match" title="Coerente col tipo scelto">tipo ✓</span>' : ''}${nome}</div>`;
       }
       case 'marca': return `<span class="rc-cell-txt">${a.marca ? escapeHtml(a.marca) : '—'}</span>`;
       case 'venditore': return `<span class="rc-cell-txt">${escapeHtml(a.venditore || (a.fonte === 'autodoc' ? 'Autodoc' : '—'))}</span>`;
@@ -1046,19 +1057,74 @@ function rcCopyFallback(text, cb) {   // contesti senza Clipboard API (http non-
   try { document.execCommand('copy'); cb(); } catch { /* no-op */ } finally { ta.remove(); }
 }
 
-// Immagini della scheda per il lightbox: foto principale + galleria eBay (se presente), dedup.
+// ── SCHEDA v7: selettore varianti (un codice = più tipi + più marche/materiali) ──
+function rcCatalogo() { return rcData && rcData.scheda && rcData.scheda.catalogo; }
+function rcSelectedVariant() {
+  const cat = rcCatalogo(); if (!cat || !rcVariantSel.articleId) return null;
+  for (const t of cat.tipi) for (const v of t.articoli) if (v.articleId === rcVariantSel.articleId) return v;
+  return null;
+}
+function rcActiveTipoArticoli() {
+  const cat = rcCatalogo(); if (!cat) return [];
+  const t = cat.tipi.find(x => x.tipo === rcVariantSel.tipo) || cat.tipi[0];
+  return t ? t.articoli : [];
+}
+// Immagini per il lightbox: foto della variante scelta + galleria eBay (se presente), dedup.
 function rcSchedaImages() {
-  const s = rcData && rcData.scheda;
-  if (!s) return [];
-  const imgs = [s.immagine, ...(Array.isArray(s.galleria) ? s.galleria : [])].filter(Boolean);
+  const s = rcData && rcData.scheda; if (!s) return [];
+  const v = rcSelectedVariant();
+  const imgs = [(v && v.immagine), s.fotoReale, ...(Array.isArray(s.galleria) ? s.galleria : [])].filter(Boolean);
   return [...new Set(imgs)].map(u => ({ full: u }));
 }
-
-// Card "scheda ricambio": identità certa dal catalogo (dati tecnici + prezzo NUOVO).
-// Sostituisce il titolone; la lista sotto contiene solo le OFFERTE (Subito/web).
+// grid dati tecnici (codici copiabili + dropdown produttore/articolo) — riusata dalla variante scelta.
+function rcDtGridHTML(datiTecnici) {
+  const dt = {};
+  for (const [k, v] of Object.entries(datiTecnici || {})) if (!(k in dt) && !RC_NONTECH_KEYS.has(k)) dt[k] = v;
+  if (!Object.keys(dt).length) return '';
+  const dvHtml = (k, v) => RC_COPY_KEYS.has(k)
+    ? `<button type="button" class="rc-det-v rc-copy" data-copy="${escapeHtml(String(v))}" title="Copia negli appunti">${escapeHtml(String(v)).slice(0, 70)}</button>`
+    : `<span class="rc-det-v">${escapeHtml(String(v)).slice(0, 70)}</span>`;
+  const prod = dt['Codice produttore'], art = dt['Codice articolo del produttore'];
+  const bothCodes = prod && art;
+  const dtRows = Object.entries(dt).slice(0, 10)
+    .filter(([k]) => !(bothCodes && k === 'Codice articolo del produttore'))
+    .map(([k, v]) => bothCodes && k === 'Codice produttore'
+      ? `<div class="rc-det-row"><span class="rc-det-k">Codice produttore</span><details class="rc-code-more"><summary>${dvHtml('Codice produttore', prod)}<span class="rc-code-caret"></span></summary><div class="rc-code-extra"><span class="rc-det-k">Cod. articolo produttore</span>${dvHtml('Codice articolo del produttore', art)}</div></details></div>`
+      : `<div class="rc-det-row"><span class="rc-det-k">${escapeHtml(k)}</span>${dvHtml(k, v)}</div>`).join('');
+  return `<div class="rc-sch-sec"><div class="rc-sch-sechd">Dati tecnici</div><div class="rc-sch-grid">${dtRows}</div></div>`;
+}
+// riga variante selezionabile (marca · nota · voto · prezzo)
+function rcVariantRowHTML(v) {
+  const on = rcVariantSel.articleId === v.articleId;
+  const nota = v.variante ? ` · ${escapeHtml(v.variante)}` : '';
+  const voto = v.stelle ? ` · ★${escapeHtml(String(v.stelle))}${v.recensioni ? '/' + v.recensioni : ''}` : '';
+  const disp = v.disponibile === false ? ' · non disp.' : '';
+  return `<button type="button" class="rc-var-row${on ? ' active' : ''}" data-artid="${escapeHtml(v.articleId)}">` +
+    `<span class="rc-var-marca">${escapeHtml(v.marca || 'Marca ?')}</span><span class="rc-var-nota">${nota}${voto}${disp}</span>` +
+    `<span class="rc-var-prezzo">${v.prezzo != null ? rcEur(v.prezzo) : '—'}</span></button>`;
+}
+// riferimento nuovo della variante scelta: foto + prezzo + specs (cmsnl embedded / autodoc lazy) + OE
+function rcVariantDetailHTML(v, s) {
+  const foto = v.immagine || s.fotoReale;
+  const img = foto ? `<img class="rc-sch-img" src="${escapeHtml(foto)}" alt="" referrerpolicy="no-referrer">` : '<div class="rc-sch-img rc-img-ph"></div>';
+  const url = rcSafeUrl(v.url);
+  const buybox = `<div class="rc-sch-buybox"><span class="rc-sch-price-lab">Prezzo nuovo${v.marca ? ' · ' + escapeHtml(v.marca) : ''}</span>` +
+    `<div class="rc-sch-priceline"><span class="rc-prezzo">${v.prezzo != null ? rcEur(v.prezzo) : 'n/d'}</span>${v.prezzoListino && v.sconto ? `<span class="rc-listino">${rcEur(v.prezzoListino)}</span><span class="rc-sconto">-${escapeHtml(String(v.sconto))}%</span>` : ''}</div>` +
+    `${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">su ${escapeHtml(RC_FONTE[v.fonte] || v.fonte)} ↗</a>` : ''}</div>`;
+  const lazy = rcVariantSpecs[v.articleId];
+  const loading = v.fonte === 'autodoc' && (!lazy || lazy.loading);
+  const datiTecnici = { ...(s.datiTecniciEbay || {}), ...(v.datiTecnici || {}), ...((lazy && !lazy.loading && lazy.datiTecnici) || {}) };
+  const compat = v.compatibilita || (lazy && !lazy.loading && lazy.compatibilita) || null;
+  const dtBlock = rcDtGridHTML(datiTecnici) ||
+    (loading ? '<div class="rc-sch-sec"><div class="rc-sch-sechd">Dati tecnici</div><div class="rc-det-loading">Carico specifiche…</div></div>' : '');
+  const oe = (s.oeAlternativi && s.oeAlternativi.length)
+    ? `<div class="rc-sch-sec"><div class="rc-sch-sechd">Codici OE equivalenti</div><div class="rc-oechips">${s.oeAlternativi.slice(0, 14).map(c => `<button type="button" class="rc-oe" data-oe="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`
+    : '';
+  return `<div class="rc-sch-main">${img}${buybox}</div><div class="rc-sch-secs">${dtBlock}${rcFitsTable(compat)}${oe}</div>`;
+}
 function rcSchedaHTML(d) {
   const s = d.scheda;
-  if (!s) {   // nessun catalogo → card placeholder che SPIEGA (mai vuota silenziosa)
+  if (!s || !s.catalogo) {   // nessun catalogo → card placeholder che SPIEGA
     const idParts = [d.tipoPezzo, d.veicoli].filter(Boolean).map(escapeHtml);
     const idLine = `${idParts.join(' · ').slice(0, 160) || 'Ricambio'}${d.oen ? ` · <span class="rc-code">${escapeHtml(d.oen)}</span>` : ''}`;
     let msg;
@@ -1066,52 +1132,32 @@ function rcSchedaHTML(d) {
     else {
       const catName = d.veicolo === 'auto' ? 'Autodoc' : 'CMSNL';
       const cat = d.veicolo === 'auto' ? d.sources?.autodoc : d.sources?.cmsnl;
-      msg = (cat && ['blocked', 'error', 'timeout'].includes(cat.status))
-        ? `Catalogo ${catName} non disponibile ora — riprova tra poco.`
-        : `Ricambio non presente nel catalogo ${catName}.`;
+      msg = (cat && ['blocked', 'error', 'timeout'].includes(cat.status)) ? `Catalogo ${catName} non disponibile ora — riprova tra poco.` : `Ricambio non presente nel catalogo ${catName}.`;
     }
     return `<div class="rc-scheda rc-scheda-empty"><div class="rc-sch-body"><div class="rc-sch-tit">${idLine}</div><div class="rc-sch-emptymsg">${msg}</div></div></div>`;
   }
-  const img = s.immagine ? `<img class="rc-sch-img" src="${escapeHtml(s.immagine)}" alt="" referrerpolicy="no-referrer">` : '<div class="rc-sch-img rc-img-ph"></div>';
-  const pn = s.prezzoNuovo;
-  const pnUrl = pn && rcSafeUrl(pn.url);
-  // BUY-BOX: prezzo nuovo in evidenza (riquadro a destra dell'immagine)
-  const buybox = pn ? `<div class="rc-sch-buybox">
-      <span class="rc-sch-price-lab">Prezzo nuovo</span>
-      <div class="rc-sch-priceline"><span class="rc-prezzo">${rcEur(pn.valore)}</span>${pn.listino && pn.sconto ? `<span class="rc-listino">${rcEur(pn.listino)}</span><span class="rc-sconto">-${escapeHtml(String(pn.sconto))}%</span>` : ''}</div>
-      ${pnUrl ? `<a href="${escapeHtml(pnUrl)}" target="_blank" rel="noopener noreferrer">su ${escapeHtml(RC_FONTE[pn.fonte] || pn.fonte)} ↗</a>` : `<span class="rc-sch-src">(${escapeHtml(RC_FONTE[pn.fonte] || pn.fonte)})</span>`}
-    </div>` : `<div class="rc-sch-buybox rc-sch-buybox-empty"><span class="rc-sch-price-lab">Prezzo nuovo</span><span class="rc-sch-src">non disponibile</span></div>`;
-  // DATI TECNICI: SOLO veri dati tecnici (marca è nell'header; commerciali negli annunci).
-  const dt = {};
-  for (const [k, v] of Object.entries(s.datiTecnici || {})) if (!(k in dt) && !RC_NONTECH_KEYS.has(k)) dt[k] = v;
-  // valore: codice → button copiabile (keyboard-accessibile nativo); altrimenti testo
-  const dvHtml = (k, v) => RC_COPY_KEYS.has(k)
-    ? `<button type="button" class="rc-det-v rc-copy" data-copy="${escapeHtml(String(v))}" title="Copia negli appunti">${escapeHtml(String(v)).slice(0, 70)}</button>`
-    : `<span class="rc-det-v">${escapeHtml(String(v)).slice(0, 70)}</span>`;
-  const prod = dt['Codice produttore'], art = dt['Codice articolo del produttore'];
-  const bothCodes = prod && art;   // se ci sono entrambi → un solo dropdown (collassato = codice produttore)
-  const dtRows = Object.entries(dt).slice(0, 10)
-    .filter(([k]) => !(bothCodes && k === 'Codice articolo del produttore'))   // l'articolo va nel dropdown, non in riga separata
-    .map(([k, v]) => {
-      if (bothCodes && k === 'Codice produttore') {
-        return `<div class="rc-det-row"><span class="rc-det-k">Codice produttore</span>` +
-          `<details class="rc-code-more"><summary>${dvHtml('Codice produttore', prod)}<span class="rc-code-caret"></span></summary>` +
-          `<div class="rc-code-extra"><span class="rc-det-k">Cod. articolo produttore</span>${dvHtml('Codice articolo del produttore', art)}</div></details></div>`;
-      }
-      return `<div class="rc-det-row"><span class="rc-det-k">${escapeHtml(k)}</span>${dvHtml(k, v)}</div>`;
-    }).join('');
-  const dtBlock = dtRows ? `<div class="rc-sch-sec"><div class="rc-sch-sechd">Dati tecnici</div><div class="rc-sch-grid">${dtRows}</div></div>` : '';
-  const compat = rcFitsTable(s.compatibilita);
-  const oe = (s.oeAlternativi && s.oeAlternativi.length)
-    ? `<div class="rc-sch-sec"><div class="rc-sch-sechd">Codici OE equivalenti</div><div class="rc-oechips">${s.oeAlternativi.slice(0, 14).map(c => `<button type="button" class="rc-oe" data-oe="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`
-    : '';
+  const cat = s.catalogo;
   const code = escapeHtml(s.codice || d.oen || '');
-  const marca = s.marca ? ` · ${escapeHtml(s.marca)}` : '';
-  return `<div class="rc-scheda">
-    <div class="rc-sch-head"><span class="rc-sch-titmain">${escapeHtml(s.tipoPezzo || 'Ricambio')}${marca}</span>${code ? `<span class="rc-code">${code}</span>` : ''}</div>
-    <div class="rc-sch-main">${img}${buybox}</div>
-    <div class="rc-sch-secs">${dtBlock}${compat}${oe}</div>
-  </div>`;
+  const head = `<div class="rc-sch-head"><span class="rc-sch-titmain">${escapeHtml(s.tipoPezzo || 'Ricambio')}</span>${code ? `<span class="rc-code">${code}</span>` : ''}</div>`;
+  // chip tipi (solo multi-tipo) — evita di spacciare un tipo per un altro (il bug del €8.29)
+  const tipiChips = cat.multiTipo ? `<div class="rc-var-tipi"><span class="rc-var-lab">Questo codice ha ${cat.tipi.length} tipi:</span>${cat.tipi.map(t => `<button type="button" class="rc-tipo-chip${rcVariantSel.tipo === t.tipo ? ' active' : ''}" data-tipo="${escapeHtml(t.tipo)}">${escapeHtml(t.tipo)} <span class="rc-tipo-n">${t.articoli.length}</span></button>`).join('')}</div>` : '';
+  const arts = rcActiveTipoArticoli();
+  const varList = arts.length > 1 ? `<div class="rc-var-list"><div class="rc-var-lab">Scegli la variante:</div>${arts.map(rcVariantRowHTML).join('')}</div>` : '';
+  const sel = rcSelectedVariant();
+  const body = sel ? rcVariantDetailHTML(sel, s)
+    : `<div class="rc-var-prompt">${cat.multiTipo ? 'Scegli il tipo giusto e la variante per questo codice.' : 'Scegli una variante.'}</div>`;
+  return `<div class="rc-scheda">${head}${tipiChips}${varList}${body}</div>`;
+}
+
+// Specs LAZY della variante Autodoc selezionata (datiTecnici + compatibilità) — 1 nav on-demand, cache client.
+async function rcFetchVariantSpecs(v) {
+  if (!v || v.fonte !== 'autodoc' || rcVariantSpecs[v.articleId] || !rcSafeUrl(v.url)) return;
+  rcVariantSpecs[v.articleId] = { loading: true };
+  try {
+    const r = await fetch(`/api/ricambi/autodoc-specs?url=${encodeURIComponent(v.url)}`);
+    rcVariantSpecs[v.articleId] = r.ok ? await r.json() : {};
+  } catch { rcVariantSpecs[v.articleId] = {}; }
+  if (rcVariantSel.articleId === v.articleId) renderRicambiPanel();
 }
 
 function renderRicambiPanel() {
@@ -1317,6 +1363,9 @@ function setRcVeicolo(v) {
     if (imgWrap) { const im = imgWrap.querySelector('img'); if (im && im.src) openLightbox([{ full: im.src }]); return; }
     const detGal = t.closest('.det-gallery'); if (detGal && t.tagName === 'IMG') { openLightbox([...detGal.querySelectorAll('img')].map(i => ({ full: i.src }))); return; }
     const cp = t.closest('.rc-copy'); if (cp) { e.preventDefault(); rcCopy(cp.dataset.copy, cp); return; }   // preventDefault: non togglare il <details> quando il copy-button è nel summary
+    // selettore varianti v7: scegli tipo → scegli variante → specs lazy
+    const tc = t.closest('.rc-tipo-chip'); if (tc) { rcVariantSel = { tipo: tc.dataset.tipo, articleId: null }; renderRicambiPanel(); return; }
+    const vr = t.closest('.rc-var-row'); if (vr) { rcVariantSel.articleId = vr.dataset.artid; renderRicambiPanel(); rcFetchVariantSpecs(rcSelectedVariant()); return; }
     const chip = t.closest('.facet-chip'); if (chip) { rcGroupDim = chip.dataset.dim; renderRicambiPanel(); return; }
     // ordinamento via header colonna (mirror .gh-sort auto)
     const gs = t.closest('.gh-sort'); if (gs) { const k = gs.dataset.rckey; if (rcSortState.key === k) rcSortState.dir = rcSortState.dir === 'asc' ? 'desc' : 'asc'; else rcSortState = { key: k, dir: k === 'stelle' ? 'desc' : 'asc' }; renderRicambiPanel(); return; }

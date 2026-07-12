@@ -3,7 +3,7 @@
 // Fonti: Autodoc (stealth scrape, solo mode OEM) + Web (Anthropic web_search) + Subito accessori.
 // Ogni fonte è avvolta in un wrapper never-reject + timeout → una fonte lenta/rotta NON abbatte
 // le altre (Promise.all sicuro). eBay sarà una fonte in più: stesso wrapper, zero refactor.
-const { lookupOem, normOen, fetchAutodocSpecs } = require('./oem-lookup');
+const { lookupOem, normOen } = require('./oem-lookup');
 const { lookupCmsnl } = require('./cmsnl-lookup');
 const { searchWebParts } = require('./web-parts');
 const scrapeSubito = require('./scrapers/subito-api');   // .searchAccessori(keyword)
@@ -87,7 +87,6 @@ async function searchRicambi(qRaw, opts = {}) {
   const subitoFn = opts.subito || subitoSource;
   const ebayFn = opts.ebay || ebaySource;
   const ebaySpecsFn = opts.ebaySpecs || ebayScrape.fetchEbayItemSpecs;
-  const autodocSpecsFn = opts.autodocSpecs || fetchAutodocSpecs;
   const term = mode === 'oem' ? normOen(qRaw) : String(qRaw || '').trim();
   if (!term) return { oen: '', mode, veicolo, articoli: [], count: 0, sources: {}, error: 'query vuota' };
 
@@ -124,44 +123,27 @@ async function searchRicambi(qRaw, opts = {}) {
     logger.info('[ricambi]', `scheda null "${term}" (${veicolo}): catalogo ${cat ? cat.status : 'assente'}${cat?.reason ? ' — ' + cat.reason : ''}`);
   }
 
-  // Arricchimento scheda da eBay: foto REALE del pezzo + dati tecnici ("Item specifics").
-  // Match affidabile solo in mode oem: l'offerta il cui titolo contiene il codice.
+  // Arricchimento eBay CODE-LEVEL: foto reale + galleria + dati tecnici → fallback per la variante scelta.
+  // (Le specs Autodoc sono LAZY per-variante via /api/ricambi/autodoc-specs, non più upfront → ricerca più veloce.)
   if (scheda && mode === 'oem') {
     const match = (res.ebay?.items || []).find(i => normOen(i.nome).includes(term));
-    if (match?.immagine && (!scheda.immagine || scheda.prezzoNuovo?.fonte === 'cmsnl')) {
-      scheda.immagine = match.immagine;   // la foto CMSNL è spesso un disegno → meglio la foto vera
-    }
     if (match) {
+      if (match.immagine) scheda.fotoReale = match.immagine;
       let timer;
       try {
         const s = await Promise.race([
           ebaySpecsFn(match.url),
           new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('specs timeout')), 20000); }),
         ]);
-        if (s?.specs && Object.keys(s.specs).length) scheda.datiTecnici = s.specs;
-        if (s?.immagine && scheda.prezzoNuovo?.fonte !== 'autodoc') scheda.immagine = s.immagine;
-        if (s?.galleria?.length) scheda.galleria = s.galleria;   // foto multiple → lightbox scheda
+        if (s?.immagine) scheda.fotoReale = s.immagine;
+        if (s?.galleria?.length) scheda.galleria = s.galleria;
+        if (s?.specs && Object.keys(s.specs).length) scheda.datiTecniciEbay = s.specs;
       } catch (e) {
         logger.warn('[ricambi]', `ebay specs "${term}": ${e.message}`);
       } finally { clearTimeout(timer); }
     }
   }
-  // Arricchimento scheda AUTO da Autodoc: la pagina-prodotto ha la tabella tecnica (Potenza/Anno/
-  // Codice produttore + eventuali misure) e i modelli compatibili — la card no. +1 navigazione, cache-coperta.
-  if (scheda && mode === 'oem' && scheda.prezzoNuovo?.fonte === 'autodoc' && scheda.prezzoNuovo.url) {
-    let timer;
-    try {
-      const a = await Promise.race([
-        autodocSpecsFn(scheda.prezzoNuovo.url),
-        new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('autodoc specs timeout')), 25000); }),
-      ]);
-      if (a?.datiTecnici && Object.keys(a.datiTecnici).length) scheda.datiTecnici = { ...(scheda.datiTecnici || {}), ...a.datiTecnici };   // catalogo ha precedenza sull'eBay
-      if (a?.compatibilita?.length && !scheda.compatibilita) scheda.compatibilita = a.compatibilita;   // riempie la compatibilità auto (gap storico)
-    } catch (e) {
-      logger.warn('[ricambi]', `autodoc specs "${term}": ${e.message}`);
-    } finally { clearTimeout(timer); }
-  }
-  if (scheda && !scheda.immagine) scheda.immagine = (res.subito?.items || [])[0]?.immagine || null;
+  if (scheda && !scheda.fotoReale) scheda.fotoReale = (res.subito?.items || [])[0]?.immagine || null;
 
   // Web search = FALLBACK-ONLY: parte solo se né la scheda né le offerte hanno trovato nulla.
   const offerteCount = ['subito', 'ebay'].reduce((n, k) => n + (res[k] ? res[k].items.length : 0), 0);
@@ -185,7 +167,7 @@ async function searchRicambi(qRaw, opts = {}) {
     // campi top-level mantenuti per compat (PDF/testata): identità catalogo → web
     tipoPezzo: scheda?.tipoPezzo || res.web?.meta?.pezzo?.tipo || null,
     categoria: res.autodoc?.meta?.categoria || null,
-    veicoli: (Array.isArray(scheda?.compatibilita) ? scheda.compatibilita.join(', ') : scheda?.compatibilita) || res.web?.meta?.pezzo?.veicoli || null,
+    veicoli: schedaVeicoli(scheda) || res.web?.meta?.pezzo?.veicoli || null,
     oeAlternativi: scheda?.oeAlternativi || [],
     sources,
     articoli,
@@ -193,44 +175,68 @@ async function searchRicambi(qRaw, opts = {}) {
   };
 }
 
-// Costruisce la scheda dal catalogo del veicolo. Autodoc lista fino a 12 VENDITORI dello stesso
-// pezzo nuovo → si prende il prezzo MINIMO (gli altri sono lo stesso ricambio, non offerte diverse).
+// Estrae il TIPO base dal nome Autodoc ("Bloccasterzo TOPRAN 1K0 905 851 B" → "Bloccasterzo"):
+// taglia dalla marca (1° token) o dal primo token-codice. Pura (testabile).
+function baseTipo(nome, marca) {
+  const n = String(nome || '').replace(/\s+/g, ' ').trim();
+  if (!n) return 'Ricambio';
+  const brand = String(marca || '').split(/\s+/)[0];
+  if (brand && brand.length > 1) { const i = n.indexOf(brand); if (i > 0) return n.slice(0, i).trim() || n; }
+  const m = n.match(/^(.*?)\s+[0-9][\w .-]*$/);   // fallback: taglia dal 1° token che inizia con cifra (codice)
+  return (m && m[1]) ? m[1].trim() : n;
+}
+// Default variante = PIÙ RECENSITA; fallback = prezzo più vicino alla mediana. Pura.
+function pickDefaultVariant(articoli) {
+  const rev = articoli.filter(v => v.recensioni > 0);
+  if (rev.length) return rev.reduce((m, v) => (v.recensioni > m.recensioni ? v : m)).articleId;
+  const priced = articoli.filter(v => typeof v.prezzo === 'number');
+  if (!priced.length) return articoli[0]?.articleId || null;
+  const sorted = priced.map(v => v.prezzo).sort((a, b) => a - b);
+  const median = sorted[sorted.length >> 1];
+  return priced.reduce((m, v) => (Math.abs(v.prezzo - median) < Math.abs(m.prezzo - median) ? v : m)).articleId;
+}
+// veicoli top-level (PDF): compatibilità della 1ª variante che ce l'ha (cmsnl fits). Array → stringa.
+function schedaVeicoli(scheda) {
+  const v = scheda?.catalogo?.tipi?.flatMap(t => t.articoli).find(a => a.compatibilita)?.compatibilita;
+  return Array.isArray(v) ? v.join(', ') : (v || null);
+}
+
+// SCHEDA v7 = ALBERO CATALOGO: un codice OEM mappa PIÙ tipi + PIÙ varianti (materiali/marche) — NON
+// un solo pezzo. Raggruppa per tipo; niente min-prezzo. Il frontend fa il selettore (tipo → variante).
 function buildScheda(res, term) {
   const aItems = res.autodoc?.items || [];
-  if (aItems.length) {
-    const priced = aItems.filter(a => typeof a.prezzo === 'number');
-    const best = priced.length ? priced.reduce((m, a) => (a.prezzo < m.prezzo ? a : m)) : aItems[0];
-    return {
-      tipoPezzo: res.autodoc.meta?.tipoPezzo || best.nome || null,
-      codice: term,
-      marca: best.marca || null,
-      compatibilita: null,   // gap applicabilità auto (candidato PartSouq)
-      oeAlternativi: res.autodoc.meta?.oeAlternativi || [],
-      prezzoNuovo: typeof best.prezzo === 'number'
-        ? { valore: best.prezzo, listino: best.prezzoListino || null, sconto: best.sconto || null, fonte: 'autodoc', url: best.url || null }
-        : null,
-      immagine: best.immagine || null,
-      disponibile: best.disponibile ?? null,
-      condizione: 'Nuovo', spedizione: null,
-      stelle: best.stelle || null, recensioni: best.recensioni || null,
+  const cItems = res.cmsnl?.items || [];
+  let fonte, items, fits = null;
+  if (aItems.length) { fonte = 'autodoc'; items = aItems; }
+  else if (cItems.length) { fonte = 'cmsnl'; items = cItems; fits = res.cmsnl.meta?.veicoli || null; }
+  else return null;
+
+  const byTipo = new Map();
+  items.forEach((a, idx) => {
+    const tipo = fonte === 'cmsnl' ? (res.cmsnl.meta?.tipoPezzo || a.nome || 'Ricambio') : baseTipo(a.nome, a.marca);
+    const v = {
+      fonte, marca: a.marca || null, variante: a.variante || null,
+      prezzo: typeof a.prezzo === 'number' ? a.prezzo : null,
+      prezzoListino: a.prezzoListino || null, sconto: a.sconto || null,
+      immagine: a.immagine || null, url: a.url || null,
+      articleId: String(a.articleId || a.codiceCmsnl || a.url || a.nome || ('v' + idx)),
+      stelle: a.stelle ? Number(a.stelle) : null, recensioni: a.recensioni ? Number(a.recensioni) : null,
+      disponibile: a.disponibile ?? null,
+      compatibilita: fonte === 'cmsnl' ? fits : null,   // cmsnl porta i fits embedded; autodoc → specs LAZY
+      spedizione: a.spedizione || null, condizione: a.condizione || null,
     };
-  }
-  const c = (res.cmsnl?.items || [])[0];
-  if (c) {
-    return {
-      tipoPezzo: res.cmsnl.meta?.tipoPezzo || c.nome || null,
-      codice: term,
-      marca: c.marca || null,
-      compatibilita: res.cmsnl.meta?.veicoli || null,   // fits con anni/telai
-      oeAlternativi: [],
-      prezzoNuovo: typeof c.prezzo === 'number' ? { valore: c.prezzo, listino: null, sconto: null, fonte: 'cmsnl', url: c.url || null } : null,
-      immagine: c.immagine || null,
-      disponibile: c.disponibile ?? null,
-      condizione: c.condizione || 'Nuovo', spedizione: c.spedizione || null,
-      stelle: null, recensioni: null,
-    };
-  }
-  return null;
+    if (!byTipo.has(tipo)) byTipo.set(tipo, []);
+    byTipo.get(tipo).push(v);
+  });
+  const tipi = [...byTipo.entries()].map(([tipo, articoli]) => ({ tipo, articoli }))
+    .sort((x, y) => y.articoli.length - x.articoli.length);   // dominante = più varianti
+  const multiTipo = tipi.length > 1;
+  return {
+    codice: term,
+    tipoPezzo: tipi[0].tipo,
+    oeAlternativi: fonte === 'autodoc' ? (res.autodoc.meta?.oeAlternativi || []) : [],
+    catalogo: { tipi, multiTipo, tipoDominante: tipi[0].tipo, defaultArticleId: multiTipo ? null : pickDefaultVariant(tipi[0].articoli) },
+  };
 }
 
 module.exports = { searchRicambi, runSource, relevantToQuery };

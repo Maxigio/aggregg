@@ -254,6 +254,22 @@ body:not(.has-results) .search {
 .rc-sch-buybox .rc-prezzo { font-size: 1.7rem; font-weight: 800; color: var(--text); }
 .rc-sch-buybox a { color: var(--accent); font-weight: 600; font-size: 0.82rem; }
 .rc-sch-secs { display: flex; flex-direction: column; gap: 12px; }
+/* selettore varianti v7: chip tipi + lista varianti */
+.rc-var-tipi { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.rc-var-lab { font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.rc-tipo-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2, #f7f8fa); font-size: 0.82rem; color: var(--text); cursor: pointer; }
+.rc-tipo-chip:hover { border-color: var(--accent); }
+.rc-tipo-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rc-tipo-n { font-size: 0.7rem; opacity: 0.75; font-weight: 700; }
+.rc-var-list { display: flex; flex-direction: column; gap: 4px; }
+.rc-var-row { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); cursor: pointer; font-size: 0.86rem; }
+.rc-var-row:hover { border-color: var(--accent); background: var(--surface-2, #f7f8fa); }
+.rc-var-row.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; background: var(--accent-weak); }
+.rc-var-marca { font-weight: 700; color: var(--text); }
+.rc-var-nota { flex: 1; color: var(--text-muted); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-var-prezzo { font-family: var(--num); font-weight: 800; color: var(--pos); }
+.rc-var-prompt { color: var(--text-muted); font-size: 0.9rem; padding: 6px 2px; }
+.rc-tipo-match { display: inline-block; font-size: 0.62rem; font-weight: 700; color: var(--pos); border: 1px solid var(--pos); border-radius: 3px; padding: 0 4px; margin-right: 6px; vertical-align: middle; }
 .rc-sch-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 12px; }
 .rc-sch-tit { font-weight: 700; font-size: 1.1rem; color: var(--text); }
 .rc-sch-price-lab { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }

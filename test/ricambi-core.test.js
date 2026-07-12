@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const { searchRicambi, relevantToQuery } = require('../backend/ricambi-core');
 
 // stub delle fonti (ognuna risolve al SUO envelope, come lookupOem / searchWebParts / subitoSource)
-const okAutodoc = async (oen) => ({ oen, tipoPezzo: 'Bloccasterzo', categoria: 'GOLF 7', articoli: [{ fonte: 'autodoc', nome: 'a', prezzo: 30.99 }], count: 1 });
+const okAutodoc = async (oen) => ({ oen, tipoPezzo: 'Bloccasterzo', categoria: 'GOLF 7', articoli: [{ fonte: 'autodoc', nome: 'Bloccasterzo RIDEX 1K0905851B', marca: 'RIDEX', prezzo: 30.99, url: 'https://www.auto-doc.it/ridex/1', articleId: 'A1', stelle: 8, recensioni: 5 }], count: 1 });
 const okWeb = async (q) => ({ oen: q, pezzo: { tipo: 'ECU', veicoli: 'VW/Audi' }, articoli: [{ fonte: 'web', nome: 'w', url: 'https://x.it/p' }], count: 1 });
 const okSubito = async (term) => ({ articoli: [{ fonte: 'subito', nome: 's', prezzo: 65, url: 'https://subito.it/x' }] });
 const emptySubito = async () => ({ articoli: [] });
@@ -26,37 +26,43 @@ test('OEM auto: scheda da Autodoc, lista SOLO annunci Subito, web/cmsnl mai', as
   assert.deepStrictEqual(r.articoli.map(a => a.fonte), ['subito']);
   assert.strictEqual(r.count, 1);
   assert.ok(r.scheda, 'scheda presente');
+  assert.ok(r.scheda.catalogo, 'catalogo v7 presente');
   assert.strictEqual(r.scheda.tipoPezzo, 'Bloccasterzo');
-  assert.strictEqual(r.scheda.prezzoNuovo.fonte, 'autodoc');
-  assert.strictEqual(r.scheda.prezzoNuovo.valore, 30.99);
+  assert.strictEqual(r.scheda.catalogo.multiTipo, false);
+  const v = r.scheda.catalogo.tipi[0].articoli[0];
+  assert.strictEqual(v.fonte, 'autodoc');
+  assert.strictEqual(v.prezzo, 30.99);
+  assert.strictEqual(r.scheda.catalogo.defaultArticleId, 'A1');
   assert.strictEqual(webCalled, false);                   // scheda+annunci presenti → web saltata
   assert.strictEqual(cmsnlCalled, false);                 // veicolo auto → mai CMSNL
   assert.strictEqual(r.sources.autodoc.status, 'ok');     // catalogo resta nel breakdown
   assert.strictEqual(r.veicolo, 'auto');
 });
 
-test('scheda AUTO: arricchita da Autodoc product page (datiTecnici + compatibilità)', async () => {
-  const autodocUrl = async (oen) => ({ oen, tipoPezzo: 'Disco Freno', articoli: [{ fonte: 'autodoc', nome: 'Disco', prezzo: 45, url: 'https://www.auto-doc.it/ridex/123' }], count: 1 });
-  let specsCalled = null;
-  const specsStub = async (url) => { specsCalled = url; return { datiTecnici: { 'Ø [mm]': '312', 'Spessore [mm]': '25' }, compatibilita: ['Golf 7', 'Audi A3 8P'] }; };
-  const r = await searchRicambi('1K0905851B', stubs({ autodoc: autodocUrl, autodocSpecs: specsStub }));
-  assert.strictEqual(specsCalled, 'https://www.auto-doc.it/ridex/123');       // +1 nav sulla product page
-  assert.strictEqual(r.scheda.datiTecnici['Ø [mm]'], '312');                  // specs reali nella scheda
-  assert.deepStrictEqual(r.scheda.compatibilita, ['Golf 7', 'Audi A3 8P']);   // compatibilità auto riempita
+test('scheda AUTO: catalogo multi-tipo — raggruppa per tipo, dominante primo, NO auto-pick', async () => {
+  const multi = async (oen) => ({ oen, articoli: [
+    { fonte: 'autodoc', nome: 'Bloccasterzo TOPRAN 1K0905851B', marca: 'TOPRAN', prezzo: 36.99, articleId: 'B1', recensioni: 2 },
+    { fonte: 'autodoc', nome: 'Bloccasterzo AIC 1K0905851B', marca: 'AIC', prezzo: 35.99, articleId: 'B2', recensioni: 0 },
+    { fonte: 'autodoc', nome: 'Blocchetto accensione RIDEX 1K0905851B', marca: 'RIDEX', prezzo: 8.29, articleId: 'C1', recensioni: 1 },
+  ], count: 3 });
+  const r = await searchRicambi('1K0905851B', stubs({ autodoc: multi }));
+  const cat = r.scheda.catalogo;
+  assert.strictEqual(cat.multiTipo, true);
+  assert.strictEqual(cat.tipi[0].tipo, 'Bloccasterzo');            // dominante = più varianti (2)
+  assert.strictEqual(cat.tipi[0].articoli.length, 2);
+  assert.strictEqual(cat.tipi[1].tipo, 'Blocchetto accensione');
+  assert.strictEqual(cat.defaultArticleId, null);                 // multi-tipo → nessun auto-pick (niente €8.29)
 });
 
-test('scheda AUTO: enrichment Autodoc NON parte senza url del prezzo nuovo', async () => {
-  let called = false;
-  const specsStub = async () => { called = true; return { datiTecnici: {}, compatibilita: null }; };
-  await searchRicambi('1K0905851B', stubs({ autodocSpecs: specsStub }));   // okAutodoc default = nessun url
-  assert.strictEqual(called, false);
-});
-
-test('scheda MOTO: enrichment Autodoc mai (fonte prezzo = cmsnl)', async () => {
-  let called = false;
-  const specsStub = async () => { called = true; return { datiTecnici: {}, compatibilita: null }; };
-  await searchRicambi('34218526568', { veicolo: 'moto', autodoc: okAutodoc, cmsnl: okCmsnl, web: okWeb, subito: okSubito, ebay: emptyEbay, ebaySpecs: noSpecs, autodocSpecs: specsStub });
-  assert.strictEqual(called, false);
+test('scheda AUTO: tipo singolo → default = variante PIÙ RECENSITA (non min-prezzo)', async () => {
+  const single = async (oen) => ({ oen, articoli: [
+    { fonte: 'autodoc', nome: 'Bloccasterzo TOPRAN 1K0', marca: 'TOPRAN', prezzo: 40, articleId: 'S1', recensioni: 1 },
+    { fonte: 'autodoc', nome: 'Bloccasterzo VIKA 1K0', marca: 'VIKA', prezzo: 30, articleId: 'S2', recensioni: 9 },
+    { fonte: 'autodoc', nome: 'Bloccasterzo AIC 1K0', marca: 'AIC', prezzo: 20, articleId: 'S3', recensioni: 0 },
+  ], count: 3 });
+  const r = await searchRicambi('1K0905851B', stubs({ autodoc: single }));
+  assert.strictEqual(r.scheda.catalogo.multiTipo, false);
+  assert.strictEqual(r.scheda.catalogo.defaultArticleId, 'S2');   // più recensita, non il min-prezzo S3 (€20)
 });
 
 test('OEM moto: CMSNL+Subito, Autodoc mai; veicoli dai fits CMSNL', async () => {
@@ -152,7 +158,9 @@ test('veicolo moto + cmsnl ok + 0 annunci: scheda presente, lista vuota, web sal
   assert.strictEqual(r.sources.cmsnl.status, 'ok');
   assert.strictEqual(webCalled, false);                   // scheda trovata → niente fallback web
   assert.ok(r.scheda);
-  assert.strictEqual(r.scheda.prezzoNuovo.fonte, 'cmsnl');
+  assert.ok(r.scheda.catalogo);
+  assert.strictEqual(r.scheda.catalogo.tipi[0].articoli[0].fonte, 'cmsnl');
+  assert.strictEqual(r.scheda.catalogo.multiTipo, false);
   assert.strictEqual(r.tipoPezzo, 'Disco Freno Posteriore');
   assert.deepStrictEqual(r.articoli, []);                 // catalogo ≠ annunci
   assert.strictEqual(r.count, 0);
@@ -179,9 +187,9 @@ test('eBay: offerte in lista dopo Subito; scheda foto reale dal match + dati tec
   const r = await searchRicambi('34218526568', { veicolo: 'moto', cmsnl: okCmsnl, subito: okSubito, ebay: okEbay, ebaySpecs: specs, web: okWeb });
   assert.deepStrictEqual(r.articoli.map(a => a.fonte), ['subito', 'ebay']);
   assert.strictEqual(r.sources.ebay.status, 'ok');
-  // foto reale: cmsnl (disegno) rimpiazzata dalla foto eBay hi-res delle specs
-  assert.strictEqual(r.scheda.immagine, 'https://i.ebayimg.com/hi/s-l1600.webp');
-  assert.deepStrictEqual(r.scheda.datiTecnici, { 'Marca': 'BMW', 'Numero ricambio OEM': '34218526568' });
+  // foto reale eBay hi-res a livello codice (fallback per la variante) + dati tecnici eBay
+  assert.strictEqual(r.scheda.fotoReale, 'https://i.ebayimg.com/hi/s-l1600.webp');
+  assert.deepStrictEqual(r.scheda.datiTecniciEbay, { 'Marca': 'BMW', 'Numero ricambio OEM': '34218526568' });
 });
 
 test('eBay: nessun match titolo-codice → niente specs fetch, scheda intatta', async () => {

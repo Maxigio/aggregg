@@ -33,12 +33,14 @@ function mount(app, deps = {}) {
   const searchRicambi = deps.searchRicambi || realCore.searchRicambi;
   const normOen = deps.normOen || realOem.normOen;
   const fetchEbayItemDetails = deps.fetchEbayItemDetails || realEbay.fetchEbayItemDetails;
+  const fetchAutodocSpecs = deps.fetchAutodocSpecs || realOem.fetchAutodocSpecs;
   const clientIp = deps.clientIp || defaultClientIp;
 
   const hits = new Map();                    // ip → { windowStart, count } (ricerche)
   const ebayHits = new Map();                // ip → { windowStart, count } (enrich ⓘ, budget separato)
   const cache = new Map();                   // normOen → { ts, ttl, data }
   const ebayCache = new Map();               // itm url → { ts, data } (enrich lazy annunci eBay)
+  const autodocCache = new Map();            // product url → { ts, data } (specs lazy variante Autodoc)
   const rateLimiter = (map, cap) => (ip) => {
     const now = Date.now();
     const rec = map.get(ip);
@@ -90,6 +92,25 @@ function mount(app, deps = {}) {
     } catch (e) {
       console.error('[ricambi] ebay-item', e.message);
       res.status(502).json({ error: 'Dettaglio annuncio non disponibile.' });
+    }
+  });
+
+  // Specs LAZY di una variante Autodoc (datiTecnici + compatibilità) — chiamata quando si seleziona
+  // una variante nel selettore. Valida l'URL product-page (anti-SSRF: solo auto-doc.it), cache per URL.
+  app.get('/api/ricambi/autodoc-specs', async (req, res) => {
+    if (!ebayRateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
+    const url = String(req.query.url || '').trim();
+    if (!/^https?:\/\/(www\.)?auto-doc\.it\//i.test(url)) return res.status(400).json({ error: 'URL Autodoc non valido' });
+    const hit = autodocCache.get(url);
+    if (hit && Date.now() - hit.ts < RICAMBI_TTL) return res.json(hit.data);
+    try {
+      const data = await fetchAutodocSpecs(url);
+      autodocCache.set(url, { ts: Date.now(), data });
+      if (autodocCache.size > RICAMBI_CACHE_MAX) autodocCache.delete(autodocCache.keys().next().value);
+      res.json(data);
+    } catch (e) {
+      console.error('[ricambi] autodoc-specs', e.message);
+      res.status(502).json({ error: 'Specifiche non disponibili.' });
     }
   });
 }
