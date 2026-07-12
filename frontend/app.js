@@ -1115,12 +1115,16 @@ function rcVariantDetailHTML(v, s) {
   const loading = v.fonte === 'autodoc' && (!lazy || lazy.loading);
   const datiTecnici = { ...(s.datiTecniciEbay || {}), ...(v.datiTecnici || {}), ...((lazy && !lazy.loading && lazy.datiTecnici) || {}) };
   const compat = v.compatibilita || (lazy && !lazy.loading && lazy.compatibilita) || null;
-  const dtBlock = rcDtGridHTML(datiTecnici) ||
-    (loading ? '<div class="rc-sch-sec"><div class="rc-sch-sechd">Dati tecnici</div><div class="rc-det-loading">Carico specifiche…</div></div>' : '');
+  const dtBlock = rcDtGridHTML(datiTecnici);
+  // specs/compatibilità = chiamata lazy alla product-page → indicatore chiaro finché arriva
+  const loadingBlock = loading
+    ? '<div class="rc-sch-sec"><div class="rc-det-loading"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Carico dati tecnici e compatibilità…</div></div>'
+    : '';
+  const compatBlock = loading ? '' : rcFitsTable(compat);
   const oe = (s.oeAlternativi && s.oeAlternativi.length)
     ? `<div class="rc-sch-sec"><div class="rc-sch-sechd">Codici OE equivalenti</div><div class="rc-oechips">${s.oeAlternativi.slice(0, 14).map(c => `<button type="button" class="rc-oe" data-oe="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`
     : '';
-  return `<div class="rc-sch-main">${img}${buybox}</div><div class="rc-sch-secs">${dtBlock}${rcFitsTable(compat)}${oe}</div>`;
+  return `<div class="rc-sch-main">${img}${buybox}</div><div class="rc-sch-secs">${dtBlock}${loadingBlock}${compatBlock}${oe}</div>`;
 }
 function rcSchedaHTML(d) {
   const s = d.scheda;
