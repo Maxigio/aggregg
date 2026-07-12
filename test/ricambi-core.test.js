@@ -266,6 +266,21 @@ test('parseEbayQty: estrae disponibili/venduti (best-effort)', () => {
   assert.strictEqual(parseEbayQty('spedizione gratis'), null);
 });
 
+test('buildEbayDetails: assembla venditore/spedizione/quantità/marca dai testi grezzi', () => {
+  const { buildEbayDetails } = require('../backend/ebay-scrape');
+  const d = buildEbayDetails({
+    seller: 'rollerdunse-owschlag(9151)Venditore professionale',
+    shipping: 'EUR 22,00 Standard International. Vedi i dettagli per la spedizione',
+    qty: '5 disponibili - 1 venduto',
+    marca: 'BMW',
+  });
+  assert.strictEqual(d.venditore, 'rollerdunse-owschlag (9151) · Professionale');
+  assert.strictEqual(d.spedizione, 'EUR 22,00 Standard International');
+  assert.strictEqual(d.marca, 'BMW');
+  assert.strictEqual(d.quantita, '5 disponibili · 1 venduti');
+  assert.deepStrictEqual(buildEbayDetails({}), {});
+});
+
 test('cleanEbayTitle: via il testo accessibilità dal titolo', () => {
   const { cleanEbayTitle } = require('../backend/ebay-scrape');
   assert.strictEqual(cleanEbayTitle('Disco freno BMW viene aperta una nuova finestra o scheda'), 'Disco freno BMW');

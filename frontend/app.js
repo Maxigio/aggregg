@@ -912,7 +912,7 @@ function rcRowHTML(a, bestKey) {
 async function rcEnrichEbay(a, det) {
   if (!a || a.fonte !== 'ebay' || a._ebayDetails || !rcSafeUrl(a.url)) return;
   a._ebayDetails = 'loading';
-  det.querySelector('.rc-det-specs')?.insertAdjacentHTML('beforeend', '<div class="rc-det-loading" role="status">Carico dettagli annuncio…</div>');
+  det.querySelector('.det-specs')?.insertAdjacentHTML('beforeend', '<div class="rc-det-loading" role="status">Carico dettagli annuncio…</div>');
   try {
     const r = await fetch(`/api/ricambi/ebay-item?url=${encodeURIComponent(a.url)}`);
     const d = r.ok ? await r.json() : {};
@@ -924,8 +924,9 @@ async function rcEnrichEbay(a, det) {
 
 // Contenuto dell'accordion info: tutti i campi extra della fonte (assenti → riga omessa).
 function rcDetailHTML(a) {
+  // stessa struttura/classi dell'accordion auto (.det-inner/.det-gallery/.det-specs/.det-spec/.det-foot/.det-open)
   const rows = [];
-  const push = (k, v) => { if (v != null && v !== '') rows.push(`<div class="rc-det-row"><span class="rc-det-k">${k}</span><span class="rc-det-v">${escapeHtml(String(v))}</span></div>`); };
+  const push = (k, v) => { if (v != null && v !== '') rows.push(`<div class="det-spec"><span class="det-k">${k}</span><span class="det-v">${escapeHtml(String(v))}</span></div>`); };
   push('Fonte', RC_FONTE[a.fonte] || a.fonte);
   push('Prezzo', rcPriceText(a));
   if (a.prezzoListino && a.sconto) push('Listino', `${rcEur(a.prezzoListino)} (-${a.sconto}%)`);
@@ -940,10 +941,12 @@ function rcDetailHTML(a) {
   push('Valutazione', a.stelle ? `★ ${a.stelle}/10 (${a.recensioni || 0} recensioni)` : null);
   push('Venditore', a.venditore);
   push('Provincia', a.provincia);
+  const imgs = [...new Set([a.immagine, ...(Array.isArray(a.galleria) ? a.galleria : [])].filter(Boolean))];
+  const gallery = imgs.length ? `<div class="det-gallery">${imgs.slice(0, 8).map(im => `<img src="${escapeHtml(im)}" loading="lazy" referrerpolicy="no-referrer" alt="">`).join('')}</div>` : '';
   const u = rcSafeUrl(a.url);
-  const gal = a.immagine ? `<img class="rc-det-img" src="${escapeHtml(a.immagine)}" referrerpolicy="no-referrer" alt="">` : '';
-  const foot = u ? `<a class="rc-det-open" href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">apri annuncio ↗</a>` : '';
-  return `<div class="rc-det-inner">${gal}<div class="rc-det-specs">${rows.join('') || '<span class="rc-det-empty">Nessun dettaglio aggiuntivo</span>'}</div>${foot}</div>`;
+  const openBtn = u ? `<a class="det-open" href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">Apri annuncio ↗</a>` : '';
+  const specs = rows.join('') || '<span class="spec-empty">Nessun dettaglio aggiuntivo</span>';
+  return `<div class="det-inner">${gallery}<div class="det-specs">${specs}</div><div class="det-foot">${openBtn}</div></div>`;
 }
 
 // Brand a 2 parole (altrimenti la marca sarebbe il 1° token). Lowercase.
@@ -1007,9 +1010,19 @@ function rcSchedaImages() {
 // Sostituisce il titolone; la lista sotto contiene solo le OFFERTE (Subito/web).
 function rcSchedaHTML(d) {
   const s = d.scheda;
-  if (!s) {   // nessun catalogo → head compatto (identità dal web se c'è)
+  if (!s) {   // nessun catalogo → card placeholder che SPIEGA (mai vuota silenziosa)
     const idParts = [d.tipoPezzo, d.veicoli].filter(Boolean).map(escapeHtml);
-    return `<div class="rc-tit">${idParts.join(' · ').slice(0, 160) || 'Ricambio'} · <span class="rc-code">${escapeHtml(d.oen || '')}</span></div>`;
+    const idLine = `${idParts.join(' · ').slice(0, 160) || 'Ricambio'}${d.oen ? ` · <span class="rc-code">${escapeHtml(d.oen)}</span>` : ''}`;
+    let msg;
+    if (d.mode && d.mode !== 'oem') msg = 'La scheda tecnica (prezzo nuovo, dati tecnici) è disponibile solo cercando per <b>codice OE/OEM</b>.';
+    else {
+      const catName = d.veicolo === 'auto' ? 'Autodoc' : 'CMSNL';
+      const cat = d.veicolo === 'auto' ? d.sources?.autodoc : d.sources?.cmsnl;
+      msg = (cat && ['blocked', 'error', 'timeout'].includes(cat.status))
+        ? `Catalogo ${catName} non disponibile ora — riprova tra poco.`
+        : `Ricambio non presente nel catalogo ${catName}.`;
+    }
+    return `<div class="rc-scheda rc-scheda-empty"><div class="rc-sch-body"><div class="rc-sch-tit">${idLine}</div><div class="rc-sch-emptymsg">${msg}</div></div></div>`;
   }
   const img = s.immagine ? `<img class="rc-sch-img" src="${escapeHtml(s.immagine)}" alt="" referrerpolicy="no-referrer">` : '<div class="rc-sch-img rc-img-ph"></div>';
   const pn = s.prezzoNuovo;
@@ -1261,7 +1274,7 @@ function renderRcFontiLine() {
     if (t.closest('img.rc-sch-img')) { const imgs = rcSchedaImages(); if (imgs.length) openLightbox(imgs); return; }
     const imgWrap = t.closest('.rc-img-wrap:not(.rc-img-ph)');
     if (imgWrap) { const im = imgWrap.querySelector('img'); if (im && im.src) openLightbox([{ full: im.src }]); return; }
-    const detImg = t.closest('img.rc-det-img'); if (detImg && detImg.src) { openLightbox([{ full: detImg.src }]); return; }
+    const detGal = t.closest('.det-gallery'); if (detGal && t.tagName === 'IMG') { openLightbox([...detGal.querySelectorAll('img')].map(i => ({ full: i.src }))); return; }
     const cp = t.closest('.rc-copy'); if (cp) { e.preventDefault(); rcCopy(cp.dataset.copy, cp); return; }   // preventDefault: non togglare il <details> quando il copy-button è nel summary
     const chip = t.closest('.facet-chip'); if (chip) { rcGroupDim = chip.dataset.dim; if (rcView !== 'grid') rcView = 'grid'; renderRicambiPanel(); return; }
     // collapse gruppo: toggle diretto (niente re-render → no scroll jump); rcCollapsed persiste

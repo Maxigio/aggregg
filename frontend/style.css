@@ -242,6 +242,8 @@ body:not(.has-results) .search {
 .rc-src-bad { background: var(--neg-bg); color: var(--neg); }
 /* SCHEDA RICAMBIO — a blocchi: [img+prezzo] | [titolo · dati tecnici · compatibilità · OE] */
 .rc-scheda { display: flex; gap: 18px; align-items: flex-start; border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface); padding: 16px; }
+.rc-scheda-empty { background: var(--surface-2, #f7f8fa); }
+.rc-sch-emptymsg { color: var(--text-muted); font-size: 0.9rem; line-height: 1.4; }
 .rc-sch-left { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; align-items: center; width: 130px; }
 .rc-sch-img { width: 130px; height: auto; max-height: 190px; object-fit: contain; background: transparent; border: 1px solid var(--line); border-radius: 6px; cursor: zoom-in; display: block; }
 .rc-sch-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 12px; }
@@ -309,11 +311,9 @@ body:not(.has-results) .search {
 .rc-group.collapsed .rc-group-body { display: none; }
 .rc-group-body { padding: 8px; }
 .rc-group .rc-list { border: none; }
-/* dettaglio — accordion inline full-width sotto la riga (mirror .row-detail auto) */
+/* accordion inline: usa le classi .det-* della ricerca auto (stesso look). Restano solo le classi
+   scheda (.rc-det-row/-k/-v = griglia dati tecnici) + il wrapper + lo spinner enrich. */
 .rc-detail { background: var(--surface-2, #f7f8fa); border-bottom: 1px solid var(--line); }
-.rc-det-inner { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; padding: 12px 14px; }
-.rc-det-img { width: 88px; height: 88px; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 6px; flex: 0 0 auto; cursor: zoom-in; }
-.rc-det-specs { flex: 1; min-width: 220px; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 18px; }
 .rc-det-row { display: flex; justify-content: space-between; gap: 10px; font-size: 0.82rem; padding: 3px 0; border-bottom: 1px dotted var(--line); }
 .rc-det-k { color: var(--text-muted); }
 .rc-det-v { color: var(--text); font-weight: 600; text-align: right; }
@@ -327,8 +327,6 @@ body:not(.has-results) .search {
 .rc-code-more[open] .rc-code-caret { transform: rotate(180deg); }
 .rc-code-extra { display: flex; justify-content: space-between; gap: 10px; margin-top: 4px; padding-top: 4px; border-top: 1px dotted var(--line); font-size: 0.8rem; }
 .rc-code-extra .rc-det-k { font-weight: 400; }
-.rc-det-open { align-self: center; color: var(--accent); font-weight: 600; font-size: 0.84rem; white-space: nowrap; }
-.rc-det-empty { color: var(--text-faint); font-style: italic; font-size: 0.82rem; }
 .rc-det-loading { grid-column: 1 / -1; color: var(--text-muted); font-size: 0.8rem; font-style: italic; padding: 4px 0; }
 /* confronto parti */
 .rc-cmp-scroll { overflow-x: auto; }

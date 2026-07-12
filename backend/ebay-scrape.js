@@ -143,6 +143,22 @@ function parseEbayQty(raw) {
 }
 
 // fetchEbayItemDetails(url) → { venditore, spedizione, quantita, marca } dalla pagina item (enrich lazy dell'annuncio).
+// Assembla i campi enrich dai testi grezzi estratti (pura, testabile).
+function buildEbayDetails(raw) {
+  const out = {};
+  const seller = parseEbaySeller(raw.seller);
+  if (seller.nome) out.venditore = `${seller.nome}${seller.feedback ? ` (${seller.feedback})` : ''}${seller.tipo ? ` · ${seller.tipo}` : ''}`;
+  // il value spedizione concatena spans extra ("Vedi i dettagli…Oggetto che si trova a…") → tronca al primo marker
+  const sped = cleanEbayTitle(raw.shipping || '').split(/vedi i dettagli|oggetto che si trova|consegna prevista/i)[0].replace(/[.\s]+$/, '').trim();
+  if (sped) out.spedizione = sped.slice(0, 80);
+  const qty = parseEbayQty(raw.qty);
+  if (qty) out.quantita = qty;
+  if (raw.marca) { const m = normalizzaVal(cleanEbayTitle(raw.marca)).trim(); if (m) out.marca = m.slice(0, 40); }
+  return out;
+}
+
+// fetchEbayItemDetails(url) → { venditore, spedizione, quantita, marca }. Il contenuto item è CLIENT-rendered
+// (l'HTTP puro non basta), ma `waitUntil:'commit'` + waitForSelector aspetta SOLO gli elementi utili → ~2s invece di 6s.
 async function fetchEbayItemDetails(url) {
   const u = String(url || '');
   if (!/^https:\/\/www\.ebay\.\w+\/itm\//.test(u)) return {};
@@ -150,9 +166,9 @@ async function fetchEbayItemDetails(url) {
   const page = await ctx.newPage();
   try {
     await warmup(page);
-    const resp = await page.goto(u, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const resp = await page.goto(u, { waitUntil: 'commit', timeout: 30000 });
     if (resp && resp.status() === 403) { _warm = false; throw new Error('eBay 403 (item)'); }
-    await page.waitForTimeout(2500);
+    await page.waitForSelector('.x-sellercard-atf__info__about-seller, .ux-labels-values', { timeout: 12000 }).catch(() => {});
     const raw = await page.evaluate(() => {
       const norm = e => e ? e.textContent.replace(/\s+/g, ' ').trim() : null;
       const pick = sels => { for (const s of sels) { const e = document.querySelector(s); if (e && norm(e)) return norm(e); } return null; };
@@ -168,19 +184,9 @@ async function fetchEbayItemDetails(url) {
         marca,
       };
     });
-    const out = {};
-    const seller = parseEbaySeller(raw.seller);
-    if (seller.nome) out.venditore = `${seller.nome}${seller.feedback ? ` (${seller.feedback})` : ''}${seller.tipo ? ` · ${seller.tipo}` : ''}`;
-    // il value spedizione concatena spans extra ("Vedi i dettagli…Oggetto che si trova a…") → tronca al primo marker
-    const sped = cleanEbayTitle(raw.shipping || '').split(/vedi i dettagli|oggetto che si trova|consegna prevista/i)[0].replace(/[.\s]+$/, '').trim();
-    if (sped) out.spedizione = sped.slice(0, 80);
-    const qty = parseEbayQty(raw.qty);
-    if (qty) out.quantita = qty;
-    if (raw.marca) { const m = normalizzaVal(cleanEbayTitle(raw.marca)).trim(); if (m) out.marca = m.slice(0, 40); }
-    return out;
-  } finally {
-    await page.close().catch(() => {});
-  }
+    return buildEbayDetails(raw);
+  } catch (e) { logger.warn('[ebay]', `item details "${u}": ${e.message}`); return {}; }
+  finally { await page.close().catch(() => {}); }
 }
 
 // searchEbay('34218526568') → [{fonte:'ebay', nome, prezzo, valuta, immagine, url, condizione, spedizione}]
@@ -193,7 +199,7 @@ async function searchEbay(query) {
     await warmup(page);
     const resp = await page.goto(`https://www.ebay.it/sch/i.html?_nkw=${encodeURIComponent(q)}&_sacat=0`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     if (resp && resp.status() === 403) { _warm = false; throw new Error('eBay 403 (serp)'); }
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(2000);
     const raw = await page.evaluate(() => {
       return [...document.querySelectorAll('.s-item, li.s-card, [data-viewport] .s-card')].slice(0, 25).map(it => {
         const t = it.querySelector('.s-item__title, .s-card__title')?.textContent?.replace(/\s+/g, ' ').trim() || null;
@@ -232,7 +238,7 @@ async function fetchEbayItemSpecs(url) {
     await warmup(page);
     const resp = await page.goto(u, { waitUntil: 'domcontentloaded', timeout: 30000 });
     if (resp && resp.status() === 403) { _warm = false; throw new Error('eBay 403 (item)'); }
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(1500);
     const raw = await page.evaluate(() => {
       const txt = el => el ? el.textContent.replace(/\s+/g, ' ').trim() : null;
       const pairs = [];
@@ -267,7 +273,7 @@ async function fetchEbayItemSpecs(url) {
   }
 }
 
-module.exports = { searchEbay, fetchEbayItemSpecs, fetchEbayItemDetails, parsePrezzoEur, isPlaceholder, isJunkSpec, normalizzaSpec, normalizzaVal, cleanEbayTitle, ebayCardMeta, parseEbaySeller, parseEbayQty };
+module.exports = { searchEbay, fetchEbayItemSpecs, fetchEbayItemDetails, buildEbayDetails, parsePrezzoEur, isPlaceholder, isJunkSpec, normalizzaSpec, normalizzaVal, cleanEbayTitle, ebayCardMeta, parseEbaySeller, parseEbayQty };
 
 // self-check manuale: `node backend/ebay-scrape.js 34218526568`
 if (require.main === module) {

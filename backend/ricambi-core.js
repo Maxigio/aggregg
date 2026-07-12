@@ -119,6 +119,10 @@ async function searchRicambi(qRaw, opts = {}) {
   // sono l'identità certa del pezzo: dati tecnici + prezzo nuovo. La lista articoli resta per
   // le OFFERTE di mercato (Subito usato, poi eBay).
   const scheda = buildScheda(res, term);
+  if (mode === 'oem' && !scheda) {   // diagnosi "annunci sì, scheda no": perché il catalogo non ha dato la scheda
+    const cat = veicolo === 'auto' ? res.autodoc : res.cmsnl;
+    logger.info('[ricambi]', `scheda null "${term}" (${veicolo}): catalogo ${cat ? cat.status : 'assente'}${cat?.reason ? ' — ' + cat.reason : ''}`);
+  }
 
   // Arricchimento scheda da eBay: foto REALE del pezzo + dati tecnici ("Item specifics").
   // Match affidabile solo in mode oem: l'offerta il cui titolo contiene il codice.
