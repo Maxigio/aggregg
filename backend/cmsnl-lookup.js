@@ -85,7 +85,7 @@ async function lookupCmsnl(oenRaw) {
       immagine: prod.image || p.galImg || null,
       url: prod.url || url,
     }];
-    return { oen, tipoPezzo: prod.name, veicoli: p.fits ? p.fits.join(', ') : null, articoli, count: 1 };
+    return { oen, tipoPezzo: prod.name, veicoli: p.fits || null, articoli, count: 1 };   // array di fit (Marca modello anno) — il render fa la tabella
   } catch (e) {
     return { oen, articoli: [], count: 0, error: e.message };
   } finally {

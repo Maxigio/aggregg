@@ -907,6 +907,21 @@ function rcRowHTML(a, bestKey) {
   return row + detail;
 }
 
+// Enrich LAZY di un annuncio eBay all'apertura dell'accordion: +1 nav item (venditore/spedizione/
+// quantità/marca) solo on-demand. Muta `a` (riferimento in rcData.articoli) e re-renderizza se ancora aperto.
+async function rcEnrichEbay(a, det) {
+  if (!a || a.fonte !== 'ebay' || a._ebayDetails || !rcSafeUrl(a.url)) return;
+  a._ebayDetails = 'loading';
+  det.querySelector('.rc-det-specs')?.insertAdjacentHTML('beforeend', '<div class="rc-det-loading" role="status">Carico dettagli annuncio…</div>');
+  try {
+    const r = await fetch(`/api/ricambi/ebay-item?url=${encodeURIComponent(a.url)}`);
+    const d = r.ok ? await r.json() : {};
+    for (const kk of ['venditore', 'spedizione', 'quantita', 'marca']) if (d[kk] != null && d[kk] !== '') a[kk] = d[kk];
+  } catch { /* enrich best-effort */ }
+  a._ebayDetails = true;
+  if (!det.classList.contains('d-none')) det.innerHTML = rcDetailHTML(a);   // re-render solo se ancora aperto
+}
+
 // Contenuto dell'accordion info: tutti i campi extra della fonte (assenti → riga omessa).
 function rcDetailHTML(a) {
   const rows = [];
@@ -920,6 +935,7 @@ function rcDetailHTML(a) {
   push('Variante', a.variante);
   push('Condizione', a.condizione);
   push('Spedizione', a.spedizione);
+  push('Quantità', a.quantita);
   push('Disponibilità', a.disponibile == null ? null : (a.disponibile ? 'Disponibile' : 'Non disponibile'));
   push('Valutazione', a.stelle ? `★ ${a.stelle}/10 (${a.recensioni || 0} recensioni)` : null);
   push('Venditore', a.venditore);
@@ -928,6 +944,63 @@ function rcDetailHTML(a) {
   const gal = a.immagine ? `<img class="rc-det-img" src="${escapeHtml(a.immagine)}" referrerpolicy="no-referrer" alt="">` : '';
   const foot = u ? `<a class="rc-det-open" href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">apri annuncio ↗</a>` : '';
   return `<div class="rc-det-inner">${gal}<div class="rc-det-specs">${rows.join('') || '<span class="rc-det-empty">Nessun dettaglio aggiuntivo</span>'}</div>${foot}</div>`;
+}
+
+// Brand a 2 parole (altrimenti la marca sarebbe il 1° token). Lowercase.
+const RC_BRANDS_2W = ['moto guzzi', 'harley davidson', 'harley-davidson', 'alfa romeo', 'land rover', 'range rover',
+  'mercedes benz', 'mercedes-benz', 'aston martin', 'royal enfield', 'can am', 'can-am'];
+// Fit CMSNL "Marca modello anno" → {marca, modello, anno}. anno finale = singolo o range (2019, 2019-2023, 2019>).
+function rcParseFit(raw) {
+  const str = String(raw || '').replace(/\s+/g, ' ').trim();
+  if (!str) return { marca: '', modello: '', anno: '' };
+  const m = str.match(/((?:19|20)\d{2}(?:\s*[-–/>]\s*(?:(?:19|20)\d{2}|oggi)?)?)\s*$/i);
+  let anno = '', body = str;
+  if (m && m.index > 0) { anno = m[1].trim(); body = str.slice(0, m.index).trim(); }
+  const low = body.toLowerCase();
+  const b2 = RC_BRANDS_2W.find(b => low === b || low.startsWith(b + ' '));
+  let marca, modello;
+  if (b2) { marca = body.slice(0, b2.length); modello = body.slice(b2.length).trim(); }
+  else { const sp = body.indexOf(' '); marca = sp === -1 ? body : body.slice(0, sp); modello = sp === -1 ? '' : body.slice(sp + 1).trim(); }
+  return { marca, modello, anno };
+}
+// Compatibilità → tabella Marca | Modello | Anno. Accetta array (reale) o stringa (retro-compat/web).
+function rcFitsTable(compat) {
+  const list = Array.isArray(compat) ? compat : String(compat || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!list.length) return '';
+  const cap = 20;
+  const rows = list.slice(0, cap).map(f => {
+    const p = rcParseFit(f);
+    return `<tr><td>${escapeHtml(p.marca)}</td><td>${escapeHtml(p.modello)}</td><td>${escapeHtml(p.anno)}</td></tr>`;
+  }).join('');
+  const more = list.length > cap ? `<div class="rc-fits-more">+${list.length - cap} altri</div>` : '';
+  // dropdown consultabile su interazione (chiuso di default) — pattern nativo <details>
+  return `<div class="rc-sch-sec"><details class="rc-fits"><summary class="rc-fits-sum">Compatibilità · ${list.length} ${list.length === 1 ? 'modello' : 'modelli'}</summary>` +
+    `<div class="rc-fits-wrap"><table class="rc-fits-tbl"><thead><tr><th>Marca</th><th>Modello</th><th>Anno</th></tr></thead><tbody>${rows}</tbody></table>${more}</div></details></div>`;
+}
+
+// Chiavi-codice della grid dati tecnici → valore copiabile al click.
+const RC_COPY_KEYS = new Set(['Codice produttore', 'Codice articolo del produttore', 'Numero OEM', 'EAN', 'Numero di riferimento']);
+// Chiavi commerciali (non dati tecnici) da NON mostrare nella grid scheda — restano negli annunci.
+const RC_NONTECH_KEYS = new Set(['Condizione', 'Disponibilità', 'Spedizione', 'Valutazione']);
+function rcCopy(text, el) {
+  const restore = el.textContent;
+  const done = () => { el.classList.add('rc-copied'); el.textContent = 'Copiato ✓'; setTimeout(() => { el.textContent = restore; el.classList.remove('rc-copied'); }, 1200); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(() => rcCopyFallback(text, done));
+  else rcCopyFallback(text, done);
+}
+function rcCopyFallback(text, cb) {   // contesti senza Clipboard API (http non-secure)
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); cb(); } catch { /* no-op */ } finally { ta.remove(); }
+}
+
+// Immagini della scheda per il lightbox: foto principale + galleria eBay (se presente), dedup.
+function rcSchedaImages() {
+  const s = rcData && rcData.scheda;
+  if (!s) return [];
+  const imgs = [s.immagine, ...(Array.isArray(s.galleria) ? s.galleria : [])].filter(Boolean);
+  return [...new Set(imgs)].map(u => ({ full: u }));
 }
 
 // Card "scheda ricambio": identità certa dal catalogo (dati tecnici + prezzo NUOVO).
@@ -947,25 +1020,36 @@ function rcSchedaHTML(d) {
       ${pn.listino && pn.sconto ? `<span class="rc-listino">${rcEur(pn.listino)}</span><span class="rc-sconto">-${escapeHtml(String(pn.sconto))}%</span>` : ''}
       ${pnUrl ? `<a href="${escapeHtml(pnUrl)}" target="_blank" rel="noopener noreferrer">su ${escapeHtml(RC_FONTE[pn.fonte] || pn.fonte)} ↗</a>` : `<span class="rc-sch-src">(${escapeHtml(RC_FONTE[pn.fonte] || pn.fonte)})</span>`}
     </div>` : '';
-  // DATI TECNICI: merge dati catalogo (precedenza) + Item specifics eBay (già in italiano)
+  // DATI TECNICI: SOLO veri dati tecnici — identità (Marca) + specifiche catalogo/eBay.
+  // Le info commerciali (condizione/disponibilità/spedizione/valutazione) NON sono dati tecnici → restano negli annunci.
   const dt = {};
   if (s.marca) dt['Marca'] = s.marca;
-  if (s.condizione) dt['Condizione'] = s.condizione;
-  if (s.disponibile != null) dt['Disponibilità'] = s.disponibile ? 'Disponibile' : 'Non disponibile';
-  if (s.spedizione) dt['Spedizione'] = s.spedizione;
-  if (s.stelle) dt['Valutazione'] = `★ ${s.stelle}/10${s.recensioni ? ` (${s.recensioni})` : ''}`;
-  for (const [k, v] of Object.entries(s.datiTecnici || {})) if (!(k in dt)) dt[k] = v;
+  for (const [k, v] of Object.entries(s.datiTecnici || {})) if (!(k in dt) && !RC_NONTECH_KEYS.has(k)) dt[k] = v;
+  // valore: codice → button copiabile (keyboard-accessibile nativo); altrimenti testo
+  const dvHtml = (k, v) => RC_COPY_KEYS.has(k)
+    ? `<button type="button" class="rc-det-v rc-copy" data-copy="${escapeHtml(String(v))}" title="Copia negli appunti">${escapeHtml(String(v)).slice(0, 70)}</button>`
+    : `<span class="rc-det-v">${escapeHtml(String(v)).slice(0, 70)}</span>`;
+  const prod = dt['Codice produttore'], art = dt['Codice articolo del produttore'];
+  const bothCodes = prod && art;   // se ci sono entrambi → un solo dropdown (collassato = codice produttore)
   const dtRows = Object.entries(dt).slice(0, 10)
-    .map(([k, v]) => `<div class="rc-det-row"><span class="rc-det-k">${escapeHtml(k)}</span><span class="rc-det-v">${escapeHtml(String(v)).slice(0, 70)}</span></div>`).join('');
+    .filter(([k]) => !(bothCodes && k === 'Codice articolo del produttore'))   // l'articolo va nel dropdown, non in riga separata
+    .map(([k, v]) => {
+      if (bothCodes && k === 'Codice produttore') {
+        return `<div class="rc-det-row"><span class="rc-det-k">Codice produttore</span>` +
+          `<details class="rc-code-more"><summary>${dvHtml('Codice produttore', prod)}<span class="rc-code-caret"></span></summary>` +
+          `<div class="rc-code-extra"><span class="rc-det-k">Cod. articolo produttore</span>${dvHtml('Codice articolo del produttore', art)}</div></details></div>`;
+      }
+      return `<div class="rc-det-row"><span class="rc-det-k">${escapeHtml(k)}</span>${dvHtml(k, v)}</div>`;
+    }).join('');
   const dtBlock = dtRows ? `<div class="rc-sch-sec"><div class="rc-sch-sechd">Dati tecnici</div><div class="rc-sch-grid">${dtRows}</div></div>` : '';
-  const compat = s.compatibilita ? `<div class="rc-sch-sec"><div class="rc-sch-sechd">Compatibilità</div><div class="rc-sch-fits" title="${escapeHtml(s.compatibilita)}">${escapeHtml(s.compatibilita)}</div></div>` : '';
+  const compat = rcFitsTable(s.compatibilita);
   const oe = (s.oeAlternativi && s.oeAlternativi.length)
     ? `<div class="rc-sch-sec"><div class="rc-sch-sechd">Codici OE equivalenti</div><div class="rc-oechips">${s.oeAlternativi.slice(0, 14).map(c => `<button type="button" class="rc-oe" data-oe="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`
     : '';
   return `<div class="rc-scheda">
     <div class="rc-sch-left">${img}${prezzoRow}</div>
     <div class="rc-sch-body">
-      <div class="rc-sch-tit">${escapeHtml(s.tipoPezzo || 'Ricambio')} <span class="rc-code">${escapeHtml(s.codice || d.oen || '')}</span></div>
+      <div class="rc-sch-tit">${escapeHtml(s.tipoPezzo || 'Ricambio')}</div>
       ${dtBlock}${compat}${oe}
     </div></div>`;
 }
@@ -1173,6 +1257,12 @@ function renderRcFontiLine() {
   const panel = document.getElementById('ricambiPanel');
   panel?.addEventListener('click', e => {
     const t = e.target;
+    // foto → lightbox (riuso openLightbox). Scheda: galleria; riga annuncio: la sua thumb.
+    if (t.closest('img.rc-sch-img')) { const imgs = rcSchedaImages(); if (imgs.length) openLightbox(imgs); return; }
+    const imgWrap = t.closest('.rc-img-wrap:not(.rc-img-ph)');
+    if (imgWrap) { const im = imgWrap.querySelector('img'); if (im && im.src) openLightbox([{ full: im.src }]); return; }
+    const detImg = t.closest('img.rc-det-img'); if (detImg && detImg.src) { openLightbox([{ full: detImg.src }]); return; }
+    const cp = t.closest('.rc-copy'); if (cp) { e.preventDefault(); rcCopy(cp.dataset.copy, cp); return; }   // preventDefault: non togglare il <details> quando il copy-button è nel summary
     const chip = t.closest('.facet-chip'); if (chip) { rcGroupDim = chip.dataset.dim; if (rcView !== 'grid') rcView = 'grid'; renderRicambiPanel(); return; }
     // collapse gruppo: toggle diretto (niente re-render → no scroll jump); rcCollapsed persiste
     const gh = t.closest('.rc-group-head'); if (gh) { const g = gh.closest('.rc-group'), k = g.dataset.gkey; g.classList.toggle('collapsed'); rcCollapsed.has(k) ? rcCollapsed.delete(k) : rcCollapsed.add(k); return; }
@@ -1182,7 +1272,7 @@ function renderRcFontiLine() {
       if (det && det.classList.contains('rc-detail')) {
         const opening = det.classList.contains('d-none');
         det.classList.toggle('d-none');
-        if (opening) { const art = rcArt(k); if (art) det.innerHTML = rcDetailHTML(art); rcOpenDetails.add(k); } else rcOpenDetails.delete(k);
+        if (opening) { const art = rcArt(k); if (art) { det.innerHTML = rcDetailHTML(art); rcEnrichEbay(art, det); } rcOpenDetails.add(k); } else rcOpenDetails.delete(k);
       }
       return;
     }

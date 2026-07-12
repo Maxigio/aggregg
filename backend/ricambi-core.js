@@ -3,7 +3,7 @@
 // Fonti: Autodoc (stealth scrape, solo mode OEM) + Web (Anthropic web_search) + Subito accessori.
 // Ogni fonte è avvolta in un wrapper never-reject + timeout → una fonte lenta/rotta NON abbatte
 // le altre (Promise.all sicuro). eBay sarà una fonte in più: stesso wrapper, zero refactor.
-const { lookupOem, normOen } = require('./oem-lookup');
+const { lookupOem, normOen, fetchAutodocSpecs } = require('./oem-lookup');
 const { lookupCmsnl } = require('./cmsnl-lookup');
 const { searchWebParts } = require('./web-parts');
 const scrapeSubito = require('./scrapers/subito-api');   // .searchAccessori(keyword)
@@ -87,6 +87,7 @@ async function searchRicambi(qRaw, opts = {}) {
   const subitoFn = opts.subito || subitoSource;
   const ebayFn = opts.ebay || ebaySource;
   const ebaySpecsFn = opts.ebaySpecs || ebayScrape.fetchEbayItemSpecs;
+  const autodocSpecsFn = opts.autodocSpecs || fetchAutodocSpecs;
   const term = mode === 'oem' ? normOen(qRaw) : String(qRaw || '').trim();
   if (!term) return { oen: '', mode, veicolo, articoli: [], count: 0, sources: {}, error: 'query vuota' };
 
@@ -135,10 +136,26 @@ async function searchRicambi(qRaw, opts = {}) {
         ]);
         if (s?.specs && Object.keys(s.specs).length) scheda.datiTecnici = s.specs;
         if (s?.immagine && scheda.prezzoNuovo?.fonte !== 'autodoc') scheda.immagine = s.immagine;
+        if (s?.galleria?.length) scheda.galleria = s.galleria;   // foto multiple → lightbox scheda
       } catch (e) {
         logger.warn('[ricambi]', `ebay specs "${term}": ${e.message}`);
       } finally { clearTimeout(timer); }
     }
+  }
+  // Arricchimento scheda AUTO da Autodoc: la pagina-prodotto ha la tabella tecnica (Potenza/Anno/
+  // Codice produttore + eventuali misure) e i modelli compatibili — la card no. +1 navigazione, cache-coperta.
+  if (scheda && mode === 'oem' && scheda.prezzoNuovo?.fonte === 'autodoc' && scheda.prezzoNuovo.url) {
+    let timer;
+    try {
+      const a = await Promise.race([
+        autodocSpecsFn(scheda.prezzoNuovo.url),
+        new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('autodoc specs timeout')), 25000); }),
+      ]);
+      if (a?.datiTecnici && Object.keys(a.datiTecnici).length) scheda.datiTecnici = { ...(scheda.datiTecnici || {}), ...a.datiTecnici };   // catalogo ha precedenza sull'eBay
+      if (a?.compatibilita?.length && !scheda.compatibilita) scheda.compatibilita = a.compatibilita;   // riempie la compatibilità auto (gap storico)
+    } catch (e) {
+      logger.warn('[ricambi]', `autodoc specs "${term}": ${e.message}`);
+    } finally { clearTimeout(timer); }
   }
   if (scheda && !scheda.immagine) scheda.immagine = (res.subito?.items || [])[0]?.immagine || null;
 
@@ -164,7 +181,7 @@ async function searchRicambi(qRaw, opts = {}) {
     // campi top-level mantenuti per compat (PDF/testata): identità catalogo → web
     tipoPezzo: scheda?.tipoPezzo || res.web?.meta?.pezzo?.tipo || null,
     categoria: res.autodoc?.meta?.categoria || null,
-    veicoli: scheda?.compatibilita || res.web?.meta?.pezzo?.veicoli || null,
+    veicoli: (Array.isArray(scheda?.compatibilita) ? scheda.compatibilita.join(', ') : scheda?.compatibilita) || res.web?.meta?.pezzo?.veicoli || null,
     oeAlternativi: scheda?.oeAlternativi || [],
     sources,
     articoli,

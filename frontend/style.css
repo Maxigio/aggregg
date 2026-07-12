@@ -243,7 +243,7 @@ body:not(.has-results) .search {
 /* SCHEDA RICAMBIO — a blocchi: [img+prezzo] | [titolo · dati tecnici · compatibilità · OE] */
 .rc-scheda { display: flex; gap: 18px; align-items: flex-start; border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface); padding: 16px; }
 .rc-sch-left { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; align-items: center; width: 130px; }
-.rc-sch-img { width: 130px; height: 130px; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+.rc-sch-img { width: 130px; height: auto; max-height: 190px; object-fit: contain; background: transparent; border: 1px solid var(--line); border-radius: 6px; cursor: zoom-in; display: block; }
 .rc-sch-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 12px; }
 .rc-sch-tit { font-weight: 700; font-size: 1.1rem; color: var(--text); }
 .rc-sch-price { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
@@ -254,7 +254,19 @@ body:not(.has-results) .search {
 .rc-sch-sec { display: flex; flex-direction: column; gap: 5px; }
 .rc-sch-sechd { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
 .rc-sch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 2px 20px; }
-.rc-sch-fits { font-size: 0.82rem; color: var(--text); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rc-fits-wrap { max-height: 180px; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; }
+.rc-fits-tbl { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.rc-fits-tbl th { text-align: left; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.62rem; padding: 5px 10px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); }
+.rc-fits-tbl td { padding: 4px 10px; color: var(--text); border-bottom: 1px solid var(--line); vertical-align: top; }
+.rc-fits-tbl tbody tr:nth-child(even) { background: var(--surface-2, #f7f8fa); }
+.rc-fits-tbl tbody tr:last-child td { border-bottom: 0; }
+.rc-fits-more { padding: 5px 10px; font-size: 0.72rem; color: var(--text-muted); }
+.rc-fits > .rc-fits-wrap { margin-top: 6px; }
+.rc-fits-sum { cursor: pointer; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); list-style: none; display: flex; align-items: center; gap: 6px; user-select: none; }
+.rc-fits-sum::-webkit-details-marker { display: none; }
+.rc-fits-sum::before { content: '▸'; font-size: 0.8rem; transition: transform 0.15s; }
+.rc-fits[open] > .rc-fits-sum::before { transform: rotate(90deg); }
+.rc-fits-sum:hover { color: var(--text); }
 .rc-oechips { display: flex; flex-wrap: wrap; gap: 6px; }
 /* lista annunci — righe a tutta larghezza (mirror .result-row auto) */
 .rc-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r2); overflow: hidden; background: var(--surface); }
@@ -264,12 +276,13 @@ body:not(.has-results) .search {
 .rc-item[data-sel="1"] { box-shadow: 0 0 0 2px var(--accent) inset; }
 .rc-item.rc-best { box-shadow: 0 0 0 2px var(--pos) inset; }
 .rc-img-wrap { width: 48px; height: 48px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 4px; background: #fff; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.rc-img-wrap:not(.rc-img-ph) { cursor: zoom-in; }
 .rc-img { width: 100%; height: 100%; object-fit: contain; display: block; }
 /* placeholder immagine come auto (emoji dal veicolo della ricerca) */
 .rc-img-ph { background: var(--surface-2, #f2f3f5); }
 .rc-img-wrap.rc-img-ph::after, .rc-sch-img.rc-img-ph::after { content: '🚗'; font-size: 1.3rem; opacity: 0.5; display: flex; align-items: center; justify-content: center; height: 100%; }
 #ricambiPanel[data-veicolo="moto"] .rc-img-ph::after { content: '🏍'; }
-.rc-sch-img.rc-img-ph { display: flex; align-items: center; justify-content: center; }
+.rc-sch-img.rc-img-ph { height: 130px; cursor: default; display: flex; align-items: center; justify-content: center; }
 .rc-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; justify-content: center; }
 .rc-nome { font-size: 0.88rem; color: var(--text); line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .rc-best-badge { font-size: 0.58rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; color: #fff; background: var(--pos); padding: 1px 5px; border-radius: 5px; margin-right: 5px; vertical-align: middle; }
@@ -299,13 +312,24 @@ body:not(.has-results) .search {
 /* dettaglio — accordion inline full-width sotto la riga (mirror .row-detail auto) */
 .rc-detail { background: var(--surface-2, #f7f8fa); border-bottom: 1px solid var(--line); }
 .rc-det-inner { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; padding: 12px 14px; }
-.rc-det-img { width: 88px; height: 88px; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 6px; flex: 0 0 auto; }
+.rc-det-img { width: 88px; height: 88px; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 6px; flex: 0 0 auto; cursor: zoom-in; }
 .rc-det-specs { flex: 1; min-width: 220px; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 18px; }
 .rc-det-row { display: flex; justify-content: space-between; gap: 10px; font-size: 0.82rem; padding: 3px 0; border-bottom: 1px dotted var(--line); }
 .rc-det-k { color: var(--text-muted); }
 .rc-det-v { color: var(--text); font-weight: 600; text-align: right; }
+.rc-copy { background: none; border: 0; padding: 0; margin: 0; font: inherit; font-weight: 600; color: var(--accent); text-align: right; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+.rc-copy:hover { text-decoration-style: solid; }
+.rc-copy.rc-copied { color: var(--ok, #22a06b); text-decoration: none; }
+.rc-code-more { display: inline; }
+.rc-code-more > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; justify-content: flex-end; }
+.rc-code-more > summary::-webkit-details-marker { display: none; }
+.rc-code-caret { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--text-muted); transition: transform 0.15s; }
+.rc-code-more[open] .rc-code-caret { transform: rotate(180deg); }
+.rc-code-extra { display: flex; justify-content: space-between; gap: 10px; margin-top: 4px; padding-top: 4px; border-top: 1px dotted var(--line); font-size: 0.8rem; }
+.rc-code-extra .rc-det-k { font-weight: 400; }
 .rc-det-open { align-self: center; color: var(--accent); font-weight: 600; font-size: 0.84rem; white-space: nowrap; }
 .rc-det-empty { color: var(--text-faint); font-style: italic; font-size: 0.82rem; }
+.rc-det-loading { grid-column: 1 / -1; color: var(--text-muted); font-size: 0.8rem; font-style: italic; padding: 4px 0; }
 /* confronto parti */
 .rc-cmp-scroll { overflow-x: auto; }
 .rc-cmp { border-collapse: collapse; width: 100%; font-size: 0.84rem; }

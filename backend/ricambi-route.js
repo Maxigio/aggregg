@@ -9,6 +9,7 @@
 // come la ricerca auto: un fallimento parziale non è un errore della rotta.
 const realCore = require('./ricambi-core');
 const realOem = require('./oem-lookup');
+const realEbay = require('./ebay-scrape');
 
 const RICAMBI_TTL = 60 * 60 * 1000;        // 1h per lookup con risultati
 const RICAMBI_EMPTY_TTL = 5 * 60 * 1000;   // 5min per 0-item (codice ignoto): non ri-cercare subito
@@ -30,10 +31,12 @@ function cacheable(env) {
 function mount(app, deps = {}) {
   const searchRicambi = deps.searchRicambi || realCore.searchRicambi;
   const normOen = deps.normOen || realOem.normOen;
+  const fetchEbayItemDetails = deps.fetchEbayItemDetails || realEbay.fetchEbayItemDetails;
   const clientIp = deps.clientIp || defaultClientIp;
 
   const hits = new Map();                    // ip → { windowStart, count }
   const cache = new Map();                   // normOen → { ts, ttl, data }
+  const ebayCache = new Map();               // itm url → { ts, data } (enrich lazy annunci eBay)
   const rateOk = (ip) => {
     const now = Date.now();
     const rec = hits.get(ip);
@@ -64,6 +67,25 @@ function mount(app, deps = {}) {
     } catch (e) {
       console.error('[ricambi]', e.message);
       res.status(500).json({ error: 'Errore interno durante il lookup.' });
+    }
+  });
+
+  // Enrich LAZY di un annuncio eBay (venditore/spedizione/quantità/marca) — chiamata all'apertura ⓘ.
+  // Valida l'URL item (anti-SSRF: solo ebay.<tld>/itm/), cache per URL, stesso rate-limit.
+  app.get('/api/ricambi/ebay-item', async (req, res) => {
+    if (!rateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
+    const url = String(req.query.url || '').trim();
+    if (!/^https:\/\/www\.ebay\.\w+\/itm\/\d+/.test(url)) return res.status(400).json({ error: 'URL eBay item non valido' });
+    const hit = ebayCache.get(url);
+    if (hit && Date.now() - hit.ts < RICAMBI_TTL) return res.json(hit.data);
+    try {
+      const data = await fetchEbayItemDetails(url);
+      ebayCache.set(url, { ts: Date.now(), data });
+      if (ebayCache.size > RICAMBI_CACHE_MAX) ebayCache.delete(ebayCache.keys().next().value);
+      res.json(data);
+    } catch (e) {
+      console.error('[ricambi] ebay-item', e.message);
+      res.status(502).json({ error: 'Dettaglio annuncio non disponibile.' });
     }
   });
 }

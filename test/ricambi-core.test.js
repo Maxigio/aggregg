@@ -35,6 +35,30 @@ test('OEM auto: scheda da Autodoc, lista SOLO annunci Subito, web/cmsnl mai', as
   assert.strictEqual(r.veicolo, 'auto');
 });
 
+test('scheda AUTO: arricchita da Autodoc product page (datiTecnici + compatibilità)', async () => {
+  const autodocUrl = async (oen) => ({ oen, tipoPezzo: 'Disco Freno', articoli: [{ fonte: 'autodoc', nome: 'Disco', prezzo: 45, url: 'https://www.auto-doc.it/ridex/123' }], count: 1 });
+  let specsCalled = null;
+  const specsStub = async (url) => { specsCalled = url; return { datiTecnici: { 'Ø [mm]': '312', 'Spessore [mm]': '25' }, compatibilita: ['Golf 7', 'Audi A3 8P'] }; };
+  const r = await searchRicambi('1K0905851B', stubs({ autodoc: autodocUrl, autodocSpecs: specsStub }));
+  assert.strictEqual(specsCalled, 'https://www.auto-doc.it/ridex/123');       // +1 nav sulla product page
+  assert.strictEqual(r.scheda.datiTecnici['Ø [mm]'], '312');                  // specs reali nella scheda
+  assert.deepStrictEqual(r.scheda.compatibilita, ['Golf 7', 'Audi A3 8P']);   // compatibilità auto riempita
+});
+
+test('scheda AUTO: enrichment Autodoc NON parte senza url del prezzo nuovo', async () => {
+  let called = false;
+  const specsStub = async () => { called = true; return { datiTecnici: {}, compatibilita: null }; };
+  await searchRicambi('1K0905851B', stubs({ autodocSpecs: specsStub }));   // okAutodoc default = nessun url
+  assert.strictEqual(called, false);
+});
+
+test('scheda MOTO: enrichment Autodoc mai (fonte prezzo = cmsnl)', async () => {
+  let called = false;
+  const specsStub = async () => { called = true; return { datiTecnici: {}, compatibilita: null }; };
+  await searchRicambi('34218526568', { veicolo: 'moto', autodoc: okAutodoc, cmsnl: okCmsnl, web: okWeb, subito: okSubito, ebay: emptyEbay, ebaySpecs: noSpecs, autodocSpecs: specsStub });
+  assert.strictEqual(called, false);
+});
+
 test('OEM moto: CMSNL+Subito, Autodoc mai; veicoli dai fits CMSNL', async () => {
   let autodocCalled = false;
   const spyA = async () => { autodocCalled = true; return { articoli: [] }; };
@@ -191,7 +215,7 @@ test('isJunkSpec: via spedizione/consegna/resi, restano i dati tecnici veri', ()
   assert.strictEqual(isJunkSpec('Condizione'), false);
 });
 
-test('normalizzaSpec: DE/EN → IT, straniere ignote scartate, italiane tenute', () => {
+test('normalizzaSpec: WHITELIST — solo chiavi mappate, ogni altra scartata (niente tedesco residuo)', () => {
   const { normalizzaSpec } = require('../backend/ebay-scrape');
   assert.strictEqual(normalizzaSpec('Hersteller:'), 'Marca');
   assert.strictEqual(normalizzaSpec('Herstellernummer'), 'Codice produttore');
@@ -199,11 +223,47 @@ test('normalizzaSpec: DE/EN → IT, straniere ignote scartate, italiane tenute',
   assert.strictEqual(normalizzaSpec('Manufacturer Part Number'), 'Codice produttore');
   assert.strictEqual(normalizzaSpec('EAN'), 'EAN');
   assert.strictEqual(normalizzaSpec('Einbauposition'), 'Posizione');
-  assert.strictEqual(normalizzaSpec('Oberfläche'), 'Finitura');    // mappata
-  assert.strictEqual(normalizzaSpec('Größe'), null);               // tedesca con umlaut → drop
-  // limite noto: tedesco ASCII ignoto (es. Innendurchmesser) passa — copre la mappa dei casi reali
+  assert.strictEqual(normalizzaSpec('Oberfläche'), 'Finitura');
+  assert.strictEqual(normalizzaSpec('Größe'), 'Dimensioni');       // ora mappata
+  assert.strictEqual(normalizzaSpec('Breite'), 'Larghezza');       // tedesco ASCII: ora mappato
+  assert.strictEqual(normalizzaSpec('Diametro'), 'Diametro');      // italiana in whitelist
+  assert.strictEqual(normalizzaSpec('Lieferumfang'), null);        // tedesco ASCII ignoto → drop (whitelist)
   assert.strictEqual(normalizzaSpec('Unit Type'), null);           // inglese ignota → drop
-  assert.strictEqual(normalizzaSpec('Diametro'), 'Diametro');      // italiana ignota → tenuta
+});
+
+test('normalizzaVal: enum DE→IT token-wise, testo libero intatto', () => {
+  const { normalizzaVal } = require('../backend/ebay-scrape');
+  assert.strictEqual(normalizzaVal('Gebraucht'), 'Usato');
+  assert.strictEqual(normalizzaVal('Vorne links'), 'Anteriore Sinistra');
+  assert.strictEqual(normalizzaVal('Neu'), 'Nuovo');
+  assert.strictEqual(normalizzaVal('Nero'), 'Nero');               // testo libero → intatto
+  assert.strictEqual(normalizzaVal('12,5 mm'), '12,5 mm');         // numeri → intatti
+});
+
+test('ebayCardMeta: condizione + spedizione dagli span .su-styled-text della card serp', () => {
+  const { ebayCardMeta } = require('../backend/ebay-scrape');
+  const attrs = ['Disco freno posteriore BMW 34218526568', 'Di seconda mano |', 'Venditore professionale',
+    'EUR 50,00', 'EUR 50,00', 'Compralo Subito', '+EUR 22,00 per la consegna'];
+  assert.deepStrictEqual(ebayCardMeta(attrs), { condizione: 'Usato', spedizione: 'EUR 22,00 per la consegna' });
+  assert.deepStrictEqual(ebayCardMeta(['Nuovo', 'Consegna gratis']), { condizione: 'Nuovo', spedizione: 'Consegna gratis' });
+  assert.deepStrictEqual(ebayCardMeta([]), { condizione: null, spedizione: null });
+});
+
+test('parseEbaySeller: nome + feedback + tipo dal blocco venditore item', () => {
+  const { parseEbaySeller } = require('../backend/ebay-scrape');
+  const r = parseEbaySeller('rollerdunse-owschlag(9151)Venditore professionaleRegistrato come venditore professionale');
+  assert.strictEqual(r.nome, 'rollerdunse-owschlag');
+  assert.strictEqual(r.feedback, '9151');
+  assert.strictEqual(r.tipo, 'Professionale');
+  assert.deepStrictEqual(parseEbaySeller(''), {});
+});
+
+test('parseEbayQty: estrae disponibili/venduti (best-effort)', () => {
+  const { parseEbayQty } = require('../backend/ebay-scrape');
+  assert.strictEqual(parseEbayQty('5 disponibili - 1 venduto'), '5 disponibili · 1 venduti');
+  assert.strictEqual(parseEbayQty('Più di 10 disponibili'), 'Più di 10 disponibili');
+  assert.strictEqual(parseEbayQty(''), null);
+  assert.strictEqual(parseEbayQty('spedizione gratis'), null);
 });
 
 test('cleanEbayTitle: via il testo accessibilità dal titolo', () => {

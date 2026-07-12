@@ -33,30 +33,55 @@ const isPlaceholder = (titolo, url) => /shop on ebay/i.test(titolo || '') || /eb
 const isJunkSpec = k => /spedizion|consegna|restituzion|pagament|garanzia clienti|vedi i veicoli|oggetto che si trova/i.test(String(k || ''));
 
 // Le Item specifics arrivano nella LINGUA DEL VENDITORE (annuncio tedesco → "Hersteller").
-// Mappa sinonimi DE/EN → etichetta italiana; chiave ignota chiaramente straniera → scartata. Pura.
+// WHITELIST: solo le chiavi che sappiamo mappare in italiano; ogni altra (incl. tedesco senza
+// umlaut tipo "Lieferumfang") → scartata → zero label straniere residue nella scheda. Pura.
 const SPEC_IT = new Map(Object.entries({
   'hersteller': 'Marca', 'marke': 'Marca', 'brand': 'Marca', 'manufacturer': 'Marca', 'marca': 'Marca',
   'herstellernummer': 'Codice produttore', 'manufacturer part number': 'Codice produttore', 'mpn': 'Codice produttore',
   'numero di parte del produttore': 'Codice produttore', 'numero parte produttore': 'Codice produttore',
   'oe/oem referenznummer(n)': 'Numero OEM', 'oe-oem referenznummer(n)': 'Numero OEM', 'oe/oem part number': 'Numero OEM',
   'numero ricambio oem': 'Numero OEM', 'numero oem': 'Numero OEM', 'oem': 'Numero OEM',
+  'referenznummer(n)': 'Numero di riferimento', 'referenznummer': 'Numero di riferimento',
+  'reference number': 'Numero di riferimento', 'vergleichsnummer': 'Numero di riferimento',
   'ean': 'EAN', 'gtin': 'EAN',
   'farbe': 'Colore', 'colour': 'Colore', 'color': 'Colore', 'colore': 'Colore',
   'material': 'Materiale', 'materiale': 'Materiale',
-  'einbauposition': 'Posizione', 'placement on vehicle': 'Posizione', 'posizione sul veicolo': 'Posizione', 'lato di montaggio': 'Posizione',
+  'einbauposition': 'Posizione', 'placement on vehicle': 'Posizione', 'posizione sul veicolo': 'Posizione',
+  'einbauseite': 'Lato di montaggio', 'lato di montaggio': 'Lato di montaggio',
   'zustand': 'Condizione', 'condition': 'Condizione', 'condizione': 'Condizione',
-  'oberfläche': 'Finitura', 'surface finish': 'Finitura',
-  'produktart': 'Tipo', 'product type': 'Tipo', 'tipo': 'Tipo',
+  'oberfläche': 'Finitura', 'surface finish': 'Finitura', 'finitura': 'Finitura',
+  'produktart': 'Tipo', 'product type': 'Tipo', 'tipo': 'Tipo', 'typ': 'Tipo',
+  'gewicht': 'Peso', 'weight': 'Peso', 'peso': 'Peso',
+  'abmessungen': 'Dimensioni', 'größe': 'Dimensioni', 'size': 'Dimensioni', 'dimensioni': 'Dimensioni', 'dimensions': 'Dimensioni',
+  'breite': 'Larghezza', 'width': 'Larghezza', 'larghezza': 'Larghezza',
+  'höhe': 'Altezza', 'height': 'Altezza', 'altezza': 'Altezza',
+  'länge': 'Lunghezza', 'length': 'Lunghezza', 'lunghezza': 'Lunghezza',
+  'durchmesser': 'Diametro', 'diameter': 'Diametro', 'diametro': 'Diametro',
+  'garantie': 'Garanzia', 'warranty': 'Garanzia', 'garanzia': 'Garanzia',
+  'menge': 'Quantità', 'stückzahl': 'Quantità', 'quantity': 'Quantità', 'quantità': 'Quantità',
+}));
+// Valori enum ricorrenti nella lingua del venditore → italiano (token-wise). ponytail: set comune (posizioni/colori/materiali), non un traduttore.
+const VALUE_IT = new Map(Object.entries({
+  'neu': 'Nuovo', 'gebraucht': 'Usato', 'generalüberholt': 'Rigenerato', 'generaluberholt': 'Rigenerato',
+  'vorne': 'Anteriore', 'hinten': 'Posteriore', 'links': 'Sinistra', 'rechts': 'Destra',
+  'oben': 'Alto', 'unten': 'Basso', 'vorderachse': 'Assale anteriore', 'hinterachse': 'Assale posteriore',
+  // colori
+  'schwarz': 'Nero', 'weiß': 'Bianco', 'weiss': 'Bianco', 'rot': 'Rosso', 'blau': 'Blu', 'grün': 'Verde',
+  'gruen': 'Verde', 'grau': 'Grigio', 'silber': 'Argento', 'gelb': 'Giallo', 'braun': 'Marrone',
+  // materiali
+  'stahl': 'Acciaio', 'edelstahl': 'Acciaio inox', 'aluminium': 'Alluminio', 'kunststoff': 'Plastica',
+  'gummi': 'Gomma', 'messing': 'Ottone', 'kupfer': 'Rame', 'chrom': 'Cromo',
 }));
 function normalizzaSpec(k) {
   const key = String(k || '').replace(/:$/, '').trim();
   if (!key) return null;
-  const hit = SPEC_IT.get(key.toLowerCase());
-  if (hit) return hit;
-  // ignota: tienila solo se plausibilmente italiana/neutra; scarta il lessico straniero evidente
-  if (/[äöüßÄÖÜ]/.test(key)) return null;
-  if (/\b(number|width|height|length|weight|type|size|fitment|part|color|side)\b/i.test(key)) return null;
-  return key;
+  return SPEC_IT.get(key.toLowerCase()) || null;   // whitelist: chiave ignota → scartata (niente tedesco residuo)
+}
+// Traduce parola-per-parola i termini enum noti (es. "Vorne links" → "Anteriore Sinistra"); numeri/colori/testo libero intatti. Pura.
+function normalizzaVal(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return s;
+  return s.split(/\s+/).map(w => VALUE_IT.get(w.toLowerCase().replace(/[.,;]+$/, '')) || w).join(' ');
 }
 
 // Context persistente con warm-up (la sessione amortizza il 403 a freddo). Si ricrea se il browser cade.
@@ -74,7 +99,91 @@ async function warmup(page) {
   _warm = true;
 }
 
-// searchEbay('34218526568') → [{fonte:'ebay', nome, prezzo, valuta, immagine, url}]
+// Metadati dalla card serp (.su-styled-text): eBay ha spostato condizione/spedizione fuori dai
+// vecchi .s-item__* (ora morti, PROVATO col probe). Estrae dai soli span brevi. Pura (testabile).
+const EBAY_COND = [[/seconda mano|usato/i, 'Usato'], [/ricondizionat|refurbish/i, 'Ricondizionato'], [/\bnuovo\b|brand new/i, 'Nuovo']];
+function ebayCardMeta(attrs) {
+  const list = (attrs || []).map(s => String(s || '').replace(/\s*\|\s*$/, '').trim()).filter(Boolean);
+  let condizione = null, spedizione = null;
+  for (const s of list) {
+    if (!condizione && s.length <= 30) for (const [re, v] of EBAY_COND) if (re.test(s)) { condizione = v; break; }
+    if (!spedizione && /per la consegna|consegna grati|spedizione grati/i.test(s)) {
+      spedizione = /grati/i.test(s) ? 'Consegna gratis' : s.replace(/^\+\s*/, '').trim();
+    }
+  }
+  return { condizione, spedizione };
+}
+// Condizione dal testo verboso della pagina item ("UsatoOggetto che è stato usato…") → enum. Pura.
+function condFromText(s) {
+  for (const [re, v] of EBAY_COND) if (re.test(String(s || ''))) return v;
+  return null;
+}
+// Immagine eBay al formato grande (s-l1600) — le thumbnail arrivano s-l140/500. Pura.
+const ebayBig = u => String(u || '').replace(/\/s-l\d+\./, '/s-l1600.');
+
+// Venditore dal blocco ".x-sellercard-atf__info__about-seller" ("nome(feedback)Venditore professionale…"). Pura.
+function parseEbaySeller(raw) {
+  const s = String(raw || '').replace(/\s+/g, ' ').trim();
+  if (!s) return {};
+  const nome = (s.match(/^([^(]+?)\s*\(/) || s.match(/^([\w.\-]+)/) || [])[1] || null;
+  const feedback = (s.match(/\((\d[\d.\s]*)\)/) || [])[1]?.replace(/\s/g, '') || null;
+  const tipo = /venditore professionale/i.test(s) ? 'Professionale' : /venditore privato|\bprivato\b/i.test(s) ? 'Privato' : null;
+  return { nome: nome ? nome.trim() : null, feedback, tipo };
+}
+// "5 disponibili - 1 venduto" / "Più di 10 disponibili" → riassunto. Pura (best-effort).
+function parseEbayQty(raw) {
+  const s = String(raw || '').replace(/\s+/g, ' ').trim();
+  if (!s) return null;
+  const disp = s.match(/((?:più di\s*)?\d[\d.]*)\s*disponibil/i);
+  const sold = s.match(/(\d[\d.]*)\s*vendut/i);
+  const parts = [];
+  if (disp) parts.push(`${disp[1].trim()} disponibili`);
+  if (sold) parts.push(`${sold[1]} venduti`);
+  return parts.length ? parts.join(' · ') : null;
+}
+
+// fetchEbayItemDetails(url) → { venditore, spedizione, quantita, marca } dalla pagina item (enrich lazy dell'annuncio).
+async function fetchEbayItemDetails(url) {
+  const u = String(url || '');
+  if (!/^https:\/\/www\.ebay\.\w+\/itm\//.test(u)) return {};
+  const ctx = await getCtx();
+  const page = await ctx.newPage();
+  try {
+    await warmup(page);
+    const resp = await page.goto(u, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    if (resp && resp.status() === 403) { _warm = false; throw new Error('eBay 403 (item)'); }
+    await page.waitForTimeout(2500);
+    const raw = await page.evaluate(() => {
+      const norm = e => e ? e.textContent.replace(/\s+/g, ' ').trim() : null;
+      const pick = sels => { for (const s of sels) { const e = document.querySelector(s); if (e && norm(e)) return norm(e); } return null; };
+      let marca = null;
+      for (const l of document.querySelectorAll('.ux-labels-values')) {
+        const k = norm(l.querySelector('.ux-labels-values__labels')) || '';
+        if (/^(marca|hersteller|marke|brand)\b/i.test(k)) { marca = norm(l.querySelector('.ux-labels-values__values')); break; }
+      }
+      return {
+        seller: pick(['.x-sellercard-atf__info__about-seller']),
+        shipping: pick(['.ux-labels-values--shipping .ux-labels-values__values', '.d-shipping-minview .ux-textspans']),
+        qty: pick(['.d-quantity__availability', '.x-quantity__availability', '[data-testid="x-quantity"]']),
+        marca,
+      };
+    });
+    const out = {};
+    const seller = parseEbaySeller(raw.seller);
+    if (seller.nome) out.venditore = `${seller.nome}${seller.feedback ? ` (${seller.feedback})` : ''}${seller.tipo ? ` · ${seller.tipo}` : ''}`;
+    // il value spedizione concatena spans extra ("Vedi i dettagli…Oggetto che si trova a…") → tronca al primo marker
+    const sped = cleanEbayTitle(raw.shipping || '').split(/vedi i dettagli|oggetto che si trova|consegna prevista/i)[0].replace(/[.\s]+$/, '').trim();
+    if (sped) out.spedizione = sped.slice(0, 80);
+    const qty = parseEbayQty(raw.qty);
+    if (qty) out.quantita = qty;
+    if (raw.marca) { const m = normalizzaVal(cleanEbayTitle(raw.marca)).trim(); if (m) out.marca = m.slice(0, 40); }
+    return out;
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
+// searchEbay('34218526568') → [{fonte:'ebay', nome, prezzo, valuta, immagine, url, condizione, spedizione}]
 async function searchEbay(query) {
   const q = String(query || '').trim();
   if (!q) return [];
@@ -91,7 +200,8 @@ async function searchEbay(query) {
         const p = it.querySelector('.s-item__price, .s-card__price')?.textContent?.trim() || null;
         const u = it.querySelector('a[href*="/itm/"]')?.href?.split('?')[0] || null;
         const img = it.querySelector('img')?.src || null;
-        return { t, p, u, img };
+        const attrs = [...it.querySelectorAll('.su-styled-text')].map(e => e.textContent.replace(/\s+/g, ' ').trim());
+        return { t, p, u, img, attrs };
       });
     });
     return raw
@@ -100,10 +210,12 @@ async function searchEbay(query) {
       .map(r => ({
         fonte: 'ebay',
         nome: cleanEbayTitle(r.t),
-        prezzo: parsePrezzoEur(r.p),
+        // il vecchio .s-card__price può essere vuoto → fallback allo span EUR breve della card
+        prezzo: parsePrezzoEur(r.p) ?? parsePrezzoEur((r.attrs || []).find(s => /^(eur|€|us ?\$|\$)\s*[\d.,]/i.test(s))),
         valuta: 'EUR',
         immagine: (r.img && /ebayimg/.test(r.img)) ? r.img : null,
         url: r.u,
+        ...ebayCardMeta(r.attrs),
       }));
   } finally {
     await page.close().catch(() => {});
@@ -131,21 +243,31 @@ async function fetchEbayItemSpecs(url) {
       }
       const og = document.querySelector('meta[property="og:image"]')?.content || null;
       const hi = [...document.querySelectorAll('img[src*="ebayimg"]')].map(i => i.src).find(s => /s-l(9|1[0-9])\d\d/.test(s)) || null;
-      return { pairs, immagine: og || hi };
+      const gallery = [...document.querySelectorAll('.ux-image-carousel img, .ux-image-carousel-item img, button.ux-image-grid-item img, .ux-image-grid img')]
+        .map(i => i.getAttribute('src') || i.getAttribute('data-src')).filter(Boolean);
+      return { pairs, immagine: og || hi, gallery };
     });
     const specs = {};
-    for (const [k, v] of raw.pairs) {   // via spedizione/consegna/resi + chiavi tradotte in italiano
+    for (const [k, v] of raw.pairs) {   // junk via (spedizione/resi); chiavi → whitelist IT; valori puliti
       if (isJunkSpec(k) || isJunkSpec(v)) continue;
       const kIt = normalizzaSpec(k);
-      if (kIt && !(kIt in specs) && Object.keys(specs).length < 10) specs[kIt] = v;
+      if (!kIt || kIt === 'Tipo' || kIt === 'Condizione') continue;   // 'Tipo' ridondante con tipoPezzo; 'Condizione' = stato dell'annuncio usato, non un dato tecnico della scheda
+      let vv = cleanEbayTitle(v);             // via il testo di accessibilità dai valori
+      if (kIt === 'Condizione') vv = condFromText(vv) || vv;   // collassa il tooltip verboso all'enum
+      vv = normalizzaVal(vv);
+      if (vv.length > 80) vv = vv.slice(0, 80).trim();          // taglia eventuali tooltip lunghi residui
+      if (vv && !(kIt in specs) && Object.keys(specs).length < 10) specs[kIt] = vv;
     }
-    return { specs, immagine: raw.immagine };
+    // galleria unica al formato grande → alimenta il lightbox della scheda
+    const seen = new Set(), galleria = [];
+    for (const g of raw.gallery || []) { const big = ebayBig(g); if (/ebayimg/.test(big) && !seen.has(big)) { seen.add(big); galleria.push(big); } }
+    return { specs, immagine: raw.immagine, galleria: galleria.slice(0, 12) };
   } finally {
     await page.close().catch(() => {});
   }
 }
 
-module.exports = { searchEbay, fetchEbayItemSpecs, parsePrezzoEur, isPlaceholder, isJunkSpec, normalizzaSpec, cleanEbayTitle };
+module.exports = { searchEbay, fetchEbayItemSpecs, fetchEbayItemDetails, parsePrezzoEur, isPlaceholder, isJunkSpec, normalizzaSpec, normalizzaVal, cleanEbayTitle, ebayCardMeta, parseEbaySeller, parseEbayQty };
 
 // self-check manuale: `node backend/ebay-scrape.js 34218526568`
 if (require.main === module) {

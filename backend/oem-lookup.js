@@ -168,11 +168,50 @@ async function lookupOem(oenRaw) {
   }
 }
 
+// fetchAutodocSpecs(url): +1 navigazione alla pagina-prodotto dell'articolo → tabella "Informazioni
+// prodotto" (Potenza/Anno/Codice produttore + eventuali misure) + modelli compatibili. Solo AUTO.
+// Le specs della listing-card sono dietro uno <span> AJAX (non estraibili); la product page sì (verificato).
+async function fetchAutodocSpecs(url) {
+  const u = String(url || '');
+  if (!/^https?:\/\/(www\.)?auto-doc\.it\//i.test(u)) return { datiTecnici: {}, compatibilita: null };
+  const browser = await getBrowser();
+  const context = await browser.newContext({ userAgent: UA, locale: 'it-IT', viewport: { width: 1280, height: 900 } });
+  try {
+    const page = await context.newPage();
+    const resp = await page.goto(u, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    if (resp && resp.status() >= 400) return { datiTecnici: {}, compatibilita: null };
+    await page.waitForTimeout(2500);
+    const rows = await page.evaluate(() => {
+      const norm = t => t.replace(/\s+/g, ' ').trim();
+      const out = [];
+      for (const t of document.querySelectorAll('table')) {
+        for (const tr of t.querySelectorAll('tr')) {
+          const cells = [...tr.querySelectorAll('th,td')].map(c => norm(c.textContent));
+          if (cells.length >= 2 && cells[0] && cells[1]) out.push([cells[0], cells[1]]);
+        }
+      }
+      return out;
+    });
+    const COMPAT = /modelli di auto/i;
+    const SKIP = /motori|numero.*parte oe|numero\/i di parte/i;   // fitment lunghi / OE (già in oeAlternativi)
+    let compatibilita = null;
+    const datiTecnici = {};
+    for (const [k, v] of rows) {
+      if (COMPAT.test(k)) { compatibilita = v.split(/\s*;\s*/).map(x => x.trim()).filter(Boolean).slice(0, 40); continue; }
+      if (SKIP.test(k)) continue;
+      if (k.length > 45 || v.length > 60) continue;   // via i blob (liste motori ecc.)
+      if (!(k in datiTecnici) && Object.keys(datiTecnici).length < 10) datiTecnici[k] = v;
+    }
+    return { datiTecnici, compatibilita };
+  } catch { return { datiTecnici: {}, compatibilita: null }; }
+  finally { await context.close().catch(() => {}); }
+}
+
 async function closeBrowser() {
   if (browserInstance) { await browserInstance.close().catch(() => {}); browserInstance = null; }
 }
 
-module.exports = { lookupOem, normOen, dedupeOe, closeBrowser, getBrowser };
+module.exports = { lookupOem, normOen, dedupeOe, closeBrowser, getBrowser, fetchAutodocSpecs };
 
 // self-check manuale: `node backend/whatsapp/oem-lookup.js 1K0905851B`
 if (require.main === module) {
