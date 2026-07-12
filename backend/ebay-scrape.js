@@ -113,11 +113,6 @@ function ebayCardMeta(attrs) {
   }
   return { condizione, spedizione };
 }
-// Condizione dal testo verboso della pagina item ("UsatoOggetto che è stato usato…") → enum. Pura.
-function condFromText(s) {
-  for (const [re, v] of EBAY_COND) if (re.test(String(s || ''))) return v;
-  return null;
-}
 // Immagine eBay al formato grande (s-l1600) — le thumbnail arrivano s-l140/500. Pura.
 const ebayBig = u => String(u || '').replace(/\/s-l\d+\./, '/s-l1600.');
 
@@ -258,9 +253,7 @@ async function fetchEbayItemSpecs(url) {
       if (isJunkSpec(k) || isJunkSpec(v)) continue;
       const kIt = normalizzaSpec(k);
       if (!kIt || kIt === 'Tipo' || kIt === 'Condizione') continue;   // 'Tipo' ridondante con tipoPezzo; 'Condizione' = stato dell'annuncio usato, non un dato tecnico della scheda
-      let vv = cleanEbayTitle(v);             // via il testo di accessibilità dai valori
-      if (kIt === 'Condizione') vv = condFromText(vv) || vv;   // collassa il tooltip verboso all'enum
-      vv = normalizzaVal(vv);
+      let vv = normalizzaVal(cleanEbayTitle(v));   // via il testo di accessibilità + enum DE→IT sui valori
       if (vv.length > 80) vv = vv.slice(0, 80).trim();          // taglia eventuali tooltip lunghi residui
       if (vv && !(kIt in specs) && Object.keys(specs).length < 10) specs[kIt] = vv;
     }

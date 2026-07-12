@@ -16,6 +16,7 @@ const RICAMBI_EMPTY_TTL = 5 * 60 * 1000;   // 5min per 0-item (codice ignoto): n
 const RICAMBI_CACHE_MAX = 200;
 const RATE_WINDOW = 60 * 1000;
 const RATE_CAP = 10;
+const EBAY_RATE_CAP = 30;   // l'enrich ⓘ è leggero (1 nav) → budget separato, non ruba quello delle ricerche
 
 const defaultClientIp = req =>
   (req.headers['x-forwarded-for'] || '').split(',').pop().trim() || req.socket?.remoteAddress || 'local';
@@ -34,15 +35,18 @@ function mount(app, deps = {}) {
   const fetchEbayItemDetails = deps.fetchEbayItemDetails || realEbay.fetchEbayItemDetails;
   const clientIp = deps.clientIp || defaultClientIp;
 
-  const hits = new Map();                    // ip → { windowStart, count }
+  const hits = new Map();                    // ip → { windowStart, count } (ricerche)
+  const ebayHits = new Map();                // ip → { windowStart, count } (enrich ⓘ, budget separato)
   const cache = new Map();                   // normOen → { ts, ttl, data }
   const ebayCache = new Map();               // itm url → { ts, data } (enrich lazy annunci eBay)
-  const rateOk = (ip) => {
+  const rateLimiter = (map, cap) => (ip) => {
     const now = Date.now();
-    const rec = hits.get(ip);
-    if (!rec || now - rec.windowStart >= RATE_WINDOW) { hits.set(ip, { windowStart: now, count: 1 }); return true; }
-    rec.count++; return rec.count <= RATE_CAP;
+    const rec = map.get(ip);
+    if (!rec || now - rec.windowStart >= RATE_WINDOW) { map.set(ip, { windowStart: now, count: 1 }); return true; }
+    rec.count++; return rec.count <= cap;
   };
+  const rateOk = rateLimiter(hits, RATE_CAP);
+  const ebayRateOk = rateLimiter(ebayHits, EBAY_RATE_CAP);
 
   app.get('/api/ricambi', async (req, res) => {
     if (!rateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
@@ -73,7 +77,7 @@ function mount(app, deps = {}) {
   // Enrich LAZY di un annuncio eBay (venditore/spedizione/quantità/marca) — chiamata all'apertura ⓘ.
   // Valida l'URL item (anti-SSRF: solo ebay.<tld>/itm/), cache per URL, stesso rate-limit.
   app.get('/api/ricambi/ebay-item', async (req, res) => {
-    if (!rateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
+    if (!ebayRateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
     const url = String(req.query.url || '').trim();
     if (!/^https:\/\/www\.ebay\.\w+\/itm\/\d+/.test(url)) return res.status(400).json({ error: 'URL eBay item non valido' });
     const hit = ebayCache.get(url);

@@ -224,7 +224,6 @@ body:not(.has-results) .search {
 .rc-mode-btn.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 .rc-input-row { display: flex; gap: 10px; align-items: stretch; }
 .rc-topline { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-.rc-fonti-line { margin-top: 6px; font-size: 0.74rem; color: var(--text-faint); }
 .rc-nome-link { color: inherit; text-decoration: none; }
 .rc-nome-link:hover { color: var(--accent); text-decoration: underline; }
 
@@ -241,17 +240,23 @@ body:not(.has-results) .search {
 .rc-src { font-size: 0.74rem; padding: 2px 8px; border-radius: 9px; }
 .rc-src-bad { background: var(--neg-bg); color: var(--neg); }
 /* SCHEDA RICAMBIO — a blocchi: [img+prezzo] | [titolo · dati tecnici · compatibilità · OE] */
-.rc-scheda { display: flex; gap: 18px; align-items: flex-start; border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface); padding: 16px; }
+/* scheda "buy-box": header (tipo·marca + codice) → main (foto | prezzo in evidenza) → sezioni */
+.rc-scheda { display: flex; flex-direction: column; gap: 14px; border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface); padding: 16px; }
 .rc-scheda-empty { background: var(--surface-2, #f7f8fa); }
 .rc-sch-emptymsg { color: var(--text-muted); font-size: 0.9rem; line-height: 1.4; }
-.rc-sch-left { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; align-items: center; width: 130px; }
-.rc-sch-img { width: 130px; height: auto; max-height: 190px; object-fit: contain; background: transparent; border: 1px solid var(--line); border-radius: 6px; cursor: zoom-in; display: block; }
+.rc-sch-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.rc-sch-titmain { font-weight: 700; font-size: 1.15rem; color: var(--text); }
+.rc-sch-main { display: flex; gap: 18px; align-items: stretch; }
+.rc-sch-img { width: 150px; flex: 0 0 auto; height: auto; max-height: 190px; object-fit: contain; background: transparent; border: 1px solid var(--line); border-radius: 6px; cursor: zoom-in; display: block; }
+.rc-sch-buybox { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 5px; background: var(--surface-2, #f7f8fa); border: 1px solid var(--line); border-radius: var(--r2); padding: 14px 18px; }
+.rc-sch-buybox-empty { justify-content: center; }
+.rc-sch-priceline { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.rc-sch-buybox .rc-prezzo { font-size: 1.7rem; font-weight: 800; color: var(--text); }
+.rc-sch-buybox a { color: var(--accent); font-weight: 600; font-size: 0.82rem; }
+.rc-sch-secs { display: flex; flex-direction: column; gap: 12px; }
 .rc-sch-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 12px; }
 .rc-sch-tit { font-weight: 700; font-size: 1.1rem; color: var(--text); }
-.rc-sch-price { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
 .rc-sch-price-lab { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
-.rc-sch-price .rc-prezzo { font-size: 1.25rem; }
-.rc-sch-price a { color: var(--accent); font-weight: 600; font-size: 0.78rem; }
 .rc-sch-src { color: var(--text-muted); font-size: 0.78rem; }
 .rc-sch-sec { display: flex; flex-direction: column; gap: 5px; }
 .rc-sch-sechd { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
@@ -272,11 +277,11 @@ body:not(.has-results) .search {
 .rc-oechips { display: flex; flex-wrap: wrap; gap: 6px; }
 /* lista annunci — righe a tutta larghezza (mirror .result-row auto) */
 .rc-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r2); overflow: hidden; background: var(--surface); }
-.rc-item { display: flex; gap: 12px; align-items: center; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--line); min-height: 62px; }
+.rc-item { display: flex; gap: 12px; align-items: center; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--line); border-left: 3px solid transparent; min-height: 62px; }
 .rc-item:last-of-type { border-bottom: none; }
 .rc-item:hover { background: var(--surface-2, #f7f8fa); }
-.rc-item[data-sel="1"] { box-shadow: 0 0 0 2px var(--accent) inset; }
-.rc-item.rc-best { box-shadow: 0 0 0 2px var(--pos) inset; }
+.rc-item[data-sel="1"] { border-left-color: var(--accent); background: var(--accent-weak); }
+.rc-item.rc-best { border-left-color: var(--pos); }
 .rc-img-wrap { width: 48px; height: 48px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 4px; background: #fff; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .rc-img-wrap:not(.rc-img-ph) { cursor: zoom-in; }
 .rc-img { width: 100%; height: 100%; object-fit: contain; display: block; }
@@ -804,7 +809,7 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
 
 /* ─── Dettaglio inline (ℹ → fisarmonica sotto la riga) ──────────────────────── */
 .row-detail { background: var(--surface-2); border-bottom: 1px solid var(--line); }
-.row-detail .det-inner { padding: 12px 14px; }
+.row-detail .det-inner, .rc-detail .det-inner { padding: 12px 14px; }
 .det-gallery { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .det-gallery img { width: 96px; height: 72px; object-fit: cover; border-radius: var(--r); border: 1px solid var(--line); cursor: pointer; background: var(--surface); }
 .det-specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 2px 18px; }

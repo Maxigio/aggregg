@@ -180,18 +180,22 @@ async function fetchAutodocSpecs(url) {
     const page = await context.newPage();
     const resp = await page.goto(u, { waitUntil: 'domcontentloaded', timeout: 30000 });
     if (resp && resp.status() >= 400) return { datiTecnici: {}, compatibilita: null };
-    await page.waitForTimeout(2500);
-    const rows = await page.evaluate(() => {
+    const extract = () => page.evaluate(() => {
       const norm = t => t.replace(/\s+/g, ' ').trim();
       const out = [];
       for (const t of document.querySelectorAll('table')) {
-        for (const tr of t.querySelectorAll('tr')) {
+        const trs = t.querySelectorAll('tr');
+        if (trs.length > 25) continue;   // liste prodotti/cross-sell → non è la tabella specifiche
+        for (const tr of trs) {
           const cells = [...tr.querySelectorAll('th,td')].map(c => norm(c.textContent));
           if (cells.length >= 2 && cells[0] && cells[1]) out.push([cells[0], cells[1]]);
         }
       }
       return out;
     });
+    await page.waitForTimeout(2500);
+    let rows = await extract();
+    if (!rows.length) { await page.waitForTimeout(2500); rows = await extract(); }   // challenge CF ancora in corso → 1 retry
     const COMPAT = /modelli di auto/i;
     const SKIP = /motori|numero.*parte oe|numero\/i di parte/i;   // fitment lunghi / OE (già in oeAlternativi)
     let compatibilita = null;

@@ -761,7 +761,8 @@ let rcData = null;            // ultimo envelope {articoli, sources, tipoPezzo, 
 let ricambiMode = 'oem';
 let rcVeicolo = 'auto';       // 'auto' | 'moto' — un ricambio è per auto O per moto
 let rcGroupDim = '';
-let rcView = 'grid';         // 'grid' | 'compare' | 'salvati'
+let rcView = 'grid';         // 'grid' | 'salvati'
+let rcCompareOpen = false;   // confronto = sezione separata (come auto), la lista resta navigabile
 let rcSort = 'prezzo-asc';    // prezzo-asc | prezzo-desc | stelle | sconto
 let rcCollapsed = new Set();  // chiavi-gruppo collassate (persistono al re-render, meglio di auto)
 let rcOpenDetails = new Set();// chiavi articolo con accordion info aperto (persistono al re-render)
@@ -813,7 +814,7 @@ const rcKey = a => a._rk || `${a.fonte}:${a.url || a.articleId || a.nome}`;   //
 const rcHas = (arr, a) => arr.some(x => rcKey(x) === rcKey(a));
 const rcEur = n => (typeof n === 'number' ? '€ ' + n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null);
 const rcSafeUrl = u => (/^https?:\/\//i.test(u || '') ? u : null);   // solo http/https: blocca javascript:/data: (XSS)
-function rcCurrentList() { return rcView === 'salvati' ? salvatiRicambi : rcView === 'compare' ? confrontoRicambi : rcVisibleArts(); }
+function rcCurrentList() { return rcView === 'salvati' ? salvatiRicambi : rcVisibleArts(); }
 function rcPriceText(a) { const p = rcEur(a.prezzo); return p || (a.fonte === 'subito' ? 'trattabile' : 'prezzo sul sito'); }
 function rcArt(key) { return (rcData && rcData.articoli || []).find(a => rcKey(a) === key) || salvatiRicambi.find(a => rcKey(a) === key) || confrontoRicambi.find(a => rcKey(a) === key); }
 
@@ -986,6 +987,7 @@ const RC_COPY_KEYS = new Set(['Codice produttore', 'Codice articolo del produtto
 // Chiavi commerciali (non dati tecnici) da NON mostrare nella grid scheda — restano negli annunci.
 const RC_NONTECH_KEYS = new Set(['Condizione', 'Disponibilità', 'Spedizione', 'Valutazione']);
 function rcCopy(text, el) {
+  if (el.classList.contains('rc-copied')) return;   // già in animazione → non catturare "Copiato ✓" come testo da ripristinare
   const restore = el.textContent;
   const done = () => { el.classList.add('rc-copied'); el.textContent = 'Copiato ✓'; setTimeout(() => { el.textContent = restore; el.classList.remove('rc-copied'); }, 1200); };
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(() => rcCopyFallback(text, done));
@@ -1027,16 +1029,14 @@ function rcSchedaHTML(d) {
   const img = s.immagine ? `<img class="rc-sch-img" src="${escapeHtml(s.immagine)}" alt="" referrerpolicy="no-referrer">` : '<div class="rc-sch-img rc-img-ph"></div>';
   const pn = s.prezzoNuovo;
   const pnUrl = pn && rcSafeUrl(pn.url);
-  const prezzoRow = pn ? `<div class="rc-sch-price">
+  // BUY-BOX: prezzo nuovo in evidenza (riquadro a destra dell'immagine)
+  const buybox = pn ? `<div class="rc-sch-buybox">
       <span class="rc-sch-price-lab">Prezzo nuovo</span>
-      <span class="rc-prezzo">${rcEur(pn.valore)}</span>
-      ${pn.listino && pn.sconto ? `<span class="rc-listino">${rcEur(pn.listino)}</span><span class="rc-sconto">-${escapeHtml(String(pn.sconto))}%</span>` : ''}
+      <div class="rc-sch-priceline"><span class="rc-prezzo">${rcEur(pn.valore)}</span>${pn.listino && pn.sconto ? `<span class="rc-listino">${rcEur(pn.listino)}</span><span class="rc-sconto">-${escapeHtml(String(pn.sconto))}%</span>` : ''}</div>
       ${pnUrl ? `<a href="${escapeHtml(pnUrl)}" target="_blank" rel="noopener noreferrer">su ${escapeHtml(RC_FONTE[pn.fonte] || pn.fonte)} ↗</a>` : `<span class="rc-sch-src">(${escapeHtml(RC_FONTE[pn.fonte] || pn.fonte)})</span>`}
-    </div>` : '';
-  // DATI TECNICI: SOLO veri dati tecnici — identità (Marca) + specifiche catalogo/eBay.
-  // Le info commerciali (condizione/disponibilità/spedizione/valutazione) NON sono dati tecnici → restano negli annunci.
+    </div>` : `<div class="rc-sch-buybox rc-sch-buybox-empty"><span class="rc-sch-price-lab">Prezzo nuovo</span><span class="rc-sch-src">non disponibile</span></div>`;
+  // DATI TECNICI: SOLO veri dati tecnici (marca è nell'header; commerciali negli annunci).
   const dt = {};
-  if (s.marca) dt['Marca'] = s.marca;
   for (const [k, v] of Object.entries(s.datiTecnici || {})) if (!(k in dt) && !RC_NONTECH_KEYS.has(k)) dt[k] = v;
   // valore: codice → button copiabile (keyboard-accessibile nativo); altrimenti testo
   const dvHtml = (k, v) => RC_COPY_KEYS.has(k)
@@ -1059,12 +1059,13 @@ function rcSchedaHTML(d) {
   const oe = (s.oeAlternativi && s.oeAlternativi.length)
     ? `<div class="rc-sch-sec"><div class="rc-sch-sechd">Codici OE equivalenti</div><div class="rc-oechips">${s.oeAlternativi.slice(0, 14).map(c => `<button type="button" class="rc-oe" data-oe="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`
     : '';
+  const code = escapeHtml(s.codice || d.oen || '');
+  const marca = s.marca ? ` · ${escapeHtml(s.marca)}` : '';
   return `<div class="rc-scheda">
-    <div class="rc-sch-left">${img}${prezzoRow}</div>
-    <div class="rc-sch-body">
-      <div class="rc-sch-tit">${escapeHtml(s.tipoPezzo || 'Ricambio')}</div>
-      ${dtBlock}${compat}${oe}
-    </div></div>`;
+    <div class="rc-sch-head"><span class="rc-sch-titmain">${escapeHtml(s.tipoPezzo || 'Ricambio')}${marca}</span>${code ? `<span class="rc-code">${code}</span>` : ''}</div>
+    <div class="rc-sch-main">${img}${buybox}</div>
+    <div class="rc-sch-secs">${dtBlock}${compat}${oe}</div>
+  </div>`;
 }
 
 function renderRicambiPanel() {
@@ -1072,23 +1073,23 @@ function renderRicambiPanel() {
   const d = rcData || { articoli: [], sources: {} };
   panel.dataset.veicolo = d.veicolo || rcVeicolo;   // pilota il placeholder immagine 🚗/🏍
   const rawArts = d.articoli || [];
-  const testa = `${escapeHtml(d.tipoPezzo || 'Ricambio')} · <span class="rc-code">${escapeHtml(d.oen || '')}</span>`;
   // SOLO fonti in errore (diagnostica) — le pill "ok" ridondano col group-by Fonte, via.
   const badSrc = Object.entries(d.sources || {}).filter(([, s]) => ['blocked', 'error', 'timeout'].includes(s.status));
   const statusLine = badSrc.length
     ? `<div class="rc-srcline">${badSrc.map(([k, s]) => `<span class="rc-src rc-src-bad"${s.reason ? ` title="${escapeHtml(s.reason)}"` : ''}>${escapeHtml(RC_FONTE[k] || k)}: ${s.status === 'blocked' ? 'bloccato' : escapeHtml(s.status)}</span>`).join('')}</div>`
     : '';
   const head = `<div class="rc-head">${rcSchedaHTML(d)}${statusLine}</div>`;
+  // confronto = sezione separata (come auto): la lista sotto resta sempre navigabile
+  const cmp = (rcCompareOpen && confrontoRicambi.length) ? rcCompareSection() : '';
 
-  // vista compare / salvati — head+toolbar a larghezza-container, corpo in .rc-wrap (come auto)
-  if (rcView === 'compare') { panel.innerHTML = `<div class="rc-head"><div class="rc-tit">${testa}</div></div>${rcToolbarHTML()}<div class="rc-wrap">${rcCompareHTML()}</div>`; return; }
-  if (rcView === 'salvati') { panel.innerHTML = `<div class="rc-head"><div class="rc-tit">Ricambi salvati</div></div>${rcToolbarHTML()}<div class="rc-wrap">${rcSalvatiHTML()}</div>`; return; }
+  // vista salvati — head+toolbar a larghezza-container, corpo in .rc-wrap (come auto)
+  if (rcView === 'salvati') { panel.innerHTML = `<div class="rc-head"><div class="rc-tit">Ricambi salvati</div></div>${rcToolbarHTML()}${cmp}<div class="rc-wrap">${rcSalvatiHTML()}</div>`; return; }
 
   if (!rawArts.length) {
     const allEmpty = Object.values(d.sources || {}).length && Object.values(d.sources).every(s => s.status === 'empty');
     const msg = d.scheda ? 'Nessun annuncio sul mercato per questo ricambio (vedi prezzo nuovo nella scheda).'
       : allEmpty ? 'Nessun ricambio trovato. Verifica il codice/nome.' : 'Fonti non disponibili al momento. Riprova tra poco.';
-    panel.innerHTML = `${head}${rcToolbarHTML()}<div class="rc-wrap"><div class="rc-empty">${msg}</div></div>`;
+    panel.innerHTML = `${head}${rcToolbarHTML()}${cmp}<div class="rc-wrap"><div class="rc-empty">${msg}</div></div>`;
     return;
   }
 
@@ -1111,7 +1112,7 @@ function renderRicambiPanel() {
     body = `<div class="rc-list">${arts.map(a => rcRowHTML(a, bestKey)).join('')}</div>`;
   }
   // head + toolbar a larghezza-container (come auto); SOLO la lista in .rc-wrap (full-bleed)
-  panel.innerHTML = `${head}${rcToolbarHTML()}<div class="rc-wrap">${body}</div>`;
+  panel.innerHTML = `${head}${rcToolbarHTML()}${cmp}<div class="rc-wrap">${body}</div>`;
 }
 
 // Toolbar rispecchiata su quella auto/moto (.results-toolbar a sezioni .tb-group / .tb-sep).
@@ -1143,7 +1144,7 @@ function rcToolbarHTML() {
       ${sortSel}
       ${saveBtn}
       ${rcView !== 'grid' ? '<button type="button" class="tb-btn" id="rcBackGrid">← risultati</button>' : ''}
-      <button type="button" class="tb-btn${rcView === 'compare' ? ' active' : ''}" id="rcOpenCompare"${nCmp ? '' : ' disabled'}>Confronto (${nCmp})</button>
+      <button type="button" class="tb-btn${rcCompareOpen ? ' active' : ''}" id="rcOpenCompare"${nCmp ? '' : ' disabled'}>Confronto (${nCmp})</button>
       <button type="button" class="tb-btn${rcView === 'salvati' ? ' active' : ''}" id="rcOpenSaved"${nSave ? '' : ' disabled'}>♥ Preferiti (${nSave})</button>
       <button type="button" class="tb-btn" id="rcCsv">CSV</button>
       <button type="button" class="tb-btn" id="rcPdf">PDF</button>
@@ -1158,6 +1159,11 @@ const RC_CMP_ROWS = [
   ['Valutazione', a => a.stelle ? `★ ${a.stelle}/10 (${a.recensioni || 0})` : '—'],
   ['Disponibilità', a => a.disponibile == null ? '—' : (a.disponibile ? 'Disponibile' : 'No')],
 ];
+// Sezione confronto separata (mirror #cmatrixPanel auto): non sostituisce la lista, ci sta accanto.
+function rcCompareSection() {   // riuso le classi .cmatrix-* della ricerca auto (stesso look)
+  return `<section class="cmatrix-panel"><div class="cmatrix-head"><span class="cmatrix-title">Confronto (${confrontoRicambi.length})</span>` +
+    `<button type="button" class="cmatrix-close" id="rcCompareClose" aria-label="Chiudi">&times;</button></div>${rcCompareHTML()}</section>`;
+}
 function rcCompareHTML() {
   if (!confrontoRicambi.length) return '<div class="rc-empty">Nessun ricambio selezionato. Usa ⇄ sulle righe.</div>';
   const cols = confrontoRicambi;
@@ -1178,7 +1184,7 @@ function rcToggleCmp(key) {
   const i = confrontoRicambi.findIndex(x => rcKey(x) === key);
   if (i >= 0) confrontoRicambi.splice(i, 1);
   else { if (confrontoRicambi.length >= RC_COMPARE_CAP) { showError(`Massimo ${RC_COMPARE_CAP} ricambi a confronto.`); return; } confrontoRicambi.push(a); }
-  if (rcView === 'compare' && !confrontoRicambi.length) rcView = 'grid';
+  if (!confrontoRicambi.length) rcCompareOpen = false;
   renderRicambiPanel();
 }
 function rcToggleSave(key, remove) {
@@ -1233,19 +1239,10 @@ function setRicambiMode(m) {
   ricambiMode = ['nome', 'prodotto'].includes(m) ? m : 'oem';
   document.querySelectorAll('#ricambiModeToggle .rc-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.rcmode === ricambiMode));
   document.querySelectorAll('.rc-input').forEach(i => i.classList.toggle('d-none', i.dataset.rcfor !== ricambiMode));
-  renderRcFontiLine();
 }
 function setRcVeicolo(v) {
   rcVeicolo = v === 'moto' ? 'moto' : 'auto';
   document.querySelectorAll('#rcVeicoloToggle .rc-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.rcveicolo === rcVeicolo));
-  renderRcFontiLine();
-}
-// riga "Fonti:" sotto l'input — dichiara cosa verrà interrogato per (modo, veicolo)
-function renderRcFontiLine() {
-  const el = document.getElementById('rcFontiLine'); if (!el) return;
-  const catalogo = rcVeicolo === 'moto' ? 'CMSNL' : 'Autodoc';
-  const fonti = ricambiMode === 'oem' ? [catalogo, 'Subito', 'eBay'] : ['Subito', 'eBay'];
-  el.textContent = `Fonti: ${fonti.join(' · ')} — se nessuna trova il pezzo, parte la ricerca web`;
 }
 
 // wiring (delegazione, una volta)
@@ -1265,7 +1262,6 @@ function renderRcFontiLine() {
     doRicambi();
   });
   document.getElementById('rcVeicoloToggle')?.addEventListener('click', e => { const b = e.target.closest('.rc-mode-btn'); if (b) setRcVeicolo(b.dataset.rcveicolo); });
-  renderRcFontiLine();
   renderRicambiFavTab();
   const panel = document.getElementById('ricambiPanel');
   panel?.addEventListener('click', e => {
@@ -1290,7 +1286,8 @@ function renderRcFontiLine() {
       return;
     }
     if (t.closest('#rcBackGrid')) { rcView = 'grid'; renderRicambiPanel(); return; }
-    if (t.closest('#rcOpenCompare')) { rcView = 'compare'; renderRicambiPanel(); return; }
+    if (t.closest('#rcOpenCompare')) { rcCompareOpen = !rcCompareOpen; renderRicambiPanel(); return; }
+    if (t.closest('#rcCompareClose')) { rcCompareOpen = false; renderRicambiPanel(); return; }
     if (t.closest('#rcOpenSaved')) { rcView = 'salvati'; renderRicambiPanel(); return; }
     if (t.closest('#rcCsv')) { exportCsvRicambi(); return; }
     if (t.closest('#rcPdf')) { exportPdfRicambi(); return; }
