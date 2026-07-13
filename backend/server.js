@@ -1136,20 +1136,44 @@ app.post('/api/subito/keep-alive', express.json(), async (req, res) => {
   res.json(result);
 });
 
-// ─── Webhook WhatsApp (Meta Cloud API) ────────────────────────────────────────
-// In AUTH_FREE (Meta non ha cookie → firma HMAC). searchFn = closure su runSearch/
-// parseSearchParams (funzioni locali non esportate): il bot cerca senza HTTP hop.
-require('./whatsapp/webhook').mount(app, {
-  searchFn: async (input) => {
-    // il modello LLM può omettere tipo (schema tool: "default auto") o passare una regione
-    // libera non valida → normalizza prima di parseSearchParams (che li rigetterebbe).
-    const q = { ...input, tipo: input.tipo || 'auto' };
-    let parsed = parseSearchParams(q);
-    if (parsed.errors && q.regione) { delete q.regione; parsed = parseSearchParams(q); }   // regione invalida → droppa e riprova
-    if (parsed.errors) return { error: parsed.errors.join(', ') };
-    const data = await runSearch(parsed.params);
-    return { params: parsed.params, risultati: data.risultati || [], sources: data.sources || {} };
-  },
+// Closure di ricerca AMR condivisa (bot WhatsApp + assistente web "AI mode"): il modello LLM può
+// omettere tipo (default auto) o passare una regione libera non valida → normalizza prima di
+// parseSearchParams (che li rigetterebbe). In-process, niente HTTP hop.
+const amrSearchFn = async (input) => {
+  const q = { ...input, tipo: input.tipo || 'auto' };
+  let parsed = parseSearchParams(q);
+  if (parsed.errors && q.regione) { delete q.regione; parsed = parseSearchParams(q); }   // regione invalida → droppa e riprova
+  if (parsed.errors) return { error: parsed.errors.join(', ') };
+  const data = await runSearch(parsed.params);
+  return { params: parsed.params, risultati: data.risultati || [], sources: data.sources || {} };
+};
+
+// ─── Webhook WhatsApp (Meta Cloud API) — in AUTH_FREE (firma HMAC), searchFn condivisa ─────────
+require('./whatsapp/webhook').mount(app, { searchFn: amrSearchFn });
+
+// ─── Assistente interno "AI mode" (Haiku 4.5) — SSE ────────────────────────────────────────────
+// Dietro login; POST ⇒ il demo-gate lo blocca per il demo (sola lettura) → di fatto SOLO owner
+// 'full', a protezione della chiave di test (apribile al demo in futuro esentandolo come /api/report).
+// ctx = categoria scelta dai bottoni (deterministica). Chiave dedicata ASSISTANT_ANTHROPIC_KEY.
+const { runAssistant } = require('./assistant/assistant');
+app.post('/api/assistant', express.json({ limit: '64kb' }), async (req, res) => {
+  if (!searchRateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
+  const { text, history, ctx } = req.body || {};
+  if (!text || typeof text !== 'string') return res.status(400).json({ error: 'testo mancante' });
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');   // niente buffering proxy → SSE arriva subito
+  res.flushHeaders?.();
+  const emit = (event, data) => { try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* client chiuso */ } };
+  try {
+    const out = await runAssistant({ text, history: Array.isArray(history) ? history : [], ctx: ctx || {}, searchFn: amrSearchFn, emit });
+    emit('done', { history: out.history });
+  } catch (e) {
+    logger.error('[assistant]', (e && e.message) || String(e));
+    emit('error', { message: 'Assistente non disponibile ora.' });
+  }
+  res.end();
 });
 
 const server = app.listen(PORT, () => {

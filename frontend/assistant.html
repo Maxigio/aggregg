@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auto Moto Radar · AI</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('amr_theme')||'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+  <style>
+    :root{
+      --bg:#f4f6fb; --surface:#fff; --surface-2:#eef1f7; --line:#e2e6ef; --text:#0f1730; --muted:#5b6478;
+      --accent:#5b6cff; --accent-2:#8a5bff; --pos:#16a34a; --shadow:0 10px 40px rgba(20,30,70,.10); --r:16px;
+    }
+    :root[data-theme="dark"]{
+      --bg:#0b0f1c; --surface:#131a2c; --surface-2:#1b2338; --line:#26304a; --text:#eef1fb; --muted:#95a0ba;
+      --accent:#7c8bff; --accent-2:#a884ff; --pos:#4ade80; --shadow:0 12px 44px rgba(0,0,0,.5);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%}
+    body{background:radial-gradient(1200px 600px at 80% -10%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 60%),var(--bg);
+      color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      display:flex;flex-direction:column;min-height:100%}
+    a{color:inherit}
+    /* header */
+    .ai-top{display:flex;align-items:center;gap:12px;padding:14px clamp(14px,3vw,32px);border-bottom:1px solid var(--line);
+      position:sticky;top:0;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(10px);z-index:10}
+    .ai-brand{display:flex;align-items:center;gap:9px;font-weight:800;letter-spacing:-.2px}
+    .ai-badge{font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;padding:2px 7px;border-radius:999px;
+      background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#fff}
+    .ai-spacer{flex:1}
+    .ai-btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:10px;
+      height:36px;padding:0 12px;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+    .ai-btn:hover{border-color:var(--accent)}
+    .ai-icon{width:36px;justify-content:center;padding:0}
+    /* main */
+    .ai-main{flex:1;width:100%;max-width:920px;margin:0 auto;padding:clamp(16px,3vw,32px);display:flex;flex-direction:column}
+    /* category picker */
+    .hero{margin:auto 0;text-align:center;padding:6vh 0}
+    .hero h1{font-size:clamp(1.8rem,4.5vw,2.8rem);margin:0 0 6px;letter-spacing:-1px;
+      background:linear-gradient(90deg,var(--text),color-mix(in srgb,var(--accent) 70%,var(--text)));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+    .hero p{color:var(--muted);margin:0 0 26px;font-size:1.02rem}
+    .cat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;max-width:560px;margin:0 auto}
+    .cat{appearance:none;cursor:pointer;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);
+      padding:20px;font:inherit;color:var(--text);box-shadow:var(--shadow);transition:transform .12s,border-color .12s}
+    .cat:hover{transform:translateY(-3px);border-color:var(--accent)}
+    .cat .emoji{font-size:1.7rem;display:block;margin-bottom:8px}
+    .cat .t{font-weight:800;font-size:1.05rem}
+    .cat .s{color:var(--muted);font-size:.85rem;margin-top:2px}
+    .sub{max-width:560px;margin:18px auto 0;text-align:center}
+    .sub .q{font-weight:700;margin-bottom:10px}
+    .pill-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+    .pill{appearance:none;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:999px;
+      padding:9px 18px;font:inherit;font-weight:700}
+    .pill:hover{border-color:var(--accent);color:var(--accent)}
+    .link-min{background:none;border:0;color:var(--muted);cursor:pointer;font:inherit;text-decoration:underline;margin-top:14px}
+    /* chat */
+    .ctx-chip{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;background:var(--surface);border:1px solid var(--line);
+      border-radius:999px;padding:6px 12px;font-weight:700;font-size:.85rem;margin-bottom:12px}
+    .ctx-chip button{background:none;border:0;color:var(--muted);cursor:pointer;font-size:1rem;line-height:1;padding:0}
+    .thread{flex:1;display:flex;flex-direction:column;gap:14px;padding-bottom:12px}
+    .msg{max-width:88%;padding:11px 14px;border-radius:14px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}
+    .msg.user{align-self:flex-end;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#fff;border-bottom-right-radius:4px}
+    .msg.bot{align-self:flex-start;background:var(--surface);border:1px solid var(--line);border-bottom-left-radius:4px}
+    .msg.bot.thinking{color:var(--muted);font-style:italic}
+    .dots::after{content:'…';animation:dots 1.2s steps(4,end) infinite}
+    @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+    /* result cards */
+    .res{align-self:stretch;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--shadow)}
+    .res-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:10px}
+    .res-head .tp{font-weight:800}
+    .res-stat{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8rem;color:var(--muted)}
+    .res-stat b{color:var(--text)}
+    .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+    .card{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface-2);display:flex;flex-direction:column;gap:3px;min-width:0}
+    .card a{font-weight:700;text-decoration:none;line-height:1.3}
+    .card a:hover{color:var(--accent)}
+    .card .price{font-weight:800;color:var(--pos)}
+    .card .meta{font-size:.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .src{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+    .more{color:var(--muted);font-size:.82rem;margin-top:8px;text-align:center}
+    /* composer */
+    .composer{position:sticky;bottom:0;display:flex;gap:10px;padding:12px 0;background:linear-gradient(180deg,transparent,var(--bg) 30%)}
+    .composer form{flex:1;display:flex;gap:10px}
+    .composer input{flex:1;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:12px;
+      height:50px;padding:0 16px;font:inherit;font-size:1rem;box-shadow:var(--shadow)}
+    .composer input:focus{outline:none;border-color:var(--accent)}
+    .send{width:50px;height:50px;border:0;border-radius:12px;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#fff;
+      font-size:1.2rem;cursor:pointer;box-shadow:var(--shadow)}
+    .send:disabled{opacity:.5;cursor:default}
+    .err{color:var(--neg,#e5484d);align-self:center;font-size:.9rem}
+    .d-none{display:none!important}
+    @media(max-width:560px){.cat-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header class="ai-top">
+    <span class="ai-brand">Auto Moto Radar <span class="ai-badge">AI</span></span>
+    <span class="ai-spacer"></span>
+    <a class="ai-btn" href="/" title="Torna alla ricerca classica">← App</a>
+    <button type="button" class="ai-btn ai-icon" id="themeBtn" title="Cambia tema" aria-label="Cambia tema">☾</button>
+  </header>
+
+  <main class="ai-main">
+    <!-- STEP 1: scelta categoria -->
+    <section class="hero" id="picker">
+      <h1>Cosa cerchi?</h1>
+      <p>Scegli, poi scrivi a parole tue — ci penso io a cercare su Auto Moto Radar.</p>
+      <div class="cat-grid">
+        <button class="cat" data-cat="auto"><span class="emoji">🚗</span><span class="t">Auto usate</span><span class="s">annunci da Subito, Autoscout24</span></button>
+        <button class="cat" data-cat="moto"><span class="emoji">🏍️</span><span class="t">Moto usate</span><span class="s">annunci da Subito, Moto.it</span></button>
+        <button class="cat" data-cat="ricambio_auto"><span class="emoji">🔧</span><span class="t">Ricambio auto</span><span class="s">catalogo Autodoc + usato</span></button>
+        <button class="cat" data-cat="ricambio_moto"><span class="emoji">🛠️</span><span class="t">Ricambio moto</span><span class="s">catalogo CMSNL + usato</span></button>
+      </div>
+      <!-- sotto-scelta OEM per i ricambi -->
+      <div class="sub d-none" id="oemSub">
+        <div class="q">Hai un codice OE / OEM / OEN?</div>
+        <div class="pill-row">
+          <button class="pill" data-oem="1">Sì, ho il codice</button>
+          <button class="pill" data-oem="0">No — codice articolo o nome</button>
+        </div>
+        <button class="link-min" id="backCat">← cambia categoria</button>
+      </div>
+    </section>
+
+    <!-- STEP 2: chat -->
+    <section class="chat d-none" id="chat" style="flex:1;display:flex;flex-direction:column">
+      <div class="ctx-chip" id="ctxChip"><span id="ctxLabel"></span><button type="button" id="ctxReset" title="Cambia categoria" aria-label="Cambia categoria">✕</button></div>
+      <div class="thread" id="thread"></div>
+      <div class="composer">
+        <form id="composer">
+          <input type="text" id="input" autocomplete="off" placeholder="Scrivi qui…" />
+          <button type="submit" class="send" id="send" aria-label="Invia">➤</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script src="assistant.js"></script>
+</body>
+</html>

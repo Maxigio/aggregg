@@ -28,7 +28,6 @@ const advancedFilters = document.getElementById('advancedFilters');
 const logoBtn         = document.getElementById('logoBtn');
 const qrPanel         = document.getElementById('qrPanel');
 const themeToggle     = document.getElementById('themeToggle');
-const helpToggle      = document.getElementById('helpToggle');
 const prezzoSliderEl  = document.getElementById('prezzoSlider');
 const btnStatCsv      = document.getElementById('btnStatCsv');
 const btnStatPdf      = document.getElementById('btnStatPdf');
@@ -92,76 +91,6 @@ function applyTheme(t) {
   if (themeToggle) { themeToggle.textContent = t === 'dark' ? '☀' : '☾'; themeToggle.title = t === 'dark' ? 'Tema chiaro' : 'Tema scuro'; }
 }
 
-// ─── Aiuti contestuali (?) ───────────────────────────────────────────────────
-// "?" discreti accanto ai controlli: in hover (desktop) o tap (mobile) spiegano.
-// Toggle globale nel topbar per nasconderli tutti (app per papà anziano).
-// Testi: UNICA sorgente = frontend/help-texts.md (l'utente la edita) → sincronizzata QUI.
-// I .help-dot usano data-help-key; il testo viene iniettato in data-help al boot.
-const HELP = {
-  ricerca:    'Dati da fonti esposte pubblicamente. È possibile personalizzare le fonti di riferimento e quali dati sono più interessanti da ricevere.',
-  valuta:     'Modo Valuta: marca + modello + anno + km → il valore di mercato (mediana e fascia) dai comparabili reali ora online. Metti "il tuo prezzo" per vedere se è sopra/in linea/sotto mercato. Niente numeri inventati: sotto soglia di campioni dice "dati insufficienti".',
-  filtri:     'Prezzo, anno, km e regione sono filtri reali applicati alla fonte. Nota: su Subito i km sono a fasce (~5.000 km), abbiamo scelto di arrotondare per eccesso. Autoscout invece ha un sacco di filtri avanzati che le altre fonti non hanno, in questo caso li esponiamo negli annunci e non complichiamo l\'area.',
-  regione:    'Subito e Moto.it filtrano la regione esatta. Autoscout cerca entro un raggio dal capoluogo della regione (default 100 km, modificabile col campo "Raggio") — come fa il sito ufficiale.',
-  griglia:    'Area personalizzabile dedicata a controlli utili a organizzare gli annunci.',
-  raggruppa:  'È possibile racchiudere gli annunci in cartelle tematiche.',
-  confronto:  'Confronto di molteplici annunci disponibile',
-  azioni:     'ℹ Accesso ai dettagli · ☐ Confronta · ⚑ Salva. Il titolo apre l\'annuncio sul sito originale.',
-  controllo:  'Controlla ora questa ricerca salvata: cerca annunci nuovi e cali di prezzo dall\'ultimo controllo. Se non c\'è nulla di nuovo te lo dice.',
-  qr:         'Clicca il logo per il QR e l\'indirizzo: apri l\'app dal telefono (serve la password).',
-  export:     'Esporta i risultati: PDF report stampabile o CSV per Excel.',
-  ricercheSalvate: 'Salva una ricerca o un particolare veicolo per ricevere informazioni su nuove offerte basate sui filtri desiderati. (Per salvare è necessario il login completo.)',
-};
-function helpText(key) { return HELP[key] || ''; }
-// Span "?" per i template generati in JS (testo già risolto inline).
-function helpDot(key) {
-  return `<span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="${key}" data-help="${escapeHtml(helpText(key))}">?</span>`;
-}
-// Riempie data-help dai data-help-key (per i dot statici in index.html).
-function injectHelp(root = document) {
-  root.querySelectorAll('.help-dot[data-help-key]').forEach(el => {
-    if (!el.dataset.help) el.dataset.help = helpText(el.dataset.helpKey);
-  });
-}
-function helpOn() { try { return localStorage.getItem('amr_help') !== '0'; } catch (_) { return true; } }
-function applyHelp(on) {
-  document.body.classList.toggle('help-off', !on);
-  try { localStorage.setItem('amr_help', on ? '1' : '0'); } catch (_) {}
-  if (helpToggle) { helpToggle.classList.toggle('active', on); helpToggle.title = on ? 'Nascondi aiuti' : 'Mostra aiuti'; }
-}
-// Tooltip flottante per i .help-dot: delegazione eventi (i dot si rigenerano ad
-// ogni render), position:fixed clampato al viewport (mai overflow → mai scroll-x),
-// hover su desktop + tap su touch, nascosto su scroll/resize.
-function setupHelpTips() {
-  const tip = document.createElement('div');
-  tip.className = 'help-tip'; document.body.appendChild(tip);
-  let cur = null;
-  const show = dot => {
-    if (document.body.classList.contains('help-off')) return;
-    const txt = dot.dataset.help || helpText(dot.dataset.helpKey);
-    if (!txt) return;
-    cur = dot; tip.textContent = txt;
-    tip.style.left = '0px'; tip.style.top = '0px'; tip.classList.add('show');   // misura dopo render
-    const r = dot.getBoundingClientRect(); const tr = tip.getBoundingClientRect();
-    const m = 8;
-    let left = Math.max(m, Math.min(r.left + r.width / 2 - tr.width / 2, window.innerWidth - tr.width - m));
-    let top = r.top - tr.height - m;
-    if (top < m) top = r.bottom + m;   // flip sotto se non c'è spazio sopra
-    tip.style.left = `${Math.round(left)}px`; tip.style.top = `${Math.round(top)}px`;
-  };
-  const hide = () => { cur = null; tip.classList.remove('show'); };
-  document.addEventListener('mouseover', e => { const d = e.target.closest && e.target.closest('.help-dot'); if (d) show(d); });
-  document.addEventListener('mouseout',  e => { const d = e.target.closest && e.target.closest('.help-dot'); if (d && d === cur) hide(); });
-  document.addEventListener('focusin',   e => { const d = e.target.closest && e.target.closest('.help-dot'); if (d) show(d); });
-  document.addEventListener('focusout',  e => { const d = e.target.closest && e.target.closest('.help-dot'); if (d && d === cur) hide(); });
-  document.addEventListener('click', e => {
-    const d = e.target.closest && e.target.closest('.help-dot');
-    if (d) { e.preventDefault(); e.stopPropagation(); (cur === d) ? hide() : show(d); }
-    else if (cur) hide();
-  });
-  window.addEventListener('scroll', () => { if (cur) hide(); }, true);
-  window.addEventListener('resize', () => { if (cur) hide(); });
-}
-
 // ─── Toast leggero ──────────────────────────────────────────────────────────
 let toastTimer = null;
 function toast(msg) {
@@ -183,7 +112,7 @@ function applyDemoMode() {
   if (!document.querySelector('.demo-banner')) {
     const bar = document.createElement('div');
     bar.className = 'demo-banner';
-    bar.innerHTML = 'Demo — Esplora le icone <strong>?</strong> per maggiori informazioni. Oppure nascondile dall\'icona <strong>?</strong> in alto a destra.';
+    bar.textContent = 'Modalità demo — sola lettura: puoi cercare ed esplorare, i salvataggi sono disattivati.';
     document.body.prepend(bar);
   }
 }
@@ -214,11 +143,6 @@ async function init() {
   } catch (_) {}
 
   themeToggle?.addEventListener('click', () => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
-
-  injectHelp();
-  applyHelp(helpOn());
-  helpToggle?.addEventListener('click', () => applyHelp(document.body.classList.contains('help-off')));
-  setupHelpTips();   // tooltip "?" flottante clampato (no overflow / no scroll-x)
 
   tipoInputs.forEach(input => input.addEventListener('change', async () => {
     document.body.dataset.tipo = input.value;
@@ -1765,7 +1689,7 @@ function gridHeadHTML() {
     if (c.key === 'foto')    return '<span class="gh">Foto</span>';
     if (c.key === 'veicolo') return '<span class="gh">Veicolo</span>';
     if (c.key === 'fonte')   return '<span class="gh">Fonte</span>';
-    if (c.key === 'azioni')  return `<span class="gh" style="text-align:right">Azioni ${helpDot('azioni')}</span>`;
+    if (c.key === 'azioni')  return `<span class="gh" style="text-align:right">Azioni</span>`;
     if (c.sort) return `<span class="gh gh-num"><button type="button" class="gh-sort${sortState.key === c.sort ? ' active' : ''}" data-key="${c.sort}">${c.label} ${caret(c.sort)}</button></span>`;
     return `<span class="gh">${c.label}</span>`;
   }).join('');
@@ -2270,7 +2194,7 @@ function renderRicerche() {
         ${digestLine}
       </div>
       <div class="ric-actions">
-        ${isDemo ? '' : '<button class="rnav-btn ric-check" title="Controlla ora">Controlla</button>' + helpDot('controllo')}
+        ${isDemo ? '' : '<button class="rnav-btn ric-check" title="Controlla ora">Controlla</button>'}
         ${isDemo ? '' : `<button class="rnav-btn ric-del" title="Elimina">${icon('x')}</button>`}
       </div>
       ${alertsHtml ? `<div class="ric-alerts">${alertsHtml}</div>` : ''}

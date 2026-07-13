@@ -39,13 +39,12 @@
         </svg>
         <span class="brand-name">Auto Moto Radar</span>
       </button>
-      <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="qr">?</span>
       <div class="topbar-spacer"></div>
       <button type="button" class="topbar-saved" id="btnSaved" data-bs-toggle="offcanvas" data-bs-target="#offcanvasSaved" title="Annunci e ricerche salvate" style="display:none">
         Salvati <span class="tb-badge" id="salvatiCount">0</span><span class="tb-badge tb-badge-new" id="novitaCount" style="display:none">0</span>
       </button>
+      <a class="theme-toggle ai-mode-btn" id="aiModeBtn" href="/assistant.html" title="Assistente AI — cerca a parole tue" aria-label="AI mode">✨ AI</a>
       <button type="button" class="theme-toggle" id="btnReportNav" title="Segnala un problema" aria-label="Segnala">⚑</button>
-      <button type="button" class="theme-toggle" id="helpToggle" title="Mostra/nascondi aiuti" aria-label="Aiuti">?</button>
       <button type="button" class="theme-toggle" id="themeToggle" title="Cambia tema" aria-label="Cambia tema">☾</button>
     </div>
 
@@ -65,7 +64,6 @@
           <input type="radio" name="tipo" id="tipoMoto" value="moto" />
           <label for="tipoMoto">Moto</label>
         </div>
-        <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="ricerca">?</span>
 
         <div class="search-fields">
           <div class="ac-wrap">
@@ -92,7 +90,6 @@
         </div>
 
         <button type="button" class="adv-toggle" id="advancedToggle" aria-expanded="false">Filtri avanzati</button>
-        <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="filtri">?</span>
         <div class="adv-grid d-none" id="advancedFilters">
           <label class="adv-field"><span>Prezzo min (€)</span><input type="number" id="prezzoMin" placeholder="1000" min="0" /></label>
           <label class="adv-field"><span>Prezzo max (€)</span><input type="number" id="prezzoMax" placeholder="20000" min="0" /></label>
@@ -100,7 +97,7 @@
           <label class="adv-field"><span>Anno a</span><input type="number" id="annoMax" min="1900" /></label>
           <label class="adv-field"><span>Km min</span><input type="number" id="kmMin" placeholder="20000" min="0" /></label>
           <label class="adv-field"><span>Km max</span><input type="number" id="kmMax" placeholder="100000" min="0" /></label>
-          <label class="adv-field"><span>Regione <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="regione">?</span></span><select id="regione"><option value="">Tutta Italia</option></select></label>
+          <label class="adv-field"><span>Regione</span><select id="regione"><option value="">Tutta Italia</option></select></label>
           <label class="adv-field"><span>Raggio km (Autoscout)</span><input type="number" id="raggio" placeholder="100" min="1" /></label>
         </div>
 
@@ -170,12 +167,10 @@
         <span id="resultsCount" class="tb-count"></span>
         <span class="tb-stat"><span class="tb-stat-label">min</span><b id="statMin">—</b></span>
         <span class="tb-stat"><span class="tb-stat-label">max</span><b id="statMax">—</b></span>
-        <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="griglia">?</span>
       </div>
       <span class="tb-sep"></span>
       <div class="tb-group">
         <span class="tb-label">Raggruppa</span>
-        <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="raggruppa">?</span>
         <div id="facetChips" class="facet-chips"></div>
       </div>
       <span class="tb-sep"></span>
@@ -207,7 +202,6 @@
           <option value="km_asc">Km minori</option>
         </select>
         <button class="tb-btn" id="btnSalvaRicerca" title="Salva questa ricerca e ricevi avvisi sulle novità">Salva ricerca</button>
-        <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="export">?</span>
         <button class="tb-btn" id="btnStatCsv">CSV</button>
         <button class="tb-btn" id="btnStatPdf">PDF</button>
       </div>
@@ -218,7 +212,6 @@
     <!-- BARRA CONFRONTO (appare con ≥1 selezionato) -->
     <div id="compareBar" class="compare-bar d-none">
       <span>Selezionati: <b id="compareCount">0</b></span>
-      <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="confronto">?</span>
       <span class="cbar-spacer"></span>
       <button type="button" class="primary" id="compareOpen">Apri confronto</button>
       <button type="button" id="compareClear">Svuota</button>
@@ -308,7 +301,6 @@
         <div class="tab-pane fade" id="paneRicerche" role="tabpanel" aria-labelledby="tabRicercheBtn">
           <div class="ricerche-toolbar">
             <button type="button" class="rnav-btn" id="btnControllaTutte">Controlla tutte</button>
-            <span class="help-dot" tabindex="0" role="button" aria-label="Aiuto" data-help-key="ricercheSalvate">?</span>
           </div>
           <div id="ricercheList" class="p-3"></div>
         </div>

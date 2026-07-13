@@ -913,26 +913,7 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
   padding-inline: 12px;
 }
 
-/* ─── Aiuti contestuali (?) ─────────────────────────────────────────────────── */
-.help-dot {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 16px; height: 16px; flex: none; margin-left: 4px;
-  border: 1px solid var(--line-strong); border-radius: 50%;
-  font-size: 0.64rem; font-weight: 700; color: var(--text-muted);
-  background: var(--surface); cursor: help; position: relative; user-select: none; vertical-align: middle;
-}
-.help-dot:hover { border-color: var(--accent); color: var(--accent); }
-body.help-off .help-dot { display: none; }
-/* Tooltip flottante (JS): position:fixed + clamp al viewport → mai overflow/scroll-x */
-.help-tip {
-  position: fixed; z-index: 3000; max-width: 280px;
-  background: var(--text); color: var(--bg);
-  padding: 8px 11px; border-radius: var(--r); font-size: 0.76rem; font-weight: 500; line-height: 1.45;
-  box-shadow: var(--shadow); pointer-events: none; opacity: 0; transition: opacity .12s;
-}
-.help-tip.show { opacity: 1; }
-
-/* ─── Topbar: bottone Salvati + toggle attivo ──────────────────────────────── */
+/* ─── Topbar: bottone Salvati + AI mode ────────────────────────────────────── */
 .topbar-saved {
   display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
@@ -941,7 +922,13 @@ body.help-off .help-dot { display: none; }
 .topbar-saved:hover { border-color: var(--accent); color: var(--accent); }
 .tb-badge { background: var(--surface-2); color: var(--text-muted); font-family: var(--num); font-size: 0.72rem; font-weight: 700; border-radius: 3px; padding: 1px 6px; }
 .tb-badge-new { background: var(--neg); color: #fff; }
-.theme-toggle.active { border-color: var(--accent); color: var(--accent); }
+/* AI mode: link-bottone accent nel topbar (nascosto in demo — chiave di test protetta) */
+.ai-mode-btn {
+  width: auto; padding: 0 12px; gap: 5px; font-weight: 700; font-size: 0.82rem;
+  text-decoration: none; color: var(--accent); border-color: var(--accent);
+}
+.ai-mode-btn:hover { background: var(--accent); color: #fff; }
+body.demo-mode .ai-mode-btn { display: none; }
 
 /* ─── Responsive ─────────────────────────────────────────────────────────────── */
 @media (max-width: 860px) {
