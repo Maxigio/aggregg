@@ -299,7 +299,23 @@ const serveMin = (kind, type) => (req, res, next) => {
 app.get('/app.js',    serveMin('js',  'application/javascript'));
 app.get('/style.css', serveMin('css', 'text/css'));
 
-app.use(express.static(path.join(__dirname, '../frontend')));
+// index.html con asset VERSIONATI (?v=<ver>): al cambio codice l'URL cambia → il browser scarica
+// il bundle nuovo da solo su un reload normale (niente hard refresh). ver = hash del build minify.
+app.get(['/', '/index.html'], (req, res, next) => {
+  try {
+    const v = minFE.ver || String(Date.now());
+    const html = fs.readFileSync(path.join(__dirname, '../frontend/index.html'), 'utf8')
+      .replace(/(src|href)="(app\.js|style\.css|pricing\.js)"/g, `$1="$2?v=${v}"`);
+    res.set('Cache-Control', 'no-cache').type('html').send(html);
+  } catch (_) { next(); }
+});
+
+app.use(express.static(path.join(__dirname, '../frontend'), {
+  setHeaders(res, filePath) {
+    // HTML sempre rivalidato → niente index.html stale in cache dopo un deploy/edit
+    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+  },
+}));
 
 // §F1.5 — salute crawler / rilevamento ban. DIETRO auth (l'app è esposta via
 // Funnel pubblico → non auth-free). Sommario {ok, blocked[], degraded[], fonti[]}.
@@ -1150,31 +1166,6 @@ const amrSearchFn = async (input) => {
 
 // ─── Webhook WhatsApp (Meta Cloud API) — in AUTH_FREE (firma HMAC), searchFn condivisa ─────────
 require('./whatsapp/webhook').mount(app, { searchFn: amrSearchFn });
-
-// ─── Assistente interno "AI mode" (Haiku 4.5) — SSE ────────────────────────────────────────────
-// Dietro login; POST ⇒ il demo-gate lo blocca per il demo (sola lettura) → di fatto SOLO owner
-// 'full', a protezione della chiave di test (apribile al demo in futuro esentandolo come /api/report).
-// ctx = categoria scelta dai bottoni (deterministica). Chiave dedicata ASSISTANT_ANTHROPIC_KEY.
-const { runAssistant } = require('./assistant/assistant');
-app.post('/api/assistant', express.json({ limit: '64kb' }), async (req, res) => {
-  if (!searchRateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
-  const { text, history, ctx } = req.body || {};
-  if (!text || typeof text !== 'string') return res.status(400).json({ error: 'testo mancante' });
-  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');   // niente buffering proxy → SSE arriva subito
-  res.flushHeaders?.();
-  const emit = (event, data) => { try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* client chiuso */ } };
-  try {
-    const out = await runAssistant({ text, history: Array.isArray(history) ? history : [], ctx: ctx || {}, searchFn: amrSearchFn, emit });
-    emit('done', { history: out.history });
-  } catch (e) {
-    logger.error('[assistant]', (e && e.message) || String(e));
-    emit('error', { message: 'Assistente non disponibile ora.' });
-  }
-  res.end();
-});
 
 const server = app.listen(PORT, () => {
   console.log(`Server avviato su http://localhost:${PORT}`);

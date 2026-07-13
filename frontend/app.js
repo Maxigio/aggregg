@@ -78,9 +78,97 @@ const ICONS = {
   info:              '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
   chevron:           '<path d="m6 9 6 6 6-6"/>',
   x:                 '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  moon:              '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+  sun:               '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
 };
 function icon(name, cls = '') {
   return `<svg class="ico ${cls}" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+}
+
+// ─── Prezzo di listino: Commissione (+ € o %), Spese (− €), Margine (rivendita %), IVA 22% ──
+// `pricing`/`priceAdjActive`/`PRICE_DEFAULT` arrivano da pricing.js (globale). Stato per contesto,
+// persistito in localStorage. Applicato coerentemente a righe/stats/slider/export.
+function loadPriceCfg(key) { try { return Object.assign({}, PRICE_DEFAULT, JSON.parse(localStorage.getItem(key) || '{}')); } catch (_) { return Object.assign({}, PRICE_DEFAULT); } }
+function savePriceCfg(key, cfg) { try { localStorage.setItem(key, JSON.stringify(cfg)); } catch (_) {} }
+let priceCfgV = loadPriceCfg('amr_price_v');   // veicoli (auto/moto)
+let priceCfgR = loadPriceCfg('amr_price_r');   // ricambi
+const vPricing = base => pricing(base, priceCfgV);
+const rPricing = base => pricing(base, priceCfgR);
+const eurRound = n => '€ ' + Math.round(n).toLocaleString('it-IT');
+
+// Dropdown "Prezzo €" (riusa lo stile .tb-cols di "Colonne"). ns = 'v' | 'r'.
+function priceMenuHTML(cfg, ns) {
+  const pct = cfg.commUnit === 'pct';
+  const num = v => (v ? String(v) : '');
+  return `<details class="tb-cols price-menu${priceAdjActive(cfg) ? ' has-adj' : ''}">
+    <summary class="tb-btn">Prezzo €</summary>
+    <div class="tb-cols-menu price-menu-body">
+      <label class="pm-row"><span>Commissione</span><span class="pm-inp"><input type="number" inputmode="numeric" min="0" step="10" id="pmComm_${ns}" value="${num(cfg.comm)}" placeholder="0"><button type="button" class="pm-unit" id="pmUnit_${ns}" title="Cambia unità">${pct ? '%' : '€'}</button></span></label>
+      <label class="pm-row"><span>Spese</span><span class="pm-inp"><input type="number" inputmode="numeric" min="0" step="10" id="pmSpese_${ns}" value="${num(cfg.spese)}" placeholder="0"><span class="pm-unit-static">€</span></span></label>
+      <label class="pm-row"><span>Margine rivendita</span><span class="pm-inp"><input type="number" inputmode="numeric" min="0" step="1" id="pmMarg_${ns}" value="${num(cfg.margine)}" placeholder="0"><span class="pm-unit-static">%</span></span></label>
+      <label class="pm-check"><input type="checkbox" id="pmIva_${ns}"${cfg.iva ? ' checked' : ''}> Scorporo IVA 22%</label>
+      <button type="button" class="pm-reset" id="pmReset_${ns}">Azzera</button>
+    </div>
+  </details>`;
+}
+// Rilegge i campi del menu (namespace ns) → nuovo cfg (commUnit dal precedente, flippato altrove).
+function readPriceMenu(ns, prev) {
+  const g = id => document.getElementById(id + '_' + ns);
+  const n = el => Math.max(0, Number(el && el.value) || 0);
+  return { comm: n(g('pmComm')), commUnit: prev.commUnit, spese: n(g('pmSpese')), margine: n(g('pmMarg')), iva: !!(g('pmIva') && g('pmIva').checked) };
+}
+// Colonne/celle extra prezzo per export (rivendita/imponibile/IVA) in base a cfg.
+function priceExtraHeaders(cfg) {
+  const h = [];
+  if (cfg.margine > 0) h.push('Rivendita (€)');
+  if (cfg.iva) h.push('Imponibile (€)', 'IVA 22% (€)');
+  return h;
+}
+function priceExtraValues(pr, cfg) {   // pr = pricing() | null ; ritorna numeri arrotondati o ''
+  const v = [], r = x => (x == null ? '' : Math.round(x));
+  if (cfg.margine > 0) v.push(r(pr && pr.rivendita));
+  if (cfg.iva) { v.push(r(pr && pr.imponibile)); v.push(r(pr && pr.ivaQuota)); }
+  return v;
+}
+// Sotto-note riga: "→ riv. €X" e "imp. €Y + IVA €Z" (vuoto se non attivi). fmt = formatter €.
+function priceRowExtraHTML(pr, fmt) {
+  if (!pr) return '';
+  fmt = fmt || eurRound;
+  let s = '';
+  if (pr.rivendita != null) s += `<span class="row-riv">→ riv. ${fmt(pr.rivendita)}</span>`;
+  if (pr.imponibile != null) s += `<span class="row-iva">imp. ${fmt(pr.imponibile)} + IVA ${fmt(pr.ivaQuota)}</span>`;
+  return s;
+}
+// Menu prezzo veicoli (toolbar statica): render + wiring. Per i ricambi è dentro rcToolbarHTML.
+function renderPriceMenuV() {
+  const host = document.getElementById('priceMenuV');
+  if (!host) return;
+  const wasOpen = host.querySelector('details')?.open;
+  host.innerHTML = priceMenuHTML(priceCfgV, 'v');
+  if (wasOpen) { const d = host.querySelector('details'); if (d) d.open = true; }
+  wirePriceMenuV();
+}
+function wirePriceMenuV() {
+  const host = document.getElementById('priceMenuV');
+  if (!host) return;
+  const apply = (rerenderMenu) => {
+    savePriceCfg('amr_price_v', priceCfgV);
+    if (rerenderMenu) renderPriceMenuV();
+    else host.querySelector('.price-menu')?.classList.toggle('has-adj', priceAdjActive(priceCfgV));
+    renderResults(currentResults);
+  };
+  ['pmComm_v', 'pmSpese_v', 'pmMarg_v'].forEach(id => document.getElementById(id)?.addEventListener('input', () => { priceCfgV = readPriceMenu('v', priceCfgV); apply(false); }));
+  document.getElementById('pmIva_v')?.addEventListener('change', () => { priceCfgV = readPriceMenu('v', priceCfgV); apply(false); });
+  document.getElementById('pmUnit_v')?.addEventListener('click', () => { priceCfgV.commUnit = priceCfgV.commUnit === 'pct' ? 'eur' : 'pct'; priceCfgV = readPriceMenu('v', priceCfgV); apply(true); });
+  document.getElementById('pmReset_v')?.addEventListener('click', () => { priceCfgV = Object.assign({}, PRICE_DEFAULT); apply(true); });
+}
+// Il dropdown "Prezzo €" sta a destra nella toolbar → ancora a destra; se sforerebbe a sinistra
+// (bottone troppo a sx, es. toolbar stretta) ripiega su ancoraggio a sinistra. Niente overflow.
+function positionPriceMenu(det) {
+  const body = det && det.querySelector('.price-menu-body');
+  if (!body) return;
+  body.style.left = 'auto'; body.style.right = '0';
+  if (body.getBoundingClientRect().left < 8) { body.style.left = '0'; body.style.right = 'auto'; }
 }
 
 // ─── Tema (light/dark commutabile) ──────────────────────────────────────────
@@ -88,7 +176,7 @@ function currentTheme() { return document.documentElement.getAttribute('data-the
 function applyTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
   try { localStorage.setItem('amr_theme', t); } catch (_) {}
-  if (themeToggle) { themeToggle.textContent = t === 'dark' ? '☀' : '☾'; themeToggle.title = t === 'dark' ? 'Tema chiaro' : 'Tema scuro'; }
+  if (themeToggle) { themeToggle.innerHTML = icon(t === 'dark' ? 'sun' : 'moon'); themeToggle.title = t === 'dark' ? 'Tema chiaro' : 'Tema scuro'; }
 }
 
 // ─── Toast leggero ──────────────────────────────────────────────────────────
@@ -171,6 +259,13 @@ async function init() {
     visibleCols = OPTIONAL_COLS.filter(k => document.querySelector(`.col-toggle[value="${k}"]`)?.checked);
     renderResults(currentResults);
   }));
+  renderPriceMenuV();   // menu "Prezzo €" (Commissione/Spese/Margine/IVA) nella toolbar veicoli
+  // riposiziona il dropdown "Prezzo €" all'apertura (veicoli + ricambi; delegato → sopravvive ai re-render)
+  document.addEventListener('click', e => {
+    const sum = e.target.closest('.price-menu > summary');
+    if (!sum) return;
+    requestAnimationFrame(() => { const det = sum.parentElement; if (det && det.open) positionPriceMenu(det); });
+  });
   // Responsività colonne in JS (l'inline grid-template vince sulle media-query).
   let _resizeT;
   window.addEventListener('resize', () => { clearTimeout(_resizeT); _resizeT = setTimeout(() => {
@@ -591,6 +686,7 @@ function selectPrimary(mode) {
   setSearchMode('cerca');
 }
 function setSearchMode(mode) {
+  const prev = searchMode;
   searchMode = ['valuta', 'ricambi'].includes(mode) ? mode : 'cerca';
   const valuta = searchMode === 'valuta';
   const ricambi = searchMode === 'ricambi';
@@ -606,11 +702,12 @@ function setSearchMode(mode) {
   btnCerca.textContent = valuta ? 'Valuta' : 'Cerca';
   document.getElementById('modello').placeholder = valuta
     ? 'Modello — es. V-Strom 1050 (obbligatorio)'
-    : 'Modello — es. 318d (opzionale)';
+    : currentTipo() === 'moto' ? 'Modello — es. MT-07 (opzionale)' : 'Modello — es. 318d (opzionale)';
   // Pannelli output: mostra solo quello del modo attivo (lo popola il rispettivo do*()).
   if (!ricambi) document.getElementById('ricambiPanel').classList.add('d-none');
   if (!valuta) document.getElementById('valutaPanel').classList.add('d-none');
-  if (valuta || ricambi) hideResults();   // i modi-scheda nascondono la lista auto
+  if (ricambi || valuta) document.getElementById('versioneRow').classList.add('d-none');   // niente riga Versione Moto.it fuori da Moto
+  if (valuta || ricambi || prev === 'ricambi') { rcData = null; currentResults = []; hideResults(); }   // modi-scheda / uscita da ricambi → pulizia piena
 }
 
 async function doValuta() {
@@ -692,6 +789,7 @@ let rcVisibleCols = [];      // colonne opzionali mostrate (marca/venditore/valu
 let rcVariantSel = { tipo: null, articleId: null };   // selezione nel selettore varianti catalogo (v7)
 let rcVariantSpecs = {};     // cache specs lazy Autodoc per articleId ({loading}|{datiTecnici,compatibilita})
 let rcCollapsed = new Set();  // chiavi-gruppo collassate (persistono al re-render, meglio di auto)
+let rcSchedaCollapsed = false;  // scheda tecnica minimizzata (persiste al re-render)
 let rcOpenDetails = new Set();// chiavi articolo con accordion info aperto (persistono al re-render)
 let confrontoRicambi = [];
 let salvatiRicambi = rcLoadSalvati();
@@ -835,7 +933,7 @@ async function doRicambi() {
     // id stabile per articolo (gli item web possono non avere url/articleId → il nome collide) → indice per unicità
     (d.articoli || []).forEach((a, i) => { if (!a._rk) a._rk = `${a.fonte}:${a.url || a.articleId || (a.nome + '#' + i)}`; });
     rcData = d; rcView = 'grid';
-    rcCollapsed = new Set(); rcOpenDetails = new Set();   // nuova ricerca → reset gruppi/dettagli aperti
+    rcCollapsed = new Set(); rcOpenDetails = new Set(); rcSchedaCollapsed = false;   // nuova ricerca → reset gruppi/dettagli/scheda
     rcVariantSpecs = {};
     const cat = d.scheda && d.scheda.catalogo;   // v7: selettore varianti — dominante pre-aperto, default variante se tipo singolo
     rcVariantSel = cat ? { tipo: cat.tipoDominante, articleId: cat.defaultArticleId } : { tipo: null, articleId: null };
@@ -878,7 +976,7 @@ function rcRowHTML(a, bestKey) {
       case 'marca': return `<span class="rc-cell-txt">${a.marca ? escapeHtml(a.marca) : '—'}</span>`;
       case 'venditore': return `<span class="rc-cell-txt">${escapeHtml(a.venditore || (a.fonte === 'autodoc' ? 'Autodoc' : '—'))}</span>`;
       case 'valutazione': return `<span class="rc-cell-txt">${a.stelle ? '★ ' + escapeHtml(String(a.stelle)) : '—'}</span>`;
-      case 'prezzo': { const prezzo = rcEur(a.prezzo); return prezzo ? `<span class="rc-prezzo">${prezzo}</span>` : `<span class="rc-prezzo rc-noprice">${rcPriceText(a)}</span>`; }
+      case 'prezzo': { const pr = rPricing(a.prezzo); return pr ? `<span class="rc-prezzo">${rcEur(pr.finale)}${priceRowExtraHTML(pr, rcEur)}</span>` : `<span class="rc-prezzo rc-noprice">${rcPriceText(a)}</span>`; }
       case 'fonte': return `<span class="rc-cell-txt">${escapeHtml(RC_FONTE[a.fonte] || a.fonte)}</span>`;
       case 'azioni': return `<div class="rc-rowact">
         <button type="button" class="rc-act rc-btn-info" data-key="${escapeHtml(key)}" title="Dettagli e foto">${icon('info')}</button>
@@ -1058,21 +1156,17 @@ function rcVariantDetailHTML(v, s) {
 }
 function rcSchedaHTML(d) {
   const s = d.scheda;
-  if (!s || !s.catalogo) {   // nessun catalogo → card placeholder che SPIEGA
+  if (!s || !s.catalogo) {   // nessun catalogo
+    if (d.mode && d.mode !== 'oem') return '';   // ricerca non-OEM (nome/codice prodotto) → niente scheda, solo le offerte
     const idParts = [d.tipoPezzo, d.veicoli].filter(Boolean).map(escapeHtml);
     const idLine = `${idParts.join(' · ').slice(0, 160) || 'Ricambio'}${d.oen ? ` · <span class="rc-code">${escapeHtml(d.oen)}</span>` : ''}`;
-    let msg;
-    if (d.mode && d.mode !== 'oem') msg = 'La scheda tecnica (prezzo nuovo, dati tecnici) è disponibile solo cercando per <b>codice OE/OEM</b>.';
-    else {
-      const catName = d.veicolo === 'auto' ? 'Autodoc' : 'CMSNL';
-      const cat = d.veicolo === 'auto' ? d.sources?.autodoc : d.sources?.cmsnl;
-      msg = (cat && ['blocked', 'error', 'timeout'].includes(cat.status)) ? `Catalogo ${catName} non disponibile ora — riprova tra poco.` : `Ricambio non presente nel catalogo ${catName}.`;
-    }
+    const catName = d.veicolo === 'auto' ? 'Autodoc' : 'CMSNL';
+    const cat = d.veicolo === 'auto' ? d.sources?.autodoc : d.sources?.cmsnl;
+    const msg = (cat && ['blocked', 'error', 'timeout'].includes(cat.status)) ? `Catalogo ${catName} non disponibile ora — riprova tra poco.` : `Ricambio non presente nel catalogo ${catName}.`;
     return `<div class="rc-scheda rc-scheda-empty"><div class="rc-sch-body"><div class="rc-sch-tit">${idLine}</div><div class="rc-sch-emptymsg">${msg}</div></div></div>`;
   }
   const cat = s.catalogo;
   const code = escapeHtml(s.codice || d.oen || '');
-  const head = `<div class="rc-sch-head"><span class="rc-sch-titmain">${escapeHtml(s.tipoPezzo || 'Ricambio')}</span>${code ? `<span class="rc-code">${code}</span>` : ''}</div>`;
   // chip tipi (solo multi-tipo) — evita di spacciare un tipo per un altro (il bug del €8.29)
   const tipiChips = cat.multiTipo ? `<div class="rc-var-tipi"><span class="rc-var-lab">Questo codice ha ${cat.tipi.length} tipi:</span>${cat.tipi.map(t => `<button type="button" class="rc-tipo-chip${rcVariantSel.tipo === t.tipo ? ' active' : ''}" data-tipo="${escapeHtml(t.tipo)}">${escapeHtml(t.tipo)} <span class="rc-tipo-n">${t.articoli.length}</span></button>`).join('')}</div>` : '';
   const arts = rcActiveTipoArticoli();
@@ -1086,7 +1180,11 @@ function rcSchedaHTML(d) {
     ? `<details class="rc-var-dd"${selInTipo ? '' : ' open'}><summary class="rc-var-sum">${summaryTxt}</summary><div class="rc-var-menu">${arts.map(rcVariantRowHTML).join('')}</div></details>`
     : '';
   const body = sel ? rcVariantDetailHTML(sel, s) : '';   // nessuna scelta → il dropdown basta (niente prompt testuale)
-  return `<div class="rc-scheda">${head}${tipiChips}${varDropdown}${body}</div>`;
+  // Scheda avvolta in un gruppo collassabile (riuso pattern "Raggruppa": .rc-group + caret).
+  const inner = `<div class="rc-scheda">${tipiChips}${varDropdown}${body}</div>`;
+  return `<div class="rc-group${rcSchedaCollapsed ? ' collapsed' : ''}">`
+    + `<button type="button" class="rc-group-head rc-sched-head"><span class="rc-gcaret">${icon('chevron')}</span><span class="rc-group-title">Scheda tecnica</span><span class="rc-group-meta">${escapeHtml(s.tipoPezzo || 'Ricambio')}${code ? ' · ' + code : ''}</span></button>`
+    + `<div class="rc-group-body">${inner}</div></div>`;
 }
 
 // Specs LAZY della variante Autodoc selezionata (datiTecnici + compatibilità) — 1 nav on-demand, cache client.
@@ -1107,10 +1205,12 @@ function renderRicambiPanel() {
   // i <details> aperti (dropdown varianti / Colonne) sopravvivono all'innerHTML replace —
   // altrimenti il re-render asincrono delle specs li richiude sotto il cursore
   const ddOpen = !!panel.querySelector('.rc-var-dd[open]');
-  const colsOpen = !!panel.querySelector('.tb-cols[open]');
+  const colsOpen = !!panel.querySelector('.tb-cols:not(.price-menu)[open]');
+  const priceOpen = !!panel.querySelector('.price-menu[open]');
   const restoreOpen = () => {
     if (ddOpen) panel.querySelector('.rc-var-dd')?.setAttribute('open', '');
-    if (colsOpen) panel.querySelector('.tb-cols')?.setAttribute('open', '');
+    if (colsOpen) panel.querySelector('.tb-cols:not(.price-menu)')?.setAttribute('open', '');
+    if (priceOpen) panel.querySelector('.price-menu')?.setAttribute('open', '');
   };
   const rawArts = d.articoli || [];
   // SOLO fonti in errore (diagnostica) — le pill "ok" ridondano col group-by Fonte, via.
@@ -1158,7 +1258,8 @@ function renderRicambiPanel() {
 // Toolbar rispecchiata su quella auto/moto (.results-toolbar a sezioni .tb-group / .tb-sep).
 function rcToolbarHTML() {
   const list = rcVisibleArts();
-  const stats = rcStats(list);
+  const finals = list.map(a => { const pr = rPricing(a.prezzo); return pr ? pr.finale : null; }).filter(n => typeof n === 'number');
+  const stats = finals.length ? { n: finals.length, min: Math.min(...finals), max: Math.max(...finals), mediana: rcMedian(finals) } : null;
   // sez.1 — conteggio + statistiche prezzo (min/max cliccabili → annuncio di riferimento)
   const statJump = (which, val) => `<button type="button" class="tb-stat rc-stat-jump" data-which="${which}" title="Vai all'annuncio ${which === 'min' ? 'più economico' : 'più caro'}"><span class="tb-stat-label">${which}</span><b>${rcEur(val)}</b></button>`;
   const statsHTML = `<span class="tb-count">${list.length} ricambi</span>` + (stats
@@ -1177,6 +1278,7 @@ function rcToolbarHTML() {
     <div class="tb-group"><span class="tb-label">Raggruppa</span><div class="facet-chips">${facets}</div></div>
     <span class="tb-sep"></span>
     <div class="tb-group">
+      ${priceMenuHTML(priceCfgR, 'r')}
       ${colsDropdown}
       ${saveBtn}
       <button type="button" class="tb-btn" id="rcCsv">CSV</button>
@@ -1185,7 +1287,7 @@ function rcToolbarHTML() {
 }
 
 const RC_CMP_ROWS = [
-  { label: 'Prezzo', fmt: a => rcPriceText(a), val: a => (typeof a.prezzo === 'number' ? a.prezzo : null), best: 'min' },
+  { label: 'Prezzo', fmt: a => { const pr = rPricing(a.prezzo); return pr ? rcEur(pr.finale) : rcPriceText(a); }, val: a => { const pr = rPricing(a.prezzo); return pr ? pr.finale : null; }, best: 'min' },
   { label: 'Marca', fmt: a => a.marca || '—' },
   { label: 'Venditore', fmt: a => a.venditore || (a.fonte === 'autodoc' ? 'Autodoc' : '—') },
   { label: 'Fonte', fmt: a => RC_FONTE[a.fonte] || a.fonte },
@@ -1237,8 +1339,9 @@ function rcToggleSave(key, remove) {
 function exportCsvRicambi() {
   const arts = rcCurrentList(); if (!arts.length) { showError('Niente da esportare.'); return; }
   const cell = v => { let s = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
-  const cols = ['Fonte', 'Ricambio', 'Marca', 'Prezzo (€)', 'Venditore', 'URL'];
-  const rows = arts.map(a => [RC_FONTE[a.fonte] || a.fonte, a.nome, a.marca || '', a.prezzo != null ? a.prezzo : '', a.venditore || '', a.url || ''].map(cell).join(','));
+  const cfg = priceCfgR;
+  const cols = ['Fonte', 'Ricambio', 'Marca', 'Prezzo (€)', 'Venditore', ...priceExtraHeaders(cfg), 'URL'];
+  const rows = arts.map(a => { const pr = rPricing(a.prezzo); return [RC_FONTE[a.fonte] || a.fonte, a.nome, a.marca || '', pr ? Number(pr.finale.toFixed(2)) : '', a.venditore || '', ...priceExtraValues(pr, cfg), a.url || ''].map(cell).join(','); });
   const csv = ['﻿' + cols.join(','), ...rows].join('\r\n');
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
   const a = Object.assign(document.createElement('a'), { href: url, download: `ricambi-${(rcData && rcData.oen || 'export')}-${new Date().toISOString().slice(0, 10)}.csv` });
@@ -1256,14 +1359,15 @@ function exportPdfRicambi() {
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(170, 185, 210);
   const meta = rcData || {};
   doc.text(`${[meta.tipoPezzo, meta.veicoli].filter(Boolean).join(' · ').slice(0, 110)}  ·  ${meta.oen || ''}`, 14, 17);
+  const rcCfg = priceCfgR, rcExtraH = priceExtraHeaders(rcCfg);
   doc.autoTable({
     startY: 26,
-    head: [['Fonte', 'Ricambio', 'Marca', 'Prezzo', 'Venditore']],
-    body: arts.map(a => [RC_FONTE[a.fonte] || a.fonte, a.nome, a.marca || '—', rcPriceText(a), a.venditore || '—']),
+    head: [['Fonte', 'Ricambio', 'Marca', 'Prezzo', 'Venditore', ...rcExtraH]],
+    body: arts.map(a => { const pr = rPricing(a.prezzo); return [RC_FONTE[a.fonte] || a.fonte, a.nome, a.marca || '—', pr ? rcEur(pr.finale) : rcPriceText(a), a.venditore || '—', ...priceExtraValues(pr, rcCfg).map(x => x === '' ? '—' : rcEur(x))]; }),
     styles: { font: 'helvetica', fontSize: 8, cellPadding: 2, overflow: 'ellipsize' },
     headStyles: { fillColor: [20, 24, 31], textColor: [255, 255, 255], fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [247, 248, 250] },
-    columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 30 }, 3: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }, 4: { cellWidth: 40 } },
+    columnStyles: Object.assign({ 0: { cellWidth: 22 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 30 }, 3: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }, 4: { cellWidth: 40 } }, ...rcExtraH.map((_, i) => ({ [5 + i]: { cellWidth: 26, halign: 'right' } }))),
     margin: { left: 14, right: 14 },
   });
   doc.save(`ricambi-${meta.oen || 'export'}-${new Date().toISOString().slice(0, 10)}.pdf`);
@@ -1335,7 +1439,9 @@ function setRcVeicolo(v) {
     // prezzo min/max in toolbar → vai all'annuncio di riferimento
     const sj = t.closest('.rc-stat-jump'); if (sj) { rcJumpToStat(sj.dataset.which); return; }
     // collapse gruppo: toggle diretto (niente re-render → no scroll jump); rcCollapsed persiste
-    const gh = t.closest('.rc-group-head'); if (gh) { const g = gh.closest('.rc-group'), k = g.dataset.gkey; g.classList.toggle('collapsed'); rcCollapsed.has(k) ? rcCollapsed.delete(k) : rcCollapsed.add(k); return; }
+    const gh = t.closest('.rc-group-head'); if (gh) { const g = gh.closest('.rc-group');
+      if (gh.classList.contains('rc-sched-head')) { g.classList.toggle('collapsed'); rcSchedaCollapsed = g.classList.contains('collapsed'); return; }
+      const k = g.dataset.gkey; g.classList.toggle('collapsed'); rcCollapsed.has(k) ? rcCollapsed.delete(k) : rcCollapsed.add(k); return; }
     // accordion info: toggle diretto + lazy content; rcOpenDetails persiste al re-render
     const info = t.closest('.rc-btn-info'); if (info) {
       const k = info.dataset.key, det = info.closest('.rc-item').nextElementSibling;
@@ -1349,6 +1455,8 @@ function setRcVeicolo(v) {
     if (t.closest('#rcOpenCompare')) { rcCompareOpen = !rcCompareOpen; renderRicambiPanel(); return; }
     if (t.closest('#rcCompareClose')) { rcCompareOpen = false; renderRicambiPanel(); return; }
     if (t.closest('#rcCompareClear')) { confrontoRicambi = []; rcCompareOpen = false; renderRicambiPanel(); return; }
+    if (t.closest('#pmUnit_r')) { priceCfgR.commUnit = priceCfgR.commUnit === 'pct' ? 'eur' : 'pct'; priceCfgR = readPriceMenu('r', priceCfgR); savePriceCfg('amr_price_r', priceCfgR); renderRicambiPanel(); return; }
+    if (t.closest('#pmReset_r')) { priceCfgR = Object.assign({}, PRICE_DEFAULT); savePriceCfg('amr_price_r', priceCfgR); renderRicambiPanel(); return; }
     if (t.closest('#rcCsv')) { exportCsvRicambi(); return; }
     if (t.closest('#rcPdf')) { exportPdfRicambi(); return; }
     if (t.closest('#rcSaveCode')) { if (rcData && rcData.oen) rcToggleFav(rcData.oen, rcData.mode, rcData.veicolo); return; }
@@ -1362,6 +1470,10 @@ function setRcVeicolo(v) {
     if (e.target.classList.contains('rc-col-toggle')) {
       rcVisibleCols = RC_OPTIONAL_COLS.filter(k => panel.querySelector(`.rc-col-toggle[value="${k}"]`)?.checked);
       renderRicambiPanel();
+      return;
+    }
+    if (['pmComm_r', 'pmSpese_r', 'pmMarg_r', 'pmIva_r'].includes(e.target.id)) {
+      priceCfgR = readPriceMenu('r', priceCfgR); savePriceCfg('amr_price_r', priceCfgR); renderRicambiPanel();
     }
   });
   // immagine rotta → placeholder 🚗/🏍 (mirror del listener auto su resultsGrid)
@@ -1512,8 +1624,8 @@ function initPrezzoSlider(results) {
     format: { to: v => Math.round(v), from: v => Number(v) },
   });
   prezzoSliderInstance.on('update', ([sMin, sMax]) => {
-    document.getElementById('sliderLabelMin').textContent = `€ ${Number(sMin).toLocaleString('it-IT')}`;
-    document.getElementById('sliderLabelMax').textContent = `€ ${Number(sMax).toLocaleString('it-IT')}`;
+    document.getElementById('sliderLabelMin').textContent = eurRound(vPricing(Number(sMin)).finale);
+    document.getElementById('sliderLabelMax').textContent = eurRound(vPricing(Number(sMax)).finale);
     renderResults(currentResults);
   });
 }
@@ -1550,6 +1662,7 @@ function renderResults(results) {
   renderFacetChips();
 
   resultsToolbar.classList.remove('d-none');
+  if (!document.querySelector('#priceMenuV summary')) renderPriceMenuV();   // rete di sicurezza: menu "Prezzo €" popolato quando la toolbar appare
   updateStats(sorted);
 
   if (sorted.length === 0) {
@@ -1567,7 +1680,7 @@ function renderResults(results) {
         <button type="button" class="group-header" aria-expanded="true">
           <span class="group-caret">${icon('chevron')}</span>
           <span class="group-title">${escapeHtml(String(g.key))}</span>
-          <span class="group-meta">${g.items.length} annunci${g.minPrezzo != null ? ` · da € ${g.minPrezzo.toLocaleString('it-IT')}` : ''}</span>
+          <span class="group-meta">${g.items.length} annunci${(() => { const gm = vPricing(g.minPrezzo); return gm ? ` · da ${eurRound(gm.finale)}` : ''; })()}</span>
         </button>
         <div class="group-body">${gridHeadHTML()}<div class="result-list">${g.items.map(r => rowHTML(r, best)).join('')}</div></div>
       </div>`;
@@ -1701,7 +1814,8 @@ function escapeHtml(str) {
 }
 
 function rowHTML(item, bestSet) {
-  const prezzoStr = item.prezzo != null ? `€ ${item.prezzo.toLocaleString('it-IT')}` : 'n/d';
+  const pr = vPricing(item.prezzo);
+  const prezzoStr = pr ? eurRound(pr.finale) : 'n/d';
   const fonteLabel = FONTE_LABEL[item.fonte] || item.fonte;
   const fonteTag = { subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[item.fonte] || '';
   const urlSafe = /^https?:\/\//i.test(item.url) ? escapeHtml(item.url) : '#';
@@ -1737,7 +1851,7 @@ function rowHTML(item, bestSet) {
       case 'km':     return `<div class="row-cell num muted">${item.km != null ? item.km.toLocaleString('it-IT') : '—'}</div>`;
       case 'carb':   return `<div class="row-cell muted">${item.carburante ? escapeHtml(item.carburante) : '—'}</div>`;
       case 'cv':     return `<div class="row-cell num muted">${item.potenzaCv != null ? item.potenzaCv : '—'}</div>`;
-      case 'prezzo': return `<div class="row-prezzo">${prezzoStr}</div>`;
+      case 'prezzo': return `<div class="row-prezzo">${prezzoStr}${priceRowExtraHTML(pr)}</div>`;
       case 'fonte':  return `<div class="row-fonte"><span class="tag ${fonteTag}">${escapeHtml(fonteLabel)}</span></div>`;
       case 'azioni': return `<div class="row-actions">
           <button class="row-act btn-info" title="Dettagli e foto">${icon('info')}</button>
@@ -1767,7 +1881,7 @@ function toggleDetail(rowEl) {
 }
 function detailSpecsHTML(r) {
   const base = [];
-  if (r.prezzo != null) base.push(['Prezzo', `€ ${r.prezzo.toLocaleString('it-IT')}`]);
+  if (r.prezzo != null) { const _pr = vPricing(r.prezzo); base.push(['Prezzo', _pr ? eurRound(_pr.finale) : `€ ${r.prezzo.toLocaleString('it-IT')}`]); }
   if (r.anno != null)   base.push(['Anno', r.anno]);
   if (r.km != null)     base.push(['Km', `${r.km.toLocaleString('it-IT')} km`]);
   if (r.provincia)      base.push(['Provincia', r.provincia]);
@@ -1801,17 +1915,14 @@ function openAd(url) { if (/^https?:\/\//i.test(url)) window.open(url, '_blank',
 
 // ─── Statistiche ──────────────────────────────────────────────────────────────
 function updateStats(results) {
-  const prices = results.map(r => r.prezzo).filter(p => p != null && p > 0).sort((a, b) => a - b);
-  const fmt = n => `€ ${n.toLocaleString('it-IT')}`;
-  if (prices.length === 0) {
+  const withP = results.map(r => ({ r, p: vPricing(r.prezzo) })).filter(x => x.p && x.p.finale > 0).sort((a, b) => a.p.finale - b.p.finale);
+  if (!withP.length) {
     document.getElementById('statMin').innerHTML = '—'; document.getElementById('statMax').innerHTML = '—'; return;
   }
-  const min = prices[0], max = prices[prices.length - 1];
-  const minResult = results.find(r => r.prezzo === min);
-  const maxResult = results.find(r => r.prezzo === max);
-  const mk = (val, r) => r ? `<button class="stat-clickable" data-url="${escapeHtml(r.url)}">${fmt(val)}</button>` : fmt(val);
-  document.getElementById('statMin').innerHTML = mk(min, minResult);
-  document.getElementById('statMax').innerHTML = mk(max, maxResult);
+  const lo = withP[0], hi = withP[withP.length - 1];
+  const mk = (val, r) => r ? `<button class="stat-clickable" data-url="${escapeHtml(r.url)}">${eurRound(val)}</button>` : eurRound(val);
+  document.getElementById('statMin').innerHTML = mk(lo.p.finale, lo.r);
+  document.getElementById('statMax').innerHTML = mk(hi.p.finale, hi.r);
 }
 
 function scrollToCard(url) {
@@ -2259,8 +2370,9 @@ function exportCsv(results) {
     if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
     return `"${s.replace(/"/g, '""')}"`;
   };
-  const cols = ['Fonte', 'Titolo', 'Prezzo (€)', 'Anno', 'KM', 'Carburante', 'Provincia', 'URL'];
-  const rows = results.map(r => [r.fonte, r.titolo, r.prezzo != null ? r.prezzo : '', r.anno != null ? r.anno : '', r.km != null ? r.km : '', r.carburante || '', r.provincia || '', r.url].map(cell).join(','));
+  const cfg = priceCfgV;
+  const cols = ['Fonte', 'Titolo', 'Prezzo (€)', 'Anno', 'KM', 'Carburante', 'Provincia', ...priceExtraHeaders(cfg), 'URL'];
+  const rows = results.map(r => { const pr = vPricing(r.prezzo); return [r.fonte, r.titolo, pr ? Math.round(pr.finale) : '', r.anno != null ? r.anno : '', r.km != null ? r.km : '', r.carburante || '', r.provincia || '', ...priceExtraValues(pr, cfg), r.url].map(cell).join(','); });
   const csv = [cols.join(','), ...rows].join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -2301,8 +2413,9 @@ function exportPdf(results) {
   doc.text((crit + '   ·   ' + today).slice(0, 150), 25, 19);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...WHITE); doc.text(results.length + ' annunci', pageW - 14, 14, { align: 'right' });
 
-  // ── Striscia metriche inline
-  const prices = results.map(r => r.prezzo).filter(p => p != null && p > 0).sort((a, b) => a - b);
+  // ── Striscia metriche inline (sui prezzi finali: base + commissione − spese)
+  const cfg = priceCfgV;
+  const prices = results.map(r => vPricing(r.prezzo)).filter(p => p && p.finale > 0).map(p => p.finale).sort((a, b) => a - b);
   const mid = prices.length / 2;
   const metrics = [
     ['MIN', prices.length ? fmtEur(prices[0]) : '—'],
@@ -2319,17 +2432,27 @@ function exportPdf(results) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK); doc.text(String(val), x + 4, stripY + 7);
   });
 
-  // ── Tabella pulita + chip fonte
-  const tableBody = results.map(r => [FONTE_LABEL_PDF[r.fonte] || r.fonte, r.titolo, r.prezzo != null ? fmtEur(r.prezzo) : '—', r.anno != null ? String(r.anno) : '—', r.km != null ? r.km.toLocaleString('it-IT') + ' km' : '—', r.carburante || '—', r.provincia || '—']);
+  // ── Nota adjustment + tabella pulita + chip fonte
+  const extraH = priceExtraHeaders(cfg);
+  const tableBody = results.map(r => { const pr = vPricing(r.prezzo); return [FONTE_LABEL_PDF[r.fonte] || r.fonte, r.titolo, pr ? fmtEur(Math.round(pr.finale)) : '—', r.anno != null ? String(r.anno) : '—', r.km != null ? r.km.toLocaleString('it-IT') + ' km' : '—', r.carburante || '—', r.provincia || '—', ...priceExtraValues(pr, cfg).map(x => x === '' ? '—' : fmtEur(x))]; });
+  if (priceAdjActive(cfg)) {
+    const bits = [];
+    if (cfg.comm) bits.push(`Commissione +${cfg.comm}${cfg.commUnit === 'pct' ? '%' : ' €'}`);
+    if (cfg.spese) bits.push(`Spese −${cfg.spese} €`);
+    if (cfg.margine) bits.push(`Margine ${cfg.margine}%`);
+    if (cfg.iva) bits.push('IVA 22% scorporata');
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(...SLATE);
+    doc.text('Prezzi finali · ' + bits.join(' · '), 14, stripY + 11);
+  }
   doc.autoTable({
-    startY: stripY + 12,
-    head: [['Fonte', 'Veicolo', 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia']],
+    startY: stripY + (priceAdjActive(cfg) ? 15 : 12),
+    head: [['Fonte', 'Veicolo', 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia', ...extraH]],
     body: tableBody,
     theme: 'plain',
     styles: { font: 'helvetica', fontSize: 7.5, cellPadding: { top: 2.6, right: 3, bottom: 2.6, left: 3 }, valign: 'middle', overflow: 'ellipsize' },
     headStyles: { fillColor: INK, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
     alternateRowStyles: { fillColor: ZEBRA },
-    columnStyles: { 0: { halign: 'center', cellWidth: 24 }, 1: { cellWidth: 'auto' }, 2: { halign: 'right', cellWidth: 26, fontStyle: 'bold', textColor: ACCENT }, 3: { halign: 'center', cellWidth: 14 }, 4: { halign: 'right', cellWidth: 24 }, 5: { halign: 'center', cellWidth: 24 }, 6: { halign: 'center', cellWidth: 24 } },
+    columnStyles: Object.assign({ 0: { halign: 'center', cellWidth: 24 }, 1: { cellWidth: 'auto' }, 2: { halign: 'right', cellWidth: 26, fontStyle: 'bold', textColor: ACCENT }, 3: { halign: 'center', cellWidth: 14 }, 4: { halign: 'right', cellWidth: 24 }, 5: { halign: 'center', cellWidth: 24 }, 6: { halign: 'center', cellWidth: 24 } }, ...extraH.map((_, i) => ({ [7 + i]: { halign: 'right', cellWidth: 22 } }))),
     didParseCell(data) { if (data.section === 'body' && data.column.index === 0) data.cell.text = [' ']; },   // chip disegnato a mano
     didDrawCell(data) {
       if (data.section !== 'body' || data.column.index !== 0) return;

@@ -243,6 +243,8 @@ body:not(.has-results) .search {
 /* scheda "buy-box": header (tipo·marca + codice) → main (foto | prezzo in evidenza) → sezioni */
 .rc-scheda { display: flex; flex-direction: column; gap: 14px; border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface); padding: 16px; }
 .rc-scheda-empty { background: var(--surface-2, #f7f8fa); }
+/* scheda dentro il gruppo collassabile → niente doppio bordo/frame, il gruppo fa da cornice */
+.rc-group-body > .rc-scheda { border: 0; border-radius: 0; padding: 12px; }
 .rc-sch-emptymsg { color: var(--text-muted); font-size: 0.9rem; line-height: 1.4; }
 .rc-sch-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
 .rc-sch-titmain { font-weight: 700; font-size: 1.15rem; color: var(--text); }
@@ -922,13 +924,22 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
 .topbar-saved:hover { border-color: var(--accent); color: var(--accent); }
 .tb-badge { background: var(--surface-2); color: var(--text-muted); font-family: var(--num); font-size: 0.72rem; font-weight: 700; border-radius: 3px; padding: 1px 6px; }
 .tb-badge-new { background: var(--neg); color: #fff; }
-/* AI mode: link-bottone accent nel topbar (nascosto in demo — chiave di test protetta) */
-.ai-mode-btn {
-  width: auto; padding: 0 12px; gap: 5px; font-weight: 700; font-size: 0.82rem;
-  text-decoration: none; color: var(--accent); border-color: var(--accent);
-}
-.ai-mode-btn:hover { background: var(--accent); color: #fff; }
-body.demo-mode .ai-mode-btn { display: none; }
+/* ─── Menu "Prezzo €" (Commissione/Spese/Margine/IVA) + note prezzo in riga ─────── */
+.price-menu > summary { position: relative; }
+.price-menu.has-adj > summary::after { content: ''; position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+/* apri ancorato a destra (il menu sta a dx nella toolbar) → resta dentro il viewport, niente overflow */
+.price-menu-body { left: auto; right: 0; min-width: min(236px, calc(100vw - 24px)); max-width: calc(100vw - 24px); max-height: min(60vh, 380px); overflow-y: auto; display: flex; flex-direction: column; gap: 9px; }
+.pm-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 0.82rem; color: var(--text); white-space: nowrap; }
+.pm-inp { display: inline-flex; align-items: center; gap: 4px; }
+.pm-inp input { width: 82px; height: 30px; text-align: right; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); padding: 0 8px; font: inherit; }
+.pm-inp input:focus { outline: none; border-color: var(--accent); }
+.pm-unit { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--text); cursor: pointer; font-weight: 700; line-height: 1; }
+.pm-unit:hover { border-color: var(--accent); color: var(--accent); }
+.pm-unit-static { display: inline-flex; width: 22px; justify-content: center; color: var(--text-muted); }
+.pm-check { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--text); cursor: pointer; }
+.pm-reset { align-self: flex-start; background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; font-size: 0.8rem; padding: 0; text-decoration: underline; }
+.row-riv, .row-iva { display: block; font-size: 0.7rem; font-weight: 600; color: var(--text-muted); line-height: 1.25; }
+.row-riv { color: var(--accent); }
 
 /* ─── Responsive ─────────────────────────────────────────────────────────────── */
 @media (max-width: 860px) {
