@@ -681,6 +681,9 @@ app.get('/api/search', async (req, res) => {
 // ─── Ricambi: codice OEM → articoli (auto-doc via stealth) — vedi ricambi-route.js ──
 require('./ricambi-route').mount(app, { clientIp });
 
+// ─── Scheda tecnica veicolo (auto-data.net) — vedi scheda-veicolo-route.js ──────────
+require('./scheda-veicolo-route').mount(app, { clientIp });
+
 // ─── F32 Fase 1: valutazione (#1/#6) ─────────────────────────────────────────
 // Motore puro in `valuation.js`; qui l'orchestrazione LIVE: riusa `runSearchCore`
 // (risolve modello→fonte slug/mmmv + filtri nativi + regione) per i comparabili,
