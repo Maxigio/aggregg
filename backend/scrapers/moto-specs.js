@@ -60,7 +60,7 @@ function prettyMoto(slug) {
 // Valore: togli le conversioni imperiali/alternative tra parentesi, tieni il metrico.
 function cleanVal(v) {
   return clean(v)
-    .replace(/\s*\((?:[^)]*\b(?:inch|inches|pounds|lbs|gallons|quarts|cubic|mph|ft\.?\s?lbs|kgf|miles|cu\.?)\b[^)]*)\)/gi, '')
+    .replace(/\s*\((?:[^)]*\b(?:inch|inches|pounds|lbs|gallons|quarts|cubic|mph|mpg|ft\.?\s?lbs|kgf|miles|cu\.?)\b[^)]*)\)/gi, '')
     .replace(/\s+/g, ' ').trim() || clean(v);
 }
 
@@ -90,6 +90,7 @@ function parseMotoSpecs(html) {
     if (cells.length < 2) return;
     const k = clean($(cells[0]).text()).replace(/\s*:\s*$/, '');   // alcune pagine hanno "Brand:" / "Ratio :"
     if (!k) return;
+    $(cells[1]).find('br').replaceWith(' ');   // valori multi-riga (<br>) → non fondere le parole
     const vRaw = clean($(cells[1]).text());
     if (k === 'Brand') head.brand = vRaw;
     else if (k === 'Model') head.model = vRaw;

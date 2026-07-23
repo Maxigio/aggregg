@@ -13,17 +13,21 @@ const INDEX_PATH = path.join(__dirname, '..', 'data', 'autodata-index.json');
 let INDEX = null;
 function loadIndex() {
   if (INDEX) return INDEX;
-  try { INDEX = JSON.parse(fs.readFileSync(INDEX_PATH, 'utf8')); } catch (_) { INDEX = { brands: {} }; }
-  return INDEX;
+  // NB: memoizza solo in caso di successo; se il file non è (ancora) leggibile ritorna un vuoto
+  // NON cachato → la richiesta successiva riprova (evita notFound-per-sempre fino al riavvio).
+  try { INDEX = JSON.parse(fs.readFileSync(INDEX_PATH, 'utf8')); return INDEX; } catch (_) { return { brands: {} }; }
 }
 
 const MOTO_INDEX_PATH = path.join(__dirname, '..', 'data', 'ultimatespecs-moto-index.json');
 let MOTO_INDEX = null;
 function loadMotoIndex() {
   if (MOTO_INDEX) return MOTO_INDEX;
-  try { MOTO_INDEX = JSON.parse(fs.readFileSync(MOTO_INDEX_PATH, 'utf8')); } catch (_) { MOTO_INDEX = { brands: {}, host: ms.HOST }; }
-  return MOTO_INDEX;
+  try { MOTO_INDEX = JSON.parse(fs.readFileSync(MOTO_INDEX_PATH, 'utf8')); return MOTO_INDEX; } catch (_) { return { brands: {}, host: ms.HOST }; }
 }
+
+// Alias marca app→chiave-indice: i cataloghi app hanno nomi più lunghi di quelli scrapati.
+const BRAND_ALIAS = { royalenfield: 'enfield', dsautomobiles: 'ds' };
+function brandKey(marca) { const k = norm(marca); return BRAND_ALIAS[k] || k; }
 
 // Cache per-URL (pagine liste 12h, specs 1h, vuoti 5min) + LRU.
 const PAGE_TTL = 12 * 60 * 60 * 1000, SPEC_TTL = 60 * 60 * 1000, EMPTY_TTL = 5 * 60 * 1000, CACHE_MAX = 300;
@@ -86,10 +90,10 @@ function matchMotoModels(models, query) {
   return out;
 }
 
-// marca+modello → tutte le voci/anni della famiglia (dropdown), specifiche lazy via /specs.
-function resolveMoto({ marca, modello }) {
+// marca+modello(+anno) → tutte le voci/anni della famiglia (dropdown), specifiche lazy via /specs.
+function resolveMoto({ marca, modello, anno }) {
   const idx = loadMotoIndex();
-  const brand = idx.brands[norm(marca)];
+  const brand = idx.brands[brandKey(marca)];
   if (!brand) return { notFound: 'marca' };
   const matched = matchMotoModels(brand.models, modello);
   if (!matched.length) return { notFound: 'modello' };
@@ -99,6 +103,12 @@ function resolveMoto({ marca, modello }) {
     entries.push({ label: `${mo.label} · ${year}`, url: `${host}/motorcycles-specs/${brand.seg}/${slug}`, year });
   }
   entries.sort((a, b) => b.year - a.year || a.label.localeCompare(b.label));
+  const yr = Number(anno) || null;   // preseleziona (in cima) la voce dell'annata cercata; lista resta anno-desc
+  if (yr && entries.length) {
+    let bi = 0, bd = Infinity;
+    entries.forEach((e, i) => { const d = Math.abs(e.year - yr); if (d < bd) { bd = d; bi = i; } });
+    if (bi > 0) entries.unshift(entries.splice(bi, 1)[0]);
+  }
   const baseLabel = matched[0].label;
   return {
     title: `${brand.name} ${baseLabel}`, marca: brand.name, modello: baseLabel,
@@ -110,10 +120,10 @@ function resolveMoto({ marca, modello }) {
 
 // marca+modello(+anno|gen) → { title, marca, modello, generations[], gen, motorizzazioni[] }
 async function resolveScheda({ tipo, marca, modello, anno, genSlug }) {
-  if (tipo === 'moto') return resolveMoto({ marca, modello });
+  if (tipo === 'moto') return resolveMoto({ marca, modello, anno });
   if (tipo && tipo !== 'auto') return { unsupported: true };
   const idx = loadIndex();
-  const brand = idx.brands[norm(marca)];
+  const brand = idx.brands[brandKey(marca)];
   if (!brand) return { notFound: 'marca' };
   // Nomi IT → EN per i pattern comuni (Serie 3 → 3 Series, Classe A → A-Class) su auto-data.net
   const candidates = [modello];
@@ -123,9 +133,12 @@ async function resolveScheda({ tipo, marca, modello, anno, genSlug }) {
   for (const q of candidates) { model = matchModel(Object.values(brand.models), q); if (model) break; }
   if (!model) return { notFound: 'modello' };
 
-  const mp = await fetchCached(`${vs.HOST}/en/${model.slug}`, PAGE_TTL);
+  const modelUrl = `${vs.HOST}/en/${model.slug}`;
+  const mp = await fetchCached(modelUrl, PAGE_TTL);
   const gens = vs.parseGenerationList(mp);
-  if (!gens.length) return { notFound: 'generazione' };
+  // body senza generazioni = pagina transitoria/interstitial servita 200 → declassa il TTL a EMPTY_TTL
+  // così si riprova tra pochi minuti invece di restare notFound per 12h.
+  if (!gens.length) { cacheSet(modelUrl, mp, EMPTY_TTL); return { notFound: 'generazione' }; }
 
   // Generazione esplicita (dropdown) → onorala. Altrimenti scorri le candidate best-first
   // e usa la PRIMA con motorizzazioni: salta le gen "fantasma" (es. Fiesta Van = 0 motori).

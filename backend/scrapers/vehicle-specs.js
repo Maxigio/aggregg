@@ -98,9 +98,9 @@ function parseTrimList(html, genSlug) {
     if (genBase && !slug.startsWith(genBase + '-')) return;
     if (/-(brand|model|generation)-\d+$/.test(slug)) return;
     if (seen.has(slug)) return; seen.add(slug);
-    let label = slug.slice((genBase + '-').length).replace(/-\d{4,6}$/, '');
-    label = prettyLabel(label);
-    out.push({ label, url: `${HOST}/en/${slug}`, hp: hpOf(slug), fuel: fuelOf(slug) });
+    const trimSlug = slug.slice((genBase + '-').length).replace(/-\d{4,6}$/, '');   // solo la parte trim (no marca/gen/id)
+    const label = prettyLabel(trimSlug);
+    out.push({ label, url: `${HOST}/en/${slug}`, hp: hpOf(trimSlug), fuel: fuelOf(trimSlug) });   // hp/fuel dallo slug-trim, non dallo slug con marca
   });
   return out;
 }
@@ -125,7 +125,7 @@ const fuelOf = s => { s = String(s).toLowerCase();
 // valore: togli le conversioni imperiali (US/UK mpg, mph, lbs, in., cu ft) → resta il metrico
 function cleanVal(v) {
   return clean(v)
-    .replace(/\s*[|]?\s*\d[\d.,]*\s*(US\b|UK\b|Imp\b|mph|lbs?\b|cu\.?|in\.).*$/i, '')   // taglia dalla 1a conversione imperiale
+    .replace(/\s*[|]?\s*\d[\d.,]*\s*(US\b|UK\b|Imp\b|mph|lbs?\b|cu\.?|in\.|ft\b).*$/i, '')   // taglia dalla 1a conversione imperiale
     .replace(/\s+$/, '').trim() || clean(v);
 }
 
@@ -153,6 +153,7 @@ function parseTrimSpecs(html) {
     if (cells.length < 2) return;
     const k = clean($(cells[0]).text());
     if (!k) return;
+    $(cells[1]).find('br').replaceWith(' ');   // valori multi-riga (<br>) → non fondere le parole
     const vRaw = clean($(cells[1]).text());
     if (k === 'Brand') head.brand = vRaw;
     else if (k === 'Model') head.model = vRaw;
