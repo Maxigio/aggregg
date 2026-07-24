@@ -32,7 +32,7 @@ const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
 const { resolveMotoitModelSlug, getBrandModels, getModelBikes, resolveMotoitVersionEntry } = require('./scrapers/motoit-models');
 const { getDetail } = require('./scrapers/detail');
 const saved = require('./saved');
-const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing } = require('./scrapers/brand-match');
+const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
 const regionCentroids = require('../data/region-centroids.json');  // capoluoghi regione {lat,lng} → raggio AS24 nativo
 const modelsData      = require('../data/models.json');
@@ -113,6 +113,26 @@ async function scrapeAutoscoutSmart(params) {
     catch (e) { console.warn(`[AS24] GraphQL fallito (${e.message}) → fallback Playwright`); }
   }
   return scrapeAutoscout(params);
+}
+
+// F50 fase 1b — UNIONE MULTI-GRAFIA. AS24 filtra per parola intera e non ha OR: una
+// sola grafia perde gli annunci scritti diversamente ("800MT-X" non aggancia
+// "800 MT X" né "Mtx"). Interroghiamo le grafie in parallelo e uniamo per url.
+// Costo: 1 richiesta per grafia (le query strette esauriscono la lista a pagina 1),
+// e solo sul ramo dei modelli senza codice-modello. Va diretto al GraphQL: passando
+// da scrapeAutoscoutSmart un GraphQL rotto aprirebbe un browser Playwright PER GRAFIA.
+async function scrapeAutoscoutUnion(params) {
+  const grafie = params.autoscoutSpellings;
+  if (!grafie || grafie.length < 2) return scrapeAutoscoutSmart(params);
+  let unaOk = false;
+  const liste = await Promise.all(grafie.map(async g => {
+    try { const r = await scrapeAutoscoutGraphql({ ...params, autoscoutVersionText: g }); unaOk = true; return r; }
+    catch (_) { return []; }
+  }));
+  if (!unaOk) return scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null });   // GraphQL giù → un solo tentativo classico
+  const byUrl = new Map();
+  for (const lista of liste) for (const r of lista) if (r && r.url && !byUrl.has(r.url)) byUrl.set(r.url, r);
+  return [...byUrl.values()];
 }
 
 // Subito: API di prima parte hades.subito.it come PRIMARIO (JSON diretto, niente
@@ -856,8 +876,9 @@ async function runSearchCore(params) {
       const nar = resolveAs24Narrowing(brandEntry?.models, params.modello, asMakeId);
       params.autoscoutMmmv = nar.mmmv;
       params.autoscoutVersionText = nar.versionText;
+      params.autoscoutSpellings = as24Spellings(params.modello);   // grafie alternative (unione)
       params.as24Padre = nar.padre;   // solo per diagnostica/UI
-      console.log(`[server] AS24 fase1 "${params.marca} ${params.modello}": mmmv=${nar.mmmv}${nar.padre ? ` (padre "${nar.padre}")` : ' (brand-only)'} + filtro nativo "${nar.versionText}"`);
+      console.log(`[server] AS24 fase1 "${params.marca} ${params.modello}": mmmv=${nar.mmmv}${nar.padre ? ` (padre "${nar.padre}")` : ' (brand-only)'} + grafie ${JSON.stringify(params.autoscoutSpellings)}`);
     }
   }
   // Regione AS24 NATIVA (verificato live): centroide capoluogo + raggio (default 100km,
@@ -901,7 +922,7 @@ async function runSearchCore(params) {
     runSubito(params, TIMEOUT_MS),
     skipAutoscout
       ? Promise.resolve({ items: [], status: 'skipped', reason: asSkipReason })
-      : runSource(scrapeAutoscoutSmart(params), TIMEOUT_MS, 'Autoscout24'),
+      : runSource(scrapeAutoscoutUnion(params), TIMEOUT_MS, 'Autoscout24'),
     skipMotoIt
       ? Promise.resolve({ items: [], status: 'skipped', reason: motoSkipReason })
       : runSource(scrapeMotoIt(params), TIMEOUT_MS, 'Moto.it'),
@@ -913,7 +934,7 @@ async function runSearchCore(params) {
   let asRes = asRes0, as24Allargato = false;
   if (params.autoscoutVersionText && asRes.status === 'empty') {
     const retry = await runSource(
-      scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null }), TIMEOUT_MS, 'Autoscout24');
+      scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null, autoscoutSpellings: null }), TIMEOUT_MS, 'Autoscout24');
     if (retry.items.length) { asRes = retry; as24Allargato = true; }
   }
 

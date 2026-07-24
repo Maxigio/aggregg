@@ -110,4 +110,38 @@ function resolveAs24Narrowing(models, modello, makeId) {
   };
 }
 
-module.exports = { norm, makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing };
+/**
+ * Grafie plausibili di un nome-modello per il filtro nativo AS24.
+ *
+ * AS24 confronta per PAROLA INTERA con i token in AND: "800MT-X" (token 800MT + X)
+ * aggancia "CFMOTO 800MT-X BASSA" ma NON "CFMOTO 800 MT X" né "CFMOTO Mtx", che i
+ * venditori scrivono di continuo. Una grafia sola perde la maggior parte degli annunci,
+ * e non esiste un OR: serve una query per grafia, poi si uniscono i risultati.
+ *
+ * Regole (deterministiche, nessuna lista scritta a mano):
+ *  1. il nome come cercato                         "800MT-X"
+ *  2. separando cifre e lettere                    "800 MT X"
+ *  solo per i codici compatti (senza spazi), dove le varianti di scrittura abbondano:
+ *  3. tutto attaccato                              "800mtx"
+ *  4. sole lettere (>=3), che è come molti abbreviano   "MTX"
+ * Per i nomi multi-parola le ultime due produrrebbero stringhe inesistenti → saltate.
+ */
+function as24Spellings(modello) {
+  const raw = String(modello || '').trim();
+  if (!raw) return [];
+  const out = [];
+  const push = s => {
+    const v = String(s).trim().replace(/\s+/g, ' ');
+    if (v && !out.some(x => x.toLowerCase() === v.toLowerCase())) out.push(v);
+  };
+  push(raw);
+  push(raw.replace(/([0-9])([a-z])/gi, '$1 $2').replace(/([a-z])([0-9])/gi, '$1 $2').replace(/[^a-z0-9]+/gi, ' '));
+  if (!/\s/.test(raw)) {                    // codice compatto: "800MT-X", "300CL-X"
+    push(norm(raw));
+    const lettere = raw.replace(/[^a-z]/gi, '');
+    if (lettere.length >= 3) push(lettere);
+  }
+  return out.slice(0, 4);                   // tetto: max 4 richieste per ricerca
+}
+
+module.exports = { norm, makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings };

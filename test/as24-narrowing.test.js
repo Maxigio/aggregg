@@ -3,7 +3,7 @@
 // La parentela è dedotta dal CATALOGO per prefisso normalizzato — nessuna lista scritta a mano.
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { resolveAs24Narrowing } = require('../backend/scrapers/brand-match');
+const { resolveAs24Narrowing, as24Spellings } = require('../backend/scrapers/brand-match');
 
 // Catalogo CFMOTO reale (estratto da data/models.json): "800MT" ha il codice, "800MT-X" no.
 const CFMOTO = [
@@ -73,4 +73,28 @@ test('buildVariables: il filtro nativo entra nella classification AS24', () => {
   assert.deepStrictEqual(v.classification, [{ make: 51518, model: 76611, modelVersionInput: '800MT-X' }]);
   const { v: senza } = buildVariables({ tipo: 'moto', autoscoutMmmv: '51518|76611||' }, 1);
   assert.deepStrictEqual(senza.classification, [{ make: 51518, model: 76611 }]);   // invariato senza fase 1
+});
+
+// ── Unione multi-grafia (fase 1b): AS24 confronta per parola intera e non ha OR ──
+test('grafie: codice compatto → 4 varianti (quelle che i venditori scrivono davvero)', () => {
+  assert.deepStrictEqual(as24Spellings('800MT-X'), ['800MT-X', '800 MT X', '800mtx', 'MTX']);
+});
+
+test('grafie: nome multi-parola → niente varianti-spazzatura (solo separazione cifre/lettere)', () => {
+  assert.deepStrictEqual(as24Spellings('Africa Twin CRF 1000L'), ['Africa Twin CRF 1000L', 'Africa Twin CRF 1000 L']);
+});
+
+test('grafie: nessun duplicato quando le regole coincidono', () => {
+  assert.deepStrictEqual(as24Spellings('GTS 300'), ['GTS 300']);   // già separato: una sola grafia
+});
+
+test('grafie: sigla di 2 lettere non diventa una grafia (troppo generica)', () => {
+  // "125nk" è duplicato di "125NK" a meno di maiuscole → deduplicato; "NK" (2 char) escluso
+  assert.deepStrictEqual(as24Spellings('125NK'), ['125NK', '125 NK']);
+});
+
+test('grafie: tetto di 4 richieste e input vuoto gestito', () => {
+  assert.ok(as24Spellings('300CL-X').length <= 4);
+  assert.deepStrictEqual(as24Spellings(''), []);
+  assert.deepStrictEqual(as24Spellings(null), []);
 });
