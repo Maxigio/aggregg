@@ -25,7 +25,6 @@ const scrapeAutoscout = require('./scrapers/autoscout-playwright');
 const scrapeAutoscoutGraphql = require('./scrapers/autoscout-graphql');
 const scrapeSubitoApi = require('./scrapers/subito-api');
 const scrapeMotoIt    = require('./scrapers/motoit');
-const valuation       = require('./valuation');   // F32: motore valutazione (puro)
 const subitoSession   = require('./scrapers/subito-session');
 const { runBootstrap } = require('./scrapers/subito-bootstrap');
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
@@ -188,7 +187,6 @@ app.use((req, res, next) => {
   // /login·/logout sono già esenti via AUTH_FREE. (Il pannello admin non esiste più →
   // l'owner-tool DB-puro lo sostituisce; nessuna route /admin da gateare qui.)
   if (role === 'demo') {
-    const isValuta = req.path === '/api/valuta';   // modo Valuta = solo papà (full), non demo
     const isReport = req.path === '/api/report';   // l'utente demo DEVE poter segnalare (match esatto)
     const isWrite = req.method !== 'GET' && req.method !== 'HEAD';
     // review: il gate method-based NON basta. Alcune GET MUTANO (GET /api/crawl/lease scrive
@@ -197,7 +195,7 @@ app.use((req, res, next) => {
     // già coperto da isWrite; qui copriamo la GET di lista e le route di coordinamento crawl.)
     const isPrivate = req.path === '/api/saved' || req.path.startsWith('/api/saved/')
       || req.path.startsWith('/api/crawl/');
-    if ((isValuta || isWrite || isPrivate) && !isReport) {
+    if ((isWrite || isPrivate) && !isReport) {
       if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'modalità demo: sola lettura' });
       if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) return res.redirect(302, '/');
       return res.status(403).send('modalità demo: sola lettura');
@@ -240,9 +238,8 @@ app.get('/logout', (req, res) => {
 // Ruolo della sessione corrente (per la UI: nasconde salvataggi/admin in demo).
 // Auth disattivata (app locale) → 'full'. Sotto /api/ → già protetta dal middleware.
 app.get('/api/me', (req, res) => {
-  const valutaEnabled = false;   // F48: Valuta nascosta in permanenza (toggle nascosto + /api/valuta 403)
-  if (!auth.isEnabled()) return res.json({ role: 'full', authDisabled: true, valutaEnabled });
-  res.json({ role: req.authRole || auth.checkToken(parseCookies(req).amr_auth) || null, valutaEnabled });
+  if (!auth.isEnabled()) return res.json({ role: 'full', authDisabled: true });
+  res.json({ role: req.authRole || auth.checkToken(parseCookies(req).amr_auth) || null });
 });
 
 // Liveness per il probe di avvio Electron (waitForBackend). Auth-exempt: il
@@ -703,61 +700,6 @@ require('./ricambi-route').mount(app, { clientIp });
 
 // ─── Scheda tecnica veicolo (auto-data.net) — vedi scheda-veicolo-route.js ──────────
 require('./scheda-veicolo-route').mount(app, { clientIp });
-
-// ─── F32 Fase 1: valutazione (#1/#6) ─────────────────────────────────────────
-// Motore puro in `valuation.js`; qui l'orchestrazione LIVE: riusa `runSearchCore`
-// (risolve modello→fonte slug/mmmv + filtri nativi + regione) per i comparabili,
-// poi la statistica robusta + onestà (N, troncato, fonti disponibili). Dietro
-// login; il demo può LEGGERE (dato di mercato, non il parco privato di papà).
-// Cap on-search REALI per fonte (AS24 50×2, Subito 50×2, Moto.it 13×8): count≥cap ⟺
-// troncato (forse coda economica), count<cap = vista completa del mercato del modello.
-const VAL_SOURCE_CAP = { autoscout: 100, subito: 100, moto: 39 };   // moto on-search = MAX_PAGES 3 × 13 (F35, browser)
-const valNum = v => { const n = parseInt(v, 10); return isNaN(n) || n < 0 ? null : n; };
-
-app.get('/api/valuta', async (req, res) => {
-  return res.status(403).json({ error: 'Valutazione disattivata' });   // F48: Valuta nascosta in permanenza
-  // eslint-disable-next-line no-unreachable
-  if (!searchRateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
-  const parsed = parseSearchParams(req.query);
-  if (parsed.errors) return res.status(400).json({ error: parsed.errors.join(', ') });
-  if (!parsed.params.modello) return res.status(400).json({ error: 'modello obbligatorio per la valutazione' });
-  const annoT = valNum(req.query.anno), kmT = valNum(req.query.km), myPrice = valNum(req.query.prezzo);
-  try {
-    // 1 fetch (regionale) del modello. Niente filtri anno/km nativi: prendiamo TUTTI
-    // i comparabili del modello, poi il motore puro applica la finestra adattiva.
-    let src = await runSearchCore({ ...parsed.params });
-    let regioneUsata = parsed.params.regione || null;
-    // Fallback nazionale se in regione i comparabili usabili sono troppo pochi.
-    if (parsed.params.regione) {
-      const usableN = src.risultati.filter(valuation._isUsableComparable).length;
-      if (usableN < valuation.PREFER_N) {
-        src = await runSearchCore({ ...parsed.params, regione: '' });
-        regioneUsata = null;
-      }
-    }
-    // Posizione di papà (#4) calcolata DENTRO il motore, sullo stesso set della fascia.
-    const val = valuation.computeValuation(src.risultati, { anno: annoT, km: kmT }, { myPrice });
-    // "Troncato" = una fonte ha reso ~il suo cap → forse non tutto il mercato (coda
-    // economica). Per i modelli di nicchia di papà di solito è false → mediana onesta.
-    const troncato = valuation.inferTruncated(src.sources, VAL_SOURCE_CAP);
-    // Onestà fonti: quali hanno risposto / saltate / bloccate (degrado dichiarato).
-    const fonti = Object.fromEntries(Object.entries(src.sources).map(([k, s]) => [k, { status: s.status, count: s.count }]));
-    res.json({
-      ...val,
-      regione: regioneUsata,
-      troncato,
-      myPrice: myPrice ?? null,
-      fonti,
-      // Comparabili snelliti ma VERIFICABILI (url reale + dati chiave), cap 40.
-      comparabili: (val.comparabili || []).slice(0, 40).map(c => ({
-        url: c.url, prezzo: c.prezzo, anno: c.anno, km: c.km, venditore: c.venditore, fonte: c.fonte,
-      })),
-    });
-  } catch (e) {
-    console.error('[valuta]', e.message);
-    res.status(500).json({ error: 'Errore interno nella valutazione' });
-  }
-});
 
 // ─── Cache ricerche recenti (§17.4) ───────────────────────────────────────────
 // Stessa ricerca entro il TTL → risposta istantanea. NON cacha se una fonte è

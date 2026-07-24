@@ -6,8 +6,8 @@
  * marca/modello (richiede makeId), NON per venditore → non può isolare lo stock
  * di un concessionario. La pagina `/concessionari/<slug>` ha invece i suoi annunci
  * come JSON strutturato in `props.pageProps.listings` (stessa forma del GraphQL):
- * leggerlo = parsare un blob JSON, non scraping HTML fragile. Il GraphQL resta per
- * i COMPARABILI di ogni veicolo (valuation.js).
+ * leggerlo = parsare un blob JSON, non scraping HTML fragile. Il GraphQL resta la
+ * via normale per la ricerca per marca/modello.
  *
  * `parseDealerStock` è PURA (testabile su fixture). L'I/O (fetch + DB) è a parte.
  */

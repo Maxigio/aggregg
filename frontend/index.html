@@ -105,15 +105,6 @@
           <label class="adv-field"><span>Raggio km (Autoscout)</span><input type="number" id="raggio" placeholder="100" min="1" /></label>
         </div>
 
-        <!-- Campi modalità VALUTA (#6): anno/km del veicolo da valutare + prezzo opzionale -->
-        <div class="valuta-fields d-none" id="valutaFields">
-          <label class="adv-field"><span>Anno</span><input type="number" id="vAnno" placeholder="2019" min="1900" /></label>
-          <label class="adv-field"><span>Km</span><input type="number" id="vKm" placeholder="45000" min="0" /></label>
-          <label class="adv-field"><span>Prezzo min annunci simili</span><input type="number" id="vPrezzoMin" placeholder="2500" min="0" title="Minimo realistico per escludere relitti/ricambi e raddrizzare la fascia sui modelli ambigui" /></label>
-          <label class="adv-field"><span>Prezzo max (opz.)</span><input type="number" id="vPrezzoMax" placeholder="20000" min="0" /></label>
-          <label class="adv-field"><span>Il tuo prezzo (opz.)</span><input type="number" id="vPrezzo" placeholder="9000" min="0" /></label>
-        </div>
-
         <!-- Campi modalità RICAMBI: veicolo (auto|moto) + 3 tab con input DEDICATI (valori persistenti) -->
         <div class="ricambi-fields d-none" id="ricambiFields">
           <div class="rc-topline">
@@ -136,9 +127,6 @@
         </div>
       </form>
     </section>
-
-    <!-- PANNELLO VALUTAZIONE (#6) -->
-    <div id="valutaPanel" class="d-none"></div>
 
     <!-- PANNELLO RICAMBI (multi-fonte, full-width) -->
     <div id="ricambiPanel" class="d-none"></div>

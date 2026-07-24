@@ -40,6 +40,17 @@ Tentativi valutati e scartati:
   `engineDisplacementInCCM`) per varianti accurate — già fatto a fini display in §22.
 - Eventuale segnale-condizione strutturato (AS24 `specialConditions`) se valorizzato.
 
+## Aggiornamento: rimosso anche il motore di valutazione (2026-07-25)
+Il rating era già fuori dal 21; la **valutazione** ("valore di mercato", `/api/valuta` +
+`backend/valuation.js`) era disattivata in permanenza da F48 ma il codice restava in
+piedi. Ora è cancellato del tutto, per la stessa ragione di fondo: **il campione è la
+pesca troncata delle fonti** (AS24/Subito rendono i ~100 annunci più economici), quindi
+mediane e fasce sottostimano il mercato — misurato sul Ducati Monster 937: media 8.332 €
+sul campione contro 9.644 € ordinando per data, con la metà alta del mercato invisibile.
+Rimossa nella stessa occasione la **mediana dei ricambi** in toolbar: restano `min`/`max`,
+cioè un intervallo verificabile, come già nella ricerca veicoli. Il codice resta
+recuperabile dalla history git.
+
 ## Cosa resta nell'app dopo la rimozione
 - `clusterModello` (spostato in `frontend/app.js`) per il group-by "Modello/variante".
 - Avvisi ricerche-salvate **solo price-based**: `nuovo` + `calo` (niente "affare").

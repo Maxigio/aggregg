@@ -195,10 +195,10 @@ function toast(msg) {
 // ─── Modalità demo (ospite read-only) ───────────────────────────────────────
 function applyDemoMode() {
   document.body.classList.add('demo-mode');
-  ['btnSalvaRicerca', 'btnControllaTutte', 'modeToggle'].forEach(id => {   // modo Valuta = solo papà
+  ['btnSalvaRicerca', 'btnControllaTutte', 'modeToggle'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
-  setSearchMode('cerca');   // demo resta in Cerca (niente Valuta)
+  setSearchMode('cerca');
   if (!document.querySelector('.demo-banner')) {
     const bar = document.createElement('div');
     bar.className = 'demo-banner';
@@ -348,10 +348,10 @@ async function init() {
   btnStatPdf.addEventListener('click', () => exportPdf(currentResults));
   errorClose.addEventListener('click', hideError);
   backToSearch.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-  form.addEventListener('submit', async (e) => { e.preventDefault(); if (searchMode === 'valuta') await doValuta(); else if (searchMode === 'ricambi') await doRicambi(); else await doSearch(); });
+  form.addEventListener('submit', async (e) => { e.preventDefault(); if (searchMode === 'ricambi') await doRicambi(); else await doSearch(); });
 
   // Nav primaria Auto · Moto · Ricambi (data-mode). Auto/Moto = ricerca veicolo (pilota il
-  // radio tipo nascosto); Ricambi = pipeline parti. 'Valuta' non è più nella UI (dormiente).
+  // radio tipo nascosto); Ricambi = pipeline parti.
   document.getElementById('modeToggle')?.addEventListener('click', e => {
     const btn = e.target.closest('.mode-btn'); if (!btn) return;
     selectPrimary(btn.dataset.mode);
@@ -743,11 +743,11 @@ function renderFacetChips() {
     `<button type="button" class="facet-chip${dim === groupDim ? ' active' : ''}" data-dim="${dim}">${label}</button>`).join('');
 }
 
-// ─── Modo Valuta (#6) ──────────────────────────────────────────────────────
+// ─── Modi di ricerca (Cerca / Ricambi) ─────────────────────────────────────
 let searchMode = 'cerca';
 // Nav primaria: 'auto'|'moto' → ricerca veicolo (modo Cerca), 'ricambi' → pipeline parti.
 // Pilota il radio tipo nascosto (che via il suo change-handler rinfresca marche/placeholder)
-// e lo stato attivo dei bottoni. 'Valuta' non è più esposta (setSearchMode la gestisce ancora).
+// e lo stato attivo dei bottoni.
 function selectPrimary(mode) {
   const primary = ['auto', 'moto', 'ricambi'].includes(mode) ? mode : 'auto';
   document.querySelectorAll('#modeToggle .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === primary));
@@ -758,87 +758,23 @@ function selectPrimary(mode) {
 }
 function setSearchMode(mode) {
   const prev = searchMode;
-  searchMode = ['valuta', 'ricambi'].includes(mode) ? mode : 'cerca';
-  const valuta = searchMode === 'valuta';
+  searchMode = mode === 'ricambi' ? 'ricambi' : 'cerca';
   const ricambi = searchMode === 'ricambi';
-  // Ricambi ha i suoi campi (OEM) e nasconde i campi auto (marca/modello + tipo); Valuta li tiene.
+  // Ricambi ha i suoi campi (OEM) e nasconde i campi auto (marca/modello + tipo).
   document.getElementById('ricambiFields').classList.toggle('d-none', !ricambi);
   document.querySelector('.search-fields').classList.toggle('d-none', ricambi);
   document.querySelector('.seg-toggle').classList.toggle('d-none', ricambi);
   // #marca è required: se resta hidden+required il submit nativo si blocca ("not focusable") → togli required in ricambi.
   document.getElementById('marca').required = !ricambi;
-  document.getElementById('valutaFields').classList.toggle('d-none', !valuta);
-  document.getElementById('advancedToggle').classList.toggle('d-none', valuta || ricambi);   // i filtri-ricerca non servono per valutare/ricambi
-  if (valuta || ricambi) document.getElementById('advancedFilters').classList.add('d-none');
-  btnCerca.textContent = valuta ? 'Valuta' : 'Cerca';
-  document.getElementById('modello').placeholder = valuta
-    ? 'Modello — es. V-Strom 1050 (obbligatorio)'
-    : currentTipo() === 'moto' ? 'Modello — es. MT-07 (opzionale)' : 'Modello — es. 318d (opzionale)';
+  document.getElementById('advancedToggle').classList.toggle('d-none', ricambi);   // i filtri-ricerca non servono per i ricambi
+  if (ricambi) document.getElementById('advancedFilters').classList.add('d-none');
+  btnCerca.textContent = 'Cerca';
+  document.getElementById('modello').placeholder =
+    currentTipo() === 'moto' ? 'Modello — es. MT-07 (opzionale)' : 'Modello — es. 318d (opzionale)';
   // Pannelli output: mostra solo quello del modo attivo (lo popola il rispettivo do*()).
   if (!ricambi) document.getElementById('ricambiPanel').classList.add('d-none');
-  if (!valuta) document.getElementById('valutaPanel').classList.add('d-none');
-  if (ricambi || valuta) document.getElementById('versioneRow').classList.add('d-none');   // niente riga Versione Moto.it fuori da Moto
-  if (valuta || ricambi || prev === 'ricambi') { rcData = null; currentResults = []; hideResults(); }   // modi-scheda / uscita da ricambi → pulizia piena
-}
-
-async function doValuta() {
-  const brand = matchedBrand();
-  if (!brand) { showError('Scegli una marca dalla lista.'); return; }
-  const modello = document.getElementById('modello').value.trim();
-  if (!modello) { showError('Per valutare serve il modello (es. V-Strom 1050).'); return; }
-  const tipo = currentTipo();
-  const anno = document.getElementById('vAnno').value, km = document.getElementById('vKm').value, prezzo = document.getElementById('vPrezzo').value;
-  const prezzoMin = document.getElementById('vPrezzoMin').value, prezzoMax = document.getElementById('vPrezzoMax').value;
-  const q = new URLSearchParams({ tipo, marca: brand.nome, modello });
-  if (anno) q.set('anno', anno);
-  if (km) q.set('km', km);
-  if (prezzo) q.set('prezzo', prezzo);
-  if (prezzoMin) q.set('prezzoMin', prezzoMin);   // filtro nativo → comparabili dal floor (esclude relitti/ricambi)
-  if (prezzoMax) q.set('prezzoMax', prezzoMax);
-  if (regioneSelect.value) q.set('regione', regioneSelect.value);
-
-  hideResults();
-  document.body.classList.add('has-results'); document.body.dataset.tipo = tipo;
-  const panel = document.getElementById('valutaPanel');
-  panel.classList.remove('d-none');
-  panel.innerHTML = '<div class="vp-card vp-loading">Valuto sul mercato…</div>';
-  try {
-    const d = await fetch('/api/valuta?' + q.toString()).then(r => r.json());
-    if (d.error) { panel.innerHTML = `<div class="vp-card"><div class="vp-empty">${escapeHtml(d.error)}</div></div>`; return; }
-    renderValutaCard(panel, d, { marca: brand.nome, modello, anno, km, prezzo });
-  } catch (_) { panel.innerHTML = '<div class="vp-card"><div class="vp-empty">Valutazione non disponibile.</div></div>'; }
-}
-
-function renderValutaCard(panel, d, inp) {
-  const eur = n => n == null ? 'n/d' : '€ ' + Number(n).toLocaleString('it-IT');
-  const titolo = `${escapeHtml(inp.marca)} ${escapeHtml(inp.modello)}${inp.anno ? ' · ' + inp.anno : ''}${inp.km ? ' · ' + Number(inp.km).toLocaleString('it-IT') + ' km' : ''}`;
-  if (!d.ok || !d.fascia) {
-    panel.innerHTML = `<div class="vp-card"><div class="vp-tit">${titolo}</div><div class="vp-empty">Dati insufficienti${d.n != null ? ` (${d.n} annunci simili)` : ''} — niente fascia inventata. Prova con un modello più diffuso o meno dettagli.</div></div>`;
-    return;
-  }
-  const f = d.fascia;
-  const myPrice = inp.prezzo ? Number(inp.prezzo) : null;
-  let verdict = '';
-  if (myPrice != null) {
-    const cls = myPrice > f.p75 ? 'caro' : myPrice < f.p25 ? 'basso' : 'linea';
-    const txt = cls === 'caro' ? 'sopra mercato' : cls === 'basso' ? 'sotto mercato' : 'in linea';
-    const pos = d.posizione ? ` · ${d.posizione.percentile}° percentile` : '';
-    verdict = `<div class="vp-mine">Il tuo prezzo <b>${eur(myPrice)}</b> <span class="vp-verdict vp-v-${cls}">${txt}</span>${pos}</div>`;
-  }
-  const split = d.split ? `conc ${d.split.conc.n ? eur(d.split.conc.mediana) : '—'} · privati ${d.split.priv.n ? eur(d.split.priv.mediana) : '—'}` : '';
-  const fonti = d.fonti ? Object.entries(d.fonti).filter(([, s]) => s.count).map(([k, s]) => `${k} ${s.count}`).join(' · ') : '';
-  const comp = (d.comparabili && d.comparabili.length)
-    ? `<details class="vp-comp"><summary>${d.comparabili.length} annunci comparabili (verifica)</summary>${d.comparabili.slice(0, 15).map(c => `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer">${eur(c.prezzo)} · ${c.anno || '—'} · ${c.km != null ? Number(c.km).toLocaleString('it-IT') + ' km' : '—'} · ${escapeHtml(c.fonte)}</a>`).join('')}</details>`
-    : '';
-  panel.innerHTML = `<div class="vp-card">
-    <div class="vp-tit">${titolo}</div>
-    <div class="vp-band"><span class="vp-med">${eur(f.mediana)}</span><span class="vp-lab">valore di mercato</span></div>
-    <div class="vp-range">fascia ${eur(f.p25)} – ${eur(f.p75)}</div>
-    ${verdict}
-    <div class="vp-meta">su <b>${d.n}</b> annunci simili (${escapeHtml(d.tightness)})${d.troncato ? ' · <span class="vp-trunc">fascia bassa*</span>' : ''} · ${escapeHtml(d.regione || 'Italia')}${split ? ' · ' + split : ''}${fonti ? ' · ' + fonti : ''}</div>
-    ${comp}
-    <div class="vp-note">Dati reali dagli annunci ora a mercato.${d.troncato ? ' *mercato ampio: la fascia pesa verso i più economici.' : ''} Nessun valore inventato.</div>
-  </div>`;
+  if (ricambi) document.getElementById('versioneRow').classList.add('d-none');   // niente riga Versione Moto.it nei ricambi
+  if (ricambi || prev === 'ricambi') { rcData = null; currentResults = []; hideResults(); }   // ingresso/uscita ricambi → pulizia piena
 }
 
 // ═══ Modo Ricambi — pipeline parti SEPARATA (multi-fonte, full-width) ═══════════
@@ -1332,11 +1268,13 @@ function renderRicambiPanel() {
 function rcToolbarHTML() {
   const list = rcVisibleArts();
   const finals = list.map(a => { const pr = rPricing(a.prezzo); return pr ? pr.finale : null; }).filter(n => typeof n === 'number');
-  const stats = finals.length ? { n: finals.length, min: Math.min(...finals), max: Math.max(...finals), mediana: rcMedian(finals) } : null;
+  // Solo min/max (intervallo verificabile, come nella ricerca veicoli): niente mediana.
+  // Il campione è la pesca troncata delle fonti, quindi una "media" sarebbe fuorviante.
+  const stats = finals.length ? { n: finals.length, min: Math.min(...finals), max: Math.max(...finals) } : null;
   // sez.1 — conteggio + statistiche prezzo (min/max cliccabili → annuncio di riferimento)
   const statJump = (which, val) => `<button type="button" class="tb-stat rc-stat-jump" data-which="${which}" title="Vai all'annuncio ${which === 'min' ? 'più economico' : 'più caro'}"><span class="tb-stat-label">${which}</span><b>${rcEur(val)}</b></button>`;
   const statsHTML = `<span class="tb-count">${list.length} ricambi</span>` + (stats
-    ? `${statJump('min', stats.min)}<span class="tb-stat"><span class="tb-stat-label">med</span><b>${rcEur(stats.mediana)}</b></span>${statJump('max', stats.max)}` : '');
+    ? `${statJump('min', stats.min)}${statJump('max', stats.max)}` : '');
   // sez.2 — raggruppa (facet-chips, "Fonte" è QUI)
   const facets = RC_GROUP_DIMS.map(([dim, lab]) => `<button type="button" class="facet-chip${rcGroupDim === dim ? ' active' : ''}" data-dim="${dim}">${escapeHtml(lab)}</button>`).join('');
   // sez.3 — colonne (dropdown come auto) + salva ricerca + export
