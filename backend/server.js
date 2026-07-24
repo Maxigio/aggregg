@@ -32,7 +32,7 @@ const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
 const { resolveMotoitModelSlug, getBrandModels, getModelBikes, resolveMotoitVersionEntry } = require('./scrapers/motoit-models');
 const { getDetail } = require('./scrapers/detail');
 const saved = require('./saved');
-const { makeResolver, makeModelResolver, loadAliasMap } = require('./scrapers/brand-match');
+const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
 const regionCentroids = require('../data/region-centroids.json');  // capoluoghi regione {lat,lng} → raggio AS24 nativo
 const modelsData      = require('../data/models.json');
@@ -848,6 +848,17 @@ async function runSearchCore(params) {
   // Passa mmmv AS24 al scraper: livello modello > livello brand (brand-only = makeId|||).
   if (asMakeId) {
     params.autoscoutMmmv = params.mmmvAutoscout || `${asMakeId}|||`;
+    // F50 fase 1 — modelli MOTO senza codice-modello (18,6%): invece della pesca cieca
+    // brand-only (100 annunci dal più economico, dove il modello spesso non c'è), si
+    // restringe con il codice del modello-PADRE dedotto dal catalogo + il filtro
+    // testuale NATIVO di AS24. Le auto non passano di qui (100% ha già il codice).
+    if (params.tipo === 'moto' && params.modello && !params.mmmvAutoscout) {
+      const nar = resolveAs24Narrowing(brandEntry?.models, params.modello, asMakeId);
+      params.autoscoutMmmv = nar.mmmv;
+      params.autoscoutVersionText = nar.versionText;
+      params.as24Padre = nar.padre;   // solo per diagnostica/UI
+      console.log(`[server] AS24 fase1 "${params.marca} ${params.modello}": mmmv=${nar.mmmv}${nar.padre ? ` (padre "${nar.padre}")` : ' (brand-only)'} + filtro nativo "${nar.versionText}"`);
+    }
   }
   // Regione AS24 NATIVA (verificato live): centroide capoluogo + raggio (default 100km,
   // come il sito ufficiale: position{lat,lng}+radius). Sostituisce il vecchio post-filtro
@@ -886,7 +897,7 @@ async function runSearchCore(params) {
 
   // Ogni fonte ritorna { items, status, reason }. Subito ha wrapper dedicato
   // (propaga 'needs_bootstrap'). Lo skip è uno stato esplicito, non un [] muto.
-  const [subitoRes, asRes, motoRes] = await Promise.all([
+  const [subitoRes, asRes0, motoRes] = await Promise.all([
     runSubito(params, TIMEOUT_MS),
     skipAutoscout
       ? Promise.resolve({ items: [], status: 'skipped', reason: asSkipReason })
@@ -895,6 +906,16 @@ async function runSearchCore(params) {
       ? Promise.resolve({ items: [], status: 'skipped', reason: motoSkipReason })
       : runSource(scrapeMotoIt(params), TIMEOUT_MS, 'Moto.it'),
   ]);
+
+  // F50 fase 1 — riallargamento SOLO a zero risultati (scelta di prodotto: mai allargare
+  // a priori). Se il filtro nativo non trova nulla, si riprova tenendo il modello-padre:
+  // meglio "ti mostro anche il modello imparentato, segnalato" che una schermata vuota.
+  let asRes = asRes0, as24Allargato = false;
+  if (params.autoscoutVersionText && asRes.status === 'empty') {
+    const retry = await runSource(
+      scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null }), TIMEOUT_MS, 'Autoscout24');
+    if (retry.items.length) { asRes = retry; as24Allargato = true; }
+  }
 
   const grezzi = [...subitoRes.items, ...asRes.items, ...motoRes.items];
 
@@ -950,7 +971,10 @@ async function runSearchCore(params) {
     // Eccezione: asFilterToken forza il filtro titolo su AS24 anche quando mmmvAutoscout esiste,
     // per isolare submodelli che AS24 colloca sotto un modelId condiviso (es. Diavel V4).
     const subitoModelFiltered    = r.fonte === 'subito'    && Boolean(params.modello);
-    const autoscoutModelFiltered = r.fonte === 'autoscout' && Boolean(params.mmmvAutoscout) && !params.asFilterToken;
+    // autoscoutVersionText (fase 1) = AS24 ha già filtrato per modello server-side; il
+    // filtro-titolo locale qui taglierebbe grafie legittime ("CFMOTO 800 MT X" non
+    // contiene "800mtx") proprio sul ramo che vogliamo recuperare.
+    const autoscoutModelFiltered = r.fonte === 'autoscout' && (Boolean(params.mmmvAutoscout) || Boolean(params.autoscoutVersionText)) && !params.asFilterToken;
     // Moto.it filtra per modello quando il client/server ha risolto motoitModelSlug
     const motoitModelFiltered    = r.fonte === 'moto'      && Boolean(params.motoitModelSlug);
     const siteAlreadyFilteredModel = subitoModelFiltered || autoscoutModelFiltered || motoitModelFiltered;
@@ -993,9 +1017,11 @@ async function runSearchCore(params) {
 
   // §12: AS24 brand-only narrowato per titolo (serie/modello irrisolto) e finito a 0
   // → reason esplicita, così la UI distingue "0 per filtro titolo" da errore/vuoto-vero.
-  const asReason = (autoTokenRe && asCount === 0 && asRes.status === 'ok')
-    ? 'modello filtrato per titolo'
-    : (asRes.reason || null);
+  const asReason = as24Allargato
+    ? `nessun "${params.modello}" su Autoscout: mostro ${params.as24Padre ? `"${params.as24Padre}"` : 'la marca'}`
+    : (autoTokenRe && asCount === 0 && asRes.status === 'ok')
+      ? 'modello filtrato per titolo'
+      : (asRes.reason || null);
 
   // §DB — scrittura opportunistica on-search (fire-and-forget, NON blocca la
   // risposta). Solo con marca+modello entrambi presenti (no brand-only/serie →

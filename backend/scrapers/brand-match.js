@@ -73,4 +73,41 @@ function makeModelResolver(candidates) {
   };
 }
 
-module.exports = { norm, makeResolver, makeModelResolver, loadAliasMap };
+/**
+ * Restringimento AS24 per i modelli SENZA codice-modello (18,6% delle moto).
+ *
+ * Oggi quei modelli finiscono in pesca brand-only: AS24 manda i 100 annunci più
+ * economici della marca, dove il modello cercato spesso non compare affatto
+ * (misurato: CFMOTO brand-only copre 1.450-4.150 €, ma le 800MT-X partono da 6.900 €).
+ *
+ * Qui si ricava il restringimento migliore usando SOLO il catalogo — nessuna lista
+ * scritta a mano, la parentela è dedotta per prefisso normalizzato:
+ *  - `mmmv`: il codice del modello-PADRE se esiste ("800MT-X" → padre "800MT"), così
+ *    la pesca avviene nel bucket giusto invece che su tutta la marca;
+ *  - `versionText`: il modello cercato, che AS24 filtra server-side. Verificato live:
+ *    il campo cerca sia nel nome-modello sia nell'allestimento, per parola intera,
+ *    più token in AND, senza wildcard.
+ *
+ * @param {Array}  models  voci-modello della marca ({ nome, mmmvAutoscout })
+ * @param {string} modello nome cercato dall'utente
+ * @param {number} makeId  id marca AS24 (per il fallback brand-only)
+ */
+function resolveAs24Narrowing(models, modello, makeId) {
+  const brandOnly = makeId ? `${makeId}|||` : '';
+  const q = norm(modello);
+  if (!q) return { mmmv: brandOnly, versionText: '', padre: null };
+  let padre = null, padreLen = 0;
+  for (const m of (models || [])) {
+    if (!m || !m.mmmvAutoscout) continue;         // il padre deve avere il codice, altrimenti non aiuta
+    const n = norm(m.nome);
+    if (n.length < 3 || !q.startsWith(n) || n === q) continue;   // prefisso STRETTO: "800mt" ⊂ "800mtx"
+    if (n.length > padreLen) { padre = m; padreLen = n.length; }  // il più specifico vince
+  }
+  return {
+    mmmv: padre ? padre.mmmvAutoscout : brandOnly,
+    versionText: String(modello || '').trim(),
+    padre: padre ? padre.nome : null,
+  };
+}
+
+module.exports = { norm, makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing };

@@ -81,6 +81,10 @@ function buildVariables(params, page, opts = {}) {
 
   const classification = { make };
   if (model) classification.model = model;
+  // Filtro testuale NATIVO AS24 (F50 fase 1): usato per i modelli senza codice-modello.
+  // Verificato live: cerca sia in classification.model sia in modelVersionInput, per
+  // parola intera, più token in AND, case-insensitive, senza wildcard.
+  if (params.autoscoutVersionText) classification.modelVersionInput = String(params.autoscoutVersionText);
 
   const v = {
     classification: [classification],
