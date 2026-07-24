@@ -49,6 +49,36 @@ test('mapListing: shape completa coerente con gli altri scraper', () => {
   assert.strictEqual(r.url, 'https://www.autoscout24.it/annunci/bmw-320d-x');
 });
 
+// F50 Fase 0: il nome-modello entra nel titolo. Prima, con modelVersionInput vuoto (~74% delle
+// moto AS24) il titolo era la sola marca e il post-filter di server.js scartava l'annuncio.
+const nodeCls = cls => ({ details: { ...NODE.details, vehicle: { ...NODE.details.vehicle, classification: cls } } });
+
+test('mapListing: allestimento vuoto → il titolo include il nome-modello (non solo la marca)', () => {
+  const r = mapListing(nodeCls({ make: { formatted: 'Yamaha' }, model: { formatted: 'TMAX 500' }, modelVersionInput: null }));
+  assert.strictEqual(r.titolo, 'Yamaha TMAX 500');   // prima: 'Yamaha' → scartato dal post-filter
+  assert.strictEqual(r.variante, null);              // il campo grezzo resta invariato
+});
+
+test('mapListing: allestimento che già contiene il modello → nessuna duplicazione', () => {
+  const r = mapListing(nodeCls({ make: { formatted: 'CFMOTO' }, model: { formatted: '800 MT' }, modelVersionInput: 'CFMOTO 800MT-X BASSA 830' }));
+  assert.strictEqual(r.titolo, 'CFMOTO CFMOTO 800MT-X BASSA 830');   // invariato rispetto a prima
+});
+
+test('mapListing: modello catch-all "Altro" → escluso dal titolo (rumore AS24)', () => {
+  const r = mapListing(nodeCls({ make: { formatted: 'Honda' }, model: { formatted: 'Altro' }, modelVersionInput: 'Africa Twin RD04' }));
+  assert.strictEqual(r.titolo, 'Honda Africa Twin RD04');
+});
+
+test('mapListing: modello e allestimento distinti → entrambi nel titolo', () => {
+  const r = mapListing(nodeCls({ make: { formatted: 'Honda' }, model: { formatted: 'XRV 750' }, modelVersionInput: 'Africa Twin RD07a' }));
+  assert.strictEqual(r.titolo, 'Honda XRV 750 Africa Twin RD07a');
+});
+
+test('mapListing: senza modello né allestimento → resta il fallback', () => {
+  const r = mapListing(nodeCls({ make: { formatted: '' }, model: null, modelVersionInput: null }));
+  assert.strictEqual(r.titolo, 'Annuncio senza titolo');
+});
+
 test('mapListing: specs ricche native (potenza/cilindri/proprietari/colore/carrozzeria/venditore/danni)', () => {
   const r = mapListing(NODE);
   assert.strictEqual(r.potenzaCv, 150);          // power.hp.raw (buco AS24 riempito)

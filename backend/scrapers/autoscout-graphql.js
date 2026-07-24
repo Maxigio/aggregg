@@ -139,8 +139,17 @@ function mapListing(node, opts = {}) {
   const c = v.classification || {};
   const make = (c.make && c.make.formatted) || '';
   const variante = c.modelVersionInput || null;
-  const titolo = [make, variante].filter(Boolean).join(' ')
-              || (c.model && c.model.formatted) || 'Annuncio senza titolo';
+  // Il nome-modello AS24 c'è SEMPRE; l'allestimento è vuoto nel ~74% degli annunci moto (misurato).
+  // Prima il titolo restava la sola marca ("Yamaha") e il post-filter di server.js lo scartava:
+  // Ducati "Monster" sopravviveva su 1 annuncio su 50. Il vecchio `|| model.formatted` era codice
+  // morto (`make` è sempre presente, quindi il join non è mai vuoto).
+  // Saltato quando: bucket catch-all "Altro" (rumore, ~12% annunci) o già contenuto nell'allestimento.
+  const modelName = (c.model && c.model.formatted) || '';
+  const nkey = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const modelPart = !modelName || /^(altro|other)$/i.test(modelName.trim())
+                 || (variante && nkey(modelName) && nkey(variante).includes(nkey(modelName)))
+    ? '' : modelName;
+  const titolo = [make, modelPart, variante].filter(Boolean).join(' ') || 'Annuncio senza titolo';
   const ccm = v.engine && v.engine.engineDisplacementInCCM ? v.engine.engineDisplacementInCCM.raw : null;
   const usage = v.usageState || null;   // New | Used | HadAccident | Wreck
 
