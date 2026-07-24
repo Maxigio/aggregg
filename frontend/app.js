@@ -300,6 +300,8 @@ async function init() {
     if (grpHead) { grpHead.parentElement.classList.toggle('veh-collapsed'); return; }
     const head = e.target.closest('.rc-sched-head'); if (!head) return;
     const g = head.closest('.rc-group'); g.classList.toggle('collapsed'); vehSchedaCollapsed = g.classList.contains('collapsed');
+    const s = vehSpecs[vehSelUrl];
+    if (!vehSchedaCollapsed && vehSelUrl && (!s || (!s.loading && !s.ok))) fetchVehSpecs(vehSelUrl);   // riprova le specs fallite alla riapertura
   });
   // combobox scheda: lista visibile filtrata + click/keyboard (come marca/modello); + ricerca-campo toolbar
   vehSchedaEl?.addEventListener('input', e => {
@@ -2503,26 +2505,26 @@ async function loadVehScheda() {
 function renderVehScheda() {
   const el = document.getElementById('vehicleScheda'); if (!el || !vehData) return;
   const d = vehData;
-  const tipo = d.source && /ultimatespecs/i.test(d.source) ? 'moto' : 'auto';
+  const tipo = vehTipo();
   // combobox (search + dropdown): input vuoto di default; value = etichetta solo dopo la scelta. Caret = dropdown.
-  const combo = (cls, val, ph) => `<div class="ac-wrap veh-combo-wrap"><input type="text" class="veh-combo ${cls}" role="combobox" autocomplete="off" aria-autocomplete="list" aria-expanded="false" placeholder="${escapeHtml(ph)}" value="${escapeHtml(val)}"><span class="veh-combo-caret">${icon('chevron')}</span><ul class="ac-list veh-ac d-none" role="listbox"></ul></div>`;
   const genSel = tipo === 'auto' && d.generations.length
-    ? combo('veh-combo-gen', vehGenChosen && d.gen ? d.gen.name : '', 'Generazione')
+    ? vehCombo('veh-combo-gen', vehGenChosen && d.gen ? d.gen.name : '', 'Generazione')
     : '';
-  const curMoto = d.motorizzazioni.find(m => m.url === vehSelUrl) || {};
+  const curMoto = (d.motorizzazioni || []).find(m => m.url === vehSelUrl) || {};
   const curLabel = vehSelUrl && curMoto.label ? curMoto.label + (curMoto.hp ? ` · ${curMoto.hp} CV` : '') : '';
-  const motoSel = combo('veh-combo-moto', curLabel, tipo === 'moto' ? 'Anno / allestimento' : 'Motorizzazione');
-  const itBtn = `<button type="button" class="veh-tb-btn veh-it${vehXf.translate ? ' on' : ''}" title="Traduci in italiano">IT</button>`;
+  const motoSel = vehCombo('veh-combo-moto', curLabel, tipo === 'moto' ? 'Anno / allestimento' : 'Motorizzazione');
+  // auto = specifiche già native in italiano (/it/) → toggle IT solo per la moto (fonte inglese, dizionario)
+  const itBtn = tipo === 'moto' ? `<button type="button" class="veh-tb-btn veh-it${vehXf.translate ? ' on' : ''}" title="Traduci in italiano">IT</button>` : '';
   // toolbar + combos vivono FUORI da .rc-sch-secs (persistenti): l'arrivo async delle specs
   // aggiorna solo .rc-sch-secs (renderVehBody) senza distruggere ciò che l'utente sta digitando.
   el.innerHTML = `<div class="rc-group${vehSchedaCollapsed ? ' collapsed' : ''}">`
     + `<button type="button" class="rc-group-head rc-sched-head"><span class="rc-gcaret">${icon('chevron')}</span><span class="rc-group-title">Scheda tecnica</span><span class="rc-group-meta">${escapeHtml(d.title)}</span></button>`
-    + `<div class="rc-group-body"><div class="veh-sel-row">${genSel}${motoSel}${itBtn}</div>${vehToolbarHTML()}<div class="rc-sch-secs">${vehBodyHTML()}</div></div></div>`;
+    + `<div class="rc-group-body"><div class="veh-sel-row">${genSel}${motoSel}${itBtn}</div>${vehSelUrl ? vehToolbarHTML() : ''}<div class="rc-sch-secs">${vehBodyHTML()}</div></div></div>`;
   applyVehViewState();   // ri-applica ricerca-campo + espandi/comprimi dopo ogni render
 }
 function vehBodyHTML() {
-  const tipo = vehData && vehData.source && /ultimatespecs/i.test(vehData.source) ? 'moto' : 'auto';
-  if (tipo === 'auto' && !vehGenChosen) return vehGenGridHTML();   // griglia foto generazioni (auto)
+  const tipo = vehTipo();
+  if (!vehGenChosen && vehGenStep()) return vehGenGridHTML();   // griglia foto generazioni (auto con generazioni)
   if (!vehSelUrl) {
     if (!((vehData && vehData.motorizzazioni) || []).length) return '<div class="rc-empty">Nessuna motorizzazione per questa selezione.</div>';
     return vehMotoGridHTML(tipo);   // griglia card motorizzazione/anno
@@ -2625,7 +2627,7 @@ function vehToolbarHTML() {
   if (vehXf.compare) {
     const cm = vehData.motorizzazioni.find(m => m.url === vehXf.compare) || {};
     const cl = cm.label ? cm.label + (cm.hp ? ` · ${cm.hp} CV` : '') : '';
-    cmpCombo = `<div class="ac-wrap veh-combo-wrap"><input type="text" class="veh-combo veh-combo-cmp" role="combobox" autocomplete="off" aria-autocomplete="list" aria-expanded="false" placeholder="Confronta con…" value="${escapeHtml(cl)}"><span class="veh-combo-caret">${icon('chevron')}</span><ul class="ac-list veh-ac d-none" role="listbox"></ul></div>`;
+    cmpCombo = vehCombo('veh-combo-cmp', cl, 'Confronta con…');
   }
   return `<div class="veh-toolbar">`
     + `<div class="veh-q-wrap">${icon('search', 'veh-q-ico')}<input type="search" class="veh-tb-q" placeholder="Cerca campo…" value="${escapeHtml(vehXf.q)}"></div>`
@@ -2709,7 +2711,7 @@ async function fetchVehSpecs(url) {
 async function switchVehGen(genSlug) {
   if (!vehData) return;
   const my = ++vehGen;   // cambio generazione rapido → vince l'ultimo, gli altri si scartano
-  const tipo = vehData.source && /ultimatespecs/i.test(vehData.source) ? 'moto' : 'auto';   // tipo della scheda, non della UI
+  const tipo = vehTipo();   // tipo della scheda, non della UI
   const el = document.getElementById('vehicleScheda');
   const secs = el && el.querySelector('.rc-sch-secs'); if (secs) secs.innerHTML = '<div class="rc-loading">Carico…</div>';
   try {
@@ -2717,7 +2719,7 @@ async function switchVehGen(genSlug) {
     const d = await r.json();
     if (my !== vehGen) return;   // una selezione/ricerca più recente ha già preso il posto
     // gen scelta: aggiorna le voci ma NON auto-selezionare la motorizzazione (la sceglie l'utente)
-    if (d.ok && d.generations) { vehData = d; vehSpecs = {}; vehXf.compare = null; vehSelUrl = null; vehGenChosen = true; vehShowAll = false; renderVehScheda(); }
+    if (d.ok && d.generations) { vehData = d; vehSpecs = {}; vehXf.compare = null; vehSelUrl = null; vehGenChosen = !!d.gen; vehShowAll = false; renderVehScheda(); }   // gen non trovata (d.gen null) → torna alla griglia generazioni
     else if (secs) secs.innerHTML = '<div class="rc-empty">Nessuna specifica per questa generazione.</div>';
   } catch (_) { if (my === vehGen && secs) secs.innerHTML = '<div class="rc-empty">Scheda non disponibile.</div>'; }
 }
@@ -2726,9 +2728,8 @@ async function switchVehGen(genSlug) {
 let vehAcActive = -1;   // indice evidenziato nella lista aperta (una sola alla volta)
 function vehComboSrc(input) {
   if (input.classList.contains('veh-combo-gen')) return { kind: 'gen', src: ((vehData && vehData.generations) || []).map(g => ({ label: g.name, key: g.slug, img: g.img })) };
-  const tipo = vehData && vehData.source && /ultimatespecs/i.test(vehData.source) ? 'moto' : 'auto';
-  // auto: le motorizzazioni compaiono solo DOPO aver scelto la generazione
-  let src = (tipo === 'auto' && !vehGenChosen) ? [] : ((vehData && vehData.motorizzazioni) || []).map(m => ({ label: m.label + (m.hp ? ` · ${m.hp} CV` : ''), key: m.url }));
+  // auto con generazioni: le motorizzazioni compaiono solo DOPO aver scelto la generazione (search-landing: subito)
+  let src = (!vehGenChosen && vehGenStep()) ? [] : ((vehData && vehData.motorizzazioni) || []).map(m => ({ label: m.label + (m.hp ? ` · ${m.hp} CV` : ''), key: m.url }));
   if (input.classList.contains('veh-combo-cmp')) src = src.filter(x => x.key !== vehSelUrl);   // niente auto-confronto
   return { kind: 'moto', src };
 }
@@ -2775,12 +2776,17 @@ function pickVehCombo(input, key, label) {
   vehComboClose(input);
   if (input.classList.contains('veh-combo-gen')) switchVehGen(key);
   else if (input.classList.contains('veh-combo-cmp')) { vehXf.compare = key; renderVehBody(); fetchVehSpecs(key); }
-  else { vehSelUrl = key; renderVehBody(); fetchVehSpecs(vehSelUrl); }
+  else { vehSelUrl = key; renderVehScheda(); fetchVehSpecs(vehSelUrl); }   // renderVehScheda: fa comparire la toolbar (visibile solo con una voce scelta)
 }
 
 // ─── Toolbar scheda: trasformazioni NON distruttive (dati grezzi intatti) ─────
 // Stato persistente tra i re-render e i cambi di voce. compare = 2a voce da confrontare.
 // translate ON di default; highlight = Set di chiavi-campo messe in evidenza dall'utente.
+function vehTipo() { return vehData && vehData.source && /ultimatespecs/i.test(vehData.source) ? 'moto' : 'auto'; }
+// auto con generazioni → si sceglie prima la generazione. Search-landing (kind:'search', nessuna gen) → dritto ai trim, come la moto.
+function vehGenStep() { return vehTipo() === 'auto' && ((vehData && vehData.generations) || []).length > 0; }
+// markup combobox scheda (input + caret + lista): condiviso tra sel-row e toolbar confronto
+const vehCombo = (cls, val, ph) => `<div class="ac-wrap veh-combo-wrap"><input type="text" class="veh-combo ${cls}" role="combobox" autocomplete="off" aria-autocomplete="list" aria-expanded="false" placeholder="${escapeHtml(ph)}" value="${escapeHtml(val)}"><span class="veh-combo-caret">${icon('chevron')}</span><ul class="ac-list veh-ac d-none" role="listbox"></ul></div>`;
 const vehXf = { translate: true, units: {}, q: '', allOpen: null, compare: null, highlight: new Set() };
 let vehGenChosen = false;   // auto: le motorizzazioni compaiono solo dopo aver scelto la generazione
 let vehShowAll = false;     // griglie: false = filtra per anni cercati, true = mostra tutte
@@ -2854,7 +2860,7 @@ function vehXfGroups(spec) {
 // Testo/CSV della scheda (post-trasformazioni) per Copia / Esporta.
 function vehSchedaText() {
   const spec = vehSpecs[vehSelUrl]; if (!spec || !spec.groups) return '';
-  const cur = (vehData.motorizzazioni.find(m => m.url === vehSelUrl) || {}).label || '';
+  const cur = ((vehData.motorizzazioni || []).find(m => m.url === vehSelUrl) || {}).label || '';
   const out = [`${vehData.title} — ${cur}`];
   for (const g of vehXfGroups(spec)) { out.push('', `## ${g.title}`); for (const r of g.rows) out.push(`- ${r.k}: ${r.v}`); }
   return out.join('\n');
@@ -2877,21 +2883,20 @@ function vehSchedaPdf() {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const INK = [20, 24, 31], ACCENT = [31, 111, 235], WHITE = [255, 255, 255], HL = [230, 240, 253];
-  const cur = (vehData.motorizzazioni.find(m => m.url === vehSelUrl) || {}).label || '';
+  const cur = ((vehData.motorizzazioni || []).find(m => m.url === vehSelUrl) || {}).label || '';
   doc.setFillColor(...INK); doc.rect(0, 0, pageW, 22, 'F');
   doc.setFillColor(...ACCENT); doc.rect(14, 7, 7, 7, 'F');
   doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...WHITE); doc.text('SCHEDA TECNICA', 25, 12);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(170, 185, 210);
   doc.text(`${vehData.title}${cur ? ' · ' + cur : ''}`.slice(0, 95), 25, 17.5);
-  const body = [];
-  for (const g of vehXfGroups(spec)) for (const r of g.rows) body.push([g.title, r.k, r.v]);
-  const hlKeys = new Set([...vehXf.highlight].map(vehTrKey));   // chiavi evidenziate (post-traduzione, come in tabella)
+  const body = [], rawKeys = [];   // rawKeys[i] = chiave grezza della riga i → evidenza per chiave grezza (come a schermo, niente collisioni di traduzione)
+  for (const g of spec.groups) for (const r of g.rows) { body.push([g.title, vehTrKey(r.k), vehTrVal(vehConv(r.v))]); rawKeys.push(r.k); }
   doc.autoTable({
     startY: 28, head: [['Sezione', 'Campo', 'Valore']], body, theme: 'plain',
     styles: { font: 'helvetica', fontSize: 8, cellPadding: { top: 2, right: 3, bottom: 2, left: 3 }, valign: 'middle', overflow: 'linebreak' },
     headStyles: { fillColor: INK, textColor: WHITE, fontStyle: 'bold' },
     columnStyles: { 0: { cellWidth: 40, textColor: [91, 100, 114] }, 1: { cellWidth: 58, fontStyle: 'bold' }, 2: { cellWidth: 'auto' } },
-    didParseCell: c => { if (c.section === 'body' && hlKeys.has(c.row.raw[1])) c.cell.styles.fillColor = HL; },
+    didParseCell: c => { if (c.section === 'body' && vehXf.highlight.has(rawKeys[c.row.index])) c.cell.styles.fillColor = HL; },
   });
   const name = `scheda-${(vehData.marca || '')}-${(vehData.modello || '')}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'scheda';
   doc.save(name + '.pdf');

@@ -49,3 +49,43 @@ test('parseTrimSpecs: classifica per contenuto + pulisce le conversioni imperial
 test('prettyLabel: normalizza sigle e potenza', () => {
   assert.strictEqual(vs.prettyLabel('r-2.0-tsi-300hp-4motion-dsg'), 'R 2.0 TSI 300 Hp 4MOTION DSG');
 });
+
+test('parseTrimSpecs: pagina /it/ — identità italiana esclusa, gruppi bilingue, cleanVal range imperiale', () => {
+  const html = '<table class="cardetailsout">'
+    + '<tr><th>Marca</th><td>BMW</td></tr>'
+    + '<tr><th>Modello</th><td>Serie 3</td></tr>'
+    + '<tr><th>Cilindrata</th><td>1998 cm3 121.93 cu. in.</td></tr>'
+    + '<tr><th>Consumo di carburante combinato (WLTP)</th><td>6.4-7.2 l/100 km 36.8 - 32.7 US mpg 44.1 - 39.2 UK mpg</td></tr>'
+    + '<tr><th>Lunghezza</th><td>4713 mm 185.55 in.</td></tr>'
+    + '<tr><th>Freni anteriori</th><td>Dischi ventilati</td></tr></table>';
+  const { head, groups } = vs.parseTrimSpecs(html);
+  assert.strictEqual(head.brand, 'BMW');
+  assert.strictEqual(head.model, 'Serie 3');
+  assert.ok(!groups.some(g => g.rows.some(r => r.k === 'Marca' || r.k === 'Modello')), 'identità NON nei gruppi');
+  const motore = groups.find(g => g.title === 'Motore');
+  assert.deepStrictEqual(motore.rows.find(r => r.k === 'Cilindrata'), { k: 'Cilindrata', v: '1998 cm3' });   // via "121.93 cu. in."
+  const consumi = groups.find(g => g.title === 'Consumi ed emissioni');
+  assert.deepStrictEqual(consumi.rows[0], { k: 'Consumo di carburante combinato (WLTP)', v: '6.4-7.2 l/100 km' });   // via "36.8 - 32.7 US mpg…"
+  assert.ok(groups.find(g => g.title === 'Dimensioni').rows.some(r => r.k === 'Lunghezza' && r.v === '4713 mm'));
+  assert.ok(groups.find(g => g.title === 'Trasmissione, freni, sospensioni').rows.some(r => r.k === 'Freni anteriori'));
+});
+
+test('parseSearchWords: trim/model, anno+hp fuori label, slug con punti, fuel ibrida (no baco d-)', () => {
+  const body = 'results?search=x###0|bmw-3-series-coupe-e30-318i-105hp-46133###'
+    + '<img src="/images/f69/x_thumb.jpg" />BMW 3 Series Coupe (E30) 318i (105 Hp) (1982 - 1986) |volkswagen-golf-vii-5-door-e-golf-24.2-kwh-115hp-44054###'
+    + '<img src="//cdn/y.jpg" />Volkswagen Golf VII (5-door) e-Golf 24.2 kWh (115 Hp) (2014 - 2016) |lexus-ct-i-200h-136hp-hybrid-e-cvt-17492###'
+    + '<img src="/l.jpg" />Lexus CT I 200h (136 Hp) Hybrid e-CVT (2011 - 2014) |audi-a4-model-501###'
+    + '<img src="/z.jpg" />Audi A4';
+  const r = vs.parseSearchWords(body);
+  assert.strictEqual(r.length, 4);
+  assert.strictEqual(r[0].kind, 'trim');
+  assert.strictEqual(r[0].label, 'BMW 3 Series Coupe (E30) 318i');   // hp/anno tolti dalla label
+  assert.strictEqual(r[0].year, 1982);
+  assert.strictEqual(r[0].yearRange, '1982–1986');
+  assert.strictEqual(r[0].hp, 105);
+  assert.strictEqual(r[1].slug, 'volkswagen-golf-vii-5-door-e-golf-24.2-kwh-115hp-44054');   // punto preservato
+  assert.strictEqual(r[1].fuel, 'Elettrica');
+  assert.strictEqual(r[2].fuel, 'Ibrida');   // "hybrid-e-cvt" NON è più Diesel (fix del pattern d-)
+  assert.strictEqual(r[3].kind, 'model');
+  assert.strictEqual(r[3].label, 'Audi A4');
+});

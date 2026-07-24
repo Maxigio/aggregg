@@ -48,7 +48,6 @@ const HOST_OK_AUTO = /^https?:\/\/(www\.)?auto-data\.net\//i;
 const HOST_OK_MOTO = /^https?:\/\/(www\.)?ultimatespecs\.com\//i;
 // specs URL → quale parser usare (o null se host non consentito, anti-SSRF)
 function specsHostKind(url) { if (HOST_OK_AUTO.test(url)) return 'auto'; if (HOST_OK_MOTO.test(url)) return 'moto'; return null; }
-const BODY_VARIANT = /cabriolet|convertible|variant|estate|wagon|sportsvan|sportback|shooting|gran\b|\bplus\b|alltrack|allroad|cross|coupe|3-door|roadster|spider|touring|\blong\b|\b4x4\b|\b4wd\b/i;
 // nome modello senza gli anni finali ("Golf 1974 -" → "Golf", "A3 2003 -" → "A3") per display E match
 const cleanName = n => String(n).replace(/\s+(19|20)\d{2}\s*(-\s*((19|20)\d{2})?)?\s*$/, '').trim() || String(n);
 
@@ -66,15 +65,6 @@ function matchModel(models, query) {
   }
   return null;
 }
-
-// Ordina le generazioni best-first: carrozzeria BASE nell'anno cercato, poi varianti
-// nell'anno, poi base fuori-anno, poi il resto (gens è già ordinata dal più recente).
-function rankGens(gens, yr) {
-  const inYear = g => g.years.length && yr && yr >= Math.min(...g.years) && yr <= Math.max(...g.years) + 2;
-  const rank = g => (yr && inYear(g) ? 0 : 2) + (BODY_VARIANT.test(g.name) ? 1 : 0);
-  return gens.map((g, i) => ({ g, i })).sort((a, b) => rank(a.g) - rank(b.g) || a.i - b.i).map(x => x.g);
-}
-function pickGen(gens, yr) { return rankGens(gens, yr)[0]; }
 
 // ── Moto (ultimatespecs) ─────────────────────────────────────────────────────
 // Match modello moto: esatto-normalizzato + varianti (chiave che estende q con un
@@ -131,16 +121,24 @@ async function resolveScheda({ tipo, marca, modello, anno, genSlug }) {
   mm = /^classe\s+(.+)$/i.exec(modello); if (mm) { candidates.push(mm[1] + '-Class'); candidates.push(mm[1] + ' Class'); }
   let model = null;
   for (const q of candidates) { model = matchModel(Object.values(brand.models), q); if (model) break; }
-  if (!model) return { notFound: 'modello' };
+  if (model) return await resolveModelPage(brand, model, genSlug);
+  // Fallback: la ricerca interna di auto-data.net risolve le sigle-motore/varianti che NON sono
+  // modelli ("318"→trim Serie 3, "CT 200h"→trim Lexus CT). Delego il matching alla fonte, niente liste.
+  return (await searchScheda(brand, marca, modello, genSlug)) || { notFound: 'modello' };
+}
 
-  const modelUrl = `${vs.HOST}/en/${model.slug}`;
+// modello risolto → generazioni (senza gen scelta) o trim della generazione scelta.
+async function resolveModelPage(brand, model, genSlug) {
+  const modelUrl = `${vs.HOST}/it/${model.slug}`;   // /it/ = pagina in italiano (nomi generazioni + specifiche native)
   const mp = await fetchCached(modelUrl, PAGE_TTL);
   const gens = vs.parseGenerationList(mp);
   // body senza generazioni = pagina transitoria/interstitial servita 200 → declassa il TTL a EMPTY_TTL
   // così si riprova tra pochi minuti invece di restare notFound per 12h.
   if (!gens.length) { cacheSet(modelUrl, mp, EMPTY_TTL); return { notFound: 'generazione' }; }
-
-  const mName = cleanName(model.name);   // via anni dal nome
+  // nome-modello italiano dal <title> della pagina /it/ ("BMW Serie 3 | Scheda…"), altrimenti quello (EN) dall'indice
+  const itTitle = (mp.match(/<title>([^<|]+)/i) || [])[1];
+  const itName = itTitle ? itTitle.replace(/\s+/g, ' ').trim().replace(new RegExp('^' + brand.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '').trim() : '';
+  const mName = itName || cleanName(model.name);   // via anni dal nome
   const base = {
     title: `${brand.name} ${mName}`, marca: brand.name, modello: mName,
     generations: gens.map(g => ({ name: g.name, slug: g.slug, img: g.img || '', years: g.years || [] })), source: 'auto-data.net',
@@ -148,8 +146,30 @@ async function resolveScheda({ tipo, marca, modello, anno, genSlug }) {
   // Senza generazione scelta: NON caricare i trim (l'utente sceglie prima la generazione).
   const gen = genSlug ? gens.find(g => g.slug === genSlug) : null;
   if (!gen) return { ...base, gen: null, motorizzazioni: [] };
-  const gp = await fetchCached(`${vs.HOST}/en/${gen.slug}`, PAGE_TTL);
+  const gp = await fetchCached(`${vs.HOST}/it/${gen.slug}`, PAGE_TTL);
   return { ...base, gen: { name: gen.name, slug: gen.slug }, motorizzazioni: vs.parseTrimList(gp, gen.slug) };
+}
+
+// Ricerca interna auto-data.net (get-words.php): se indica un modello del nostro indice usa il flusso
+// generazioni; altrimenti "atterra sui trim" — le versioni trovate diventano le motorizzazioni.
+async function searchScheda(brand, marca, modello, genSlug) {
+  const url = `${vs.HOST}/ajax/get-words.php?SEARCH_MORE_RESULTS=0&search=${encodeURIComponent(`${marca} ${modello}`)}`;
+  let body; try { body = await fetchCached(url, PAGE_TTL); } catch (_) { return null; }
+  const bn = norm(brand.name);
+  const items = vs.parseSearchWords(body).filter(x => norm(x.label).startsWith(bn));   // solo la marca cercata
+  if (!items.length) return null;
+  // la ricerca indica un MODELLO che abbiamo in indice → flusso generazioni (griglia foto)
+  const modelHit = items.find(x => x.kind === 'model');
+  const model = modelHit && Object.values(brand.models).find(m => m.slug === modelHit.slug);
+  if (model) return await resolveModelPage(brand, model, genSlug);
+  // altrimenti atterra sui trim (le versioni che la fonte associa alla sigla cercata)
+  const trims = items.filter(x => x.kind === 'trim').slice(0, 40);
+  if (!trims.length) return null;
+  return {
+    title: `${brand.name} ${cleanName(modello)}`, marca: brand.name, modello: cleanName(modello),
+    generations: [], gen: null, source: 'auto-data.net', kind: 'search',
+    motorizzazioni: trims.map(t => ({ label: t.label, url: t.url, year: t.year, yearRange: t.yearRange, hp: t.hp, fuel: t.fuel })),
+  };
 }
 
 function mount(app, deps = {}) {
@@ -180,4 +200,4 @@ function mount(app, deps = {}) {
   });
 }
 
-module.exports = { mount, resolveScheda, matchModel, pickGen, matchMotoModels, resolveMoto };
+module.exports = { mount, resolveScheda, matchModel, matchMotoModels, resolveMoto };

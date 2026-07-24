@@ -78,14 +78,19 @@ function parseGenerationList(html) {
     if (!/-generation-\d+$/.test(slug)) return;
     const text = clean($(a).text());
     const ctx = clean($(a).closest('tr, li, div').text());
-    const years = [...new Set((ctx.match(/(19|20)\d{2}/g) || []).map(Number))].sort((x, y) => x - y);
+    const yr = ctx.match(/((?:19|20)\d{2})\s*-\s*((?:19|20)\d{2})?/);   // range "2012 - 2020" / "1974 -": ancora sugli anni, non su cilindrata & c.
+    const years = yr ? [Number(yr[1]), ...(yr[2] ? [Number(yr[2])] : [])]
+      : [...new Set((ctx.match(/(19|20)\d{2}/g) || []).map(Number))].sort((x, y) => x - y);
     const isName = /[a-z]/i.test(text) && !/^\d/.test(text) && text.length < 70;   // il nome vero (non "2024 - Hatchback…")
     const g = bySlug.get(slug) || { slug, name: '', years: [], img: '' };
     if (isName && !g.name) g.name = text;
     if (years.length >= g.years.length) g.years = years;
-    if (!g.img) {   // thumbnail della generazione (aiuta la scelta): prima <img> nella riga
+    if (!g.img) {   // thumbnail della generazione (aiuta la scelta): prima <img> "foto" nella riga
       const src = $(a).closest('tr, li, div').find('img').first().attr('src') || '';
-      if (/\.(jpe?g|png|webp)/i.test(src)) g.img = /^https?:/.test(src) ? src : HOST + (src[0] === '/' ? '' : '/') + src;
+      const junk = /(flag|logo|icon|sprite|loader|spacer|blank|pixel|placeholder|\/i\/)/i;   // scarta bandiere/icone/segnaposto
+      if (/\.(jpe?g|png|webp)/i.test(src) && !junk.test(src)) {
+        g.img = /^https?:/.test(src) ? src : src.startsWith('//') ? 'https:' + src : HOST + (src[0] === '/' ? '' : '/') + src;
+      }
     }
     bySlug.set(slug, g);
   });
@@ -109,8 +114,7 @@ function parseTrimList(html, genSlug) {
     const ym = ctx.match(/((?:19|20)\d{2})\s*-\s*((?:19|20)\d{2})?/);
     const year = ym ? Number(ym[1]) : null;
     const yearRange = ym ? (ym[2] ? `${ym[1]}–${ym[2]}` : `${ym[1]}–`) : '';
-    out.push({ label, url: `${HOST}/en/${slug}`, hp: hpOf(trimSlug), fuel: fuelOf(trimSlug), year, yearRange });   // hp/fuel dallo slug-trim
-
+    out.push({ label, url: `${HOST}/it/${slug}`, hp: hpOf(trimSlug), fuel: fuelOf(trimSlug), year, yearRange });   // hp/fuel dallo slug-trim; /it/ = specifiche in italiano
   });
   return out;
 }
@@ -124,7 +128,7 @@ function prettyLabel(s) {
 }
 const hpOf = s => { const m = String(s).match(/(\d+)hp/i); return m ? Number(m[1]) : null; };
 const fuelOf = s => { s = String(s).toLowerCase();
-  if (/tdi|cdi|hdi|dci|jtd|bluetec|d-|diesel/.test(s)) return 'Diesel';
+  if (/tdi|cdi|hdi|dci|jtd|bluetec|diesel|\d+d(?![a-z0-9])/.test(s)) return 'Diesel';   // \d+d = "320d/318d"; NON "hybrid-e" (era il baco di "d-")
   if (/tsi|tfsi|fsi|vti|mpi|gti|petrol|benz/.test(s)) return 'Benzina';
   if (/phev|plug/.test(s)) return 'Ibrida plug-in';
   if (/hybrid|hev/.test(s)) return 'Ibrida';
@@ -132,25 +136,54 @@ const fuelOf = s => { s = String(s).toLowerCase();
   return null;
 };
 
-// valore: togli le conversioni imperiali (US/UK mpg, mph, lbs, in., cu ft) → resta il metrico
+// Ricerca interna del sito (get-words.php) → [{ slug, url, label, kind, year, yearRange, hp, fuel, img }].
+// Risolve sigle-motore/varianti che NON sono modelli ("318"→trim Serie 3, "CT 200h"→trim Lexus CT).
+// Formato risposta: "header###idx|slug###<img src=…>label |slug2###<img …>label2 |…" (slug prima, label dopo).
+function parseSearchWords(body) {
+  const parts = String(body || '').split('###');
+  const SL = /\|([a-z0-9][a-z0-9.\-]*-\d+)/i;   // slug: può contenere punti (es. "24.2-kwh") e finisce con -ID
+  const slugs = [], labels = [], imgs = [];
+  const first = (parts[1] || '').match(SL); if (first) slugs.push(first[1]);
+  for (let i = 2; i < parts.length; i++) {
+    const lm = parts[i].match(/<img[^>]*src="([^"]*)"[^>]*>\s*([^|]*?)\s*(?:\||$)/i);
+    if (lm) { imgs.push(lm[1]); labels.push(clean(lm[2])); }
+    const sm = parts[i].match(SL); if (sm) slugs.push(sm[1]);
+  }
+  const out = [];
+  for (let i = 0; i < Math.min(slugs.length, labels.length); i++) {
+    const slug = slugs[i], raw = labels[i];
+    const kind = /-model-\d+$/.test(slug) ? 'model' : /-generation-\d+$/.test(slug) ? 'gen' : 'trim';
+    const ym = raw.match(/\((\d{4})\s*-\s*(\d{4})?\s*\)/);   // "(1982 - 1986)" / "(2017 - )"
+    const hp = (raw.match(/\((\d{2,4})\s*Hp\)/i) || [])[1];
+    const label = raw.replace(/\s*\(\d{2,4}\s*Hp\)/i, '').replace(/\s*\(\d{4}\s*-\s*\d{0,4}\s*\)\s*$/, '').trim();   // via anno/hp (mostrati a parte)
+    let img = imgs[i] || '';
+    if (img && !/^https?:/.test(img)) img = img.startsWith('//') ? 'https:' + img : HOST + (img[0] === '/' ? '' : '/') + img;
+    out.push({ slug, url: `${HOST}/it/${slug}`, label, kind, year: ym ? Number(ym[1]) : null, yearRange: ym ? (ym[2] ? `${ym[1]}–${ym[2]}` : `${ym[1]}–`) : '', hp: hp ? Number(hp) : null, fuel: fuelOf(slug), img });   // /it/ = specifiche italiane
+  }
+  return out;
+}
+
+// valore: togli le conversioni imperiali (mpg/mph/lbs/in./cu ft/gal/qt), anche a range "36.8 - 32.7 US mpg" → resta il metrico
 function cleanVal(v) {
   return clean(v)
-    .replace(/\s*[|]?\s*\d[\d.,]*\s*(US\b|UK\b|Imp\b|mph|lbs?\b|cu\.?|in\.|ft\b).*$/i, '')   // taglia dalla 1a conversione imperiale
+    .replace(/\s*[|]?\s*\d[\d.,]*\s*(?:-\s*\d[\d.,]*\s*)?(US\b|UK\b|Imp\b|mph|mpg|lbs?\b|cu\.?|in\.|ft\b|gal\b|qt\b).*$/i, '')   // taglia dalla 1a conversione imperiale (range incluso)
     .replace(/\s+$/, '').trim() || clean(v);
 }
 
 const GROUP_ORDER = ['Motore', 'Prestazioni', 'Consumi ed emissioni', 'Trasmissione, freni, sospensioni', 'Dimensioni', 'Pesi e capacità', 'Generale'];
+// bilingue EN (/en/) + IT (/it/): mantiene l'inglese (nessuna regressione) e aggiunge i termini italiani.
 function classifyKey(k) {
   const s = k.toLowerCase();
-  if (/consum|economy|co2|emission|fuel type|emission standard/.test(s)) return 'Consumi ed emissioni';
-  if (/displacement|cylinder|valve|bore|stroke|compression|aspiration|fuel system|injection|coolant|position of/.test(s)) return 'Motore';
-  if (/power|torque|speed|acceleration|0-100|0-60|per litre|weight-to-power/.test(s)) return 'Prestazioni';
-  if (/drive|transmission|gearbox|number of gears|clutch|suspension|brake|tyre|tire|rim|wheel size|steering|assisting|axle/.test(s)) return 'Trasmissione, freni, sospensioni';
-  if (/length|width|height|wheelbase|track|clearance|ground|turning|drag|aerodynamic|coefficient/.test(s)) return 'Dimensioni';
-  if (/weight|kerb|payload|trunk|boot|volume|tank|capacit/.test(s)) return 'Pesi e capacità';
+  if (/consum|economy|co2|emission|emissione|fuel type|tipo (di )?carburante|gas di scarico/.test(s)) return 'Consumi ed emissioni';
+  if (/displacement|cylinder|valve|bore|stroke|compression|aspiration|fuel system|injection|coolant|position of|motor|cilindr|valvol|alesaggio|\bcorsa\b|compressione|aspirazion|iniezione|distribuzione|olio/.test(s)) return 'Motore';
+  if (/power|torque|speed|acceleration|0-100|0-60|per litre|per litro|weight-to-power|prestazion|potenza|coppia|accelerazion|velocit|rapporto peso/.test(s)) return 'Prestazioni';
+  if (/drive|transmission|gearbox|number of gears|clutch|suspension|brake|tyre|tire|rim|wheel size|steering|assisting|axle|trazione|marce|\bcambio\b|sospension|freni|pneumatic|cerchi|sterzo|assistenza|avviamento/.test(s)) return 'Trasmissione, freni, sospensioni';
+  if (/length|width|height|wheelbase|track|clearance|ground|turning|drag|aerodynamic|coefficient|lunghezza|larghezza|altezza|\bpasso\b|carreggiata|coefficiente|resistenza|diametro|sterzata|suolo/.test(s)) return 'Dimensioni';
+  if (/weight|kerb|payload|trunk|boot|volume|tank|capacit|peso|massa|carico|bagagliaio|serbatoio|tetto|rimorchiabile/.test(s)) return 'Pesi e capacità';
   return 'Generale';
 }
-const IDENTITY_KEYS = new Set(['Brand', 'Model', 'Generation', 'Modification (Engine)', 'Start of production', 'End of production']);
+const IDENTITY_KEYS = new Set(['Brand', 'Model', 'Generation', 'Modification (Engine)', 'Start of production', 'End of production',
+  'Marca', 'Modello', 'Generazione', 'Modifica (motore)', 'Inizio anno di produzione']);
 
 // trim page → { head:{brand,model,generation,modification}, groups:[{title, rows:[{k,v}]}] }
 // I titoli-sezione di auto-data.net non si allineano 1:1 alle tabelle → classifichiamo per contenuto.
@@ -165,10 +198,10 @@ function parseTrimSpecs(html) {
     if (!k) return;
     $(cells[1]).find('br').replaceWith(' ');   // valori multi-riga (<br>) → non fondere le parole
     const vRaw = clean($(cells[1]).text());
-    if (k === 'Brand') head.brand = vRaw;
-    else if (k === 'Model') head.model = vRaw;
-    else if (k === 'Generation') head.generation = vRaw;
-    else if (k === 'Modification (Engine)') head.modification = vRaw;
+    if (k === 'Brand' || k === 'Marca') head.brand = vRaw;
+    else if (k === 'Model' || k === 'Modello') head.model = vRaw;
+    else if (k === 'Generation' || k === 'Generazione') head.generation = vRaw;
+    else if (k === 'Modification (Engine)' || k === 'Modifica (motore)') head.modification = vRaw;
     if (IDENTITY_KEYS.has(k) || seen.has(k)) return;   // identità → nel head, non nei gruppi
     const v = cleanVal(vRaw);
     if (!v || v === k) return;
@@ -191,6 +224,6 @@ function dedupe(arr) { const m = new Map(); for (const x of arr) if (!m.has(x.sl
 
 module.exports = {
   HOST, httpGetText, fetchVehicleSpecs,
-  parseBrandList, parseModelList, parseGenerationList, parseTrimList, parseTrimSpecs,
+  parseBrandList, parseModelList, parseGenerationList, parseTrimList, parseTrimSpecs, parseSearchWords,
   slugOf, prettyLabel,
 };
