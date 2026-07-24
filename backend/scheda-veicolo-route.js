@@ -113,7 +113,7 @@ function resolveMoto({ marca, modello, anno }) {
   return {
     title: `${brand.name} ${baseLabel}`, marca: brand.name, modello: baseLabel,
     generations: [], gen: { name: `${brand.name} ${baseLabel}`, slug: '' },
-    motorizzazioni: entries.map(e => ({ label: e.label, url: e.url })),
+    motorizzazioni: entries.map(e => ({ label: e.label, url: e.url, year: e.year })),
     source: 'ultimatespecs.com',
   };
 }
@@ -140,28 +140,16 @@ async function resolveScheda({ tipo, marca, modello, anno, genSlug }) {
   // così si riprova tra pochi minuti invece di restare notFound per 12h.
   if (!gens.length) { cacheSet(modelUrl, mp, EMPTY_TTL); return { notFound: 'generazione' }; }
 
-  // Generazione esplicita (dropdown) → onorala. Altrimenti scorri le candidate best-first
-  // e usa la PRIMA con motorizzazioni: salta le gen "fantasma" (es. Fiesta Van = 0 motori).
-  let gen = genSlug ? gens.find(g => g.slug === genSlug) : null;
-  let motorizzazioni = [];
-  if (gen) {
-    const gp = await fetchCached(`${vs.HOST}/en/${gen.slug}`, PAGE_TTL);
-    motorizzazioni = vs.parseTrimList(gp, gen.slug);
-  } else {
-    for (const g of rankGens(gens, Number(anno) || null).slice(0, 4)) {   // cap 4 fetch (cache 12h)
-      const gp = await fetchCached(`${vs.HOST}/en/${g.slug}`, PAGE_TTL);
-      const trims = vs.parseTrimList(gp, g.slug);
-      if (!gen) gen = g;   // fallback: prima candidata anche se vuota
-      if (trims.length) { gen = g; motorizzazioni = trims; break; }
-    }
-  }
   const mName = cleanName(model.name);   // via anni dal nome
-  return {
+  const base = {
     title: `${brand.name} ${mName}`, marca: brand.name, modello: mName,
-    generations: gens.map(g => ({ name: g.name, slug: g.slug })),
-    gen: { name: gen.name, slug: gen.slug },
-    motorizzazioni, source: 'auto-data.net',
+    generations: gens.map(g => ({ name: g.name, slug: g.slug, img: g.img || '', years: g.years || [] })), source: 'auto-data.net',
   };
+  // Senza generazione scelta: NON caricare i trim (l'utente sceglie prima la generazione).
+  const gen = genSlug ? gens.find(g => g.slug === genSlug) : null;
+  if (!gen) return { ...base, gen: null, motorizzazioni: [] };
+  const gp = await fetchCached(`${vs.HOST}/en/${gen.slug}`, PAGE_TTL);
+  return { ...base, gen: { name: gen.name, slug: gen.slug }, motorizzazioni: vs.parseTrimList(gp, gen.slug) };
 }
 
 function mount(app, deps = {}) {

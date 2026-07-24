@@ -80,9 +80,13 @@ function parseGenerationList(html) {
     const ctx = clean($(a).closest('tr, li, div').text());
     const years = [...new Set((ctx.match(/(19|20)\d{2}/g) || []).map(Number))].sort((x, y) => x - y);
     const isName = /[a-z]/i.test(text) && !/^\d/.test(text) && text.length < 70;   // il nome vero (non "2024 - Hatchback…")
-    const g = bySlug.get(slug) || { slug, name: '', years: [] };
+    const g = bySlug.get(slug) || { slug, name: '', years: [], img: '' };
     if (isName && !g.name) g.name = text;
     if (years.length >= g.years.length) g.years = years;
+    if (!g.img) {   // thumbnail della generazione (aiuta la scelta): prima <img> nella riga
+      const src = $(a).closest('tr, li, div').find('img').first().attr('src') || '';
+      if (/\.(jpe?g|png|webp)/i.test(src)) g.img = /^https?:/.test(src) ? src : HOST + (src[0] === '/' ? '' : '/') + src;
+    }
     bySlug.set(slug, g);
   });
   return [...bySlug.values()].filter(g => g.name);
@@ -100,7 +104,13 @@ function parseTrimList(html, genSlug) {
     if (seen.has(slug)) return; seen.add(slug);
     const trimSlug = slug.slice((genBase + '-').length).replace(/-\d{4,6}$/, '');   // solo la parte trim (no marca/gen/id)
     const label = prettyLabel(trimSlug);
-    out.push({ label, url: `${HOST}/en/${slug}`, hp: hpOf(trimSlug), fuel: fuelOf(trimSlug) });   // hp/fuel dallo slug-trim, non dallo slug con marca
+    // anni della motorizzazione dal contesto riga ("…DSG 2024 -" / "…2013 - 2020")
+    const ctx = clean($(a).closest('tr, li, div').text());
+    const ym = ctx.match(/((?:19|20)\d{2})\s*-\s*((?:19|20)\d{2})?/);
+    const year = ym ? Number(ym[1]) : null;
+    const yearRange = ym ? (ym[2] ? `${ym[1]}–${ym[2]}` : `${ym[1]}–`) : '';
+    out.push({ label, url: `${HOST}/en/${slug}`, hp: hpOf(trimSlug), fuel: fuelOf(trimSlug), year, yearRange });   // hp/fuel dallo slug-trim
+
   });
   return out;
 }

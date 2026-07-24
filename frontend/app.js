@@ -77,6 +77,7 @@ const ICONS = {
   'square-check':    '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 12 2 2 4-4"/>',
   info:              '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
   chevron:           '<path d="m6 9 6 6 6-6"/>',
+  search:            '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>',
   x:                 '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   moon:              '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
   sun:               '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
@@ -270,40 +271,52 @@ async function init() {
   // scheda veicolo: collapse + cambio generazione/motorizzazione (delegato, sopravvive ai re-render)
   const vehSchedaEl = document.getElementById('vehicleScheda');
   vehSchedaEl?.addEventListener('click', e => {
-    const tb = e.target.closest('.veh-tb-btn');   // toolbar: trasformazioni non distruttive
+    const exp = e.target.closest('.veh-exp');   // Esporta ▾: Copia / CSV / PDF
+    if (exp) {
+      const kind = exp.dataset.exp;
+      if (kind === 'copia') { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(vehSchedaText()).then(() => { exp.textContent = 'Copiato ✓'; setTimeout(() => exp.textContent = 'Copia negli appunti', 1200); }, () => {}); }
+      else if (kind === 'csv') vehDownload('scheda-tecnica.csv', vehSchedaCsv(), 'text/csv;charset=utf-8');
+      else if (kind === 'pdf') vehSchedaPdf();
+      return;
+    }
+    const tb = e.target.closest('.veh-tb-btn');   // toolbar / toggle IT
     if (tb) {
-      if (tb.classList.contains('veh-tb-tr')) { vehXf.translate = !vehXf.translate; renderVehScheda(); }
+      if (tb.classList.contains('veh-it')) { vehXf.translate = !vehXf.translate; tb.classList.toggle('on', vehXf.translate); renderVehBody(); }
       else if (tb.classList.contains('veh-tb-all')) { vehXf.allOpen = vehXf.allOpen === true ? false : true; renderVehScheda(); }
       else if (tb.classList.contains('veh-tb-cmp')) {
         if (vehXf.compare) vehXf.compare = null;
         else { const alt = (vehData && vehData.motorizzazioni || []).find(m => m.url !== vehSelUrl); vehXf.compare = alt ? alt.url : null; if (vehXf.compare) fetchVehSpecs(vehXf.compare); }
         renderVehScheda();
       }
-      else if (tb.classList.contains('veh-tb-copy')) {
-        const done = ok => { tb.textContent = ok ? 'Copiato ✓' : 'Non copiato'; setTimeout(() => { tb.textContent = 'Copia'; }, 1200); };
-        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(vehSchedaText()).then(() => done(true), () => done(false));
-        else done(false);   // contesto non-secure (http su IP LAN) → clipboard non disponibile
-      }
-      else if (tb.classList.contains('veh-tb-csv')) { vehDownload('scheda-tecnica.csv', vehSchedaCsv(), 'text/csv;charset=utf-8'); }
-      return;
+      return;   // summary Unità/Esporta (anch'essi .veh-tb-btn) → nessun ramo, il <details> nativo fa il toggle
     }
+    const showAllBtn = e.target.closest('.veh-showall');   // filtro anni: mostra tutte / filtra
+    if (showAllBtn) { vehShowAll = showAllBtn.dataset.showall === '1'; renderVehBody(); return; }
+    const genCard = e.target.closest('.veh-gen-card');   // griglia generazioni → scegli
+    if (genCard) { switchVehGen(genCard.dataset.slug); return; }
+    const motoCard = e.target.closest('.veh-moto-card');   // griglia motorizzazioni → scegli
+    if (motoCard) { vehSelUrl = motoCard.dataset.url; renderVehScheda(); fetchVehSpecs(vehSelUrl); return; }
     const grpHead = e.target.closest('.veh-grp-head');   // sezione accordion interna
     if (grpHead) { grpHead.parentElement.classList.toggle('veh-collapsed'); return; }
     const head = e.target.closest('.rc-sched-head'); if (!head) return;
     const g = head.closest('.rc-group'); g.classList.toggle('collapsed'); vehSchedaCollapsed = g.classList.contains('collapsed');
-    const s = vehSpecs[vehSelUrl];
-    if (!vehSchedaCollapsed && vehSelUrl && (!s || (!s.loading && !s.ok))) fetchVehSpecs(vehSelUrl);   // lazy: carica/riprova alla prima apertura
   });
   // combobox scheda: lista visibile filtrata + click/keyboard (come marca/modello); + ricerca-campo toolbar
   vehSchedaEl?.addEventListener('input', e => {
     if (e.target.classList.contains('veh-combo')) vehComboOpen(e.target, true);
     else if (e.target.classList.contains('veh-tb-q')) { vehXf.q = e.target.value; applyVehViewState(); }
   });
-  vehSchedaEl?.addEventListener('change', e => {   // selettori unità
-    if (!e.target.classList.contains('veh-tb-unit')) return;
-    const fam = e.target.dataset.fam;
-    if (e.target.value) vehXf.units[fam] = e.target.value; else delete vehXf.units[fam];
-    renderVehScheda();
+  vehSchedaEl?.addEventListener('change', e => {
+    if (e.target.classList.contains('veh-tb-unit')) {   // selettore unità → converti (solo corpo, il <details> resta aperto)
+      const fam = e.target.dataset.fam;
+      if (e.target.value) vehXf.units[fam] = e.target.value; else delete vehXf.units[fam];
+      const det = e.target.closest('.veh-units'); if (det) det.classList.toggle('has-adj', Object.values(vehXf.units).some(Boolean));
+      renderVehBody();
+    } else if (e.target.classList.contains('veh-hl-cb')) {   // checkbox "in evidenza" per-campo
+      const k = e.target.dataset.k;
+      if (e.target.checked) vehXf.highlight.add(k); else vehXf.highlight.delete(k);
+      renderVehBody();
+    }
   });
   vehSchedaEl?.addEventListener('focusin', e => { if (e.target.classList.contains('veh-combo')) { e.target.select?.(); vehComboOpen(e.target, false); } });
   vehSchedaEl?.addEventListener('focusout', e => { if (e.target.classList.contains('veh-combo')) { const inp = e.target; setTimeout(() => { vehComboClose(inp); vehComboRestore(inp); }, 150); } });
@@ -2472,43 +2485,123 @@ async function loadVehScheda() {
   const modello = p.modello || (selectedModel && selectedModel.nome) || '';
   if (!marca || !modello) { clearVehScheda(); return; }   // scheda solo con un modello specifico
   const anno = p.annoMin || p.annoMax || '';
-  vehSchedaCollapsed = true;   // scheda chiusa di default; le specs si caricano alla prima apertura
-  vehXf.compare = null; vehXf.q = '';   // reset confronto/ricerca-campo per la nuova ricerca (traduci/unità restano preferenze)
+  vehSchedaCollapsed = true;   // scheda chiusa di default
+  vehXf.compare = null; vehXf.q = ''; vehXf.highlight = new Set(); vehGenChosen = false; vehShowAll = false;   // reset per ricerca (traduci/unità restano preferenze)
   el.innerHTML = '<div class="rc-group"><div class="rc-group-body"><div class="rc-loading">Carico la scheda tecnica…</div></div></div>';
   try {
     const r = await fetch(`/api/scheda-veicolo?tipo=${encodeURIComponent(tipo)}&marca=${encodeURIComponent(marca)}&modello=${encodeURIComponent(modello)}&anno=${encodeURIComponent(anno)}`);
     const d = await r.json();
     if (my !== vehGen) return;   // una ricerca più recente ha già preso il posto → non toccare la scheda
-    if (!d.ok || !d.motorizzazioni || !d.motorizzazioni.length) { clearVehScheda(); return; }
-    vehData = d; vehSpecs = {}; vehSelUrl = d.motorizzazioni[0].url;
-    renderVehScheda();   // niente fetch specs qui: differito all'apertura (vedi listener collapse)
+    const hasData = d.ok && (((d.generations || []).length) || ((d.motorizzazioni || []).length));
+    if (!hasData) { clearVehScheda(); return; }
+    // NIENTE auto-selezione: l'utente sceglie generazione → motorizzazione. Moto: voci pronte subito.
+    vehData = d; vehSpecs = {}; vehSelUrl = null;
+    renderVehScheda();
   } catch (_) { if (my === vehGen) clearVehScheda(); }
 }
 
 function renderVehScheda() {
   const el = document.getElementById('vehicleScheda'); if (!el || !vehData) return;
   const d = vehData;
-  // combobox: input + lista visibile filtrata (come marca/modello). value = selezione corrente.
-  const combo = (cls, val, ph) => `<div class="ac-wrap veh-combo-wrap"><input type="text" class="veh-combo ${cls}" role="combobox" autocomplete="off" aria-autocomplete="list" aria-expanded="false" placeholder="${escapeHtml(ph)}" value="${escapeHtml(val)}"><ul class="ac-list veh-ac d-none" role="listbox"></ul></div>`;
-  const genSel = d.generations.length > 1
-    ? combo('veh-combo-gen', d.gen.name, 'Generazione…')
-    : `<span class="veh-gen-name">${escapeHtml(d.gen.name)}</span>`;
-  const curMoto = d.motorizzazioni.find(m => m.url === vehSelUrl) || d.motorizzazioni[0] || {};
-  const curLabel = curMoto.label ? curMoto.label + (curMoto.hp ? ` · ${curMoto.hp} CV` : '') : '';
-  const motoSel = combo('veh-combo-moto', curLabel, 'Cerca…');
+  const tipo = d.source && /ultimatespecs/i.test(d.source) ? 'moto' : 'auto';
+  // combobox (search + dropdown): input vuoto di default; value = etichetta solo dopo la scelta. Caret = dropdown.
+  const combo = (cls, val, ph) => `<div class="ac-wrap veh-combo-wrap"><input type="text" class="veh-combo ${cls}" role="combobox" autocomplete="off" aria-autocomplete="list" aria-expanded="false" placeholder="${escapeHtml(ph)}" value="${escapeHtml(val)}"><span class="veh-combo-caret">${icon('chevron')}</span><ul class="ac-list veh-ac d-none" role="listbox"></ul></div>`;
+  const genSel = tipo === 'auto' && d.generations.length
+    ? combo('veh-combo-gen', vehGenChosen && d.gen ? d.gen.name : '', 'Generazione')
+    : '';
+  const curMoto = d.motorizzazioni.find(m => m.url === vehSelUrl) || {};
+  const curLabel = vehSelUrl && curMoto.label ? curMoto.label + (curMoto.hp ? ` · ${curMoto.hp} CV` : '') : '';
+  const motoSel = combo('veh-combo-moto', curLabel, tipo === 'moto' ? 'Anno / allestimento' : 'Motorizzazione');
+  const itBtn = `<button type="button" class="veh-tb-btn veh-it${vehXf.translate ? ' on' : ''}" title="Traduci in italiano">IT</button>`;
   // toolbar + combos vivono FUORI da .rc-sch-secs (persistenti): l'arrivo async delle specs
   // aggiorna solo .rc-sch-secs (renderVehBody) senza distruggere ciò che l'utente sta digitando.
   el.innerHTML = `<div class="rc-group${vehSchedaCollapsed ? ' collapsed' : ''}">`
     + `<button type="button" class="rc-group-head rc-sched-head"><span class="rc-gcaret">${icon('chevron')}</span><span class="rc-group-title">Scheda tecnica</span><span class="rc-group-meta">${escapeHtml(d.title)}</span></button>`
-    + `<div class="rc-group-body"><div class="veh-sel-row">${genSel}${motoSel}<a class="veh-src" href="${escapeHtml((vehSelUrl || '').replace(/[^a-z0-9:/._-]/gi, ''))}" target="_blank" rel="noopener">${escapeHtml(d.source || 'fonte')}</a></div>${vehToolbarHTML()}<div class="rc-sch-secs">${vehBodyHTML()}</div></div></div>`;
+    + `<div class="rc-group-body"><div class="veh-sel-row">${genSel}${motoSel}${itBtn}</div>${vehToolbarHTML()}<div class="rc-sch-secs">${vehBodyHTML()}</div></div></div>`;
   applyVehViewState();   // ri-applica ricerca-campo + espandi/comprimi dopo ogni render
 }
 function vehBodyHTML() {
-  const spec = vehSpecs[vehSelUrl];
   const tipo = vehData && vehData.source && /ultimatespecs/i.test(vehData.source) ? 'moto' : 'auto';
+  if (tipo === 'auto' && !vehGenChosen) return vehGenGridHTML();   // griglia foto generazioni (auto)
+  if (!vehSelUrl) {
+    if (!((vehData && vehData.motorizzazioni) || []).length) return '<div class="rc-empty">Nessuna motorizzazione per questa selezione.</div>';
+    return vehMotoGridHTML(tipo);   // griglia card motorizzazione/anno
+  }
+  const spec = vehSpecs[vehSelUrl];
   if (!spec || spec.loading) return '<div class="rc-loading">Carico le specifiche…</div>';
   if (!spec.ok || !spec.groups || !spec.groups.length) return '<div class="rc-empty">Specifiche non disponibili per questa motorizzazione.</div>';
-  return vehKeySpecsHTML(spec, tipo) + vehSectionsHTML(spec);
+  return (vehXf.compare ? '' : vehHlBandHTML(spec)) + vehSectionsHTML(spec);
+}
+// ── Filtro/suggerimento per anno (dai filtri ricerca "anno da/anno a"): suggerisce ma NON sceglie ──
+function vehYearFilter() {
+  const p = lastSearchParams || {};
+  const min = Number(p.annoMin) || null, max = Number(p.annoMax) || null;
+  return (min || max) ? { min, max } : null;
+}
+function vehInRange(s, e, f) {   // periodo [s,e] (e null = ancora in produzione) interseca [f.min,f.max]?
+  if (s == null) return false;
+  return s <= (f.max || Infinity) && (e == null ? Infinity : e) >= (f.min || -Infinity);
+}
+function vehItemYears(m) {   // start + end dai campi years/yearRange/year
+  if (Array.isArray(m.years)) return m.years.length ? [Math.min(...m.years), Math.max(...m.years)] : [null, null];
+  const s = m.year || null, em = /–\s*(\d{4})/.exec(m.yearRange || '');
+  const e = em ? Number(em[1]) : (/–\s*$/.test(m.yearRange || '') ? null : s);   // "2024–" = aperto; singolo = s
+  return [s, e];
+}
+function vehYearNoteHTML(f, hidden, showAll, noMatch) {
+  const label = f.min && f.max ? `${f.min}–${f.max}` : (f.min ? `dal ${f.min}` : `fino al ${f.max}`);
+  if (noMatch) return `<div class="veh-year-note">Nessuna corrisponde al periodo cercato (${label}) — le mostro tutte.</div>`;
+  return showAll
+    ? `<div class="veh-year-note">Anni cercati ${label} <span class="veh-sug-dot"></span>evidenziati. <button type="button" class="veh-showall" data-showall="0">Filtra per periodo</button></div>`
+    : `<div class="veh-year-note">Filtrate per anni ${label}${hidden ? ` · ${hidden} nascoste` : ''}. <button type="button" class="veh-showall" data-showall="1">Mostra tutte</button></div>`;
+}
+// grid generica con filtro/evidenza per anno (mai auto-seleziona)
+function vehCardGrid(items, cardFn, gridClass, hint) {
+  const f = vehYearFilter();
+  const ann = items.map(it => ({ it, match: f ? vehInRange(...vehItemYears(it), f) : false }));
+  const anyMatch = f && ann.some(x => x.match);
+  const showAll = !f || vehShowAll || !anyMatch;
+  const shown = showAll ? ann : ann.filter(x => x.match);
+  const note = f ? vehYearNoteHTML(f, ann.length - shown.length, showAll, !anyMatch) : '';
+  const cards = shown.map(x => cardFn(x.it, showAll && anyMatch && x.match)).join('');   // badge "suggerito" solo mostrando tutte
+  return `<div class="veh-gen-pick"><div class="veh-gen-pick-hint">${escapeHtml(hint)}</div>${note}<div class="${gridClass}">${cards}</div></div>`;
+}
+
+// Griglia visiva selezione generazione (auto): card foto + nome + anni.
+function vehGenCardHTML(g, sug) {
+  const prefix = new RegExp('^' + `${(vehData && vehData.marca) || ''} ${(vehData && vehData.modello) || ''} `.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  const img = /^https:\/\/(www\.)?auto-data\.net\//i.test(g.img || '') ? g.img : '';
+  const name = String(g.name || '').replace(prefix, '') || g.name;
+  const yr = g.years && g.years.length ? `${Math.min(...g.years)}–${Math.max(...g.years)}` : '';
+  return `<button type="button" class="veh-gen-card${sug ? ' veh-card-sug' : ''}" data-slug="${escapeHtml(g.slug)}">`
+    + (img ? `<img class="veh-gen-card-img" src="${escapeHtml(img)}" alt="" loading="lazy">` : '<span class="veh-gen-card-noimg"></span>')
+    + `<span class="veh-gen-card-name">${escapeHtml(name)}</span>${yr ? `<span class="veh-gen-card-years">${escapeHtml(yr)}</span>` : ''}</button>`;
+}
+function vehGenGridHTML() {
+  const gens = (vehData && vehData.generations) || [];
+  if (!gens.length) return '<div class="rc-empty">Nessuna generazione disponibile.</div>';
+  return vehCardGrid(gens, vehGenCardHTML, 'veh-gen-grid', 'Scegli la generazione dalla foto:');
+}
+// Griglia card motorizzazione: anno in evidenza + label + hp/carburante. Selezione via click.
+function vehMotoCardHTML(m, sug) {
+  const yr = m.yearRange || (m.year ? String(m.year) : '');
+  const meta = [m.hp ? `${m.hp} CV` : '', m.fuel || ''].filter(Boolean).join(' · ');
+  return `<button type="button" class="veh-moto-card${sug ? ' veh-card-sug' : ''}" data-url="${escapeHtml(m.url)}">`
+    + `<span class="veh-moto-card-year">${escapeHtml(yr || '—')}</span>`
+    + `<span class="veh-moto-card-label">${escapeHtml(m.label)}</span>`
+    + (meta ? `<span class="veh-moto-card-meta">${escapeHtml(meta)}</span>` : '') + `</button>`;
+}
+function vehMotoGridHTML(tipo) {
+  const list = (vehData && vehData.motorizzazioni) || [];
+  return vehCardGrid(list, vehMotoCardHTML, 'veh-moto-grid', `Scegli ${tipo === 'moto' ? "l'annata / allestimento" : 'la motorizzazione'}:`);
+}
+// banda "In evidenza": SOLO i campi spuntati dall'utente (niente highlight automatico)
+function vehHlBandHTML(spec) {
+  if (!vehXf.highlight.size) return '';
+  const flat = {}; spec.groups.forEach(g => g.rows.forEach(r => { if (flat[r.k] == null) flat[r.k] = r; }));
+  const picks = [...vehXf.highlight].map(k => flat[k]).filter(Boolean).map(vehXfRow);
+  if (!picks.length) return '';
+  return `<div class="veh-hl-band">${picks.map(r => `<div class="veh-ks veh-hl"><span class="veh-ks-k">${escapeHtml(r.k)}</span><span class="veh-ks-v">${escapeHtml(r.v)}</span></div>`).join('')}</div>`;
 }
 // aggiorna SOLO il corpo dati (toolbar/combos restano): usato all'arrivo async delle specs
 function renderVehBody() {
@@ -2518,29 +2611,30 @@ function renderVehBody() {
   applyVehViewState();
 }
 
+const VEH_UNIT_ROWS = [
+  ['len', 'Lunghezze', [['', 'mm'], ['cm', 'cm'], ['m', 'm']]],
+  ['disp', 'Cilindrata', [['', 'cm³'], ['L', 'L']]],
+  ['mass', 'Peso', [['', 'kg'], ['t', 't']]],
+  ['pow', 'Potenza', [['', 'CV/Hp'], ['kW', 'kW']]],
+  ['trq', 'Coppia', [['', 'Nm'], ['kgm', 'kgm']]],
+];
 function vehToolbarHTML() {
-  const unit = (fam, opts) => `<select class="veh-tb-unit" data-fam="${fam}" aria-label="unità ${fam}">${opts.map(([v, l]) => `<option value="${v}"${(vehXf.units[fam] || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
+  const unitsActive = Object.values(vehXf.units).some(Boolean);
+  const unitsMenu = VEH_UNIT_ROWS.map(([fam, lab, opts]) => `<label class="veh-u-row"><span>${lab}</span><select class="veh-tb-unit" data-fam="${fam}" aria-label="${lab}">${opts.map(([v, l]) => `<option value="${v}"${(vehXf.units[fam] || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`).join('');
   let cmpCombo = '';
   if (vehXf.compare) {
     const cm = vehData.motorizzazioni.find(m => m.url === vehXf.compare) || {};
     const cl = cm.label ? cm.label + (cm.hp ? ` · ${cm.hp} CV` : '') : '';
-    cmpCombo = `<div class="ac-wrap veh-combo-wrap"><input type="text" class="veh-combo veh-combo-cmp" role="combobox" autocomplete="off" aria-autocomplete="list" aria-expanded="false" placeholder="Confronta con…" value="${escapeHtml(cl)}"><ul class="ac-list veh-ac d-none" role="listbox"></ul></div>`;
+    cmpCombo = `<div class="ac-wrap veh-combo-wrap"><input type="text" class="veh-combo veh-combo-cmp" role="combobox" autocomplete="off" aria-autocomplete="list" aria-expanded="false" placeholder="Confronta con…" value="${escapeHtml(cl)}"><span class="veh-combo-caret">${icon('chevron')}</span><ul class="ac-list veh-ac d-none" role="listbox"></ul></div>`;
   }
   return `<div class="veh-toolbar">`
-    + `<button type="button" class="veh-tb-btn veh-tb-tr${vehXf.translate ? ' on' : ''}">Traduci IT</button>`
-    + `<span class="veh-tb-units">Unità ${unit('len', [['', 'mm'], ['cm', 'cm'], ['m', 'm']])}${unit('disp', [['', 'cm³'], ['L', 'L']])}${unit('mass', [['', 'kg'], ['t', 't']])}${unit('pow', [['', 'CV/Hp'], ['kW', 'kW']])}${unit('trq', [['', 'Nm'], ['kgm', 'kgm']])}</span>`
-    + `<input type="search" class="veh-tb-q" placeholder="Cerca campo…" value="${escapeHtml(vehXf.q)}">`
+    + `<div class="veh-q-wrap">${icon('search', 'veh-q-ico')}<input type="search" class="veh-tb-q" placeholder="Cerca campo…" value="${escapeHtml(vehXf.q)}"></div>`
+    + `<details class="tb-cols veh-units${unitsActive ? ' has-adj' : ''}"><summary class="veh-tb-btn">Unità</summary><div class="tb-cols-menu veh-units-menu">${unitsMenu}</div></details>`
     + `<button type="button" class="veh-tb-btn veh-tb-all">${vehXf.allOpen === true ? 'Comprimi tutto' : 'Espandi tutto'}</button>`
     + `<button type="button" class="veh-tb-btn veh-tb-cmp${vehXf.compare ? ' on' : ''}">Confronta</button>`
-    + `<button type="button" class="veh-tb-btn veh-tb-copy">Copia</button>`
-    + `<button type="button" class="veh-tb-btn veh-tb-csv">CSV</button>`
+    + `<details class="tb-cols veh-export"><summary class="veh-tb-btn">Esporta</summary><div class="tb-cols-menu veh-export-menu"><button type="button" class="veh-exp" data-exp="copia">Copia negli appunti</button><button type="button" class="veh-exp" data-exp="csv">Scarica CSV</button><button type="button" class="veh-exp" data-exp="pdf">Scarica PDF</button></div></details>`
     + cmpCombo
     + `</div>`;
-}
-function vehKeySpecsHTML(spec, tipo) {
-  const ks = vehKeySpecs(spec, tipo);
-  if (!ks.length) return '';
-  return `<div class="veh-keyspecs">${ks.map(r => `<div class="veh-ks"><span class="veh-ks-k">${escapeHtml(r.k)}</span><span class="veh-ks-v">${escapeHtml(r.v)}</span></div>`).join('')}</div>`;
 }
 function vehGrpHTML(title, count, i, bodyInner, extraCls) {
   return `<div class="veh-grp${i === 0 ? '' : ' veh-collapsed'}"><button type="button" class="veh-grp-head"><span class="veh-grp-caret">${icon('chevron')}</span><span class="veh-grp-tit">${escapeHtml(title)}</span><span class="veh-grp-count">${count}</span></button><div class="veh-grp-body${extraCls || ''}">${bodyInner}</div></div>`;
@@ -2572,7 +2666,13 @@ function vehSectionsHTML(spec) {
     }).join('');
     return head + note + secs;
   }
-  return vehXfGroups(spec).map((g, i) => vehGrpHTML(g.title, g.rows.length, i, g.rows.map(r => `<div class="veh-row"><span class="veh-k">${escapeHtml(r.k)}</span><span class="veh-v">${escapeHtml(r.v)}</span></div>`).join('')) ).join('');
+  return spec.groups.map((g, gi) => {
+    const inner = g.rows.map(r => {
+      const hl = vehXf.highlight.has(r.k);
+      return `<div class="veh-row${hl ? ' veh-hl' : ''}"><input type="checkbox" class="veh-hl-cb" data-k="${escapeHtml(r.k)}"${hl ? ' checked' : ''} title="Metti in evidenza"><span class="veh-k">${escapeHtml(vehTrKey(r.k))}</span><span class="veh-v">${escapeHtml(vehTrVal(vehConv(r.v)))}</span></div>`;
+    }).join('');
+    return vehGrpHTML(g.title, g.rows.length, gi, inner);
+  }).join('');
 }
 // ricerca-campo + espandi/comprimi: manipola il DOM (niente re-render → non perde il focus)
 function applyVehViewState() {
@@ -2616,7 +2716,8 @@ async function switchVehGen(genSlug) {
     const r = await fetch(`/api/scheda-veicolo?tipo=${encodeURIComponent(tipo)}&marca=${encodeURIComponent(vehData.marca)}&modello=${encodeURIComponent(vehData.modello)}&gen=${encodeURIComponent(genSlug)}`);
     const d = await r.json();
     if (my !== vehGen) return;   // una selezione/ricerca più recente ha già preso il posto
-    if (d.ok && d.motorizzazioni && d.motorizzazioni.length) { vehData = d; vehSpecs = {}; vehXf.compare = null; vehSelUrl = d.motorizzazioni[0].url; renderVehScheda(); fetchVehSpecs(vehSelUrl); }
+    // gen scelta: aggiorna le voci ma NON auto-selezionare la motorizzazione (la sceglie l'utente)
+    if (d.ok && d.generations) { vehData = d; vehSpecs = {}; vehXf.compare = null; vehSelUrl = null; vehGenChosen = true; vehShowAll = false; renderVehScheda(); }
     else if (secs) secs.innerHTML = '<div class="rc-empty">Nessuna specifica per questa generazione.</div>';
   } catch (_) { if (my === vehGen && secs) secs.innerHTML = '<div class="rc-empty">Scheda non disponibile.</div>'; }
 }
@@ -2624,18 +2725,20 @@ async function switchVehGen(genSlug) {
 // ── Combobox scheda (lista visibile filtrata): sorgente/filtro/render/pick ──
 let vehAcActive = -1;   // indice evidenziato nella lista aperta (una sola alla volta)
 function vehComboSrc(input) {
-  if (input.classList.contains('veh-combo-gen')) return { kind: 'gen', src: ((vehData && vehData.generations) || []).map(g => ({ label: g.name, key: g.slug })) };
-  let src = ((vehData && vehData.motorizzazioni) || []).map(m => ({ label: m.label + (m.hp ? ` · ${m.hp} CV` : ''), key: m.url }));
+  if (input.classList.contains('veh-combo-gen')) return { kind: 'gen', src: ((vehData && vehData.generations) || []).map(g => ({ label: g.name, key: g.slug, img: g.img })) };
+  const tipo = vehData && vehData.source && /ultimatespecs/i.test(vehData.source) ? 'moto' : 'auto';
+  // auto: le motorizzazioni compaiono solo DOPO aver scelto la generazione
+  let src = (tipo === 'auto' && !vehGenChosen) ? [] : ((vehData && vehData.motorizzazioni) || []).map(m => ({ label: m.label + (m.hp ? ` · ${m.hp} CV` : ''), key: m.url }));
   if (input.classList.contains('veh-combo-cmp')) src = src.filter(x => x.key !== vehSelUrl);   // niente auto-confronto
   return { kind: 'moto', src };
 }
 // ripristina nel campo l'etichetta della selezione corrente (chiusura senza pick → non lasciare il testo-filtro)
 function vehComboRestore(input) {
   if (!vehData) return;
-  if (input.classList.contains('veh-combo-gen')) { input.value = vehData.gen.name; return; }
+  if (input.classList.contains('veh-combo-gen')) { input.value = vehGenChosen && vehData.gen ? vehData.gen.name : ''; return; }
   const url = input.classList.contains('veh-combo-cmp') ? vehXf.compare : vehSelUrl;
-  const m = vehData.motorizzazioni.find(x => x.url === url) || {};
-  input.value = m.label ? m.label + (m.hp ? ` · ${m.hp} CV` : '') : '';
+  const m = (vehData.motorizzazioni || []).find(x => x.url === url) || {};
+  input.value = url && m.label ? m.label + (m.hp ? ` · ${m.hp} CV` : '') : '';
 }
 function vehComboMatches(input) {
   const { src } = vehComboSrc(input);
@@ -2649,7 +2752,10 @@ function vehComboMatches(input) {
 function renderVehAc(input, matches) {
   const list = input.parentElement.querySelector('.veh-ac'); if (!list) return;
   if (!matches.length) { list.classList.add('d-none'); list.innerHTML = ''; input.setAttribute('aria-expanded', 'false'); return; }
-  list.innerHTML = matches.map((it, i) => `<li class="ac-item${i === vehAcActive ? ' active' : ''}" role="option" aria-selected="${i === vehAcActive}" data-key="${escapeHtml(it.key)}" data-label="${escapeHtml(it.label)}">${escapeHtml(it.label)}</li>`).join('');
+  list.innerHTML = matches.map((it, i) => {
+    const img = it.img && /^https:\/\/(www\.)?auto-data\.net\//i.test(it.img) ? it.img : '';   // solo thumb auto-data.net
+    return `<li class="ac-item${img ? ' veh-ac-photo' : ''}${i === vehAcActive ? ' active' : ''}" role="option" aria-selected="${i === vehAcActive}" data-key="${escapeHtml(it.key)}" data-label="${escapeHtml(it.label)}">${img ? `<img class="veh-ac-thumb" src="${escapeHtml(img)}" alt="" loading="lazy">` : ''}<span>${escapeHtml(it.label)}</span></li>`;
+  }).join('');
   list.classList.remove('d-none'); input.setAttribute('aria-expanded', 'true');
 }
 function vehComboOpen(input, useFilter) {
@@ -2668,13 +2774,16 @@ function pickVehCombo(input, key, label) {
   input.value = label;
   vehComboClose(input);
   if (input.classList.contains('veh-combo-gen')) switchVehGen(key);
-  else if (input.classList.contains('veh-combo-cmp')) { vehXf.compare = key; fetchVehSpecs(key); renderVehScheda(); }
-  else { vehSelUrl = key; fetchVehSpecs(vehSelUrl); }
+  else if (input.classList.contains('veh-combo-cmp')) { vehXf.compare = key; renderVehBody(); fetchVehSpecs(key); }
+  else { vehSelUrl = key; renderVehBody(); fetchVehSpecs(vehSelUrl); }
 }
 
 // ─── Toolbar scheda: trasformazioni NON distruttive (dati grezzi intatti) ─────
 // Stato persistente tra i re-render e i cambi di voce. compare = 2a voce da confrontare.
-const vehXf = { translate: false, units: {}, q: '', allOpen: null, compare: null };
+// translate ON di default; highlight = Set di chiavi-campo messe in evidenza dall'utente.
+const vehXf = { translate: true, units: {}, q: '', allOpen: null, compare: null, highlight: new Set() };
+let vehGenChosen = false;   // auto: le motorizzazioni compaiono solo dopo aver scelto la generazione
+let vehShowAll = false;     // griglie: false = filtra per anni cercati, true = mostra tutte
 
 // Dizionario chiavi EN→IT (campi osservati su auto-data.net + ultimatespecs). Non mappato → invariato.
 const VEH_TR_KEY = {
@@ -2742,16 +2851,6 @@ function vehXfGroups(spec) {
   return spec.groups.map(g => ({ title: g.title, rows: g.rows.map(vehXfRow) })).filter(g => g.rows.length);
 }
 
-// Key specs "in evidenza": campi chiave per tipo (match sulla chiave grezza).
-const VEH_KEYSPECS = {
-  auto: ['Power', 'Engine displacement', 'Acceleration 0 - 100 km/h', 'Maximum speed', 'Fuel Type', 'Kerb Weight', 'Number of gears and type of gearbox'],
-  moto: ['Maximum power - Output - Horsepower', 'Engine size - Displacement - Engine capacity', 'Maximum torque', 'Curb Weight (including fluids)', 'Seat Height', 'Fuel Tank Capacity'],
-};
-function vehKeySpecs(spec, tipo) {
-  const flat = {}; spec.groups.forEach(g => g.rows.forEach(r => { if (flat[r.k] == null) flat[r.k] = r; }));
-  return (VEH_KEYSPECS[tipo] || []).map(k => flat[k]).filter(Boolean).map(vehXfRow);
-}
-
 // Testo/CSV della scheda (post-trasformazioni) per Copia / Esporta.
 function vehSchedaText() {
   const spec = vehSpecs[vehSelUrl]; if (!spec || !spec.groups) return '';
@@ -2769,6 +2868,33 @@ function vehSchedaCsv() {
 function vehDownload(name, text, mime) {
   const blob = new Blob([text], { type: mime }); const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+// PDF scheda (riuso jsPDF + autoTable come exportPdf). Righe in evidenza sfondo azzurro.
+function vehSchedaPdf() {
+  if (!window.jspdf) return;
+  const spec = vehSpecs[vehSelUrl]; if (!spec || !spec.groups) return;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const INK = [20, 24, 31], ACCENT = [31, 111, 235], WHITE = [255, 255, 255], HL = [230, 240, 253];
+  const cur = (vehData.motorizzazioni.find(m => m.url === vehSelUrl) || {}).label || '';
+  doc.setFillColor(...INK); doc.rect(0, 0, pageW, 22, 'F');
+  doc.setFillColor(...ACCENT); doc.rect(14, 7, 7, 7, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...WHITE); doc.text('SCHEDA TECNICA', 25, 12);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(170, 185, 210);
+  doc.text(`${vehData.title}${cur ? ' · ' + cur : ''}`.slice(0, 95), 25, 17.5);
+  const body = [];
+  for (const g of vehXfGroups(spec)) for (const r of g.rows) body.push([g.title, r.k, r.v]);
+  const hlKeys = new Set([...vehXf.highlight].map(vehTrKey));   // chiavi evidenziate (post-traduzione, come in tabella)
+  doc.autoTable({
+    startY: 28, head: [['Sezione', 'Campo', 'Valore']], body, theme: 'plain',
+    styles: { font: 'helvetica', fontSize: 8, cellPadding: { top: 2, right: 3, bottom: 2, left: 3 }, valign: 'middle', overflow: 'linebreak' },
+    headStyles: { fillColor: INK, textColor: WHITE, fontStyle: 'bold' },
+    columnStyles: { 0: { cellWidth: 40, textColor: [91, 100, 114] }, 1: { cellWidth: 58, fontStyle: 'bold' }, 2: { cellWidth: 'auto' } },
+    didParseCell: c => { if (c.section === 'body' && hlKeys.has(c.row.raw[1])) c.cell.styles.fillColor = HL; },
+  });
+  const name = `scheda-${(vehData.marca || '')}-${(vehData.modello || '')}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'scheda';
+  doc.save(name + '.pdf');
 }
 
 // review: i titoli arrivano da siti esterni → anti formula-injection. Un valore che inizia
