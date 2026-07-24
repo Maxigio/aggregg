@@ -44,7 +44,7 @@ function httpGetText(url, redirects = 0) {
   });
 }
 
-const slugOf = href => String(href || '').replace(/^https?:\/\/[^/]+/, '').replace(/^\/?(en\/)?/, '').replace(/\/+$/, '');
+const slugOf = href => String(href || '').replace(/^https?:\/\/[^/]+/, '').replace(/^\/?(?:[a-z]{2}\/)?/, '').replace(/\/+$/, '');   // toglie prefisso lingua (/en/ | /it/ | …): lo slug è indipendente dalla lingua
 const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
 
 // allbrands → [{ name, slug }] (slug es. "volkswagen-brand-80")

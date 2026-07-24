@@ -50,6 +50,14 @@ test('prettyLabel: normalizza sigle e potenza', () => {
   assert.strictEqual(vs.prettyLabel('r-2.0-tsi-300hp-4motion-dsg'), 'R 2.0 TSI 300 Hp 4MOTION DSG');
 });
 
+test('slugOf: toglie il prefisso lingua (/en/ e /it/), non intacca slug senza lingua', () => {
+  assert.strictEqual(vs.slugOf('/it/volkswagen-golf-viii-variant-facelift-2024-generation-9900'), 'volkswagen-golf-viii-variant-facelift-2024-generation-9900');   // regressione: prima restava "it/…" → URL /it/it/… → 404
+  assert.strictEqual(vs.slugOf('/en/bmw-3-series-model-953'), 'bmw-3-series-model-953');
+  assert.strictEqual(vs.slugOf('https://www.auto-data.net/it/bmw-3-series-coupe-e30-318i-105hp-46133'), 'bmw-3-series-coupe-e30-318i-105hp-46133');
+  assert.strictEqual(vs.slugOf('/volkswagen-golf-model-896'), 'volkswagen-golf-model-896');   // niente prefisso lingua → invariato
+  assert.strictEqual(vs.slugOf('/it/audi-a4-model-501/'), 'audi-a4-model-501');   // slash finale via
+});
+
 test('parseTrimSpecs: pagina /it/ — identità italiana esclusa, gruppi bilingue, cleanVal range imperiale', () => {
   const html = '<table class="cardetailsout">'
     + '<tr><th>Marca</th><td>BMW</td></tr>'
