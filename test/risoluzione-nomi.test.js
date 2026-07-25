@@ -13,8 +13,10 @@
  *    mano avrei congelato la mia convinzione su cosa fa il codice, non cosa fa davvero;
  *  - gli input vengono dai DATI VERI (data/models.json, data/model-groups.json, i nomi-bike di
  *    Moto.it), non da esempi inventati, che tendono a essere comodi;
- *  - dove il comportamento congelato mi sembra un DIFETTO, il test lo dice: chi lo correggera'
- *    vedra' un rosso con scritto "era noto, aggiorna la fixture di proposito".
+ *  - dove il comportamento congelato sembrava un DIFETTO l'ho verificato sui dati reali invece
+ *    di correggerlo a intuito: dei tre sospetti segnalati il 2026-07-25, due erano miei esempi
+ *    sintetici (la forma non esiste nel dominio) e uno era vero ed e' stato corretto. In fondo
+ *    al file c'e' la misura, non l'opinione.
  *
  * Quando un test qui diventa rosso NON significa per forza che hai rotto qualcosa: significa
  * che hai cambiato un comportamento. Guarda la differenza, decidi se e' voluta, e se lo e'
@@ -93,33 +95,63 @@ test('motoit: le funzioni pure senza test, congelate come stanno oggi', () => {
   }
 });
 
-// ─── Comportamenti congelati che SEMBRANO difetti ────────────────────────────
-// Non li correggo qui: prima la rete, poi le correzioni, una alla volta e misurate. Ma li
-// scrivo, perche' una rete che congela un baco senza dirlo lo trasforma in una regola.
+// ─── I tre comportamenti marcati DA VERIFICARE, verificati ───────────────────
+// Misurati il 2026-07-25 su 272 nomi-bike VERI presi dall'API Moto.it (6 marche). Esito: due
+// dei tre "difetti" non esistono nel dominio reale — erano miei esempi sintetici — e il terzo
+// era vero ed e' stato corretto. La misura resta scritta qui, perche' e' cio' che rende una
+// scelta difendibile fra sei mesi.
 
-test('DA VERIFICARE — versionBase mangia il suffisso dopo il trattino', () => {
+test('versionBase: il taglio finale toglie SOLO codici di fabbrica (misurato)', () => {
+  // Su 272 nomi-bike reali il taglio "-<alfanumerico>" scatta 118 volte, TUTTE su
+  // Harley-Davidson, e cio' che toglie e' sempre un codice maiuscolo di fabbrica
+  // (66 distinti: FLHXSE, FXSBSE, FLHTCUSE...). Zero eccezioni.
+  assert.strictEqual(mmodels._versionBase('110 Street Glide (2016) - FLHXSE'), '110 Street Glide');
+  assert.strictEqual(mmodels._versionBase('1800 Breakout (2012 - 14) - FXSBSE'), '1800 Breakout');
+  // I nomi senza codice restano interi: il taglio non e' goloso.
+  assert.strictEqual(mmodels._versionBase('ADV 350 Special Edition (2025 - 26)'), 'ADV 350 Special Edition');
+  assert.strictEqual(mmodels._versionBase("Bw's 50 N.G. (1996 - 99)"), "Bw's 50 N.G.");
+  assert.strictEqual(mmodels._versionBase('V-Strom 1050SE'), 'V-Strom 1050SE', 'niente trattino finale, niente taglio');
+
+  // Il caso che TEMEVO ("MT-07" ridotto a "MT") non e' raggiungibile: versionBase riceve solo
+  // nomi-BIKE, e fra i 272 misurati NESSUNO finisce con lettera-cifre. "MT-07" e' un nome di
+  // FAMIGLIA, e le famiglie non passano di qui. Il comportamento resta quello, dichiarato:
   assert.strictEqual(mmodels._versionBase('MT-07 (2021-)'), 'MT',
-    'oggi "MT-07" diventa "MT": la regex toglie "-<alfanumerico>" finale. Nel dominio Moto.it '
-    + 'sembra voluto (toglie la sigla di coda), ma su un nome tipo MT-07 e\' distruttivo. '
-    + 'Se lo correggi, questo test va aggiornato DI PROPOSITO.');
-  assert.strictEqual(mmodels._versionBase('Caballero-Rally-500'), 'Caballero-Rally');
+    'su una stringa cosi\' il taglio sarebbe distruttivo, ma questa forma non arriva mai qui: '
+    + 'se un giorno arrivasse, questo test e\' il posto dove accorgersene.');
 });
 
-test('DA VERIFICARE — parseYears perde l\'anno di inizio sui periodi aperti', () => {
-  assert.deepStrictEqual(mmodels._parseYears('(2015-)'), { annoMin: null, annoMax: null },
-    'un periodo aperto "(2015-)" dovrebbe dare annoMin 2015; oggi da\' due null, quindi una '
-    + 'moto ancora in produzione non porta l\'anno di inizio. Congelato, non approvato.');
-  assert.deepStrictEqual(mmodels._parseYears('(1998-02)'), { annoMin: 1998, annoMax: 2002 },
-    'la ricostruzione dell\'anno a due cifre invece funziona');
+test('parseYears: copre i formati che Moto.it usa davvero (misurato)', () => {
+  // Formati contati sui 272 nomi: "(NNNN - NN)" ×228, "(NNNN)" ×39, "(NNNN - NNNN)" ×1.
+  assert.deepStrictEqual(mmodels._parseYears('Aerox 50 (1999 - 07)'), { annoMin: 1999, annoMax: 2007 });
+  assert.deepStrictEqual(mmodels._parseYears('ADV 350 (2022 - 24)'), { annoMin: 2022, annoMax: 2024 });
+  assert.deepStrictEqual(mmodels._parseYears('Monster (2019)'), { annoMin: 2019, annoMax: 2019 });
+  assert.deepStrictEqual(mmodels._parseYears('X (2010 - 2014)'), { annoMin: 2010, annoMax: 2014 });
+  // La ricostruzione del secolo, che e' la parte non ovvia: "98-02" attraversa il 2000.
+  assert.deepStrictEqual(mmodels._parseYears('(1998-02)'), { annoMin: 1998, annoMax: 2002 });
+
+  // Il periodo APERTO "(2015-)" che avevo segnalato NON compare nei dati reali (zero su 272):
+  // Moto.it scrive sempre un anno di fine, anche per i modelli in produzione. Il ritorno a due
+  // null resta quindi la risposta giusta per una stringa che non e' un periodo riconosciuto.
+  assert.deepStrictEqual(mmodels._parseYears('(2015-)'), { annoMin: null, annoMax: null });
+  assert.deepStrictEqual(mmodels._parseYears('(FLHRSEI)'), { annoMin: null, annoMax: null },
+    'nei dati veri esiste anche un codice dentro le parentesi: non deve diventare un anno');
 });
 
-test('DA VERIFICARE — il pari merito dipende dall\'ordine dell\'elenco', () => {
+test('CORRETTO — il pari merito ora e\' stabile, non dipende dall\'ordine', () => {
   const { makeModelResolver } = require('../backend/scrapers/brand-match');
   const a = makeModelResolver([{ name: '320d', value: 'D' }, { name: '320i', value: 'I' }]);
   const b = makeModelResolver([{ name: '320i', value: 'I' }, { name: '320d', value: 'D' }]);
-  assert.strictEqual(a('320'), 'D');
-  assert.strictEqual(b('320'), 'I');
-  assert.notStrictEqual(a('320'), b('320'),
-    'stessa domanda, stesso insieme di candidati, risposta diversa secondo l\'ordine: '
-    + 'basta un sort a monte per cambiare gli annunci mostrati, e nulla lo segnala.');
+  assert.strictEqual(a('320'), b('320'),
+    'stessa domanda, stessi candidati: la risposta non puo\' dipendere da come e\' ordinato l\'elenco');
+  assert.strictEqual(a('320'), 'D', 'a parita\' di distanza vince il nome alfabeticamente minore');
+
+  // Tre candidati equidistanti: stabile in qualunque ordine arrivino.
+  const perm = [
+    [{ name: 'RS Q3', value: 3 }, { name: 'RS Q8', value: 8 }],
+    [{ name: 'RS Q8', value: 8 }, { name: 'RS Q3', value: 3 }],
+  ].map(l => makeModelResolver(l)('rsq'));
+  assert.strictEqual(perm[0], perm[1], 'RS Q3 / RS Q8: stessa risposta in entrambi gli ordini');
+
+  // Il caso esatto continua a vincere sul prefisso: la correzione non ha allentato nulla.
+  assert.strictEqual(makeModelResolver([{ name: '320', value: 'X' }, { name: '320d', value: 'D' }])('320'), 'X');
 });

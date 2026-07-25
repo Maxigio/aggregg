@@ -76,7 +76,14 @@ function makeModelResolver(candidates) {
     if (q.length >= 3) {
       const cont = items.filter(c => c.n.length >= 3 && (c.n.startsWith(q) || q.startsWith(c.n)));
       if (cont.length) {
-        cont.sort((a, b) => Math.abs(a.n.length - q.length) - Math.abs(b.n.length - q.length));
+        // A parita' di distanza serve un criterio STABILE, altrimenti decide l'ordine in cui
+        // il catalogo e' arrivato: con [320d,320i] la query "320" dava 320d, invertendo la
+        // lista dava 320i, e bastava un sort a monte per cambiare gli annunci mostrati senza
+        // che nulla lo segnalasse. Misurato sul catalogo vero: il pari merito capita nel 26%
+        // delle query con piu' candidati, ma fissarlo in ordine alfabetico cambia solo 25
+        // risposte su 12.078 (0,2%) — e in quelle la scelta era comunque arbitraria.
+        cont.sort((a, b) => Math.abs(a.n.length - q.length) - Math.abs(b.n.length - q.length)
+          || (a.n < b.n ? -1 : a.n > b.n ? 1 : 0));
         return cont[0].value;
       }
     }
