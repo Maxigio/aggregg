@@ -314,18 +314,31 @@ async function init() {
       if (e.target.value) vehXf.units[fam] = e.target.value; else delete vehXf.units[fam];
       const det = e.target.closest('.veh-units'); if (det) det.classList.toggle('has-adj', Object.values(vehXf.units).some(Boolean));
       renderVehBody();
-    } else if (e.target.classList.contains('veh-carb-prov')) {   // provincia per il prezzo carburante
-      try { localStorage.setItem('amrCarbProvincia', e.target.value); } catch (_) {}
-      renderVehBody();
-    } else if (e.target.classList.contains('veh-carb-km')) {     // km/anno per la stima
-      try { localStorage.setItem('amrCarbKm', e.target.value); } catch (_) {}
-      renderVehBody();
     } else if (e.target.classList.contains('veh-hl-cb')) {   // checkbox "in evidenza" per-campo
       const k = e.target.dataset.k;
       if (e.target.checked) vehXf.highlight.add(k); else vehXf.highlight.delete(k);
       renderVehBody();
     }
   });
+  // Pannello "Costi e mercato": vive in #vehicleMercato, quindi ha i SUOI listener.
+  // (I gestori stavano dentro quelli della scheda e non scattavano mai: elemento sbagliato.)
+  const vehMercatoEl = document.getElementById('vehicleMercato');
+  vehMercatoEl?.addEventListener('click', e => {
+    const h = e.target.closest('.mk-head'); if (!h) return;
+    const g = h.closest('.rc-group'); g.classList.toggle('collapsed');
+    mkAperto = !g.classList.contains('collapsed');
+    if (mkAperto && (mkStato === 'mai' || mkStato === 'ko' || mkChiaveCaricata !== mkChiave())) mkCarica();
+  });
+  vehMercatoEl?.addEventListener('change', e => {
+    if (e.target.classList.contains('veh-carb-prov')) {        // provincia: prezzo carburante E IPT
+      try { localStorage.setItem('amrCarbProvincia', e.target.value); } catch (_) {}
+      mkCarica();                                              // l'IPT si calcola nel backend
+    } else if (e.target.classList.contains('veh-carb-km')) {   // km/anno: solo ricalcolo locale
+      try { localStorage.setItem('amrCarbKm', e.target.value); } catch (_) {}
+      mkRenderBody();
+    }
+  });
+
   vehSchedaEl?.addEventListener('focusin', e => { if (e.target.classList.contains('veh-combo')) { e.target.select?.(); vehComboOpen(e.target, false); } });
   vehSchedaEl?.addEventListener('focusout', e => { if (e.target.classList.contains('veh-combo')) { const inp = e.target; setTimeout(() => { vehComboClose(inp); vehComboRestore(inp); }, 150); } });
   vehSchedaEl?.addEventListener('keydown', e => {
@@ -2418,7 +2431,7 @@ function hideResults() {
 
 // ─── Scheda tecnica veicolo (auto-data.net) — highlighted, collassabile, sopra gli annunci ──
 let vehData = null, vehSpecs = {}, vehSchedaCollapsed = false, vehSelUrl = null, vehGen = 0;   // vehGen: token anti-race — scarta risposte di ricerche/generazioni superate
-function clearVehScheda() { vehGen++; vehData = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; const el = document.getElementById('vehicleScheda'); if (el) el.innerHTML = ''; }   // vehGen++ invalida le fetch in volo
+function clearVehScheda() { clearMercato(); vehGen++; vehData = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; const el = document.getElementById('vehicleScheda'); if (el) el.innerHTML = ''; }   // vehGen++ invalida le fetch in volo
 
 async function loadVehScheda() {
   const el = document.getElementById('vehicleScheda'); if (!el) return;
@@ -2446,6 +2459,7 @@ async function loadVehScheda() {
     // Moto.it usa lo STESSO codice-versione della ricerca (nessun rischio di sbagliare moto).
     vehData = d; vehSpecs = {}; vehSelUrl = vehVersionePreScelta(d) || null;
     renderVehScheda();
+    renderMercato();   // pannello "Costi e mercato": creato chiuso, si carica all'apertura
   } catch (_) { if (my === vehGen) clearVehScheda(); }
 }
 
@@ -2479,7 +2493,7 @@ function vehBodyHTML() {
   const spec = vehSpecs[vehSelUrl];
   if (!spec || spec.loading) return '<div class="rc-loading">Carico le specifiche…</div>';
   if (!spec.ok || !spec.groups || !spec.groups.length) return '<div class="rc-empty">Specifiche non disponibili per questa motorizzazione.</div>';
-  return (vehXf.compare ? '' : vehCostoHTML(spec) + vehHlBandHTML(spec)) + vehSectionsHTML(spec);
+  return (vehXf.compare ? '' : vehHlBandHTML(spec)) + vehSectionsHTML(spec);
 }
 // Versione Moto.it scelta nella ricerca → la stessa voce nella scheda, già selezionata.
 // L'aggancio è per CODICE, non per nome: l'URL della scheda Moto.it finisce col codice-versione
@@ -2571,6 +2585,124 @@ function vehCostoHTML(spec) {
   </div>`;
 }
 
+// ── Pannello "Costi e mercato": nasce CHIUSO, si apre con un click ────────────
+// Sta a parte dalla scheda tecnica di proposito: sono dati economici, non specifiche, e
+// tenerli sempre a schermo aggiungeva rumore. Dentro: liquidita del modello (ACI
+// Autoritratto), costo carburante (MIMIT) e costo del passaggio (IPT, fonte ACI).
+let mkAperto = false, mkDati = null, mkStato = 'mai';
+
+function mkChiave() { const p = lastSearchParams || {}; return `${p.tipo || ''}|${p.marca || ''}|${p.modello || ''}`; }
+let mkChiaveCaricata = null;
+
+async function mkCarica() {
+  const p = lastSearchParams || {};
+  if (!p.marca || !p.modello) return;
+  mkStato = 'carico'; mkRenderBody();
+  const q = new URLSearchParams({ tipo: p.tipo || 'auto', marca: p.marca, modello: p.modello });
+  const kw = mkKw(); if (kw && kw.kw) q.set('kw', String(kw.kw));   // mkKw torna {kw, da}: serve il numero
+  const pv = carbProvincia(); if (pv) q.set('provincia', pv);
+  try {
+    const d = await fetch('/api/mercato?' + q.toString()).then(r => r.json());
+    mkDati = d; mkStato = 'ok'; mkChiaveCaricata = mkChiave();
+  } catch (_) { mkStato = 'ko'; }
+  loadCarburanti();     // l'indice prezzi serve al riquadro carburante
+  mkRenderBody();
+}
+
+// kW del veicolo: dalla scheda se li dichiara, altrimenti convertiti dai CV (1 CV = 0,7355 kW).
+// Si tiene traccia di come sono stati ottenuti: l'IPT e' una spesa vera e una stima va detta.
+function mkKw() {
+  const spec = vehSpecs[vehSelUrl];
+  const righe = spec && spec.groups ? spec.groups.flatMap(g => g.rows || []) : [];
+  for (const r of righe) {
+    const m = String(r.v).match(/(\d+(?:[.,]\d+)?)\s*kW/i);
+    if (m) return { kw: Math.round(Number(m[1].replace(',', '.'))), da: 'scheda' };
+  }
+  for (const r of righe) {
+    if (!/potenza/i.test(r.k)) continue;
+    const m = String(r.v).match(/(\d+(?:[.,]\d+)?)\s*(?:CV|Hp)/i);
+    if (m) return { kw: Math.round(Number(m[1].replace(',', '.')) * 0.7355), da: 'CV', cv: Number(m[1].replace(',', '.')) };
+  }
+  return null;
+}
+
+function mkNum(n) { return Number(n).toLocaleString('it-IT'); }
+
+function mkBoxLiquidita() {
+  const l = mkDati && mkDati.liquidita;
+  if (!l) return `<div class="mk-box"><div class="mk-tit">Liquidita del modello</div><div class="mk-vuoto">Nessun dato per questo modello.</div></div>`;
+  if (!l.ok) return `<div class="mk-box"><div class="mk-tit">Liquidita del modello</div><div class="mk-vuoto">${escapeHtml(l.motivo)}</div><div class="mk-fonte">${escapeHtml(l.spiegazione || '')}</div></div>`;
+  const g = l.giudizio || {};
+  return `<div class="mk-box">
+    <div class="mk-tit">Liquidita del modello</div>
+    <div class="mk-cifra">${mkNum(l.trasferimenti)}</div>
+    <div class="mk-sub">passaggi di proprieta nel ${l.anno}, in Italia</div>
+    ${g.testo ? `<span class="mk-badge mk-${g.classe}">${escapeHtml(g.testo)}</span>` : ''}
+    <div class="mk-det">${l.parco ? mkNum(l.parco) + ' in circolazione' : 'parco non disponibile'}${l.ricambio != null ? ` · ricambio ${String(l.ricambio).replace('.', ',')}%/anno` : ''}</div>
+    ${l.viaPadre ? `<div class="mk-avviso">Dato del modello base &laquo;${escapeHtml(l.viaPadre)}&raquo;, non della variante cercata.</div>` : ''}
+    <div class="mk-fonte">${escapeHtml(l.fonte)}. ${escapeHtml(l.nota)}</div>
+  </div>`;
+}
+
+function mkBoxCarburante() {
+  const spec = vehSpecs[vehSelUrl];
+  if (!spec || !spec.groups) return `<div class="mk-box"><div class="mk-tit">Costo carburante</div><div class="mk-vuoto">Scegli una versione nella scheda tecnica.</div></div>`;
+  const inner = vehCostoHTML(spec);
+  if (!inner) return `<div class="mk-box"><div class="mk-tit">Costo carburante</div><div class="mk-vuoto">Consumo non disponibile per questa versione.</div></div>`;
+  return `<div class="mk-box"><div class="mk-tit">Costo carburante</div>${inner}</div>`;
+}
+
+function mkBoxPassaggio() {
+  const ipt = mkDati && mkDati.ipt;
+  const kw = mkKw();
+  const pv = carbProvincia();
+  const sel = `<div class="mk-ctrl"><select class="veh-carb-prov" aria-label="provincia per il calcolo">${
+    (carbIdx ? ['<option value="">Scegli la provincia</option>'].concat(Object.keys(carbIdx.province).sort().map(x => `<option value="${x}"${x === pv ? ' selected' : ''}>${x}</option>`)).join('') : '<option value="">…</option>')}</select></div>`;
+  if (!pv) return `<div class="mk-box"><div class="mk-tit">Passaggio di proprieta</div><div class="mk-vuoto">Scegli la provincia per il calcolo.</div>${sel}</div>`;
+  if (!kw) return `<div class="mk-box"><div class="mk-tit">Passaggio di proprieta</div><div class="mk-vuoto">Serve la potenza: scegli una versione nella scheda tecnica.</div>${sel}</div>`;
+  if (!ipt) return `<div class="mk-box"><div class="mk-tit">Passaggio di proprieta</div><div class="mk-vuoto">Calcolo non disponibile.</div>${sel}</div>`;
+  if (!ipt.ok) return `<div class="mk-box"><div class="mk-tit">Passaggio di proprieta</div><div class="mk-vuoto">${escapeHtml(ipt.motivo)}</div>${sel}<div class="mk-fonte">Fonte ACI, ${escapeHtml(ipt.fonte.aggiornato)}</div></div>`;
+  const eur = n => Number(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `<div class="mk-box">
+    <div class="mk-tit">Passaggio di proprieta</div>
+    <div class="mk-cifra">${eur(ipt.totaleNoto)} &euro;</div>
+    <div class="mk-sub">IPT ${eur(ipt.ipt)} &euro; + emolumenti ${eur(ipt.emolumenti)} &euro;</div>
+    <div class="mk-det">${ipt.provincia} maggiorazione ${ipt.maggiorazione}% · ${ipt.kW} kW${kw.da === 'CV' ? ` (stimati da ${String(kw.cv).replace('.', ',')} CV: la cifra esatta e sul libretto)` : ''}</div>
+    ${sel}
+    ${(ipt.avvisi || []).length ? `<div class="mk-avviso">${escapeHtml(ipt.avvisi[0])}</div>` : ''}
+    <div class="mk-fonte">Fonte ACI (${escapeHtml(ipt.fonte.aggiornato)}). Non incluso: ${escapeHtml((ipt.nonIncluso || []).join('; '))}.</div>
+  </div>`;
+}
+
+function mkBodyHTML() {
+  if (mkStato === 'carico') return '<div class="mk-vuoto">Carico i dati di mercato…</div>';
+  if (mkStato === 'ko') return '<div class="mk-vuoto">Dati di mercato non disponibili.</div>';
+  if (mkStato !== 'ok') return '<div class="mk-vuoto">Apri per vedere liquidita, costo carburante e passaggio di proprieta.</div>';
+  return mkBoxLiquidita() + mkBoxCarburante() + mkBoxPassaggio();
+}
+
+function mkRenderBody() {
+  const el = document.getElementById('vehicleMercato');
+  const b = el && el.querySelector('.mk-body');
+  if (b) b.innerHTML = mkBodyHTML(); else renderMercato();
+}
+
+function renderMercato() {
+  const el = document.getElementById('vehicleMercato'); if (!el) return;
+  const p = lastSearchParams || {};
+  if (!p.marca || !p.modello) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="rc-group${mkAperto ? '' : ' collapsed'}">`
+    + `<button type="button" class="rc-group-head mk-head"><span class="rc-gcaret">${icon('chevron')}</span>`
+    + `<span class="rc-group-title">Costi e mercato</span>`
+    + `<span class="rc-group-meta">${escapeHtml(p.marca)} ${escapeHtml(p.modello)}</span></button>`
+    + `<div class="rc-group-body"><div class="mk-body">${mkBodyHTML()}</div></div></div>`;
+}
+
+function clearMercato() {
+  mkAperto = false; mkDati = null; mkStato = 'mai'; mkChiaveCaricata = null;
+  const el = document.getElementById('vehicleMercato'); if (el) el.innerHTML = '';
+}
+
 // ── Filtro/suggerimento per anno (dai filtri ricerca "anno da/anno a"): suggerisce ma NON sceglie ──
 function vehYearFilter() {
   const p = lastSearchParams || {};
@@ -2653,6 +2785,7 @@ function renderVehBody() {
   if (!secs || !vehData) return renderVehScheda();
   secs.innerHTML = vehBodyHTML();
   applyVehViewState();
+  if (mkAperto) mkRenderBody();   // consumo e kW arrivano dalle specs: il pannello si riallinea
 }
 
 const VEH_UNIT_ROWS = [

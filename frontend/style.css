@@ -244,6 +244,24 @@ body:not(.has-results) .search {
 /* Scheda tecnica veicolo (riusa .rc-group/.rc-sch-*): selettori generazione/motorizzazione */
 #vehicleScheda { margin: 0 0 10px; }
 #vehicleScheda:empty { display: none; }
+#vehicleMercato:empty { display: none; }
+#vehicleMercato .rc-group, #vehicleMercato .rc-group-body { overflow: visible; }
+/* pannello "Costi e mercato": tre riquadri, uno per fonte, ognuno con la sua attribuzione */
+.mk-body { padding: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; }
+.mk-box { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--r2); background: var(--surface-2); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.mk-tit { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 700; }
+.mk-cifra { font-family: var(--num); font-size: 1.4rem; font-weight: 800; color: var(--text); line-height: 1.1; }
+.mk-sub { font-size: 0.8rem; color: var(--text); }
+.mk-det { font-size: 0.76rem; color: var(--text-muted); font-family: var(--num); }
+.mk-badge { align-self: flex-start; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 8px; border-radius: 999px; }
+.mk-alta { background: var(--accent-weak); color: var(--accent); }
+.mk-media { background: var(--tag-moto-bg); color: var(--tag-moto-fg); }
+.mk-bassa, .mk-ferma { background: var(--neg-bg); color: var(--neg); }
+.mk-avviso { font-size: 0.74rem; color: var(--warn); }
+.mk-fonte { font-size: 0.68rem; color: var(--text-faint); border-top: 1px solid var(--line); padding-top: 5px; margin-top: auto; }
+.mk-vuoto { font-size: 0.82rem; color: var(--text-faint); font-style: italic; }
+.mk-ctrl { display: flex; gap: 8px; flex-wrap: wrap; }
+.mk-ctrl select { height: 28px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); font: inherit; font-size: 0.78rem; padding: 0 6px; cursor: pointer; }
 .veh-sel-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 /* combobox scheda: input + lista visibile filtrata (riusa .ac-list/.ac-item di marca/modello) */
 #vehicleScheda .veh-combo-wrap { flex: 0 1 260px; min-width: 160px; }

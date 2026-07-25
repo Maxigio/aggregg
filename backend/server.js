@@ -30,6 +30,8 @@ const { runBootstrap } = require('./scrapers/subito-bootstrap');
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
 const { resolveMotoitModelSlug, getBrandModels, getModelBikes, resolveMotoitVersionEntry } = require('./scrapers/motoit-models');
 const { getDetail } = require('./scrapers/detail');
+const liquidita      = require('./liquidita');    // liquidita modello (ACI Autoritratto)
+const iptCalc        = require('./ipt');          // costo passaggio di proprieta per provincia
 const carburanti     = require('./carburanti');   // prezzi carburante MIMIT per provincia
 const saved = require('./saved');
 const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings } = require('./scrapers/brand-match');
@@ -502,6 +504,27 @@ app.get('/api/models', async (req, res) => {
 //  - `modelSlug` = famiglia Moto.it scelta direttamente → bikes della famiglia.
 //  - `modelNome` = voce-catalogo (es. "Dyna Fat Bob") senza slug → risolve famiglia+versioni.
 // Ritorna `{ familySlug, versioni:[{nome,code,annoMin,annoMax}] }`.
+// ─── "Costi e mercato": dati economici del modello, dietro interazione ────────
+// Un'unica risposta per il pannello richiudibile: liquidità del modello (ACI Autoritratto,
+// CC-BY) e costo del passaggio di proprietà (IPT per provincia, fonte ACI). Il costo
+// carburante ha già la sua route perché l'indice è condiviso da tutte le ricerche.
+// Si serve solo su richiesta: il pannello nasce chiuso, così non aggiunge rumore.
+app.get('/api/mercato', async (req, res) => {
+  const { tipo, marca, modello, kw, provincia, ivaEsposta } = req.query || {};
+  const out = { ok: true };
+  try {
+    out.liquidita = liquidita.cerca(marca, modello, tipo);
+  } catch (e) { out.liquidita = null; console.warn('[api/mercato] liquidita KO:', e.message); }
+  try {
+    const n = parseInt(kw, 10);
+    out.ipt = (provincia && n > 0)
+      ? iptCalc.calcola({ provincia, kW: n, tipo: tipo === 'moto' ? 'moto' : 'auto', ivaEsposta: ivaEsposta === '1' })
+      : null;
+  } catch (e) { out.ipt = null; console.warn('[api/mercato] ipt KO:', e.message); }
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.json(out);
+});
+
 // ─── Prezzi carburante ufficiali per provincia (open data MIMIT, IODL 2.0) ────
 // Incrociati col consumo della scheda tecnica danno il costo reale al km dove vive
 // l'utente. L'indice è piccolo (107 province × 4 carburanti) → si serve tutto e il
