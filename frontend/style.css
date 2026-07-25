@@ -1120,34 +1120,58 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
   .adv-grid { grid-template-columns: 1fr; }    /* filtri in colonna singola: input numerici più comodi */
 }
 
-/* ─── CATALOGO del nuovo ─────────────────────────────────────────────────────
-   Sezione indipendente dalla ricerca: la barra di ricerca sparisce del tutto
-   invece di essere riconfigurata (il catalogo non ha un form). */
-/* Nel catalogo il form non serve, ma i bottoni dei modi devono restare: vivono DENTRO
-   #searchForm, e nascondere l'intera sezione chiudeva l'utente nel catalogo senza uscita. */
+/* ─── CATALOGO ───────────────────────────────────────────────────────────────
+   Sezione indipendente dalla ricerca. Nel catalogo il form non serve, ma i bottoni
+   dei modi devono restare: vivono DENTRO #searchForm, e nascondere l'intera sezione
+   chiudeva l'utente nel catalogo senza uscita. */
 section.search.cat-attivo #searchForm > *:not(#modeToggle) { display: none; }
 section.search.cat-attivo #searchForm { min-height: 0; }
 #catalogoPanel:empty { display: none; }
 .cat-wrap { border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface); padding: 12px; margin: 0 0 12px; }
+
+/* barra dell'AREA: fonti + ricerca + vista + densita'. Resta ferma mentre si naviga. */
+.cat-barra { display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 10px; }
+.cat-fonti { display: flex; gap: 6px; flex-wrap: wrap; }
+.cat-fonte { padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--text-muted); font: inherit; font-size: 0.82rem; cursor: pointer; }
+.cat-fonte:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+.cat-fonte.attiva { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.cat-fonte.spenta { opacity: 0.45; cursor: not-allowed; }
+.cat-strumenti { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cat-cerca { flex: 1 1 220px; min-width: 180px; max-width: 420px; height: 32px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.86rem; padding: 0 10px; }
+.cat-cerca:disabled { opacity: 0.5; }
+.cat-vista { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.cat-v { width: 32px; height: 32px; border: 0; background: var(--surface-2); color: var(--text-muted); font-size: 0.95rem; cursor: pointer; }
+.cat-v.attiva { background: var(--accent); color: #fff; }
+.cat-perriga { display: inline-flex; align-items: center; gap: 7px; font-size: 0.76rem; color: var(--text-muted); }
+.cat-perriga input[type=range] { width: 110px; accent-color: var(--accent); }
+.cat-perriga b { font-family: var(--num); color: var(--text); min-width: 1.2em; text-align: right; }
+
 .cat-briciole { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.84rem; margin-bottom: 10px; }
 .cat-briciole i { color: var(--text-faint); font-style: normal; }
 .cat-briciole span { color: var(--text); font-weight: 600; }
 .cat-su { border: 0; background: none; padding: 0; font: inherit; font-size: 0.84rem; color: var(--accent); cursor: pointer; text-decoration: underline; }
-.cat-cerca { width: 100%; max-width: 340px; height: 32px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.86rem; padding: 0 10px; }
 .cat-vuoto { padding: 18px 4px; color: var(--text-faint); font-size: 0.88rem; font-style: italic; }
-.cat-griglia { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 8px; max-height: 62vh; overflow-y: auto; }
-.cat-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px; border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface-2); cursor: pointer; font: inherit; }
-.cat-card:hover { border-color: var(--accent); }
-.cat-card img { width: 46px; height: 34px; object-fit: contain; }
-.cat-noimg { width: 46px; height: 34px; border-radius: var(--r); background: var(--line); }
-.cat-card-nome { font-size: 0.78rem; color: var(--text); text-align: center; line-height: 1.2; }
+
+/* GRIGLIA — quante per riga lo decide l'operatore (--cat-cols).
+   Sfondo BIANCO fisso sulle tessere: molti loghi sono jpg con il quadrato bianco intorno, e
+   su fondo scuro si vedevano i quadratini. Col bianco il logo si fonde con la tessera. */
+.cat-griglia { display: grid; grid-template-columns: repeat(var(--cat-cols, 6), minmax(0, 1fr)); gap: 8px; max-height: 62vh; overflow-y: auto; }
+.cat-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 12px 6px; border: 1px solid var(--line); border-radius: var(--r2); background: #fff; cursor: pointer; font: inherit; min-height: 92px; }
+.cat-card:hover { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-weak); }
+.cat-card img { width: 100%; max-width: 72px; height: 40px; object-fit: contain; }
+.cat-noimg { width: 46px; height: 34px; border-radius: var(--r); background: #e9e9e9; }
+.cat-card-nome { font-size: 0.76rem; color: #1a1a1a; text-align: center; line-height: 1.2; word-break: break-word; }
+
 .cat-lista { display: flex; flex-direction: column; gap: 4px; max-height: 62vh; overflow-y: auto; }
 .cat-riga { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: baseline; width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface-2); cursor: pointer; font: inherit; text-align: left; }
 .cat-riga:hover { border-color: var(--accent); }
 .cat-riga-t { font-size: 0.9rem; font-weight: 600; color: var(--text); }
 .cat-riga-m { grid-column: 1; font-size: 0.76rem; color: var(--text-muted); font-family: var(--num); }
 .cat-riga-p { grid-row: 1 / span 2; align-self: center; font-family: var(--num); font-weight: 700; color: var(--text); white-space: nowrap; }
-/* scheda dell'allestimento */
+/* a elenco anche le marche: una riga sola, senza la colonna prezzo */
+.cat-lista .cat-marca { grid-template-columns: 1fr; }
+
+/* scheda dell'allestimento / specifiche */
 .cat-testa { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 10px; }
 .cat-titolo { font-size: 1.06rem; font-weight: 700; }
 .cat-listino { font-family: var(--num); font-size: 1.3rem; font-weight: 800; color: var(--accent); }
@@ -1158,9 +1182,14 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .cat-sp b { font-family: var(--num); }
 .cat-acc-testa { margin: 14px 0 6px; font-size: 0.84rem; font-weight: 700; }
 .cat-acc-testa em { display: block; font-weight: 400; font-size: 0.72rem; color: var(--text-faint); font-style: normal; }
-.cat-acc-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; max-height: 46vh; overflow-y: auto; }
+.cat-acc-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; max-height: 52vh; overflow-y: auto; }
 .cat-acc-g h4 { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 4px; }
 .cat-acc { display: flex; justify-content: space-between; gap: 8px; font-size: 0.8rem; padding: 3px 0; border-bottom: 1px dashed var(--line); }
 .cat-acc span { font-size: 0.68rem; color: var(--text-faint); white-space: nowrap; }
 .cat-acc-o span { color: var(--accent); }
-.cat-fonte { margin-top: 12px; font-size: 0.7rem; color: var(--text-faint); }
+.cat-fonte-nota { margin-top: 12px; font-size: 0.7rem; color: var(--text-faint); }
+
+@media (max-width: 700px) {
+  /* su schermo stretto la densita' scelta non regge: si limita, senza cambiare la preferenza */
+  .cat-griglia { grid-template-columns: repeat(min(var(--cat-cols, 6), 3), minmax(0, 1fr)); }
+}

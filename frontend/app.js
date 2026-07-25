@@ -241,7 +241,8 @@ async function init() {
   setupVersioneAutocomplete();
   document.getElementById('versioneNoteClose')?.addEventListener('click', () => versioneNote?.classList.add('d-none'));
   validateMarca();
-  await applyUrlParams();
+  const daUrl = await applyUrlParams();
+  if (!daUrl) ripristinaModo();
 
   try {
     const me = await fetch('/api/me').then(r => (r.ok ? r.json() : null)).catch(() => null);
@@ -821,6 +822,12 @@ function selectPrimary(mode) {
 function setSearchMode(mode) {
   const prev = searchMode;
   searchMode = ['ricambi', 'catalogo'].includes(mode) ? mode : 'cerca';
+  // Ricordare l'area: ricaricando la pagina si torna dove si stava lavorando, invece di
+  // ripartire sempre dalla ricerca auto. Si salva anche il tipo, che distingue Auto da Moto.
+  try {
+    localStorage.setItem('amrModo', searchMode);
+    if (searchMode === 'cerca') localStorage.setItem('amrModoTipo', currentTipo());
+  } catch (_) {}
   const ricambi = searchMode === 'ricambi';
   const catalogo = searchMode === 'catalogo';
   // Il catalogo non ha un form: nasconde tutta la barra di ricerca invece di riconfigurarla,
@@ -3417,9 +3424,11 @@ function exportPdf(results) {
 }
 
 // ─── Pre-fill da URL params ───────────────────────────────────────────────────
+// Torna true se l'URL ha davvero pilotato l'app: in quel caso il modo salvato non deve
+// scavalcare cio' che l'utente ha chiesto col link.
 async function applyUrlParams() {
   const p = new URLSearchParams(window.location.search);
-  if (!p.has('marca')) return;
+  if (!p.has('marca')) return false;
   const tipo = p.get('tipo') || 'auto';
   const tipoInput = document.querySelector(`input[name="tipo"][value="${tipo}"]`);
   if (tipoInput) { tipoInput.checked = true; document.body.dataset.tipo = tipo; }
@@ -3435,14 +3444,31 @@ async function applyUrlParams() {
     // Replay programmatico: bypassa il force-select se la marca combacia col catalogo.
     if (isValidMarca()) doSearch();
   }
+  return true;
 }
 
-// ─── CATALOGO del nuovo ───────────────────────────────────────────────────────
+// Ripristino dell'area di lavoro. Si applica solo a un modo valido e diverso dal predefinito:
+// un valore sporco in localStorage non deve poter bloccare l'app fuori dalla ricerca.
+function ripristinaModo() {
+  let m = null, t = null;
+  try { m = localStorage.getItem('amrModo'); t = localStorage.getItem('amrModoTipo'); } catch (_) {}
+  if (m === 'catalogo' || m === 'ricambi') return selectPrimary(m);
+  if (m === 'cerca' && t === 'moto') return selectPrimary('moto');
+}
+
+// ─── CATALOGO ─────────────────────────────────────────────────────────────────
 // Isolata dal path ricerca, come il modo Ricambi: stato e funzioni proprie (prefisso cat),
 // non tocca currentResults / searchActive / lastSearchParams / renderResults.
-// Quattro livelli, uno per schermata: marche → modelli → allestimenti → scheda.
-// Ogni livello e' una richiesta sola e il server la serve dalla sua cache: tornare indietro
-// non ricarica niente.
+//
+// AGGREGA TRE CATALOGHI e non li mescola, perche' sono cose diverse:
+//   nuovo → listino del nuovo (Motornet): prezzi, kW, dotazione. Via rete.
+//   auto  → schede tecniche auto (auto-data.net): 392 marche, su disco.
+//   moto  → schede tecniche moto (ultimatespecs): 377 marche, su disco.
+// Stessa navigazione a quattro livelli per tutte: marche → modelli → versioni → scheda.
+// Per le due su disco i livelli profondi riusano /api/scheda-veicolo, che accetta
+// marca+modello da sola e non dipende da una ricerca.
+let catFonte = null;            // id della fonte attiva
+let catFonti = null;            // elenco fonti dal server
 let catLivello = 'marche';      // marche | modelli | versioni | scheda
 let catMarca = null;            // {acronimo, nome}
 let catModello = null;          // {codiceModello, nome}
@@ -3451,10 +3477,18 @@ let catStato = 'mai';           // mai | carico | ok | ko | spento
 let catMotivo = '';
 let catFiltro = '';
 
+// Preferenze di vista, ricordate fra le sessioni: sono scelte dell'operatore, non stato.
+const catPref = (k, d) => { try { const v = localStorage.getItem('amrCat_' + k); return v == null ? d : v; } catch (_) { return d; } };
+const catSetPref = (k, v) => { try { localStorage.setItem('amrCat_' + k, String(v)); } catch (_) {} };
+let catVista = catPref('vista', 'griglia') === 'lista' ? 'lista' : 'griglia';
+let catPerRiga = Math.min(12, Math.max(2, Number(catPref('perRiga', 6)) || 6));
+
 const catEl = () => document.getElementById('catalogoPanel');
 const catEur = n => (n > 0 ? Number(n).toLocaleString('it-IT') + ' €' : '—');
+const catTipo = () => (catFonteAttiva() || {}).tipo || 'auto';
+const catFonteAttiva = () => (catFonti || []).find(f => f.id === catFonte) || null;
 
-function catApri() { if (catStato === 'mai' || catStato === 'ko') catVaiMarche(); else catRender(); }
+function catApri() { if (catStato === 'mai' || catStato === 'ko') catInizio(); else catRender(); }
 function catChiudi() { const el = catEl(); if (el) el.innerHTML = ''; }
 
 async function catChiedi(percorso) {
@@ -3464,102 +3498,197 @@ async function catChiedi(percorso) {
     if (d && d.ok) { catStato = 'ok'; return d; }
     catStato = d && d.spento ? 'spento' : 'ko';
     catMotivo = (d && d.motivo) || 'non disponibile';
-  } catch (e) { catStato = 'ko'; catMotivo = 'richiesta non riuscita'; }
+  } catch (_) { catStato = 'ko'; catMotivo = 'richiesta non riuscita'; }
   catRender();
   return null;
+}
+
+async function catInizio() {
+  if (!catFonti) {
+    try {
+      const d = await fetch('/api/catalogo/fonti').then(r => r.json());
+      catFonti = (d && d.fonti) || [];
+    } catch (_) { catFonti = []; }
+  }
+  if (!catFonte || !catFonti.some(f => f.id === catFonte && f.disponibile)) {
+    const salvata = catPref('fonte', '');
+    const buona = catFonti.find(f => f.id === salvata && f.disponibile) || catFonti.find(f => f.disponibile);
+    catFonte = buona ? buona.id : null;
+  }
+  if (!catFonte) { catStato = 'ko'; catMotivo = 'nessun catalogo disponibile'; return catRender(); }
+  return catVaiMarche();
+}
+
+async function catCambiaFonte(id) {
+  if (id === catFonte) return;
+  catFonte = id; catSetPref('fonte', id);
+  catDati = { marche: null, modelli: null, versioni: null, scheda: null };
+  return catVaiMarche();
 }
 
 async function catVaiMarche() {
   catLivello = 'marche'; catMarca = null; catModello = null; catFiltro = '';
   if (catDati.marche) { catStato = 'ok'; return catRender(); }
-  const d = await catChiedi('/api/catalogo/marche');
+  const d = await catChiedi('/api/catalogo/marche?fonte=' + encodeURIComponent(catFonte));
   if (d) { catDati.marche = d.marche; catRender(); }
 }
 
 async function catVaiModelli(marca) {
   const stesso = catMarca && catMarca.acronimo === marca.acronimo && catDati.modelli;
   catMarca = marca; catModello = null; catLivello = 'modelli'; catFiltro = '';
-  if (stesso) { catStato = 'ok'; return catRender(); }   // tornare indietro non ricarica
-  const d = await catChiedi('/api/catalogo/modelli?marca=' + encodeURIComponent(marca.acronimo));
+  if (stesso) { catStato = 'ok'; return catRender(); }
+  const d = await catChiedi(`/api/catalogo/modelli?fonte=${encodeURIComponent(catFonte)}&marca=${encodeURIComponent(marca.acronimo)}`);
   if (d) { catDati.modelli = d.modelli; catRender(); }
 }
 
+// Livello 3. Sulle due fonti-schede non esiste una route di catalogo: si passa da
+// /api/scheda-veicolo, che da' generazioni e motorizzazioni a partire da marca+modello.
 async function catVaiVersioni(modello) {
   const stesso = catModello && String(catModello.codiceModello) === String(modello.codiceModello) && catDati.versioni;
   catModello = modello; catLivello = 'versioni'; catFiltro = '';
   if (stesso) { catStato = 'ok'; return catRender(); }
-  const d = await catChiedi('/api/catalogo/versioni?modello=' + encodeURIComponent(modello.codiceModello));
-  if (d) { catDati.versioni = d.versioni; catRender(); }
+  if (catFonte === 'nuovo') {
+    const d = await catChiedi('/api/catalogo/versioni?modello=' + encodeURIComponent(modello.codiceModello));
+    if (d) { catDati.versioni = d.versioni; catRender(); }
+    return;
+  }
+  const q = new URLSearchParams({ tipo: catTipo(), marca: catMarca.nome, modello: modello.nome });
+  catStato = 'carico'; catRender();
+  try {
+    const d = await fetch('/api/scheda-veicolo?' + q.toString()).then(r => r.json());
+    if (!d || !d.ok) { catStato = 'ko'; catMotivo = (d && d.error) || 'scheda non disponibile'; return catRender(); }
+    catStato = 'ok';
+    catDati.versioni = (d.motorizzazioni || []).map(m => ({
+      nome: m.label || m.name || '', url: m.url || null,
+      cavalli: m.hp || null, alimentazione: m.fuel || null, anni: m.yearRange || (m.year ? String(m.year) : null),
+    }));
+    catRender();
+  } catch (_) { catStato = 'ko'; catMotivo = 'richiesta non riuscita'; catRender(); }
 }
 
-async function catVaiScheda(codice) {
+async function catVaiScheda(rif) {
   catLivello = 'scheda';
-  const d = await catChiedi('/api/catalogo/allestimento?codice=' + encodeURIComponent(codice));
-  if (d) { catDati.scheda = d; catRender(); }
+  if (catFonte === 'nuovo') {
+    const d = await catChiedi('/api/catalogo/allestimento?codice=' + encodeURIComponent(rif));
+    if (d) { catDati.scheda = d; catRender(); }
+    return;
+  }
+  catStato = 'carico'; catRender();
+  try {
+    const d = await fetch('/api/scheda-veicolo/specs?url=' + encodeURIComponent(rif)).then(r => r.json());
+    if (!d || !d.ok) { catStato = 'ko'; catMotivo = 'specifiche non disponibili'; return catRender(); }
+    catStato = 'ok'; catDati.scheda = { specs: d, url: rif }; catRender();
+  } catch (_) { catStato = 'ko'; catMotivo = 'richiesta non riuscita'; catRender(); }
 }
 
 // ── disegno ──────────────────────────────────────────────────────────────────
+// La barra e' dell'AREA, non di un livello: fonti, ricerca, vista e densita' restano al loro
+// posto mentre si naviga, cosi' non si riconfigura tutto a ogni passo.
+function catBarraHTML() {
+  const f = (catFonti || []).map(x => `<button type="button" class="cat-fonte${x.id === catFonte ? ' attiva' : ''}${x.disponibile ? '' : ' spenta'}"`
+    + ` data-fonte="${escapeHtml(x.id)}"${x.disponibile ? '' : ' disabled'}`
+    + ` title="${escapeHtml(x.dettaglio || '')}${x.marche ? ' · ' + x.marche + ' marche' : ''}">${escapeHtml(x.nome)}</button>`).join('');
+  const ph = catLivello === 'marche' ? 'Cerca una marca…'
+    : catLivello === 'modelli' ? 'Cerca un modello…'
+      : catLivello === 'versioni' ? 'Cerca una versione…' : 'Cerca…';
+  const conElenco = catLivello !== 'scheda';
+  return `<div class="cat-barra">
+    <div class="cat-fonti" role="tablist" aria-label="Cataloghi">${f}</div>
+    <div class="cat-strumenti">
+      <input type="search" class="cat-cerca" placeholder="${ph}" value="${escapeHtml(catFiltro)}" aria-label="${ph}"${conElenco ? '' : ' disabled'}>
+      <div class="cat-vista" role="group" aria-label="Come mostrare l'elenco">
+        <button type="button" class="cat-v${catVista === 'griglia' ? ' attiva' : ''}" data-vista="griglia" title="A griglia">▦</button>
+        <button type="button" class="cat-v${catVista === 'lista' ? ' attiva' : ''}" data-vista="lista" title="A elenco">☰</button>
+      </div>
+      <label class="cat-perriga${catVista === 'griglia' && catLivello === 'marche' ? '' : ' d-none'}">
+        <span>per riga</span>
+        <input type="range" class="cat-cols" min="2" max="12" step="1" value="${catPerRiga}" aria-label="quante marche per riga">
+        <b>${catPerRiga}</b>
+      </label>
+    </div>
+  </div>`;
+}
+
 function catBriciole() {
-  const p = [{ t: 'Catalogo del nuovo', l: 'marche' }];
+  const f = catFonteAttiva();
+  const p = [{ t: f ? f.nome : 'Catalogo', l: 'marche' }];
   if (catMarca) p.push({ t: catMarca.nome, l: 'modelli' });
   if (catModello) p.push({ t: catModello.nome, l: 'versioni' });
-  if (catLivello === 'scheda' && catDati.scheda) p.push({ t: catDati.scheda.dettaglio.allestimento, l: null });
+  if (catLivello === 'scheda') p.push({ t: catTitoloScheda(), l: null });
   return `<nav class="cat-briciole">${p.map((x, i) => (x.l && i < p.length - 1
     ? `<button type="button" class="cat-su" data-l="${x.l}">${escapeHtml(x.t)}</button>`
     : `<span>${escapeHtml(x.t)}</span>`)).join('<i>›</i>')}</nav>`;
 }
 
-function catCerca(ph) {
-  return `<input type="search" class="cat-cerca" placeholder="${ph}" value="${escapeHtml(catFiltro)}" aria-label="${ph}">`;
+function catTitoloScheda() {
+  const s = catDati.scheda;
+  if (!s) return 'Scheda';
+  if (s.dettaglio) return s.dettaglio.allestimento || 'Scheda';
+  return (s.specs && s.specs.title) || 'Scheda';
 }
+
 const catFiltra = (lista, chiave) => {
   const q = catFiltro.trim().toLowerCase();
   return q ? lista.filter(x => String(chiave(x) || '').toLowerCase().includes(q)) : lista;
 };
+const catVuoto = t => `<div class="cat-vuoto">${escapeHtml(t)}</div>`;
+
+// Un elenco, disegnato a griglia o a righe secondo la scelta: stessi dati, due forme.
+function catElencoHTML(voci, opt) {
+  if (!voci.length) return catVuoto(opt.vuoto);
+  if (catVista === 'lista' || !opt.griglia) {
+    return `<div class="cat-lista">${voci.map(v => `
+      <button type="button" class="cat-riga ${opt.classe}" ${opt.dati(v)}>
+        <span class="cat-riga-t">${escapeHtml(v.nome || '')}</span>
+        ${opt.meta(v) ? `<span class="cat-riga-m">${opt.meta(v)}</span>` : ''}
+        ${opt.prezzo && opt.prezzo(v) ? `<span class="cat-riga-p">${opt.prezzo(v)}</span>` : ''}
+      </button>`).join('')}</div>`;
+  }
+  return `<div class="cat-griglia" style="--cat-cols:${catPerRiga}">${voci.map(v => `
+    <button type="button" class="cat-card ${opt.classe}" ${opt.dati(v)}>
+      ${v.logo ? `<img src="${escapeHtml(v.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="cat-noimg"></span>'}
+      <span class="cat-card-nome">${escapeHtml(v.nome || '')}</span>
+    </button>`).join('')}</div>`;
+}
 
 function catCorpo() {
-  if (catStato === 'carico') return '<div class="cat-vuoto">Carico…</div>';
-  if (catStato === 'spento') return `<div class="cat-vuoto">Il catalogo del nuovo non e attivo su questa installazione.</div>`;
-  if (catStato === 'ko') return `<div class="cat-vuoto">${escapeHtml(catMotivo)}</div>`;
+  if (catStato === 'carico') return catVuoto('Carico…');
+  if (catStato === 'spento') return catVuoto('Questo catalogo non e attivo su questa installazione.');
+  if (catStato === 'ko') return catVuoto(catMotivo);
 
   if (catLivello === 'marche') {
-    const l = catFiltra(catDati.marche || [], x => x.nome);
-    return catCerca('Filtra le marche…') + `<div class="cat-griglia">${l.map(m => `
-      <button type="button" class="cat-card cat-marca" data-acr="${escapeHtml(m.acronimo)}" data-nome="${escapeHtml(m.nome)}">
-        ${m.logo ? `<img src="${escapeHtml(m.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="cat-noimg"></span>'}
-        <span class="cat-card-nome">${escapeHtml(m.nome)}</span>
-      </button>`).join('')}</div>`
-      + (l.length ? '' : '<div class="cat-vuoto">Nessuna marca con questo nome.</div>');
+    return catElencoHTML(catFiltra(catDati.marche || [], x => x.nome), {
+      classe: 'cat-marca', griglia: true, vuoto: 'Nessuna marca con questo nome.',
+      dati: v => `data-acr="${escapeHtml(v.acronimo)}" data-nome="${escapeHtml(v.nome)}"`,
+      meta: () => '',
+    });
   }
-
   if (catLivello === 'modelli') {
-    const l = catFiltra(catDati.modelli || [], x => x.nome);
-    if (!l.length) return catCerca('Filtra i modelli…') + '<div class="cat-vuoto">Nessun modello nel listino del nuovo per questa marca.</div>';
-    return catCerca('Filtra i modelli…') + `<div class="cat-lista">${l.map(m => `
-      <button type="button" class="cat-riga cat-modello" data-cod="${escapeHtml(String(m.codiceModello))}" data-nome="${escapeHtml(m.nome)}">
-        <span class="cat-riga-t">${escapeHtml(m.nome)}</span>
-        <span class="cat-riga-m">${escapeHtml(m.gamma || '')}${m.inizio ? ' · dal ' + String(m.inizio).slice(0, 4) : ''}</span>
-      </button>`).join('')}</div>`;
+    return catElencoHTML(catFiltra(catDati.modelli || [], x => x.nome), {
+      classe: 'cat-modello', griglia: false, vuoto: 'Nessun modello in questo catalogo.',
+      dati: v => `data-cod="${escapeHtml(String(v.codiceModello))}" data-nome="${escapeHtml(v.nome)}"`,
+      meta: v => escapeHtml([v.gamma, v.inizio ? 'dal ' + String(v.inizio).slice(0, 4) : ''].filter(Boolean).join(' · ')),
+    });
   }
-
   if (catLivello === 'versioni') {
-    const l = catFiltra(catDati.versioni || [], x => x.nome);
-    if (!l.length) return catCerca('Filtra gli allestimenti…') + '<div class="cat-vuoto">Nessun allestimento.</div>';
-    return catCerca('Filtra gli allestimenti…') + `<div class="cat-lista">${l.map(v => `
-      <button type="button" class="cat-riga cat-versione" data-cod="${escapeHtml(v.codiceMotornet || '')}">
-        <span class="cat-riga-t">${escapeHtml(v.nome || '')}</span>
-        <span class="cat-riga-m">${v.kw ? v.kw + ' kW' : ''}${v.cavalli ? ' · ' + v.cavalli + ' CV' : ''}${v.alimentazione ? ' · ' + escapeHtml(v.alimentazione) : ''}${v.euro ? ' · Euro ' + escapeHtml(v.euro) : ''}</span>
-        <span class="cat-riga-p">${catEur(v.prezzoListino)}</span>
-      </button>`).join('')}</div>`;
+    return catElencoHTML(catFiltra(catDati.versioni || [], x => x.nome), {
+      classe: 'cat-versione', griglia: false, vuoto: 'Nessuna versione.',
+      dati: v => `data-rif="${escapeHtml(v.codiceMotornet || v.url || '')}"`,
+      meta: v => escapeHtml([v.kw ? v.kw + ' kW' : null, v.cavalli ? v.cavalli + ' CV' : null,
+        v.alimentazione, v.euro ? 'Euro ' + v.euro : null, v.anni].filter(Boolean).join(' · ')),
+      prezzo: v => (v.prezzoListino ? catEur(v.prezzoListino) : ''),
+    });
   }
-
   return catSchedaHTML();
 }
 
-// Scheda dell'allestimento: i numeri che servono a valutare, poi la dotazione.
+// Scheda: due forme, una per famiglia di fonti. Il listino porta prezzo e dotazione, le
+// schede tecniche portano i gruppi di specifiche cosi' come li da' la fonte.
 function catSchedaHTML() {
   const s = catDati.scheda;
-  if (!s || !s.dettaglio) return '<div class="cat-vuoto">Scheda non disponibile.</div>';
+  if (!s) return catVuoto('Scheda non disponibile.');
+  if (s.specs) return catSchedaSpecsHTML(s);
+  if (!s.dettaglio) return catVuoto('Scheda non disponibile.');
   const d = s.dettaglio;
   const riga = (k, v) => (v == null || v === '' ? '' : `<div class="cat-sp"><span>${escapeHtml(k)}</span><b>${escapeHtml(String(v))}</b></div>`);
   const acc = s.accessori;
@@ -3592,17 +3721,38 @@ function catSchedaHTML() {
     </div>
     ${acc ? `<div class="cat-acc-testa">Dotazione — ${acc.serie.length} di serie, ${acc.optional.length} a richiesta
       <em>i prezzi degli optional non sono nei dati pubblici della fonte</em></div><div class="cat-acc-lista">${gruppi}</div>` : ''}
-    <div class="cat-fonte">${escapeHtml(d.fonte || '')}${d.url ? ` · <a href="${escapeHtml(d.url)}" target="_blank" rel="noopener noreferrer">scheda originale ↗</a>` : ''}</div>
+    <div class="cat-fonte-nota">${escapeHtml(d.fonte || '')}${d.url ? ` · <a href="${escapeHtml(d.url)}" target="_blank" rel="noopener noreferrer">scheda originale ↗</a>` : ''}</div>
+  </div>`;
+}
+
+function catSchedaSpecsHTML(s) {
+  const sp = s.specs;
+  const gruppi = (sp.groups || []).map(g => `<div class="cat-acc-g"><h4>${escapeHtml(g.title || '')}</h4>
+    ${(g.rows || []).map(r => `<div class="cat-sp"><span>${escapeHtml(r.k)}</span><b>${escapeHtml(String(r.v))}</b></div>`).join('')}</div>`).join('');
+  return `<div class="cat-scheda">
+    <div class="cat-testa"><div class="cat-titolo">${escapeHtml(sp.title || catTitoloScheda())}</div></div>
+    ${gruppi ? `<div class="cat-acc-lista">${gruppi}</div>` : catVuoto('Nessuna specifica.')}
+    <div class="cat-fonte-nota">${escapeHtml((catFonteAttiva() || {}).dettaglio || '')}
+      · <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer">scheda originale ↗</a></div>
   </div>`;
 }
 
 function catRender() {
   const el = catEl(); if (!el) return;
-  el.innerHTML = `<div class="cat-wrap">${catBriciole()}${catCorpo()}</div>`;
+  el.innerHTML = `<div class="cat-wrap">${catBarraHTML()}${catBriciole()}<div class="cat-corpo">${catCorpo()}</div></div>`;
+}
+// Riscrive SOLO l'elenco: usato dal filtro e dal cursore, per non far perdere il fuoco.
+function catRenderCorpo() {
+  const c = catEl()?.querySelector('.cat-corpo');
+  if (c) c.innerHTML = catCorpo(); else catRender();
 }
 
 // Un solo listener sul pannello: i figli si ridisegnano, la delega no.
 document.getElementById('catalogoPanel')?.addEventListener('click', e => {
+  const fo = e.target.closest('.cat-fonte');
+  if (fo && !fo.disabled) return void catCambiaFonte(fo.dataset.fonte);
+  const vi = e.target.closest('.cat-v');
+  if (vi) { catVista = vi.dataset.vista; catSetPref('vista', catVista); return void catRender(); }
   const su = e.target.closest('.cat-su');
   if (su) {
     if (su.dataset.l === 'marche') catVaiMarche();
@@ -3615,18 +3765,19 @@ document.getElementById('catalogoPanel')?.addEventListener('click', e => {
   const mo = e.target.closest('.cat-modello');
   if (mo) return void catVaiVersioni({ codiceModello: mo.dataset.cod, nome: mo.dataset.nome });
   const ve = e.target.closest('.cat-versione');
-  if (ve && ve.dataset.cod) return void catVaiScheda(ve.dataset.cod);
+  if (ve && ve.dataset.rif) return void catVaiScheda(ve.dataset.rif);
 });
-// Il filtro NON ridisegna tutto: riscrive solo l'elenco, altrimenti il campo perde il fuoco.
 document.getElementById('catalogoPanel')?.addEventListener('input', e => {
-  if (!e.target.classList.contains('cat-cerca')) return;
-  catFiltro = e.target.value;
-  const wrap = catEl().querySelector('.cat-wrap');
-  const vecchio = wrap.querySelector('.cat-griglia, .cat-lista, .cat-vuoto');
-  const nuovo = document.createElement('div');
-  nuovo.innerHTML = catCorpo();
-  const rimpiazzo = nuovo.querySelector('.cat-griglia, .cat-lista, .cat-vuoto');
-  if (vecchio && rimpiazzo) vecchio.replaceWith(rimpiazzo);
+  if (e.target.classList.contains('cat-cerca')) {
+    catFiltro = e.target.value;
+    return void catRenderCorpo();
+  }
+  if (e.target.classList.contains('cat-cols')) {
+    catPerRiga = Math.min(12, Math.max(2, Number(e.target.value) || 6));
+    catSetPref('perRiga', catPerRiga);
+    const b = e.target.parentElement.querySelector('b'); if (b) b.textContent = catPerRiga;
+    const g = catEl().querySelector('.cat-griglia'); if (g) g.style.setProperty('--cat-cols', catPerRiga);
+  }
 });
 
 // ─── Avvio ────────────────────────────────────────────────────────────────────
