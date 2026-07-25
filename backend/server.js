@@ -1258,7 +1258,14 @@ const amrSearchFn = async (input) => {
 // ─── Webhook WhatsApp (Meta Cloud API) — in AUTH_FREE (firma HMAC), searchFn condivisa ─────────
 require('./whatsapp/webhook').mount(app, { searchFn: amrSearchFn });
 
-const server = app.listen(PORT, () => {
+// Si mette in ascolto SOLO se questo file e' il programma avviato, mai se qualcuno lo
+// richiede come modulo. Serve ai test: la catena di risoluzione marca/modello vive qui dentro
+// e finora nessun test poteva toccarla, perche' bastava il require ad aprire una porta,
+// inizializzare il DB, compilare il bundle worker e scaldare due browser headless.
+// Produzione invariata: sia `node backend/server.js` sia il fork di Electron eseguono questo
+// file come principale, quindi require.main === module e' vero in entrambi i casi.
+const avviaAscolto = require.main === module;
+const server = !avviaAscolto ? null : app.listen(PORT, () => {
   console.log(`Server avviato su http://localhost:${PORT}`);
 
   // F9 — costruisce/aggiorna il bundle worker servito ai nodi (best-effort, non blocca il boot).
@@ -1321,4 +1328,6 @@ const server = app.listen(PORT, () => {
     }, 8000).unref?.();
   });
 });
-module.exports = server;
+// Esposte per i test di caratterizzazione: sono le funzioni con cui inizia OGNI risoluzione
+// marca/modello, e finora non erano raggiungibili da fuori. Prefisso _ = superficie interna.
+module.exports = { server, app, _lookupBrand: lookupBrand, _lookupModelGroup: lookupModelGroup, _catalogResolver: catalogResolver };

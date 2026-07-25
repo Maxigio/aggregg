@@ -173,4 +173,7 @@ async function resolveMotoitVersionEntry(brandSlug, entryName) {
   return null;
 }
 
-module.exports = { resolveMotoitModelSlug, getBrandModels, getModelBikes, resolveMotoitVersionEntry };
+// versionBase e parseYears sono pure e contengono le regole piu' delicate del confine
+// famiglia/versione: esposte per poterle sorvegliare con dei test (prefisso _ = interne).
+module.exports = { resolveMotoitModelSlug, getBrandModels, getModelBikes, resolveMotoitVersionEntry,
+  _versionBase: versionBase, _parseYears: parseYears };

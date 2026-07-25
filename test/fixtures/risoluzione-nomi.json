@@ -1,0 +1,1122 @@
+{
+ "lookupBrand": [
+  {
+   "in": [
+    "auto",
+    "Fiat"
+   ],
+   "out": {
+    "nome": "Fiat",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Fiat"
+   ],
+   "out": {
+    "nome": "Fiat",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Mercedes-Benz"
+   ],
+   "out": {
+    "nome": "Mercedes-Benz",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Mercedes-Benz"
+   ],
+   "out": {
+    "nome": "Mercedes-Benz",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "BMW"
+   ],
+   "out": {
+    "nome": "BMW",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "BMW"
+   ],
+   "out": {
+    "nome": "BMW",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Volkswagen"
+   ],
+   "out": {
+    "nome": "Volkswagen",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Volkswagen"
+   ],
+   "out": {
+    "nome": "Volkswagen",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Citroen"
+   ],
+   "out": {
+    "nome": "Citroën",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "BMW"
+   ],
+   "out": {
+    "nome": "BMW",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "BMW"
+   ],
+   "out": {
+    "nome": "BMW",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "BMW"
+   ],
+   "out": {
+    "nome": "BMW",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Mercedes-Benz"
+   ],
+   "out": {
+    "nome": "Mercedes-Benz",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Mercedes-Benz"
+   ],
+   "out": {
+    "nome": "Mercedes-Benz",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "BMW"
+   ],
+   "out": {
+    "nome": "BMW",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Marca Inesistente"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "auto",
+    "Fiat"
+   ],
+   "out": {
+    "nome": "Fiat",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "Honda"
+   ],
+   "out": {
+    "nome": "Honda",
+    "siti": [
+     "subito",
+     "autoscout",
+     "motoit"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "Yamaha"
+   ],
+   "out": {
+    "nome": "Yamaha",
+    "siti": [
+     "subito",
+     "autoscout",
+     "motoit"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "Beta"
+   ],
+   "out": {
+    "nome": "Beta",
+    "siti": [
+     "subito",
+     "autoscout",
+     "motoit"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "Fantic"
+   ],
+   "out": {
+    "nome": "Fantic",
+    "siti": [
+     "subito",
+     "autoscout",
+     "motoit"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "Can-Am"
+   ],
+   "out": {
+    "nome": "Can-Am",
+    "siti": [
+     "subito",
+     "autoscout",
+     "motoit"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "Ducati"
+   ],
+   "out": {
+    "nome": "Ducati",
+    "siti": [
+     "subito",
+     "autoscout",
+     "motoit"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Abarth"
+   ],
+   "out": {
+    "nome": "Abarth",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Alfa Romeo"
+   ],
+   "out": {
+    "nome": "Alfa Romeo",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Alpine"
+   ],
+   "out": {
+    "nome": "Alpine",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Aston Martin"
+   ],
+   "out": {
+    "nome": "Aston Martin",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Audi"
+   ],
+   "out": {
+    "nome": "Audi",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Bentley"
+   ],
+   "out": {
+    "nome": "Bentley",
+    "siti": [
+     "subito",
+     "autoscout"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "Aprilia"
+   ],
+   "out": {
+    "nome": "Aprilia",
+    "siti": [
+     "subito",
+     "autoscout",
+     "motoit"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "BMW"
+   ],
+   "out": {
+    "nome": "BMW",
+    "siti": [
+     "subito",
+     "autoscout",
+     "motoit"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "Benelli"
+   ],
+   "out": {
+    "nome": "Benelli",
+    "siti": [
+     "subito",
+     "autoscout",
+     "motoit"
+    ],
+    "hasAutoscout": true
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "CFMOTO"
+   ],
+   "out": {
+    "nome": "CFMOTO",
+    "siti": [
+     "subito",
+     "autoscout",
+     "motoit"
+    ],
+    "hasAutoscout": true
+   }
+  }
+ ],
+ "lookupModelGroup": [
+  {
+   "in": [
+    "auto",
+    "Fiat",
+    "Panda"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "auto",
+    "Fiat",
+    "Punto"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "auto",
+    "Mercedes-Benz",
+    "A 180"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "auto",
+    "Mercedes-Benz",
+    "CLA 200"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "auto",
+    "BMW",
+    "320d"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "auto",
+    "BMW",
+    "318"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "auto",
+    "Volkswagen",
+    "Golf"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "auto",
+    "Volkswagen",
+    "Golf GTI"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "auto",
+    "Citroen",
+    "C3"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "auto",
+    "BMW",
+    "Serie 3"
+   ],
+   "out": [
+    "315",
+    "316",
+    "318",
+    "320",
+    "323",
+    "324",
+    "325",
+    "328",
+    "330",
+    "335",
+    "340"
+   ]
+  },
+  {
+   "in": [
+    "auto",
+    "BMW",
+    "Serie 1"
+   ],
+   "out": [
+    "114",
+    "116",
+    "118",
+    "120",
+    "123",
+    "125",
+    "128",
+    "130",
+    "135",
+    "140"
+   ]
+  },
+  {
+   "in": [
+    "auto",
+    "BMW",
+    "serie  3"
+   ],
+   "out": [
+    "315",
+    "316",
+    "318",
+    "320",
+    "323",
+    "324",
+    "325",
+    "328",
+    "330",
+    "335",
+    "340"
+   ]
+  },
+  {
+   "in": [
+    "auto",
+    "Mercedes-Benz",
+    "Classe A"
+   ],
+   "out": [
+    "A 140",
+    "A 150",
+    "A 160",
+    "A 170",
+    "A 180",
+    "A 190",
+    "A 200",
+    "A 210",
+    "A 220",
+    "A 250",
+    "A 35 AMG",
+    "A 45 AMG"
+   ]
+  },
+  {
+   "in": [
+    "auto",
+    "Mercedes-Benz",
+    "Classe C"
+   ],
+   "out": [
+    "C 160",
+    "C 180",
+    "C 200",
+    "C 220",
+    "C 230",
+    "C 240",
+    "C 250",
+    "C 270",
+    "C 280",
+    "C 30 AMG",
+    "C 300",
+    "C 32 AMG",
+    "C 320",
+    "C 350",
+    "C 36 AMG",
+    "C 400",
+    "C 43 AMG",
+    "C 450",
+    "C 55 AMG",
+    "C 63 AMG"
+   ]
+  },
+  {
+   "in": [
+    "auto",
+    "BMW",
+    "Serie 99"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "auto",
+    "Marca Inesistente",
+    "Modello Inesistente"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "moto",
+    "Honda",
+    "CB 500"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "moto",
+    "Yamaha",
+    "MT-07"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "moto",
+    "Beta",
+    "RR 125"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "moto",
+    "Fantic",
+    "Caballero 500"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "moto",
+    "Can-Am",
+    "Renegade"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "moto",
+    "Ducati",
+    "Monster"
+   ],
+   "out": null
+  }
+ ],
+ "resolveAutoscout": [
+  {
+   "in": [
+    "auto",
+    "Fiat",
+    "Panda"
+   ],
+   "out": {
+    "mmmv": "28|1746||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Fiat",
+    "Punto"
+   ],
+   "out": {
+    "mmmv": "28|1747||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Mercedes-Benz",
+    "A 180"
+   ],
+   "out": {
+    "mmmv": "47|18486||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Mercedes-Benz",
+    "CLA 200"
+   ],
+   "out": {
+    "mmmv": "47|20230||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "BMW",
+    "320d"
+   ],
+   "out": {
+    "mmmv": "13|1641||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "BMW",
+    "318"
+   ],
+   "out": {
+    "mmmv": "13|1640||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Volkswagen",
+    "Golf"
+   ],
+   "out": {
+    "mmmv": "74|2084||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Volkswagen",
+    "Golf GTI"
+   ],
+   "out": {
+    "mmmv": "74|20342||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Citroen",
+    "C3"
+   ],
+   "out": {
+    "mmmv": "21|18264||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "BMW",
+    "Serie 3"
+   ],
+   "out": {
+    "mmmv": "13|||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "BMW",
+    "Serie 1"
+   ],
+   "out": {
+    "mmmv": "13|||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "BMW",
+    "serie  3"
+   ],
+   "out": {
+    "mmmv": "13|||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Mercedes-Benz",
+    "Classe A"
+   ],
+   "out": {
+    "mmmv": "47|||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Mercedes-Benz",
+    "Classe C"
+   ],
+   "out": {
+    "mmmv": "47|||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "BMW",
+    "Serie 99"
+   ],
+   "out": {
+    "mmmv": "13|||"
+   }
+  },
+  {
+   "in": [
+    "auto",
+    "Marca Inesistente",
+    "Modello Inesistente"
+   ],
+   "out": null
+  },
+  {
+   "in": [
+    "moto",
+    "Honda",
+    "CB 500"
+   ],
+   "out": {
+    "mmmv": "31|53905||"
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "Yamaha",
+    "MT-07"
+   ],
+   "out": {
+    "mmmv": "50107|70888||"
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "Beta",
+    "RR 125"
+   ],
+   "out": {
+    "mmmv": "50011|58297||"
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "Fantic",
+    "Caballero 500"
+   ],
+   "out": {
+    "mmmv": "50035|74857||"
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "Can-Am",
+    "Renegade"
+   ],
+   "out": {
+    "mmmv": "50124|61502||"
+   }
+  },
+  {
+   "in": [
+    "moto",
+    "Ducati",
+    "Monster"
+   ],
+   "out": {
+    "mmmv": "50030|||"
+   }
+  }
+ ],
+ "resolveMotoit": [
+  {
+   "in": [
+    "moto",
+    "Honda",
+    "CB 500"
+   ],
+   "out": {}
+  },
+  {
+   "in": [
+    "moto",
+    "Yamaha",
+    "MT-07"
+   ],
+   "out": {}
+  },
+  {
+   "in": [
+    "moto",
+    "Beta",
+    "RR 125"
+   ],
+   "out": {}
+  },
+  {
+   "in": [
+    "moto",
+    "Fantic",
+    "Caballero 500"
+   ],
+   "out": {}
+  },
+  {
+   "in": [
+    "moto",
+    "Can-Am",
+    "Renegade"
+   ],
+   "out": {}
+  },
+  {
+   "in": [
+    "moto",
+    "Ducati",
+    "Monster"
+   ],
+   "out": {}
+  }
+ ],
+ "motoit": [
+  {
+   "fn": "versionBase",
+   "in": "Dyna Fat Bob",
+   "out": "Dyna Fat Bob"
+  },
+  {
+   "fn": "versionBase",
+   "in": "V-Strom 1050SE",
+   "out": "V-Strom 1050SE"
+  },
+  {
+   "fn": "versionBase",
+   "in": "MT-07 (2021-)",
+   "out": "MT"
+  },
+  {
+   "fn": "versionBase",
+   "in": "Caballero-Rally-500",
+   "out": "Caballero-Rally"
+  },
+  {
+   "fn": "versionBase",
+   "in": "CB 650 R",
+   "out": "CB 650 R"
+  },
+  {
+   "fn": "versionBase",
+   "in": "1584 Fat Bob",
+   "out": "1584 Fat Bob"
+  },
+  {
+   "fn": "versionBase",
+   "in": "Monster 937 (2021-23)",
+   "out": "Monster 937"
+  },
+  {
+   "fn": "versionBase",
+   "in": "Z 900 RS",
+   "out": "Z 900 RS"
+  },
+  {
+   "fn": "parseYears",
+   "in": "(1998-02)",
+   "out": {
+    "annoMin": 1998,
+    "annoMax": 2002
+   }
+  },
+  {
+   "fn": "parseYears",
+   "in": "(2015-)",
+   "out": {
+    "annoMin": null,
+    "annoMax": null
+   }
+  },
+  {
+   "fn": "parseYears",
+   "in": "(2010-2014)",
+   "out": {
+    "annoMin": 2010,
+    "annoMax": 2014
+   }
+  },
+  {
+   "fn": "parseYears",
+   "in": "niente anni",
+   "out": {
+    "annoMin": null,
+    "annoMax": null
+   }
+  },
+  {
+   "fn": "parseYears",
+   "in": "(2010-4)",
+   "out": {
+    "annoMin": null,
+    "annoMax": null
+   }
+  },
+  {
+   "fn": "parseYears",
+   "in": "(2019)",
+   "out": {
+    "annoMin": 2019,
+    "annoMax": 2019
+   }
+  },
+  {
+   "fn": "parseYears",
+   "in": "(2008-13)",
+   "out": {
+    "annoMin": 2008,
+    "annoMax": 2013
+   }
+  },
+  {
+   "fn": "parseYears",
+   "in": "(2014 - 17)",
+   "out": {
+    "annoMin": 2014,
+    "annoMax": 2017
+   }
+  },
+  {
+   "fn": "resolveMotoitSlug",
+   "in": "Beta",
+   "out": "betamotor"
+  },
+  {
+   "fn": "resolveMotoitSlug",
+   "in": "Betamotor",
+   "out": "betamotor"
+  },
+  {
+   "fn": "resolveMotoitSlug",
+   "in": "Fantic",
+   "out": "fantic-motor"
+  },
+  {
+   "fn": "resolveMotoitSlug",
+   "in": "Honda",
+   "out": "honda"
+  },
+  {
+   "fn": "resolveMotoitSlug",
+   "in": "Marca Finta",
+   "out": null
+  },
+  {
+   "fn": "resolveMotoitSlug",
+   "in": "",
+   "out": null
+  }
+ ]
+}
