@@ -41,3 +41,5 @@ data/logs/
 data/carburanti-cache.json
 # cache runtime listino Motornet (si rigenera da sola, TTL 7g) — dato di terzi: non entra nel repo
 data/motornet-cache.json
+# cache rilevamenti auto.it (si rigenera, TTL 7g) — dato di terzi: non entra nel repo
+data/autoit-rilevamenti-cache.json

@@ -15,6 +15,7 @@
  * per lo stato legale di quella fonte.
  */
 const motornet = require('./scrapers/motornet');
+const autoit = require('./scrapers/autoit-rilevamenti');
 
 // Il catalogo aggrega TRE cataloghi distinti, e non li mescola: sono cose diverse e chi
 // naviga deve sapere cosa sta guardando.
@@ -38,6 +39,9 @@ const FONTI = {
   nuovo: { nome: 'Listino del nuovo', dettaglio: 'prezzi, potenza e dotazione — Motornet (Eurotax)', tipo: 'auto', rete: true },
   auto: { nome: 'Schede tecniche auto', dettaglio: 'auto-data.net', tipo: 'auto', rete: false },
   moto: { nome: 'Schede tecniche moto', dettaglio: 'ultimatespecs.com', tipo: 'moto', rete: false },
+  // La quarta e' diversa dalle altre tre: non dichiarazioni del costruttore ma MISURE della
+  // redazione. Due soli livelli, perche' la prova E' la foglia: non c'e' niente sotto.
+  rilevamenti: { nome: 'Rilevamenti', dettaglio: 'misure della redazione — Auto (auto.it)', tipo: 'auto', rete: true, livelli: 2 },
 };
 
 // Da un indice su disco all'elenco marche/modelli, nella stessa forma della fonte di rete.
@@ -72,11 +76,14 @@ const SPENTO = { ok: false, motivo: 'catalogo non attivo su questa installazione
 function mount(app, deps = {}) {
   const clientIp = deps.clientIp || (req => req.ip || '');
   // Ogni risposta del catalogo passa di qui: limite, interruttore, errore in chiaro.
-  const via = (percorso, lavoro) => app.get(percorso, async (req, res) => {
+  // `fonteFissa` = la route serve sempre quella fonte, qualunque cosa dica la query. Senza,
+  // /api/catalogo/rilevamenti (che non manda `fonte`) ricadeva sul listino e rispondeva spento.
+  const via = (percorso, lavoro, fonteFissa) => app.get(percorso, async (req, res) => {
     if (!rateOk(clientIp(req))) return res.status(429).json({ ok: false, motivo: 'Troppe richieste.' });
-    // Lo spegnimento riguarda la SOLA fonte di rete: i due cataloghi su disco vanno comunque.
-    const fonteQ = String((req.query || {}).fonte || 'nuovo');
-    if (!motornet.ATTIVO && !indiceDi(fonteQ)) return res.json(SPENTO);
+    // Lo spegnimento riguarda la SOLA fonte di rete che lo prevede (Motornet): i due cataloghi
+    // su disco e i rilevamenti vanno comunque.
+    const fonteQ = fonteFissa || String((req.query || {}).fonte || 'nuovo');
+    if (!motornet.ATTIVO && !indiceDi(fonteQ) && fonteQ !== 'rilevamenti') return res.json(SPENTO);
     try {
       const out = await lavoro(req.query || {});
       if (out == null) return res.json({ ok: false, motivo: 'non trovato' });
@@ -94,17 +101,26 @@ function mount(app, deps = {}) {
     res.set('Cache-Control', 'public, max-age=3600');
     res.json({ ok: true, fonti: Object.entries(FONTI).map(([id, f]) => ({
       id, ...f,
-      disponibile: f.rete ? motornet.ATTIVO : true,
+      disponibile: id === 'rilevamenti' ? true : (f.rete ? motornet.ATTIVO : true),
       marche: f.rete ? null : conta(id),
     })) });
   });
 
   via('/api/catalogo/marche', async q => {
     const f = String(q.fonte || 'nuovo');
+    if (f === 'rilevamenti') return { fonte: f, marche: await autoit.marche() };
     const idx = indiceDi(f);
     if (idx) return { fonte: f, marche: marcheDaIndice(idx, f === 'auto' ? LOGHI_AUTO : null) };
     return { fonte: 'nuovo', marche: await motornet.marche() };
   });
+
+  // Secondo e ULTIMO livello dei rilevamenti: le prove di una marca. Ognuna e' gia' la foglia,
+  // con i valori misurati e il rimando all'articolo pubblicato.
+  via('/api/catalogo/rilevamenti', async q => {
+    const marca = String(q.marca || '').trim();
+    if (!marca) return { rilevamenti: [], motivo: 'marca mancante' };
+    return await autoit.rilevamenti(marca);
+  }, 'rilevamenti');
 
   via('/api/catalogo/modelli', async q => {
     const marca = String(q.marca || '').trim();
@@ -134,7 +150,7 @@ function mount(app, deps = {}) {
     const cod = String(q.modello || '').trim();
     if (!cod) return { versioni: [], motivo: 'modello mancante' };
     return await motornet.versioni(cod);
-  });
+  }, 'nuovo');
 
   // La scheda completa di un allestimento. Accessori a parte e in parallelo: sono due
   // richieste diverse alla fonte, e se una fallisce l'altra deve arrivare lo stesso.
@@ -148,7 +164,7 @@ function mount(app, deps = {}) {
       catch (e) { console.warn('[catalogo] accessori KO:', e.message); }
     }
     return { dettaglio: d, accessori: acc };
-  });
+  }, 'nuovo');
 }
 
 module.exports = { mount, _rateOk: rateOk };

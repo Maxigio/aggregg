@@ -1193,3 +1193,16 @@ section.search.cat-attivo #searchForm { min-height: 0; }
   /* su schermo stretto la densita' scelta non regge: si limita, senza cambiare la preferenza */
   .cat-griglia { grid-template-columns: repeat(min(var(--cat-cols, 6), 3), minmax(0, 1fr)); }
 }
+
+/* rilevamenti: ogni prova e' una scheda di valori MISURATI, senza livelli sotto */
+.cat-prove { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; max-height: 62vh; overflow-y: auto; }
+.cat-prova { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--r2); background: var(--surface-2); padding: 10px 12px; }
+.cat-prova-t { font-size: 0.92rem; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+.cat-prova-t span { font-family: var(--num); font-weight: 500; color: var(--text-muted); }
+.cat-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--accent-weak); color: var(--accent); font-size: 0.66rem; font-style: normal; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.cat-prova-n { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 12px; }
+.cat-prova-n div { display: flex; justify-content: space-between; gap: 8px; font-size: 0.78rem; padding: 2px 0; border-bottom: 1px dashed var(--line); }
+.cat-prova-n span { color: var(--text-muted); }
+.cat-prova-n b { font-family: var(--num); white-space: nowrap; }
+.cat-prova-f { margin-top: 8px; font-size: 0.72rem; color: var(--text-faint); }
+.cat-prova-f a { color: var(--accent); }

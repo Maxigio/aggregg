@@ -3472,7 +3472,7 @@ let catFonti = null;            // elenco fonti dal server
 let catLivello = 'marche';      // marche | modelli | versioni | scheda
 let catMarca = null;            // {acronimo, nome}
 let catModello = null;          // {codiceModello, nome}
-let catDati = { marche: null, modelli: null, versioni: null, scheda: null };
+let catDati = { marche: null, modelli: null, versioni: null, scheda: null, rilevamenti: null };
 let catStato = 'mai';           // mai | carico | ok | ko | spento
 let catMotivo = '';
 let catFiltro = '';
@@ -3534,7 +3534,7 @@ async function catInizio() {
 async function catCambiaFonte(id) {
   if (id === catFonte) return;
   catFonte = id; catSetPref('fonte', id);
-  catDati = { marche: null, modelli: null, versioni: null, scheda: null };
+  catDati = { marche: null, modelli: null, versioni: null, scheda: null, rilevamenti: null };
   return catVaiMarche();
 }
 
@@ -3545,7 +3545,17 @@ async function catVaiMarche() {
   if (d) { catDati.marche = d.marche; catRender(); }
 }
 
+// I rilevamenti hanno DUE livelli soli: la prova e' gia' la foglia, non c'e' niente sotto.
+async function catVaiRilevamenti(marca) {
+  const stesso = catMarca && catMarca.acronimo === marca.acronimo && catDati.rilevamenti;
+  catMarca = marca; catModello = null; catLivello = 'rilevamenti'; catFiltro = '';
+  if (stesso) { catStato = 'ok'; return catRender(); }
+  const d = await catChiedi('/api/catalogo/rilevamenti?marca=' + encodeURIComponent(marca.acronimo));
+  if (d) { catDati.rilevamenti = d; catRender(); }
+}
+
 async function catVaiModelli(marca) {
+  if (catFonte === 'rilevamenti') return catVaiRilevamenti(marca);
   const stesso = catMarca && catMarca.acronimo === marca.acronimo && catDati.modelli;
   catMarca = marca; catModello = null; catLivello = 'modelli'; catFiltro = '';
   if (stesso) { catStato = 'ok'; return catRender(); }
@@ -3602,7 +3612,8 @@ function catBarraHTML() {
     + ` title="${escapeHtml(x.dettaglio || '')}${x.marche ? ' · ' + x.marche + ' marche' : ''}">${escapeHtml(x.nome)}</button>`).join('');
   const ph = catLivello === 'marche' ? 'Cerca una marca…'
     : catLivello === 'modelli' ? 'Cerca un modello…'
-      : catLivello === 'versioni' ? 'Cerca una versione…' : 'Cerca…';
+      : catLivello === 'versioni' ? 'Cerca una versione…'
+        : catLivello === 'rilevamenti' ? 'Cerca una prova…' : 'Cerca…';
   const conElenco = catLivello !== 'scheda';
   return `<div class="cat-barra">
     <div class="cat-fonti" role="tablist" aria-label="Cataloghi">${f}</div>
@@ -3626,6 +3637,7 @@ function catBriciole() {
   const p = [{ t: f ? f.nome : 'Catalogo', l: 'marche' }];
   if (catMarca) p.push({ t: catMarca.nome, l: 'modelli' });
   if (catModello) p.push({ t: catModello.nome, l: 'versioni' });
+  if (catLivello === 'rilevamenti' && catMarca) p[p.length - 1].l = null;   // e' gia' la foglia
   if (catLivello === 'scheda') p.push({ t: catTitoloScheda(), l: null });
   return `<nav class="cat-briciole">${p.map((x, i) => (x.l && i < p.length - 1
     ? `<button type="button" class="cat-su" data-l="${x.l}">${escapeHtml(x.t)}</button>`
@@ -3693,7 +3705,33 @@ function catCorpo() {
       prezzo: v => (v.prezzoListino ? catEur(v.prezzoListino) : ''),
     });
   }
+  if (catLivello === 'rilevamenti') return catRilevamentiHTML();
   return catSchedaHTML();
+}
+
+// Le prove: ognuna e' una scheda con i valori MISURATI. Niente livelli sotto, e il rimando
+// all'articolo pubblicato e' sempre in vista — il numero lo diamo noi, la prova la leggi da loro.
+function catRilevamentiHTML() {
+  const d = catDati.rilevamenti;
+  if (!d || !d.rilevamenti) return catVuoto('Nessuna prova.');
+  const l = catFiltra(d.rilevamenti, x => x.nome);
+  if (!l.length) return catVuoto('Nessuna prova con questo nome.');
+  const v = (x, u) => (x == null ? '—' : String(x).replace('.', ',') + (u || ''));
+  return `<div class="cat-prove">${l.map(r => `<div class="cat-prova">
+    <div class="cat-prova-t">${escapeHtml(r.nome)}${r.anno ? ` <span>${r.anno}</span>` : ''}
+      ${r.elettrica ? '<em class="cat-tag">elettrica</em>' : ''}${r.autoDellAnno ? '<em class="cat-tag">auto dell\'anno</em>' : ''}</div>
+    <div class="cat-prova-n">
+      <div><span>velocita max</span><b>${v(r.velocitaMax, ' km/h')}</b></div>
+      <div><span>0-100</span><b>${escapeHtml(r.acc0_100 || '—')}</b></div>
+      <div><span>ripresa 80-120</span><b>${escapeHtml(r.ripresa80_120 || '—')}</b></div>
+      <div><span>frenata 100-0</span><b>${v(r.frenata100_0, ' m')}</b></div>
+      <div><span>consumo medio</span><b>${v(r.l100Medio, ' l/100km')}</b></div>
+      <div><span>citta / autostrada</span><b>${v(r.l100Citta)} / ${v(r.l100Autostrada)}</b></div>
+    </div>
+    <div class="cat-prova-f">${r.prova ? 'Prova su ' + escapeHtml(r.prova) : ''}
+      ${r.link ? `· <a href="${escapeHtml(r.link)}" target="_blank" rel="noopener noreferrer">leggi la prova ↗</a>` : ''}</div>
+  </div>`).join('')}
+  <div class="cat-fonte-nota">${escapeHtml(d.fonte || '')}${d.completo === false ? ' · elenco incompleto' : ''}. Valori MISURATI dalla redazione, non dichiarati dal costruttore.</div></div>`;
 }
 
 // Scheda: due forme, una per famiglia di fonti. Il listino porta prezzo e dotazione, le
