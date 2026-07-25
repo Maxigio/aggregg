@@ -64,7 +64,7 @@ function candidates(catalog, existing, opts = {}) {
         if (!model || !model.nome) continue;
         const cov = coverage(model);
         if (cov === 0) continue;                                  // niente target morti
-        const key = `${tp}|${norm(aliasMap1(amap, brandName))}|${norm(model.nome)}`;
+        const key = canonKey(tp, brandName, model.nome, amap);   // stessa chiave degli esistenti
         if (have.has(key)) continue;                              // già in watchlist
         out.push({ tipo: tp, marca: brandName, modello: model.nome, coverage: cov, sites: model.sites || [] });
       }
@@ -78,9 +78,5 @@ function candidates(catalog, existing, opts = {}) {
   const items = out.slice(offset, offset + limit);
   return { items, total };
 }
-
-// Canonicalizza il nome brand del catalogo con la stessa aliasMap usata sugli
-// esistenti → i due lati combaciano anche se il catalogo usa una variante.
-function aliasMap1(amap, brandName) { return amap[norm(brandName)] || brandName; }
 
 module.exports = { candidates, coverage, _canonKey: canonKey };

@@ -143,7 +143,11 @@ function priceExtraHeaders(cfg, conPass) {
 function priceExtraValues(pr, cfg, conPass) {   // pr = pricing() | null ; ritorna numeri arrotondati o ''
   const v = [], r = x => (x == null ? '' : Math.round(x));
   if (cfg.margine > 0) v.push(r(pr && pr.rivendita));
-  if (cfg.margine > 0 && (cfg.passaggio || conPass)) v.push(r(pr && pr.margineNetto));
+  // La colonna resta per tutte le righe, ma la CELLA si riempie solo dove un costo di pratica
+  // esiste davvero per quella riga: senza questo, calcolare il passaggio su un annuncio solo
+  // stampava il margine LORDO sugli altri 19, che nel foglio sembrano cosi' i piu' redditizi.
+  // Stessa regola della UI di riga (priceRowExtraHTML).
+  if (cfg.margine > 0 && (cfg.passaggio || conPass)) v.push(r(pr && pr.passaggio ? pr.margineNetto : null));
   if (cfg.iva) { v.push(r(pr && pr.imponibile)); v.push(r(pr && pr.ivaQuota)); }
   return v;
 }
@@ -834,6 +838,11 @@ function setSearchMode(mode) {
   // e vive nel suo pannello. Uscendo si ripulisce, cosi' non lascia stato in giro.
   document.querySelector('section.search').classList.toggle('cat-attivo', catalogo);
   document.getElementById('catalogoPanel').classList.toggle('d-none', !catalogo);
+  // Pannelli output: mostra solo quello del modo attivo (lo popola il rispettivo do*()).
+  // Stanno PRIMA del ramo catalogo perche' il suo `return` le saltava: da Ricambi a Catalogo
+  // la lista ricambi restava a schermo, e stando prima nel DOM finiva sopra la griglia marche.
+  if (!ricambi) document.getElementById('ricambiPanel').classList.add('d-none');
+  if (ricambi || prev === 'ricambi') { rcData = null; currentResults = []; hideResults(); }   // ingresso/uscita ricambi → pulizia piena
   if (catalogo) { hideResults(); catApri(); return; }
   if (prev === 'catalogo') catChiudi();
   // Ricambi ha i suoi campi (OEM) e nasconde i campi auto (marca/modello + tipo).
@@ -847,10 +856,7 @@ function setSearchMode(mode) {
   btnCerca.textContent = 'Cerca';
   document.getElementById('modello').placeholder =
     currentTipo() === 'moto' ? 'Modello — es. MT-07 (opzionale)' : 'Modello — es. 318d (opzionale)';
-  // Pannelli output: mostra solo quello del modo attivo (lo popola il rispettivo do*()).
-  if (!ricambi) document.getElementById('ricambiPanel').classList.add('d-none');
   if (ricambi) document.getElementById('versioneRow').classList.add('d-none');   // niente riga Versione Moto.it nei ricambi
-  if (ricambi || prev === 'ricambi') { rcData = null; currentResults = []; hideResults(); }   // ingresso/uscita ricambi → pulizia piena
 }
 
 // ═══ Modo Ricambi — pipeline parti SEPARATA (multi-fonte, full-width) ═══════════
@@ -1612,7 +1618,10 @@ async function doSearch() {
   lastSearchParams = { ...params };
   // Liquidita per la marca cercata: alimenta il segno accanto a ogni annuncio. Solo auto
   // (le moto non hanno il dato) e solo con una marca: una richiesta per ricerca, cachata.
+  // L'else non e' facoltativo: senza, i dati della marca AUTO precedente restavano in memoria e
+  // finivano accanto a una moto — "Fiat 500: 94.618 passaggi, fonte ACI" su una Honda CB 500.
   if (params.tipo !== 'moto' && params.marca) liqCarica(params.marca, params.modello, params.tipo);
+  else { liqMarca = null; liqModelli = null; liqVoce = null; liqStato = 'mai'; }
   visibleCols = colsFromFilters(params);   // colonne default = filtri usati (anno/km); resto via menu
   syncColMenu();
 
@@ -3381,17 +3390,22 @@ function exportPdf(results) {
   const conPass = results.some(r => passDi(r) != null);
   const extraH = priceExtraHeaders(cfg, conPass);
   const tableBody = results.map(r => { const pr = vPricing(r.prezzo, passDi(r)); return [FONTE_LABEL_PDF[r.fonte] || r.fonte, r.titolo, pr ? fmtEur(Math.round(pr.finale)) : '—', r.anno != null ? String(r.anno) : '—', r.km != null ? r.km.toLocaleString('it-IT') + ' km' : '—', r.carburante || '—', r.provincia || '—', ...priceExtraValues(pr, cfg, conPass).map(x => x === '' ? '—' : fmtEur(x))]; });
-  if (priceAdjActive(cfg)) {
-    const bits = [];
-    if (cfg.comm) bits.push(`Commissione +${cfg.comm}${cfg.commUnit === 'pct' ? '%' : ' €'}`);
-    if (cfg.spese) bits.push(`Spese −${cfg.spese} €`);
-    if (cfg.margine) bits.push(`Margine ${cfg.margine}%`);
-    if (cfg.iva) bits.push('IVA 22% scorporata');
+  // La legenda si decide sui `bits`, non su priceAdjActive: con il solo passaggio impostato e
+  // margine 0 quest'ultimo e' vero ma non c'e' niente da elencare, e usciva "Prezzi finali · "
+  // monca. Il passaggio entra in legenda quando conta davvero, cioe' quando alimenta la
+  // colonna "Margine netto (€)": senza, il PDF sottrae un costo che non dichiara da nessuna parte.
+  const bits = [];
+  if (cfg.comm) bits.push(`Commissione +${cfg.comm}${cfg.commUnit === 'pct' ? '%' : ' €'}`);
+  if (cfg.spese) bits.push(`Spese −${cfg.spese} €`);
+  if (cfg.margine) bits.push(`Margine ${cfg.margine}%`);
+  if (cfg.margine && cfg.passaggio) bits.push(`Passaggio −${cfg.passaggio} €`);
+  if (cfg.iva) bits.push('IVA 22% scorporata');
+  if (bits.length) {
     doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(...SLATE);
     doc.text('Prezzi finali · ' + bits.join(' · '), 14, stripY + 11);
   }
   doc.autoTable({
-    startY: stripY + (priceAdjActive(cfg) ? 15 : 12),
+    startY: stripY + (bits.length ? 15 : 12),
     head: [['Fonte', 'Veicolo', 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia', ...extraH]],
     body: tableBody,
     theme: 'plain',
@@ -3476,6 +3490,10 @@ let catDati = { marche: null, modelli: null, versioni: null, scheda: null, rilev
 let catStato = 'mai';           // mai | carico | ok | ko | spento
 let catMotivo = '';
 let catFiltro = '';
+// Token di generazione, come searchGen/rcGen/vehGen. Rilevamenti va sulla rete e puo' metterci
+// secondi; le fonti locali rispondono in millisecondi. Senza token, la risposta della fonte che
+// hai gia' abbandonato arriva dopo e sovrascrive quella che stai guardando.
+let catGen = 0;
 
 // Preferenze di vista, ricordate fra le sessioni: sono scelte dell'operatore, non stato.
 const catPref = (k, d) => { try { const v = localStorage.getItem('amrCat_' + k); return v == null ? d : v; } catch (_) { return d; } };
@@ -3504,13 +3522,15 @@ function catApri() { if (catStato === 'mai' || catStato === 'ko') catInizio(); e
 function catChiudi() { const el = catEl(); if (el) el.innerHTML = ''; }
 
 async function catChiedi(percorso) {
+  const mia = ++catGen;
   catStato = 'carico'; catRender();
   try {
     const d = await fetch(percorso).then(r => r.json());
+    if (mia !== catGen) return null;          // sorpassata: non tocca ne' stato ne' dati
     if (d && d.ok) { catStato = 'ok'; return d; }
     catStato = d && d.spento ? 'spento' : 'ko';
     catMotivo = (d && d.motivo) || 'non disponibile';
-  } catch (_) { catStato = 'ko'; catMotivo = 'richiesta non riuscita'; }
+  } catch (_) { if (mia !== catGen) return null; catStato = 'ko'; catMotivo = 'richiesta non riuscita'; }
   catRender();
   return null;
 }
@@ -3534,6 +3554,7 @@ async function catInizio() {
 async function catCambiaFonte(id) {
   if (id === catFonte) return;
   catFonte = id; catSetPref('fonte', id);
+  catGen++;                                   // invalida anche le fetch dirette (versioni/scheda)
   catDati = { marche: null, modelli: null, versioni: null, scheda: null, rilevamenti: null };
   return catVaiMarche();
 }
@@ -3575,9 +3596,11 @@ async function catVaiVersioni(modello) {
     return;
   }
   const q = new URLSearchParams({ tipo: catTipo(), marca: catMarca.nome, modello: modello.nome });
+  const mia = ++catGen;
   catStato = 'carico'; catRender();
   try {
     const d = await fetch('/api/scheda-veicolo?' + q.toString()).then(r => r.json());
+    if (mia !== catGen) return;
     if (!d || !d.ok) { catStato = 'ko'; catMotivo = (d && d.error) || 'scheda non disponibile'; return catRender(); }
     catStato = 'ok';
     catDati.versioni = (d.motorizzazioni || []).map(m => ({
@@ -3585,7 +3608,7 @@ async function catVaiVersioni(modello) {
       cavalli: m.hp || null, alimentazione: m.fuel || null, anni: m.yearRange || (m.year ? String(m.year) : null),
     }));
     catRender();
-  } catch (_) { catStato = 'ko'; catMotivo = 'richiesta non riuscita'; catRender(); }
+  } catch (_) { if (mia !== catGen) return; catStato = 'ko'; catMotivo = 'richiesta non riuscita'; catRender(); }
 }
 
 async function catVaiScheda(rif) {
@@ -3595,12 +3618,14 @@ async function catVaiScheda(rif) {
     if (d) { catDati.scheda = d; catRender(); }
     return;
   }
+  const mia = ++catGen;
   catStato = 'carico'; catRender();
   try {
     const d = await fetch('/api/scheda-veicolo/specs?url=' + encodeURIComponent(rif)).then(r => r.json());
+    if (mia !== catGen) return;
     if (!d || !d.ok) { catStato = 'ko'; catMotivo = 'specifiche non disponibili'; return catRender(); }
     catStato = 'ok'; catDati.scheda = { specs: d, url: rif }; catRender();
-  } catch (_) { catStato = 'ko'; catMotivo = 'richiesta non riuscita'; catRender(); }
+  } catch (_) { if (mia !== catGen) return; catStato = 'ko'; catMotivo = 'richiesta non riuscita'; catRender(); }
 }
 
 // ── disegno ──────────────────────────────────────────────────────────────────
@@ -3715,7 +3740,11 @@ function catRilevamentiHTML() {
   const d = catDati.rilevamenti;
   if (!d || !d.rilevamenti) return catVuoto('Nessuna prova.');
   const l = catFiltra(d.rilevamenti, x => x.nome);
-  if (!l.length) return catVuoto('Nessuna prova con questo nome.');
+  // A elenco vuoto per un intoppo della fonte, "Nessuna prova con questo nome" e' una bugia:
+  // fa incolpare il proprio filtro invece della fonte. Il filtro c'entra solo se e' stato scritto.
+  if (!l.length) return catVuoto(!d.rilevamenti.length
+    ? 'Elenco non disponibile adesso: riprova fra qualche minuto.'
+    : 'Nessuna prova con questo nome.');
   const v = (x, u) => (x == null ? '—' : String(x).replace('.', ',') + (u || ''));
   return `<div class="cat-prove">${l.map(r => `<div class="cat-prova">
     <div class="cat-prova-t">${escapeHtml(r.nome)}${r.anno ? ` <span>${r.anno}</span>` : ''}
@@ -3725,8 +3754,8 @@ function catRilevamentiHTML() {
       <div><span>0-100</span><b>${escapeHtml(r.acc0_100 || '—')}</b></div>
       <div><span>ripresa 80-120</span><b>${escapeHtml(r.ripresa80_120 || '—')}</b></div>
       <div><span>frenata 100-0</span><b>${v(r.frenata100_0, ' m')}</b></div>
-      <div><span>consumo medio</span><b>${v(r.l100Medio, ' l/100km')}</b></div>
-      <div><span>citta / autostrada</span><b>${v(r.l100Citta)} / ${v(r.l100Autostrada)}</b></div>
+      <div><span>consumo medio</span><b>${v(r.l100Medio, ' ' + (r.unitaConsumo || 'l/100km'))}</b></div>
+      <div><span>citta / autostrada</span><b>${v(r.l100Citta)} / ${v(r.l100Autostrada, ' ' + (r.unitaConsumo || 'l/100km'))}</b></div>
     </div>
     <div class="cat-prova-f">${r.prova ? 'Prova su ' + escapeHtml(r.prova) : ''}
       ${r.link ? `· <a href="${escapeHtml(r.link)}" target="_blank" rel="noopener noreferrer">leggi la prova ↗</a>` : ''}</div>

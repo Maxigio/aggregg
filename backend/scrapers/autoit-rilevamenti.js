@@ -44,9 +44,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // Host fisso e nessun redirect seguito: il percorso lo scegliamo noi.
 async function getHtml(percorso) {
   if (Date.now() < bloccatoFino) throw fail('in pausa dopo un blocco', { kind: 'blocked' });
-  const attesa = PAUSA_MS - (Date.now() - ultima);
-  if (attesa > 0) await sleep(attesa);
-  ultima = Date.now();
+  // Lo slot si PRENOTA prima di dormire, non si segna dopo: due chiamate che entrano insieme
+  // leggerebbero lo stesso `ultima`, dormirebbero uguale e partirebbero insieme, dividendo il
+  // freno per il numero di chiamanti invece di rispettarlo.
+  const ora = Date.now();
+  const quando = Math.max(ora, ultima + PAUSA_MS);
+  ultima = quando;
+  if (quando > ora) await sleep(quando - ora);
   const { status, body } = await new Promise((resolve, reject) => {
     const req = https.get({
       host: HOST, path: percorso,
@@ -80,7 +84,17 @@ async function conCache(chiave, produci) {
   if (v && Date.now() - v.t < TTL_MS) return v.d;
   if (inVolo.has(chiave)) return inVolo.get(chiave);
   const p = (async () => {
-    try { const d = await produci(); c.voci[chiave] = { t: Date.now(), d }; scrivi(); return d; }
+    try {
+      const d = await produci();
+      // Un risultato vuoto o dichiarato incompleto non e' un dato: e' un intoppo. Si serve lo
+      // stesso (meglio di un errore), ma scade fra 15 minuti invece che fra 7 giorni, altrimenti
+      // un singolo 500 o un cambio di markup congela una marca per una settimana. Si retrodata
+      // `t` invece di aggiungere un campo: le cache gia' scritte restano leggibili.
+      const sospetto = Array.isArray(d) ? !d.length : !!(d && (d.completo === false || !(d.rilevamenti || []).length));
+      c.voci[chiave] = { t: sospetto ? Date.now() - TTL_MS + 15 * 60 * 1000 : Date.now(), d };
+      scrivi();
+      return d;
+    }
     catch (e) {
       if (v) { console.warn('[autoit] ' + chiave + ' KO (' + e.message + '): servo la cache vecchia'); return v.d; }
       throw e;
@@ -117,7 +131,8 @@ function oggettoAttorno(s, pos) {
 
 const num = v => { const n = Number(String(v == null ? '' : v).replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; };
 const testo = v => { const t = String(v == null ? '' : v).trim(); return t && t !== '-' && t !== 'n.r.' ? t : null; };
-// I consumi della fonte sono in km/l; il resto dell'app ragiona in l/100 km.
+// I consumi della fonte sono in km/l; il resto dell'app ragiona in l/100 km. Sulle elettriche
+// pure la fonte da' km/kWh: il conto e' identico, cambia solo l'unita' — vedi unitaConsumo.
 const per100 = kml => (kml > 0 ? Math.round(100 / kml * 100) / 100 : null);
 
 /** Da un record grezzo del payload a quello che mostriamo. */
@@ -126,6 +141,9 @@ function mappaRecord(r) {
   if (!nome) return null;
   const m = nome.match(/\s-\s(\d{4})\s*$/);
   const medio = num(r.ConsumoMedio), citta = num(r.ConsumoCitta), extra = num(r.ConsumoAutostrada);
+  // L'unita' la dichiara la fonte, non il flag AutoElettrica: la F-Pace P400e ha
+  // AutoElettrica:true ed e' una plug-in, i suoi 10,42 l/100 km sono carburante vero.
+  const kwh = /kwh/i.test([r.ConsumoMedio, r.ConsumoCitta, r.ConsumoAutostrada].join(' '));
   return {
     id: r.id != null ? r.id : null,
     nome: m ? nome.slice(0, m.index).trim() : nome,
@@ -140,6 +158,7 @@ function mappaRecord(r) {
     consumoMedio: medio, consumoCitta: citta, consumoAutostrada: extra,
     // La conversione e' cio' che rende il dato usabile dal nostro calcolo carburante.
     l100Medio: per100(medio), l100Citta: per100(citta), l100Autostrada: per100(extra),
+    unitaConsumo: kwh ? 'kWh/100km' : 'l/100km',
     autonomiaBatteria: testo(r.AutonomiaBatteria),
     elettrica: r.AutoElettrica === true,
     cambioAutomatico: r.CambioAutomatico === true,
@@ -222,6 +241,10 @@ const rilevamenti = slug => conCache('riv|' + slug, async () => {
     if (!nuovi.length) break;                 // pagina senza novita': l'elenco e' finito
     out.push(...nuovi);
   }
+  // L'intestazione dice quante prove ci sono e non ne abbiamo estratta nessuna: non e' una
+  // marca senza prove, e' il parsing che non aggancia piu'. Meglio un errore dichiarato che un
+  // "Nessuna prova con questo nome" archiviato per 7 giorni.
+  if (atteso && !out.length) throw fail('rilevamenti non estratti per ' + slug + ': la pagina della fonte e\' cambiata', { kind: 'parse' });
   return {
     marca: nomeDaSlug(slug), slug,
     dichiarati: atteso, rilevamenti: out,

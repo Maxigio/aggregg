@@ -520,7 +520,8 @@ app.get('/api/liquidita', (req, res) => {
   const modelli = [];
   for (const [k, m] of Object.entries(liquidita.dati.modelli)) {
     if (!k.startsWith(pref)) continue;
-    modelli.push({ modello: m.modello, parco: m.parco, trasferimenti: m.trasferimenti, ricambio: m.ricambio, giudizio: liquidita.giudizio(m.ricambio) });
+    const r = liquidita.ricambioUtile(m);   // niente percentuale dove il rapporto non e' misurabile
+    modelli.push({ modello: m.modello, parco: m.parco, trasferimenti: m.trasferimenti, ricambio: r, giudizio: liquidita.giudizio(r) });
   }
   res.set('Cache-Control', 'public, max-age=86400');
   // voce del modello cercato: la sola che sa dire "questo e' il dato del modello base, non
@@ -571,7 +572,10 @@ app.get('/api/passaggio', async (req, res) => {
   });
   r.localita = { testo: String(provincia || '').slice(0, 60), sigla: loc.sigla, via: loc.via };
   if (kwStimati != null) r.potenzaStimata = { cv: cvN, kw: kwStimati };
-  if (kwListino && kwN < 1) r.potenzaListino = { cv: cvN, kw: kwListino.kw, versioni: kwListino.versioni.slice(0, 3), fonte: kwListino.fonte, url: kwListino.url };
+  // `!(kwN >= 1)`, non `kwN < 1`: senza il parametro kw questo e' NaN, e NaN < 1 e' FALSO —
+  // la provenienza non sarebbe mai uscita proprio nel caso per cui esiste. Stessa forma della
+  // riga 564, che con NaN sceglie appunto i kW di listino.
+  if (kwListino && !(kwN >= 1)) r.potenzaListino = { cv: cvN, kw: kwListino.kw, versioni: kwListino.versioni.slice(0, 3), fonte: kwListino.fonte, url: kwListino.url };
   // Cache solo sui successi: un "non calcolabile" dipende dai dati dell'annuncio, che possono
   // arrivare dopo (Moto.it arricchisce la potenza in un secondo momento).
   if (r.ok) res.set('Cache-Control', 'public, max-age=3600');

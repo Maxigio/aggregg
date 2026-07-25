@@ -16,6 +16,19 @@ const L = require('../data/liquidita-modelli.json');
 const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   .replace(/[^a-z0-9]+/g, ' ').trim();
 
+/**
+ * Il rapporto trasferimenti/parco ha senso solo su un parco abbastanza grande. Sotto, incrocia
+ * due tavole ACI tagliate diversamente — i passaggi di una riga possono finire su un'altra — e
+ * produce rumore fino all'impossibile: misurato su data/liquidita-modelli.json, HILUX (parco
+ * 856) da' 0,4% mentre HILUX 4WD (parco 134) da' 119,4%, cioe' i passaggi dell'una contati
+ * sull'altra. Con la soglia a 300 restano fuori 233 modelli su 1.328 e il massimo residuo
+ * scende a 33,6% (BYD Dolphin), che e' plausibile.
+ * Un rapporto sopra il 100% non e' "alto": e' aritmeticamente impossibile, quindi si tace.
+ */
+const PARCO_MIN = 300;
+const ricambioUtile = m =>
+  (m && m.ricambio != null && m.parco >= PARCO_MIN && m.ricambio <= 100) ? m.ricambio : null;
+
 // "come si rivende" da un tasso di ricambio annuo. Soglie ricavate dalla distribuzione
 // reale del dato (mediana ~8%): non sono un giudizio, sono un posizionamento.
 function giudizio(ricambio) {
@@ -52,13 +65,16 @@ function cerca(marca, modello, tipo) {
     }
   }
   if (!hit) return null;
+  // I due numeri assoluti restano: presi da soli sono corretti, e' il loro rapporto a non
+  // esserlo. Sparisce solo la percentuale, e con lei il giudizio che ne discende.
+  const r = ricambioUtile(hit);
   return {
     ok: true, marca: hit.marca, modello: hit.modello, viaPadre,
     parco: hit.parco, trasferimenti: hit.trasferimenti, trasferimentiTotali: hit.trasferimentiTotali,
-    ricambio: hit.ricambio, giudizio: giudizio(hit.ricambio),
+    ricambio: r, giudizio: giudizio(r),
     anno: L.anno, fonte: L.fonte, aggiornato: L.generatedAt,
     nota: 'Dato aggregato di modello sul parco italiano: non riguarda il singolo veicolo in vendita.',
   };
 }
 
-module.exports = { cerca, giudizio, dati: L };
+module.exports = { cerca, giudizio, ricambioUtile, dati: L };

@@ -135,9 +135,13 @@ function mount(app, deps = {}) {
     }
     // Si accetta sia la sigla ("ALF") sia il nome esteso ("Alfa Romeo"): chi arriva da un
     // link della ricerca usato ha il nome, chi naviga il catalogo ha la sigla.
+    // Si distingue sigla da nome guardando gli acronimi VERI, non la lunghezza: "DS" e "MG"
+    // sono nomi di due caratteri con acronimo diverso ("DSA", "MGG"), e con l'euristica sulla
+    // lunghezza finivano spediti a Motornet come codice_marca, che rispondeva elenco vuoto.
+    // marche() e' in cache 7 giorni: non aggiunge richieste.
     let acronimo = marca.toUpperCase();
-    if (marca.length > 3) {
-      const ms = await motornet.marche();
+    const ms = await motornet.marche();
+    if (!ms.some(x => x.acronimo === acronimo)) {
       const n = motornet._norm(marca);
       const m = ms.find(x => motornet._norm(x.nome) === n) || ms.find(x => motornet._norm(x.nome).startsWith(n));
       if (!m) return { modelli: [], motivo: 'marca non nel listino del nuovo' };
