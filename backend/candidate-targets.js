@@ -27,8 +27,10 @@ function coverage(model) {
 }
 
 // Nome canonico del brand per il confronto (alias → primo del gruppo), poi norm.
+// loadAliasMap torna il GRUPPO (canonico per primo); regge anche la forma storica a stringa.
 function canonKey(tipo, marca, modello, aliasMap) {
-  const canon = aliasMap[norm(marca)] || marca;
+  const g = aliasMap[norm(marca)];
+  const canon = (Array.isArray(g) ? g[0] : g) || marca;
   return `${tipo}|${norm(canon)}|${norm(modello)}`;
 }
 

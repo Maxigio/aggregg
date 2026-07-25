@@ -17,7 +17,14 @@ const norm = s => String(s).toLowerCase()
   .replace(/[^a-z0-9]/g, '');
 
 // ─── Alias brand curati (gruppi di nomi = stesso brand reale) ────────────────
-// Ritorna map: norm(qualsiasi-nome-del-gruppo) → nome canonico (primo del gruppo).
+// Ritorna map: norm(qualsiasi-nome-del-gruppo) → TUTTO il gruppo (canonico per primo).
+//
+// Prima tornava il solo nome canonico, e questo rendeva gli alias inutili proprio dove
+// servivano: il gruppo ["Beta","Betamotor"] ha per canonico "Beta", ma l'elenco marche di
+// Moto.it contiene "Betamotor" — il resolver cercava "Beta" fra i candidati, non lo trovava e
+// rispondeva null. Misurato: 8 gruppi su 10 fallivano cosi' (Beta, Fantic, Benda, Brixton,
+// Can-Am, Keeway, Mash, Mondial), cioe' marche vendute davvero in Italia.
+// Col gruppo intero il resolver puo' provare ogni grafia finche' una e' fra i candidati.
 function loadAliasMap(tipo) {
   let groups = [];
   try {
@@ -27,8 +34,7 @@ function loadAliasMap(tipo) {
   const map = {};
   for (const g of groups) {
     if (!Array.isArray(g) || !g.length) continue;
-    const canonical = g[0];
-    for (const name of g) map[norm(name)] = canonical;
+    for (const name of g) map[norm(name)] = g;
   }
   return map;
 }
@@ -44,9 +50,14 @@ function makeResolver(candidates, opts = {}) {
   return function resolve(query) {
     const q = norm(query);
     if (!q) return null;
-    if (alias[q]) {
-      const ck = norm(alias[q]);
-      if (exact.has(ck)) return exact.get(ck);
+    // L'alias puo' essere un gruppo di grafie o (forma storica) il solo nome canonico:
+    // si prova ogni grafia, e vince la prima che esiste davvero fra i candidati.
+    const a = alias[q];
+    if (a) {
+      for (const name of (Array.isArray(a) ? a : [a])) {
+        const ck = norm(name);
+        if (exact.has(ck)) return exact.get(ck);
+      }
     }
     return exact.has(q) ? exact.get(q) : null;
   };
