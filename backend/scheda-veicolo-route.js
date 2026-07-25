@@ -69,12 +69,35 @@ function matchModel(models, query) {
 // ── Moto (ultimatespecs) ─────────────────────────────────────────────────────
 // Match modello moto: esatto-normalizzato + varianti (chiave che estende q con un
 // carattere NON numerico → "mt07" pesca mt07/mt07abs/mt07tr, ma non "r1"→"r15").
+// token a confine-parola, accenti appianati ("Caballero-Rally-500" → [caballero,rally,500])
+const motoTokens = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .split(/[^a-z0-9]+/).filter(Boolean);
+
 function matchMotoModels(models, query) {
   const q = norm(query);
   if (!q) return [];
   const out = [];
   for (const k of Object.keys(models)) {
     if (k === q || (k.startsWith(q) && k.length > q.length && !/\d/.test(k[q.length]))) out.push({ k, ...models[k] });
+  }
+  // RIPIEGO: ultimatespecs intercala la variante nel nome ("Caballero-Rally-500"), quindi
+  // "Caballero 500" non è prefisso di nessuna chiave → prima non trovavamo niente. Qui si
+  // accettano le voci il cui nome contiene TUTTI i token cercati, a confine-parola e in
+  // ordine libero. Il confine-parola è ciò che evita i falsi match: "Pegaso 50" NON prende
+  // "Pegaso-650" (token "50" ≠ "650"), e "R1" non prende "R15".
+  // Solo se il prefisso non ha trovato nulla → nessun match già funzionante cambia.
+  if (!out.length) {
+    const qt = motoTokens(query);
+    // Sigla-serie di 1 carattere dichiarata dalla query (BMW "R 1300 R" → "r"): in quel caso
+    // NON si accetta una voce che apra con una sigla DIVERSA ("K-1300-R" è un'altra moto).
+    // Se la query non dichiara nessuna sigla ("100 CS"), la voce può averla ("R-100-CS").
+    const qSigle = qt.filter(t => t.length === 1);
+    if (qt.length) for (const k of Object.keys(models)) {
+      const lt = motoTokens(models[k].label);
+      if (!qt.every(t => lt.includes(t))) continue;
+      if (qSigle.length && lt[0] && lt[0].length === 1 && !qSigle.includes(lt[0])) continue;
+      out.push({ k, ...models[k] });
+    }
   }
   out.sort((a, b) => a.k.length - b.k.length);   // base (chiave più corta) primo
   return out;
@@ -99,7 +122,13 @@ function resolveMoto({ marca, modello, anno }) {
     entries.forEach((e, i) => { const d = Math.abs(e.year - yr); if (d < bd) { bd = d; bi = i; } });
     if (bi > 0) entries.unshift(entries.splice(bi, 1)[0]);
   }
-  const baseLabel = matched[0].label;
+  // Nome del veicolo: la voce ESATTA se esiste, altrimenti ciò che l'utente ha cercato.
+  // Prima si prendeva matched[0].label = la chiave più corta, cioè una variante ARBITRARIA:
+  // cercando "800MT" (che su ultimatespecs non esiste come voce a sé) la scheda si
+  // intitolava "800MT-Sport" solo perché più corta di "800MT-Touring". Le varianti restano
+  // tutte selezionabili nella griglia: è là che l'utente scegli, non nel titolo.
+  const exact = matched.find(m => m.k === norm(modello));
+  const baseLabel = exact ? exact.label : String(modello || '').trim() || matched[0].label;
   return {
     title: `${brand.name} ${baseLabel}`, marca: brand.name, modello: baseLabel,
     generations: [], gen: { name: `${brand.name} ${baseLabel}`, slug: '' },
