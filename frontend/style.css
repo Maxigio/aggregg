@@ -261,6 +261,11 @@ body:not(.has-results) .search {
 .mk-fonte { font-size: 0.68rem; color: var(--text-faint); border-top: 1px solid var(--line); padding-top: 5px; margin-top: auto; }
 .mk-vuoto { font-size: 0.82rem; color: var(--text-faint); font-style: italic; }
 .mk-ctrl { display: flex; gap: 8px; flex-wrap: wrap; }
+/* segno di liquidita accanto all'annuncio: ricambio annuo del modello (ACI) */
+.liq-badge { margin-left: 6px; font-family: var(--num); font-size: 0.7rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; white-space: nowrap; cursor: help; }
+.liq-alta { background: var(--accent-weak); color: var(--accent); }
+.liq-media { background: var(--tag-moto-bg); color: var(--tag-moto-fg); }
+.liq-bassa, .liq-ferma { background: var(--neg-bg); color: var(--neg); }
 .mk-usa { align-self: flex-start; height: 28px; padding: 0 10px; border: 1px solid var(--accent); border-radius: var(--r); background: var(--surface); color: var(--accent); font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
 .mk-usa:hover { background: var(--accent); color: #fff; }
 .row-marg { color: var(--pos); font-family: var(--num); font-size: 0.76rem; }

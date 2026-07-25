@@ -1572,6 +1572,9 @@ async function doSearch() {
   }
   Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });
   lastSearchParams = { ...params };
+  // Liquidita per la marca cercata: alimenta il segno accanto a ogni annuncio. Solo auto
+  // (le moto non hanno il dato) e solo con una marca: una richiesta per ricerca, cachata.
+  if (params.tipo !== 'moto' && params.marca) liqCarica(params.marca);
   visibleCols = colsFromFilters(params);   // colonne default = filtri usati (anno/km); resto via menu
   syncColMenu();
 
@@ -1895,7 +1898,7 @@ function rowHTML(item, bestSet) {
           <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}</div>
           ${item.variante ? `<div class="row-variante">${escapeHtml(item.variante)}</div>` : ''}
           ${sub ? `<div class="row-sub">${sub}</div>` : ''}
-          <div class="row-sub-m">${escapeHtml(subM)}</div>
+          <div class="row-sub-m">${escapeHtml(subM)}${liqBadgeHTML(item)}</div>
         </div>`;
       case 'anno':   return `<div class="row-cell num muted">${item.anno || '—'}</div>`;
       case 'km':     return `<div class="row-cell num muted">${item.km != null ? item.km.toLocaleString('it-IT') : '—'}</div>`;
@@ -2603,6 +2606,51 @@ function vehCostoHTML(spec) {
     <div class="veh-costo-fonte">Prezzi self ${carbIdx.aggiornato ? 'del ' + carbIdx.aggiornato : ''} — ${escapeHtml(carbIdx.fonte)}. Stima: consumo dichiarato, non reale.</div>
   </div>`;
 }
+
+// ── Liquidita accanto a ogni annuncio ────────────────────────────────────────
+// Nelle ricerche per sola MARCA ogni riga e' un modello diverso: sapere quali si
+// rivendono in fretta cambia la scelta quando ne valuti venti insieme. Il dato e' ACI
+// Autoritratto (parco + passaggi/anno per modello): si scarica una volta per marca.
+// L'attribuzione riga→modello usa il nome ACI piu' LUNGO contenuto nel titolo: e' preciso
+// perche' la marca e' gia' fissata dalla ricerca. Nessun match → nessun segno, mai un
+// numero attribuito a caso. Le moto non hanno questo dato (vedi backend/liquidita.js).
+let liqMarca = null, liqModelli = null, liqStato = 'mai';
+const liqNorm = x => String(x || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+async function liqCarica(marca) {
+  if (liqStato === 'carico' || liqMarca === liqNorm(marca)) return;
+  liqStato = 'carico'; liqMarca = liqNorm(marca);
+  try {
+    const d = await fetch('/api/liquidita?marca=' + encodeURIComponent(marca)).then(r => r.json());
+    if (d && d.ok && d.modelli.length) {
+      // ordinati per nome decrescente di lunghezza: il primo che combacia e' il piu' specifico
+      liqModelli = d.modelli.map(m => ({ ...m, n: liqNorm(m.modello) })).filter(m => m.n.length >= 2)
+        .sort((a, b) => b.n.length - a.n.length);
+      liqStato = 'ok';
+    } else { liqModelli = null; liqStato = 'vuoto'; }
+  } catch (_) { liqStato = 'ko'; }
+  if (liqStato === 'ok') renderResults(currentResults);   // le righe si ridisegnano col segno
+}
+
+// titolo annuncio → voce di liquidita, o null. Confine-parola per non far matchare "500" in "1500".
+function liqPerTitolo(titolo) {
+  if (liqStato !== 'ok' || !liqModelli) return null;
+  const t = ' ' + liqNorm(titolo) + ' ';
+  for (const m of liqModelli) if (t.includes(' ' + m.n + ' ')) return m;
+  return null;
+}
+
+function liqBadgeHTML(item) {
+  if (item._liq === undefined) item._liq = liqPerTitolo(item.titolo);   // memo: una volta per riga
+  const m = item._liq;
+  if (!m || m.ricambio == null) return '';
+  const g = m.giudizio || {};
+  const tip = `${m.modello}: ${Number(m.trasferimenti).toLocaleString('it-IT')} passaggi di proprieta nel ${liqAnno}` +
+    (m.parco ? ` su ${Number(m.parco).toLocaleString('it-IT')} in circolazione` : '') +
+    (g.testo ? ` — ${g.testo}` : '') + '. Fonte ACI Autoritratto.';
+  return `<span class="liq-badge liq-${g.classe || 'media'}" title="${escapeHtml(tip)}">&#8635; ${String(m.ricambio).replace('.', ',')}%</span>`;
+}
+let liqAnno = 2025;
 
 // ── Pannello "Costi e mercato": nasce CHIUSO, si apre con un click ────────────
 // Sta a parte dalla scheda tecnica di proposito: sono dati economici, non specifiche, e

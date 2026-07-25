@@ -504,6 +504,24 @@ app.get('/api/models', async (req, res) => {
 //  - `modelSlug` = famiglia Moto.it scelta direttamente → bikes della famiglia.
 //  - `modelNome` = voce-catalogo (es. "Dyna Fat Bob") senza slug → risolve famiglia+versioni.
 // Ritorna `{ familySlug, versioni:[{nome,code,annoMin,annoMax}] }`.
+// ─── Liquidita per MARCA: alimenta il segno accanto a ogni annuncio ───────────
+// Si serve solo la marca cercata (poche decine di modelli, non i 1.997 totali), cosi'
+// il client puo' attribuire il dato riga per riga senza scaricare tutto l'archivio.
+// Serve nelle ricerche per sola marca, dove ogni riga e' un modello diverso.
+app.get('/api/liquidita', (req, res) => {
+  const marca = String((req.query || {}).marca || '').trim();
+  if (!marca) return res.json({ ok: false });
+  const norm = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const pref = norm(marca) + '|';
+  const modelli = [];
+  for (const [k, m] of Object.entries(liquidita.dati.modelli)) {
+    if (!k.startsWith(pref)) continue;
+    modelli.push({ modello: m.modello, parco: m.parco, trasferimenti: m.trasferimenti, ricambio: m.ricambio, giudizio: liquidita.giudizio(m.ricambio) });
+  }
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.json({ ok: true, marca, anno: liquidita.dati.anno, fonte: liquidita.dati.fonte, modelli });
+});
+
 // ─── "Costi e mercato": dati economici del modello, dietro interazione ────────
 // Un'unica risposta per il pannello richiudibile: liquidità del modello (ACI Autoritratto,
 // CC-BY) e costo del passaggio di proprietà (IPT per provincia, fonte ACI). Il costo
