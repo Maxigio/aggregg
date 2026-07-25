@@ -33,6 +33,7 @@ const { getDetail } = require('./scrapers/detail');
 const liquidita      = require('./liquidita');    // liquidita modello (ACI Autoritratto)
 const iptCalc        = require('./ipt');          // costo passaggio di proprieta per provincia
 const provSigla      = require('./province-sigla'); // localita' dell'annuncio -> sigla provincia
+const motornet       = require('./scrapers/motornet');  // kW ufficiali di listino (SPENTO se AMR_MOTORNET!=1)
 const carburanti     = require('./carburanti');   // prezzi carburante MIMIT per provincia
 const saved = require('./saved');
 const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings } = require('./scrapers/brand-match');
@@ -534,8 +535,8 @@ app.get('/api/liquidita', (req, res) => {
 // arriva in tre formati diversi secondo la fonte (sigla, provincia, comune) e va tradotta in
 // sigla, altrimenti l'IPT non e' calcolabile. Se la traduzione fallisce si dice perche':
 // meglio "non lo so" che un importo su una provincia indovinata.
-app.get('/api/passaggio', (req, res) => {
-  const { provincia, cap, cv, kw, tipo, ivaEsposta, storico } = req.query || {};
+app.get('/api/passaggio', async (req, res) => {
+  const { provincia, cap, cv, kw, tipo, ivaEsposta, storico, marca, modello } = req.query || {};
   const st = storico === '1';
   const loc = provSigla.risolvi(provincia, cap);
   if (!loc) return res.json({ ok: false, motivo: 'localita\' non riconosciuta: "' + String(provincia || '').slice(0, 40) + '"' });
@@ -551,7 +552,15 @@ app.get('/api/passaggio', (req, res) => {
   // kW dichiarati se ci sono, altrimenti stimati dai CV: la stima va detta, non nascosta.
   // Si arrotonda a un decimale PRIMA del calcolo: l'IPT si paga sui kW del libretto, che sono
   // un valore dichiarato — portarsi dietro 55,16240625 kW sarebbe finta precisione.
-  const kwDiretti = kwN >= 1 ? kwN : null;
+  // I kW DICHIARATI battono la stima: sopra e sotto i 53 kW la tariffa cambia categoria, e la
+  // stima dai CV puo' far scavalcare la soglia a un'utilitaria (73 CV → 53,7 kW stimati, ma il
+  // libretto puo' dire 53 → 49 € di differenza). Il listino li ha; se non li ha, si stima e si dice.
+  let kwListino = null;
+  if (motornet.ATTIVO && marca && modello && cvN >= 1) {
+    try { kwListino = await motornet.kwDaCavalli(marca, modello, cvN); }
+    catch (e) { console.warn('[api/passaggio] motornet KO:', e.message); }
+  }
+  const kwDiretti = kwN >= 1 ? kwN : (kwListino ? kwListino.kw : null);
   const kwStimati = kwDiretti == null && cvN >= 1 ? Math.round(provSigla.kwDaCv(cvN) * 10) / 10 : null;
   const kW = kwDiretti != null ? kwDiretti : kwStimati;
   if (!(kW > 0) && !st) return res.json({ ok: false, provincia: loc.sigla, motivo: 'potenza non disponibile in questo annuncio' });
@@ -562,6 +571,7 @@ app.get('/api/passaggio', (req, res) => {
   });
   r.localita = { testo: String(provincia || '').slice(0, 60), sigla: loc.sigla, via: loc.via };
   if (kwStimati != null) r.potenzaStimata = { cv: cvN, kw: kwStimati };
+  if (kwListino && kwN < 1) r.potenzaListino = { cv: cvN, kw: kwListino.kw, versioni: kwListino.versioni.slice(0, 3), fonte: kwListino.fonte, url: kwListino.url };
   // Cache solo sui successi: un "non calcolabile" dipende dai dati dell'annuncio, che possono
   // arrivare dopo (Moto.it arricchisce la potenza in un secondo momento).
   if (r.ok) res.set('Cache-Control', 'public, max-age=3600');

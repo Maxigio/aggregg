@@ -1994,6 +1994,11 @@ async function calcolaPassaggio(r, panel) {
   if (panel && panel._render) panel._render();
   const pv = passProvincia(r);
   const q = new URLSearchParams({ provincia: pv.testo, tipo: passTipo(r) });
+  // marca e modello servono al server per cercare i kW DICHIARATI di listino invece di
+  // stimarli dai CV: sulla soglia dei 53 kW la differenza e' una categoria di tariffa.
+  const sp = lastSearchParams || {};
+  if (sp.marca) q.set('marca', sp.marca);
+  if (sp.modello) q.set('modello', sp.modello);
   if (r._passStorico) q.set('storico', '1');
   if (!pv.mia) { const z = r.zip || r.cap; if (z) q.set('cap', String(z)); }   // il CAP e' dell'annuncio
   if (r.potenzaCv > 0) q.set('cv', String(r.potenzaCv));
@@ -2045,9 +2050,11 @@ function passHTML(r) {
     + `${passAvvisiHTML(d)}${opz}`;
   const eur = n => Number(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const loc = d.localita || {};
-  const stima = d.potenzaStimata
-    ? ` · ${d.potenzaStimata.kw} kW stimati da ${d.potenzaStimata.cv} CV (la cifra esatta e sul libretto)`
-    : (d.kW ? ` · ${d.kW} kW` : '');
+  const stima = d.potenzaListino
+    ? ` · ${d.potenzaListino.kw} kW da listino (${d.potenzaListino.cv} CV), non stimati`
+    : d.potenzaStimata
+      ? ` · ${d.potenzaStimata.kw} kW stimati da ${d.potenzaStimata.cv} CV (la cifra esatta e sul libretto)`
+      : (d.kW ? ` · ${d.kW} kW` : '');
   // Da quale provincia viene l'importo, e come si passa all'altra: la differenza tra le due
   // sono euro veri (dallo 0% di Bolzano al 30% di quasi tutte le altre).
   const altra = st.mia ? (r.provincia || '') : carbProvincia();
