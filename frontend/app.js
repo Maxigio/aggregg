@@ -2434,8 +2434,11 @@ async function loadVehScheda() {
     if (my !== vehGen) return;   // una ricerca più recente ha già preso il posto → non toccare la scheda
     const hasData = d.ok && (((d.generations || []).length) || ((d.motorizzazioni || []).length));
     if (!hasData) { clearVehScheda(); return; }
-    // NIENTE auto-selezione: l'utente sceglie generazione → motorizzazione. Moto: voci pronte subito.
-    vehData = d; vehSpecs = {}; vehSelUrl = null;
+    // NIENTE auto-selezione per DEDUZIONE: l'utente sceglie generazione → motorizzazione.
+    // UNICA eccezione: la versione Moto.it che l'utente ha scelto LUI nella ricerca. Non è
+    // un'ipotesi nostra, è la sua scelta esplicita — e l'aggancio è esatto perché la scheda
+    // Moto.it usa lo STESSO codice-versione della ricerca (nessun rischio di sbagliare moto).
+    vehData = d; vehSpecs = {}; vehSelUrl = vehVersionePreScelta(d) || null;
     renderVehScheda();
   } catch (_) { if (my === vehGen) clearVehScheda(); }
 }
@@ -2472,6 +2475,18 @@ function vehBodyHTML() {
   if (!spec.ok || !spec.groups || !spec.groups.length) return '<div class="rc-empty">Specifiche non disponibili per questa motorizzazione.</div>';
   return (vehXf.compare ? '' : vehHlBandHTML(spec)) + vehSectionsHTML(spec);
 }
+// Versione Moto.it scelta nella ricerca → la stessa voce nella scheda, già selezionata.
+// L'aggancio è per CODICE, non per nome: l'URL della scheda Moto.it finisce col codice-versione
+// che la ricerca ha mandato come `bike=`. Niente codice o nessuna corrispondenza → null, e
+// l'utente sceglie dalla griglia come sempre. Le specifiche restano pigre (si caricano
+// all'apertura della scheda), quindi questo non aggiunge richieste.
+function vehVersionePreScelta(d) {
+  const code = (lastSearchParams || {}).motoitBikeCode;
+  if (!code || !/moto\.it/i.test(d.source || '')) return null;
+  const hit = (d.motorizzazioni || []).find(m => String(m.url || '').endsWith('/' + code));
+  return hit ? hit.url : null;
+}
+
 // ── Filtro/suggerimento per anno (dai filtri ricerca "anno da/anno a"): suggerisce ma NON sceglie ──
 function vehYearFilter() {
   const p = lastSearchParams || {};
