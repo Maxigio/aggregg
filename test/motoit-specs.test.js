@@ -80,3 +80,49 @@ test('isVuoto: riconosce i non-dati', () => {
 test('httpGetText: anti-SSRF, host diverso da moto.it rifiutato', async () => {
   await assert.rejects(() => mis.httpGetText('https://example.com/listino/x'), /host non consentito/);
 });
+
+// ── Foto/prezzo per versione dalla pagina-modello (una richiesta per tutte) ────
+// La pagina ha due blocchi: listino corrente (foto + prezzo) e "fuori listino" (soli link).
+const PAGINA_MODELLO = `<html><head>
+  <meta property="og:image" content="https://cdn-img.moto.it/images/1/2000x/800mt_studio.jpg?width=1200">
+  </head><body>
+  <div class="col"><div class="card">
+    <a href="/listino/cfmoto/800mt/800mt-explore-2023-26/0UjUQn">800MT Explore (2023 - 26)</a>
+    <img src="https://cdn-img.moto.it/images/31471012/HOR_STD/2000x/explore.jpg">
+    <span>€ 9.390</span>
+  </div></div>
+  <h2>CFMOTO 800MT fuori listino</h2>
+  <div class="col"><div class="sqlink">
+    <a href="/listino/cfmoto/800mt/800mt-limited-edition-2023-25/XJPVRb">800MT Limited Edition (2023 - 25)</a>
+  </div></div>
+</body></html>`;
+
+test('parseModelVersionsMeta: foto e prezzo per le versioni in listino', () => {
+  const { versioni } = mis.parseModelVersionsMeta(PAGINA_MODELLO, 'cfmoto', '800mt');
+  assert.strictEqual(versioni['0UjUQn'].prezzo, '€ 9.390');
+  assert.match(versioni['0UjUQn'].img, /explore\.jpg$/);
+});
+
+test('parseModelVersionsMeta: le versioni "fuori listino" restano senza foto propria', () => {
+  const { versioni } = mis.parseModelVersionsMeta(PAGINA_MODELLO, 'cfmoto', '800mt');
+  assert.ok(versioni.XJPVRb, 'la versione fuori listino va comunque elencata');
+  assert.strictEqual(versioni.XJPVRb.img, '');
+  assert.strictEqual(versioni.XJPVRb.prezzo, '');
+});
+
+test('parseModelVersionsMeta: foto del modello come ripiego (og:image)', () => {
+  const { fotoModello } = mis.parseModelVersionsMeta(PAGINA_MODELLO, 'cfmoto', '800mt');
+  assert.match(fotoModello, /800mt_studio\.jpg/);
+});
+
+test('isFotoVera: scarta il segnaposto "swap.jpg" delle moto storiche e i loghi', () => {
+  assert.ok(mis.isFotoVera('https://cdn-img.moto.it/images/1/2000x/explore.jpg'));
+  assert.ok(!mis.isFotoVera('https://cdn-img.moto.it/images/298611/2000x/swap.jpg?width=1200'));
+  assert.ok(!mis.isFotoVera('https://www.moto.it/dist/img/microdata/logo-moto.webp'));
+  assert.ok(!mis.isFotoVera('https://altro-cdn.example/foto.jpg'));   // solo il CDN di Moto.it
+  assert.ok(!mis.isFotoVera(''));
+});
+
+test('modelUrl: pagina-modello', () => {
+  assert.strictEqual(mis.modelUrl('fantic-motor', 'caballero-500'), 'https://www.moto.it/listino/fantic-motor/caballero-500');
+});

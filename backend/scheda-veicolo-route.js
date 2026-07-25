@@ -151,10 +151,27 @@ async function resolveMotoit({ marca, modello, anno }) {
   let versioni = [];
   try { versioni = await getModelBikes(brandSlug, hit.slug); } catch (_) { return null; }
   if (!versioni.length) return null;
-  const entries = versioni.map(v => ({
-    label: v.name, url: mis.specUrl(brandSlug, hit.slug, v.code),
-    year: v.annoMin || null, yearRange: v.annoMin ? (v.annoMax && v.annoMax !== v.annoMin ? `${v.annoMin}–${v.annoMax}` : `${v.annoMin}`) : '',
-  }));
+  // Foto + prezzo per versione dalla pagina-modello: UNA richiesta cachata 12h per tutte,
+  // così la griglia moto ha le immagini come quella auto. Se salta, si procede senza foto.
+  let meta = { versioni: {}, fotoModello: '' };
+  try {
+    const mUrl = mis.modelUrl(brandSlug, hit.slug);
+    const hitCache = cacheGet('motoit-model:' + mUrl);
+    if (hitCache) meta = hitCache;
+    else {
+      const { body } = await mis.httpGetText(mUrl);
+      meta = mis.parseModelVersionsMeta(body, brandSlug, hit.slug);
+      cacheSet('motoit-model:' + mUrl, meta, PAGE_TTL);
+    }
+  } catch (_) { /* niente foto, la scheda funziona comunque */ }
+  const entries = versioni.map(v => {
+    const m = meta.versioni[v.code] || {};
+    return {
+      label: v.name, url: mis.specUrl(brandSlug, hit.slug, v.code),
+      year: v.annoMin || null, yearRange: v.annoMin ? (v.annoMax && v.annoMax !== v.annoMin ? `${v.annoMin}–${v.annoMax}` : `${v.annoMin}`) : '',
+      img: m.img || meta.fotoModello || '', prezzo: m.prezzo || '',
+    };
+  });
   entries.sort((a, b) => (b.year || 0) - (a.year || 0) || a.label.localeCompare(b.label));
   const yr = Number(anno) || null;   // porta in cima l'annata cercata (lista comunque anno-desc)
   if (yr && entries.length) {

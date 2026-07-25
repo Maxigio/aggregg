@@ -78,6 +78,35 @@ function specUrl(brandSlug, modelSlug, code) {
   return `${HOST}/listino/${p[0]}/${p[1]}/${p[2]}/${p[3]}`;
 }
 
+// Foto segnaposto di Moto.it: le moto storiche restituiscono "swap.jpg" (immagine generica),
+// non una foto del mezzo. Meglio il riquadro vuoto che una foto sbagliata.
+const isFotoVera = u => /^https:\/\/cdn-img\.moto\.it\//i.test(u || '') && !/swap\.jpg|logo-moto/i.test(u);
+
+// pagina-MODELLO → { versioni: { <codice>: {img, prezzo} }, fotoModello }.
+// UNA richiesta (cacheabile) per tutte le versioni, invece di una per foto. Attenzione:
+// la pagina ha due blocchi, il listino corrente (con foto e prezzo) e "fuori listino"
+// (soli link di testo) → le versioni fuori produzione restano senza foto propria. Per
+// quelle si ripiega su `fotoModello` (og:image della pagina): è lo stesso modello, e la
+// variante la dice l'etichetta della card — come l'auto, dove una foto copre tutta la
+// generazione. Meglio riconoscere la moto che una griglia di riquadri vuoti.
+function parseModelVersionsMeta(html, brandSlug, modelSlug) {
+  const $ = cheerio.load(html);
+  const base = `/listino/${brandSlug}/${modelSlug}/`;
+  const versioni = {};
+  $(`a[href*="${base}"]`).each((_, a) => {
+    const href = String($(a).attr('href') || '');
+    const code = href.split('/').filter(Boolean).pop();
+    if (!code || versioni[code]) return;
+    const box = $(a).closest('li, article, div');
+    const img = box.find('img').first();
+    const src = String(img.attr('src') || img.attr('data-src') || '');
+    const prezzo = (box.text().match(/€\s*[\d.]+/) || [])[0] || '';
+    versioni[code] = { img: isFotoVera(src) ? src : '', prezzo: clean(prezzo) };
+  });
+  const og = String($('meta[property="og:image"]').attr('content') || '');
+  return { versioni, fotoModello: isFotoVera(og) ? og : '' };
+}
+
 // pagina-versione → { head:{marca,modello,allestimento,categoria}, groups:[{title,rows:[{k,v}]}] }
 function parseMotoitSpecs(html) {
   const $ = cheerio.load(html);
@@ -114,4 +143,9 @@ async function fetchMotoitSpecs(url) {
   return { ...parsed, source: 'moto.it', url };
 }
 
-module.exports = { HOST, httpGetText, fetchMotoitSpecs, parseMotoitSpecs, specUrl, isVuoto };
+// URL della pagina-modello (elenco versioni con foto/prezzo).
+function modelUrl(brandSlug, modelSlug) {
+  return `${HOST}/listino/${encodeURIComponent(brandSlug)}/${encodeURIComponent(modelSlug)}`;
+}
+
+module.exports = { HOST, httpGetText, fetchMotoitSpecs, parseMotoitSpecs, parseModelVersionsMeta, specUrl, modelUrl, isVuoto, isFotoVera };

@@ -274,6 +274,9 @@ body:not(.has-results) .search {
 /* griglia card motorizzazione (anno in evidenza) */
 .veh-moto-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-height: 440px; overflow-y: auto; padding: 2px; }
 .veh-moto-card { display: flex; flex-direction: column; gap: 3px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r2); padding: 10px; cursor: pointer; font: inherit; color: var(--text); }
+/* card con foto (moto, fonte Moto.it): stessa geometria della griglia-generazioni auto */
+.veh-moto-card.veh-card-foto { gap: 4px; padding: 8px; }
+.veh-moto-card.veh-card-foto .veh-moto-card-year { font-size: 0.95rem; }
 .veh-moto-card:hover { border-color: var(--accent); box-shadow: var(--shadow); }
 .veh-moto-card-year { font-size: 1.05rem; font-weight: 700; color: var(--accent); }
 .veh-moto-card-label { font-size: 0.82rem; font-weight: 600; line-height: 1.2; }

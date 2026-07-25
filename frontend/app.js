@@ -2537,11 +2537,16 @@ function vehGenGridHTML() {
   if (!gens.length) return '<div class="rc-empty">Nessuna generazione disponibile.</div>';
   return vehCardGrid(gens, vehGenCardHTML, 'veh-gen-grid', 'Scegli la generazione dalla foto:');
 }
-// Griglia card motorizzazione: anno in evidenza + label + hp/carburante. Selezione via click.
+// Griglia card motorizzazione/versione: foto (se la fonte la dà) + anno in evidenza + label
+// + hp/carburante/prezzo. Stessa forma della griglia-generazioni auto → coerenza estetica.
+// La foto si disegna SOLO se presente: le motorizzazioni auto non ne hanno e resterebbero
+// riquadri vuoti (questa funzione è condivisa tra auto e moto).
 function vehMotoCardHTML(m, sug) {
   const yr = m.yearRange || (m.year ? String(m.year) : '');
-  const meta = [m.hp ? `${m.hp} CV` : '', m.fuel || ''].filter(Boolean).join(' · ');
-  return `<button type="button" class="veh-moto-card${sug ? ' veh-card-sug' : ''}" data-url="${escapeHtml(m.url)}">`
+  const meta = [m.hp ? `${m.hp} CV` : '', m.fuel || '', m.prezzo || ''].filter(Boolean).join(' · ');
+  const img = /^https:\/\/cdn-img\.moto\.it\//i.test(m.img || '') ? m.img : '';   // solo il CDN di Moto.it
+  return `<button type="button" class="veh-moto-card${img ? ' veh-card-foto' : ''}${sug ? ' veh-card-sug' : ''}" data-url="${escapeHtml(m.url)}">`
+    + (img ? `<img class="veh-gen-card-img" src="${escapeHtml(img)}" alt="" loading="lazy">` : '')
     + `<span class="veh-moto-card-year">${escapeHtml(yr || '—')}</span>`
     + `<span class="veh-moto-card-label">${escapeHtml(m.label)}</span>`
     + (meta ? `<span class="veh-moto-card-meta">${escapeHtml(meta)}</span>` : '') + `</button>`;
