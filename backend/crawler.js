@@ -87,9 +87,18 @@ async function resolveMotoit(target) {
 
 // Guard anti-rumore per Subito (free-text): tiene l'annuncio solo se tutti i
 // token significativi del modello (len>=2) compaiono nel titolo normalizzato.
+//
+// I token si ricavano dal nome GREZZO (solo accenti appianati), NON da norm():
+// norm() elimina già ogni separatore, quindi lo split successivo non spezzava mai
+// nulla e il guard finiva per pretendere il nome intero attaccato
+// ("africatwincrf1000l") come sottostringa del titolo → scartava annunci veri
+// ("Honda CRF 1000 L Africa Twin"). Misurato: scartava l'80% dei risultati
+// corretti di "Serie 3" e il 26% di quelli di "800MT".
+// Nota: i modelli mono-token ("800MT", "200") si comportano come prima.
+const deaccent = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 function titleMatchesModel(titolo, modello) {
   const nt = norm(titolo);
-  const tokens = norm(modello).split('-').filter(t => t.length >= 2);
+  const tokens = deaccent(modello).split(/[^a-z0-9]+/).filter(t => t.length >= 2);
   if (!tokens.length) return true;
   return tokens.every(tok => nt.includes(tok));
 }
