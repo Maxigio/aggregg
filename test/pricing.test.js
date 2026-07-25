@@ -48,3 +48,49 @@ test('priceAdjActive: vero solo se una leva è impostata', () => {
   assert.strictEqual(priceAdjActive({ ...PRICE_DEFAULT, comm: 100 }), true);
   assert.strictEqual(priceAdjActive({ ...PRICE_DEFAULT, iva: true }), true);
 });
+
+// ── Passaggio di proprietà: costo della pratica agganciato al MARGINE ──────────
+// Il passaggio non tocca il prezzo di rivendita: è un costo che l'operatore sostiene,
+// quindi si sottrae al margine. Senza questo, il margine mostrato era più alto del reale.
+test('pricing: margine in EURO, non solo la percentuale', () => {
+  const r = pricing(10000, { comm: 0, commUnit: 'eur', spese: 0, margine: 15, iva: false });
+  assert.strictEqual(r.rivendita, 11500);
+  assert.strictEqual(r.margineEuro, 1500);
+  assert.strictEqual(r.margineNetto, 1500);      // nessun passaggio impostato
+  assert.strictEqual(r.passaggio, null);
+});
+
+test('pricing: il passaggio si sottrae al margine, NON al prezzo di rivendita', () => {
+  const r = pricing(10000, { comm: 0, commUnit: 'eur', spese: 0, margine: 15, iva: false, passaggio: 223.05 });
+  assert.strictEqual(r.rivendita, 11500, 'il prezzo di vendita non cambia');
+  assert.strictEqual(r.finale, 10000);
+  assert.strictEqual(r.margineEuro, 1500);
+  assert.strictEqual(r.margineNetto, 1276.95);   // 1500 − 223,05
+  assert.strictEqual(r.passaggio, 223.05);
+});
+
+test('pricing: senza margine non c\'è margine netto da mostrare', () => {
+  const r = pricing(10000, { comm: 0, commUnit: 'eur', spese: 0, margine: 0, iva: false, passaggio: 223.05 });
+  assert.strictEqual(r.rivendita, null);
+  assert.strictEqual(r.margineEuro, null);
+  assert.strictEqual(r.margineNetto, null);
+});
+
+test('pricing: passaggio negativo o non numerico ignorato', () => {
+  for (const p of [-50, 'abc', null, undefined]) {
+    const r = pricing(10000, { comm: 0, commUnit: 'eur', spese: 0, margine: 10, iva: false, passaggio: p });
+    assert.strictEqual(r.passaggio, null, `passaggio ${p}`);
+    assert.strictEqual(r.margineNetto, 1000);
+  }
+});
+
+test('pricing: il passaggio può azzerare o superare il margine (si vede, non si nasconde)', () => {
+  const r = pricing(1000, { comm: 0, commUnit: 'eur', spese: 0, margine: 10, iva: false, passaggio: 300 });
+  assert.strictEqual(r.margineEuro, 100);
+  assert.strictEqual(r.margineNetto, -200, 'un margine negativo va mostrato: e\' un affare da scartare');
+});
+
+test('priceAdjActive: il solo passaggio impostato conta come leva attiva', () => {
+  assert.strictEqual(priceAdjActive({ comm: 0, spese: 0, margine: 0, iva: false, passaggio: 223 }), true);
+  assert.strictEqual(priceAdjActive({ comm: 0, spese: 0, margine: 0, iva: false, passaggio: 0 }), false);
+});

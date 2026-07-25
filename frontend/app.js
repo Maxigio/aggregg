@@ -108,6 +108,7 @@ function priceMenuHTML(cfg, ns) {
       <label class="pm-row"><span>Commissione</span><span class="pm-inp"><input type="number" inputmode="numeric" min="0" step="10" id="pmComm_${ns}" value="${num(cfg.comm)}" placeholder="0"><button type="button" class="pm-unit" id="pmUnit_${ns}" title="Cambia unità">${pct ? '%' : '€'}</button></span></label>
       <label class="pm-row"><span>Spese</span><span class="pm-inp"><input type="number" inputmode="numeric" min="0" step="10" id="pmSpese_${ns}" value="${num(cfg.spese)}" placeholder="0"><span class="pm-unit-static">€</span></span></label>
       <label class="pm-row"><span>Margine rivendita</span><span class="pm-inp"><input type="number" inputmode="numeric" min="0" step="1" id="pmMarg_${ns}" value="${num(cfg.margine)}" placeholder="0"><span class="pm-unit-static">%</span></span></label>
+      ${ns === 'v' ? `<label class="pm-row" title="Costo della pratica: si sottrae al margine, non al prezzo"><span>Passaggio</span><span class="pm-inp"><input type="number" inputmode="numeric" min="0" step="10" id="pmPass_${ns}" value="${num(cfg.passaggio)}" placeholder="0"><span class="pm-unit-static">€</span></span></label>` : ''}
       <label class="pm-check"><input type="checkbox" id="pmIva_${ns}"${cfg.iva ? ' checked' : ''}> Scorporo IVA 22%</label>
       <button type="button" class="pm-reset" id="pmReset_${ns}">Azzera</button>
     </div>
@@ -117,18 +118,23 @@ function priceMenuHTML(cfg, ns) {
 function readPriceMenu(ns, prev) {
   const g = id => document.getElementById(id + '_' + ns);
   const n = el => Math.max(0, Number(el && el.value) || 0);
-  return { comm: n(g('pmComm')), commUnit: prev.commUnit, spese: n(g('pmSpese')), margine: n(g('pmMarg')), iva: !!(g('pmIva') && g('pmIva').checked) };
+  const pass = g('pmPass');
+  return { comm: n(g('pmComm')), commUnit: prev.commUnit, spese: n(g('pmSpese')), margine: n(g('pmMarg')),
+    iva: !!(g('pmIva') && g('pmIva').checked),
+    passaggio: pass ? n(pass) : (prev.passaggio || 0) };   // il campo esiste solo per i veicoli
 }
 // Colonne/celle extra prezzo per export (rivendita/imponibile/IVA) in base a cfg.
 function priceExtraHeaders(cfg) {
   const h = [];
   if (cfg.margine > 0) h.push('Rivendita (€)');
+  if (cfg.margine > 0 && cfg.passaggio) h.push('Margine netto (€)');
   if (cfg.iva) h.push('Imponibile (€)', 'IVA 22% (€)');
   return h;
 }
 function priceExtraValues(pr, cfg) {   // pr = pricing() | null ; ritorna numeri arrotondati o ''
   const v = [], r = x => (x == null ? '' : Math.round(x));
   if (cfg.margine > 0) v.push(r(pr && pr.rivendita));
+  if (cfg.margine > 0 && cfg.passaggio) v.push(r(pr && pr.margineNetto));
   if (cfg.iva) { v.push(r(pr && pr.imponibile)); v.push(r(pr && pr.ivaQuota)); }
   return v;
 }
@@ -138,6 +144,8 @@ function priceRowExtraHTML(pr, fmt) {
   fmt = fmt || eurRound;
   let s = '';
   if (pr.rivendita != null) s += `<span class="row-riv">→ riv. ${fmt(pr.rivendita)}</span>`;
+  // Con il costo del passaggio impostato si mostra il margine NETTO: il lordo illude.
+  if (pr.margineNetto != null && pr.passaggio) s += `<span class="row-marg">margine netto ${fmt(pr.margineNetto)}</span>`;
   if (pr.imponibile != null) s += `<span class="row-iva">imp. ${fmt(pr.imponibile)} + IVA ${fmt(pr.ivaQuota)}</span>`;
   return s;
 }
@@ -159,7 +167,7 @@ function wirePriceMenuV() {
     else host.querySelector('.price-menu')?.classList.toggle('has-adj', priceAdjActive(priceCfgV));
     renderResults(currentResults);
   };
-  ['pmComm_v', 'pmSpese_v', 'pmMarg_v'].forEach(id => document.getElementById(id)?.addEventListener('input', () => { priceCfgV = readPriceMenu('v', priceCfgV); apply(false); }));
+  ['pmComm_v', 'pmSpese_v', 'pmMarg_v', 'pmPass_v'].forEach(id => document.getElementById(id)?.addEventListener('input', () => { priceCfgV = readPriceMenu('v', priceCfgV); apply(false); }));
   document.getElementById('pmIva_v')?.addEventListener('change', () => { priceCfgV = readPriceMenu('v', priceCfgV); apply(false); });
   document.getElementById('pmUnit_v')?.addEventListener('click', () => { priceCfgV.commUnit = priceCfgV.commUnit === 'pct' ? 'eur' : 'pct'; priceCfgV = readPriceMenu('v', priceCfgV); apply(true); });
   document.getElementById('pmReset_v')?.addEventListener('click', () => { priceCfgV = Object.assign({}, PRICE_DEFAULT); apply(true); });
@@ -328,6 +336,17 @@ async function init() {
     const g = h.closest('.rc-group'); g.classList.toggle('collapsed');
     mkAperto = !g.classList.contains('collapsed');
     if (mkAperto && (mkStato === 'mai' || mkStato === 'ko' || mkChiaveCaricata !== mkChiave())) mkCarica();
+  });
+  // Ponte col calcolo del margine: il costo della pratica diventa una leva di pricing.js,
+  // sottratta al margine (non al prezzo). Cosi' la lista mostra il guadagno che resta davvero.
+  vehMercatoEl?.addEventListener('click', e => {
+    const b = e.target.closest('.mk-usa'); if (!b) return;
+    const eur = Number(b.dataset.eur) || 0;
+    priceCfgV = Object.assign({}, priceCfgV, { passaggio: priceCfgV.passaggio === eur ? 0 : eur });
+    savePriceCfg('amr_price_v', priceCfgV);
+    renderPriceMenuV();                  // il campo "Passaggio" del menu si aggiorna
+    renderResults(currentResults);       // le righe mostrano il margine netto
+    mkRenderBody();                      // il pulsante diventa "✓"
   });
   vehMercatoEl?.addEventListener('change', e => {
     if (e.target.classList.contains('veh-carb-prov')) {        // provincia: prezzo carburante E IPT
@@ -2669,6 +2688,7 @@ function mkBoxPassaggio() {
     <div class="mk-sub">IPT ${eur(ipt.ipt)} &euro; + emolumenti ${eur(ipt.emolumenti)} &euro;</div>
     <div class="mk-det">${ipt.provincia} maggiorazione ${ipt.maggiorazione}% · ${ipt.kW} kW${kw.da === 'CV' ? ` (stimati da ${String(kw.cv).replace('.', ',')} CV: la cifra esatta e sul libretto)` : ''}</div>
     ${sel}
+    <button type="button" class="mk-usa" data-eur="${ipt.totaleNoto}">${priceCfgV.passaggio === ipt.totaleNoto ? 'Nel calcolo del margine ✓' : 'Usa nel calcolo del margine'}</button>
     ${(ipt.avvisi || []).length ? `<div class="mk-avviso">${escapeHtml(ipt.avvisi[0])}</div>` : ''}
     <div class="mk-fonte">Fonte ACI (${escapeHtml(ipt.fonte.aggiornato)}). Non incluso: ${escapeHtml((ipt.nonIncluso || []).join('; '))}.</div>
   </div>`;

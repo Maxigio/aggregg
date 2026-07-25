@@ -261,6 +261,9 @@ body:not(.has-results) .search {
 .mk-fonte { font-size: 0.68rem; color: var(--text-faint); border-top: 1px solid var(--line); padding-top: 5px; margin-top: auto; }
 .mk-vuoto { font-size: 0.82rem; color: var(--text-faint); font-style: italic; }
 .mk-ctrl { display: flex; gap: 8px; flex-wrap: wrap; }
+.mk-usa { align-self: flex-start; height: 28px; padding: 0 10px; border: 1px solid var(--accent); border-radius: var(--r); background: var(--surface); color: var(--accent); font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+.mk-usa:hover { background: var(--accent); color: #fff; }
+.row-marg { color: var(--pos); font-family: var(--num); font-size: 0.76rem; }
 .mk-ctrl select { height: 28px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); font: inherit; font-size: 0.78rem; padding: 0 6px; cursor: pointer; }
 .veh-sel-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 /* combobox scheda: input + lista visibile filtrata (riusa .ac-list/.ac-item di marca/modello) */
