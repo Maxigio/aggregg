@@ -795,6 +795,11 @@ require('./ricambi-route').mount(app, { clientIp });
 // ─── Scheda tecnica veicolo (auto-data.net) — vedi scheda-veicolo-route.js ──────────
 require('./scheda-veicolo-route').mount(app, { clientIp });
 
+// ─── Catalogo del nuovo (Motornet) — vedi catalogo-route.js ────────────────────
+// Sezione indipendente dalla ricerca usato: marche → modelli → allestimenti → scheda.
+// Spenta se AMR_MOTORNET != 1, e in quel caso lo dichiara invece di sembrare rotta.
+require('./catalogo-route').mount(app, { clientIp });
+
 // ─── Cache ricerche recenti (§17.4) ───────────────────────────────────────────
 // Stessa ricerca entro il TTL → risposta istantanea. NON cacha se una fonte è
 // error/needs_bootstrap (non congelare uno stato-bloccato) né i 0-risultati totali.

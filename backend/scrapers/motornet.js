@@ -209,6 +209,45 @@ const dettaglio = codiceMotornet => conCache('dettaglio|' + codiceMotornet, asyn
   };
 });
 
+// Accessori di un allestimento: di serie e a pagamento, con i prezzi di listino e — voce
+// preziosa per chi compra usato — la SVALUTAZIONE che Motornet attribuisce a ogni optional.
+// La risposta grezza e' grossa (116 KB per una Giulia) e piena di campi che non usiamo
+// (formule di inclusione/esclusione, id interni): si tiene il minimo utile e si raggruppa per
+// macrogruppo, che e' l'unico ordinamento sensato per leggerli.
+const accessori = codiceEurotax => conCache('accessori|' + codiceEurotax, async () => {
+  const d = new Date();
+  const q = `codice_eurotax=${encodeURIComponent(codiceEurotax)}&anno=${d.getFullYear()}&mese=${d.getMonth() + 1}`;
+  const r = await getJson(`${BASE}/nuovo/auto/accessori?${q}`);
+  const voci = [];
+  for (const [chiave, lista] of Object.entries(r || {})) {
+    if (!Array.isArray(lista)) continue;
+    for (const a2 of lista) {
+      const nome = a2.descrizione || a2.descrizioneBreve || a2.descrizioneNormalizzata;
+      if (!nome) continue;
+      const sv = a2.svalutazione || {};
+      voci.push({
+        nome: String(nome).trim(),
+        gruppo: a2.macrogruppo || a2.descrizioneEquipaggiamento || 'Altro',
+        diSerie: (a2.codiceGruppo === 'S') || /di serie/i.test(a2.descrizioneGruppo || '') || chiave === 'serie',
+        prezzo: Number(a2.prezzoListino || a2.prezzo) > 0 ? Number(a2.prezzoListino || a2.prezzo) : null,
+        // quanto ne resta sull'usato secondo Motornet: se manca, non si stima
+        svalutato: Number(sv.prezzoSvalutato) > 0 ? Number(sv.prezzoSvalutato) : null,
+      });
+    }
+  }
+  // Stessa voce puo' arrivare piu' volte (gruppi diversi): si tiene una riga per nome+gruppo.
+  const visti = new Set();
+  const unici = voci.filter(v => { const k = v.gruppo + '|' + v.nome; if (visti.has(k)) return false; visti.add(k); return true; });
+  const serie = unici.filter(v => v.diSerie);
+  const optional = unici.filter(v => !v.diSerie);
+  const gruppi = [...new Set(unici.map(v => v.gruppo))].sort();
+  return {
+    serie, optional, gruppi,
+    totaleOptional: optional.reduce((t, v) => t + (v.prezzo || 0), 0) || null,
+    fonte: 'Motornet.it (Eurotax Italia)',
+  };
+});
+
 // ─── Livello 2: quello che chiama l'app ──────────────────────────────────────
 // Da marca+modello scritti come li scrive un utente agli allestimenti con i kW.
 // L'accoppiamento del nome e' volutamente prudente: esatto, poi prefisso, poi
@@ -317,7 +356,7 @@ async function kwDaCavalli(marca, modello, cavalli) {
 }
 
 module.exports = {
-  ATTIVO, cerca, kwDaCavalli, marche, modelli, versioni, dettaglio, trovaModello,
+  ATTIVO, cerca, kwDaCavalli, marche, modelli, versioni, dettaglio, accessori, trovaModello,
   scegliModelli, kwPerCavalli,          // pure: testabili senza rete
   _norm: norm, _CACHE_FILE: CACHE_FILE,
 };

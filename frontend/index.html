@@ -60,6 +60,7 @@
           <button type="button" class="mode-btn active" data-mode="auto" role="tab">Auto</button>
           <button type="button" class="mode-btn" data-mode="moto" role="tab">Moto</button>
           <button type="button" class="mode-btn" data-mode="ricambi" role="tab">Ricambi</button>
+          <button type="button" class="mode-btn" data-mode="catalogo" role="tab">Catalogo</button>
         </div>
         <!-- Tipo veicolo: radio nascosti, source-of-truth per currentTipo(); pilotati dai bottoni Auto/Moto -->
         <div class="seg-toggle" role="radiogroup" aria-label="Tipo veicolo" style="display:none">
@@ -130,6 +131,9 @@
 
     <!-- PANNELLO RICAMBI (multi-fonte, full-width) -->
     <div id="ricambiPanel" class="d-none"></div>
+
+    <!-- CATALOGO del nuovo: sezione indipendente dalla ricerca (marche → modelli → allestimenti) -->
+    <div id="catalogoPanel" class="d-none"></div>
 
     <!-- STATO RICERCA / ERRORE / BANNER -->
     <div id="statusBox" class="d-none">

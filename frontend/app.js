@@ -804,23 +804,31 @@ function renderFacetChips() {
     `<button type="button" class="facet-chip${dim === groupDim ? ' active' : ''}" data-dim="${dim}">${label}</button>`).join('');
 }
 
-// ─── Modi di ricerca (Cerca / Ricambi) ─────────────────────────────────────
+// ─── Modi di ricerca (Cerca / Ricambi / Catalogo) ──────────────────────────
 let searchMode = 'cerca';
-// Nav primaria: 'auto'|'moto' → ricerca veicolo (modo Cerca), 'ricambi' → pipeline parti.
+// Nav primaria: 'auto'|'moto' → ricerca veicolo (modo Cerca), 'ricambi' → pipeline parti,
+// 'catalogo' → listino del nuovo, che NON parte da una ricerca (vedi il blocco cat* in fondo).
 // Pilota il radio tipo nascosto (che via il suo change-handler rinfresca marche/placeholder)
 // e lo stato attivo dei bottoni.
 function selectPrimary(mode) {
-  const primary = ['auto', 'moto', 'ricambi'].includes(mode) ? mode : 'auto';
+  const primary = ['auto', 'moto', 'ricambi', 'catalogo'].includes(mode) ? mode : 'auto';
   document.querySelectorAll('#modeToggle .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === primary));
-  if (primary === 'ricambi') { setSearchMode('ricambi'); return; }
+  if (primary === 'ricambi' || primary === 'catalogo') { setSearchMode(primary); return; }
   const radio = document.getElementById(primary === 'moto' ? 'tipoMoto' : 'tipoAuto');
   if (radio && !radio.checked) { radio.checked = true; radio.dispatchEvent(new Event('change')); }
   setSearchMode('cerca');
 }
 function setSearchMode(mode) {
   const prev = searchMode;
-  searchMode = mode === 'ricambi' ? 'ricambi' : 'cerca';
+  searchMode = ['ricambi', 'catalogo'].includes(mode) ? mode : 'cerca';
   const ricambi = searchMode === 'ricambi';
+  const catalogo = searchMode === 'catalogo';
+  // Il catalogo non ha un form: nasconde tutta la barra di ricerca invece di riconfigurarla,
+  // e vive nel suo pannello. Uscendo si ripulisce, cosi' non lascia stato in giro.
+  document.querySelector('section.search').classList.toggle('cat-attivo', catalogo);
+  document.getElementById('catalogoPanel').classList.toggle('d-none', !catalogo);
+  if (catalogo) { hideResults(); catApri(); return; }
+  if (prev === 'catalogo') catChiudi();
   // Ricambi ha i suoi campi (OEM) e nasconde i campi auto (marca/modello + tipo).
   document.getElementById('ricambiFields').classList.toggle('d-none', !ricambi);
   document.querySelector('.search-fields').classList.toggle('d-none', ricambi);
@@ -3428,6 +3436,198 @@ async function applyUrlParams() {
     if (isValidMarca()) doSearch();
   }
 }
+
+// ─── CATALOGO del nuovo ───────────────────────────────────────────────────────
+// Isolata dal path ricerca, come il modo Ricambi: stato e funzioni proprie (prefisso cat),
+// non tocca currentResults / searchActive / lastSearchParams / renderResults.
+// Quattro livelli, uno per schermata: marche → modelli → allestimenti → scheda.
+// Ogni livello e' una richiesta sola e il server la serve dalla sua cache: tornare indietro
+// non ricarica niente.
+let catLivello = 'marche';      // marche | modelli | versioni | scheda
+let catMarca = null;            // {acronimo, nome}
+let catModello = null;          // {codiceModello, nome}
+let catDati = { marche: null, modelli: null, versioni: null, scheda: null };
+let catStato = 'mai';           // mai | carico | ok | ko | spento
+let catMotivo = '';
+let catFiltro = '';
+
+const catEl = () => document.getElementById('catalogoPanel');
+const catEur = n => (n > 0 ? Number(n).toLocaleString('it-IT') + ' €' : '—');
+
+function catApri() { if (catStato === 'mai' || catStato === 'ko') catVaiMarche(); else catRender(); }
+function catChiudi() { const el = catEl(); if (el) el.innerHTML = ''; }
+
+async function catChiedi(percorso) {
+  catStato = 'carico'; catRender();
+  try {
+    const d = await fetch(percorso).then(r => r.json());
+    if (d && d.ok) { catStato = 'ok'; return d; }
+    catStato = d && d.spento ? 'spento' : 'ko';
+    catMotivo = (d && d.motivo) || 'non disponibile';
+  } catch (e) { catStato = 'ko'; catMotivo = 'richiesta non riuscita'; }
+  catRender();
+  return null;
+}
+
+async function catVaiMarche() {
+  catLivello = 'marche'; catMarca = null; catModello = null; catFiltro = '';
+  if (catDati.marche) { catStato = 'ok'; return catRender(); }
+  const d = await catChiedi('/api/catalogo/marche');
+  if (d) { catDati.marche = d.marche; catRender(); }
+}
+
+async function catVaiModelli(marca) {
+  const stesso = catMarca && catMarca.acronimo === marca.acronimo && catDati.modelli;
+  catMarca = marca; catModello = null; catLivello = 'modelli'; catFiltro = '';
+  if (stesso) { catStato = 'ok'; return catRender(); }   // tornare indietro non ricarica
+  const d = await catChiedi('/api/catalogo/modelli?marca=' + encodeURIComponent(marca.acronimo));
+  if (d) { catDati.modelli = d.modelli; catRender(); }
+}
+
+async function catVaiVersioni(modello) {
+  const stesso = catModello && String(catModello.codiceModello) === String(modello.codiceModello) && catDati.versioni;
+  catModello = modello; catLivello = 'versioni'; catFiltro = '';
+  if (stesso) { catStato = 'ok'; return catRender(); }
+  const d = await catChiedi('/api/catalogo/versioni?modello=' + encodeURIComponent(modello.codiceModello));
+  if (d) { catDati.versioni = d.versioni; catRender(); }
+}
+
+async function catVaiScheda(codice) {
+  catLivello = 'scheda';
+  const d = await catChiedi('/api/catalogo/allestimento?codice=' + encodeURIComponent(codice));
+  if (d) { catDati.scheda = d; catRender(); }
+}
+
+// ── disegno ──────────────────────────────────────────────────────────────────
+function catBriciole() {
+  const p = [{ t: 'Catalogo del nuovo', l: 'marche' }];
+  if (catMarca) p.push({ t: catMarca.nome, l: 'modelli' });
+  if (catModello) p.push({ t: catModello.nome, l: 'versioni' });
+  if (catLivello === 'scheda' && catDati.scheda) p.push({ t: catDati.scheda.dettaglio.allestimento, l: null });
+  return `<nav class="cat-briciole">${p.map((x, i) => (x.l && i < p.length - 1
+    ? `<button type="button" class="cat-su" data-l="${x.l}">${escapeHtml(x.t)}</button>`
+    : `<span>${escapeHtml(x.t)}</span>`)).join('<i>›</i>')}</nav>`;
+}
+
+function catCerca(ph) {
+  return `<input type="search" class="cat-cerca" placeholder="${ph}" value="${escapeHtml(catFiltro)}" aria-label="${ph}">`;
+}
+const catFiltra = (lista, chiave) => {
+  const q = catFiltro.trim().toLowerCase();
+  return q ? lista.filter(x => String(chiave(x) || '').toLowerCase().includes(q)) : lista;
+};
+
+function catCorpo() {
+  if (catStato === 'carico') return '<div class="cat-vuoto">Carico…</div>';
+  if (catStato === 'spento') return `<div class="cat-vuoto">Il catalogo del nuovo non e attivo su questa installazione.</div>`;
+  if (catStato === 'ko') return `<div class="cat-vuoto">${escapeHtml(catMotivo)}</div>`;
+
+  if (catLivello === 'marche') {
+    const l = catFiltra(catDati.marche || [], x => x.nome);
+    return catCerca('Filtra le marche…') + `<div class="cat-griglia">${l.map(m => `
+      <button type="button" class="cat-card cat-marca" data-acr="${escapeHtml(m.acronimo)}" data-nome="${escapeHtml(m.nome)}">
+        ${m.logo ? `<img src="${escapeHtml(m.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="cat-noimg"></span>'}
+        <span class="cat-card-nome">${escapeHtml(m.nome)}</span>
+      </button>`).join('')}</div>`
+      + (l.length ? '' : '<div class="cat-vuoto">Nessuna marca con questo nome.</div>');
+  }
+
+  if (catLivello === 'modelli') {
+    const l = catFiltra(catDati.modelli || [], x => x.nome);
+    if (!l.length) return catCerca('Filtra i modelli…') + '<div class="cat-vuoto">Nessun modello nel listino del nuovo per questa marca.</div>';
+    return catCerca('Filtra i modelli…') + `<div class="cat-lista">${l.map(m => `
+      <button type="button" class="cat-riga cat-modello" data-cod="${escapeHtml(String(m.codiceModello))}" data-nome="${escapeHtml(m.nome)}">
+        <span class="cat-riga-t">${escapeHtml(m.nome)}</span>
+        <span class="cat-riga-m">${escapeHtml(m.gamma || '')}${m.inizio ? ' · dal ' + String(m.inizio).slice(0, 4) : ''}</span>
+      </button>`).join('')}</div>`;
+  }
+
+  if (catLivello === 'versioni') {
+    const l = catFiltra(catDati.versioni || [], x => x.nome);
+    if (!l.length) return catCerca('Filtra gli allestimenti…') + '<div class="cat-vuoto">Nessun allestimento.</div>';
+    return catCerca('Filtra gli allestimenti…') + `<div class="cat-lista">${l.map(v => `
+      <button type="button" class="cat-riga cat-versione" data-cod="${escapeHtml(v.codiceMotornet || '')}">
+        <span class="cat-riga-t">${escapeHtml(v.nome || '')}</span>
+        <span class="cat-riga-m">${v.kw ? v.kw + ' kW' : ''}${v.cavalli ? ' · ' + v.cavalli + ' CV' : ''}${v.alimentazione ? ' · ' + escapeHtml(v.alimentazione) : ''}${v.euro ? ' · Euro ' + escapeHtml(v.euro) : ''}</span>
+        <span class="cat-riga-p">${catEur(v.prezzoListino)}</span>
+      </button>`).join('')}</div>`;
+  }
+
+  return catSchedaHTML();
+}
+
+// Scheda dell'allestimento: i numeri che servono a valutare, poi la dotazione.
+function catSchedaHTML() {
+  const s = catDati.scheda;
+  if (!s || !s.dettaglio) return '<div class="cat-vuoto">Scheda non disponibile.</div>';
+  const d = s.dettaglio;
+  const riga = (k, v) => (v == null || v === '' ? '' : `<div class="cat-sp"><span>${escapeHtml(k)}</span><b>${escapeHtml(String(v))}</b></div>`);
+  const acc = s.accessori;
+  const gruppi = acc ? acc.gruppi.map(g => {
+    const voci = acc.optional.filter(v => v.gruppo === g);
+    const ser = acc.serie.filter(v => v.gruppo === g);
+    if (!voci.length && !ser.length) return '';
+    return `<div class="cat-acc-g"><h4>${escapeHtml(g)}</h4>
+      ${ser.map(v => `<div class="cat-acc cat-acc-s">${escapeHtml(v.nome)}<span>di serie</span></div>`).join('')}
+      ${voci.map(v => `<div class="cat-acc cat-acc-o">${escapeHtml(v.nome)}<span>optional</span></div>`).join('')}</div>`;
+  }).join('') : '';
+  return `<div class="cat-scheda">
+    <div class="cat-testa">
+      <div class="cat-titolo">${escapeHtml(d.allestimento || '')}</div>
+      <div class="cat-listino">${catEur(d.prezzoListino)}<span>di listino, nuovo</span></div>
+    </div>
+    <div class="cat-specs">
+      ${riga('Potenza', d.kw ? `${d.kw} kW` : null)}
+      ${riga('Cavalli fiscali', d.cavalliFiscali)}
+      ${riga('Cilindrata', d.cilindrata ? d.cilindrata + ' cc' : null)}
+      ${riga('Alimentazione', d.alimentazione)}
+      ${riga('Cambio', [d.cambio, d.nomeCambio, d.marce ? d.marce + ' marce' : null].filter(Boolean).join(' · '))}
+      ${riga('Trazione', d.trazione)}
+      ${riga('Carrozzeria', d.carrozzeria)}
+      ${riga('Segmento', d.segmento)}
+      ${riga('Classe Euro', d.euro)}
+      ${riga('Porte / posti', [d.porte, d.posti].filter(x => x != null).join(' / '))}
+      ${riga('Neopatentati', d.neoPatentati ? 'si' : 'no')}
+      ${riga('In produzione', [d.inizioProduzione, d.fineProduzione || 'oggi'].filter(Boolean).join(' → '))}
+    </div>
+    ${acc ? `<div class="cat-acc-testa">Dotazione — ${acc.serie.length} di serie, ${acc.optional.length} a richiesta
+      <em>i prezzi degli optional non sono nei dati pubblici della fonte</em></div><div class="cat-acc-lista">${gruppi}</div>` : ''}
+    <div class="cat-fonte">${escapeHtml(d.fonte || '')}${d.url ? ` · <a href="${escapeHtml(d.url)}" target="_blank" rel="noopener noreferrer">scheda originale ↗</a>` : ''}</div>
+  </div>`;
+}
+
+function catRender() {
+  const el = catEl(); if (!el) return;
+  el.innerHTML = `<div class="cat-wrap">${catBriciole()}${catCorpo()}</div>`;
+}
+
+// Un solo listener sul pannello: i figli si ridisegnano, la delega no.
+document.getElementById('catalogoPanel')?.addEventListener('click', e => {
+  const su = e.target.closest('.cat-su');
+  if (su) {
+    if (su.dataset.l === 'marche') catVaiMarche();
+    else if (su.dataset.l === 'modelli' && catMarca) catVaiModelli(catMarca);
+    else if (su.dataset.l === 'versioni' && catModello) catVaiVersioni(catModello);
+    return;
+  }
+  const ma = e.target.closest('.cat-marca');
+  if (ma) return void catVaiModelli({ acronimo: ma.dataset.acr, nome: ma.dataset.nome });
+  const mo = e.target.closest('.cat-modello');
+  if (mo) return void catVaiVersioni({ codiceModello: mo.dataset.cod, nome: mo.dataset.nome });
+  const ve = e.target.closest('.cat-versione');
+  if (ve && ve.dataset.cod) return void catVaiScheda(ve.dataset.cod);
+});
+// Il filtro NON ridisegna tutto: riscrive solo l'elenco, altrimenti il campo perde il fuoco.
+document.getElementById('catalogoPanel')?.addEventListener('input', e => {
+  if (!e.target.classList.contains('cat-cerca')) return;
+  catFiltro = e.target.value;
+  const wrap = catEl().querySelector('.cat-wrap');
+  const vecchio = wrap.querySelector('.cat-griglia, .cat-lista, .cat-vuoto');
+  const nuovo = document.createElement('div');
+  nuovo.innerHTML = catCorpo();
+  const rimpiazzo = nuovo.querySelector('.cat-griglia, .cat-lista, .cat-vuoto');
+  if (vecchio && rimpiazzo) vecchio.replaceWith(rimpiazzo);
+});
 
 // ─── Avvio ────────────────────────────────────────────────────────────────────
 init();
