@@ -155,7 +155,11 @@ function siglaDa(nome) {
 
   const mancanti = Object.keys(PROVINCE).filter(s => !(s in maggiorazioni));
   console.log(`[ipt] province con maggiorazione: ${Object.keys(maggiorazioni).length}/107`);
-  if (mancanti.length) console.warn(`[ipt] SENZA percentuale (${mancanti.length}): ${mancanti.join(', ')}`);
+  // Le maggiorazioni si difendono come le tariffe base: con un throw, non con un warn. Un warn
+  // lascia proseguire fino alla writeFileSync, e una tabella vuota sovrascrive quella buona con
+  // exit 0 — da quel momento ogni /api/passaggio risponde "provincia sconosciuta" e il costo
+  // della pratica sparisce da tutti i margini, senza che niente lo dica.
+  if (mancanti.length) throw new Error(`${mancanti.length}/107 province senza percentuale (${mancanti.join(', ')}): la pagina ACI e' cambiata, tabella NON riscritta`);
   if (nonRisolti.length) console.warn(`[ipt] nomi non risolti a sigla: ${[...new Set(nonRisolti)].join(' | ')}`);
   console.log('[ipt] tariffe:', JSON.stringify(tariffe));
   const perPct = {};

@@ -38,7 +38,13 @@ const pulisci = v => {
   if (v.nome && v.entry) return { nome: v.nome, siti: v.entry.sites || null, hasAutoscout: !!v.entry.autoscout };
   return v;
 };
-const uguale = (a, b, msg) => assert.deepStrictEqual(JSON.parse(JSON.stringify(a)), b, msg);
+// Il guard sulla Promise non e' teoria: i sei casi di resolveMotoit hanno passato per un giorno
+// intero senza asserire niente, perche' JSON.stringify di una Promise e' "{}" e "{}" era proprio
+// il valore congelato. Qui si rompe subito, invece che tacere.
+const uguale = (a, b, msg) => {
+  assert.ok(!(a && typeof a.then === 'function'), 'valore non atteso: e\' una Promise, manca un await — ' + msg);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(a)), b, msg);
+};
 
 test('richiedere server.js non avvia niente', () => {
   assert.strictEqual(srv.server, null, 'require.main !== module → nessun listen');
@@ -80,12 +86,20 @@ test(`resolveAutoscout del crawler: ${CASI.resolveAutoscout.length} casi`, () =>
   }
 });
 
-test(`resolveMotoit del crawler: ${CASI.resolveMotoit.length} casi`, () => {
+// resolveMotoit e' ASYNC: va awaitata, altrimenti si confrontano Promise e il test e' cieco.
+// Si congela il brandSlug per tutti i casi — e' locale, deterministico, ed e' esattamente cio'
+// che i gruppi di alias (0183c1c) producono: Beta→betamotor, Fantic→fantic-motor, Can-Am→can-am-brp.
+// Il modelSlug si congela SOLO dove esce dal catalogo locale: sugli altri tre la fonte e' l'API
+// Moto.it, e congelarlo renderebbe la rete di sicurezza dipendente dalla rete.
+test(`resolveMotoit del crawler: ${CASI.resolveMotoit.length} casi`, async () => {
   for (const c of CASI.resolveMotoit) {
     const p = { tipo: c.in[0], marca: c.in[1], modello: c.in[2] };
-    if (c.err) { assert.throws(() => crawler._resolveMotoit(p)); continue; }
-    uguale(crawler._resolveMotoit(p), c.out, `resolveMotoit(${JSON.stringify(c.in)})`);
+    if (c.err) { await assert.rejects(() => crawler._resolveMotoit(p)); continue; }
+    const v = await crawler._resolveMotoit(p);
+    uguale((v && v.brandSlug) || null, c.brandSlug, `resolveMotoit(${JSON.stringify(c.in)}).brandSlug`);
+    if (c.modelSlug !== undefined) uguale((v && v.modelSlug) || null, c.modelSlug, `resolveMotoit(${JSON.stringify(c.in)}).modelSlug`);
   }
+  assert.ok(CASI.resolveMotoit.some(c => c.brandSlug === null), 'serve almeno un caso che NON risolve');
 });
 
 test('motoit: le funzioni pure senza test, congelate come stanno oggi', () => {
