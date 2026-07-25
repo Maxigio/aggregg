@@ -3652,11 +3652,16 @@ function catBarraHTML() {
     const pausa = catPausaMs(x.bloccataFino);
     const fuori = !x.disponibile || pausa > 0;
     const perche = pausa > 0 ? 'La fonte ha risposto con un blocco: si aspetta in silenzio, poi si riprova.'
-      : (x.dettaglio || '') + (x.marche ? ' · ' + x.marche + ' marche' : '');
+      : !x.disponibile ? 'Questa fonte non e\' accesa su questa installazione: si accende avviando il server con AMR_MOTORNET=1.'
+        : (x.dettaglio || '') + (x.marche ? ' · ' + x.marche + ' marche' : '');
+    // Una linguetta non selezionata e una non disponibile erano DUE GRIGI quasi identici, e la
+    // differenza la faceva solo l'opacita'. Chi guardava non poteva sapere se cliccare o no:
+    // ora lo stato che impedisce il clic lo dice a parole, come fa la pausa.
     return `<button type="button" class="cat-fonte${x.id === catFonte ? ' attiva' : ''}${x.disponibile ? '' : ' spenta'}${pausa > 0 ? ' in-pausa' : ''}"`
       + ` data-fonte="${escapeHtml(x.id)}"${fuori ? ' disabled' : ''}`
       + ` title="${escapeHtml(perche)}">${escapeHtml(x.nome)}`
-      + (pausa > 0 ? `<em class="cat-pausa" data-fine="${x.bloccataFino}">in pausa ${catMmSs(pausa)}</em>` : '')
+      + (pausa > 0 ? `<em class="cat-pausa" data-fine="${x.bloccataFino}">in pausa ${catMmSs(pausa)}</em>`
+        : x.disponibile ? '' : '<em class="cat-off">non attiva</em>')
       + '</button>';
   }).join('');
   const ph = catLivello === 'marche' ? 'Cerca una marca…'

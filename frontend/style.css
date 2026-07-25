@@ -1135,7 +1135,11 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .cat-fonte { padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--text-muted); font: inherit; font-size: 0.82rem; cursor: pointer; }
 .cat-fonte:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
 .cat-fonte.attiva { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-.cat-fonte.spenta { opacity: 0.45; cursor: not-allowed; }
+/* Spenta = non c'e' su questa installazione. Bordo tratteggiato e un'etichetta a parole: senza,
+   era lo stesso grigio di una linguetta semplicemente non selezionata, e l'unica differenza era
+   l'opacita' — indistinguibile a occhio, e non diceva se valeva la pena cliccare. */
+.cat-fonte.spenta { opacity: 0.6; cursor: not-allowed; border-style: dashed; }
+.cat-fonte.spenta .cat-off { margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: var(--surface); color: var(--text-faint); font: inherit; font-size: 0.68rem; font-style: normal; letter-spacing: 0.02em; white-space: nowrap; }
 /* In pausa dopo un blocco della fonte: NON e' spenta e non e' rotta, sta aspettando. Si
    distingue dalle due (ambra, non grigio) e porta il conto alla rovescia in chiaro. */
 .cat-fonte.in-pausa { opacity: 1; cursor: progress; border-color: var(--warn); color: var(--warn); }
