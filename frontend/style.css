@@ -1159,7 +1159,7 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .cat-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 12px 6px; border: 1px solid var(--line); border-radius: var(--r2); background: #fff; cursor: pointer; font: inherit; min-height: 92px; }
 .cat-card:hover { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-weak); }
 .cat-card img { width: 100%; max-width: 72px; height: 40px; object-fit: contain; }
-.cat-noimg { width: 46px; height: 34px; border-radius: var(--r); background: #e9e9e9; }
+.cat-noimg { display: flex; align-items: center; justify-content: center; width: 46px; height: 40px; border-radius: var(--r); background: #eef1f4; color: #55606b; font-family: var(--num); font-weight: 800; font-size: 0.92rem; letter-spacing: 0.02em; }
 .cat-card-nome { font-size: 0.76rem; color: #1a1a1a; text-align: center; line-height: 1.2; word-break: break-word; }
 
 .cat-lista { display: flex; flex-direction: column; gap: 4px; max-height: 62vh; overflow-y: auto; }

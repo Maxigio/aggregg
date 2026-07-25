@@ -3483,6 +3483,18 @@ const catSetPref = (k, v) => { try { localStorage.setItem('amrCat_' + k, String(
 let catVista = catPref('vista', 'griglia') === 'lista' ? 'lista' : 'griglia';
 let catPerRiga = Math.min(12, Math.max(2, Number(catPref('perRiga', 6)) || 6));
 
+// Segnaposto quando la fonte non da' un logo (le moto) o l'immagine non carica: le INIZIALI
+// della marca, non un quadratino grigio uguale per tutte. In una griglia di 392 voci e' la
+// differenza fra trovare qualcosa a colpo d'occhio e doverle leggere una per una.
+function catIniziali(nome) {
+  const el = document.createElement('span');
+  el.className = 'cat-noimg';
+  el.textContent = String(nome || '?').split(/[\s-]+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase() || '?';
+  return el;
+}
+const catInizialiHTML = nome => `<span class="cat-noimg">${escapeHtml(
+  String(nome || '?').split(/[\s-]+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase() || '?')}</span>`;
+
 const catEl = () => document.getElementById('catalogoPanel');
 const catEur = n => (n > 0 ? Number(n).toLocaleString('it-IT') + ' €' : '—');
 const catTipo = () => (catFonteAttiva() || {}).tipo || 'auto';
@@ -3646,7 +3658,9 @@ function catElencoHTML(voci, opt) {
   }
   return `<div class="cat-griglia" style="--cat-cols:${catPerRiga}">${voci.map(v => `
     <button type="button" class="cat-card ${opt.classe}" ${opt.dati(v)}>
-      ${v.logo ? `<img src="${escapeHtml(v.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="cat-noimg"></span>'}
+      ${v.logo
+        ? `<img src="${escapeHtml(v.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(catIniziali(this.dataset.n))" data-n="${escapeHtml(v.nome || '')}">`
+        : catInizialiHTML(v.nome)}
       <span class="cat-card-nome">${escapeHtml(v.nome || '')}</span>
     </button>`).join('')}</div>`;
 }

@@ -26,6 +26,10 @@ const motornet = require('./scrapers/motornet');
 // accetta marca+modello da sola e non dipende da una ricerca.
 const AUTODATA = require('../data/autodata-index.json');
 const ULTIMATE = require('../data/ultimatespecs-moto-index.json');
+// Loghi delle marche auto-data.net (scripts/build-autodata-loghi.js). Senza, la griglia
+// mostrava 392 segnaposto identici: una parete di quadratini in cui non si trova niente.
+let LOGHI_AUTO = {};
+try { LOGHI_AUTO = require('../data/autodata-loghi.json').loghi || {}; } catch (_) {}
 
 // auto-data.net scrive i modelli come "124 1966 -": gli anni in coda sono rumore in un elenco.
 const senzaAnni = n => String(n || '').replace(/\s+(19|20)\d{2}\s*(-\s*((19|20)\d{2})?)?\s*$/, '').trim() || String(n || '');
@@ -37,9 +41,9 @@ const FONTI = {
 };
 
 // Da un indice su disco all'elenco marche/modelli, nella stessa forma della fonte di rete.
-function marcheDaIndice(idx) {
+function marcheDaIndice(idx, loghi) {
   return Object.entries(idx.brands || {})
-    .map(([k, b]) => ({ acronimo: k, nome: b.name || k, logo: null }))
+    .map(([k, b]) => ({ acronimo: k, nome: b.name || k, logo: (loghi && loghi[k]) || null }))
     .filter(m => m.nome)
     .sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
 }
@@ -98,7 +102,7 @@ function mount(app, deps = {}) {
   via('/api/catalogo/marche', async q => {
     const f = String(q.fonte || 'nuovo');
     const idx = indiceDi(f);
-    if (idx) return { fonte: f, marche: marcheDaIndice(idx) };
+    if (idx) return { fonte: f, marche: marcheDaIndice(idx, f === 'auto' ? LOGHI_AUTO : null) };
     return { fonte: 'nuovo', marche: await motornet.marche() };
   });
 
