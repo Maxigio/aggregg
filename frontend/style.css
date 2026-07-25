@@ -321,6 +321,17 @@ body:not(.has-results) .search {
 .veh-export-menu { min-width: 180px; display: flex; flex-direction: column; gap: 2px; }
 .veh-exp { text-align: left; background: none; border: 0; color: var(--text); font: inherit; font-size: 0.84rem; padding: 7px 8px; border-radius: var(--r); cursor: pointer; }
 .veh-exp:hover { background: var(--surface-2); color: var(--accent); }
+/* banda costo carburante (prezzi ufficiali MIMIT per provincia) */
+.veh-costo { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--r2); background: var(--surface-2); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.veh-costo-attesa { color: var(--text-faint); font-size: 0.85rem; }
+.veh-costo-cifra { display: flex; align-items: baseline; gap: 8px; }
+.veh-costo-cifra b { font-family: var(--num); font-size: 1.5rem; font-weight: 800; color: var(--text); line-height: 1; }
+.veh-costo-cifra span { font-size: 0.82rem; color: var(--text-muted); }
+.veh-costo-det { font-size: 0.78rem; color: var(--text-muted); font-family: var(--num); }
+.veh-costo-warn { color: var(--warn); font-family: var(--sans); }
+.veh-costo-ctrl { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+.veh-costo-ctrl select { height: 28px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); font: inherit; font-size: 0.78rem; padding: 0 6px; cursor: pointer; }
+.veh-costo-fonte { font-size: 0.7rem; color: var(--text-faint); border-top: 1px solid var(--line); padding-top: 5px; margin-top: 2px; }
 /* banda "In evidenza" (solo campi spuntati) */
 .veh-hl-band { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .veh-ks { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }

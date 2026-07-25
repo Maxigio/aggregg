@@ -30,6 +30,7 @@ const { runBootstrap } = require('./scrapers/subito-bootstrap');
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
 const { resolveMotoitModelSlug, getBrandModels, getModelBikes, resolveMotoitVersionEntry } = require('./scrapers/motoit-models');
 const { getDetail } = require('./scrapers/detail');
+const carburanti     = require('./carburanti');   // prezzi carburante MIMIT per provincia
 const saved = require('./saved');
 const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
@@ -501,6 +502,23 @@ app.get('/api/models', async (req, res) => {
 //  - `modelSlug` = famiglia Moto.it scelta direttamente → bikes della famiglia.
 //  - `modelNome` = voce-catalogo (es. "Dyna Fat Bob") senza slug → risolve famiglia+versioni.
 // Ritorna `{ familySlug, versioni:[{nome,code,annoMin,annoMax}] }`.
+// ─── Prezzi carburante ufficiali per provincia (open data MIMIT, IODL 2.0) ────
+// Incrociati col consumo della scheda tecnica danno il costo reale al km dove vive
+// l'utente. L'indice è piccolo (107 province × 4 carburanti) → si serve tutto e il
+// client calcola: cambiare km/anno o provincia non richiede altre richieste.
+// La UI DEVE citare la fonte: è l'obbligo di attribuzione della licenza IODL 2.0.
+app.get('/api/carburanti', async (req, res) => {
+  try {
+    const idx = await carburanti.indice();
+    if (!idx) return res.json({ ok: false, motivo: 'prezzi non disponibili' });
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.json({ ok: true, aggiornato: idx.aggiornato, fonte: idx.fonte, italia: idx.italia, province: idx.province });
+  } catch (e) {
+    console.warn('[api/carburanti] KO:', e.message);
+    res.json({ ok: false, motivo: 'prezzi non disponibili' });
+  }
+});
+
 app.get('/api/moto-versions', async (req, res) => {
   const marca = (req.query.marca || '').trim();
   const modelSlug = (req.query.modelSlug || '').trim();

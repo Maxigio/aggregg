@@ -314,6 +314,12 @@ async function init() {
       if (e.target.value) vehXf.units[fam] = e.target.value; else delete vehXf.units[fam];
       const det = e.target.closest('.veh-units'); if (det) det.classList.toggle('has-adj', Object.values(vehXf.units).some(Boolean));
       renderVehBody();
+    } else if (e.target.classList.contains('veh-carb-prov')) {   // provincia per il prezzo carburante
+      try { localStorage.setItem('amrCarbProvincia', e.target.value); } catch (_) {}
+      renderVehBody();
+    } else if (e.target.classList.contains('veh-carb-km')) {     // km/anno per la stima
+      try { localStorage.setItem('amrCarbKm', e.target.value); } catch (_) {}
+      renderVehBody();
     } else if (e.target.classList.contains('veh-hl-cb')) {   // checkbox "in evidenza" per-campo
       const k = e.target.dataset.k;
       if (e.target.checked) vehXf.highlight.add(k); else vehXf.highlight.delete(k);
@@ -2473,7 +2479,7 @@ function vehBodyHTML() {
   const spec = vehSpecs[vehSelUrl];
   if (!spec || spec.loading) return '<div class="rc-loading">Carico le specifiche…</div>';
   if (!spec.ok || !spec.groups || !spec.groups.length) return '<div class="rc-empty">Specifiche non disponibili per questa motorizzazione.</div>';
-  return (vehXf.compare ? '' : vehHlBandHTML(spec)) + vehSectionsHTML(spec);
+  return (vehXf.compare ? '' : vehCostoHTML(spec) + vehHlBandHTML(spec)) + vehSectionsHTML(spec);
 }
 // Versione Moto.it scelta nella ricerca → la stessa voce nella scheda, già selezionata.
 // L'aggancio è per CODICE, non per nome: l'URL della scheda Moto.it finisce col codice-versione
@@ -2485,6 +2491,84 @@ function vehVersionePreScelta(d) {
   if (!code || !/moto\.it/i.test(d.source || '')) return null;
   const hit = (d.motorizzazioni || []).find(m => String(m.url || '').endsWith('/' + code));
   return hit ? hit.url : null;
+}
+
+// ── Costo carburante reale, coi prezzi ufficiali della TUA provincia ──────────
+// Dati MIMIT (open data, IODL 2.0 → attribuzione obbligatoria in UI), aggiornati ogni
+// giorno. Si incrociano col consumo dichiarato dalla scheda: il consumo è presente nel
+// 100% dei trim campionati, quindi la banda compare quasi sempre. Le elettriche restano
+// fuori di proposito: il prezzo dell'energia è un'altra fonte e non lo inventiamo.
+let carbIdx = null, carbStato = 'mai';           // 'mai' | 'carico' | 'ok' | 'ko'
+const CARB_ETICHETTA = { benzina: 'benzina', gasolio: 'gasolio', gpl: 'GPL', metano: 'metano' };
+const carbProvincia = () => { try { return localStorage.getItem('amrCarbProvincia') || ''; } catch (_) { return ''; } };
+const carbKmAnno = () => { try { return Number(localStorage.getItem('amrCarbKm')) || 15000; } catch (_) { return 15000; } };
+
+async function loadCarburanti() {
+  if (carbStato === 'carico' || carbStato === 'ok') return;
+  carbStato = 'carico';
+  try {
+    const d = await fetch('/api/carburanti').then(r => r.json());
+    if (d && d.ok) { carbIdx = d; carbStato = 'ok'; } else carbStato = 'ko';
+  } catch (_) { carbStato = 'ko'; }
+  renderVehBody();
+}
+
+// spec → { consumo, famiglia } leggendo le righe GREZZE (auto-data.net e Moto.it insieme)
+function vehConsumo(spec) {
+  const righe = (spec.groups || []).flatMap(g => g.rows || []);
+  let consumo = null, alim = '';
+  for (const r of righe) {
+    if (consumo == null && /consumo/i.test(r.k)) { const v = carbConsumoDa(r.v); if (v) consumo = v; }
+    if (!alim && /tipo carburante|alimentazione/i.test(r.k)) alim = r.v;
+  }
+  if (!alim && vehData && vehData.head) alim = '';
+  return { consumo, famiglia: carbFamigliaDa(alim) };
+}
+// stesse regole del backend (backend/carburanti.js): tenute uguali di proposito
+function carbConsumoDa(v) {
+  const s = String(v || '');
+  if (!/l\s*\/\s*100/i.test(s)) return null;             // kWh/100km → non quotabile qui
+  const n = (s.replace(',', '.').match(/\d+(?:\.\d+)?/g) || []).map(Number).filter(x => x > 0 && x < 60).slice(0, 2);
+  return n.length ? +(n.reduce((a, b) => a + b, 0) / n.length).toFixed(2) : null;
+}
+function carbFamigliaDa(a) {
+  const s = String(a || '').toLowerCase();
+  if (!s) return null;
+  if (/elettric/.test(s) && !/ibrid/.test(s)) return null;
+  if (/gpl/.test(s)) return 'gpl';
+  if (/metano/.test(s)) return 'metano';
+  if (/diesel|gasolio/.test(s)) return 'gasolio';
+  if (/benzin/.test(s)) return 'benzina';
+  return null;
+}
+
+function vehCostoHTML(spec) {
+  const { consumo, famiglia } = vehConsumo(spec);
+  if (!consumo || !famiglia) return '';                      // niente dati → niente banda (mai stime inventate)
+  if (carbStato === 'mai') { loadCarburanti(); return '<div class="veh-costo veh-costo-attesa">Calcolo il costo carburante…</div>'; }
+  if (carbStato === 'carico') return '<div class="veh-costo veh-costo-attesa">Calcolo il costo carburante…</div>';
+  if (carbStato !== 'ok' || !carbIdx) return '';
+  const pv = carbProvincia();
+  const tab = (pv && carbIdx.province[pv]) || carbIdx.italia;
+  const voce = tab[famiglia];
+  if (!voce) return '';
+  const km = carbKmAnno();
+  const per100 = consumo * voce.p;
+  const anno = per100 / 100 * km;
+  const eur = n => n.toLocaleString('it-IT', { maximumFractionDigits: 0 });
+  const provOpts = ['<option value="">Media Italia</option>']
+    .concat(Object.keys(carbIdx.province).sort().map(x => `<option value="${x}"${x === pv ? ' selected' : ''}>${x}</option>`)).join('');
+  const kmOpts = [10000, 15000, 20000, 30000].map(k => `<option value="${k}"${k === km ? ' selected' : ''}>${eur(k)} km/anno</option>`).join('');
+  const pochi = voce.n < 5 ? ` <span class="veh-costo-warn" title="pochi impianti rilevati: prezzo poco rappresentativo">· solo ${voce.n} impianti</span>` : '';
+  return `<div class="veh-costo">
+    <div class="veh-costo-cifra"><b>${eur(anno)} €</b><span>all'anno di ${CARB_ETICHETTA[famiglia]}</span></div>
+    <div class="veh-costo-det">${per100.toFixed(2).replace('.', ',')} € ogni 100 km · consumo dichiarato ${String(consumo).replace('.', ',')} l/100 km · ${voce.p.toFixed(3).replace('.', ',')} €/l${pochi}</div>
+    <div class="veh-costo-ctrl">
+      <select class="veh-carb-prov" aria-label="provincia per il prezzo del carburante">${provOpts}</select>
+      <select class="veh-carb-km" aria-label="chilometri all'anno">${kmOpts}</select>
+    </div>
+    <div class="veh-costo-fonte">Prezzi self ${carbIdx.aggiornato ? 'del ' + carbIdx.aggiornato : ''} — ${escapeHtml(carbIdx.fonte)}. Stima: consumo dichiarato, non reale.</div>
+  </div>`;
 }
 
 // ── Filtro/suggerimento per anno (dai filtri ricerca "anno da/anno a"): suggerisce ma NON sceglie ──

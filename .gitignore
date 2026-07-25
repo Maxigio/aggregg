@@ -36,3 +36,6 @@ data/reports.jsonl
 
 # app log (runtime)
 data/logs/
+
+# cache runtime prezzi carburante (si rigenera da sola ogni 12h)
+data/carburanti-cache.json
