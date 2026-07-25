@@ -175,10 +175,10 @@ const GROUP_ORDER = ['Motore', 'Prestazioni', 'Consumi ed emissioni', 'Trasmissi
 function classifyKey(k) {
   const s = k.toLowerCase();
   if (/consum|economy|co2|emission|emissione|fuel type|tipo (di )?carburante|gas di scarico/.test(s)) return 'Consumi ed emissioni';
-  if (/displacement|cylinder|valve|bore|stroke|compression|aspiration|fuel system|injection|coolant|position of|motor|cilindr|valvol|alesaggio|\bcorsa\b|compressione|aspirazion|iniezione|distribuzione|olio/.test(s)) return 'Motore';
+  if (/displacement|cylinder|valve|bore|stroke|compression|aspiration|fuel system|injection|coolant|position of|motor|cilindr|valvol|alesaggio|\bcorsa\b|compressione|aspirazion|iniezione|distribuzione|olio|\btempi\b|raffreddamento|alimentazione|ride by wire|batteria/.test(s)) return 'Motore';
   if (/power|torque|speed|acceleration|0-100|0-60|per litre|per litro|weight-to-power|prestazion|potenza|coppia|accelerazion|velocit|rapporto peso/.test(s)) return 'Prestazioni';
-  if (/drive|transmission|gearbox|number of gears|clutch|suspension|brake|tyre|tire|rim|wheel size|steering|assisting|axle|trazione|marce|\bcambio\b|sospension|freni|pneumatic|cerchi|sterzo|assistenza|avviamento/.test(s)) return 'Trasmissione, freni, sospensioni';
-  if (/length|width|height|wheelbase|track|clearance|ground|turning|drag|aerodynamic|coefficient|lunghezza|larghezza|altezza|\bpasso\b|carreggiata|coefficiente|resistenza|diametro|sterzata|suolo/.test(s)) return 'Dimensioni';
+  if (/drive|transmission|gearbox|number of gears|clutch|suspension|brake|tyre|tire|rim|wheel size|steering|assisting|axle|trazione|trasmission|marce|\bcambio\b|sospension|\bfren|pneumatic|cerchi|sterzo|assistenza|avviamento|frizione|escursione|\babs\b|retromarcia|telaio|ruote/.test(s)) return 'Trasmissione, freni, sospensioni';
+  if (/length|width|height|wheelbase|track|clearance|ground|turning|drag|aerodynamic|coefficient|lunghezza|larghezza|altezza|\bpasso\b|interasse|carreggiata|coefficiente|resistenza|diametro|sterzata|suolo/.test(s)) return 'Dimensioni';
   if (/weight|kerb|payload|trunk|boot|volume|tank|capacit|peso|massa|carico|bagagliaio|serbatoio|tetto|rimorchiabile/.test(s)) return 'Pesi e capacità';
   return 'Generale';
 }
@@ -226,4 +226,5 @@ module.exports = {
   HOST, httpGetText, fetchVehicleSpecs,
   parseBrandList, parseModelList, parseGenerationList, parseTrimList, parseTrimSpecs, parseSearchWords,
   slugOf, prettyLabel,
+  classifyKey, GROUP_ORDER,   // riusati da motoit-specs.js (classificazione bilingue IT/EN)
 };

@@ -1,13 +1,20 @@
 'use strict';
-// Route on-demand "scheda tecnica veicolo": auto-data.net (auto) + ultimatespecs.com (moto).
+// Route on-demand "scheda tecnica veicolo".
+//  auto → auto-data.net (/it/)
+//  moto → Moto.it /listino/ (PRIMARIA: italiano nativo, mercato italiano, prezzo di listino)
+//         con ultimatespecs.com come RIPIEGO. Misurato su 6 marche/1087 modelli:
+//         ultimatespecs 50,6% · Moto.it 42,2% · unione 62,6% (fonti complementari).
 // mount(app, { clientIp }).
 //  GET /api/scheda-veicolo?tipo&marca&modello&anno?&gen?     → generazioni/anni + voci (dropdown)
-//  GET /api/scheda-veicolo/specs?url=<auto-data.net|ultimatespecs.com>  → specifiche della voce
+//  GET /api/scheda-veicolo/specs?url=<auto-data.net|ultimatespecs.com|moto.it>  → specifiche
 const fs = require('fs');
 const path = require('path');
 const { norm } = require('./scrapers/brand-match');
 const vs = require('./scrapers/vehicle-specs');
 const ms = require('./scrapers/moto-specs');
+const mis = require('./scrapers/motoit-specs');
+const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
+const { getBrandModels, getModelBikes } = require('./scrapers/motoit-models');
 
 const INDEX_PATH = path.join(__dirname, '..', 'data', 'autodata-index.json');
 let INDEX = null;
@@ -46,8 +53,14 @@ function rateOk(ip) {
 
 const HOST_OK_AUTO = /^https?:\/\/(www\.)?auto-data\.net\//i;
 const HOST_OK_MOTO = /^https?:\/\/(www\.)?ultimatespecs\.com\//i;
+const HOST_OK_MOTOIT = /^https?:\/\/(www\.)?moto\.it\/listino\//i;   // solo il listino, non tutto moto.it
 // specs URL → quale parser usare (o null se host non consentito, anti-SSRF)
-function specsHostKind(url) { if (HOST_OK_AUTO.test(url)) return 'auto'; if (HOST_OK_MOTO.test(url)) return 'moto'; return null; }
+function specsHostKind(url) {
+  if (HOST_OK_AUTO.test(url)) return 'auto';
+  if (HOST_OK_MOTO.test(url)) return 'moto';
+  if (HOST_OK_MOTOIT.test(url)) return 'motoit';
+  return null;
+}
 // nome modello senza gli anni finali ("Golf 1974 -" → "Golf", "A3 2003 -" → "A3") per display E match
 const cleanName = n => String(n).replace(/\s+(19|20)\d{2}\s*(-\s*((19|20)\d{2})?)?\s*$/, '').trim() || String(n);
 
@@ -72,13 +85,17 @@ function matchModel(models, query) {
 // token a confine-parola, accenti appianati ("Caballero-Rally-500" → [caballero,rally,500])
 const motoTokens = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   .split(/[^a-z0-9]+/).filter(Boolean);
+// Prefisso SICURO: la chiave estende la query con un carattere NON numerico.
+// "mt07"→"mt07abs" sì; "r1"→"r15" no; "cb1"→"cb1100" no (sono moto diverse).
+// Regola unica per entrambe le fonti moto: duplicarla è come sono nati i falsi match.
+const prefissoSicuro = (k, q) => k.startsWith(q) && k.length > q.length && !/\d/.test(k[q.length]);
 
 function matchMotoModels(models, query) {
   const q = norm(query);
   if (!q) return [];
   const out = [];
   for (const k of Object.keys(models)) {
-    if (k === q || (k.startsWith(q) && k.length > q.length && !/\d/.test(k[q.length]))) out.push({ k, ...models[k] });
+    if (k === q || prefissoSicuro(k, q)) out.push({ k, ...models[k] });
   }
   // RIPIEGO: ultimatespecs intercala la variante nel nome ("Caballero-Rally-500"), quindi
   // "Caballero 500" non è prefisso di nessuna chiave → prima non trovavamo niente. Qui si
@@ -101,6 +118,56 @@ function matchMotoModels(models, query) {
   }
   out.sort((a, b) => a.k.length - b.k.length);   // base (chiave più corta) primo
   return out;
+}
+
+// Marche moto dal catalogo (per lo slug Moto.it già risolto). Caricamento pigro: il file
+// è grosso ma è lo STESSO modulo che require anche server.js → istanza condivisa da Node.
+let MOTO_BRANDS = null;
+function motoBrandEntry(marca) {
+  if (!MOTO_BRANDS) { try { MOTO_BRANDS = require('../data/models.json').moto || {}; } catch (_) { MOTO_BRANDS = {}; } }
+  return MOTO_BRANDS[marca] || null;
+}
+
+// ── Moto.it (/listino/) — fonte PRIMARIA per la scheda moto ──────────────────
+// Riusa la stessa API che alimenta l'input "Versione Moto.it" della ricerca: così la
+// scheda parla della STESSA versione che l'utente sceglie cercando (prima ricerca e
+// scheda usavano fonti diverse, da cui la confusione "Explorer" di moto.it vs "Explore").
+// Ritorna null se Moto.it non copre la moto → il chiamante ripiega su ultimatespecs.
+async function resolveMotoit({ marca, modello, anno }) {
+  if (!marca || !modello) return null;
+  const brandEntry = motoBrandEntry(marca);
+  const brandSlug = (brandEntry && brandEntry.motoit && brandEntry.motoit.brandSlug) || resolveMotoitSlug(marca) || null;
+  if (!brandSlug) return null;
+  let modelli = [];
+  try { modelli = await getBrandModels(brandSlug); } catch (_) { return null; }
+  if (!modelli.length) return null;
+  // stesso criterio del match ultimatespecs: esatto → prefisso → token (ordine libero)
+  const q = norm(modello), qt = motoTokens(modello);
+  const cand = modelli.map(m => ({ ...m, n: norm(m.name), t: motoTokens(m.name) }));
+  const hit = cand.find(m => m.n === q)
+    || cand.filter(m => q.length >= 3 && prefissoSicuro(m.n, q)).sort((a, b) => a.n.length - b.n.length)[0]
+    || (qt.length ? cand.filter(m => qt.every(t => m.t.includes(t))).sort((a, b) => a.n.length - b.n.length)[0] : null);
+  if (!hit) return null;
+  let versioni = [];
+  try { versioni = await getModelBikes(brandSlug, hit.slug); } catch (_) { return null; }
+  if (!versioni.length) return null;
+  const entries = versioni.map(v => ({
+    label: v.name, url: mis.specUrl(brandSlug, hit.slug, v.code),
+    year: v.annoMin || null, yearRange: v.annoMin ? (v.annoMax && v.annoMax !== v.annoMin ? `${v.annoMin}–${v.annoMax}` : `${v.annoMin}`) : '',
+  }));
+  entries.sort((a, b) => (b.year || 0) - (a.year || 0) || a.label.localeCompare(b.label));
+  const yr = Number(anno) || null;   // porta in cima l'annata cercata (lista comunque anno-desc)
+  if (yr && entries.length) {
+    let bi = 0, bd = Infinity;
+    entries.forEach((e, i) => { const d = Math.abs((e.year || 0) - yr); if (d < bd) { bd = d; bi = i; } });
+    if (bi > 0) entries.unshift(entries.splice(bi, 1)[0]);
+  }
+  const nome = hit.name || String(modello).trim();
+  return {
+    title: `${marca} ${nome}`, marca, modello: nome,
+    generations: [], gen: { name: `${marca} ${nome}`, slug: '' },
+    motorizzazioni: entries, source: 'moto.it',
+  };
 }
 
 // marca+modello(+anno) → tutte le voci/anni della famiglia (dropdown), specifiche lazy via /specs.
@@ -139,7 +206,7 @@ function resolveMoto({ marca, modello, anno }) {
 
 // marca+modello(+anno|gen) → { title, marca, modello, generations[], gen, motorizzazioni[] }
 async function resolveScheda({ tipo, marca, modello, anno, genSlug }) {
-  if (tipo === 'moto') return resolveMoto({ marca, modello, anno });
+  if (tipo === 'moto') return (await resolveMotoit({ marca, modello, anno })) || resolveMoto({ marca, modello, anno });
   if (tipo && tipo !== 'auto') return { unsupported: true };
   const idx = loadIndex();
   const brand = idx.brands[brandKey(marca)];
@@ -222,7 +289,9 @@ function mount(app, deps = {}) {
     const key = 'specs:' + url;
     const hit = cacheGet(key); if (hit != null) return res.json(hit);
     try {
-      const specs = kind === 'moto' ? await ms.fetchMotoSpecs(url) : await vs.fetchVehicleSpecs(url);
+      const specs = kind === 'motoit' ? await mis.fetchMotoitSpecs(url)
+        : kind === 'moto' ? await ms.fetchMotoSpecs(url)
+        : await vs.fetchVehicleSpecs(url);
       const data = { ok: true, ...specs };
       cacheSet(key, data, SPEC_TTL); res.json(data);
     } catch (_) { const data = { ok: false, error: 'specifiche non disponibili' }; cacheSet(key, data, EMPTY_TTL); res.json(data); }

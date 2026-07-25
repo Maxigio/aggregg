@@ -2451,8 +2451,8 @@ function renderVehScheda() {
   const curMoto = (d.motorizzazioni || []).find(m => m.url === vehSelUrl) || {};
   const curLabel = vehSelUrl && curMoto.label ? curMoto.label + (curMoto.hp ? ` · ${curMoto.hp} CV` : '') : '';
   const motoSel = vehCombo('veh-combo-moto', curLabel, tipo === 'moto' ? 'Anno / allestimento' : 'Motorizzazione');
-  // auto = specifiche già native in italiano (/it/) → toggle IT solo per la moto (fonte inglese, dizionario)
-  const itBtn = tipo === 'moto' ? `<button type="button" class="veh-tb-btn veh-it${vehXf.translate ? ' on' : ''}" title="Traduci in italiano">IT</button>` : '';
+  // Toggle IT solo dove serve il dizionario: auto-data.net (/it/) e Moto.it sono già italiane.
+  const itBtn = vehNeedsTr() ? `<button type="button" class="veh-tb-btn veh-it${vehXf.translate ? ' on' : ''}" title="Traduci in italiano">IT</button>` : '';
   // toolbar + combos vivono FUORI da .rc-sch-secs (persistenti): l'arrivo async delle specs
   // aggiorna solo .rc-sch-secs (renderVehBody) senza distruggere ciò che l'utente sta digitando.
   el.innerHTML = `<div class="rc-group${vehSchedaCollapsed ? ' collapsed' : ''}">`
@@ -2569,7 +2569,7 @@ function vehToolbarHTML() {
   }
   return `<div class="veh-toolbar">`
     + `<div class="veh-q-wrap">${icon('search', 'veh-q-ico')}<input type="search" class="veh-tb-q" placeholder="Cerca campo…" value="${escapeHtml(vehXf.q)}"></div>`
-    + `<details class="tb-cols veh-units${unitsActive ? ' has-adj' : ''}"><summary class="veh-tb-btn">Unità</summary><div class="tb-cols-menu veh-units-menu">${unitsMenu}</div></details>`
+    + (vehNumeriIT() ? '' : `<details class="tb-cols veh-units${unitsActive ? ' has-adj' : ''}"><summary class="veh-tb-btn">Unità</summary><div class="tb-cols-menu veh-units-menu">${unitsMenu}</div></details>`)
     + `<button type="button" class="veh-tb-btn veh-tb-all">${vehXf.allOpen === true ? 'Comprimi tutto' : 'Espandi tutto'}</button>`
     + `<button type="button" class="veh-tb-btn veh-tb-cmp${vehXf.compare ? ' on' : ''}">Confronta</button>`
     + `<details class="tb-cols veh-export"><summary class="veh-tb-btn">Esporta</summary><div class="tb-cols-menu veh-export-menu"><button type="button" class="veh-exp" data-exp="copia">Copia negli appunti</button><button type="button" class="veh-exp" data-exp="csv">Scarica CSV</button><button type="button" class="veh-exp" data-exp="pdf">Scarica PDF</button></div></details>`
@@ -2720,7 +2720,16 @@ function pickVehCombo(input, key, label) {
 // ─── Toolbar scheda: trasformazioni NON distruttive (dati grezzi intatti) ─────
 // Stato persistente tra i re-render e i cambi di voce. compare = 2a voce da confrontare.
 // translate ON di default; highlight = Set di chiavi-campo messe in evidenza dall'utente.
-function vehTipo() { return vehData && vehData.source && /ultimatespecs/i.test(vehData.source) ? 'moto' : 'auto'; }
+// Fonti moto: Moto.it (primaria, italiano nativo) e ultimatespecs (ripiego, inglese).
+function vehTipo() { return /ultimatespecs|moto\.it/i.test((vehData && vehData.source) || '') ? 'moto' : 'auto'; }
+// Serve il dizionario EN→IT? Solo per ultimatespecs: auto-data.net /it/ e Moto.it sono già in italiano.
+function vehNeedsTr() { return /ultimatespecs/i.test((vehData && vehData.source) || ''); }
+// Moto.it scrive i numeri in formato ITALIANO (migliaia col punto, decimali con la virgola:
+// "91,2 CV", "1.531 mm"). Il convertitore di unità tratta la virgola da separatore di migliaia
+// → mostrerebbe 912 CV. auto-data.net, anche su /it/, usa il punto decimale. Quindi su Moto.it
+// la conversione si spegne e il menu Unità non viene offerto: meglio nessuna conversione che
+// un numero sbagliato di dieci volte.
+function vehNumeriIT() { return /moto\.it/i.test((vehData && vehData.source) || ''); }
 // auto con generazioni → si sceglie prima la generazione. Search-landing (kind:'search', nessuna gen) → dritto ai trim, come la moto.
 function vehGenStep() { return vehTipo() === 'auto' && ((vehData && vehData.generations) || []).length > 0; }
 // markup combobox scheda (input + caret + lista): condiviso tra sel-row e toolbar confronto
@@ -2783,6 +2792,7 @@ const VEH_UNITS = [
 ];
 VEH_UNITS.forEach(u => { u.re = new RegExp('([\\d][\\d.,]*(?:\\s*[-x×]\\s*[\\d][\\d.,]*)?)\\s*(?:' + u.pat + ')\\b(?!\\s*\\/)', 'g'); });   // precompilata
 function vehConv(v) {
+  if (vehNumeriIT()) return v;   // formato italiano: convertire darebbe numeri falsi (vedi vehNumeriIT)
   let out = v;
   for (const u of VEH_UNITS) {
     const tgt = vehXf.units[u.fam]; if (!tgt || !u.f[tgt]) continue;
