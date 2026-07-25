@@ -158,6 +158,45 @@ test('modelli fonte=nuovo: le marche col nome di due lettere (DS, MG) non finisc
   });
 });
 
+// ─── Pausa dopo un blocco della fonte ────────────────────────────────────────
+test('fonti: niente cache, e la pausa non c\'e\' quando la fonte e\' libera', async () => {
+  const { corpo, headers } = await chiama('/api/catalogo/fonti');
+  // Se questa risposta fosse cachata un'ora, il conto alla rovescia resterebbe congelato.
+  assert.strictEqual(headers['Cache-Control'], 'no-store');
+  assert.ok(typeof corpo.adesso === 'number', 'serve l\'ora del server per allineare gli orologi');
+  for (const f of corpo.fonti) assert.strictEqual(f.bloccataFino, undefined, f.id + ' non e\' in pausa');
+});
+
+test('fonti: quando lo scraper e\' in pausa, l\'elenco dice fino a quando', async () => {
+  const a = require('../backend/scrapers/autoit-rilevamenti');
+  const orig = a.pausaFinoA;
+  const fine = 1900000000000;                 // istante fisso: nessun Date.now() nel test
+  a.pausaFinoA = () => fine;
+  try {
+    const { corpo } = await chiama('/api/catalogo/fonti');
+    const per = Object.fromEntries(corpo.fonti.map(f => [f.id, f]));
+    assert.strictEqual(per.rilevamenti.bloccataFino, fine);
+    assert.strictEqual(per.rilevamenti.disponibile, true, 'in pausa != spenta: torna da sola');
+    // La pausa e' della singola fonte, non del catalogo: le altre non devono risentirne.
+    assert.strictEqual(per.auto.bloccataFino, undefined);
+    assert.strictEqual(per.moto.bloccataFino, undefined);
+  } finally { a.pausaFinoA = orig; }
+});
+
+test('rilevamenti: su un blocco la risposta porta la fine della pausa', async () => {
+  const a = require('../backend/scrapers/autoit-rilevamenti');
+  const orig = { pausaFinoA: a.pausaFinoA, rilevamenti: a.rilevamenti };
+  const fine = 1900000000000;
+  a.pausaFinoA = () => fine;
+  a.rilevamenti = async () => { const e = new Error('in pausa dopo un blocco'); e.kind = 'blocked'; throw e; };
+  try {
+    const { corpo } = await chiama('/api/catalogo/rilevamenti', { marca: 'jaguar-jag' });
+    assert.strictEqual(corpo.ok, false);
+    assert.strictEqual(corpo.kind, 'blocked');
+    assert.strictEqual(corpo.bloccataFino, fine, 'senza questo la UI non sa che basta aspettare');
+  } finally { Object.assign(a, orig); }
+});
+
 test('limite: 40 richieste al minuto per IP, la 41esima no', async () => {
   const ip = 'ip-solo-per-questo-test';
   for (let i = 1; i <= 40; i++) assert.strictEqual(cat._rateOk(ip), true, 'richiesta ' + i);

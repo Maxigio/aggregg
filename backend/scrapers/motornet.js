@@ -111,7 +111,11 @@ async function conCache(chiave, produci) {
   const p = (async () => {
     try {
       const d = await produci();
-      c.voci[chiave] = { t: Date.now(), d };
+      // Stesso ragionamento di autoit-rilevamenti.js: un elenco vuoto non e' un dato, e' un
+      // intoppo. Si serve lo stesso, ma scade fra 15 minuti invece che fra 7 giorni. Misurato:
+      // "modelli|JAG" era finito in cache vuoto e sarebbe rimasto tale fino al 1 agosto.
+      const vuoto = Array.isArray(d) ? !d.length : !d;
+      c.voci[chiave] = { t: vuoto ? Date.now() - TTL_MS + 15 * 60 * 1000 : Date.now(), d };
       scrivi();
       return d;
     } catch (e) {
@@ -355,8 +359,12 @@ async function kwDaCavalli(marca, modello, cavalli) {
   return k ? { ...k, fonte: r.fonte, url: r.url } : null;
 }
 
+/** Istante (ms) fino al quale la fonte e' in pausa dopo un blocco; 0 se e' libera. */
+const pausaFinoA = () => (Date.now() < bloccatoFino ? bloccatoFino : 0);
+
 module.exports = {
   ATTIVO, cerca, kwDaCavalli, marche, modelli, versioni, dettaglio, accessori, trovaModello,
+  pausaFinoA,
   scegliModelli, kwPerCavalli,          // pure: testabili senza rete
   _norm: norm, _CACHE_FILE: CACHE_FILE,
 };

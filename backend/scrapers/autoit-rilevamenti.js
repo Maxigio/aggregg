@@ -254,8 +254,11 @@ const rilevamenti = slug => conCache('riv|' + slug, async () => {
   };
 });
 
+/** Istante (ms) fino al quale la fonte e' in pausa dopo un blocco; 0 se e' libera. */
+const pausaFinoA = () => (Date.now() < bloccatoFino ? bloccatoFino : 0);
+
 module.exports = {
-  marche, rilevamenti,
+  marche, rilevamenti, pausaFinoA,
   _estraiRecord: estraiRecord, _mappaRecord: mappaRecord, _nomeDaSlug: nomeDaSlug, _marcheDaIndice: marcheDaIndice,
   _payloadRsc: payloadRsc, _oggettoAttorno: oggettoAttorno, _per100: per100, _CACHE_FILE: CACHE_FILE,
 };

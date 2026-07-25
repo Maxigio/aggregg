@@ -3494,6 +3494,15 @@ let catFiltro = '';
 // secondi; le fonti locali rispondono in millisecondi. Senza token, la risposta della fonte che
 // hai gia' abbandonato arriva dopo e sovrascrive quella che stai guardando.
 let catGen = 0;
+// Pausa dopo un blocco della fonte (403/429): mezz'ora di silenzio. E' una scelta giusta verso
+// la fonte, ma senza dirlo la sezione sembra rotta. Si mostra quanto manca.
+// `catScarto` allinea l'orologio del browser a quello del server: la fine pausa arriva come
+// istante assoluto del server, e un browser con l'ora sfasata mostrerebbe un conto sbagliato.
+let catScarto = 0;
+let catTicker = null;
+let catBloccataFino = 0;        // la fonte che stiamo guardando, dall'ultima risposta d'errore
+const catPausaMs = fino => (fino ? Math.max(0, Number(fino) + catScarto - Date.now()) : 0);
+const catMmSs = ms => { const s = Math.ceil(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 
 // Preferenze di vista, ricordate fra le sessioni: sono scelte dell'operatore, non stato.
 const catPref = (k, d) => { try { const v = localStorage.getItem('amrCat_' + k); return v == null ? d : v; } catch (_) { return d; } };
@@ -3527,9 +3536,15 @@ async function catChiedi(percorso) {
   try {
     const d = await fetch(percorso).then(r => r.json());
     if (mia !== catGen) return null;          // sorpassata: non tocca ne' stato ne' dati
-    if (d && d.ok) { catStato = 'ok'; return d; }
+    if (d && d.ok) { catStato = 'ok'; catBloccataFino = 0; return d; }
     catStato = d && d.spento ? 'spento' : 'ko';
     catMotivo = (d && d.motivo) || 'non disponibile';
+    // Un blocco non e' un guasto: si dice fino a quando dura, cosi' si sa che basta aspettare.
+    catBloccataFino = (d && d.bloccataFino) || 0;
+    if (catBloccataFino && catFonti) {
+      const f = catFonti.find(x => x.id === catFonte);
+      if (f) f.bloccataFino = catBloccataFino;
+    }
   } catch (_) { if (mia !== catGen) return null; catStato = 'ko'; catMotivo = 'richiesta non riuscita'; }
   catRender();
   return null;
@@ -3540,6 +3555,7 @@ async function catInizio() {
     try {
       const d = await fetch('/api/catalogo/fonti').then(r => r.json());
       catFonti = (d && d.fonti) || [];
+      if (d && d.adesso) catScarto = Date.now() - d.adesso;   // allinea gli orologi
     } catch (_) { catFonti = []; }
   }
   if (!catFonte || !catFonti.some(f => f.id === catFonte && f.disponibile)) {
@@ -3632,9 +3648,17 @@ async function catVaiScheda(rif) {
 // La barra e' dell'AREA, non di un livello: fonti, ricerca, vista e densita' restano al loro
 // posto mentre si naviga, cosi' non si riconfigura tutto a ogni passo.
 function catBarraHTML() {
-  const f = (catFonti || []).map(x => `<button type="button" class="cat-fonte${x.id === catFonte ? ' attiva' : ''}${x.disponibile ? '' : ' spenta'}"`
-    + ` data-fonte="${escapeHtml(x.id)}"${x.disponibile ? '' : ' disabled'}`
-    + ` title="${escapeHtml(x.dettaglio || '')}${x.marche ? ' · ' + x.marche + ' marche' : ''}">${escapeHtml(x.nome)}</button>`).join('');
+  const f = (catFonti || []).map(x => {
+    const pausa = catPausaMs(x.bloccataFino);
+    const fuori = !x.disponibile || pausa > 0;
+    const perche = pausa > 0 ? 'La fonte ha risposto con un blocco: si aspetta in silenzio, poi si riprova.'
+      : (x.dettaglio || '') + (x.marche ? ' · ' + x.marche + ' marche' : '');
+    return `<button type="button" class="cat-fonte${x.id === catFonte ? ' attiva' : ''}${x.disponibile ? '' : ' spenta'}${pausa > 0 ? ' in-pausa' : ''}"`
+      + ` data-fonte="${escapeHtml(x.id)}"${fuori ? ' disabled' : ''}`
+      + ` title="${escapeHtml(perche)}">${escapeHtml(x.nome)}`
+      + (pausa > 0 ? `<em class="cat-pausa" data-fine="${x.bloccataFino}">in pausa ${catMmSs(pausa)}</em>` : '')
+      + '</button>';
+  }).join('');
   const ph = catLivello === 'marche' ? 'Cerca una marca…'
     : catLivello === 'modelli' ? 'Cerca un modello…'
       : catLivello === 'versioni' ? 'Cerca una versione…'
@@ -3705,7 +3729,15 @@ function catElencoHTML(voci, opt) {
 function catCorpo() {
   if (catStato === 'carico') return catVuoto('Carico…');
   if (catStato === 'spento') return catVuoto('Questo catalogo non e attivo su questa installazione.');
-  if (catStato === 'ko') return catVuoto(catMotivo);
+  if (catStato === 'ko') {
+    const p = catPausaMs(catBloccataFino);
+    // Il contatore porta la classe .cat-pausa: lo aggiorna lo stesso ticker delle linguette,
+    // e quando arriva a zero l'elenco fonti si ricarica da solo.
+    if (p > 0) return `<div class="cat-vuoto cat-vuoto-pausa">La fonte ci ha chiesto di rallentare.
+      Si riprova fra <em class="cat-pausa" data-fine="${catBloccataFino}">${catMmSs(p)}</em>.
+      <span>Nel frattempo gli altri cataloghi funzionano.</span></div>`;
+    return catVuoto(catMotivo);
+  }
 
   if (catLivello === 'marche') {
     return catElencoHTML(catFiltra(catDati.marche || [], x => x.nome), {
@@ -3821,6 +3853,26 @@ function catSchedaSpecsHTML(s) {
 function catRender() {
   const el = catEl(); if (!el) return;
   el.innerHTML = `<div class="cat-wrap">${catBarraHTML()}${catBriciole()}<div class="cat-corpo">${catCorpo()}</div></div>`;
+  catAvviaTicker();
+}
+
+// Un solo intervallo, e solo finche' c'e' davvero qualcosa che scorre. Aggiorna il TESTO dei
+// contatori invece di ridisegnare il pannello: un re-render a ogni secondo farebbe perdere il
+// fuoco alla casella di ricerca mentre si scrive.
+function catAvviaTicker() {
+  if (catTicker) return;
+  if (!catEl()?.querySelector('.cat-pausa')) return;
+  catTicker = setInterval(() => {
+    const nodi = catEl()?.querySelectorAll('.cat-pausa') || [];
+    if (!nodi.length) { clearInterval(catTicker); catTicker = null; return; }
+    let scaduta = false;
+    for (const n of nodi) {
+      const ms = catPausaMs(n.dataset.fine);
+      if (ms <= 0) scaduta = true; else n.textContent = 'in pausa ' + catMmSs(ms);
+    }
+    // Finita la pausa si richiede l'elenco fonti: lo stato vero ce l'ha il server, non noi.
+    if (scaduta) { clearInterval(catTicker); catTicker = null; catBloccataFino = 0; catFonti = null; catInizio(); }
+  }, 1000);
 }
 // Riscrive SOLO l'elenco: usato dal filtro e dal cursore, per non far perdere il fuoco.
 function catRenderCorpo() {

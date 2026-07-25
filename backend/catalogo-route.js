@@ -73,6 +73,14 @@ function rateOk(ip) {
 
 const SPENTO = { ok: false, motivo: 'catalogo non attivo su questa installazione', spento: true };
 
+// Dopo un 403/429 lo scraper tace per mezz'ora. E' una scelta giusta verso la fonte, ma
+// dall'interfaccia era indistinguibile da un guasto: si diceva "non disponibile" e basta.
+// Qui si tira su l'istante di fine pausa, cosi' la UI puo' dire quanto manca.
+const pausaDi = fonte => {
+  const s = fonte === 'rilevamenti' ? autoit : (indiceDi(fonte) ? null : motornet);
+  return s && s.pausaFinoA ? s.pausaFinoA() : 0;
+};
+
 function mount(app, deps = {}) {
   const clientIp = deps.clientIp || (req => req.ip || '');
   // Ogni risposta del catalogo passa di qui: limite, interruttore, errore in chiaro.
@@ -91,19 +99,28 @@ function mount(app, deps = {}) {
       res.json({ ok: true, ...out });
     } catch (e) {
       console.warn('[catalogo] ' + percorso + ' KO:', e.message);
-      res.json({ ok: false, motivo: e.message, kind: e.kind || 'error' });
+      // Su un blocco si dice ANCHE fino a quando dura: senza, la sezione sembra rotta per
+      // mezz'ora e non c'e' modo di sapere che basta aspettare.
+      const fino = pausaDi(fonteQ);
+      res.json({ ok: false, motivo: e.message, kind: e.kind || 'error', ...(fino ? { bloccataFino: fino } : {}) });
     }
   });
 
   // Elenco delle fonti navigabili, con quante voci hanno e se sono disponibili qui.
   app.get('/api/catalogo/fonti', (req, res) => {
     const conta = f => { const i = indiceDi(f); return i ? Object.keys(i.brands || {}).length : null; };
-    res.set('Cache-Control', 'public, max-age=3600');
-    res.json({ ok: true, fonti: Object.entries(FONTI).map(([id, f]) => ({
-      id, ...f,
-      disponibile: id === 'rilevamenti' ? true : (f.rete ? motornet.ATTIVO : true),
-      marche: f.rete ? null : conta(id),
-    })) });
+    // NIENTE cache: questa risposta porta lo stato di pausa, che cambia da un minuto all'altro.
+    // Con max-age=3600 il conto alla rovescia sarebbe rimasto congelato per un'ora.
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, adesso: Date.now(), fonti: Object.entries(FONTI).map(([id, f]) => {
+      const fino = pausaDi(id);
+      return {
+        id, ...f,
+        disponibile: id === 'rilevamenti' ? true : (f.rete ? motornet.ATTIVO : true),
+        marche: f.rete ? null : conta(id),
+        ...(fino ? { bloccataFino: fino } : {}),
+      };
+    }) });
   });
 
   via('/api/catalogo/marche', async q => {

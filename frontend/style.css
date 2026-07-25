@@ -1136,6 +1136,13 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .cat-fonte:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
 .cat-fonte.attiva { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .cat-fonte.spenta { opacity: 0.45; cursor: not-allowed; }
+/* In pausa dopo un blocco della fonte: NON e' spenta e non e' rotta, sta aspettando. Si
+   distingue dalle due (ambra, non grigio) e porta il conto alla rovescia in chiaro. */
+.cat-fonte.in-pausa { opacity: 1; cursor: progress; border-color: var(--warn); color: var(--warn); }
+.cat-fonte.in-pausa .cat-pausa { margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--warn) 16%, transparent); font: inherit; font-size: 0.72rem; font-style: normal; font-family: var(--num); white-space: nowrap; }
+.cat-vuoto-pausa { line-height: 1.6; }
+.cat-vuoto-pausa .cat-pausa { font-style: normal; font-family: var(--num); font-weight: 600; color: var(--warn); }
+.cat-vuoto-pausa span { display: block; margin-top: 6px; font-size: 0.8rem; color: var(--text-faint); }
 .cat-strumenti { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .cat-cerca { flex: 1 1 220px; min-width: 180px; max-width: 420px; height: 32px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.86rem; padding: 0 10px; }
 .cat-cerca:disabled { opacity: 0.5; }
