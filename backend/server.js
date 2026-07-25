@@ -32,6 +32,7 @@ const { resolveMotoitModelSlug, getBrandModels, getModelBikes, resolveMotoitVers
 const { getDetail } = require('./scrapers/detail');
 const liquidita      = require('./liquidita');    // liquidita modello (ACI Autoritratto)
 const iptCalc        = require('./ipt');          // costo passaggio di proprieta per provincia
+const provSigla      = require('./province-sigla'); // localita' dell'annuncio -> sigla provincia
 const carburanti     = require('./carburanti');   // prezzi carburante MIMIT per provincia
 const saved = require('./saved');
 const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings } = require('./scrapers/brand-match');
@@ -510,6 +511,8 @@ app.get('/api/models', async (req, res) => {
 // Serve nelle ricerche per sola marca, dove ogni riga e' un modello diverso.
 app.get('/api/liquidita', (req, res) => {
   const marca = String((req.query || {}).marca || '').trim();
+  const modello = String((req.query || {}).modello || '').trim();
+  const tipo = String((req.query || {}).tipo || 'auto');
   if (!marca) return res.json({ ok: false });
   const norm = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
   const pref = norm(marca) + '|';
@@ -519,28 +522,50 @@ app.get('/api/liquidita', (req, res) => {
     modelli.push({ modello: m.modello, parco: m.parco, trasferimenti: m.trasferimenti, ricambio: m.ricambio, giudizio: liquidita.giudizio(m.ricambio) });
   }
   res.set('Cache-Control', 'public, max-age=86400');
-  res.json({ ok: true, marca, anno: liquidita.dati.anno, fonte: liquidita.dati.fonte, modelli });
+  // voce del modello cercato: la sola che sa dire "questo e' il dato del modello base, non
+  // della variante" e che porta fonte e nota. Il frontend non deve reinventarle.
+  const voce = modello ? liquidita.cerca(marca, modello, tipo) : null;
+  res.json({ ok: true, marca, anno: liquidita.dati.anno, fonte: liquidita.dati.fonte, modelli, voce });
 });
 
-// ─── "Costi e mercato": dati economici del modello, dietro interazione ────────
-// Un'unica risposta per il pannello richiudibile: liquidità del modello (ACI Autoritratto,
-// CC-BY) e costo del passaggio di proprietà (IPT per provincia, fonte ACI). Il costo
-// carburante ha già la sua route perché l'indice è condiviso da tutte le ricerche.
-// Si serve solo su richiesta: il pannello nasce chiuso, così non aggiunge rumore.
-app.get('/api/mercato', async (req, res) => {
-  const { tipo, marca, modello, kw, provincia, ivaEsposta } = req.query || {};
-  const out = { ok: true };
-  try {
-    out.liquidita = liquidita.cerca(marca, modello, tipo);
-  } catch (e) { out.liquidita = null; console.warn('[api/mercato] liquidita KO:', e.message); }
-  try {
-    const n = parseInt(kw, 10);
-    out.ipt = (provincia && n > 0)
-      ? iptCalc.calcola({ provincia, kW: n, tipo: tipo === 'moto' ? 'moto' : 'auto', ivaEsposta: ivaEsposta === '1' })
-      : null;
-  } catch (e) { out.ipt = null; console.warn('[api/mercato] ipt KO:', e.message); }
-  res.set('Cache-Control', 'public, max-age=3600');
-  res.json(out);
+// ─── Passaggio di proprieta' del SINGOLO annuncio ────────────────────────────
+// Potenza e localita' sono gia' nell'annuncio: un operatore che guarda una macchina vuole
+// sapere li' quanto gli costa metterla a nome suo, non in un pannello a parte. La localita'
+// arriva in tre formati diversi secondo la fonte (sigla, provincia, comune) e va tradotta in
+// sigla, altrimenti l'IPT non e' calcolabile. Se la traduzione fallisce si dice perche':
+// meglio "non lo so" che un importo su una provincia indovinata.
+app.get('/api/passaggio', (req, res) => {
+  const { provincia, cap, cv, kw, tipo, ivaEsposta, storico } = req.query || {};
+  const st = storico === '1';
+  const loc = provSigla.risolvi(provincia, cap);
+  if (!loc) return res.json({ ok: false, motivo: 'localita\' non riconosciuta: "' + String(provincia || '').slice(0, 40) + '"' });
+
+  // Potenze fuori scala: un annuncio con "9999 CV" e' un errore di battitura del venditore,
+  // non un veicolo. Meglio rifiutare che firmare un importo assurdo. Bande larghe di proposito
+  // (esistono auto da 1.000+ CV): servono solo a fermare l'assurdo.
+  const num = x => { const n = Number(x); return Number.isFinite(n) ? n : NaN; };
+  const cvN = num(cv), kwN = num(kw);
+  if (!Number.isNaN(kwN) && kwN !== 0 && !(kwN >= 1 && kwN <= 1500)) return res.json({ ok: false, provincia: loc.sigla, motivo: 'potenza fuori scala: ' + kwN + ' kW' });
+  if (!Number.isNaN(cvN) && cvN !== 0 && !(cvN >= 1 && cvN <= 2000)) return res.json({ ok: false, provincia: loc.sigla, motivo: 'potenza fuori scala: ' + cvN + ' CV' });
+
+  // kW dichiarati se ci sono, altrimenti stimati dai CV: la stima va detta, non nascosta.
+  // Si arrotonda a un decimale PRIMA del calcolo: l'IPT si paga sui kW del libretto, che sono
+  // un valore dichiarato — portarsi dietro 55,16240625 kW sarebbe finta precisione.
+  const kwDiretti = kwN >= 1 ? kwN : null;
+  const kwStimati = kwDiretti == null && cvN >= 1 ? Math.round(provSigla.kwDaCv(cvN) * 10) / 10 : null;
+  const kW = kwDiretti != null ? kwDiretti : kwStimati;
+  if (!(kW > 0) && !st) return res.json({ ok: false, provincia: loc.sigla, motivo: 'potenza non disponibile in questo annuncio' });
+
+  const r = iptCalc.calcola({
+    provincia: loc.sigla, kW: kW || 0, tipo: tipo === 'moto' ? 'moto' : 'auto',
+    ivaEsposta: ivaEsposta === '1', storico: st,
+  });
+  r.localita = { testo: String(provincia || '').slice(0, 60), sigla: loc.sigla, via: loc.via };
+  if (kwStimati != null) r.potenzaStimata = { cv: cvN, kw: kwStimati };
+  // Cache solo sui successi: un "non calcolabile" dipende dai dati dell'annuncio, che possono
+  // arrivare dopo (Moto.it arricchisce la potenza in un secondo momento).
+  if (r.ok) res.set('Cache-Control', 'public, max-age=3600');
+  res.json(r);
 });
 
 // ─── Prezzi carburante ufficiali per provincia (open data MIMIT, IODL 2.0) ────

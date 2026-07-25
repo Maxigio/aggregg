@@ -61,9 +61,52 @@ test('l\'imposta di bollo NON è nel totale (ACI la dichiara variabile)', () => 
 test('casi non calcolabili: si dice, non si stima', () => {
   const moto = ipt.calcola({ provincia: 'MI', kW: 35, tipo: 'moto' });
   assert.strictEqual(moto.ok, false);
-  assert.match(moto.motivo, /non verificata/);
+  assert.match(moto.motivo, /non ha una riga per i motocicli/);
   assert.strictEqual(ipt.calcola({ provincia: 'MI' }).ok, false);          // senza kW
   assert.strictEqual(ipt.calcola({ provincia: 'XX', kW: 110 }).ok, false); // provincia ignota
+});
+
+// Le tre lacune dichiarate a suo tempo, chiuse sulla fonte ACI. I test le difendono
+// perche' sono soldi veri: un importo sbagliato qui e' un margine sbagliato in lista.
+test('veicoli storici: importo fisso verificato (art. 63 c.4 L. 342/2000)', () => {
+  const auto = ipt.calcola({ provincia: 'MI', kW: 90, storico: true });
+  assert.strictEqual(auto.ipt, 51.65);
+  assert.strictEqual(auto.totaleNoto, 78.65);
+  assert.strictEqual(auto.storico, true);
+  // fisso davvero: la provincia e la potenza non lo muovono
+  assert.strictEqual(ipt.calcola({ provincia: 'BZ', kW: 200, storico: true }).ipt, 51.65);
+  const moto = ipt.calcola({ provincia: 'MI', kW: 35, tipo: 'moto', storico: true });
+  assert.strictEqual(moto.ipt, 25.82, 'i motoveicoli storici hanno il loro importo');
+  assert.ok(moto.ok, 'lo storico e\' l\'unico caso moto calcolabile');
+});
+
+test('storici: la condizione d\'uso NON professionale va detta a un operatore', () => {
+  const r = ipt.calcola({ provincia: 'MI', kW: 90, storico: true });
+  assert.ok(r.avvisi.some(a => /impresa|professional/i.test(a)),
+    'per chi compra per rivendere la riduzione puo\' non spettare: va scritto');
+  assert.ok(r.avvisi.some(a => /2015/.test(a)), 'gli ultraventennali l\'hanno persa dal 2015');
+  assert.match(r.dettaglio[0], /342\/2000/);
+});
+
+test('moto: l\'esenzione dell\'art. 17 c.39 riguarda l\'imposta ERARIALE, non l\'IPT', () => {
+  const m = ipt.calcola({ provincia: 'MI', kW: 35, tipo: 'moto' });
+  assert.strictEqual(ipt.tabella.motocicli.esenti, false);
+  assert.ok(m.avvisi.some(a => /ERARIALE/.test(a)), 'la tesi sbagliata va smontata, non ripetuta');
+  assert.ok(m.avvisi.some(a => /storic/i.test(a)), 'va indicata la via che invece funziona');
+});
+
+test('la documentazione delle regole non contraddice il codice', () => {
+  // La regola "storici" diceva "importo non verificato, da confermare prima di mostrarlo"
+  // mentre il calcolo lo mostrava: una nota stantia e' una bugia che sopravvive nei dati.
+  assert.doesNotMatch(ipt.tabella.regole.storici, /NON verificato|da confermare/i);
+  assert.match(ipt.tabella.regole.storici, /342\/2000/);
+});
+
+test('imposta di bollo: dichiarata variabile CON il motivo', () => {
+  assert.strictEqual(ipt.tabella.bollo.variabile, true);
+  assert.match(ipt.tabella.bollo.perche, /per documento/);
+  assert.strictEqual(ipt.tabella.daVerificare.length, 1, 'resta solo la tariffa base moto');
+  assert.match(ipt.tabella.daVerificare[0], /motocicli non storici/);
 });
 
 test('la fonte viaggia col risultato (nessuna licenza aperta: va citata)', () => {

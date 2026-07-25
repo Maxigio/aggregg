@@ -8,11 +8,15 @@
  *
  * Dati in data/ipt-province.json, rigenerabili con scripts/build-ipt-province.js dalle
  * pagine ACI. Tutto ciò che è qui è stato VERIFICATO sulla fonte; ciò che non lo è viene
- * dichiarato come non calcolabile invece di essere stimato:
- *  - imposta di bollo: ACI la dichiara "importo variabile" → non è nel totale;
- *  - motocicli: l'esenzione IPT non è stata trovata sulle pagine ACI lette → non si calcola;
- *  - veicoli storici: riduzione prevista (art. 63 L. 342/00) ma importo non verificato.
- * Meglio dire "non lo so" che mettere in bocca al programma un numero inventato su una spesa vera.
+ * dichiarato come non calcolabile invece di essere stimato — meglio "non lo so" che un numero
+ * inventato su una spesa vera:
+ *  - imposta di bollo: non è nel totale perché si paga PER DOCUMENTO (atto + modulistica) e il
+ *    numero di documenti dipende dalla pratica; per questo ACI la dichiara "importo variabile".
+ *  - motocicli non storici: la tabella del D.M. 435/1998 non ha una riga per i motocicli
+ *    (elenca le motocarrozzette, cioè i sidecar) → l'importo base non si ricava e non si inventa.
+ *    NB: la tesi "moto esenti IPT per l'art. 17 c.39 L. 449/1997" è sbagliata — quel comma
+ *    esenta dall'imposta ERARIALE di trascrizione, tributo diverso dall'IPT provinciale.
+ *  - veicoli storici: ora calcolati (importi verificati sulla pagina ACI dedicata).
  */
 const T = require('../data/ipt-province.json');
 
@@ -26,6 +30,7 @@ const arrotonda = n => Math.round(n * 100) / 100;
  * @param {boolean} [p.ivaEsposta]  atto soggetto a IVA (vendita con fattura) — conta a Torino
  * @param {boolean} [p.speciale]    specialità sulla carta di circolazione → un quarto
  * @param {boolean} [p.consecutiva] passaggio consecutivo nello stesso giorno, non l'ultimo
+ * @param {boolean} [p.storico]     costruito da oltre 30 anni e NON usato nell'attività d'impresa
  */
 function calcola(p) {
   const pv = String((p && p.provincia) || '').toUpperCase();
@@ -35,9 +40,23 @@ function calcola(p) {
   const fonte = { maggiorazioni: T.fonti.maggiorazioni, tariffe: T.fonti.tariffe, aggiornato: T.generatedAt };
 
   if (!(pv in T.maggiorazioni)) return { ok: false, motivo: 'provincia sconosciuta', fonte };
+  // ── veicoli storici ultratrentennali: importo fisso, non dipende da kW né da provincia ──
+  if (p.storico) {
+    const fissa = tipo === 'moto' ? T.storici.motoveicoli : T.storici.autoveicoli;
+    let ipt = fissa;
+    const passaggi = [`veicolo storico oltre ${T.storici.anni} anni: IPT ridotta a ${fissa} € (${T.storici.norma})`];
+    avvisi.push(T.storici.condizione, T.storici.dal2015);
+    if (p.speciale) avvisi.push('Riduzione storici già applicata: la riduzione a un quarto per veicoli speciali non è cumulabile secondo fonte verificata, quindi non l\'applichiamo.');
+    if (p.consecutiva) { ipt = 0; passaggi.push('passaggio consecutivo non finale: IPT non dovuta'); avvisi.push(T.regole.consecutivi); }
+    const em = T.emolumentiAci;
+    return { ok: true, provincia: pv, kW: isFinite(kW) && kW > 0 ? kW : null, tipo, storico: true, maggiorazione: 0,
+      ipt: arrotonda(ipt), emolumenti: em, totaleNoto: arrotonda(ipt + em),
+      nonIncluso: T.nonIncluso, dettaglio: passaggi, avvisi, fonte: { ...fonte, storici: T.storici.fonte } };
+  }
   if (tipo === 'moto') {
-    return { ok: false, motivo: 'IPT moto non calcolabile: esenzione non verificata su fonte ACI', fonte,
-      avvisi: ['Per i motocicli l\'esenzione IPT è prevista da norma statale ma non l\'abbiamo verificata sulle pagine ACI: non mostriamo un importo.'] };
+    return { ok: false, motivo: 'IPT moto non calcolabile: la tabella del D.M. 435/1998 non ha una riga per i motocicli', fonte,
+      avvisi: [T.motocicli.perche, T.motocicli.chiarimento,
+        `Se il mezzo ha oltre ${T.storici.anni} anni vale la riduzione storici (${T.storici.motoveicoli} €): passa storico:true.`] };
   }
   if (!isFinite(kW) || kW <= 0) return { ok: false, motivo: 'potenza in kW mancante', fonte };
 

@@ -102,8 +102,37 @@ function siglaDa(nome) {
     licenza: 'contenuto istituzionale ACI, nessuna licenza aperta dichiarata → citare la fonte, non ripubblicare i testi',
     tariffe,
     emolumentiAci: 27.00,           // pagina "Passaggio di proprietà" ACI, importo fisso dichiarato
-    // ACI dichiara l'imposta di bollo come "importo variabile": NON la inventiamo.
-    nonIncluso: ['imposta di bollo su atto e modulistica (ACI: "importo variabile")'],
+    // Imposta di bollo: ACI la dichiara "importo variabile" perché si applica PER DOCUMENTO
+    // (atto + modulistica) e il numero di documenti cambia con la pratica. Non esiste un
+    // importo unico da mettere in un totale: si dichiara e, se l'operatore lo conosce, lo
+    // inserisce lui. Fonte: pagina ACI "Passaggio di proprietà".
+    nonIncluso: ['imposta di bollo su atto e modulistica (ACI: "importo variabile", si paga per documento)'],
+    bollo: { variabile: true, perche: 'si applica per documento (atto + modulistica): il numero di documenti dipende dalla pratica', fonte: 'https://aci.gov.it/pratica-auto/passaggio-di-proprieta/' },
+    // Veicoli storici ULTRATRENTENNALI — verificato testualmente su
+    // https://aci.gov.it/pratica-auto/ipt-veicoli-storici/ (art. 63 c.4 L. 342/2000):
+    // "Per gli autoveicoli l'IPT è ridotta a euro 51,65. Per i motoveicoli l'IPT è ridotta a euro 25,82."
+    storici: {
+      autoveicoli: 51.65, motoveicoli: 25.82, norma: 'art. 63 comma 4 L. 342/2000',
+      anni: 30,
+      // ATTENZIONE per un operatore: la riduzione NON spetta ai veicoli usati nell'attività.
+      condizione: 'Solo veicoli costruiti da oltre 30 anni e NON adibiti a uso professionale né utilizzati nell\'esercizio di impresa, arti o professioni. Va chiesta espressamente sulla nota di presentazione al PRA.',
+      dal2015: 'Dal 1° gennaio 2015 gli ultraVENTennali (20-29 anni) non godono più dell\'agevolazione, tranne nella Provincia autonoma di Bolzano.',
+      fonte: 'https://aci.gov.it/pratica-auto/ipt-veicoli-storici/',
+    },
+    // Motocicli: la tesi "esenti IPT per art. 17 c.39 L. 449/97" e' SBAGLIATA. Quel comma
+    // esenta dall'imposta ERARIALE di trascrizione, un tributo diverso dall'IPT (provinciale);
+    // lo si legge nel preambolo del D.M. 435/1998 sulla pagina ACI. E la pagina sui veicoli
+    // storici parla di IPT "ridotta a 25,82" per i motoveicoli: se fossero esenti non ci
+    // sarebbe nulla da ridurre. Resta il fatto che la tabella del D.M. NON ha una riga per i
+    // motocicli (ha "motocarrozzette", che sono i sidecar) → il loro importo base non e'
+    // ricavabile da questa fonte e non lo si inventa.
+    motocicli: {
+      esenti: false,
+      chiarimento: 'L\'esenzione dell\'art. 17 c.39 L. 449/1997 riguarda l\'imposta ERARIALE di trascrizione, non l\'IPT provinciale.',
+      tariffaBase: null,
+      perche: 'La tabella del D.M. 435/1998 non ha una riga per i motocicli (elenca le motocarrozzette, cioè i sidecar): l\'importo base non e\' ricavabile da questa fonte.',
+      storico: 25.82,
+    },
     maggiorazioni,
     // Eccezioni che contano per un OPERATORE (verificate sulla pagina ACI):
     eccezioni: {
@@ -116,13 +145,11 @@ function siglaDa(nome) {
     regole: {
       consecutivi: 'Passaggi consecutivi sullo stesso veicolo nella stessa giornata: IPT dovuta solo sull\'ultima formalità. L\'esenzione DECADE per le richieste presentate dopo il 60° giorno dalla sottoscrizione.',
       speciali: 'Veicoli speciali (specialità sulla carta di circolazione): IPT ridotta a un quarto (art. 56 c.8 D.Lgs. 446/97).',
-      storici: 'Veicoli storici: riduzione prevista dall\'art. 63 L. 342/00. Importo NON verificato su fonte ACI: da confermare prima di mostrarlo.',
+      storici: 'Veicoli storici oltre 30 anni: IPT ridotta a importo fisso (art. 63 c.4 L. 342/2000). Importi e condizioni in `storici`, verificati sulla pagina ACI dedicata.',
       ritardo: 'Oltre il termine: sanzione ordinaria 30% dell\'IPT dovuta + interessi legali.',
     },
     daVerificare: [
-      'imposta di bollo: importi esatti (ACI dice "variabile")',
-      'motocicli: esenzione IPT non trovata sulle pagine ACI lette',
-      'veicoli storici: importo esatto della riduzione',
+      'motocicli non storici: tariffa base assente dalla tabella del D.M. 435/1998 → unico importo ancora non calcolabile',
     ],
   };
 

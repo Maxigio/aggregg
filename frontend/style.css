@@ -244,32 +244,42 @@ body:not(.has-results) .search {
 /* Scheda tecnica veicolo (riusa .rc-group/.rc-sch-*): selettori generazione/motorizzazione */
 #vehicleScheda { margin: 0 0 10px; }
 #vehicleScheda:empty { display: none; }
-#vehicleMercato:empty { display: none; }
-#vehicleMercato .rc-group, #vehicleMercato .rc-group-body { overflow: visible; }
-/* pannello "Costi e mercato": tre riquadri, uno per fonte, ognuno con la sua attribuzione */
-.mk-body { padding: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; }
-.mk-box { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--r2); background: var(--surface-2); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
-.mk-tit { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 700; }
-.mk-cifra { font-family: var(--num); font-size: 1.4rem; font-weight: 800; color: var(--text); line-height: 1.1; }
-.mk-sub { font-size: 0.8rem; color: var(--text); }
-.mk-det { font-size: 0.76rem; color: var(--text-muted); font-family: var(--num); }
-.mk-badge { align-self: flex-start; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 8px; border-radius: 999px; }
-.mk-alta { background: var(--accent-weak); color: var(--accent); }
-.mk-media { background: var(--tag-moto-bg); color: var(--tag-moto-fg); }
-.mk-bassa, .mk-ferma { background: var(--neg-bg); color: var(--neg); }
-.mk-avviso { font-size: 0.74rem; color: var(--warn); }
-.mk-fonte { font-size: 0.68rem; color: var(--text-faint); border-top: 1px solid var(--line); padding-top: 5px; margin-top: auto; }
-.mk-vuoto { font-size: 0.82rem; color: var(--text-faint); font-style: italic; }
-.mk-ctrl { display: flex; gap: 8px; flex-wrap: wrap; }
 /* segno di liquidita accanto all'annuncio: ricambio annuo del modello (ACI) */
 .liq-badge { margin-left: 6px; font-family: var(--num); font-size: 0.7rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; white-space: nowrap; cursor: help; }
 .liq-alta { background: var(--accent-weak); color: var(--accent); }
 .liq-media { background: var(--tag-moto-bg); color: var(--tag-moto-fg); }
 .liq-bassa, .liq-ferma { background: var(--neg-bg); color: var(--neg); }
-.mk-usa { align-self: flex-start; height: 28px; padding: 0 10px; border: 1px solid var(--accent); border-radius: var(--r); background: var(--surface); color: var(--accent); font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
-.mk-usa:hover { background: var(--accent); color: #fff; }
-.row-marg { color: var(--pos); font-family: var(--num); font-size: 0.76rem; }
-.mk-ctrl select { height: 28px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); font: inherit; font-size: 0.78rem; padding: 0 6px; cursor: pointer; }
+.row-extra { display: block; }   /* contenitore delle sotto-note: si riscrive da solo quando cambia il costo pratica della riga */
+.row-marg { display: block; color: var(--pos); font-family: var(--num); font-size: 0.76rem; line-height: 1.25; }
+/* dentro la scheda tecnica: liquidita del modello (ACI Autoritratto) */
+.veh-liq { margin: 0 12px 10px; padding: 9px 12px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--r2); background: var(--surface-2); display: flex; flex-direction: column; gap: 3px; }
+.veh-liq-attesa { color: var(--text-faint); font-size: 0.82rem; font-style: italic; }
+.veh-liq-cifra { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+.veh-liq-cifra b { font-family: var(--num); font-size: 1.25rem; font-weight: 800; }
+.veh-liq-cifra span { font-size: 0.8rem; color: var(--text); }
+.veh-liq-det { font-size: 0.76rem; color: var(--text-muted); font-family: var(--num); }
+.veh-liq-avviso { font-size: 0.74rem; color: var(--warn); }
+.veh-liq-fonte { font-size: 0.68rem; color: var(--text-faint); }
+/* km/anno scritti a mano, accanto alla provincia */
+.veh-carb-kmw { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; color: var(--text-muted); }
+.veh-carb-kmw input:invalid { border-color: var(--neg); color: var(--neg); }
+.veh-carb-kmw input { width: 86px; height: 28px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); font: inherit; font-family: var(--num); font-size: 0.78rem; padding: 0 6px; }
+/* passaggio di proprieta' dentro la scheda dell'annuncio */
+.det-pass { margin-top: 8px; }
+.det-pass:empty { display: none; margin: 0; }
+.det-pass-no { font-size: 0.78rem; color: var(--text-faint); font-style: italic; }
+.det-pass-box { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--r2); background: var(--surface-2); padding: 9px 12px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.det-pass-cifra { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.det-pass-cifra b { font-family: var(--num); font-size: 1.3rem; font-weight: 800; }
+.det-pass-cifra span { font-size: 0.8rem; color: var(--text); }
+.det-pass-det { font-size: 0.76rem; color: var(--text-muted); font-family: var(--num); }
+.det-pass-prov { font-size: 0.74rem; color: var(--text-muted); }
+.det-pass-alt { border: 0; background: none; padding: 0; font: inherit; font-size: 0.74rem; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.det-pass-opz { display: flex; gap: 12px; flex-wrap: wrap; }
+.det-pass-opzv { display: inline-flex; align-items: center; gap: 5px; font-size: 0.76rem; color: var(--text-muted); cursor: pointer; }
+.det-pass-opzv input { margin: 0; cursor: pointer; }
+.det-pass-avviso { font-size: 0.74rem; color: var(--warn); }
+.det-pass-fonte { font-size: 0.68rem; color: var(--text-faint); }
 .veh-sel-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 /* combobox scheda: input + lista visibile filtrata (riusa .ac-list/.ac-item di marca/modello) */
 #vehicleScheda .veh-combo-wrap { flex: 0 1 260px; min-width: 160px; }

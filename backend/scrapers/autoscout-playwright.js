@@ -16,6 +16,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const https = require('https');
 const { parseEuro, parseKm, REGION_AS24, resolveChromiumExecutable } = require('./utils');
+const PROVINCE = require('../../data/province.json');   // per validare le sigle, non fidarsi delle ultime 2 lettere
 
 const BASE = 'https://www.autoscout24.it';
 const NUM_PAGES = 3;   // §17.2: 5→3 (i più economici restano in cima per l'ordine prezzo)
@@ -154,12 +155,14 @@ function parseAnno(vehicleDetails) {
 
 function parseProvincia(city) {
   if (!city) return null;
-  // AS24 formati visti: "Venaria Reale - Torino - TO", "Marino- Rm",
-  // "Milano - MI". Cerca il codice provincia (2 lettere uppercase) alla fine.
-  const match = city.match(/\b([A-Za-z]{2})\s*$/);
-  if (!match) return null;
-  const prov = match[1].toUpperCase();
-  return /^[A-Z]{2}$/.test(prov) ? prov : null;
+  // AS24 formati visti: "Venaria Reale - Torino - TO", "Marino- Rm", "Milano - MI".
+  // Le ultime due lettere sono una sigla SOLO se sono un pezzo a se': "Modena" finisce per
+  // "na" e prendere le ultime due lettere la trasformava in Napoli. Se la sigla non c'e' si
+  // torna la localita' INTERA: la traduzione in provincia la fa backend/province-sigla.js,
+  // che valida contro le 107 sigle vere e sa leggere anche comuni e nomi di provincia.
+  const coda = city.split(/\s*-\s*/).map(x => x.trim()).filter(Boolean).pop();
+  if (coda && /^[A-Za-z]{2}$/.test(coda) && PROVINCE[coda.toUpperCase()]) return coda.toUpperCase();
+  return city.trim() || null;
 }
 
 function parseListing(item) {

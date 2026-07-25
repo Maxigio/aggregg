@@ -94,3 +94,27 @@ test('priceAdjActive: il solo passaggio impostato conta come leva attiva', () =>
   assert.strictEqual(priceAdjActive({ comm: 0, spese: 0, margine: 0, iva: false, passaggio: 223 }), true);
   assert.strictEqual(priceAdjActive({ comm: 0, spese: 0, margine: 0, iva: false, passaggio: 0 }), false);
 });
+
+// Il costo del passaggio e' un dato del SINGOLO annuncio: dipende da potenza e provincia di
+// quel veicolo. Con un unico valore applicato a tutta la lista, righe di province diverse
+// mostravano un utile che non esisteva — e quel numero finiva anche in CSV e PDF.
+test('passaggio per annuncio: due veicoli, due costi, due margini netti', () => {
+  const cfg = { comm: 0, commUnit: 'eur', spese: 0, margine: 10, iva: false, passaggio: 0 };
+  const perRiga = (base, pass) => pricing(base, Object.assign({}, cfg, { passaggio: pass }));
+
+  // stessa auto, due province: Bolzano 0% vs Napoli 30% su 190 kW
+  const bz = require('../backend/ipt').calcola({ provincia: 'BZ', kW: 90 }).totaleNoto;
+  const na = require('../backend/ipt').calcola({ provincia: 'NA', kW: 190 }).totaleNoto;
+  assert.ok(na > bz + 400, 'le due pratiche devono costare davvero diverso');
+
+  const a = perRiga(20000, bz), b = perRiga(20000, na);
+  assert.strictEqual(a.margineEuro, b.margineEuro, 'il margine lordo non dipende dalla pratica');
+  assert.ok(a.margineNetto > b.margineNetto, 'il netto sì');
+  assert.ok(Math.abs((a.margineNetto - b.margineNetto) - (na - bz)) < 0.01,
+    'la differenza tra i netti e\' esattamente la differenza tra le due pratiche');
+
+  // annuncio senza calcolo: resta il valore scritto a mano nel menu, non quello di un altro veicolo
+  const senza = pricing(20000, cfg);
+  assert.strictEqual(senza.margineNetto, senza.margineEuro, 'nessuna pratica impostata → netto = lordo');
+  assert.strictEqual(senza.passaggio, null);
+});

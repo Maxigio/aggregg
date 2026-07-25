@@ -94,7 +94,13 @@ function loadPriceCfg(key) { try { return Object.assign({}, PRICE_DEFAULT, JSON.
 function savePriceCfg(key, cfg) { try { localStorage.setItem(key, JSON.stringify(cfg)); } catch (_) {} }
 let priceCfgV = loadPriceCfg('amr_price_v');   // veicoli (auto/moto)
 let priceCfgR = loadPriceCfg('amr_price_r');   // ricambi
-const vPricing = base => pricing(base, priceCfgV);
+// Il costo del passaggio e' un dato del SINGOLO annuncio: dipende da potenza e provincia di
+// quel veicolo. Se per quell'annuncio e' stato calcolato, il suo margine netto usa QUELLO;
+// altrimenti resta il valore scritto a mano nel menu prezzi, che vale come default per tutti.
+// (Con un solo importo globale, righe con potenza e provincia diverse mostravano un utile
+// che non esisteva: fino a centinaia di euro di differenza tra Bolzano e Napoli.)
+const passDi = r => (r && r._pass && r._pass.d && r._pass.d.ok ? r._pass.d.totaleNoto : null);
+const vPricing = (base, pass) => pricing(base, pass == null ? priceCfgV : Object.assign({}, priceCfgV, { passaggio: pass }));
 const rPricing = base => pricing(base, priceCfgR);
 const eurRound = n => '€ ' + Math.round(n).toLocaleString('it-IT');
 
@@ -124,17 +130,20 @@ function readPriceMenu(ns, prev) {
     passaggio: pass ? n(pass) : (prev.passaggio || 0) };   // il campo esiste solo per i veicoli
 }
 // Colonne/celle extra prezzo per export (rivendita/imponibile/IVA) in base a cfg.
-function priceExtraHeaders(cfg) {
+// `conPass` = c'e' un costo di pratica da qualche parte: quello globale del menu OPPURE uno
+// calcolato su singoli annunci. Guardare solo il globale faceva sparire dall'export la
+// colonna del margine netto proprio quando i costi per-annuncio c'erano.
+function priceExtraHeaders(cfg, conPass) {
   const h = [];
   if (cfg.margine > 0) h.push('Rivendita (€)');
-  if (cfg.margine > 0 && cfg.passaggio) h.push('Margine netto (€)');
+  if (cfg.margine > 0 && (cfg.passaggio || conPass)) h.push('Margine netto (€)');
   if (cfg.iva) h.push('Imponibile (€)', 'IVA 22% (€)');
   return h;
 }
-function priceExtraValues(pr, cfg) {   // pr = pricing() | null ; ritorna numeri arrotondati o ''
+function priceExtraValues(pr, cfg, conPass) {   // pr = pricing() | null ; ritorna numeri arrotondati o ''
   const v = [], r = x => (x == null ? '' : Math.round(x));
   if (cfg.margine > 0) v.push(r(pr && pr.rivendita));
-  if (cfg.margine > 0 && cfg.passaggio) v.push(r(pr && pr.margineNetto));
+  if (cfg.margine > 0 && (cfg.passaggio || conPass)) v.push(r(pr && pr.margineNetto));
   if (cfg.iva) { v.push(r(pr && pr.imponibile)); v.push(r(pr && pr.ivaQuota)); }
   return v;
 }
@@ -326,36 +335,30 @@ async function init() {
       const k = e.target.dataset.k;
       if (e.target.checked) vehXf.highlight.add(k); else vehXf.highlight.delete(k);
       renderVehBody();
-    }
-  });
-  // Pannello "Costi e mercato": vive in #vehicleMercato, quindi ha i SUOI listener.
-  // (I gestori stavano dentro quelli della scheda e non scattavano mai: elemento sbagliato.)
-  const vehMercatoEl = document.getElementById('vehicleMercato');
-  vehMercatoEl?.addEventListener('click', e => {
-    const h = e.target.closest('.mk-head'); if (!h) return;
-    const g = h.closest('.rc-group'); g.classList.toggle('collapsed');
-    mkAperto = !g.classList.contains('collapsed');
-    if (mkAperto && (mkStato === 'mai' || mkStato === 'ko' || mkChiaveCaricata !== mkChiave())) mkCarica();
-  });
-  // Ponte col calcolo del margine: il costo della pratica diventa una leva di pricing.js,
-  // sottratta al margine (non al prezzo). Cosi' la lista mostra il guadagno che resta davvero.
-  vehMercatoEl?.addEventListener('click', e => {
-    const b = e.target.closest('.mk-usa'); if (!b) return;
-    const eur = Number(b.dataset.eur) || 0;
-    priceCfgV = Object.assign({}, priceCfgV, { passaggio: priceCfgV.passaggio === eur ? 0 : eur });
-    savePriceCfg('amr_price_v', priceCfgV);
-    renderPriceMenuV();                  // il campo "Passaggio" del menu si aggiorna
-    renderResults(currentResults);       // le righe mostrano il margine netto
-    mkRenderBody();                      // il pulsante diventa "✓"
-  });
-  vehMercatoEl?.addEventListener('change', e => {
-    if (e.target.classList.contains('veh-carb-prov')) {        // provincia: prezzo carburante E IPT
+    } else if (e.target.classList.contains('veh-carb-prov')) {   // provincia: cambia il prezzo al litro
       try { localStorage.setItem('amrCarbProvincia', e.target.value); } catch (_) {}
-      mkCarica();                                              // l'IPT si calcola nel backend
-    } else if (e.target.classList.contains('veh-carb-km')) {   // km/anno: solo ricalcolo locale
-      try { localStorage.setItem('amrCarbKm', e.target.value); } catch (_) {}
-      mkRenderBody();
+      vehCostoAggiorna();          // l'indice ha già tutte le province: nessuna richiesta
     }
+  });
+  // km/anno a mano: si aggiorna a ogni tasto SENZA ridisegnare, altrimenti il campo perde il
+  // fuoco a metà del numero. Si riscrivono solo le cifre già a schermo.
+  // Mentre si scrive, un valore incompleto (il "2" di 23456) NON deve far ballare la cifra:
+  // si aggiorna solo su valori utilizzabili, e il campo fuori scala lo segnala il browser da
+  // sé (min/max nativi). Al termine (blur) un valore inservibile viene buttato, così non
+  // resta spazzatura in localStorage da una sessione all'altra.
+  vehSchedaEl?.addEventListener('input', e => {
+    if (!e.target.classList.contains('veh-carb-km')) return;
+    const n = carbKmValido(e.target.value);
+    if (!(n >= KM_MIN && n <= KM_MAX)) return;
+    try { localStorage.setItem('amrCarbKm', String(n)); } catch (_) {}
+    vehCostoAggiorna();
+  });
+  vehSchedaEl?.addEventListener('change', e => {
+    if (!e.target.classList.contains('veh-carb-km')) return;
+    const n = carbKmValido(e.target.value);
+    if (n >= KM_MIN && n <= KM_MAX) return;
+    try { localStorage.removeItem('amrCarbKm'); } catch (_) {}
+    renderVehBody();                      // il campo torna al valore usato davvero
   });
 
   vehSchedaEl?.addEventListener('focusin', e => { if (e.target.classList.contains('veh-combo')) { e.target.select?.(); vehComboOpen(e.target, false); } });
@@ -443,6 +446,15 @@ async function init() {
     if (row.dataset.detail) {
       if (e.target.closest('.btn-salva'))    { toggleSalva(url); return; }
       if (e.target.closest('.btn-confronta')) { toggleConfronto(url); return; }
+      // Passaggio di proprieta': si calcola su richiesta, sui dati di QUESTO annuncio.
+      if (e.target.closest('.btn-passaggio')) { const r = trovaResult(url); if (r) calcolaPassaggio(r, row); return; }
+      // Scambio provincia (tua / del venditore): stessa pratica, importo diverso.
+      const alt = e.target.closest('.det-pass-alt');
+      if (alt) {
+        const r = trovaResult(url);
+        if (r) { r._passProvAnnuncio = alt.dataset.alt === 'annuncio'; calcolaPassaggio(r, row); }
+        return;
+      }
       return;   // altri click nel pannello: ignora
     }
     if (e.target.closest('.row-thumb')) {
@@ -456,6 +468,17 @@ async function init() {
     if (e.target.closest('.btn-salva'))     { toggleSalva(url); return; }
     if (e.target.closest('.btn-confronta'))  { toggleConfronto(url); return; }
     if (e.target.closest('.btn-info'))       { toggleDetail(row); return; }
+  });
+
+  // Spunta "veicolo storico" dentro il pannello di un annuncio: cambia la tariffa, si rifa' il conto.
+  resultsGrid.addEventListener('change', e => {
+    const storico = e.target.classList.contains('pass-storico-chk');
+    const iva = e.target.classList.contains('pass-iva-chk');
+    if (!storico && !iva) return;
+    const row = e.target.closest('[data-url]'); if (!row) return;
+    const r = trovaResult(row.dataset.url); if (!r) return;
+    if (storico) r._passStorico = e.target.checked; else r._passIva = e.target.checked;
+    calcolaPassaggio(r, row);
   });
 
   // Delegation: pannello salvati
@@ -1574,7 +1597,7 @@ async function doSearch() {
   lastSearchParams = { ...params };
   // Liquidita per la marca cercata: alimenta il segno accanto a ogni annuncio. Solo auto
   // (le moto non hanno il dato) e solo con una marca: una richiesta per ricerca, cachata.
-  if (params.tipo !== 'moto' && params.marca) liqCarica(params.marca);
+  if (params.tipo !== 'moto' && params.marca) liqCarica(params.marca, params.modello, params.tipo);
   visibleCols = colsFromFilters(params);   // colonne default = filtri usati (anno/km); resto via menu
   syncColMenu();
 
@@ -1867,7 +1890,7 @@ function escapeHtml(str) {
 }
 
 function rowHTML(item, bestSet) {
-  const pr = vPricing(item.prezzo);
+  const pr = vPricing(item.prezzo, passDi(item));
   const prezzoStr = pr ? eurRound(pr.finale) : 'n/d';
   const fonteLabel = FONTE_LABEL[item.fonte] || item.fonte;
   const fonteTag = { subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[item.fonte] || '';
@@ -1904,7 +1927,7 @@ function rowHTML(item, bestSet) {
       case 'km':     return `<div class="row-cell num muted">${item.km != null ? item.km.toLocaleString('it-IT') : '—'}</div>`;
       case 'carb':   return `<div class="row-cell muted">${item.carburante ? escapeHtml(item.carburante) : '—'}</div>`;
       case 'cv':     return `<div class="row-cell num muted">${item.potenzaCv != null ? item.potenzaCv : '—'}</div>`;
-      case 'prezzo': return `<div class="row-prezzo">${prezzoStr}${priceRowExtraHTML(pr)}</div>`;
+      case 'prezzo': return `<div class="row-prezzo">${prezzoStr}<span class="row-extra">${priceRowExtraHTML(pr)}</span></div>`;
       case 'fonte':  return `<div class="row-fonte"><span class="tag ${fonteTag}">${escapeHtml(fonteLabel)}</span></div>`;
       case 'azioni': return `<div class="row-actions">
           <button class="row-act btn-info" title="Dettagli e foto">${icon('info')}</button>
@@ -1934,7 +1957,7 @@ function toggleDetail(rowEl) {
 }
 function detailSpecsHTML(r) {
   const base = [];
-  if (r.prezzo != null) { const _pr = vPricing(r.prezzo); base.push(['Prezzo', _pr ? eurRound(_pr.finale) : `€ ${r.prezzo.toLocaleString('it-IT')}`]); }
+  if (r.prezzo != null) { const _pr = vPricing(r.prezzo, passDi(r)); base.push(['Prezzo', _pr ? eurRound(_pr.finale) : `€ ${r.prezzo.toLocaleString('it-IT')}`]); }
   if (r.anno != null)   base.push(['Anno', r.anno]);
   if (r.km != null)     base.push(['Km', `${r.km.toLocaleString('it-IT')} km`]);
   if (r.provincia)      base.push(['Provincia', r.provincia]);
@@ -1943,6 +1966,141 @@ function detailSpecsHTML(r) {
   if (!all.length) return '<span class="spec-empty">Nessun dettaglio aggiuntivo</span>';
   return all.map(([k, v]) => `<div class="det-spec"><span class="det-k">${escapeHtml(String(k))}</span><span class="det-v">${escapeHtml(String(v))}</span></div>`).join('');
 }
+// ── Passaggio di proprieta' del singolo annuncio ─────────────────────────────
+// Potenza e localita' sono gia' scritte nell'annuncio: il costo per metterlo a nome proprio
+// si puo' calcolare li', senza andare a cercare provincia e kW da un'altra parte. Non parte
+// da solo: e' una richiesta al server, e la fa solo chi la vuole.
+// Risultato in cache sull'oggetto annuncio (r._pass): riaprire la riga non ricalcola.
+//
+// DUE cose che sembrano ovvie e non lo sono:
+//  - il TIPO di veicolo va preso dalla RICERCA, non dalla fonte dell'annuncio: cercando moto,
+//    Subito e AutoScout rispondono con moto, e trattarle come auto darebbe la tariffa
+//    autoveicoli su un mezzo per cui l'IPT non e' nemmeno calcolabile;
+//  - l'IPT si paga sulla provincia di RESIDENZA di chi intesta (fonte ACI), non su quella
+//    dove sta il venditore. Se l'operatore ha scelto la sua provincia si usa quella; la
+//    localita' dell'annuncio e' un ripiego, e si dice sempre quale delle due si sta usando.
+function passTipo(r) {
+  const t = (lastSearchParams || {}).tipo;
+  return (t === 'moto' || r.fonte === 'moto') ? 'moto' : 'auto';
+}
+function passProvincia(r) {
+  const mia = carbProvincia();
+  if (r._passProvAnnuncio) return { testo: r.provincia || '', mia: false };
+  return mia ? { testo: mia, mia: true } : { testo: r.provincia || '', mia: false };
+}
+
+async function calcolaPassaggio(r, panel) {
+  r._pass = { stato: 'carico' };
+  if (panel && panel._render) panel._render();
+  const pv = passProvincia(r);
+  const q = new URLSearchParams({ provincia: pv.testo, tipo: passTipo(r) });
+  if (r._passStorico) q.set('storico', '1');
+  if (!pv.mia) { const z = r.zip || r.cap; if (z) q.set('cap', String(z)); }   // il CAP e' dell'annuncio
+  if (r.potenzaCv > 0) q.set('cv', String(r.potenzaCv));
+  // A Torino un atto con IVA esposta paga il 20% invece del 30%: per un operatore che compra
+  // con fattura e' la normalita', quindi la scelta esiste (e vale solo la' — vedi ipt.js).
+  if (r._passIva) q.set('ivaEsposta', '1');
+  try {
+    const d = await fetch('/api/passaggio?' + q.toString()).then(x => x.json());
+    r._pass = { stato: 'ok', d, mia: pv.mia };
+  } catch (_) { r._pass = { stato: 'ko' }; }
+  if (panel && panel.isConnected && panel._render) panel._render();
+  aggiornaNoteRiga(r);
+}
+
+// Le sotto-note di prezzo di UNA riga, riscritte in loco: il margine netto di quell'annuncio
+// cambia appena si conosce il costo della sua pratica. Un renderResults() qui chiuderebbe il
+// pannello da cui e' stato chiesto il calcolo.
+function aggiornaNoteRiga(r) {
+  if (!r || !r.url) return;
+  const pr = vPricing(r.prezzo, passDi(r));
+  resultsGrid.querySelectorAll(`[data-url="${CSS.escape(r.url)}"]`).forEach(el => {
+    if (el.dataset.detail) return;
+    el.querySelectorAll('.row-extra').forEach(n => { n.innerHTML = priceRowExtraHTML(pr); });
+  });
+}
+
+// Il bottone compare solo se i dati per calcolare ci sono davvero: senza potenza o senza
+// localita' il conto non si fa, e lo si dice invece di mostrare un pulsante che fallisce.
+// Le due spunte (storico, IVA) restano raggiungibili SEMPRE, anche quando il calcolo non
+// riesce: sono proprio loro a poterlo far riuscire (una moto non storica non e' calcolabile).
+function passHTML(r) {
+  const haPot = r.potenzaCv > 0;
+  const st = r._pass;
+  const opz = passOpzioniHTML(r);
+  if (!st) {
+    if (!r.provincia && !carbProvincia()) return '';
+    if (!haPot && !r._passStorico) {
+      return `<div class="det-pass-no">Passaggio di proprieta: manca la potenza in questo annuncio.</div>${opz}`;
+    }
+    return `<button type="button" class="det-act btn-passaggio">${icon('info')}<span class="ra-txt">Calcola passaggio di proprieta</span></button>${opz}`;
+  }
+  if (st.stato === 'carico') return '<div class="det-pass-no">Calcolo…</div>';
+  if (st.stato === 'ko') {
+    return `<div class="det-pass-no">Calcolo non riuscito (rete).</div>`
+      + `<button type="button" class="det-act btn-passaggio"><span class="ra-txt">Riprova</span></button>${opz}`;
+  }
+  const d = st.d || {};
+  if (!d.ok) return `<div class="det-pass-no">Non calcolabile: ${escapeHtml(d.motivo || 'dati insufficienti')}.</div>`
+    + `${passAvvisiHTML(d)}${opz}`;
+  const eur = n => Number(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const loc = d.localita || {};
+  const stima = d.potenzaStimata
+    ? ` · ${d.potenzaStimata.kw} kW stimati da ${d.potenzaStimata.cv} CV (la cifra esatta e sul libretto)`
+    : (d.kW ? ` · ${d.kW} kW` : '');
+  // Da quale provincia viene l'importo, e come si passa all'altra: la differenza tra le due
+  // sono euro veri (dallo 0% di Bolzano al 30% di quasi tutte le altre).
+  const altra = st.mia ? (r.provincia || '') : carbProvincia();
+  const scambio = altra
+    ? ` <button type="button" class="det-pass-alt" data-alt="${st.mia ? 'annuncio' : 'mia'}">usa ${st.mia ? `la provincia dell'annuncio (${escapeHtml(altra)})` : `la tua provincia (${escapeHtml(altra)})`}</button>`
+    : '';
+  return `<div class="det-pass-box">
+    <div class="det-pass-cifra"><b>${eur(d.totaleNoto)} €</b><span>IPT ${eur(d.ipt)} € + emolumenti ${eur(d.emolumenti)} €</span></div>
+    <div class="det-pass-det">${escapeHtml(loc.sigla || '')}${loc.via && loc.via !== 'sigla' ? ` (da &laquo;${escapeHtml(loc.testo)}&raquo;)` : ''}${d.storico ? '' : ` · maggiorazione ${d.maggiorazione}%`}${stima}</div>
+    <div class="det-pass-prov">${st.mia ? 'La tua provincia' : 'Provincia del venditore'} — l'IPT si paga su quella di residenza di chi intesta.${scambio}</div>
+    ${opz}
+    ${passAvvisiHTML(d)}
+    <div class="det-pass-fonte">Fonte ACI. Nel margine di questa riga. Non incluso: ${escapeHtml((d.nonIncluso || []).join('; '))}.</div>
+  </div>`;
+}
+
+// TUTTI gli avvisi, non solo il primo: sono condizioni verificate su fonte (uso professionale,
+// passaggi consecutivi, decadenza dei ventennali) e ognuna puo' cambiare l'importo dovuto.
+function passAvvisiHTML(d) {
+  const a = (d && d.avvisi) || [];
+  if (!a.length) return '';
+  return `<div class="det-pass-avviso">${a.map(x => escapeHtml(x)).join('<br>')}</div>`;
+}
+
+function passOpzioniHTML(r) {
+  const iva = passIvaHTML(r);
+  const st = passStoricoHTML(r);
+  return (iva || st) ? `<div class="det-pass-opz">${st}${iva}</div>` : '';
+}
+
+// La scelta IVA cambia l'importo SOLO a Torino (unica provincia con due aliquote): si mostra
+// dove serve, non su tutte le altre 106 dove non cambierebbe nulla.
+function passIvaHTML(r) {
+  const sig = (r._pass && r._pass.d && r._pass.d.localita && r._pass.d.localita.sigla) || null;
+  if (sig !== 'TO' && !r._passIva) return '';
+  return `<label class="det-pass-opzv"><input type="checkbox" class="pass-iva-chk"${r._passIva ? ' checked' : ''}> atto con IVA esposta (fattura)</label>`;
+}
+
+// La riduzione per veicoli storici (51,65 € auto / 25,82 € moto) vale oltre i 30 anni, e
+// l'anno di questo annuncio lo sappiamo: la spunta compare solo dove ha senso. Resta manuale
+// perche' la riduzione NON spetta ai veicoli usati nell'attivita' d'impresa: lo sa l'operatore,
+// non il programma. Le moto non storiche non sono calcolabili affatto, quindi li' la spunta e'
+// l'unica via a un importo: si mostra anche senza anno.
+function passStoricoHTML(r) {
+  const eta = r.anno > 1900 ? new Date().getFullYear() - r.anno : null;
+  // Per le moto la spunta e' l'UNICA strada a un importo (le non storiche non sono
+  // calcolabili), quindi si mostra anche senza anno.
+  const plausibile = (eta != null && eta >= 30) || (passTipo(r) === 'moto');
+  if (!plausibile && !r._passStorico) return '';
+  return `<label class="det-pass-opzv"><input type="checkbox" class="pass-storico-chk"${r._passStorico ? ' checked' : ''}>`
+    + ` veicolo storico${eta != null ? ` (${eta} anni)` : ' (oltre 30 anni)'}, non usato nell'attivita'</label>`;
+}
+
 function renderDetailInto(panel, r) {
   panel.dataset.loaded = '1';
   const renderBody = () => {
@@ -1954,8 +2112,11 @@ function renderDetailInto(panel, r) {
     const isSal = salvati.some(x => x.url === r.url), inConf = confronto.some(x => x.url === r.url);
     const salBtn  = `<button type="button" class="det-act btn-salva${isSal ? ' attivo' : ''}">${icon(isSal ? 'bookmark-filled' : 'bookmark')}<span class="ra-txt">${isSal ? 'Salvato' : 'Salva'}</span></button>`;
     const confBtn = `<button type="button" class="det-act btn-confronta${inConf ? ' attivo' : ''}">${icon(inConf ? 'square-check' : 'square')}<span class="ra-txt">${inConf ? 'Nel confronto' : 'Confronta'}</span></button>`;
-    panel.innerHTML = `<div class="det-inner">${gallery}<div class="det-specs">${detailSpecsHTML(r)}</div><div class="det-foot">${openBtn}${salBtn}${confBtn}</div></div>`;
+    panel.innerHTML = `<div class="det-inner">${gallery}<div class="det-specs">${detailSpecsHTML(r)}</div>`
+      + `<div class="det-pass">${passHTML(r)}</div>`
+      + `<div class="det-foot">${openBtn}${salBtn}${confBtn}</div></div>`;
   };
+  panel._render = renderBody;   // il calcolo del passaggio ridisegna solo questo pannello
   renderBody();   // apertura immediata (cover + dati on-search) → niente freeze del click
   // Moto.it: galleria piena + spec dalla pagina-dettaglio. Riusa enrichMotoRow (merge
   // immagini+spec, cache 12h server, aggiorna anche il thumb della riga); poi ri-rende.
@@ -2453,7 +2614,7 @@ function hideResults() {
 
 // ─── Scheda tecnica veicolo (auto-data.net) — highlighted, collassabile, sopra gli annunci ──
 let vehData = null, vehSpecs = {}, vehSchedaCollapsed = false, vehSelUrl = null, vehGen = 0;   // vehGen: token anti-race — scarta risposte di ricerche/generazioni superate
-function clearVehScheda() { clearMercato(); vehGen++; vehData = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; const el = document.getElementById('vehicleScheda'); if (el) el.innerHTML = ''; }   // vehGen++ invalida le fetch in volo
+function clearVehScheda() { vehGen++; vehData = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; const el = document.getElementById('vehicleScheda'); if (el) el.innerHTML = ''; }   // vehGen++ invalida le fetch in volo
 
 async function loadVehScheda() {
   const el = document.getElementById('vehicleScheda'); if (!el) return;
@@ -2481,7 +2642,6 @@ async function loadVehScheda() {
     // Moto.it usa lo STESSO codice-versione della ricerca (nessun rischio di sbagliare moto).
     vehData = d; vehSpecs = {}; vehSelUrl = vehVersionePreScelta(d) || null;
     renderVehScheda();
-    renderMercato();   // pannello "Costi e mercato": creato chiuso, si carica all'apertura
   } catch (_) { if (my === vehGen) clearVehScheda(); }
 }
 
@@ -2515,7 +2675,9 @@ function vehBodyHTML() {
   const spec = vehSpecs[vehSelUrl];
   if (!spec || spec.loading) return '<div class="rc-loading">Carico le specifiche…</div>';
   if (!spec.ok || !spec.groups || !spec.groups.length) return '<div class="rc-empty">Specifiche non disponibili per questa motorizzazione.</div>';
-  return (vehXf.compare ? '' : vehHlBandHTML(spec)) + vehSectionsHTML(spec);
+  // Costo carburante e liquidita' stanno QUI, non in un pannello separato: dipendono
+  // entrambi dalla versione scelta sopra, e leggerli altrove costringeva a rimbalzare.
+  return (vehXf.compare ? '' : vehCostoHTML(spec) + vehLiqHTML() + vehHlBandHTML(spec)) + vehSectionsHTML(spec);
 }
 // Versione Moto.it scelta nella ricerca → la stessa voce nella scheda, già selezionata.
 // L'aggancio è per CODICE, non per nome: l'URL della scheda Moto.it finisce col codice-versione
@@ -2537,7 +2699,23 @@ function vehVersionePreScelta(d) {
 let carbIdx = null, carbStato = 'mai';           // 'mai' | 'carico' | 'ok' | 'ko'
 const CARB_ETICHETTA = { benzina: 'benzina', gasolio: 'gasolio', gpl: 'GPL', metano: 'metano' };
 const carbProvincia = () => { try { return localStorage.getItem('amrCarbProvincia') || ''; } catch (_) { return ''; } };
-const carbKmAnno = () => { try { return Number(localStorage.getItem('amrCarbKm')) || 15000; } catch (_) { return 15000; } };
+// km/anno scritti a mano. I limiti stanno in un posto solo: se l'input dicesse una cosa e la
+// validazione un'altra, il bordo rosso non significherebbe niente. E quando il valore scritto
+// non e' utilizzabile NON si ricade sul default in silenzio: si dice che la cifra e' quella
+// dei 15.000 km, altrimenti il campo mostra 999999 e il riquadro un conto che non c'entra.
+const KM_MIN = 100, KM_MAX = 200000, KM_DEF = 15000;
+// Solo cifre: "15.000" scritto all'italiana per Number() vale 15, e sarebbe un conto ridicolo
+// spacciato per buono.
+const carbKmValido = t => (/^\s*\d{1,6}\s*$/.test(String(t == null ? '' : t)) ? Number(t) : NaN);
+function carbKmStato() {
+  let t = null;
+  try { t = localStorage.getItem('amrCarbKm'); } catch (_) { t = null; }
+  if (t == null || t === '') return { km: KM_DEF, difetto: false };
+  const n = carbKmValido(t);
+  if (!(n >= KM_MIN && n <= KM_MAX)) return { km: KM_DEF, difetto: true, scritto: String(t).slice(0, 12) };
+  return { km: n, difetto: false };
+}
+const carbKmAnno = () => carbKmStato().km;
 
 async function loadCarburanti() {
   if (carbStato === 'carico' || carbStato === 'ok') return;
@@ -2578,6 +2756,45 @@ function carbFamigliaDa(a) {
   return null;
 }
 
+// Aritmetica del costo, isolata: la usano sia il primo disegno sia l'aggiornamento a ogni
+// tasto sui km. Tenerla in un posto solo evita che le due strade divergano.
+function carbCalcola(consumo, prezzoLitro, km) {
+  const per100 = consumo * prezzoLitro;
+  return { per100, anno: per100 / 100 * km };
+}
+
+// Anche la riga di dettaglio e' una sola funzione: scritta due volte, la versione
+// dell'aggiornamento in loco perdeva l'avviso "solo N impianti" (diventava testo grigio).
+function carbDetHTML(per100, consumo, voce, kmSt) {
+  const pochi = voce.n < 5
+    ? ` <span class="veh-costo-warn" title="pochi impianti rilevati: prezzo poco rappresentativo">· solo ${voce.n} impianti</span>` : '';
+  const difetto = kmSt && kmSt.difetto
+    ? ` <span class="veh-costo-warn" title="km/anno non utilizzabili">· km/anno &laquo;${escapeHtml(kmSt.scritto || '')}&raquo; non validi: conto su ${KM_DEF.toLocaleString('it-IT')} km</span>` : '';
+  return `${per100.toFixed(2).replace('.', ',')} € ogni 100 km · consumo dichiarato ${String(consumo).replace('.', ',')} l/100 km · ${voce.p.toFixed(3).replace('.', ',')} €/l${pochi}${difetto}`;
+}
+
+// Aggiorna le cifre gia' a schermo senza ricostruire il DOM: se ridisegnassimo, il campo dei
+// km perderebbe il fuoco a meta' del numero e l'operatore non riuscirebbe a scriverlo.
+function vehCostoAggiorna() {
+  const box = document.querySelector('#vehicleScheda .veh-costo');
+  const spec = vehSpecs[vehSelUrl];
+  if (!box || !spec || carbStato !== 'ok' || !carbIdx) return;
+  const { consumo, famiglia } = vehConsumo(spec);
+  if (!consumo || !famiglia) return;
+  const pv = carbProvincia();
+  const voce = ((pv && carbIdx.province[pv]) || carbIdx.italia)[famiglia];
+  // Provincia che non quota quel carburante (il metano manca in 8 province): senza questo
+  // ramo restavano a schermo le cifre della provincia PRECEDENTE, credibili e sbagliate.
+  if (!voce) { renderVehBody(); return; }
+  const kmSt = carbKmStato();
+  const { per100, anno } = carbCalcola(consumo, voce.p, kmSt.km);
+  const eur = n => n.toLocaleString('it-IT', { maximumFractionDigits: 0 });
+  const cifra = box.querySelector('.veh-costo-cifra b');
+  const det = box.querySelector('.veh-costo-det');
+  if (cifra) cifra.textContent = `${eur(anno)} €`;
+  if (det) det.innerHTML = carbDetHTML(per100, consumo, voce, kmSt);
+}
+
 function vehCostoHTML(spec) {
   const { consumo, famiglia } = vehConsumo(spec);
   if (!consumo || !famiglia) return '';                      // niente dati → niente banda (mai stime inventate)
@@ -2588,20 +2805,18 @@ function vehCostoHTML(spec) {
   const tab = (pv && carbIdx.province[pv]) || carbIdx.italia;
   const voce = tab[famiglia];
   if (!voce) return '';
-  const km = carbKmAnno();
-  const per100 = consumo * voce.p;
-  const anno = per100 / 100 * km;
+  const kmSt = carbKmStato();
+  const km = kmSt.km;
+  const { per100, anno } = carbCalcola(consumo, voce.p, km);
   const eur = n => n.toLocaleString('it-IT', { maximumFractionDigits: 0 });
   const provOpts = ['<option value="">Media Italia</option>']
     .concat(Object.keys(carbIdx.province).sort().map(x => `<option value="${x}"${x === pv ? ' selected' : ''}>${x}</option>`)).join('');
-  const kmOpts = [10000, 15000, 20000, 30000].map(k => `<option value="${k}"${k === km ? ' selected' : ''}>${eur(k)} km/anno</option>`).join('');
-  const pochi = voce.n < 5 ? ` <span class="veh-costo-warn" title="pochi impianti rilevati: prezzo poco rappresentativo">· solo ${voce.n} impianti</span>` : '';
   return `<div class="veh-costo">
     <div class="veh-costo-cifra"><b>${eur(anno)} €</b><span>all'anno di ${CARB_ETICHETTA[famiglia]}</span></div>
-    <div class="veh-costo-det">${per100.toFixed(2).replace('.', ',')} € ogni 100 km · consumo dichiarato ${String(consumo).replace('.', ',')} l/100 km · ${voce.p.toFixed(3).replace('.', ',')} €/l${pochi}</div>
+    <div class="veh-costo-det">${carbDetHTML(per100, consumo, voce, kmSt)}</div>
     <div class="veh-costo-ctrl">
       <select class="veh-carb-prov" aria-label="provincia per il prezzo del carburante">${provOpts}</select>
-      <select class="veh-carb-km" aria-label="chilometri all'anno">${kmOpts}</select>
+      <label class="veh-carb-kmw"><input type="number" class="veh-carb-km" value="${kmSt.difetto ? '' : km}" min="${KM_MIN}" max="${KM_MAX}" step="any" inputmode="numeric" aria-label="chilometri all'anno"><span>km/anno</span></label>
     </div>
     <div class="veh-costo-fonte">Prezzi self ${carbIdx.aggiornato ? 'del ' + carbIdx.aggiornato : ''} — ${escapeHtml(carbIdx.fonte)}. Stima: consumo dichiarato, non reale.</div>
   </div>`;
@@ -2614,14 +2829,20 @@ function vehCostoHTML(spec) {
 // L'attribuzione riga→modello usa il nome ACI piu' LUNGO contenuto nel titolo: e' preciso
 // perche' la marca e' gia' fissata dalla ricerca. Nessun match → nessun segno, mai un
 // numero attribuito a caso. Le moto non hanno questo dato (vedi backend/liquidita.js).
-let liqMarca = null, liqModelli = null, liqStato = 'mai';
+let liqMarca = null, liqModelli = null, liqStato = 'mai', liqVoce = null;
 const liqNorm = x => String(x || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
-async function liqCarica(marca) {
-  if (liqStato === 'carico' || liqMarca === liqNorm(marca)) return;
-  liqStato = 'carico'; liqMarca = liqNorm(marca);
+async function liqCarica(marca, modello, tipo) {
+  const chiave = liqNorm(marca) + '|' + liqNorm(modello);
+  if (liqStato === 'carico' || liqMarca === chiave) return;
+  liqStato = 'carico'; liqMarca = chiave;
   try {
-    const d = await fetch('/api/liquidita?marca=' + encodeURIComponent(marca)).then(r => r.json());
+    const q = new URLSearchParams({ marca });
+    if (modello) q.set('modello', modello);
+    if (tipo) q.set('tipo', tipo);
+    const d = await fetch('/api/liquidita?' + q.toString()).then(r => r.json());
+    liqVoce = (d && d.voce) || null;      // voce del modello cercato, con fonte e avvisi
+    liqAnno = (d && d.anno) || liqAnno;
     if (d && d.ok && d.modelli.length) {
       // ordinati per nome decrescente di lunghezza: il primo che combacia e' il piu' specifico
       liqModelli = d.modelli.map(m => ({ ...m, n: liqNorm(m.modello) })).filter(m => m.n.length >= 2)
@@ -2629,7 +2850,10 @@ async function liqCarica(marca) {
       liqStato = 'ok';
     } else { liqModelli = null; liqStato = 'vuoto'; }
   } catch (_) { liqStato = 'ko'; }
-  if (liqStato === 'ok') renderResults(currentResults);   // le righe si ridisegnano col segno
+  if (liqStato === 'ok') {
+    renderResults(currentResults);   // le righe si ridisegnano col segno
+    renderVehBody();                 // e la scheda tecnica mostra il riquadro liquidita
+  }
 }
 
 // titolo annuncio → voce di liquidita, o null. Confine-parola per non far matchare "500" in "1500".
@@ -2652,123 +2876,29 @@ function liqBadgeHTML(item) {
 }
 let liqAnno = 2025;
 
-// ── Pannello "Costi e mercato": nasce CHIUSO, si apre con un click ────────────
-// Sta a parte dalla scheda tecnica di proposito: sono dati economici, non specifiche, e
-// tenerli sempre a schermo aggiungeva rumore. Dentro: liquidita del modello (ACI
-// Autoritratto), costo carburante (MIMIT) e costo del passaggio (IPT, fonte ACI).
-let mkAperto = false, mkDati = null, mkStato = 'mai';
-
-function mkChiave() { const p = lastSearchParams || {}; return `${p.tipo || ''}|${p.marca || ''}|${p.modello || ''}`; }
-let mkChiaveCaricata = null;
-
-async function mkCarica() {
+// ── Liquidita del modello, dentro la scheda tecnica ──────────────────────────
+// Quanto si rivende un modello e' un dato economico, ma parla della STESSA cosa di cui parla
+// la scheda: il veicolo. Sta qui e non in un pannello a parte perche' l'operatore che guarda
+// le specifiche di una Panda vuole sapere nella stessa occhiata quanto quel modello gira.
+// Nessuna richiesta in piu': riusa i dati gia' scaricati per i segni accanto agli annunci.
+function vehLiqHTML() {
   const p = lastSearchParams || {};
-  if (!p.marca || !p.modello) return;
-  mkStato = 'carico'; mkRenderBody();
-  const q = new URLSearchParams({ tipo: p.tipo || 'auto', marca: p.marca, modello: p.modello });
-  const kw = mkKw(); if (kw && kw.kw) q.set('kw', String(kw.kw));   // mkKw torna {kw, da}: serve il numero
-  const pv = carbProvincia(); if (pv) q.set('provincia', pv);
-  try {
-    const d = await fetch('/api/mercato?' + q.toString()).then(r => r.json());
-    mkDati = d; mkStato = 'ok'; mkChiaveCaricata = mkChiave();
-  } catch (_) { mkStato = 'ko'; }
-  loadCarburanti();     // l'indice prezzi serve al riquadro carburante
-  mkRenderBody();
-}
-
-// kW del veicolo: dalla scheda se li dichiara, altrimenti convertiti dai CV (1 CV = 0,7355 kW).
-// Si tiene traccia di come sono stati ottenuti: l'IPT e' una spesa vera e una stima va detta.
-function mkKw() {
-  const spec = vehSpecs[vehSelUrl];
-  const righe = spec && spec.groups ? spec.groups.flatMap(g => g.rows || []) : [];
-  for (const r of righe) {
-    const m = String(r.v).match(/(\d+(?:[.,]\d+)?)\s*kW/i);
-    if (m) return { kw: Math.round(Number(m[1].replace(',', '.'))), da: 'scheda' };
-  }
-  for (const r of righe) {
-    if (!/potenza/i.test(r.k)) continue;
-    const m = String(r.v).match(/(\d+(?:[.,]\d+)?)\s*(?:CV|Hp)/i);
-    if (m) return { kw: Math.round(Number(m[1].replace(',', '.')) * 0.7355), da: 'CV', cv: Number(m[1].replace(',', '.')) };
-  }
-  return null;
-}
-
-function mkNum(n) { return Number(n).toLocaleString('it-IT'); }
-
-function mkBoxLiquidita() {
-  const l = mkDati && mkDati.liquidita;
-  if (!l) return `<div class="mk-box"><div class="mk-tit">Liquidita del modello</div><div class="mk-vuoto">Nessun dato per questo modello.</div></div>`;
-  if (!l.ok) return `<div class="mk-box"><div class="mk-tit">Liquidita del modello</div><div class="mk-vuoto">${escapeHtml(l.motivo)}</div><div class="mk-fonte">${escapeHtml(l.spiegazione || '')}</div></div>`;
-  const g = l.giudizio || {};
-  return `<div class="mk-box">
-    <div class="mk-tit">Liquidita del modello</div>
-    <div class="mk-cifra">${mkNum(l.trasferimenti)}</div>
-    <div class="mk-sub">passaggi di proprieta nel ${l.anno}, in Italia</div>
-    ${g.testo ? `<span class="mk-badge mk-${g.classe}">${escapeHtml(g.testo)}</span>` : ''}
-    <div class="mk-det">${l.parco ? mkNum(l.parco) + ' in circolazione' : 'parco non disponibile'}${l.ricambio != null ? ` · ricambio ${String(l.ricambio).replace('.', ',')}%/anno` : ''}</div>
-    ${l.viaPadre ? `<div class="mk-avviso">Dato del modello base &laquo;${escapeHtml(l.viaPadre)}&raquo;, non della variante cercata.</div>` : ''}
-    <div class="mk-fonte">${escapeHtml(l.fonte)}. ${escapeHtml(l.nota)}</div>
+  if (!p.marca) return '';
+  if (liqStato === 'carico') return '<div class="veh-liq veh-liq-attesa">Carico la liquidita del modello…</div>';
+  if (liqStato !== 'ok') return '';
+  // Prima la voce del server (sa ripiegare sul modello base e porta fonte, nota e avviso);
+  // in mancanza, l'attribuzione per titolo usata anche dai segni accanto agli annunci.
+  const m = (liqVoce && liqVoce.ok) ? liqVoce : liqPerTitolo(`${p.marca} ${p.modello || ''}`);
+  if (!m || m.ricambio == null) return '';
+  const g = m.giudizio || {};
+  const n = x => Number(x).toLocaleString('it-IT');
+  return `<div class="veh-liq">
+    <div class="veh-liq-cifra"><b>${n(m.trasferimenti)}</b> <span>passaggi di proprieta nel ${m.anno || liqAnno}</span>
+      ${g.testo ? `<span class="liq-badge liq-${g.classe || 'media'}">${escapeHtml(g.testo)}</span>` : ''}</div>
+    <div class="veh-liq-det">${escapeHtml(m.modello)} · ${m.parco ? n(m.parco) + ' in circolazione' : 'parco non disponibile'} · ricambio ${String(m.ricambio).replace('.', ',')}%/anno</div>
+    ${m.viaPadre ? `<div class="veh-liq-avviso">Dato del modello base &laquo;${escapeHtml(m.viaPadre)}&raquo;, non della variante cercata.</div>` : ''}
+    <div class="veh-liq-fonte">${escapeHtml(m.fonte || ('ACI Autoritratto ' + liqAnno))}. ${escapeHtml(m.nota || 'Dato aggregato sul modello, non sulla singola versione.')}</div>
   </div>`;
-}
-
-function mkBoxCarburante() {
-  const spec = vehSpecs[vehSelUrl];
-  if (!spec || !spec.groups) return `<div class="mk-box"><div class="mk-tit">Costo carburante</div><div class="mk-vuoto">Scegli una versione nella scheda tecnica.</div></div>`;
-  const inner = vehCostoHTML(spec);
-  if (!inner) return `<div class="mk-box"><div class="mk-tit">Costo carburante</div><div class="mk-vuoto">Consumo non disponibile per questa versione.</div></div>`;
-  return `<div class="mk-box"><div class="mk-tit">Costo carburante</div>${inner}</div>`;
-}
-
-function mkBoxPassaggio() {
-  const ipt = mkDati && mkDati.ipt;
-  const kw = mkKw();
-  const pv = carbProvincia();
-  const sel = `<div class="mk-ctrl"><select class="veh-carb-prov" aria-label="provincia per il calcolo">${
-    (carbIdx ? ['<option value="">Scegli la provincia</option>'].concat(Object.keys(carbIdx.province).sort().map(x => `<option value="${x}"${x === pv ? ' selected' : ''}>${x}</option>`)).join('') : '<option value="">…</option>')}</select></div>`;
-  if (!pv) return `<div class="mk-box"><div class="mk-tit">Passaggio di proprieta</div><div class="mk-vuoto">Scegli la provincia per il calcolo.</div>${sel}</div>`;
-  if (!kw) return `<div class="mk-box"><div class="mk-tit">Passaggio di proprieta</div><div class="mk-vuoto">Serve la potenza: scegli una versione nella scheda tecnica.</div>${sel}</div>`;
-  if (!ipt) return `<div class="mk-box"><div class="mk-tit">Passaggio di proprieta</div><div class="mk-vuoto">Calcolo non disponibile.</div>${sel}</div>`;
-  if (!ipt.ok) return `<div class="mk-box"><div class="mk-tit">Passaggio di proprieta</div><div class="mk-vuoto">${escapeHtml(ipt.motivo)}</div>${sel}<div class="mk-fonte">Fonte ACI, ${escapeHtml(ipt.fonte.aggiornato)}</div></div>`;
-  const eur = n => Number(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `<div class="mk-box">
-    <div class="mk-tit">Passaggio di proprieta</div>
-    <div class="mk-cifra">${eur(ipt.totaleNoto)} &euro;</div>
-    <div class="mk-sub">IPT ${eur(ipt.ipt)} &euro; + emolumenti ${eur(ipt.emolumenti)} &euro;</div>
-    <div class="mk-det">${ipt.provincia} maggiorazione ${ipt.maggiorazione}% · ${ipt.kW} kW${kw.da === 'CV' ? ` (stimati da ${String(kw.cv).replace('.', ',')} CV: la cifra esatta e sul libretto)` : ''}</div>
-    ${sel}
-    <button type="button" class="mk-usa" data-eur="${ipt.totaleNoto}">${priceCfgV.passaggio === ipt.totaleNoto ? 'Nel calcolo del margine ✓' : 'Usa nel calcolo del margine'}</button>
-    ${(ipt.avvisi || []).length ? `<div class="mk-avviso">${escapeHtml(ipt.avvisi[0])}</div>` : ''}
-    <div class="mk-fonte">Fonte ACI (${escapeHtml(ipt.fonte.aggiornato)}). Non incluso: ${escapeHtml((ipt.nonIncluso || []).join('; '))}.</div>
-  </div>`;
-}
-
-function mkBodyHTML() {
-  if (mkStato === 'carico') return '<div class="mk-vuoto">Carico i dati di mercato…</div>';
-  if (mkStato === 'ko') return '<div class="mk-vuoto">Dati di mercato non disponibili.</div>';
-  if (mkStato !== 'ok') return '<div class="mk-vuoto">Apri per vedere liquidita, costo carburante e passaggio di proprieta.</div>';
-  return mkBoxLiquidita() + mkBoxCarburante() + mkBoxPassaggio();
-}
-
-function mkRenderBody() {
-  const el = document.getElementById('vehicleMercato');
-  const b = el && el.querySelector('.mk-body');
-  if (b) b.innerHTML = mkBodyHTML(); else renderMercato();
-}
-
-function renderMercato() {
-  const el = document.getElementById('vehicleMercato'); if (!el) return;
-  const p = lastSearchParams || {};
-  if (!p.marca || !p.modello) { el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="rc-group${mkAperto ? '' : ' collapsed'}">`
-    + `<button type="button" class="rc-group-head mk-head"><span class="rc-gcaret">${icon('chevron')}</span>`
-    + `<span class="rc-group-title">Costi e mercato</span>`
-    + `<span class="rc-group-meta">${escapeHtml(p.marca)} ${escapeHtml(p.modello)}</span></button>`
-    + `<div class="rc-group-body"><div class="mk-body">${mkBodyHTML()}</div></div></div>`;
-}
-
-function clearMercato() {
-  mkAperto = false; mkDati = null; mkStato = 'mai'; mkChiaveCaricata = null;
-  const el = document.getElementById('vehicleMercato'); if (el) el.innerHTML = '';
 }
 
 // ── Filtro/suggerimento per anno (dai filtri ricerca "anno da/anno a"): suggerisce ma NON sceglie ──
@@ -2853,7 +2983,6 @@ function renderVehBody() {
   if (!secs || !vehData) return renderVehScheda();
   secs.innerHTML = vehBodyHTML();
   applyVehViewState();
-  if (mkAperto) mkRenderBody();   // consumo e kW arrivano dalle specs: il pannello si riallinea
 }
 
 const VEH_UNIT_ROWS = [
@@ -3164,8 +3293,9 @@ function csvCell(v) { let s = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.tes
 function exportCsv(results) {
   const cell = csvCell;
   const cfg = priceCfgV;
-  const cols = ['Fonte', 'Titolo', 'Prezzo (€)', 'Anno', 'KM', 'Carburante', 'Provincia', ...priceExtraHeaders(cfg), 'URL'];
-  const rows = results.map(r => { const pr = vPricing(r.prezzo); return [r.fonte, r.titolo, pr ? Math.round(pr.finale) : '', r.anno != null ? r.anno : '', r.km != null ? r.km : '', r.carburante || '', r.provincia || '', ...priceExtraValues(pr, cfg), r.url].map(cell).join(','); });
+  const conPass = results.some(r => passDi(r) != null);
+  const cols = ['Fonte', 'Titolo', 'Prezzo (€)', 'Anno', 'KM', 'Carburante', 'Provincia', ...priceExtraHeaders(cfg, conPass), 'URL'];
+  const rows = results.map(r => { const pr = vPricing(r.prezzo, passDi(r)); return [r.fonte, r.titolo, pr ? Math.round(pr.finale) : '', r.anno != null ? r.anno : '', r.km != null ? r.km : '', r.carburante || '', r.provincia || '', ...priceExtraValues(pr, cfg, conPass), r.url].map(cell).join(','); });
   const csv = [cols.join(','), ...rows].join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -3226,8 +3356,9 @@ function exportPdf(results) {
   });
 
   // ── Nota adjustment + tabella pulita + chip fonte
-  const extraH = priceExtraHeaders(cfg);
-  const tableBody = results.map(r => { const pr = vPricing(r.prezzo); return [FONTE_LABEL_PDF[r.fonte] || r.fonte, r.titolo, pr ? fmtEur(Math.round(pr.finale)) : '—', r.anno != null ? String(r.anno) : '—', r.km != null ? r.km.toLocaleString('it-IT') + ' km' : '—', r.carburante || '—', r.provincia || '—', ...priceExtraValues(pr, cfg).map(x => x === '' ? '—' : fmtEur(x))]; });
+  const conPass = results.some(r => passDi(r) != null);
+  const extraH = priceExtraHeaders(cfg, conPass);
+  const tableBody = results.map(r => { const pr = vPricing(r.prezzo, passDi(r)); return [FONTE_LABEL_PDF[r.fonte] || r.fonte, r.titolo, pr ? fmtEur(Math.round(pr.finale)) : '—', r.anno != null ? String(r.anno) : '—', r.km != null ? r.km.toLocaleString('it-IT') + ' km' : '—', r.carburante || '—', r.provincia || '—', ...priceExtraValues(pr, cfg, conPass).map(x => x === '' ? '—' : fmtEur(x))]; });
   if (priceAdjActive(cfg)) {
     const bits = [];
     if (cfg.comm) bits.push(`Commissione +${cfg.comm}${cfg.commUnit === 'pct' ? '%' : ' €'}`);
