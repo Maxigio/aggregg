@@ -1240,3 +1240,38 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .cat-prova-n b { font-family: var(--num); white-space: nowrap; }
 .cat-prova-f { margin-top: 8px; font-size: 0.72rem; color: var(--text-faint); }
 .cat-prova-f a { color: var(--accent); }
+
+/* ─── Area RICHIAMI (Safety Gate) ────────────────────────────────────────────
+   L'avvertenza sta in cima e non in fondo: senza, l'archivio sembra dire "questa macchina e'
+   richiamata" quando puo' solo dire "su questo modello risulta un richiamo". */
+.rca-avv { margin: 0 0 8px; padding: 9px 12px; border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); border-radius: 0 var(--r) var(--r) 0; font-size: 0.8rem; line-height: 1.55; color: var(--text-muted); }
+.rca-avv b { color: var(--warn); }
+.rca-stato { margin: 0 0 14px; font-size: 0.72rem; color: var(--text-faint); font-family: var(--num); }
+.rca-cerca { flex: 1 1 240px; min-width: 180px; max-width: 460px; height: 32px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.86rem; padding: 0 10px; }
+.rca-marche { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.rca-m { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.86rem; cursor: pointer; text-align: left; }
+.rca-m:hover { border-color: var(--accent); }
+.rca-m em { font-style: normal; font-family: var(--num); font-size: 0.76rem; color: var(--text-faint); }
+.rca-conta { margin: 0 0 10px; font-size: 0.76rem; color: var(--text-faint); font-family: var(--num); }
+.rca-a { margin-bottom: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
+.rca-a header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+.rca-a-t { font-weight: 600; font-size: 0.94rem; }
+.rca-lv { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--surface); font-size: 0.7rem; color: var(--text-faint); white-space: nowrap; }
+.rca-lv.grave { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); font-weight: 600; }
+.rca-dif { margin: 0 0 10px; font-size: 0.86rem; line-height: 1.6; }
+.rca-n { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px 14px; margin-bottom: 10px; }
+.rca-n div { display: flex; flex-direction: column; gap: 1px; }
+.rca-n span { font-size: 0.68rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+.rca-n b { font-size: 0.8rem; font-weight: 500; }
+/* Le omologazioni sono l'unico identificativo esatto: si mostrano in evidenza quando ci sono, e
+   si dice chiaramente quando NON ci sono invece di lasciare il riquadro vuoto. */
+.rca-om { padding: 8px 10px; border-radius: var(--r); background: var(--surface); font-size: 0.74rem; }
+.rca-om span { display: block; margin-bottom: 4px; color: var(--text-faint); }
+.rca-om code { display: inline-block; margin: 2px 4px 2px 0; padding: 1px 6px; border-radius: 4px; background: var(--surface-2); font-family: var(--num); font-size: 0.72rem; }
+.rca-om.vuota { color: var(--text-faint); font-style: italic; }
+.rca-desc, .rca-mis { margin: 8px 0 0; font-size: 0.76rem; line-height: 1.55; color: var(--text-muted); }
+.rca-a footer { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-top: 10px; }
+.rca-foto { display: flex; gap: 6px; }
+.rca-foto img { width: 64px; height: 48px; object-fit: cover; border-radius: 4px; }
+.rca-link { font-size: 0.72rem; }
+@media (max-width: 640px) { .rca-a header, .rca-a footer { flex-direction: column; align-items: flex-start; } }

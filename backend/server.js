@@ -804,6 +804,9 @@ require('./scheda-veicolo-route').mount(app, { clientIp });
 // Spenta se AMR_MOTORNET != 1, e in quel caso lo dichiara invece di sembrare rotta.
 require('./catalogo-route').mount(app, { clientIp });
 
+// ─── Richiami di sicurezza (Safety Gate UE) — vedi richiami-route.js ───────────
+require('./richiami-route').mount(app, { clientIp });
+
 // ─── Cache ricerche recenti (§17.4) ───────────────────────────────────────────
 // Stessa ricerca entro il TTL → risposta istantanea. NON cacha se una fonte è
 // error/needs_bootstrap (non congelare uno stato-bloccato) né i 0-risultati totali.

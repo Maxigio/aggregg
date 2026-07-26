@@ -816,16 +816,16 @@ let searchMode = 'cerca';
 // Pilota il radio tipo nascosto (che via il suo change-handler rinfresca marche/placeholder)
 // e lo stato attivo dei bottoni.
 function selectPrimary(mode) {
-  const primary = ['auto', 'moto', 'ricambi', 'catalogo'].includes(mode) ? mode : 'auto';
+  const primary = ['auto', 'moto', 'ricambi', 'catalogo', 'richiami'].includes(mode) ? mode : 'auto';
   document.querySelectorAll('#modeToggle .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === primary));
-  if (primary === 'ricambi' || primary === 'catalogo') { setSearchMode(primary); return; }
+  if (['ricambi', 'catalogo', 'richiami'].includes(primary)) { setSearchMode(primary); return; }
   const radio = document.getElementById(primary === 'moto' ? 'tipoMoto' : 'tipoAuto');
   if (radio && !radio.checked) { radio.checked = true; radio.dispatchEvent(new Event('change')); }
   setSearchMode('cerca');
 }
 function setSearchMode(mode) {
   const prev = searchMode;
-  searchMode = ['ricambi', 'catalogo'].includes(mode) ? mode : 'cerca';
+  searchMode = ['ricambi', 'catalogo', 'richiami'].includes(mode) ? mode : 'cerca';
   // Ricordare l'area: ricaricando la pagina si torna dove si stava lavorando, invece di
   // ripartire sempre dalla ricerca auto. Si salva anche il tipo, che distingue Auto da Moto.
   try {
@@ -834,17 +834,22 @@ function setSearchMode(mode) {
   } catch (_) {}
   const ricambi = searchMode === 'ricambi';
   const catalogo = searchMode === 'catalogo';
-  // Il catalogo non ha un form: nasconde tutta la barra di ricerca invece di riconfigurarla,
-  // e vive nel suo pannello. Uscendo si ripulisce, cosi' non lascia stato in giro.
-  document.querySelector('section.search').classList.toggle('cat-attivo', catalogo);
+  const richiami = searchMode === 'richiami';
+  // Catalogo e Richiami non hanno un form di ricerca: nascondono tutta la barra invece di
+  // riconfigurarla, e vivono nel loro pannello. Uscendo si ripuliscono, cosi' non lasciano
+  // stato in giro. Il flag e' uno solo per entrambe: sono aree, non modi di ricerca.
+  document.querySelector('section.search').classList.toggle('cat-attivo', catalogo || richiami);
   document.getElementById('catalogoPanel').classList.toggle('d-none', !catalogo);
+  document.getElementById('richiamiPanel').classList.toggle('d-none', !richiami);
   // Pannelli output: mostra solo quello del modo attivo (lo popola il rispettivo do*()).
-  // Stanno PRIMA del ramo catalogo perche' il suo `return` le saltava: da Ricambi a Catalogo
+  // Stanno PRIMA dei rami con return perche' quelli le saltavano: da Ricambi a Catalogo
   // la lista ricambi restava a schermo, e stando prima nel DOM finiva sopra la griglia marche.
   if (!ricambi) document.getElementById('ricambiPanel').classList.add('d-none');
   if (ricambi || prev === 'ricambi') { rcData = null; currentResults = []; hideResults(); }   // ingresso/uscita ricambi → pulizia piena
+  if (prev === 'catalogo' && !catalogo) catChiudi();
+  if (prev === 'richiami' && !richiami) rcaChiudi();
   if (catalogo) { hideResults(); catApri(); return; }
-  if (prev === 'catalogo') catChiudi();
+  if (richiami) { hideResults(); rcaApri(); return; }
   // Ricambi ha i suoi campi (OEM) e nasconde i campi auto (marca/modello + tipo).
   document.getElementById('ricambiFields').classList.toggle('d-none', !ricambi);
   document.querySelector('.search-fields').classList.toggle('d-none', ricambi);
@@ -3466,7 +3471,7 @@ async function applyUrlParams() {
 function ripristinaModo() {
   let m = null, t = null;
   try { m = localStorage.getItem('amrModo'); t = localStorage.getItem('amrModoTipo'); } catch (_) {}
-  if (m === 'catalogo' || m === 'ricambi') return selectPrimary(m);
+  if (['catalogo', 'ricambi', 'richiami'].includes(m)) return selectPrimary(m);
   if (m === 'cerca' && t === 'moto') return selectPrimary('moto');
 }
 
@@ -4011,6 +4016,149 @@ document.getElementById('catalogoPanel')?.addEventListener('input', e => {
     const b = e.target.parentElement.querySelector('b'); if (b) b.textContent = catPerRiga;
     const g = catEl().querySelector('.cat-griglia'); if (g) g.style.setProperty('--cat-cols', catPerRiga);
   }
+});
+
+// ═══ RICHIAMI — allerte di sicurezza Safety Gate (Commissione UE) ══════════════
+// Area a se', isolata come Catalogo e Ricambi: stato e funzioni proprie (prefisso rca), non tocca
+// currentResults / lastSearchParams / renderResults.
+//
+// COSA PUO' DIRE, e l'interfaccia lo scrive invece di lasciarlo intuire: l'allerta individua i
+// veicoli colpiti tramite il numero di omologazione europea o un intervallo di telaio, e un
+// annuncio non porta ne' l'uno ne' l'altro. Qui si dice se su un MODELLO risulta un richiamo,
+// non se il singolo esemplare e' coinvolto.
+const rcaEl = () => document.getElementById('richiamiPanel');
+let rcaStato = 'mai';          // mai | carico | ok | ko
+let rcaMotivo = '';
+let rcaInfo = null;            // stato dell'archivio
+let rcaMarche = null;
+let rcaMarca = null;
+let rcaFiltro = '';
+let rcaAllerte = null;
+let rcaGen = 0;                // token di generazione, come searchGen/catGen
+
+async function rcaChiedi(percorso) {
+  const mia = ++rcaGen;
+  rcaStato = 'carico'; rcaRender();
+  try {
+    const d = await fetch(percorso).then(r => r.json());
+    if (mia !== rcaGen) return null;
+    if (d && d.ok) { rcaStato = 'ok'; return d; }
+    rcaStato = 'ko'; rcaMotivo = (d && d.motivo) || 'non disponibile';
+  } catch (_) { if (mia !== rcaGen) return null; rcaStato = 'ko'; rcaMotivo = 'richiesta non riuscita'; }
+  rcaRender();
+  return null;
+}
+
+function rcaChiudi() { const el = rcaEl(); if (el) el.innerHTML = ''; }
+
+async function rcaApri() {
+  if (rcaInfo && rcaMarche) return rcaRender();
+  const s = await rcaChiedi('/api/richiami/stato');
+  if (!s) return;
+  rcaInfo = s;
+  if (!s.pronto) { rcaStato = 'ko'; rcaMotivo = s.motivo; return rcaRender(); }
+  const m = await rcaChiedi('/api/richiami/marche');
+  if (m) { rcaMarche = m.marche; rcaAllerte = null; rcaMarca = null; rcaRender(); }
+}
+
+async function rcaVaiMarca(nome) {
+  rcaMarca = nome; rcaFiltro = '';
+  const d = await rcaChiedi('/api/richiami/cerca?marca=' + encodeURIComponent(nome));
+  if (d) { rcaAllerte = d.allerte; rcaRender(); }
+}
+
+async function rcaVaiUltime() {
+  rcaMarca = null; rcaFiltro = '';
+  const d = await rcaChiedi('/api/richiami/ultime?quante=60');
+  if (d) { rcaAllerte = d.allerte; rcaRender(); }
+}
+
+const rcaNorm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+function rcaAllertaHTML(a) {
+  const riga = (e, v) => (v ? `<div><span>${escapeHtml(e)}</span><b>${escapeHtml(String(v))}</b></div>` : '');
+  return `<article class="rca-a">
+    <header>
+      <div class="rca-a-t">${escapeHtml(a.marca || '—')}${a.nome ? ' · ' + escapeHtml(a.nome) : ''}</div>
+      <span class="rca-lv${/grave/i.test(a.livello || '') ? ' grave' : ''}">${escapeHtml(a.livello || '')}</span>
+    </header>
+    <p class="rca-dif">${escapeHtml(a.difetto || '')}</p>
+    <div class="rca-n">
+      ${riga('prodotto', a.prodotto)}
+      ${riga('rischio', a.rischio)}
+      ${riga('produzione', a.produzione)}
+      ${riga('codice campagna', a.codiceCampagna)}
+      ${riga('notificato da', a.paeseNotifica)}
+      ${riga('origine', a.paeseOrigine)}
+      ${riga('caso', a.caso)}
+    </div>
+    ${a.haOmologazione ? `<div class="rca-om"><span>Omologazioni colpite — confrontale con la carta di circolazione</span>
+      <code>${a.omologazioni.map(escapeHtml).join('</code> <code>')}</code></div>`
+    : `<div class="rca-om vuota">Il costruttore non ha indicato un numero di omologazione: qui il confronto con il libretto non è possibile.</div>`}
+    ${a.descrizione ? `<p class="rca-desc">${escapeHtml(a.descrizione)}</p>` : ''}
+    ${a.misure ? `<p class="rca-mis">${escapeHtml(a.misure)}</p>` : ''}
+    <footer>
+      ${a.foto && a.foto.length ? `<div class="rca-foto">${a.foto.slice(0, 4).map(u => `<img src="${escapeHtml(u)}" alt="" loading="lazy">`).join('')}</div>` : ''}
+      <div class="rca-link">
+        ${a.scheda ? `<a href="${escapeHtml(a.scheda)}" target="_blank" rel="noopener noreferrer">scheda ufficiale ↗</a>` : ''}
+        ${a.urlCampagna ? `· <a href="${escapeHtml(a.urlCampagna)}" target="_blank" rel="noopener noreferrer">campagna del costruttore ↗</a>` : ''}
+      </div>
+    </footer>
+  </article>`;
+}
+
+function rcaCorpo() {
+  if (rcaStato === 'carico') return '<div class="cat-vuoto">Carico…</div>';
+  if (rcaStato === 'ko') return `<div class="cat-vuoto">${escapeHtml(rcaMotivo)}</div>`;
+  if (rcaAllerte) {
+    const f = rcaNorm(rcaFiltro);
+    const l = f ? rcaAllerte.filter(a => rcaNorm(a.marca + ' ' + a.nome + ' ' + a.prodotto + ' ' + a.difetto).includes(f)) : rcaAllerte;
+    if (!l.length) return '<div class="cat-vuoto">Nessuna allerta con questo testo.</div>';
+    return `<p class="rca-conta">${l.length} allerte${rcaMarca ? ' per ' + escapeHtml(rcaMarca) : ''}</p>`
+      + l.map(rcaAllertaHTML).join('');
+  }
+  const f = rcaNorm(rcaFiltro);
+  const m = (rcaMarche || []).filter(x => !f || rcaNorm(x.nome).includes(f));
+  if (!m.length) return '<div class="cat-vuoto">Nessuna marca con questo nome.</div>';
+  return `<div class="rca-marche">${m.map(x =>
+    `<button type="button" class="rca-m" data-marca="${escapeHtml(x.nome)}">${escapeHtml(x.nome)}<em>${x.allerte}</em></button>`).join('')}</div>`;
+}
+
+function rcaRender() {
+  const el = rcaEl(); if (!el) return;
+  const i = rcaInfo || {};
+  el.innerHTML = `<div class="cat-wrap">
+    <div class="cat-barra">
+      <div class="cat-fonti">
+        <button type="button" class="cat-fonte${rcaMarca || rcaAllerte ? '' : ' attiva'}" data-vai="marche">Per marca</button>
+        <button type="button" class="cat-fonte${rcaAllerte && !rcaMarca ? ' attiva' : ''}" data-vai="ultime">Ultime pubblicate</button>
+      </div>
+      <div class="cat-strumenti">
+        <input type="search" class="rca-cerca" placeholder="${rcaAllerte ? 'Cerca nel testo delle allerte…' : 'Cerca una marca…'}" value="${escapeHtml(rcaFiltro)}" aria-label="Cerca">
+      </div>
+    </div>
+    ${i.pronto ? `<p class="rca-avv"><b>Attenzione:</b> ${escapeHtml(i.avvertenza || '')}</p>` : ''}
+    ${i.pronto ? `<p class="rca-stato">${i.totale} allerte veicolo · ${i.marche} marche · ${i.conOmologazione} con omologazione dichiarata (${Math.round(100 * i.conOmologazione / i.totale)}%) · ${i.reportLetti} report letti</p>` : ''}
+    ${rcaMarca ? `<nav class="cat-briciole"><button type="button" class="rca-su">Tutte le marche</button><i>›</i><span>${escapeHtml(rcaMarca)}</span></nav>` : ''}
+    <div class="cat-corpo">${rcaCorpo()}</div>
+    ${i.fonte ? `<div class="cat-fonte-nota">${escapeHtml(i.fonte.nome || '')} · <a href="${escapeHtml(i.fonte.portale || '')}" target="_blank" rel="noopener noreferrer">portale ufficiale ↗</a></div>` : ''}
+  </div>`;
+}
+
+document.getElementById('richiamiPanel')?.addEventListener('click', e => {
+  const v = e.target.closest('[data-vai]');
+  if (v) return void (v.dataset.vai === 'ultime' ? rcaVaiUltime() : (rcaAllerte = null, rcaMarca = null, rcaFiltro = '', rcaRender()));
+  const su = e.target.closest('.rca-su');
+  if (su) { rcaAllerte = null; rcaMarca = null; rcaFiltro = ''; return void rcaRender(); }
+  const m = e.target.closest('.rca-m');
+  if (m) return void rcaVaiMarca(m.dataset.marca);
+});
+document.getElementById('richiamiPanel')?.addEventListener('input', e => {
+  if (!e.target.classList.contains('rca-cerca')) return;
+  rcaFiltro = e.target.value;
+  // Si riscrive SOLO il corpo, per non far perdere il fuoco alla casella mentre si scrive.
+  const c = rcaEl()?.querySelector('.cat-corpo');
+  if (c) c.innerHTML = rcaCorpo(); else rcaRender();
 });
 
 // ─── Avvio ────────────────────────────────────────────────────────────────────

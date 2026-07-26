@@ -61,6 +61,7 @@
           <button type="button" class="mode-btn" data-mode="moto" role="tab">Moto</button>
           <button type="button" class="mode-btn" data-mode="ricambi" role="tab">Ricambi</button>
           <button type="button" class="mode-btn" data-mode="catalogo" role="tab">Catalogo</button>
+          <button type="button" class="mode-btn" data-mode="richiami" role="tab">Richiami</button>
         </div>
         <!-- Tipo veicolo: radio nascosti, source-of-truth per currentTipo(); pilotati dai bottoni Auto/Moto -->
         <div class="seg-toggle" role="radiogroup" aria-label="Tipo veicolo" style="display:none">
@@ -134,6 +135,9 @@
 
     <!-- CATALOGO del nuovo: sezione indipendente dalla ricerca (marche → modelli → allestimenti) -->
     <div id="catalogoPanel" class="d-none"></div>
+
+    <!-- Area Richiami: allerte di sicurezza Safety Gate (Commissione UE). Disegnata da app.js. -->
+    <div id="richiamiPanel" class="d-none"></div>
 
     <!-- STATO RICERCA / ERRORE / BANNER -->
     <div id="statusBox" class="d-none">
