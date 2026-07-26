@@ -1275,3 +1275,7 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .rca-foto img { width: 64px; height: 48px; object-fit: cover; border-radius: 4px; }
 .rca-link { font-size: 0.72rem; }
 @media (max-width: 640px) { .rca-a header, .rca-a footer { flex-direction: column; align-items: flex-start; } }
+/* I telai sono l'unica cosa in tutto l'archivio che scende al singolo esemplare: si distinguono
+   dalle omologazioni, che restano un aggancio di famiglia. */
+.rca-vin { margin-top: 6px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.rca-vin code { background: var(--surface); }

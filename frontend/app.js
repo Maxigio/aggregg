@@ -4086,7 +4086,7 @@ function rcaAllertaHTML(a) {
     <div class="rca-n">
       ${riga('prodotto', a.prodotto)}
       ${riga('rischio', a.rischio)}
-      ${riga('produzione', a.produzione)}
+      ${riga('produzione', (a.periodi && a.periodi.length ? a.periodi.join(' · ') : a.produzione))}
       ${riga('codice campagna', a.codiceCampagna)}
       ${riga('notificato da', a.paeseNotifica)}
       ${riga('origine', a.paeseOrigine)}
@@ -4095,6 +4095,8 @@ function rcaAllertaHTML(a) {
     ${a.haOmologazione ? `<div class="rca-om"><span>Omologazioni colpite — confrontale con la carta di circolazione</span>
       <code>${a.omologazioni.map(escapeHtml).join('</code> <code>')}</code></div>`
     : `<div class="rca-om vuota">Il costruttore non ha indicato un numero di omologazione: qui il confronto con il libretto non è possibile.</div>`}
+    ${a.telai && a.telai.length ? `<div class="rca-om rca-vin"><span>Numeri di telaio colpiti — con questi il controllo è sul SINGOLO veicolo, non sul modello</span>
+      ${a.telai.map(t => `<code>${escapeHtml(t.da)}${t.a ? ' → ' + escapeHtml(t.a) : ''}</code>`).join(' ')}</div>` : ''}
     ${a.descrizione ? `<p class="rca-desc">${escapeHtml(a.descrizione)}</p>` : ''}
     ${a.misure ? `<p class="rca-mis">${escapeHtml(a.misure)}</p>` : ''}
     <footer>

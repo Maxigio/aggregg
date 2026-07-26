@@ -85,8 +85,20 @@ async function getXml(percorso) {
 const pausaFinoA = () => (Date.now() < bloccatoFino ? bloccatoFino : 0);
 
 // ─── Cache su disco ──────────────────────────────────────────────────────────
+// La cache conserva gli oggetti GIA' INTERPRETATI, non l'XML: cambiare il parser senza dirlo
+// significa continuare a servire il vecchio formato per un giorno intero senza accorgersene —
+// e' successo aggiungendo i telai, che risultavano zero su 1.041 mentre erano nei dati.
+// Questo numero va alzato a ogni cambio della forma dei record.
+const SCHEMA = 2;
 let memo = null;
-const leggi = () => { if (!memo) { try { memo = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch (_) { memo = { voci: {} }; } if (!memo.voci) memo.voci = {}; } return memo; };
+const leggi = () => {
+  if (!memo) {
+    try { memo = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch (_) { memo = { schema: SCHEMA, voci: {} }; }
+    if (memo.schema !== SCHEMA) memo = { schema: SCHEMA, voci: {} };   // formato vecchio: si riparte
+    if (!memo.voci) memo.voci = {};
+  }
+  return memo;
+};
 const scrivi = () => { try { fs.writeFileSync(CACHE_FILE, JSON.stringify(leggi())); } catch (_) {} };
 const inVolo = new Map();
 async function conCache(chiave, produci, sospettoSe) {
@@ -148,6 +160,33 @@ function anniDa(produzione) {
   const a = [...String(produzione || '').matchAll(/\b((?:19|20)\d{2})\b/g)].map(m => Number(m[1]));
   if (!a.length) return null;
   return { da: Math.min(...a), a: Math.max(...a) };
+}
+
+/**
+ * Il campo delle date arriva spesso con PIU' intervalli incollati senza separatore — e' la fonte a
+ * scriverli cosi': "08.12.2020 - 09.01.20268.12.2020 - 21.08.2025" sono due periodi in cui lo zero
+ * del secondo si e' fuso con l'anno del primo. Mostrarlo com'e' fa leggere "09.01.20268". Si
+ * estraggono le date una per una e si ricompongono a coppie.
+ */
+function periodiDa(produzione) {
+  const d = [...String(produzione || '').matchAll(/\b\d{1,2}[./]\d{1,2}[./](?:19|20)\d{2}\b/g)].map(m => m[0]);
+  const fuori = [];
+  for (let i = 0; i < d.length; i += 2) fuori.push(d[i + 1] ? d[i] + ' – ' + d[i + 1] : d[i]);
+  return fuori;
+}
+
+/**
+ * Intervalli di NUMERO DI TELAIO, quando la fonte li dichiara. E' l'unica cosa in tutto l'archivio
+ * che permette di scendere dal modello al SINGOLO esemplare: misurato, li porta il 12% delle
+ * allerte, dentro il campo delle date di produzione o la descrizione, nella forma
+ * "// VIN: VXKKAHPY8R6015952 - VXKKBDGH1T6000111".
+ * Un telaio e' di 17 caratteri e non usa I, O, Q per non confonderle con 1 e 0.
+ */
+function telaiDa(testo) {
+  const v = [...new Set([...String(testo || '').matchAll(/\b[A-HJ-NPR-Z0-9]{17}\b/g)].map(m => m[0]))];
+  const fuori = [];
+  for (let i = 0; i < v.length; i += 2) fuori.push(v[i + 1] ? { da: v[i], a: v[i + 1] } : { da: v[i], a: null });
+  return fuori;
 }
 
 /**
@@ -221,7 +260,10 @@ function mappaNotifica(xml, meta = {}) {
     descrizione: tag(xml, 'description'),   // qui dentro stanno gli intervalli di telaio
     codiceCampagna: tag(xml, 'companyRecallCode'),   // da citare in officina
     produzione,
+    periodi: periodiDa(produzione),          // gli intervalli separati, leggibili
     anni: anniDa(produzione),
+    // I telai, quando ci sono: e' l'unico modo di scendere dal modello al singolo esemplare.
+    telai: telaiDa(produzione + ' ' + (tag(xml, 'description') || '')),
     paeseNotifica: tag(xml, 'notifyingCountry'),
     paeseOrigine: tag(xml, 'countryOfOrigin'),
     tipoUtente: tag(xml, 'type'),
@@ -255,5 +297,5 @@ const report = id => conCache('r|' + id, async () => {
 module.exports = {
   elenco, report, pausaFinoA,
   _elencoDaXml: elencoDaXml, _veicoliDaReport: veicoliDaReport, _mappaNotifica: mappaNotifica,
-  _modelliDa: modelliDa, _marcheDa: marcheDa, _anniDa: anniDa, _cdata: cdata, _omologazioniDa: omologazioniDa, _CACHE_FILE: CACHE_FILE,
+  _modelliDa: modelliDa, _marcheDa: marcheDa, _anniDa: anniDa, _periodiDa: periodiDa, _telaiDa: telaiDa, _cdata: cdata, _omologazioniDa: omologazioniDa, _CACHE_FILE: CACHE_FILE,
 };
