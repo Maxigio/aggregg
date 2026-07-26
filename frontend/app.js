@@ -815,17 +815,28 @@ let searchMode = 'cerca';
 // 'catalogo' → listino del nuovo, che NON parte da una ricerca (vedi il blocco cat* in fondo).
 // Pilota il radio tipo nascosto (che via il suo change-handler rinfresca marche/placeholder)
 // e lo stato attivo dei bottoni.
+/**
+ * Le AREE dell'app: modi senza form di ricerca, ognuno col suo pannello e le sue funzioni di
+ * apertura e chiusura. Aggiungerne una e' una riga qui, invece di quattro casi speciali sparsi
+ * fra selectPrimary, setSearchMode, ripristinaModo e la pulizia dei pannelli.
+ */
+const AREE = {
+  catalogo: { pannello: 'catalogoPanel', apri: () => catApri(), chiudi: () => catChiudi() },
+  richiami: { pannello: 'richiamiPanel', apri: () => rcaApri(), chiudi: () => rcaChiudi() },
+  fonti: { pannello: 'fontiPanel', apri: () => fnApri(), chiudi: () => fnChiudi() },
+};
+
 function selectPrimary(mode) {
-  const primary = ['auto', 'moto', 'ricambi', 'catalogo', 'richiami'].includes(mode) ? mode : 'auto';
+  const primary = ['auto', 'moto', 'ricambi'].includes(mode) || AREE[mode] ? mode : 'auto';
   document.querySelectorAll('#modeToggle .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === primary));
-  if (['ricambi', 'catalogo', 'richiami'].includes(primary)) { setSearchMode(primary); return; }
+  if (primary === 'ricambi' || AREE[primary]) { setSearchMode(primary); return; }
   const radio = document.getElementById(primary === 'moto' ? 'tipoMoto' : 'tipoAuto');
   if (radio && !radio.checked) { radio.checked = true; radio.dispatchEvent(new Event('change')); }
   setSearchMode('cerca');
 }
 function setSearchMode(mode) {
   const prev = searchMode;
-  searchMode = ['ricambi', 'catalogo', 'richiami'].includes(mode) ? mode : 'cerca';
+  searchMode = (mode === 'ricambi' || AREE[mode]) ? mode : 'cerca';
   // Ricordare l'area: ricaricando la pagina si torna dove si stava lavorando, invece di
   // ripartire sempre dalla ricerca auto. Si salva anche il tipo, che distingue Auto da Moto.
   try {
@@ -833,23 +844,22 @@ function setSearchMode(mode) {
     if (searchMode === 'cerca') localStorage.setItem('amrModoTipo', currentTipo());
   } catch (_) {}
   const ricambi = searchMode === 'ricambi';
-  const catalogo = searchMode === 'catalogo';
-  const richiami = searchMode === 'richiami';
-  // Catalogo e Richiami non hanno un form di ricerca: nascondono tutta la barra invece di
-  // riconfigurarla, e vivono nel loro pannello. Uscendo si ripuliscono, cosi' non lasciano
-  // stato in giro. Il flag e' uno solo per entrambe: sono aree, non modi di ricerca.
-  document.querySelector('section.search').classList.toggle('cat-attivo', catalogo || richiami);
-  document.getElementById('catalogoPanel').classList.toggle('d-none', !catalogo);
-  document.getElementById('richiamiPanel').classList.toggle('d-none', !richiami);
+  const area = AREE[searchMode] || null;
+  // Le AREE non hanno un form di ricerca: nascondono tutta la barra invece di riconfigurarla, e
+  // vivono nel loro pannello. Stanno in una tabella e non in una catena di if: erano tre casi
+  // speciali ripetuti in quattro punti, e ogni area nuova ne aggiungeva uno a ciascuno.
+  document.querySelector('section.search').classList.toggle('cat-attivo', !!area);
+  for (const [id, a] of Object.entries(AREE)) {
+    const el = document.getElementById(a.pannello);
+    if (el) el.classList.toggle('d-none', id !== searchMode);
+  }
   // Pannelli output: mostra solo quello del modo attivo (lo popola il rispettivo do*()).
-  // Stanno PRIMA dei rami con return perche' quelli le saltavano: da Ricambi a Catalogo
+  // Stanno PRIMA del ramo con return perche' quello le saltava: da Ricambi a Catalogo
   // la lista ricambi restava a schermo, e stando prima nel DOM finiva sopra la griglia marche.
   if (!ricambi) document.getElementById('ricambiPanel').classList.add('d-none');
   if (ricambi || prev === 'ricambi') { rcData = null; currentResults = []; hideResults(); }   // ingresso/uscita ricambi → pulizia piena
-  if (prev === 'catalogo' && !catalogo) catChiudi();
-  if (prev === 'richiami' && !richiami) rcaChiudi();
-  if (catalogo) { hideResults(); catApri(); return; }
-  if (richiami) { hideResults(); rcaApri(); return; }
+  if (AREE[prev] && prev !== searchMode) AREE[prev].chiudi();
+  if (area) { hideResults(); area.apri(); return; }
   // Ricambi ha i suoi campi (OEM) e nasconde i campi auto (marca/modello + tipo).
   document.getElementById('ricambiFields').classList.toggle('d-none', !ricambi);
   document.querySelector('.search-fields').classList.toggle('d-none', ricambi);
@@ -3471,7 +3481,7 @@ async function applyUrlParams() {
 function ripristinaModo() {
   let m = null, t = null;
   try { m = localStorage.getItem('amrModo'); t = localStorage.getItem('amrModoTipo'); } catch (_) {}
-  if (['catalogo', 'ricambi', 'richiami'].includes(m)) return selectPrimary(m);
+  if (m === 'ricambi' || AREE[m]) return selectPrimary(m);
   if (m === 'cerca' && t === 'moto') return selectPrimary('moto');
 }
 
@@ -4161,6 +4171,257 @@ document.getElementById('richiamiPanel')?.addEventListener('input', e => {
   // Si riscrive SOLO il corpo, per non far perdere il fuoco alla casella mentre si scrive.
   const c = rcaEl()?.querySelector('.cat-corpo');
   if (c) c.innerHTML = rcaCorpo(); else rcaRender();
+});
+
+// ═══ FONTI — le banche dati aperte che non sono ne' catalogo ne' annunci ═══════
+// Quattro cose diverse, una scheda ciascuna, tenute insieme per poterle guardare e provare
+// nello stesso posto. Ognuna dichiara in cima COSA SA e COSA NON SA: sono fonti parziali, e
+// nasconderne i limiti le renderebbe inservibili proprio quando servono.
+const fnEl = () => document.getElementById('fontiPanel');
+let fnFonti = null;
+let fnFonte = null;
+let fnStato = 'mai';        // mai | carico | ok | ko
+let fnMotivo = '';
+let fnDati = {};            // per fonte: quello che ha risposto l'ultima richiesta
+let fnForm = {};            // per fonte: i campi del modulo, ricordati fra un giro e l'altro
+let fnGen = 0;
+let fnScarto = 0;
+
+async function fnChiedi(percorso) {
+  const mia = ++fnGen;
+  fnStato = 'carico'; fnRender();
+  try {
+    const d = await fetch(percorso).then(r => r.json());
+    if (mia !== fnGen) return null;
+    if (d && d.ok) { fnStato = 'ok'; return d; }
+    fnStato = 'ko'; fnMotivo = (d && d.motivo) || 'non disponibile';
+    if (d && d.bloccataFino && fnFonti) {
+      const f = fnFonti.find(x => x.id === fnFonte); if (f) f.bloccataFino = d.bloccataFino;
+    }
+  } catch (_) { if (mia !== fnGen) return null; fnStato = 'ko'; fnMotivo = 'richiesta non riuscita'; }
+  fnRender();
+  return null;
+}
+
+function fnChiudi() { const el = fnEl(); if (el) el.innerHTML = ''; }
+
+async function fnApri() {
+  if (fnFonti) return fnRender();
+  const d = await fnChiedi('/api/fonti');
+  if (!d) return;
+  fnFonti = d.fonti;
+  if (d.adesso) fnScarto = Date.now() - d.adesso;
+  fnFonte = fnFonte || (fnFonti[0] && fnFonti[0].id);
+  await fnCategorie();
+  fnRender();
+}
+
+/** L'elenco delle categorie del territorio: sta su disco, nessuna rete. */
+async function fnCategorie() {
+  if (fnDati.categorie) return;
+  try {
+    const d = await fetch('/api/fonti/territorio/categorie').then(r => r.json());
+    if (d && d.ok) fnDati.categorie = d;
+  } catch (_) { /* si mostra comunque il resto */ }
+}
+
+function fnVaiFonte(id) {
+  if (id === fnFonte) return;
+  fnFonte = id; fnGen++; fnStato = 'ok'; fnMotivo = '';
+  fnRender();
+}
+
+// ── Territorio ────────────────────────────────────────────────────────────────
+// Il conteggio NON parte da solo: sono tredici interrogazioni a Overpass in fila, e su tutta
+// Italia sono minuti. Le categorie si mostrano subito e si clicca quella che serve.
+async function fnTerritorioConta() {
+  const reg = (fnForm.territorio || {}).regione || '';
+  const d = await fnChiedi('/api/fonti/territorio/conta' + (reg ? '?regione=' + encodeURIComponent(reg) : ''));
+  if (d) { fnDati.territorio = { conteggi: d.conteggi, regione: d.regione, oggetti: null }; fnRender(); }
+}
+async function fnTerritorioOggetti(categoria) {
+  const reg = (fnForm.territorio || {}).regione || '';
+  const d = await fnChiedi('/api/fonti/territorio/oggetti?categoria=' + encodeURIComponent(categoria)
+    + (reg ? '&regione=' + encodeURIComponent(reg) : ''));
+  if (d) { fnDati.territorio = { ...(fnDati.territorio || {}), categoria, regione: d.regione, oggetti: d.oggetti, totale: d.totale }; fnRender(); }
+}
+
+// ── le altre tre: un modulo, una richiesta ────────────────────────────────────
+async function fnCerca(fonte) {
+  const f = fnForm[fonte] || {};
+  let url = null;
+  if (fonte === 'pneumatici') {
+    if (!f.misura && !f.marca) { fnStato = 'ko'; fnMotivo = 'serve almeno una misura (es. 205/55R16) o una marca'; return fnRender(); }
+    url = '/api/fonti/pneumatici/cerca?' + new URLSearchParams(Object.fromEntries(Object.entries(f).filter(([, v]) => v))).toString();
+  } else if (fonte === 'ricambiOe') {
+    if (!f.codice) { fnStato = 'ko'; fnMotivo = 'serve un codice originale, es. 1K0615301AA'; return fnRender(); }
+    url = '/api/fonti/ricambi-oe/cerca?codice=' + encodeURIComponent(f.codice);
+  } else if (fonte === 'cerchi') {
+    if (!f.marca || !f.modello || !f.anno) { fnStato = 'ko'; fnMotivo = 'servono marca, modello e anno'; return fnRender(); }
+    url = '/api/fonti/cerchi/calzate?' + new URLSearchParams({ marca: f.marca, modello: f.modello, anno: f.anno }).toString();
+  }
+  if (!url) return;
+  const d = await fnChiedi(url);
+  if (d) { fnDati[fonte] = d; fnRender(); }
+}
+
+// ── disegno ───────────────────────────────────────────────────────────────────
+const fnCampo = (fonte, nome, etichetta, val, largo) =>
+  `<label class="fn-campo${largo ? ' largo' : ''}"><span>${escapeHtml(etichetta)}</span>
+    <input type="text" data-fonte="${fonte}" data-campo="${nome}" value="${escapeHtml(val || '')}" placeholder="${escapeHtml(etichetta)}"></label>`;
+
+const fnTabella = (righe, colonne) => (!righe.length ? catVuoto('Nessun risultato.') : `<div class="fn-tab-wrap"><table class="fn-tab">
+  <thead><tr>${colonne.map(c => `<th>${escapeHtml(c[0])}</th>`).join('')}</tr></thead>
+  <tbody>${righe.map(r => `<tr>${colonne.map(c => `<td>${c[1](r)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+
+const fnVal = v => (v == null || v === '' ? '—' : escapeHtml(String(v)));
+
+function fnCorpoTerritorio() {
+  const d = fnDati.territorio || {};
+  const f = fnForm.territorio || {};
+  const testa = `<div class="fn-form">
+    ${fnCampo('territorio', 'regione', 'Regione (es. lombardia, vuoto = tutta Italia)', f.regione, true)}
+    <button type="button" class="fn-vai" data-azione="conta">Conta</button>
+  </div>`;
+  if (d.oggetti) {
+    const nome = d.categoria;
+    return testa + `<p class="fn-conta"><button type="button" class="rca-su">← categorie</button>
+      ${d.totale} oggetti in ${escapeHtml(d.regione || 'Italia')} — categoria ${escapeHtml(nome)}${d.totale > d.oggetti.length ? ` (mostrati i primi ${d.oggetti.length})` : ''}</p>`
+      + fnTabella(d.oggetti, [
+        ['Nome', r => fnVal(r.nome)],
+        ['Comune', r => fnVal(r.comune)],
+        ['Indirizzo', r => fnVal(r.indirizzo)],
+        ['Dati', r => Object.entries(r.dati).filter(([k]) => !/^addr:|^name$/.test(k))
+          .map(([k, v]) => `<em>${escapeHtml(k)}</em> ${escapeHtml(String(v)).slice(0, 40)}`).join('<br>') || '—'],
+        ['Mappa', r => (r.lat != null ? `<a href="https://www.openstreetmap.org/?mlat=${r.lat}&mlon=${r.lon}#map=18/${r.lat}/${r.lon}" target="_blank" rel="noopener noreferrer">apri ↗</a>` : '—')],
+      ]);
+  }
+  // Senza conteggio si mostrano comunque le categorie: cliccarne una e' UNA interrogazione,
+  // contarle tutte sono tredici. Il conteggio resta a richiesta.
+  const cat = (fnDati.categorie && fnDati.categorie.categorie) || [];
+  const voci = d.conteggi
+    ? Object.entries(d.conteggi).sort((a, b) => b[1] - a[1])
+    : cat.map(c => [c.id, null]);
+  const nomi = Object.fromEntries(cat.map(c => [c.id, c.nome]));
+  return testa + `<p class="fn-conta">${escapeHtml(d.regione || 'Tutta Italia')} — clicca una categoria per vedere gli oggetti${d.conteggi ? '' : ' · «Conta» dice quanti sono, ma interroga tutte e tredici le categorie'}</p>
+    <div class="rca-marche">${voci.map(([id, n]) =>
+    `<button type="button" class="rca-m" data-cat="${escapeHtml(id)}"${n === 0 ? ' disabled' : ''}>${escapeHtml(nomi[id] || id)}${n != null ? `<em>${n}</em>` : ''}</button>`).join('')}</div>`;
+}
+
+function fnCorpoPneumatici() {
+  const f = fnForm.pneumatici || {}, d = fnDati.pneumatici;
+  const testa = `<div class="fn-form">
+    ${fnCampo('pneumatici', 'misura', 'Misura — es. 205/55R16', f.misura)}
+    ${fnCampo('pneumatici', 'marca', 'Marca pneumatico', f.marca)}
+    ${fnCampo('pneumatici', 'classe', 'Classe (C1/C2/C3)', f.classe)}
+    <button type="button" class="fn-vai" data-azione="cerca">Cerca</button>
+  </div>`;
+  if (!d) return testa + catVuoto('Cerca per misura o per marca.');
+  return testa + `<p class="fn-conta">${d.totale} pneumatici trovati — mostrati ${d.presi}</p>`
+    + fnTabella(d.pneumatici, [
+      ['Marca', r => fnVal(r.marca)],
+      ['Modello', r => fnVal(r.modello)],
+      ['Misura', r => fnVal(r.misuraCompleta || r.misura)],
+      ['Efficienza', r => (r.classeEfficienza ? `<b class="fn-cl">${escapeHtml(r.classeEfficienza)}</b>` : '—')],
+      ['Bagnato', r => (r.classeBagnato ? `<b class="fn-cl">${escapeHtml(r.classeBagnato)}</b>` : '—')],
+      ['Rumore', r => (r.rumoreDb ? `${r.rumoreDb} dB <em>${escapeHtml(r.classeRumore || '')}</em>` : '—')],
+      ['Neve', r => (r.neve ? '❄︎' : '—')],
+      ['Ghiaccio', r => (r.ghiaccio ? '✻' : '—')],
+      ['Classe', r => fnVal(r.classe)],
+      ['Scheda', r => (r.scheda ? `<a href="${escapeHtml(r.scheda)}" target="_blank" rel="noopener noreferrer">↗</a>` : '—')],
+    ]);
+}
+
+function fnCorpoRicambi() {
+  const f = fnForm.ricambiOe || {}, d = fnDati.ricambiOe;
+  const testa = `<div class="fn-form">
+    ${fnCampo('ricambiOe', 'codice', 'Codice originale — es. 1K0615301AA', f.codice, true)}
+    <button type="button" class="fn-vai" data-azione="cerca">Cerca</button>
+  </div>`;
+  if (!d) return testa + catVuoto('Inserisci un codice originale per vedere tutti i suoi equivalenti.');
+  if (!d.articoli || !d.articoli.length) return testa + catVuoto('Nessun articolo con questo codice nel catalogo febi / SWAG / Blue Print.');
+  return testa + d.articoli.map(a => `<article class="rca-a">
+    <header><div class="rca-a-t">${escapeHtml(a.marchio || '')} ${escapeHtml(a.articolo || '')} · ${escapeHtml(a.descrizione || '')}</div>
+      ${a.lato ? `<span class="rca-lv">${escapeHtml(a.lato)}</span>` : ''}</header>
+    <div class="rca-n">${a.misure.map(m => `<div><span>${escapeHtml(m.nome)}</span><b>${escapeHtml(m.valore)}${m.unita ? ' ' + escapeHtml(m.unita) : ''}</b></div>`).join('')}</div>
+    <div class="rca-om"><span>Codici originali equivalenti — ${a.codiciNormalizzati.length} codici su ${a.costruttori.length} costruttori</span>
+      ${a.originali.map(g => `<div class="fn-oe"><em>${escapeHtml(g.costruttore || '')}</em> ${g.codici.map(c => `<code>${escapeHtml(c)}</code>`).join(' ')}</div>`).join('')}</div>
+    ${a.scheda ? `<footer><div class="rca-link"><a href="${escapeHtml(a.scheda)}" target="_blank" rel="noopener noreferrer">scheda articolo ↗</a></div></footer>` : ''}
+  </article>`).join('');
+}
+
+function fnCorpoCerchi() {
+  const f = fnForm.cerchi || {}, d = fnDati.cerchi;
+  const testa = `<div class="fn-form">
+    ${fnCampo('cerchi', 'marca', 'Marca — es. Fiat', f.marca)}
+    ${fnCampo('cerchi', 'modello', 'Modello — es. Panda', f.modello)}
+    ${fnCampo('cerchi', 'anno', 'Anno — es. 2020', f.anno)}
+    <button type="button" class="fn-vai" data-azione="cerca">Cerca</button>
+  </div>`;
+  if (!d) return testa + catVuoto('Inserisci marca, modello e anno.');
+  return testa + `<p class="fn-conta">${d.totale} calzate · misura in chiaro su ${d.conMisura}</p>
+    <p class="cat-fonte-nota">${escapeHtml(d.nota || '')}</p>`
+    + fnTabella(d.calzate, [
+      ['Pneumatico', r => (r.misura ? `${escapeHtml(r.misura)}${r.indiceCarico ? ' ' + r.indiceCarico : ''}${r.simboloVelocita || ''}` : '<em>non servita</em>')],
+      ['Carico', r => (r.caricoKg ? r.caricoKg + ' kg' : '—')],
+      ['Vel. max', r => (r.velocitaMaxKmh ? r.velocitaMaxKmh + ' km/h' : '—')],
+      ['Primo equip.', r => (r.primoEquipaggiamento ? 'sì' : '—')],
+      ['Cerchio', r => fnVal(r.cerchio)],
+      ['Offset', r => fnVal(r.offset)],
+      ['Peso', r => (r.pesoKg ? r.pesoKg + ' kg' : '—')],
+      ['Pressione ant./post.', r => (r.pressioneAntBar ? `<b>${r.pressioneAntBar}</b> / <b>${r.pressionePostBar}</b> bar` : '—')],
+    ]);
+}
+
+function fnCorpo() {
+  if (fnStato === 'carico') return '<div class="cat-vuoto">Carico…</div>';
+  if (fnStato === 'ko') return `<div class="cat-vuoto">${escapeHtml(fnMotivo)}</div>`;
+  if (fnFonte === 'territorio') return fnCorpoTerritorio();
+  if (fnFonte === 'pneumatici') return fnCorpoPneumatici();
+  if (fnFonte === 'ricambiOe') return fnCorpoRicambi();
+  if (fnFonte === 'cerchi') return fnCorpoCerchi();
+  return catVuoto('Scegli una fonte.');
+}
+
+function fnRender() {
+  const el = fnEl(); if (!el) return;
+  const f = (fnFonti || []).find(x => x.id === fnFonte);
+  const barra = (fnFonti || []).map(x => {
+    const pausa = catPausaMs(x.bloccataFino);
+    return `<button type="button" class="cat-fonte${x.id === fnFonte ? ' attiva' : ''}${pausa > 0 ? ' in-pausa' : ''}"`
+      + ` data-fonte="${escapeHtml(x.id)}"${pausa > 0 ? ' disabled' : ''} title="${escapeHtml(x.dettaglio || '')}">${escapeHtml(x.nome)}`
+      + (pausa > 0 ? `<em class="cat-pausa" data-fine="${x.bloccataFino}">in pausa ${catMmSs(pausa)}</em>` : '') + '</button>';
+  }).join('');
+  el.innerHTML = `<div class="cat-wrap">
+    <div class="cat-barra"><div class="cat-fonti">${barra}</div></div>
+    ${f ? `<div class="fn-sa"><p><b>Sa dire:</b> ${escapeHtml(f.sa)}</p><p><b>Non sa dire:</b> ${escapeHtml(f.nonSa)}</p></div>` : ''}
+    <div class="cat-corpo">${fnCorpo()}</div>
+    ${f ? `<div class="cat-fonte-nota">${escapeHtml(f.dettaglio || '')}</div>` : ''}
+  </div>`;
+  catAvviaTicker();      // lo stesso conto alla rovescia del catalogo
+}
+
+document.getElementById('fontiPanel')?.addEventListener('click', e => {
+  const fo = e.target.closest('.cat-fonte');
+  if (fo && !fo.disabled) return void fnVaiFonte(fo.dataset.fonte);
+  const cat = e.target.closest('[data-cat]');
+  if (cat && !cat.disabled) return void fnTerritorioOggetti(cat.dataset.cat);
+  const su = e.target.closest('.rca-su');
+  if (su) { if (fnDati.territorio) fnDati.territorio.oggetti = null; return void fnRender(); }
+  const vai = e.target.closest('.fn-vai');
+  if (vai) return void (vai.dataset.azione === 'conta' ? fnTerritorioConta() : fnCerca(fnFonte));
+});
+document.getElementById('fontiPanel')?.addEventListener('input', e => {
+  const i = e.target.closest('input[data-campo]');
+  if (!i) return;
+  // Si scrive nello stato senza ridisegnare: un re-render a ogni tasto farebbe perdere il fuoco.
+  (fnForm[i.dataset.fonte] = fnForm[i.dataset.fonte] || {})[i.dataset.campo] = i.value;
+});
+document.getElementById('fontiPanel')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.closest('input[data-campo]')) {
+    e.preventDefault();
+    if (fnFonte === 'territorio') fnTerritorioConta(); else fnCerca(fnFonte);
+  }
 });
 
 // ─── Avvio ────────────────────────────────────────────────────────────────────

@@ -1279,3 +1279,29 @@ section.search.cat-attivo #searchForm { min-height: 0; }
    dalle omologazioni, che restano un aggancio di famiglia. */
 .rca-vin { margin-top: 6px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .rca-vin code { background: var(--surface); }
+
+/* ─── Area FONTI ─────────────────────────────────────────────────────────────
+   Ogni fonte dichiara in cima cosa sa e cosa non sa: sono banche dati parziali, e nasconderne
+   i limiti le renderebbe inservibili proprio quando servono. */
+.fn-sa { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
+.fn-sa p { margin: 0; font-size: 0.78rem; line-height: 1.55; color: var(--text-muted); }
+.fn-sa b { color: var(--text); }
+.fn-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+.fn-campo { display: flex; flex-direction: column; gap: 3px; flex: 1 1 190px; }
+.fn-campo.largo { flex: 1 1 340px; }
+.fn-campo span { font-size: 0.68rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+.fn-campo input { height: 32px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.86rem; padding: 0 10px; }
+.fn-vai { height: 32px; padding: 0 16px; border: 1px solid var(--accent); border-radius: var(--r); background: var(--accent); color: #fff; font: inherit; font-size: 0.86rem; font-weight: 600; cursor: pointer; }
+.fn-conta { margin: 0 0 10px; font-size: 0.76rem; color: var(--text-faint); font-family: var(--num); }
+.fn-conta .rca-su { margin-right: 8px; }
+.fn-tab-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); }
+.fn-tab { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.fn-tab th { position: sticky; top: 0; padding: 8px 10px; background: var(--surface-2); text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); white-space: nowrap; }
+.fn-tab td { padding: 7px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+.fn-tab td em { font-style: normal; color: var(--text-faint); font-size: 0.72rem; }
+.fn-tab tr:hover td { background: var(--surface-2); }
+/* La classe dell'etichetta europea: una lettera sola, va letta a colpo d'occhio. */
+.fn-cl { display: inline-block; min-width: 1.4em; padding: 1px 5px; border-radius: 3px; background: var(--surface-2); text-align: center; font-family: var(--num); }
+.fn-oe { margin-top: 5px; }
+.fn-oe em { display: inline-block; min-width: 8em; font-style: normal; color: var(--text-faint); font-size: 0.72rem; }
+@media (max-width: 640px) { .fn-sa { grid-template-columns: 1fr; } }

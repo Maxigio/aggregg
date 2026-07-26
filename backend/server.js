@@ -807,6 +807,9 @@ require('./catalogo-route').mount(app, { clientIp });
 // ─── Richiami di sicurezza (Safety Gate UE) — vedi richiami-route.js ───────────
 require('./richiami-route').mount(app, { clientIp });
 
+// ─── Fonti dati aperte (OSM, EPREL, bilstein, Wheel-Size) — vedi fonti-route.js ──
+require('./fonti-route').mount(app, { clientIp });
+
 // ─── Cache ricerche recenti (§17.4) ───────────────────────────────────────────
 // Stessa ricerca entro il TTL → risposta istantanea. NON cacha se una fonte è
 // error/needs_bootstrap (non congelare uno stato-bloccato) né i 0-risultati totali.
