@@ -254,12 +254,12 @@ function perImpianto(txtPrezzi, txtAnagrafica) {
     prezzi.set(id, v);
   }
 
+  // Si tengono TUTTI gli impianti attivi, anche quelli che oggi non hanno comunicato niente, con
+  // `prezzi: null`. Scartarli faceva perdere una distinzione che serve a chi incrocia per codice:
+  // "impianto attivo che oggi tace" e "codice che nell'anagrafica non c'e' piu'" sono due cose
+  // diverse, e chiamarle entrambe "non trovato" nasconde quale delle due e'.
   const fuori = {};
-  for (const [id, a] of ana) {
-    const p = prezzi.get(id);
-    if (!p) continue;                                    // impianto senza prezzi comunicati oggi
-    fuori[id] = { ...a, prezzi: p };
-  }
+  for (const [id, a] of ana) fuori[id] = { ...a, prezzi: prezzi.get(id) || null };
   return fuori;
 }
 
@@ -273,7 +273,7 @@ async function impianti() {
     try {
       const [p, i] = await Promise.all([scarica(URL_PREZZI), scarica(URL_IMPIANTI)]);
       const d = perImpianto(p, i);
-      if (!Object.keys(d).length) throw new Error('nessun impianto con prezzi');
+      if (!Object.values(d).some(x => x.prezzi)) throw new Error('nessun impianto con prezzi');
       impiantiMemo = { t: Date.now(), d };
       return d;
     } catch (e) {

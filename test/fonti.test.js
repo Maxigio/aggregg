@@ -126,6 +126,38 @@ test('OSM: l\'area si costruisce col codice ISO, non col nome', () => {
   assert.match(osm._areaDi('lombardia'), /IT-25/);
   assert.match(osm._areaDi(), /ISO3166-1"="IT"/);
   assert.match(osm._areaDi('inesistente'), /ISO3166-1"="IT"/, 'una regione ignota ricade sull\'Italia');
+  // La regione arriva da una query string: 'constructor' non deve entrare nel nome dell'area.
+  assert.match(osm._areaDi('constructor'), /ISO3166-1"="IT"/);
+});
+
+test('OSM: il conteggio su tutta Italia si rifiuta, e dice perche\'', async () => {
+  // Sono tredici interrogazioni da ~31 s l'una su una macchina donata: piu' del nostro timeout e
+  // piu' di quanto sia decente chiedere. E' anche la causa misurata dei 504 che arrivavano.
+  await assert.rejects(() => osm.conta(null), /tutta Italia|regione/);
+  await assert.rejects(() => osm.conta('atlantide'), /regione sconosciuta/);
+  await assert.rejects(() => osm.conta('constructor'), /regione sconosciuta/);
+  const { corpo } = await chiama('/api/fonti/territorio/conta');
+  assert.strictEqual(corpo.ok, false);
+  assert.match(corpo.motivo, /scegli una regione/);
+});
+
+test('OSM: quanto aspettare dopo un blocco lo dice l\'istanza, non lo decidiamo noi', () => {
+  // Risposta vera di /api/status. Dicevamo "pausa 30 min" mentre l'istanza diceva 22 secondi.
+  const occupato = osm._leggiStato([
+    'Connected as: 2535763548',
+    'Rate limit: 2',
+    '0 slots available now.',
+    'Slot available after: 2026-07-26T05:48:03Z, in 22 seconds.',
+    'Slot available after: 2026-07-26T05:49:10Z, in 89 seconds.',
+  ].join('\n'));
+  assert.strictEqual(occupato.limite, 2);
+  assert.strictEqual(occupato.slotLiberi, 0);
+  assert.strictEqual(occupato.fraSecondi, 22, 'vale la PRIMA che si libera, non l\'ultima');
+  const libero = osm._leggiStato('Rate limit: 2\n2 slots available now.\n');
+  assert.strictEqual(libero.slotLiberi, 2);
+  assert.strictEqual(libero.fraSecondi, 0);
+  // Se lo stato non risponde o cambia forma non si inventa un numero: si dice che non si sa.
+  assert.deepStrictEqual(osm._leggiStato(''), { slotLiberi: null, fraSecondi: null, limite: null });
 });
 
 test('OSM: way e relation prendono la posizione da center', () => {

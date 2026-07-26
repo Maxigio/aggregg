@@ -4332,8 +4332,10 @@ const fnVal = v => (v == null || v === '' ? '—' : escapeHtml(String(v)));
  * casella in cui scriverla, e per riprovare bisognava cambiare fonte e tornare indietro.
  */
 const FN_FORM = {
+  // Il conteggio VUOLE una regione: su tutta Italia sono tredici interrogazioni da mezzo minuto
+  // l'una. Una categoria sola invece si puo' aprire anche su tutta Italia, ed e' una richiesta.
   territorio: f => `<div class="fn-form">
-    ${fnCampo('territorio', 'regione', 'Regione (es. lombardia, vuoto = tutta Italia)', f.regione, true)}
+    ${fnCampo('territorio', 'regione', 'Regione — es. lombardia (serve per il conteggio)', f.regione, true)}
     <button type="button" class="fn-vai" data-azione="conta">Conta</button>
   </div>`,
   pneumatici: f => `<div class="fn-form">
@@ -4366,8 +4368,19 @@ function fnCorpoTerritorio() {
   if (d.oggetti) {
     const nome = d.categoria;
     // Sui distributori si aggiunge la colonna dei PREZZI, che viene dal join col MIMIT.
+    // I tre modi in cui un distributore puo' NON avere un prezzo sono tre cose diverse, e vanno
+    // dette diverse. Misurato in Emilia-Romagna su 1.860: 239 senza codice, 734 con un codice che
+    // il ministero non elenca piu' fra gli impianti attivi, 67 attivi che oggi non hanno
+    // comunicato. Chiamarli tutti "codice assente" era falso su 801 righe.
+    const SENZA = {
+      senzaCodice: '<em>senza codice ministeriale su OSM</em>',
+      codiceScaduto: r => `<em>codice ${escapeHtml(r.codiceMise || '')} non piu\' fra gli impianti attivi</em>`,
+      senzaPrezziOggi: '<em>impianto attivo, oggi nessun prezzo comunicato</em>',
+    };
     const prezzi = r => {
-      if (!r.mimit) return '<em>codice ministeriale assente</em>';
+      const s = voceDi(SENZA, r.aggancio);
+      if (s) return typeof s === 'function' ? s(r) : s;
+      if (!r.mimit) return '<em>non agganciato</em>';
       const p = r.mimit.prezzi || {};
       // Il servito NON si mostra mai nudo al posto del self: costa 15-25 cent in piu' al litro, e
       // su GPL e metano e' il caso NORMALE, non l'eccezione — misurato sui 21.555 impianti MIMIT,
@@ -4398,7 +4411,7 @@ function fnCorpoTerritorio() {
     );
     return `<p class="fn-conta"><button type="button" class="rca-su">← categorie</button>
       ${d.totale} oggetti in ${escapeHtml(d.regione || 'Italia')} — categoria ${escapeHtml(nome)}${d.totale > d.oggetti.length ? ` (mostrati i primi ${d.oggetti.length})` : ''}
-      ${d.agganciati != null ? ` · <b>${d.agganciati}</b> agganciati ai prezzi MIMIT${d.sospetti ? ` · ${d.sospetti} con codice sospetto` : ''}` : ''}</p>`
+      ${d.agganciati != null ? ` · <b>${d.agganciati}</b> col prezzo di oggi${d.senzaPrezziOggi ? ` · ${d.senzaPrezziOggi} attivi ma muti oggi` : ''}${d.codiceScaduto ? ` · ${d.codiceScaduto} con codice non piu' attivo` : ''}${d.senzaCodice ? ` · ${d.senzaCodice} senza codice` : ''}${d.sospetti ? ` · ${d.sospetti} con codice sospetto` : ''}` : ''}</p>`
       + fnTabella(d.oggetti, colonne);
   }
   // Senza conteggio si mostrano comunque le categorie: cliccarne una e' UNA interrogazione,

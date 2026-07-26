@@ -54,32 +54,35 @@ async function conPrezzi(oggetti) {
   let mimit = null;
   try { mimit = await carburanti.impianti(); } catch (_) { mimit = null; }
   if (!mimit) return { oggetti, agganciati: 0, motivo: 'prezzi MIMIT non disponibili adesso' };
-  let agganciati = 0;
+  let agganciati = 0, senzaCodice = 0, senzaPrezziOggi = 0, codiceScaduto = 0;
   const fuori = oggetti.map(o => {
     // Il tag puo' portare piu' codici separati da ";" quando un punto mappa piu' impianti.
     const rif = (o.dati && o.dati['ref:mise']) || (o.altriTag && o.altriTag['ref:mise']);
     const id = String(rif || '').split(/[;,]/)[0].trim();
-    const m = id && mimit[id];
-    if (!m) return o;
-    agganciati++;
+    if (!id) { senzaCodice++; return { ...o, aggancio: 'senzaCodice' }; }
+    const m = Object.prototype.hasOwnProperty.call(mimit, id) ? mimit[id] : null;
+    // Tre esiti diversi, e vanno detti diversi. Misurato in Emilia-Romagna su 1.860 distributori:
+    // 239 senza codice, 820 col prezzo di oggi, 67 attivi che oggi non hanno comunicato, e 734
+    // con un codice che nell'anagrafica ministeriale degli impianti ATTIVI non c'e' piu' — OSM
+    // tiene il tag anche dopo che l'impianto ha chiuso. Chiamarli tutti "codice assente" era
+    // falso su 801 righe su 1.860.
+    if (!m) { codiceScaduto++; return { ...o, aggancio: 'codiceScaduto', codiceMise: id }; }
+    // Quanto distano i due punti: e' il controllo che il tag non punti altrove. Misurato in
+    // Emilia-Romagna su 820 agganci: mediana 5 metri, p90 17, e SOLO 3 oltre il chilometro —
+    // errori veri di OSM (un ref:mise digitato male porta il prezzo di un impianto a 30 km).
+    // Si marcano invece di mostrarli come se fossero giusti.
     const scartoM = distanzaM(o, m);
-    return {
-      ...o,
-      mimit: {
-        id: m.id, bandiera: m.bandiera, tipo: m.tipo, gestore: m.gestore,
-        comune: m.comune, provincia: m.provincia, indirizzo: m.indirizzo,
-        prezzi: m.prezzi,
-        // Quanto distano i due punti: e' il controllo che il tag non punti altrove.
-        scartoM,
-        // Misurato in Emilia-Romagna su 820 agganci: mediana 5 metri, p90 17, e SOLO 3 oltre il
-        // chilometro — che sono errori veri di OSM (un ref:mise digitato sbagliato porta il
-        // prezzo di un impianto a 30 km). Si marcano invece di mostrarli come se fossero giusti.
-        sospetto: scartoM != null && scartoM > 1000,
-      },
+    const scheda = {
+      id: m.id, bandiera: m.bandiera, tipo: m.tipo, gestore: m.gestore,
+      comune: m.comune, provincia: m.provincia, indirizzo: m.indirizzo,
+      prezzi: m.prezzi, scartoM, sospetto: scartoM != null && scartoM > 1000,
     };
+    if (!m.prezzi) { senzaPrezziOggi++; return { ...o, aggancio: 'senzaPrezziOggi', codiceMise: id, mimit: scheda }; }
+    agganciati++;
+    return { ...o, aggancio: 'prezzi', codiceMise: id, mimit: scheda };
   });
   const sospetti = fuori.filter(o => o.mimit && o.mimit.sospetto).length;
-  return { oggetti: fuori, agganciati, sospetti };
+  return { oggetti: fuori, agganciati, sospetti, senzaCodice, senzaPrezziOggi, codiceScaduto };
 }
 
 const FONTI = {
@@ -167,13 +170,15 @@ function mount(app, deps = {}) {
   via('/api/fonti/territorio/oggetti', 'territorio', async q => {
     if (!q.categoria) return { oggetti: [], motivo: 'categoria mancante' };
     const cat = String(q.categoria);
+    // `totale` e' quanti ne esistono, `oggetti` quanti se ne sono presi: il taglio lo fa gia'
+    // l'istanza, qui non si ritaglia niente e non si spaccia il tagliato per il totale.
     const v = await osm.oggetti(cat, q.regione ? String(q.regione) : null);
-    const base = { categoria: cat, regione: q.regione || null, totale: v.length };
+    const base = { categoria: cat, regione: q.regione || null, totale: v.totale, limite: v.limite };
     // Solo i distributori hanno un gemello nei prezzi MIMIT: sulle altre categorie il join
     // non esiste e non si finge che ci sia.
-    if (cat !== 'distributori') return { ...base, oggetti: v.slice(0, 3000) };
-    const j = await conPrezzi(v.slice(0, 3000));
-    return { ...base, oggetti: j.oggetti, agganciati: j.agganciati, sospetti: j.sospetti, ...(j.motivo ? { notaPrezzi: j.motivo } : {}) };
+    if (cat !== 'distributori') return { ...base, oggetti: v.oggetti };
+    const { oggetti: conP, motivo, ...conti } = await conPrezzi(v.oggetti);
+    return { ...base, oggetti: conP, ...conti, ...(motivo ? { notaPrezzi: motivo } : {}) };
   });
 
   // ─── Pneumatici ────────────────────────────────────────────────────────────
