@@ -4243,7 +4243,10 @@ async function fnTerritorioOggetti(categoria) {
   const reg = (fnForm.territorio || {}).regione || '';
   const d = await fnChiedi('/api/fonti/territorio/oggetti?categoria=' + encodeURIComponent(categoria)
     + (reg ? '&regione=' + encodeURIComponent(reg) : ''));
-  if (d) { fnDati.territorio = { ...(fnDati.territorio || {}), categoria, regione: d.regione, oggetti: d.oggetti, totale: d.totale }; fnRender(); }
+  // Si copiano TUTTI i campi della risposta, non un elenco a mano: e' la seconda volta che
+  // aggiungo un dato al server e mi dimentico di propagarlo qui (prima la regione, poi gli
+  // agganci ai prezzi), e a schermo spariva senza un errore.
+  if (d) { const { ok, ...resto } = d; fnDati.territorio = { ...(fnDati.territorio || {}), ...resto }; fnRender(); }
 }
 
 // ── le altre tre: un modulo, una richiesta ────────────────────────────────────
@@ -4285,16 +4288,31 @@ function fnCorpoTerritorio() {
   </div>`;
   if (d.oggetti) {
     const nome = d.categoria;
+    // Sui distributori si aggiunge la colonna dei PREZZI, che viene dal join col MIMIT.
+    const prezzi = r => {
+      if (!r.mimit) return '<em>codice ministeriale assente</em>';
+      const p = r.mimit.prezzi || {};
+      const riga = (k, e) => (p[k] ? `<div><em>${e}</em> <b>${p[k].self != null ? p[k].self.toFixed(3) : p[k].servito.toFixed(3)}</b>${p[k].self != null && p[k].servito != null ? ` <i>serv. ${p[k].servito.toFixed(3)}</i>` : ''}</div>` : '');
+      return (riga('benzina', 'benzina') + riga('gasolio', 'gasolio') + riga('gpl', 'GPL') + riga('metano', 'metano') || '—')
+        + (r.mimit.sospetto ? `<div class="fn-sospetto">codice a ${(r.mimit.scartoM / 1000).toFixed(1)} km: probabile errore di mappatura</div>` : '');
+    };
+    const colonne = [
+      ['Nome', r => fnVal(r.nome || (r.mimit && r.mimit.nome))],
+      ['Comune', r => fnVal(r.comune || (r.mimit && r.mimit.comune))],
+      ['Indirizzo', r => fnVal(r.indirizzo || (r.mimit && r.mimit.indirizzo))],
+    ];
+    if (nome === 'distributori') {
+      colonne.push(['Bandiera', r => fnVal(r.mimit && r.mimit.bandiera)], ['Prezzi di oggi €/l', prezzi]);
+    }
+    colonne.push(
+      ['Dati OSM', r => Object.entries(r.dati).filter(([k]) => !/^addr:|^name$/.test(k))
+        .map(([k, v]) => `<em>${escapeHtml(k)}</em> ${escapeHtml(String(v)).slice(0, 40)}`).join('<br>') || '—'],
+      ['Mappa', r => (r.lat != null ? `<a href="https://www.openstreetmap.org/?mlat=${r.lat}&mlon=${r.lon}#map=18/${r.lat}/${r.lon}" target="_blank" rel="noopener noreferrer">apri ↗</a>` : '—')],
+    );
     return testa + `<p class="fn-conta"><button type="button" class="rca-su">← categorie</button>
-      ${d.totale} oggetti in ${escapeHtml(d.regione || 'Italia')} — categoria ${escapeHtml(nome)}${d.totale > d.oggetti.length ? ` (mostrati i primi ${d.oggetti.length})` : ''}</p>`
-      + fnTabella(d.oggetti, [
-        ['Nome', r => fnVal(r.nome)],
-        ['Comune', r => fnVal(r.comune)],
-        ['Indirizzo', r => fnVal(r.indirizzo)],
-        ['Dati', r => Object.entries(r.dati).filter(([k]) => !/^addr:|^name$/.test(k))
-          .map(([k, v]) => `<em>${escapeHtml(k)}</em> ${escapeHtml(String(v)).slice(0, 40)}`).join('<br>') || '—'],
-        ['Mappa', r => (r.lat != null ? `<a href="https://www.openstreetmap.org/?mlat=${r.lat}&mlon=${r.lon}#map=18/${r.lat}/${r.lon}" target="_blank" rel="noopener noreferrer">apri ↗</a>` : '—')],
-      ]);
+      ${d.totale} oggetti in ${escapeHtml(d.regione || 'Italia')} — categoria ${escapeHtml(nome)}${d.totale > d.oggetti.length ? ` (mostrati i primi ${d.oggetti.length})` : ''}
+      ${d.agganciati != null ? ` · <b>${d.agganciati}</b> agganciati ai prezzi MIMIT${d.sospetti ? ` · ${d.sospetti} con codice sospetto` : ''}` : ''}</p>`
+      + fnTabella(d.oggetti, colonne);
   }
   // Senza conteggio si mostrano comunque le categorie: cliccarne una e' UNA interrogazione,
   // contarle tutte sono tredici. Il conteggio resta a richiesta.

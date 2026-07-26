@@ -22,12 +22,66 @@ const osm = require('./scrapers/osm-territorio');
 const eprel = require('./scrapers/eprel-pneumatici');
 const bilstein = require('./scrapers/bilstein-oe');
 const wheelsize = require('./scrapers/wheelsize');
+const carburanti = require('./carburanti');
+
+/**
+ * IL JOIN che tiene insieme due fonti che gia' avevamo separate.
+ *
+ * OpenStreetMap mappa i distributori col tag `ref:mise`, che e' l'idImpianto dell'anagrafica
+ * MIMIT — la stessa chiave dei prezzi che scarichiamo ogni dodici ore. Incrociandoli, alla
+ * posizione verificata sul posto, agli orari, al self service e ai carburanti disponibili di OSM
+ * si aggiunge il PREZZO REALE di oggi, self e servito, per ognuno dei quattro carburanti.
+ *
+ * Distanza fra il punto OSM e quello MIMIT, misurata: mediana 5 metri. Si calcola comunque e si
+ * espone: se un giorno diventasse grande, vorrebbe dire che il tag punta all'impianto sbagliato.
+ */
+const RAGGIO_TERRA_M = 6371000;
+function distanzaM(a, b) {
+  if (a.lat == null || a.lon == null || b.lat == null || b.lon == null) return null;
+  const r = x => (x * Math.PI) / 180;
+  const dLat = r(b.lat - a.lat), dLon = r(b.lon - a.lon);
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return Math.round(RAGGIO_TERRA_M * 2 * Math.asin(Math.sqrt(s)));
+}
+
+/** Aggiunge i prezzi MIMIT ai distributori OSM che portano `ref:mise`. */
+async function conPrezzi(oggetti) {
+  let mimit = null;
+  try { mimit = await carburanti.impianti(); } catch (_) { mimit = null; }
+  if (!mimit) return { oggetti, agganciati: 0, motivo: 'prezzi MIMIT non disponibili adesso' };
+  let agganciati = 0;
+  const fuori = oggetti.map(o => {
+    // Il tag puo' portare piu' codici separati da ";" quando un punto mappa piu' impianti.
+    const rif = (o.dati && o.dati['ref:mise']) || (o.altriTag && o.altriTag['ref:mise']);
+    const id = String(rif || '').split(/[;,]/)[0].trim();
+    const m = id && mimit[id];
+    if (!m) return o;
+    agganciati++;
+    const scartoM = distanzaM(o, m);
+    return {
+      ...o,
+      mimit: {
+        id: m.id, bandiera: m.bandiera, tipo: m.tipo, gestore: m.gestore,
+        comune: m.comune, provincia: m.provincia, indirizzo: m.indirizzo,
+        prezzi: m.prezzi,
+        // Quanto distano i due punti: e' il controllo che il tag non punti altrove.
+        scartoM,
+        // Misurato in Emilia-Romagna su 820 agganci: mediana 5 metri, p90 17, e SOLO 3 oltre il
+        // chilometro — che sono errori veri di OSM (un ref:mise digitato sbagliato porta il
+        // prezzo di un impianto a 30 km). Si marcano invece di mostrarli come se fossero giusti.
+        sospetto: scartoM != null && scartoM > 1000,
+      },
+    };
+  });
+  const sospetti = fuori.filter(o => o.mimit && o.mimit.sospetto).length;
+  return { oggetti: fuori, agganciati, sospetti };
+}
 
 const FONTI = {
   territorio: {
     nome: 'Territorio', dettaglio: 'concorrenti, officine, distributori e colonnine — OpenStreetMap',
     scraper: osm,
-    sa: 'Dove sono i concessionari che vendono usato nella tua zona, le officine, i gommisti, i distributori e le colonnine.',
+    sa: 'Dove sono i concessionari che vendono usato nella tua zona, le officine, i gommisti, i distributori e le colonnine. Sui distributori aggiunge il PREZZO di oggi incrociando il codice ministeriale con i dati MIMIT.',
     nonSa: 'OSM e\' compilato da volontari: la copertura e\' ottima nelle citta\' e piu\' rada altrove, e un negozio chiuso puo\' restare mappato.',
   },
   pneumatici: {
@@ -98,8 +152,14 @@ function mount(app, deps = {}) {
   via('/api/fonti/territorio/conta', 'territorio', q => osm.conta(q.regione || null).then(c => ({ regione: q.regione || null, conteggi: c })));
   via('/api/fonti/territorio/oggetti', 'territorio', async q => {
     if (!q.categoria) return { oggetti: [], motivo: 'categoria mancante' };
-    const v = await osm.oggetti(String(q.categoria), q.regione ? String(q.regione) : null);
-    return { categoria: q.categoria, regione: q.regione || null, totale: v.length, oggetti: v.slice(0, 3000) };
+    const cat = String(q.categoria);
+    const v = await osm.oggetti(cat, q.regione ? String(q.regione) : null);
+    const base = { categoria: cat, regione: q.regione || null, totale: v.length };
+    // Solo i distributori hanno un gemello nei prezzi MIMIT: sulle altre categorie il join
+    // non esiste e non si finge che ci sia.
+    if (cat !== 'distributori') return { ...base, oggetti: v.slice(0, 3000) };
+    const j = await conPrezzi(v.slice(0, 3000));
+    return { ...base, oggetti: j.oggetti, agganciati: j.agganciati, sospetti: j.sospetti, ...(j.motivo ? { notaPrezzi: j.motivo } : {}) };
   });
 
   // ─── Pneumatici ────────────────────────────────────────────────────────────

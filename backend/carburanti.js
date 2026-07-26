@@ -71,16 +71,43 @@ function scarica(url, redirects = 0) {
 
 const righe = txt => String(txt || '').split('\n').slice(2).filter(Boolean);   // salta "Estrazione del…" + intestazione
 
-// anagrafica → Map(idImpianto → sigla provincia). Scarta le righe con Provincia sporca.
-function parseImpianti(txt) {
+/**
+ * Anagrafica completa → Map(idImpianto → { provincia, gestore, bandiera, tipo, nome, indirizzo,
+ * comune, lat, lon }). Le dieci colonne sono quelle vere del file, verificate il 2026-07-26:
+ *   idImpianto|Gestore|Bandiera|Tipo Impianto|Nome Impianto|Indirizzo|Comune|Provincia|Lat|Lon
+ * Le righe con Provincia sporca (~0,4%, un nome di comune invece della sigla) restano ma con
+ * provincia null: servono lo stesso a chi cerca per idImpianto, e scartarle qui le farebbe
+ * sparire anche dal join con OpenStreetMap.
+ */
+function parseAnagrafica(txt) {
   const out = new Map();
   for (const r of righe(txt)) {
     const c = r.split('|');
     if (c.length < 8) continue;
     const id = c[0].trim();
+    if (!id) continue;
     const pv = (c[7] || '').trim().toUpperCase();
-    if (id && /^[A-Z]{2}$/.test(pv)) out.set(id, pv);
+    const n = v => { const x = parseFloat(v); return Number.isFinite(x) ? x : null; };
+    out.set(id, {
+      id,
+      provincia: /^[A-Z]{2}$/.test(pv) ? pv : null,
+      gestore: (c[1] || '').trim() || null,
+      bandiera: (c[2] || '').trim() || null,
+      tipo: (c[3] || '').trim() || null,
+      nome: (c[4] || '').trim() || null,
+      indirizzo: (c[5] || '').trim().replace(/\s+/g, ' ') || null,
+      comune: (c[6] || '').trim() || null,
+      lat: n(c[8]), lon: n(c[9]),
+    });
   }
+  return out;
+}
+
+// anagrafica → Map(idImpianto → sigla provincia). Scarta le righe con Provincia sporca.
+// Derivata da parseAnagrafica per non avere due parser della stessa riga che divergono.
+function parseImpianti(txt) {
+  const out = new Map();
+  for (const [id, v] of parseAnagrafica(txt)) if (v.provincia) out.set(id, v.provincia);
   return out;
 }
 
@@ -192,4 +219,72 @@ function consumoDa(valore) {
   return +(v.reduce((a, b) => a + b, 0) / v.length).toFixed(2);
 }
 
-module.exports = { indice, costruisciIndice, parseImpianti, famigliaDa, consumoDa, FAMIGLIE, FONTE, _scarica: scarica };
+/**
+ * PREZZI PER SINGOLO IMPIANTO, che l'indice per provincia butta via aggregando.
+ *
+ * Serve per una cosa sola ma che vale: OpenStreetMap mappa 20.030 distributori italiani col tag
+ * `ref:mise`, che e' esattamente questo idImpianto. Incrociandoli, alla posizione verificata sul
+ * posto, agli orari e ai carburanti disponibili di OSM si aggiunge il PREZZO REALE di oggi.
+ *
+ * Non passa da costruisciIndice: quello aggrega e va bene com'e', e riscriverlo per farlo fare
+ * due cose diverse lo renderebbe piu' fragile senza motivo.
+ */
+function perImpianto(txtPrezzi, txtAnagrafica) {
+  const ana = parseAnagrafica(txtAnagrafica);
+  const nome2fam = {};
+  for (const [fam, etichetta] of Object.entries(FAMIGLIE)) nome2fam[etichetta.toLowerCase()] = fam;
+
+  const prezzi = new Map();          // id → famiglia → { self, servito }
+  for (const r of righe(txtPrezzi)) {
+    const c = r.split('|');
+    if (c.length < 4) continue;
+    const fam = nome2fam[(c[1] || '').trim().toLowerCase()];
+    if (!fam) continue;                                  // premium fuori, come nell'aggregato
+    const p = parseFloat(c[2]);
+    if (!isFinite(p) || p <= 0 || p > 10) continue;
+    const id = c[0].trim();
+    if (!id) continue;
+    const self = String(c[3]).trim() === '1';
+    const v = prezzi.get(id) || {};
+    v[fam] = v[fam] || {};
+    // Un impianto puo' avere piu' righe per la stessa famiglia (self e servito): si tengono
+    // separate invece di fonderle, perche' la differenza fra le due e' reale e visibile.
+    const chiave = self ? 'self' : 'servito';
+    if (v[fam][chiave] == null || p < v[fam][chiave]) v[fam][chiave] = +p.toFixed(3);
+    prezzi.set(id, v);
+  }
+
+  const fuori = {};
+  for (const [id, a] of ana) {
+    const p = prezzi.get(id);
+    if (!p) continue;                                    // impianto senza prezzi comunicati oggi
+    fuori[id] = { ...a, prezzi: p };
+  }
+  return fuori;
+}
+
+/** Prezzi per impianto, con la stessa cache e lo stesso ripiego di indice(). */
+let impiantiMemo = null;
+let impiantiVolo = null;
+async function impianti() {
+  if (impiantiMemo && Date.now() - impiantiMemo.t < TTL_MS) return impiantiMemo.d;
+  if (impiantiVolo) return impiantiVolo;
+  impiantiVolo = (async () => {
+    try {
+      const [p, i] = await Promise.all([scarica(URL_PREZZI), scarica(URL_IMPIANTI)]);
+      const d = perImpianto(p, i);
+      if (!Object.keys(d).length) throw new Error('nessun impianto con prezzi');
+      impiantiMemo = { t: Date.now(), d };
+      return d;
+    } catch (e) {
+      console.warn('[carburanti] impianti KO:', e.message);
+      return impiantiMemo ? impiantiMemo.d : null;       // meglio i prezzi di ieri che nessuno
+    } finally { impiantiVolo = null; }
+  })();
+  return impiantiVolo;
+}
+
+module.exports = {
+  indice, costruisciIndice, parseImpianti, parseAnagrafica, perImpianto, impianti,
+  famigliaDa, consumoDa, FAMIGLIE, FONTE, _scarica: scarica,
+};

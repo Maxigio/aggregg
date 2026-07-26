@@ -1305,3 +1305,8 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .fn-oe { margin-top: 5px; }
 .fn-oe em { display: inline-block; min-width: 8em; font-style: normal; color: var(--text-faint); font-size: 0.72rem; }
 @media (max-width: 640px) { .fn-sa { grid-template-columns: 1fr; } }
+/* Prezzi carburante nel territorio: self in evidenza, servito accanto, e il codice sbagliato
+   marcato invece di far passare per buono un prezzo preso a chilometri di distanza. */
+.fn-tab td b { font-family: var(--num); }
+.fn-tab td i { font-style: normal; font-size: 0.7rem; color: var(--text-faint); font-family: var(--num); }
+.fn-sospetto { margin-top: 4px; padding: 2px 6px; border-radius: 3px; background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); font-size: 0.68rem; }
