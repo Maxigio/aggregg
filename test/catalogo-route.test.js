@@ -42,25 +42,57 @@ async function chiama(percorso, query = {}, ip = 'test') {
   return { stato: res._stato, headers: res._hdr, corpo: out };
 }
 
-test('sono montate tutte e sei le route del catalogo', () => {
+test('sono montate tutte e otto le route del catalogo', () => {
   for (const p of ['/api/catalogo/fonti', '/api/catalogo/marche', '/api/catalogo/rilevamenti',
-    '/api/catalogo/modelli', '/api/catalogo/versioni', '/api/catalogo/allestimento']) {
+    '/api/catalogo/modelli', '/api/catalogo/versioni', '/api/catalogo/allestimento',
+    '/api/catalogo/prove', '/api/catalogo/prova']) {
     assert.ok(rotte[p], 'manca ' + p);
   }
 });
 
-test('fonti: quattro cataloghi, e con Motornet spento solo il listino e\' indisponibile', async () => {
+test('fonti: cinque cataloghi, e con Motornet spento solo il listino e\' indisponibile', async () => {
   const { corpo } = await chiama('/api/catalogo/fonti');
   assert.strictEqual(corpo.ok, true);
   const per = Object.fromEntries(corpo.fonti.map(f => [f.id, f]));
-  assert.deepStrictEqual(Object.keys(per), ['nuovo', 'auto', 'moto', 'rilevamenti']);
+  assert.deepStrictEqual(Object.keys(per), ['nuovo', 'auto', 'moto', 'rilevamenti', 'prove']);
   assert.strictEqual(per.nuovo.disponibile, false, 'il listino dipende da AMR_MOTORNET');
   assert.strictEqual(per.auto.disponibile, true);
   assert.strictEqual(per.moto.disponibile, true);
-  // I rilevamenti NON passano dall'interruttore: auto.it non ha robots.txt e la fonte e' libera.
+  // Rilevamenti e prove NON passano dall'interruttore: auto.it e insella.it non vietano quelle
+  // pagine, quindi non hanno bisogno di un consenso esplicito come il webservice Motornet.
   assert.strictEqual(per.rilevamenti.disponibile, true);
+  assert.strictEqual(per.prove.disponibile, true);
+  assert.strictEqual(per.prove.tipo, 'moto', 'le prove inSella stanno nel mondo moto');
   assert.strictEqual(per.auto.marche, Object.keys(AUTODATA.brands).length);
   assert.strictEqual(per.moto.marche, Object.keys(ULTIMATE.brands).length);
+});
+
+test('spegnibile: solo il listino porta il flag, e regge le fonti sconosciute', async () => {
+  // Prima questa regola era ripetuta a mano come "!== 'rilevamenti'" in due punti diversi, e
+  // ogni fonte nuova ne aggiungeva un caso speciale a entrambi. Ora sta in FONTI.
+  const { corpo } = await chiama('/api/catalogo/fonti');
+  const spegnibili = corpo.fonti.filter(f => f.spegnibile).map(f => f.id);
+  assert.deepStrictEqual(spegnibili, ['nuovo']);
+  // Una fonte inventata deve comportarsi come il listino: spenta, non aperta.
+  const ignota = await chiama('/api/catalogo/marche', { fonte: 'inventata' });
+  assert.strictEqual(ignota.corpo.spento, true);
+});
+
+test('prove moto: senza marca risponde col motivo e NON si spegne con Motornet', async () => {
+  // Stessa difesa dei rilevamenti: senza il terzo argomento 'prove' la route ricadrebbe sul
+  // listino e risponderebbe spenta, facendo sparire la quinta fonte dalla UI.
+  const { corpo } = await chiama('/api/catalogo/prove', {});
+  assert.strictEqual(corpo.spento, undefined);
+  assert.strictEqual(corpo.ok, true);
+  assert.deepStrictEqual(corpo.prove, []);
+  assert.strictEqual(corpo.motivo, 'marca mancante');
+});
+
+test('scheda prova: senza slug risponde col motivo, senza toccare la rete', async () => {
+  const { corpo } = await chiama('/api/catalogo/prova', {});
+  assert.strictEqual(corpo.spento, undefined);
+  assert.strictEqual(corpo.ok, true);
+  assert.strictEqual(corpo.motivo, 'prova mancante');
 });
 
 // ─── Il buco documentato, finalmente fissato ─────────────────────────────────

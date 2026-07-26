@@ -1,0 +1,1908 @@
+{
+ "generatedAt": "2026-07-26T03:04:22.422Z",
+ "fonte": {
+  "nome": "inSella — prove e rilevamenti della redazione",
+  "url": "https://www.insella.it/prova/"
+ },
+ "categorie": [
+  "crossover",
+  "custom",
+  "enduro",
+  "motard",
+  "naked",
+  "scooter",
+  "scrambler",
+  "sportive",
+  "stradali",
+  "trial"
+ ],
+ "marche": [
+  {
+   "acronimo": "adiva",
+   "nome": "Adiva",
+   "logo": null,
+   "prove": 1
+  },
+  {
+   "acronimo": "aprilia",
+   "nome": "Aprilia",
+   "logo": null,
+   "prove": 9
+  },
+  {
+   "acronimo": "benelli",
+   "nome": "Benelli",
+   "logo": null,
+   "prove": 14
+  },
+  {
+   "acronimo": "bimota",
+   "nome": "Bimota",
+   "logo": null,
+   "prove": 1
+  },
+  {
+   "acronimo": "bmw",
+   "nome": "BMW",
+   "logo": null,
+   "prove": 33
+  },
+  {
+   "acronimo": "brixton",
+   "nome": "Brixton",
+   "logo": null,
+   "prove": 1
+  },
+  {
+   "acronimo": "cagiva",
+   "nome": "Cagiva",
+   "logo": null,
+   "prove": 1
+  },
+  {
+   "acronimo": "cfmoto",
+   "nome": "CFMoto",
+   "logo": null,
+   "prove": 4
+  },
+  {
+   "acronimo": "ducati",
+   "nome": "Ducati",
+   "logo": null,
+   "prove": 22
+  },
+  {
+   "acronimo": "energica",
+   "nome": "Energica",
+   "logo": null,
+   "prove": 1
+  },
+  {
+   "acronimo": "fantic-motor",
+   "nome": "Fantic Motor",
+   "logo": null,
+   "prove": 2
+  },
+  {
+   "acronimo": "harley-davidson",
+   "nome": "Harley-Davidson",
+   "logo": null,
+   "prove": 8
+  },
+  {
+   "acronimo": "honda",
+   "nome": "Honda",
+   "logo": null,
+   "prove": 47
+  },
+  {
+   "acronimo": "husqvarna",
+   "nome": "Husqvarna",
+   "logo": null,
+   "prove": 2
+  },
+  {
+   "acronimo": "kawasaki",
+   "nome": "Kawasaki",
+   "logo": null,
+   "prove": 21
+  },
+  {
+   "acronimo": "keeway",
+   "nome": "Keeway",
+   "logo": null,
+   "prove": 1
+  },
+  {
+   "acronimo": "kl",
+   "nome": "KL",
+   "logo": null,
+   "prove": 1
+  },
+  {
+   "acronimo": "kove",
+   "nome": "Kove",
+   "logo": null,
+   "prove": 1
+  },
+  {
+   "acronimo": "ktm",
+   "nome": "KTM",
+   "logo": null,
+   "prove": 11
+  },
+  {
+   "acronimo": "kymco",
+   "nome": "Kymco",
+   "logo": null,
+   "prove": 7
+  },
+  {
+   "acronimo": "lambretta",
+   "nome": "Lambretta",
+   "logo": null,
+   "prove": 1
+  },
+  {
+   "acronimo": "lml",
+   "nome": "LML",
+   "logo": null,
+   "prove": 1
+  },
+  {
+   "acronimo": "mash",
+   "nome": "Mash",
+   "logo": null,
+   "prove": 1
+  },
+  {
+   "acronimo": "me",
+   "nome": "Me",
+   "logo": null,
+   "prove": 1
+  },
+  {
+   "acronimo": "mondial",
+   "nome": "Mondial",
+   "logo": null,
+   "prove": 2
+  },
+  {
+   "acronimo": "moto-guzzi",
+   "nome": "Moto Guzzi",
+   "logo": null,
+   "prove": 10
+  },
+  {
+   "acronimo": "moto-morini",
+   "nome": "Moto Morini",
+   "logo": null,
+   "prove": 4
+  },
+  {
+   "acronimo": "mv-agusta",
+   "nome": "MV Agusta",
+   "logo": null,
+   "prove": 4
+  },
+  {
+   "acronimo": "piaggio",
+   "nome": "Piaggio",
+   "logo": null,
+   "prove": 8
+  },
+  {
+   "acronimo": "qj-motor",
+   "nome": "QJ Motor",
+   "logo": null,
+   "prove": 4
+  },
+  {
+   "acronimo": "rieju",
+   "nome": "Rieju",
+   "logo": null,
+   "prove": 2
+  },
+  {
+   "acronimo": "royal-enfield",
+   "nome": "Royal Enfield",
+   "logo": null,
+   "prove": 7
+  },
+  {
+   "acronimo": "suzuki",
+   "nome": "Suzuki",
+   "logo": null,
+   "prove": 24
+  },
+  {
+   "acronimo": "swm",
+   "nome": "SWM",
+   "logo": null,
+   "prove": 1
+  },
+  {
+   "acronimo": "sym",
+   "nome": "Sym",
+   "logo": null,
+   "prove": 11
+  },
+  {
+   "acronimo": "triumph",
+   "nome": "Triumph",
+   "logo": null,
+   "prove": 11
+  },
+  {
+   "acronimo": "vespa",
+   "nome": "Vespa",
+   "logo": null,
+   "prove": 5
+  },
+  {
+   "acronimo": "voge",
+   "nome": "Voge",
+   "logo": null,
+   "prove": 6
+  },
+  {
+   "acronimo": "wottan-motor",
+   "nome": "Wottan Motor",
+   "logo": null,
+   "prove": 1
+  },
+  {
+   "acronimo": "yamaha",
+   "nome": "Yamaha",
+   "logo": null,
+   "prove": 30
+  }
+ ],
+ "prove": [
+  {
+   "slug": "ducati-multistrada-v2-2025",
+   "titolo": "Ducati Multistrada V2 S Travel: divertente sempre",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "moto-morini-x-cape-2025",
+   "titolo": "Moto Morini X-Cape 700: facile e bella perché l'anima è italiana",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "qj-motor-srt-600-sx-2025",
+   "titolo": "QJ Motor SRT 600 SX: ci vai dove vuoi e il portafoglio ringrazia",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "voge-valico-525-dsx-2024",
+   "titolo": "Voge Valico 525 DSX: una vera tuttofare che costa poco",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "bmw-f-800-gs-2025",
+   "titolo": "BMW F800 GS: una crossover facile e ben fatta",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "morbidelli-t1002vx",
+   "titolo": "Prova completa Morbidelli T1002VX: ecco quanto fa e come va",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "moto-guzzi-v85-tt-strada-2024",
+   "titolo": "Prova Moto Guzzi V85 Strada: pratica e divertente",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "suzuki-v-strom-800-se-2024-0",
+   "titolo": "Prova Suzuki V-Strom 800SE: tuttofare per andare dappertutto",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "yamaha-tracer-7-2023",
+   "titolo": "Prova Yamaha Tracer 7 GT: ci fai quello che vuoi",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "bmw-s-1000-xr-2024",
+   "titolo": "Prova BMW S 1000 XR: per viaggiare veloci e divertirsi",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "suzuki-v-strom-800-se-2024",
+   "titolo": "Prova completa - Suzuki V-Strom 800SE: la crossover pronta a tutto",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "yamaha-tracer-7-gt-2024",
+   "titolo": "Yamaha Tracer 7 GT: una tuttofare intelligente",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "royal-enfield-himalayan-450-2024",
+   "titolo": "Prova Royal Enfield Himalayan 450, va bene e costa poco",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "qj-motor-srt-800-sx-2024",
+   "titolo": "QJ Motor SRT 800 SX: cinese ricca ma non nel prezzo",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "voge-valico-900-900dsx-2024",
+   "titolo": "Voge Valico 900DSX: la prova completa!",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "cfmoto-450mt-2024",
+   "titolo": "CFMoto 450MT: la crossover costa poco",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "suzuki-v-strom-1050-se-2023",
+   "titolo": "Suzuki V-Strom 1050 SE, crossover di sostanza",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "benelli-trk-502-x-2021",
+   "titolo": "Prova Benelli TRK 502 X: crossover comoda e ben fatta",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "honda-transalp-xl-750-2023",
+   "titolo": "Prova Honda Transalp 750, tuttofare di alta qualità",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "aprilia-tuareg-660-2023",
+   "titolo": "Aprilia Tuareg: l'endurona tecnologica",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "suzuki-v-strom-800-de-2023",
+   "titolo": "Suzuki V-Strom 800DE: la prova completa di rilevamenti",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "ducati-multistrada-v2-s-travel-2022",
+   "titolo": "Prova Ducati Multistrada V2S Traveller: meglio delle \"grandi\"",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "suzuki-v-strom-1050-de-2023",
+   "titolo": "Suzuki V-Strom 1050 DE: viaggiatrice avventurosa",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "bmw-r-1300-gs-2024",
+   "titolo": "BMW R 1300 GS, regine si nasce",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "benelli-trk-702-x-2023",
+   "titolo": "Benelli TRK 702 X, la prova della verità",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "yamaha-tenere-700-2023",
+   "titolo": "Yamaha Ténéré 700: regina di \"fuori\"",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "ducati-multistrada-v2-s-2022",
+   "titolo": "Ducati Multistrada V2S Traveller: è bello viaggiare in desmo",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "triumph-tiger-900-gt-pro-2022",
+   "titolo": "Triumph Tiger 900 GT Pro: grande senza esagerare",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "triumph-tiger-1200-rally-explorer-2023",
+   "titolo": "Triumph Tiger 1200 Rally Explorer: tanta voglia di avventura",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "bmw-r-1250-gs-adventure-2023",
+   "titolo": "BMW R 1250 GS Adventure: la regina dei viaggi",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "aprilia-tuareg-660-2022",
+   "titolo": "Aprilia Tuareg: tante qualità",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "yamaha-tenere-700-2022",
+   "titolo": "Yamaha Ténéré 700: adventouring per tutti",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "bmw-f-900-xr-2022",
+   "titolo": "BMW F 900 XR: per viaggiare e per divertirsi",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "yamaha-tracer-9-2022",
+   "titolo": "Yamaha Tracer 9 GT: animo sportivo e tanta voglia di viaggiare",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "voge-valico-500ds-2021",
+   "titolo": "Voge VALICO 500 DS: la crossover alla portata di tutti",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "ducati-multistrada-v4-s-2021",
+   "titolo": "Multistrada V4S, la Ducati per andare dappertutto",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "ktm-390-adventure-2021",
+   "titolo": "KTM 390 Adventure, la crossover per iniziare a sognare in grande",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "moto-guzzi-v85-tt-travel-2020",
+   "titolo": "Moto Guzzi V85 TT: con la Travel Edition sale la voglia di viaggiare",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "ktm-890-adventure-2021",
+   "titolo": "KTM 890 Adventure: il giusto sta nel mezzo",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "honda-africa-twin-crf-1100-l-urban-2020",
+   "titolo": "Honda Africa Twin 1100 DCT Urban: dal deserto alla città",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "yamaha-tenere-700-2019",
+   "titolo": "Yamaha Ténéré 700 35 kW: la media enduro per iniziare a sognare il deserto",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "bmw-serie-s-s-1000-xr-2021",
+   "titolo": "BMW S 1000 XR: prestazioni da sportiva, comodità da maxi tourer",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "ducati-multistrada-1260-pikes-peak-2018",
+   "titolo": "Multistrada 1260 Pikes Peak: una Ducati per fare tutto",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "bmw-serie-f-gs-f-750-gs-2020",
+   "titolo": "BMW F 750 GS, la virtù sta nel mezzo",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "moto-guzzi-v85-tt-2019",
+   "titolo": "Moto Guzzi V85 TT, viaggiatrice “tuttofare”",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "bmw-serie-r-gs-r-1250-gs-adventure-exclusive-2019",
+   "titolo": "BMW R 1250 GS Exclusive, questo boxer è una bomba",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "ducati-multistrada-950-2017",
+   "titolo": "Ducati Multistrada 950, sempre \"multi\", ma più facile",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "benelli-trk-502-2017",
+   "titolo": "Benelli TRK 502, Crossover low cost",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "honda-nc-x-nc-750x-travel-edition-2016",
+   "titolo": "Honda NC 750 X, facile in città, comoda sempre",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "yamaha-tracer-700-2017",
+   "titolo": "Yamaha Tracer 700, com'è divertente questa tuttofare",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "kawasaki-versys-650-grand-tourer-2016",
+   "titolo": "Kawasaki Versys 650 GT, molto comoda e ben dotata",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "ktm-1050-adventure-2015",
+   "titolo": "KTM 1050 Adventure: la “piccola” costa meno e diverte di più",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "suzuki-v-strom-650-xt-2015",
+   "titolo": "Suzuki V-Strom 650 XT: vivace “tuttofare”",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "kawasaki-versys-1000-2015",
+   "titolo": "Kawasaki Versys 1000, potente, comoda e divertente",
+   "categoria": "crossover"
+  },
+  {
+   "slug": "harley-davidson-nightster-special-2024",
+   "titolo": "Harley-Davidson Nightster Special: ha stile e va bene",
+   "categoria": "custom"
+  },
+  {
+   "slug": "honda-cmx-1100-rebel-tour-dct-2025",
+   "titolo": "Prova Honda CMX 1100 Rebel, con il DCT è tutto più facile",
+   "categoria": "custom"
+  },
+  {
+   "slug": "kawasaki-vulcan-s-2023-0",
+   "titolo": "Kawasaki Vulcan S: una cruiser tuttofare",
+   "categoria": "custom"
+  },
+  {
+   "slug": "bmw-r-12-2024",
+   "titolo": "Prova completa BMW R12: una tedesca che ama divertirsi",
+   "categoria": "custom"
+  },
+  {
+   "slug": "royal-enfield-super-meteor-650-2023",
+   "titolo": "Royal Enfield Super Meteor: moto economica per viaggiare con stile",
+   "categoria": "custom"
+  },
+  {
+   "slug": "honda-cmx-500-rebel-2021",
+   "titolo": "Honda CMX 500 Rebel: la libertà costa poco",
+   "categoria": "custom"
+  },
+  {
+   "slug": "harley-davidson-nightster-2023",
+   "titolo": "Harley-Davidson Nightster, la regina della notte",
+   "categoria": "custom"
+  },
+  {
+   "slug": "bmw-r-18-classic-2021",
+   "titolo": "BMW R 18 Classic: la bavarese per chi non ama le mezze misure",
+   "categoria": "custom"
+  },
+  {
+   "slug": "harley-davidson-touring-electra-glide-revival-2021",
+   "titolo": "Harley-Davidson Electra Glide Revival: fascino senza tempo",
+   "categoria": "custom"
+  },
+  {
+   "slug": "bmw-r-18-2021",
+   "titolo": "BMW R18 First Edition: ritorno all'antico",
+   "categoria": "custom"
+  },
+  {
+   "slug": "benelli-502c-2020",
+   "titolo": "Benelli 502 C: una compagna facile e divertente",
+   "categoria": "custom"
+  },
+  {
+   "slug": "honda-cmx-500-rebel-2017",
+   "titolo": "Honda CMX 500 Rebel, ribelle molto educata",
+   "categoria": "custom"
+  },
+  {
+   "slug": "honda-nm4-vultus-dct-2014",
+   "titolo": "Honda NM4 Vultus, astronave da passeggio",
+   "categoria": "custom"
+  },
+  {
+   "slug": "moto-guzzi-audace-1400-2016",
+   "titolo": "Moto Guzzi Audace: tanti muscoli e tanto cervello",
+   "categoria": "custom"
+  },
+  {
+   "slug": "harley-davidson-dyna-low-rider-2015",
+   "titolo": "Tutte le altre la imitano",
+   "categoria": "custom"
+  },
+  {
+   "slug": "moto-guzzi-california-1400-touring-2013",
+   "titolo": "Comoda, “ricca” e bella da guidare",
+   "categoria": "custom"
+  },
+  {
+   "slug": "yamaha-xv-950r-2014",
+   "titolo": "È più “classica” che custom",
+   "categoria": "custom"
+  },
+  {
+   "slug": "honda-ctx-700-dct-2013",
+   "titolo": "Va bene la cruiser “antiscooter”",
+   "categoria": "custom"
+  },
+  {
+   "slug": "suzuki-intruder-c-1500-t-2011",
+   "titolo": "Viaggi comodo da single",
+   "categoria": "custom"
+  },
+  {
+   "slug": "honda-goldwing-f6b-2013",
+   "titolo": "Granturismo in salsa custom",
+   "categoria": "custom"
+  },
+  {
+   "slug": "harley-davidson-sportster-iron-883-2013",
+   "titolo": "Su misura per l'italia",
+   "categoria": "custom"
+  },
+  {
+   "slug": "harley-davidson-softail-blackline-2012",
+   "titolo": "Una bella base per giocare",
+   "categoria": "custom"
+  },
+  {
+   "slug": "yamaha-xvs-midnight-star-950a-2011",
+   "titolo": "Grande \"cruiser\" piccolo prezzo",
+   "categoria": "custom"
+  },
+  {
+   "slug": "kymco-venox-250i-2011",
+   "titolo": "Per cominciare da \"biker\"",
+   "categoria": "custom"
+  },
+  {
+   "slug": "moto-morini-alltrhike-high-equipped-2026",
+   "titolo": "Moto Morini Allthrike: facile ma efficace",
+   "categoria": "enduro"
+  },
+  {
+   "slug": "cfmoto-450mt-2026",
+   "titolo": "Prova completa CFmoto 450MT: la piccola tuttofare",
+   "categoria": "enduro"
+  },
+  {
+   "slug": "aprilia-tuareg-660-rally-2025",
+   "titolo": "Prova Aprilia Tuareg 660 Rally, la regina del deserto",
+   "categoria": "enduro"
+  },
+  {
+   "slug": "yamaha-tenere-700-rally-2025",
+   "titolo": "Prova Yamaha Ténéré 700 Rally, leggenda da usare tutti i giorni",
+   "categoria": "enduro"
+  },
+  {
+   "slug": "kove-800-rally-2025",
+   "titolo": "Prova Kove 800 X Rally, la cinese avventurosa",
+   "categoria": "enduro"
+  },
+  {
+   "slug": "bmw-serie-f-gs-f-850-gs-rallye-2020",
+   "titolo": "BMW F850 GS Rallye: equilibrata e brillante",
+   "categoria": "enduro"
+  },
+  {
+   "slug": "rieju-marathonmrt-marathon-125-pro-2011",
+   "titolo": "Una fuoristrada per imparare",
+   "categoria": "enduro"
+  },
+  {
+   "slug": "beta-motard-50-track-2012",
+   "titolo": "Motardina \"da corsa\"",
+   "categoria": "motard"
+  },
+  {
+   "slug": "ducati-hypermotard-2013",
+   "titolo": "Divertente più di una naked",
+   "categoria": "motard"
+  },
+  {
+   "slug": "aprilia-dorsoduro-750-factory-2011",
+   "titolo": "La motard per tutti i giorni",
+   "categoria": "motard"
+  },
+  {
+   "slug": "suzuki-dr-125-sm-2011",
+   "titolo": "La Suzukina va in città",
+   "categoria": "motard"
+  },
+  {
+   "slug": "beta-motard-125-lc-2011",
+   "titolo": "La qualità si paga",
+   "categoria": "motard"
+  },
+  {
+   "slug": "mondial-piega-452-2024",
+   "titolo": "Prova F.B. Mondial Piega 452, bella e divertente",
+   "categoria": "naked"
+  },
+  {
+   "slug": "royal-enfield-guerrilla-2025",
+   "titolo": "Prova Royal Enfield Guerrilla 450: single con allegria",
+   "categoria": "naked"
+  },
+  {
+   "slug": "aprilia-tuono-457-2025",
+   "titolo": "Prova Aprilia Tuono 457: la potenza è limitata, il divertimento no",
+   "categoria": "naked"
+  },
+  {
+   "slug": "royal-enfield-hntr-350-2025",
+   "titolo": "Royal Enfield HNTR 350: comoda e facile, anche nel prezzo",
+   "categoria": "naked"
+  },
+  {
+   "slug": "honda-gb350s-2025",
+   "titolo": "Honda GB 350S: fascino e qualità a un prezzo imbattibile",
+   "categoria": "naked"
+  },
+  {
+   "slug": "ktm-790-duke-2024",
+   "titolo": "KTM 790 Duke: il piacere alla portata di tutti",
+   "categoria": "naked"
+  },
+  {
+   "slug": "cfmoto-800nk-advanced-2024",
+   "titolo": "CFmoto 800 NK Advanced, cattiva e raffinata",
+   "categoria": "naked"
+  },
+  {
+   "slug": "kawasaki-z650-2023-0",
+   "titolo": "Prova Kawasaki Z 650: piccola e veloce",
+   "categoria": "naked"
+  },
+  {
+   "slug": "honda-hornet-750-2023",
+   "titolo": "Honda CB 750 Hornet: veloce e a buon prezzo",
+   "categoria": "naked"
+  },
+  {
+   "slug": "kawasaki-z900rs-se-2023",
+   "titolo": "Kawasaki Z 900 RS SE: elegante e divertente",
+   "categoria": "naked"
+  },
+  {
+   "slug": "suzuki-gsx-8s-2023",
+   "titolo": "Suzuki GSX-8S: potente e ben dotata",
+   "categoria": "naked"
+  },
+  {
+   "slug": "benelli-502-c-2022",
+   "titolo": "Benelli 502C: guida in relax, ma con brio",
+   "categoria": "naked"
+  },
+  {
+   "slug": "yamaha-xsr-700-xtribute-2022",
+   "titolo": "Yamaha XSR 700 XTribute: aspetto vintage, tecnologia moderna",
+   "categoria": "naked"
+  },
+  {
+   "slug": "moto-morini-seiemmezzo-str-2023",
+   "titolo": "Moto Morini Seiemmezzo STR: una fun bike alla portata di tutti",
+   "categoria": "naked"
+  },
+  {
+   "slug": "kawasaki-z650-2023",
+   "titolo": "Kawasaki Z 650 RS: un classico che non passa di moda",
+   "categoria": "naked"
+  },
+  {
+   "slug": "swm-six-500-2023",
+   "titolo": "SWM Six6 500: bella e divertente con un tocco vintage",
+   "categoria": "naked"
+  },
+  {
+   "slug": "cfmoto-700cl-x-sport-2021",
+   "titolo": "CFMoto 700 CL-X Sport: bella da vedere, divertente da guidare",
+   "categoria": "naked"
+  },
+  {
+   "slug": "benelli-leoncino-800-2022",
+   "titolo": "Benelli Leoncino 800: divertirsi con stile",
+   "categoria": "naked"
+  },
+  {
+   "slug": "bmw-r-ninet-2023",
+   "titolo": "BMW R nine T: elegante e divertente",
+   "categoria": "naked"
+  },
+  {
+   "slug": "voge-trofeo-500ac-2021",
+   "titolo": "Voge Trofeo 500 AC: una cinese che ha studiato bene",
+   "categoria": "naked"
+  },
+  {
+   "slug": "brixton-crossfire-500-500-x-2021",
+   "titolo": "Brixton Crossfire 500 X: bella, ben fatta e costa poco",
+   "categoria": "naked"
+  },
+  {
+   "slug": "ducati-streetfighter-v2-v2-2022",
+   "titolo": "Ducati Streetfighter V2: la regina delle curve",
+   "categoria": "naked"
+  },
+  {
+   "slug": "bmw-s-1000-r-2022",
+   "titolo": "BMW S 1000R: si mangia le curve",
+   "categoria": "naked"
+  },
+  {
+   "slug": "honda-cb-f-cb-500-f-2022",
+   "titolo": "Honda CB 500F, naked cattiva per diciottenni",
+   "categoria": "naked"
+  },
+  {
+   "slug": "yamaha-mt-07-2021",
+   "titolo": "Yamaha M7-07: divertimento senza troppe complicazioni",
+   "categoria": "naked"
+  },
+  {
+   "slug": "triumph-trident-660-2021",
+   "titolo": "Triumph Trident 660: piccola, bella e facile",
+   "categoria": "naked"
+  },
+  {
+   "slug": "suzuki-gsx-s-1000-2021",
+   "titolo": "Suzuki GSX-S 1000: è weekend tutti i giorni",
+   "categoria": "naked"
+  },
+  {
+   "slug": "honda-cb-1000-r-black-edition-2021",
+   "titolo": "Honda CB 1000 R Black Edition: il nero va su tutto",
+   "categoria": "naked"
+  },
+  {
+   "slug": "energica-eva-esseesse9-2021",
+   "titolo": "Energica Eva EsseEsse 9: l'elettrica che non ti aspetti",
+   "categoria": "naked"
+  },
+  {
+   "slug": "bmw-r-ninet-pure-2021",
+   "titolo": "BMW R Nine T Pure: un classico che non passa mai di moda",
+   "categoria": "naked"
+  },
+  {
+   "slug": "ktm-duke-890-r-2020",
+   "titolo": "KTM 890 Duke R: nuda, bella e cattiva",
+   "categoria": "naked"
+  },
+  {
+   "slug": "bmw-serie-f-rgt-f-900-r-2021",
+   "titolo": "BMW F 900 R: grinta tedesca",
+   "categoria": "naked"
+  },
+  {
+   "slug": "suzuki-gsx-s-750-yugen-carbon-2019",
+   "titolo": "Suzuki GSX-S Yugen Carbon: è qui la festa?",
+   "categoria": "naked"
+  },
+  {
+   "slug": "triumph-speed-twin-2020",
+   "titolo": "Triumph Speed Twin, divertimento con stile!",
+   "categoria": "naked"
+  },
+  {
+   "slug": "moto-morini-milano-2020",
+   "titolo": "Moto Morini Milano: bella, agile e divertente",
+   "categoria": "naked"
+  },
+  {
+   "slug": "mv-agusta-brutale-800-2019",
+   "titolo": "MV Agusta Brutale 800, per entrare nel lusso",
+   "categoria": "naked"
+  },
+  {
+   "slug": "honda-cb-1000-r-plus-neo-sports-cafe-2018",
+   "titolo": "Honda CB 1000 R, la \"streetfighter\" più educata",
+   "categoria": "naked"
+  },
+  {
+   "slug": "husqvarna-svartpilen-401-2018",
+   "titolo": "Husqvarna Svartpilen 401, stile svedese anima latina",
+   "categoria": "naked"
+  },
+  {
+   "slug": "benelli-leoncino-2018",
+   "titolo": "Benelli Leoncino 500: bella, comoda e si guida bene",
+   "categoria": "naked"
+  },
+  {
+   "slug": "kawasaki-z650-2017-0",
+   "titolo": "Kawasaki Z 650, facile, agile e divertente",
+   "categoria": "naked"
+  },
+  {
+   "slug": "honda-cb-f-cb-500-f-2017",
+   "titolo": "Honda CB 500 F, è molto di più di una prima moto",
+   "categoria": "naked"
+  },
+  {
+   "slug": "kawasaki-z650-2017",
+   "titolo": "Kawasaki Z 650: facile, agile e divertente!",
+   "categoria": "naked"
+  },
+  {
+   "slug": "ducati-monster-1200-r-2016",
+   "titolo": "Ducati Monster 1200 R: anche nuda è una “rossa”",
+   "categoria": "naked"
+  },
+  {
+   "slug": "aprilia-tuono-v4-factory-2015",
+   "titolo": "Aprilia Tuono V4 1100 Factory: una superbike più comoda",
+   "categoria": "naked"
+  },
+  {
+   "slug": "mv-agusta-brutale-dragster-800-2014",
+   "titolo": "MV Agusta Dragster 800, bella, veloce e ben dotata",
+   "categoria": "naked"
+  },
+  {
+   "slug": "bmw-serie-f-rstgt-f-800-r-2015",
+   "titolo": "F 800 R, una vera BMW a buon prezzo",
+   "categoria": "naked"
+  },
+  {
+   "slug": "yamaha-mt-07-moto-cage-2015",
+   "titolo": "Yamaha MT-07 Moto Cage, la piccola \"nuda\" si fa guardare",
+   "categoria": "naked"
+  },
+  {
+   "slug": "benelli-bn-302-2016",
+   "titolo": "Benelli BN 302 - Una vera naked per cominciare",
+   "categoria": "naked"
+  },
+  {
+   "slug": "ducati-monster-821-2015",
+   "titolo": "Bella e potente ma \"facile\"",
+   "categoria": "naked"
+  },
+  {
+   "slug": "kawasaki-er-6n-2014",
+   "titolo": "Che grinta la “verdina”",
+   "categoria": "naked"
+  },
+  {
+   "slug": "yamaha-mt-07-2014",
+   "titolo": "Sopra la \"media\"",
+   "categoria": "naked"
+  },
+  {
+   "slug": "bmw-serie-r-r-nine-t-2014",
+   "titolo": "La tedesca \"fuoriserie\"",
+   "categoria": "naked"
+  },
+  {
+   "slug": "kawasaki-z1000-2014",
+   "titolo": "Tanta potenza per esperti",
+   "categoria": "naked"
+  },
+  {
+   "slug": "mv-agusta-rivale-800-2014",
+   "titolo": "Bella e cattiva \"divora\" le curve",
+   "categoria": "naked"
+  },
+  {
+   "slug": "ducati-hyperstrada-2012",
+   "titolo": "Per viaggiare ma non solo",
+   "categoria": "naked"
+  },
+  {
+   "slug": "yamaha-mt-09-2014",
+   "titolo": "Tante emozioni con poca spesa",
+   "categoria": "naked"
+  },
+  {
+   "slug": "ktm-duke-390-2013-0",
+   "titolo": "La prima moto \"vera\"",
+   "categoria": "naked"
+  },
+  {
+   "slug": "triumph-street-triple-675-r-2013",
+   "titolo": "È imbattibile nel misto",
+   "categoria": "naked"
+  },
+  {
+   "slug": "mv-agusta-brutale-675-2012",
+   "titolo": "Bella e \"possibile\"",
+   "categoria": "naked"
+  },
+  {
+   "slug": "benelli-tnt-1130-r160-2012",
+   "titolo": "Sempre bella ed efficace",
+   "categoria": "naked"
+  },
+  {
+   "slug": "ducati-streetfighter-s-2011",
+   "titolo": "Combattente con stile",
+   "categoria": "naked"
+  },
+  {
+   "slug": "aprilia-tuono-1000-v4-r-aprc-2011",
+   "titolo": "Superbike senza carena",
+   "categoria": "naked"
+  },
+  {
+   "slug": "ktm-duke-125200-200-2012",
+   "titolo": "Perfetta per la città ma non solo",
+   "categoria": "naked"
+  },
+  {
+   "slug": "ktm-duke-690-2012",
+   "titolo": "KTM Duke 690: Ora è più facile e costa meno",
+   "categoria": "naked"
+  },
+  {
+   "slug": "bmw-serie-k-k-1300-r-2011",
+   "titolo": "Supernaked \"totale\"",
+   "categoria": "naked"
+  },
+  {
+   "slug": "moto-guzzi-griso-1200-8v-2010-0",
+   "titolo": "Potente e veloce",
+   "categoria": "naked"
+  },
+  {
+   "slug": "suzuki-gladius-650-2011",
+   "titolo": "La naked per cominciare",
+   "categoria": "naked"
+  },
+  {
+   "slug": "moto-guzzi-griso-1200-8v-2010",
+   "titolo": "Guzzona potente e veloce",
+   "categoria": "naked"
+  },
+  {
+   "slug": "yamaha-xj6-2011",
+   "titolo": "Bella, comoda e facile per tutti",
+   "categoria": "naked"
+  },
+  {
+   "slug": "suzuki-gsr-750-2011",
+   "titolo": "Nuda con cuore da corsa",
+   "categoria": "naked"
+  },
+  {
+   "slug": "ducati-monster-796-abs-2011",
+   "titolo": "Sempre grintosa, ora più comoda",
+   "categoria": "naked"
+  },
+  {
+   "slug": "kawasaki-er-6n-2012",
+   "titolo": "Adesso è sopra la “media”",
+   "categoria": "naked"
+  },
+  {
+   "slug": "honda-cb-1000-cb-1000-r-2011",
+   "titolo": "Facile, potente e costa il giusto",
+   "categoria": "naked"
+  },
+  {
+   "slug": "benelli-tnt-century-racer-899-2011",
+   "titolo": "I suoi spigoli hanno fatto scuola",
+   "categoria": "naked"
+  },
+  {
+   "slug": "ducati-hypermotard-796-matt-2011",
+   "titolo": "La sorella \"leggera\"",
+   "categoria": "naked"
+  },
+  {
+   "slug": "yamaha-fz8fazer-8-fz8-2011",
+   "titolo": "Bella grintosa ma \"educata\"",
+   "categoria": "naked"
+  },
+  {
+   "slug": "kawasaki-z1000-2011",
+   "titolo": "Dal Giappone con furore",
+   "categoria": "naked"
+  },
+  {
+   "slug": "piaggio-beverly-310-2025",
+   "titolo": "Piaggio Beverly 310: un bestseller che non stanca mai",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "piaggio-mp3-400-hpe-sport-2023",
+   "titolo": "Piaggio MP3 400 Sport: tripla sicurezza",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "qj-motor-atr-125-x-2024",
+   "titolo": "Prova QJ Motor ATR 125 X: sa fare tutto e costa poco",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "kl-brera-x-125-2022",
+   "titolo": "KL Brera X 125: per le avventure di tutti i giorni",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "voge-sfida-sr1-adv-2024",
+   "titolo": "Prova Voge Sfida SR1 ADV: scooter crossover per la città",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "sym-maxsym-tl-508-2021",
+   "titolo": "Prova Sym Maxsym TL 508, lo scooter bicilindrico che costa meno",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "honda-forza-350-2024",
+   "titolo": "Prova Honda Forza 350: pronto a tutto",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "yamaha-tmax-tech-max-2020",
+   "titolo": "Yamaha TMax Tech Max, il re dei maxi scooter è una garanzia",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "wottan-motor-storm-s-300-2023",
+   "titolo": "Wottan Storm-S 300, sportivo e completo a buon prezzo",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "sym-joyride-300-2022",
+   "titolo": "SYM Joyride 300: il compagno perfetto in città e fuori",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "piaggio-beverly-200-2001-2004",
+   "titolo": "Piaggio Beverly 300 S: un grande classico che va ancora bene",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "piaggio-beverly-300-s-2021",
+   "titolo": "Piaggio Beverly 300 S: agile in città, veloce fuori",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "honda-sh-350-350i-2021",
+   "titolo": "L'Honda SH 350i: scattante nel traffico e veloce in tangenziale",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "honda-forza-350-2021",
+   "titolo": "Honda Forza 350: il giusto alleato nella giungla urbana",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "aprilia-sr-gt-200-2022",
+   "titolo": "Aprilia SR GT200: un midi-crossover per andare dappertutto",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "honda-adv-350-2022",
+   "titolo": "ADV350: due ruote a tutto tondo con la qualità Honda",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "kymco-dtx-360-350i-2022",
+   "titolo": "Kymco DTX 360: la città non è abbastanza",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "yamaha-xmax-300-2021",
+   "titolo": "Yamaha XMax 300: si rinnova lo scooter tuttofare",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "honda-forza-750-dct-2021",
+   "titolo": "Honda Forza 750: comodo come uno scooter, prestazioni da granturismo",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "honda-sh-150i-2020",
+   "titolo": "Honda SH150i, pronto a tutto",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "piaggio-medley-150-2020",
+   "titolo": "Piaggio Medley 150, l'alleato giusto per combattere il traffico",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "honda-sh-125i-2020",
+   "titolo": "Honda SH 125i 2020: il migliore è migliorato",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "piaggio-mp3-350-142587",
+   "titolo": "Piaggio MP3 350: comodo con grinta",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "me-me-scooter-60-kw-2018",
+   "titolo": "Me Scooter 6.0: maneggevole e potente",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "vespa-gts-super-300-tech-hpe-2019",
+   "titolo": "Vespa GTS 300 Super Tech, comoda, veloce e \"connessa\"",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "kymco-g-dink-300i-2018-0",
+   "titolo": "Kymco G-Dink 300 - Vano e pedana, si carica tutto",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "yamaha-xmax-300-2017",
+   "titolo": "Yamaha Xmax 300: midi veloce, e ben dotato",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "sym-cruisym-300-2017",
+   "titolo": "SYM Cruisym 300, ampio, comodo e agile in città",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "kymco-x-town-300i-2016",
+   "titolo": "Kymco X-Town 300, comodo, spazioso e scattante",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "suzuki-address-110-2015",
+   "titolo": "Costa poco e beve niente",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "yamaha-tmax-2015",
+   "titolo": "Yamaha Tmax: migliora col tempo",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "sym-joyride-200-evo-i-2011",
+   "titolo": "Un \"midi\" spazioso e comodo",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "yamaha-tricity-2015",
+   "titolo": "Yamaha Tricity: il “tre ruote” più facile e leggero",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "honda-integra-750-dct-2014",
+   "titolo": "Integra 750: più efficace e più comodo",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "vespa-gts-300-super-2014",
+   "titolo": "Elegante e sicura",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "vespa-primavera-125-3v-2014",
+   "titolo": "Vespa Primavera, maneggevole e ben fatta",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "sym-citycom300-300i-2011",
+   "titolo": "Pratico ed economico",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "yamaha-aerox-r-naked-2013",
+   "titolo": "Perde la carena ma ha più grinta",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "honda-forza-300-2013",
+   "titolo": "Lo “sportivo” consuma poco",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "suzuki-burgman-400650-burgman-650-executive-2013",
+   "titolo": "Più potente, più sicuro",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "kymco-people-one-125-2013",
+   "titolo": "Maneggevole ed economico",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "yamaha-xmax-400-2013",
+   "titolo": "Va forte e beve poco",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "piaggio-x10-350-executive-2012",
+   "titolo": "Si viaggia in \"business class\"",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "yamaha-tmax-black-max-2012",
+   "titolo": "Equilibrato ed elegante",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "honda-sh-150i-2013",
+   "titolo": "Più sicuro e spazioso",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "sym-joymax-300-2012",
+   "titolo": "Stabile, veloce e ben dotato",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "vespa-lxlxv-lx-150-3v-2012",
+   "titolo": "Economica e risparmiosa",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "kymco-g-dink-300i-2012",
+   "titolo": "Una \"poltrona\" bella e spaziosa",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "sym-maxsym-400-i-2012",
+   "titolo": "Poca spesa e tanta resa",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "aprilia-srv-850-ie-2012",
+   "titolo": "Aprilia SRV 850: È sicuro ed efficace coi controlli",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "bmw-c-600-sport-2012",
+   "titolo": "Ben fatto e veloce",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "keeway-index-350i-2012",
+   "titolo": "Ben fatto e stabile",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "honda-integra-2012",
+   "titolo": "La moto vestita da scooter",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "quadro-350-d-2012",
+   "titolo": "Comodo e sicuro l'altro 3 ruote",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "sym-e-symmetry-2012",
+   "titolo": "Agile, leggero e ricarica in fretta",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "honda-sw-t-600-2011",
+   "titolo": "Una poltrona molto veloce",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "lambretta-ln-125-2011",
+   "titolo": "Vintage solo nelle linee",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "vespa-gtsgtv-gts-300-super-2007-2010",
+   "titolo": "Scattante e comoda",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "piaggio-beverly-300-2010",
+   "titolo": "Scatta ma ripara poco",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "honda-sh-300i-2011",
+   "titolo": "Era e rimane il migliore",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "sym-citycom-300i-2011",
+   "titolo": "Comodo in città e in autostrada",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "sym-joymax-300-i-2011",
+   "titolo": "Ricco, comodo e costa poco",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "kymco-myroad-700i-2012",
+   "titolo": "Ricco in tutto, non nel prezzo",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "honda-sw-t400-2011",
+   "titolo": "Scooterone di qualità",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "lml-star-200i-4t-2011",
+   "titolo": "Più potente e bilanciata",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "suzuki-burgman-400650",
+   "titolo": "Comodo, sicuro e lussuoso",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "adiva-ar-200-roadster-2010",
+   "titolo": "Coperti bene ma a caro prezzo",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "beta-ark-ac-skull-2011",
+   "titolo": "Vestito da cattivo e dote da \"ricco\"",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "sym-symphony-50-dk-2011",
+   "titolo": "Prezzo basso, dote \"ricca\"",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "benelli-caffenero-125-2011",
+   "titolo": "Frena bene e costa poco",
+   "categoria": "scooter"
+  },
+  {
+   "slug": "triumph-scrambler-900-2023",
+   "titolo": "Triumph Scrambler 900: divertente ed elegante",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "voge-trofeo-525acx-scrambler-2023",
+   "titolo": "Voge Trofeo 525 ACX: ottima per divertirsi e in città",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "honda-cl500-2023",
+   "titolo": "Prova Honda CL 500, la scrambler per tutti i giorni",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "ducati-scrambler-800-icon-2023",
+   "titolo": "Prova Ducati Scrambler Icon: bella e divertente",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "benelli-leoncino-500-2024",
+   "titolo": "Benelli Leoncino 500: come va, pregi e difetti",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "fantic-motor-caballero-700-2023",
+   "titolo": "Prova Fantic Motor Caballero 700: una scrambler tuttofare",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "royal-enfield-scram-411-2022",
+   "titolo": "Royal Enfield Scram 411: divertimento a basso costo",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "fantic-motor-caballero-500-rally-2021",
+   "titolo": "Fantic Motor Caballero: c'è più gusto con la 500 Rally",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "royal-enfield-interceptor-2019",
+   "titolo": "Royal Enfield Interceptor: un bel classico per cominciare!",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "triumph-street-scrambler-2020",
+   "titolo": "Triumph Street Scrambler: divertimento vintage",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "husqvarna-svartpilen-701-2020",
+   "titolo": "Svartpilen 701: l'Husqvarna che non ti aspetti",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "indian-ftr-1200-s-2019",
+   "titolo": "Indian FTR 1200 S: divertirsi sognando l'ovale",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "mondial-hps-125-2017",
+   "titolo": "Mondial HPS 125, muoversi in città con stile",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "bmw-r-ninet-scrambler-2017",
+   "titolo": "BMW R nineT Scrambler, sarà modaiola, ma quanto va bene...",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "yamaha-sr-400-2016",
+   "titolo": "Yamaha SR 400, una classica moto anni 70",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "triumph-scrambler-865-2013",
+   "titolo": "Divertente, ma con tanto stile",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "bmw-serie-g-g-650-gs-sertao-2013",
+   "titolo": "È leggera e anche comoda",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "honda-crosstourer-2012-0",
+   "titolo": "Pensa lei anche a cambiare",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "ktm-freeride-350-2012",
+   "titolo": "La \"scalatrice\" piace a tutti",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "rieju-tango-250-2012",
+   "titolo": "Per danzare su ogni strada",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "bmw-serie-f-gs-f-800-gs-2011",
+   "titolo": "Con questa tedesca puoi farci di tutto",
+   "categoria": "scrambler"
+  },
+  {
+   "slug": "triumph-daytona-660-2024",
+   "titolo": "Triumph Daytona 660: facile e veloce tutti i giorni",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "qj-motor-srk-800-rr-2025",
+   "titolo": "QJ Motor SRK 800 RR, Supersport per la strada",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "suzuki-gsx-8r-2025",
+   "titolo": "Suzuki GSX-8R: la sportiva per tutti i giorni",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "benelli-tornado-550-2025",
+   "titolo": "Prova Benelli Tornado 550, sportiva di carattere",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "ducati-supersport-s-2024",
+   "titolo": "Ducati Supersport S: bella e potente, ma scomoda per due",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "bmw-r-1250-rs-2024",
+   "titolo": "BMW R 1250 RS, una sport tourer tuttofare",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "ducati-supersport-2021",
+   "titolo": "Ducati SuperSport 950S: sportiva sì, ma senza esagerare",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "kawasaki-ninja-1000-sx-2021",
+   "titolo": "Kawasaki Ninja 1000 SX: cattiva quando serve, docile all'occorrenza",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "kawasaki-ninja-zx-6r-2020",
+   "titolo": "Kawasaki Ninja ZX-6R: supersport alla riscossa!",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "kawasaki-ninja-125-2019",
+   "titolo": "Kawasaki Ninja 125, bella e cattiva!",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "kawasaki-ninja-400-2018",
+   "titolo": "Kawasaki Ninja 400, sportiva \"facile\" per fare esperienza",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "ducati-supersport-s-2017",
+   "titolo": "Ducati Supersport S - Carenata per la strada",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "ducati-panigale-959-2016",
+   "titolo": "Ducati Panigale 959, la sportiva giusta per il \"gentleman\"",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "kawasaki-ninja-zx-10r-2016",
+   "titolo": "Kawasaki Ninja ZX-10R, la regina veste in verde",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "yamaha-yzf-r1-2015",
+   "titolo": "È una MotoGP da usare su strada",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "ktm-rc-390-2015",
+   "titolo": "Per imparare la bella guida",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "honda-cbr-500-r-2013",
+   "titolo": "Bella, sportiva e anche pratica",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "bmw-hp4-2013",
+   "titolo": "Bella e veloce come una SBK",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "bimota-db8-2012",
+   "titolo": "Una sportiva per due",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "yamaha-yzf-r1-2009",
+   "titolo": "La \"jap\" sofisticata",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "suzuki-gsx-r-1000-2012",
+   "titolo": "Con lei ci vuole esperienza",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "honda-cbr-6001000-rr-cbr-1000-rr-fireblade-2012",
+   "titolo": "Sempre facile e divertente",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "honda-cbr-125250-r-cbr-125-r-2011",
+   "titolo": "Sportiva \"vera\" a 16 anni",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "suzuki-gsx-1300-r-hayabusa-2008",
+   "titolo": "Per turisti molto veloci",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "cagiva-mito-sp525-2009",
+   "titolo": "Bella e grintosa",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "kawasaki-ninja-zx-10r-2011",
+   "titolo": "Tanta potenza sotto controllo",
+   "categoria": "sportive"
+  },
+  {
+   "slug": "suzuki-gsx-s-gt-gsx-s-1000-gt-2022",
+   "titolo": "Prova Suzuki GSX-S 1000 GT: comoda e molto veloce",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "triumph-speed-twin-1200-2023",
+   "titolo": "Triumph Speed Twin: per divertirsi con eleganza",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "moto-guzzi-v100-mandello-s-2022-0",
+   "titolo": "Prova Moto Guzzi V100 Mandello: sofisticata e veloce",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "moto-guzzi-v100-mandello-s-2022",
+   "titolo": "Moto Guzzi V100 Mandello S, per viaggiare ma non solo",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "suzuki-gsx-s-1000-2021-0",
+   "titolo": "Suzuki GSX-S 1000 GT: una tuttofare che non tradisce mai",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "honda-nt1100-dct-2022",
+   "titolo": "Honda NT 1100: viaggiare in prima classe",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "kawasaki-ninja-1000-sx-tourer-2022",
+   "titolo": "Kawasaki Ninja 1000 SX Tourer: per viaggiare comodi e veloci",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "honda-nt1100-2022",
+   "titolo": "Honda NT 1100, un viaggio in prima classe",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "bmw-r-1250-rt-2022",
+   "titolo": "BMW R 1250 RT, imponente e divertente",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "harley-davidson-cvo-road-glide-2021",
+   "titolo": "Harley-Davidson Road Glide Special: schiacciasassi da corsa!",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "indian-challenger-limited-2021",
+   "titolo": "Indian Challenger Limited, la sport bagger che sfida le H-D",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "bmw-r-ninet-pure-2020",
+   "titolo": "BMW R nineT Pure: un bel boxer senza tanti fronzoli",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "bmw-serie-r-r-1250-rt-2020",
+   "titolo": "Viaggi in prima classe con la BMW R 1250 RT",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "yamaha-niken-2018",
+   "titolo": "Yamaha Niken, due sono meglio di una",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "harley-davidson-street-rod-750-2018",
+   "titolo": "Harley-Davidson Street Rod, marchio di lusso per cominciare",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "mash-black-seven-125-2017",
+   "titolo": "Mash Black Seven, la piccola retrò che piace a tutti",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "royal-enfield-classic-500-2017",
+   "titolo": "Royal Enfield Classic 500, stile e sostanza a buon prezzo",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "ktm-super-duke-gt-1290-2017",
+   "titolo": "KTM 1290 Super Duke GT, viaggi veloci e divertenti",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "suzuki-bandit-1250-s-2015",
+   "titolo": "Suzuki Bandit 1250 S - Maxi tuttofare a buon prezzo",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "suzuki-gsx-s-1000-f-2015",
+   "titolo": "Suzuki GSX-S 1000 F - La Sportiva viaggia leggera",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "bmw-serie-r-r-1200-rs-2015",
+   "titolo": "BMW R 1200 RS, la sportiva per viaggiare",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "triumph-tiger-800-xrx-2015",
+   "titolo": "Triumph Tiger 800: divertente e ben dotata",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "bmw-serie-r-r-1200-rt-2014",
+   "titolo": "Ora la RT sembra una sportiva",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "honda-nc-x-nc-750x-dct-2014",
+   "titolo": "Honda NC750X: bilanciata e molto divertente",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "suzuki-v-strom-1000-2014",
+   "titolo": "L'endurona per tutti",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "bmw-serie-f-rstgt-f-800-gt-2013-0",
+   "titolo": "Granturismo per tutti i giorni",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "honda-cb-1100-2013",
+   "titolo": "Non è solo bella",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "honda-nc-x-nc-700-x-dct-2012",
+   "titolo": "Col cambio ci guadagna",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "bmw-serie-f-gs-f-700-gs-2013",
+   "titolo": "Equilibrio ed eleganza",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "honda-nc-x-nc-700-x-dct-2012-0",
+   "titolo": "Honda NC750X: È una moto, solo... più comoda",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "ducati-multistrada-1200-s-touring-2013",
+   "titolo": "Superbike \"avventurosa\"",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "kawasaki-versys-1000-2012",
+   "titolo": "Più la usi, più ti piace",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "moto-guzzi-v7-special-2012",
+   "titolo": "Facile e divertente",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "honda-cb-1300-s-2011",
+   "titolo": "Una classica di sostanza",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "honda-crosstourer-2012",
+   "titolo": "Tanta tecnologia utile",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "benelli-tre-k-1130-k-2012",
+   "titolo": "Sportiva e comoda \"divora\" l'asfalto",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "honda-cbf-6001000-cbf-600-s-2006",
+   "titolo": "Comoda, facile e frena bene",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "honda-vt-750-s-2010",
+   "titolo": "Per passeggiate in relax",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "ducati-multistrada-1200-touring-2010",
+   "titolo": "È la vera moto \"totale\"?",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "honda-deauville-2011",
+   "titolo": "Ripara bene e beve poco",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "yamaha-fz8fazer-8-fazer-8-2011",
+   "titolo": "Agile, veloce e più sicura",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "kawasaki-vn-1700-voyager-2011",
+   "titolo": "La giapponese fa l'americana",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "ducati-diavel-abs-2011",
+   "titolo": "La belva addomesticata",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "honda-cbf-6001000-cbf-1000-st-2011",
+   "titolo": "Fa tutto bene e costa poco",
+   "categoria": "stradali"
+  },
+  {
+   "slug": "bmw-serie-r-r-1200-r-2011",
+   "titolo": "Cuore nuovo, vita nuova",
+   "categoria": "stradali"
+  }
+ ]
+}

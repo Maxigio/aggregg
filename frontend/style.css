@@ -1200,6 +1200,29 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .cat-acc-o span { color: var(--accent); }
 .cat-fonte-nota { margin-top: 12px; font-size: 0.7rem; color: var(--text-faint); }
 
+/* Scheda di una prova moto (inSella). Tutto quello che la fonte serve, diviso per provenienza:
+   misurato, dichiarato, votato — cosi' si vede a colpo d'occhio da dove viene ogni numero. */
+.cat-pv-h { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 14px; }
+.cat-pv-h img { width: 220px; max-width: 38%; border-radius: var(--r); object-fit: cover; }
+.cat-pv-h h3 { margin: 0 0 4px; font-size: 1.15rem; }
+.cat-pv-t { margin: 0 0 8px; color: var(--text-muted); font-size: 0.86rem; }
+.cat-pv-chip { display: flex; gap: 6px; flex-wrap: wrap; }
+.cat-pv-chip em { padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); font-style: normal; font-size: 0.74rem; color: var(--text-muted); }
+/* Il confronto dichiarato-contro-misurato: e' il motivo per cui questa fonte esiste, quindi sta
+   in evidenza e non in fondo a una tabella. */
+.cat-pv-delta { margin: 0 0 16px; padding: 10px 14px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 var(--r) var(--r) 0; font-size: 0.88rem; }
+.cat-pv-delta b { font-family: var(--num); }
+.cat-pv-delta span { color: var(--warn); font-weight: 600; font-family: var(--num); }
+.cat-pv-b { margin-bottom: 18px; }
+.cat-pv-b h4 { margin: 0 0 8px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+.cat-pv-b p { margin: 0; font-size: 0.88rem; line-height: 1.65; color: var(--text-muted); }
+.cat-pv-b .cat-prova-n div i { display: block; font-style: normal; font-size: 0.7rem; color: var(--text-faint); font-family: var(--num); }
+/* La metodologia di misura: senza, il numero e' un numero; con, e' una misura. */
+.cat-pv-nota { margin: 8px 0 0 !important; font-size: 0.7rem !important; color: var(--text-faint) !important; }
+.cat-pv-foto { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.cat-pv-foto img { width: 100%; aspect-ratio: 3/2; object-fit: cover; border-radius: var(--r); }
+@media (max-width: 640px) { .cat-pv-h { flex-direction: column; } .cat-pv-h img { width: 100%; max-width: none; } }
+
 @media (max-width: 700px) {
   /* su schermo stretto la densita' scelta non regge: si limita, senza cambiare la preferenza */
   .cat-griglia { grid-template-columns: repeat(min(var(--cat-cols, 6), 3), minmax(0, 1fr)); }

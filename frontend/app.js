@@ -3486,7 +3486,10 @@ let catFonti = null;            // elenco fonti dal server
 let catLivello = 'marche';      // marche | modelli | versioni | scheda
 let catMarca = null;            // {acronimo, nome}
 let catModello = null;          // {codiceModello, nome}
-let catDati = { marche: null, modelli: null, versioni: null, scheda: null, rilevamenti: null };
+// I dati per livello. In una funzione e non in due letterali sparsi: erano due, e una fonte
+// nuova che ne dimenticasse uno lascerebbe dati della fonte precedente appesi dopo il cambio.
+const catDatiVuoti = () => ({ marche: null, modelli: null, versioni: null, scheda: null, rilevamenti: null, prove: null, prova: null });
+let catDati = catDatiVuoti();
 let catStato = 'mai';           // mai | carico | ok | ko | spento
 let catMotivo = '';
 let catFiltro = '';
@@ -3571,7 +3574,7 @@ async function catCambiaFonte(id) {
   if (id === catFonte) return;
   catFonte = id; catSetPref('fonte', id);
   catGen++;                                   // invalida anche le fetch dirette (versioni/scheda)
-  catDati = { marche: null, modelli: null, versioni: null, scheda: null, rilevamenti: null };
+  catDati = catDatiVuoti();
   return catVaiMarche();
 }
 
@@ -3591,8 +3594,26 @@ async function catVaiRilevamenti(marca) {
   if (d) { catDati.rilevamenti = d; catRender(); }
 }
 
+// Le prove moto hanno TRE livelli: l'indice porta solo il titolo, la scheda con misure e voti
+// costa una richiesta a parte e non si scarica per tutte quelle di una marca.
+async function catVaiProve(marca) {
+  const stesso = catMarca && catMarca.acronimo === marca.acronimo && catDati.prove;
+  catMarca = marca; catModello = null; catLivello = 'prove'; catFiltro = ''; catDati.prova = null;
+  if (stesso) { catStato = 'ok'; return catRender(); }
+  const d = await catChiedi('/api/catalogo/prove?marca=' + encodeURIComponent(marca.acronimo));
+  if (d) { catDati.prove = d.prove || []; catRender(); }
+}
+
+async function catVaiProva(slug, titolo) {
+  catLivello = 'prova'; catFiltro = '';
+  catModello = { codiceModello: slug, nome: titolo || slug };
+  const d = await catChiedi('/api/catalogo/prova?slug=' + encodeURIComponent(slug));
+  if (d) { catDati.prova = d.prova; catRender(); }
+}
+
 async function catVaiModelli(marca) {
   if (catFonte === 'rilevamenti') return catVaiRilevamenti(marca);
+  if (catFonte === 'prove') return catVaiProve(marca);
   const stesso = catMarca && catMarca.acronimo === marca.acronimo && catDati.modelli;
   catMarca = marca; catModello = null; catLivello = 'modelli'; catFiltro = '';
   if (stesso) { catStato = 'ok'; return catRender(); }
@@ -3667,7 +3688,7 @@ function catBarraHTML() {
   const ph = catLivello === 'marche' ? 'Cerca una marca…'
     : catLivello === 'modelli' ? 'Cerca un modello…'
       : catLivello === 'versioni' ? 'Cerca una versione…'
-        : catLivello === 'rilevamenti' ? 'Cerca una prova…' : 'Cerca…';
+        : (catLivello === 'rilevamenti' || catLivello === 'prove') ? 'Cerca una prova…' : 'Cerca…';
   const conElenco = catLivello !== 'scheda';
   return `<div class="cat-barra">
     <div class="cat-fonti" role="tablist" aria-label="Cataloghi">${f}</div>
@@ -3690,8 +3711,9 @@ function catBriciole() {
   const f = catFonteAttiva();
   const p = [{ t: f ? f.nome : 'Catalogo', l: 'marche' }];
   if (catMarca) p.push({ t: catMarca.nome, l: 'modelli' });
-  if (catModello) p.push({ t: catModello.nome, l: 'versioni' });
+  if (catModello) p.push({ t: catModello.nome, l: catLivello === 'prova' ? null : 'versioni' });
   if (catLivello === 'rilevamenti' && catMarca) p[p.length - 1].l = null;   // e' gia' la foglia
+  if (catLivello === 'prove' && catMarca) p[p.length - 1].l = null;
   if (catLivello === 'scheda') p.push({ t: catTitoloScheda(), l: null });
   return `<nav class="cat-briciole">${p.map((x, i) => (x.l && i < p.length - 1
     ? `<button type="button" class="cat-su" data-l="${x.l}">${escapeHtml(x.t)}</button>`
@@ -3768,6 +3790,14 @@ function catCorpo() {
     });
   }
   if (catLivello === 'rilevamenti') return catRilevamentiHTML();
+  if (catLivello === 'prove') {
+    return catElencoHTML(catFiltra(catDati.prove || [], x => x.titolo || x.slug), {
+      classe: 'cat-provalink', griglia: false, vuoto: 'Nessuna prova con questo nome.',
+      dati: v => `data-slug="${escapeHtml(v.slug)}" data-nome="${escapeHtml(v.titolo || v.slug)}"`,
+      meta: v => escapeHtml(v.categoria || ''),
+    });
+  }
+  if (catLivello === 'prova') return catProvaHTML();
   return catSchedaHTML();
 }
 
@@ -3798,6 +3828,69 @@ function catRilevamentiHTML() {
       ${r.link ? `· <a href="${escapeHtml(r.link)}" target="_blank" rel="noopener noreferrer">leggi la prova ↗</a>` : ''}</div>
   </div>`).join('')}
   <div class="cat-fonte-nota">${escapeHtml(d.fonte || '')}${d.completo === false ? ' · elenco incompleto' : ''}. Valori MISURATI dalla redazione, non dichiarati dal costruttore.</div></div>`;
+}
+
+// La scheda di una prova moto. Si espone TUTTO quello che la fonte serve, diviso per provenienza:
+// cio' che la redazione ha MISURATO, cio' che la casa DICHIARA, e i voti. Le grandezze che le due
+// fonti danno diverse (peso, serbatoio) restano affiancate con la loro etichetta invece di essere
+// appianate in un numero solo: sono cose diverse (a secco, in ordine di marcia, massa totale).
+function catProvaHTML() {
+  const p = catDati.prova;
+  if (!p) return catVuoto('Prova non disponibile.');
+  const n = (x, u) => (x == null ? '—' : String(x).replace('.', ',') + (u || ''));
+  const righe = o => Object.entries(o || {}).map(([k, x]) =>
+    `<div><span>${escapeHtml(k)}</span><b>${escapeHtml(String(x).replace('.', ','))}</b></div>`).join('');
+  const m = p.misure || {};
+
+  // Il confronto che vale il viaggio: quanti cavalli arrivano davvero a terra.
+  const perdita = (p.potenzaDichiarataCv && m.potenzaRuota && m.potenzaRuota.cv)
+    ? Math.round((100 - 100 * m.potenzaRuota.cv / p.potenzaDichiarataCv) * 10) / 10 : null;
+
+  const blocco = (titolo, corpo, nota) => (corpo
+    ? `<section class="cat-pv-b"><h4>${escapeHtml(titolo)}</h4><div class="cat-prova-n">${corpo}</div>${nota ? `<p class="cat-pv-nota">${escapeHtml(nota)}</p>` : ''}</section>` : '');
+
+  return `<div class="cat-pv">
+    <header class="cat-pv-h">
+      ${p.copertina ? `<img src="${escapeHtml(p.copertina)}" alt="${escapeHtml(p.nome || '')}" loading="lazy">` : ''}
+      <div>
+        <h3>${escapeHtml(p.nome || p.slug)}</h3>
+        ${p.titolo ? `<p class="cat-pv-t">${escapeHtml(p.titolo)}</p>` : ''}
+        <div class="cat-pv-chip">
+          ${p.prezzoListino ? `<em>listino ${catEur(p.prezzoListino)}</em>` : ''}
+          ${p.valutazione && p.valutazione.voto != null ? `<em>${n(p.valutazione.voto)}/5 · ${p.valutazione.voti} voti</em>` : ''}
+          ${p.classeEmissioni ? `<em>${escapeHtml(p.classeEmissioni)}</em>` : ''}
+          ${p.cilindrata ? `<em>${p.cilindrata} cm³</em>` : ''}
+          ${p.marce ? `<em>${p.marce} marce</em>` : ''}
+        </div>
+      </div>
+    </header>
+
+    ${perdita != null ? `<div class="cat-pv-delta">Dichiarati <b>${n(p.potenzaDichiarataCv)} CV</b> · misurati alla ruota <b>${n(m.potenzaRuota.cv)} CV</b>${m.potenzaRuota.giri ? ' a ' + m.potenzaRuota.giri + ' giri' : ''} — <span>${n(perdita)}% in meno</span></div>` : ''}
+
+    ${blocco('Misurato dalla redazione', [
+      m.velocitaMax != null ? `<div><span>velocita massima</span><b>${n(m.velocitaMax, ' km/h')}</b></div>` : '',
+      righe(m.acc), righe(m.ripresa),
+      Object.entries(m.frenata || {}).map(([k, x]) => `<div><span>frenata ${escapeHtml(k.toLowerCase())}</span><b>${n(x, ' m')}</b></div>`).join(''),
+    ].join(''), p.metodoDiMisura)}
+
+    ${blocco('Consumi misurati', Object.entries(m.consumi || {}).map(([k, x]) =>
+      `<div><span>${escapeHtml(k)}</span><b>${n(x, ' km/l')}</b><i>${n((m.consumiL100 || {})[k], ' l/100km')}</i></div>`).join('')
+      + righe(m.autonomia ? Object.fromEntries(Object.entries(m.autonomia).map(([k, x]) => ['autonomia ' + k, x + ' km'])) : {}))}
+
+    ${blocco('Dichiarato dalla casa', righe(p.dichiarati))}
+    ${blocco('Dimensioni rilevate (cm)', righe(p.dimensioniRilevate))}
+    ${blocco('Voti della redazione', Object.entries(p.voti || {}).map(([k, x]) =>
+      `<div><span>${escapeHtml(k)}</span><b>${x}/5</b></div>`).join(''))}
+
+    ${p.inSintesi ? `<section class="cat-pv-b"><h4>In sintesi</h4><p>${escapeHtml(p.inSintesi)}</p></section>` : ''}
+    ${p.comeVa ? `<section class="cat-pv-b"><h4>Come va</h4><p>${escapeHtml(p.comeVa)}</p></section>` : ''}
+
+    ${p.foto && p.foto.length ? `<section class="cat-pv-b"><h4>Foto (${p.foto.length})</h4>
+      <div class="cat-pv-foto">${p.foto.map(u => `<img src="${escapeHtml(u)}" alt="" loading="lazy">`).join('')}</div></section>` : ''}
+
+    <div class="cat-fonte-nota">${escapeHtml(p.fonte || '')}${p.autore ? ' · ' + escapeHtml(p.autore) : ''}${p.dataProva ? ' · ' + escapeHtml(String(p.dataProva).slice(0, 10)) : ''}
+      · <a href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer">leggi la prova ↗</a></div>
+  </div>`;
 }
 
 // Scheda: due forme, una per famiglia di fonti. Il listino porta prezzo e dotazione, le
@@ -3902,6 +3995,8 @@ document.getElementById('catalogoPanel')?.addEventListener('click', e => {
   if (ma) return void catVaiModelli({ acronimo: ma.dataset.acr, nome: ma.dataset.nome });
   const mo = e.target.closest('.cat-modello');
   if (mo) return void catVaiVersioni({ codiceModello: mo.dataset.cod, nome: mo.dataset.nome });
+  const pv = e.target.closest('.cat-provalink');
+  if (pv && pv.dataset.slug) return void catVaiProva(pv.dataset.slug, pv.dataset.nome);
   const ve = e.target.closest('.cat-versione');
   if (ve && ve.dataset.rif) return void catVaiScheda(ve.dataset.rif);
 });

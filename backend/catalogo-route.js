@@ -16,6 +16,7 @@
  */
 const motornet = require('./scrapers/motornet');
 const autoit = require('./scrapers/autoit-rilevamenti');
+const insella = require('./scrapers/insella-prove');
 
 // Il catalogo aggrega TRE cataloghi distinti, e non li mescola: sono cose diverse e chi
 // naviga deve sapere cosa sta guardando.
@@ -35,13 +36,19 @@ try { LOGHI_AUTO = require('../data/autodata-loghi.json').loghi || {}; } catch (
 // auto-data.net scrive i modelli come "124 1966 -": gli anni in coda sono rumore in un elenco.
 const senzaAnni = n => String(n || '').replace(/\s+(19|20)\d{2}\s*(-\s*((19|20)\d{2})?)?\s*$/, '').trim() || String(n || '');
 
+// `spegnibile` = questa fonte dipende dall'interruttore AMR_MOTORNET. Sta qui e non sparso nei
+// rami perche' e' una proprieta' DELLA FONTE: prima era ripetuto a mano in due punti come
+// "!== 'rilevamenti'", e ogni fonte nuova aggiungeva un caso speciale a entrambi.
 const FONTI = {
-  nuovo: { nome: 'Listino del nuovo', dettaglio: 'prezzi, potenza e dotazione — Motornet (Eurotax)', tipo: 'auto', rete: true },
+  nuovo: { nome: 'Listino del nuovo', dettaglio: 'prezzi, potenza e dotazione — Motornet (Eurotax)', tipo: 'auto', rete: true, spegnibile: true },
   auto: { nome: 'Schede tecniche auto', dettaglio: 'auto-data.net', tipo: 'auto', rete: false },
   moto: { nome: 'Schede tecniche moto', dettaglio: 'ultimatespecs.com', tipo: 'moto', rete: false },
   // La quarta e' diversa dalle altre tre: non dichiarazioni del costruttore ma MISURE della
   // redazione. Due soli livelli, perche' la prova E' la foglia: non c'e' niente sotto.
   rilevamenti: { nome: 'Rilevamenti', dettaglio: 'misure della redazione — Auto (auto.it)', tipo: 'auto', rete: true, livelli: 2 },
+  // La quinta e' il gemello moto della quarta: misure invece di dichiarazioni. Tre livelli e non
+  // due, perche' l'indice porta solo il titolo della prova e la scheda va chiesta a parte.
+  prove: { nome: 'Prove moto', dettaglio: 'misure e voti della redazione — inSella', tipo: 'moto', rete: true, livelli: 3 },
 };
 
 // Da un indice su disco all'elenco marche/modelli, nella stessa forma della fonte di rete.
@@ -76,10 +83,14 @@ const SPENTO = { ok: false, motivo: 'catalogo non attivo su questa installazione
 // Dopo un 403/429 lo scraper tace per mezz'ora. E' una scelta giusta verso la fonte, ma
 // dall'interfaccia era indistinguibile da un guasto: si diceva "non disponibile" e basta.
 // Qui si tira su l'istante di fine pausa, cosi' la UI puo' dire quanto manca.
+const SCRAPER = { rilevamenti: autoit, prove: insella, nuovo: motornet };
 const pausaDi = fonte => {
-  const s = fonte === 'rilevamenti' ? autoit : (indiceDi(fonte) ? null : motornet);
+  const s = SCRAPER[fonte];
   return s && s.pausaFinoA ? s.pausaFinoA() : 0;
 };
+// Una fonte sconosciuta si comporta come il listino: si spegne. Cosi' un id sbagliato nella query
+// non apre una porta di servizio.
+const spegnibile = fonte => (FONTI[fonte] ? !!FONTI[fonte].spegnibile : true);
 
 function mount(app, deps = {}) {
   const clientIp = deps.clientIp || (req => req.ip || '');
@@ -88,10 +99,10 @@ function mount(app, deps = {}) {
   // /api/catalogo/rilevamenti (che non manda `fonte`) ricadeva sul listino e rispondeva spento.
   const via = (percorso, lavoro, fonteFissa) => app.get(percorso, async (req, res) => {
     if (!rateOk(clientIp(req))) return res.status(429).json({ ok: false, motivo: 'Troppe richieste.' });
-    // Lo spegnimento riguarda la SOLA fonte di rete che lo prevede (Motornet): i due cataloghi
-    // su disco e i rilevamenti vanno comunque.
+    // Lo spegnimento riguarda solo le fonti marcate `spegnibile` in FONTI: oggi il listino
+    // Motornet. I cataloghi su disco, i rilevamenti e le prove moto vanno comunque.
     const fonteQ = fonteFissa || String((req.query || {}).fonte || 'nuovo');
-    if (!motornet.ATTIVO && !indiceDi(fonteQ) && fonteQ !== 'rilevamenti') return res.json(SPENTO);
+    if (spegnibile(fonteQ) && !motornet.ATTIVO) return res.json(SPENTO);
     try {
       const out = await lavoro(req.query || {});
       if (out == null) return res.json({ ok: false, motivo: 'non trovato' });
@@ -116,7 +127,7 @@ function mount(app, deps = {}) {
       const fino = pausaDi(id);
       return {
         id, ...f,
-        disponibile: id === 'rilevamenti' ? true : (f.rete ? motornet.ATTIVO : true),
+        disponibile: f.spegnibile ? motornet.ATTIVO : true,
         marche: f.rete ? null : conta(id),
         ...(fino ? { bloccataFino: fino } : {}),
       };
@@ -126,10 +137,29 @@ function mount(app, deps = {}) {
   via('/api/catalogo/marche', async q => {
     const f = String(q.fonte || 'nuovo');
     if (f === 'rilevamenti') return { fonte: f, marche: await autoit.marche() };
+    if (f === 'prove') return { fonte: f, marche: await insella.marche() };
     const idx = indiceDi(f);
     if (idx) return { fonte: f, marche: marcheDaIndice(idx, f === 'auto' ? LOGHI_AUTO : null) };
     return { fonte: 'nuovo', marche: await motornet.marche() };
   });
+
+  // ─── Prove moto (inSella): marca → elenco prove → scheda della prova ───────
+  // Secondo livello: solo titolo e categoria. La scheda costa una richiesta a parte, quindi non
+  // si scarica per tutte quelle di una marca solo per mostrarne l'elenco.
+  via('/api/catalogo/prove', async q => {
+    const marca = String(q.marca || '').trim();
+    if (!marca) return { prove: [], motivo: 'marca mancante' };
+    const prove = await insella.proveDi(marca);
+    return { marca, prove, fonte: 'inSella — prove e rilevamenti della redazione' };
+  }, 'prove');
+
+  // Terzo e ultimo livello: tutto quello che la pagina porta — misure, dichiarati, dimensioni
+  // rilevate, voti, metodologia, testi e galleria.
+  via('/api/catalogo/prova', async q => {
+    const slug = String(q.slug || '').trim();
+    if (!slug) return { motivo: 'prova mancante' };
+    return { prova: await insella.prova(slug) };
+  }, 'prove');
 
   // Secondo e ULTIMO livello dei rilevamenti: le prove di una marca. Ognuna e' gia' la foglia,
   // con i valori misurati e il rimando all'articolo pubblicato.
