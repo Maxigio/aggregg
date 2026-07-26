@@ -87,6 +87,32 @@ test('anni di produzione: si tiene la finestra, non il giorno', () => {
   assert.strictEqual(sg._anniDa(null), null);
 });
 
+test('le date incollate dalla fonte si separano, invece di sparire', () => {
+  // La fonte incolla gli intervalli senza separatore, e la seconda data comincia attaccata
+  // all'anno della prima: "09.01.2026" seguito da "8.12.2020". Fra `6` e `8` non c'e' confine di
+  // parola, quindi con \b ai bordi le due date di mezzo venivano SCARTATE e le due superstiti
+  // appaiate in un periodo inventato lungo cinque anni.
+  assert.deepStrictEqual(sg._periodiDa('08.12.2020 - 09.01.20268.12.2020 - 21.08.2025'),
+    ['08.12.2020 – 09.01.2026', '8.12.2020 – 21.08.2025']);
+  assert.deepStrictEqual(sg._anniDa('08.12.2020 - 09.01.20268.12.2020 - 21.08.2025'), { da: 2020, a: 2026 });
+  // Un numero di modello attaccato all'anno NON e' una data: non ha i separatori al posto giusto.
+  assert.deepStrictEqual(sg._periodiDa('3008 V3: 09.10.2023 - 09.07.2025308 V3: 01.11.2023 - 12.02.2026'),
+    ['09.10.2023 – 09.07.2025', '01.11.2023 – 12.02.2026']);
+  // Lo spazio dopo il punto e' un refuso, non una separazione.
+  assert.deepStrictEqual(sg._periodiDa('01.07. 2010 - 21.08.2014'), ['01.07.2010 – 21.08.2014']);
+  // Un numero di lotto non e' una data: il mese 45 non esiste.
+  assert.deepStrictEqual(sg._periodiDa('lotto 123.45.2020'), []);
+});
+
+test('gli anni vengono dalle DATE: un modello di quattro cifre non e\' un anno', () => {
+  // Su un richiamo Peugeot il campo contiene "// 2008 V2" e "// 2088.3.2017" (la 208 seguita da
+  // una data): leggendoli come anni usciva da:2008 a:2088, e con quella finestra il filtro per
+  // anno non escludeva piu' niente. Il numero nudo si guarda solo se di date non ce n'e' nessuna.
+  assert.deepStrictEqual(sg._anniDa('11.1.2018 - 8.10.2022 // 2008 V28.3.2017 - 30.9.2020 // 208'),
+    { da: 2017, a: 2022 });
+  assert.deepStrictEqual(sg._anniDa('modelli 2020-2022'), { da: 2020, a: 2022 }, 'senza date vale il numero nudo');
+});
+
 // ─── Ricerca: la parte che deve essere onesta ────────────────────────────────
 test('il confronto e a parola INTERA, non a sottostringa', () => {
   // Su un dato di sicurezza un falso positivo e' peggio di un buco: se "Golf" agganciasse
@@ -166,4 +192,28 @@ test('ricerca senza archivio: risponde ok:false col motivo, non finge', () => {
   const r = rica.cerca({ marca: 'Fiat' });
   assert.strictEqual(r.ok, false);
   assert.match(r.motivo, /build-safety-gate/);
+});
+
+// ─── Le route: quanto esce da una richiesta ──────────────────────────────────
+const rotte = {};
+rica.mount({ get: (p, h) => { rotte[p] = h; } }, { clientIp: () => 'test-route' });
+async function chiamaR(percorso, query = {}) {
+  let out = null;
+  const res = { status() { return this; }, set() { return this; }, json(b) { out = b; return this; } };
+  await rotte[percorso]({ query, ip: 'test-route' }, res);
+  return out;
+}
+
+test('cerca senza filtri non spedisce l\'archivio intero', seArchivio, async () => {
+  // Senza tetto la risposta erano 1.034 allerte con difetto, descrizione, misure e foto —
+  // 1,9 MB — e il limite di 60 al minuto per IP le moltiplicava per sessanta. `totale` resta il
+  // conto vero, cosi' si sa che qualcosa e' rimasto fuori invece di crederlo tutto.
+  const r = await chiamaR('/api/richiami/cerca');
+  assert.strictEqual(r.ok, true);
+  assert.ok(r.allerte.length <= 200, 'uscite ' + r.allerte.length + ' allerte');
+  assert.strictEqual(r.totale, rica._dati.allerte.length, 'il totale non e il numero delle mostrate');
+  assert.strictEqual(r.mostrate, r.allerte.length);
+  // Una ricerca vera resta intera: il tetto non deve tagliare quello che serve.
+  const f = await chiamaR('/api/richiami/cerca', { marca: 'fiat' });
+  assert.strictEqual(f.allerte.length, f.totale);
 });

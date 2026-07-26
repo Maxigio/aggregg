@@ -24,9 +24,9 @@
  */
 const https = require('https');
 const zlib = require('zlib');
-const fs = require('fs');
 const path = require('path');
 const { fail, kindForStatus } = require('./utils');
+const cacheDisco = require('./cache-disco');
 
 const HOST = 'overpass-api.de';
 const PERCORSO = '/api/interpreter';
@@ -108,37 +108,10 @@ async function overpass(query) {
 }
 
 // ─── Cache su disco ──────────────────────────────────────────────────────────
-const SCHEMA = 1;                          // da alzare quando cambia la forma dei record
-let memo = null;
-const leggi = () => {
-  if (!memo) {
-    try { memo = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch (_) { memo = { schema: SCHEMA, voci: {} }; }
-    if (memo.schema !== SCHEMA) memo = { schema: SCHEMA, voci: {} };
-    if (!memo.voci) memo.voci = {};
-  }
-  return memo;
-};
-const scrivi = () => { try { fs.writeFileSync(CACHE_FILE, JSON.stringify(leggi())); } catch (_) {} };
-const inVolo = new Map();
-async function conCache(chiave, produci, sospettoSe) {
-  const c = leggi();
-  const v = c.voci[chiave];
-  if (v && Date.now() - v.t < TTL_MS) return v.d;
-  if (inVolo.has(chiave)) return inVolo.get(chiave);
-  const p = (async () => {
-    try {
-      const d = await produci();
-      const sospetto = sospettoSe ? !!sospettoSe(d) : false;
-      c.voci[chiave] = { t: sospetto ? Date.now() - TTL_MS + 15 * 60 * 1000 : Date.now(), d };
-      scrivi(); return d;
-    } catch (e) {
-      if (v) { console.warn('[osm] ' + chiave + ' KO (' + e.message + '): servo la cache vecchia'); return v.d; }
-      throw e;
-    } finally { inVolo.delete(chiave); }
-  })();
-  inVolo.set(chiave, p);
-  return p;
-}
+// SCHEMA: da alzare a ogni cambio della FORMA dei record, o la cache serve il vecchio formato
+// per tutto il TTL senza dirlo. Il resto (tetto, dato vecchio se la fonte cade, vita breve per
+// un risultato sospetto) sta in cache-disco.js, uguale per tutti gli scraper.
+const conCache = cacheDisco.crea(CACHE_FILE, { tag: 'osm', schema: 1, ttl: TTL_MS, max: 400 });
 
 // ─── Query ───────────────────────────────────────────────────────────────────
 const areaDi = regione => (regione && REGIONI[regione]

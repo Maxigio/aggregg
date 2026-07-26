@@ -33,10 +33,10 @@
  */
 const https = require('https');
 const zlib = require('zlib');
-const fs = require('fs');
 const path = require('path');
 
 const { kindForStatus, fail } = require('./utils');
+const cacheDisco = require('./cache-disco');
 
 const HOST = 'www.insella.it';
 const CACHE_FILE = path.join(__dirname, '..', '..', 'data', 'insella-prove-cache.json');
@@ -89,33 +89,10 @@ async function getHtml(percorso) {
 const pausaFinoA = () => (Date.now() < bloccatoFino ? bloccatoFino : 0);
 
 // ─── Cache su disco ──────────────────────────────────────────────────────────
-let memo = null;
-const leggi = () => { if (!memo) { try { memo = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch (_) { memo = { voci: {} }; } if (!memo.voci) memo.voci = {}; } return memo; };
-const scrivi = () => { try { fs.writeFileSync(CACHE_FILE, JSON.stringify(leggi())); } catch (_) {} };
-const inVolo = new Map();
-
-async function conCache(chiave, produci, sospettoSe) {
-  const c = leggi();
-  const v = c.voci[chiave];
-  if (v && Date.now() - v.t < TTL_MS) return v.d;
-  if (inVolo.has(chiave)) return inVolo.get(chiave);
-  const p = (async () => {
-    try {
-      const d = await produci();
-      // Un risultato vuoto non e' un dato, e' un intoppo: si serve lo stesso ma scade in 15
-      // minuti invece che in 7 giorni, cosi' un cambio di markup non congela la fonte.
-      const sospetto = sospettoSe ? !!sospettoSe(d) : false;
-      c.voci[chiave] = { t: sospetto ? Date.now() - TTL_MS + TTL_CORTO_MS : Date.now(), d };
-      scrivi();
-      return d;
-    } catch (e) {
-      if (v) { console.warn('[insella] ' + chiave + ' KO (' + e.message + '): servo la cache vecchia'); return v.d; }
-      throw e;
-    } finally { inVolo.delete(chiave); }
-  })();
-  inVolo.set(chiave, p);
-  return p;
-}
+// SCHEMA: era l'unico scraper della serie senza. La cache conserva le prove GIA' interpretate
+// (misure, voti, dimensioni) per 7 giorni: senza questo numero, cambiare mappaProva o misureDa
+// lasciava a schermo la forma vecchia per una settimana intera, e senza nessun segnale.
+const conCache = cacheDisco.crea(CACHE_FILE, { tag: 'insella', schema: 1, ttl: TTL_MS, ttlCorto: TTL_CORTO_MS, max: 800 });
 
 // ─── Parsing ─────────────────────────────────────────────────────────────────
 const testo = s => String(s == null ? '' : s)
@@ -392,18 +369,25 @@ async function proveDi(marcaSlug) {
     .sort((a, b) => String(b.slug).localeCompare(String(a.slug)));
 }
 
-/** Il dettaglio completo di una prova. */
-const prova = slug => conCache('prova|' + slug, async () => {
+/**
+ * Il dettaglio completo di una prova.
+ * La chiave di cache e' lo slug GIA' RIPULITO, cioe' esattamente quello che finisce nell'URL:
+ * con lo slug grezzo della query, "aprilia-tuono-457" e "aprilia-tuono-457!" erano due voci per
+ * una richiesta sola, e la seconda riscriveva l'intero file per niente.
+ */
+const prova = slug => {
   const s = String(slug || '').replace(/[^a-z0-9-]/gi, '');
-  if (!s) throw fail('slug prova mancante', { kind: 'error' });
-  const v = mappaProva(await getHtml('/prova/' + s), s);
-  // Se la pagina risponde ma non porta ne' misure ne' dichiarati, il markup e' cambiato: meglio
-  // dirlo che archiviare per 7 giorni una scheda vuota.
-  if (!v.misure.velocitaMax && !Object.keys(v.dichiarati).length) {
-    throw fail('prova ' + s + ' senza dati: la pagina della fonte e\' cambiata', { kind: 'parse' });
-  }
-  return v;
-}, d => !d || (!d.misure.velocitaMax && !Object.keys(d.dichiarati).length));
+  if (!s) return Promise.reject(fail('slug prova mancante', { kind: 'error' }));
+  return conCache('prova|' + s, async () => {
+    const v = mappaProva(await getHtml('/prova/' + s), s);
+    // Se la pagina risponde ma non porta ne' misure ne' dichiarati, il markup e' cambiato: meglio
+    // dirlo che archiviare per 7 giorni una scheda vuota.
+    if (!v.misure.velocitaMax && !Object.keys(v.dichiarati).length) {
+      throw fail('prova ' + s + ' senza dati: la pagina della fonte e\' cambiata', { kind: 'parse' });
+    }
+    return v;
+  }, d => !d || (!d.misure.velocitaMax && !Object.keys(d.dichiarati).length));
+};
 
 module.exports = {
   marche, proveDi, prova, indice, pausaFinoA,

@@ -13,6 +13,9 @@
  *  - ricambiOe    bilstein partsfinder: da un codice originale a tutti i suoi equivalenti, con
  *                 le misure tecniche del pezzo.
  *  - cerchi       Wheel-Size: calzate, offset e PRESSIONI di gonfiaggio per modello e anno.
+ *  - costi        IVASS + MEF: quanto costa TENERE un veicolo in ogni provincia — premio r.c.
+ *                 realmente pagato e aliquota dell'imposta provinciale. Unica del gruppo a stare
+ *                 tutta su disco: nessuna rete, nessuna pausa.
  *
  * Ogni fonte va in rete solo quando la si interroga, con la sua cache e la sua pausa. La pausa
  * dopo un blocco si espone come per il catalogo, cosi' l'interfaccia dice quanto manca invece di
@@ -23,6 +26,8 @@ const eprel = require('./scrapers/eprel-pneumatici');
 const bilstein = require('./scrapers/bilstein-oe');
 const wheelsize = require('./scrapers/wheelsize');
 const carburanti = require('./carburanti');
+const costi = require('./costi-possesso');
+const PROVINCE = require('../data/province.json');
 
 /**
  * IL JOIN che tiene insieme due fonti che gia' avevamo separate.
@@ -102,7 +107,17 @@ const FONTI = {
     sa: 'Le calzate omologate con offset, backspace, peso e soprattutto le PRESSIONI di gonfiaggio anteriore e posteriore.',
     nonSa: 'Distanza fori, diametro di centraggio e coppie di serraggio non sono nella pagina, e la misura del pneumatico e\' in chiaro solo su una riga su sette.',
   },
+  costi: {
+    nome: 'Costi di possesso', dettaglio: 'premio r.c. e imposta provinciale — IVASS e MEF',
+    // Nessuno scraper: e' l'unica fonte gia' tutta su disco. Da qui in giu' `scraper` va trattato
+    // come facoltativo, e non come "c'e' sempre".
+    sa: 'Quanto si paga davvero di r.c. auto in ogni provincia — mediana, media e percentili dei contratti STIPULATI, divisi per classe bonus-malus — e l\'aliquota dell\'imposta provinciale deliberata sul posto.',
+    nonSa: 'Non e\' un preventivo: sono statistiche su tutte le polizze della provincia, senza potenza del veicolo ne\' eta\' del conducente. Sette province non hanno l\'aliquota e una non ha i premi, per come pubblicano le fonti: li\' si risponde vuoto invece di stimare.',
+  },
 };
+
+/** L'istante di fine pausa di una fonte, 0 se non ne ha o se non e' bloccata. */
+const pausaDi = f => (f && f.scraper && f.scraper.pausaFinoA ? f.scraper.pausaFinoA() : 0);
 
 function mount(app, deps = {}) {
   const clientIp = deps.clientIp || (req => req.ip || '');
@@ -122,8 +137,7 @@ function mount(app, deps = {}) {
       res.json({ ok: true, ...out });
     } catch (e) {
       console.warn('[fonti] ' + percorso + ' KO:', e.message);
-      const s = FONTI[fonte] && FONTI[fonte].scraper;
-      const fino = s && s.pausaFinoA ? s.pausaFinoA() : 0;
+      const fino = pausaDi(FONTI[fonte]);
       res.json({ ok: false, motivo: e.message, kind: e.kind || 'error', ...(fino ? { bloccataFino: fino } : {}) });
     }
   });
@@ -134,7 +148,7 @@ function mount(app, deps = {}) {
     res.json({
       ok: true, adesso: Date.now(),
       fonti: Object.entries(FONTI).map(([id, f]) => {
-        const fino = f.scraper.pausaFinoA ? f.scraper.pausaFinoA() : 0;
+        const fino = pausaDi(f);
         return { id, nome: f.nome, dettaglio: f.dettaglio, sa: f.sa, nonSa: f.nonSa, ...(fino ? { bloccataFino: fino } : {}) };
       }),
     });
@@ -183,6 +197,45 @@ function mount(app, deps = {}) {
   via('/api/fonti/cerchi/calzate', 'cerchi', q => {
     if (!q.marca || !q.modello || !q.anno) return Promise.resolve({ calzate: [], motivo: 'servono marca, modello e anno' });
     return wheelsize.calzate(String(q.marca), String(q.modello), String(q.anno));
+  });
+
+  // ─── Costi di possesso ─────────────────────────────────────────────────────
+  // Sta su disco: nessuna rete, quindi nessuna pausa e nessun caso di errore da gestire.
+  const D = costi.dati;
+  const conNome = sg => ({ sigla: sg, nome: (PROVINCE[sg] || {}).nome || sg, regione: (PROVINCE[sg] || {}).regione || null });
+
+  /** La classifica nazionale del premio mediano: e' anche l'elenco da cui si sceglie. */
+  const classifica = tipo => {
+    const t = ['auto', 'moto', 'ciclomotore'].includes(tipo) ? tipo : 'auto';
+    const v = Object.entries(D.province)
+      .map(([sg, p]) => ({ ...conNome(sg), ...(p[t] || {}), aliquotaRc: p.aliquotaRc }))
+      .filter(x => x.mediana != null)
+      .sort((a, b) => a.mediana - b.mediana)
+      .map((x, i) => ({ ...x, posto: i + 1 }));
+    return { tipo: t, province: v, totale: v.length };
+  };
+
+  via('/api/fonti/costi/classifica', 'costi', q => Promise.resolve({
+    ...classifica(q.tipo),
+    periodo: D.periodo, fonti: D.fonti, nota: D.nota, assenti: D.assenti, generatedAt: D.generatedAt,
+    // Le province SENZA premio non spariscono dall'elenco: sparire farebbe pensare che non
+    // esistano, mentre e' la fonte che non le pubblica. Si dicono, col perche'.
+    senzaDato: Object.keys(D.province).filter(sg => !(D.province[sg][['auto', 'moto', 'ciclomotore'].includes(q.tipo) ? q.tipo : 'auto'] || {}).mediana).map(conNome),
+  }));
+
+  via('/api/fonti/costi/provincia', 'costi', q => {
+    const sg = String(q.provincia || '').toUpperCase().trim();
+    if (!sg) return Promise.resolve({ motivo: 'serve la sigla della provincia, es. MI' });
+    const c = costi.cerca(sg, q.tipo);
+    if (!c) return Promise.resolve({ motivo: 'provincia sconosciuta: ' + sg });
+    // Tutti e tre i tipi in una risposta sola: la domanda vera e' "quanto mi costa qui", e
+    // saperlo per l'auto ma non per la moto vuol dire rifare la stessa richiesta.
+    const perTipo = {};
+    for (const t of ['auto', 'moto', 'ciclomotore']) {
+      const x = costi.cerca(sg, t);
+      perTipo[t] = { rc: x.rc, rcMotivo: x.rcMotivo, posizione: costi.posizione(sg, t) };
+    }
+    return Promise.resolve({ ...c, ...conNome(sg), perTipo, posizione: costi.posizione(sg, q.tipo) });
   });
 }
 

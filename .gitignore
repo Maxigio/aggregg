@@ -43,3 +43,11 @@ data/carburanti-cache.json
 data/motornet-cache.json
 # cache rilevamenti auto.it (si rigenera, TTL 7g) — dato di terzi: non entra nel repo
 data/autoit-rilevamenti-cache.json
+# cache degli scraper dell'area Fonti e delle prove moto (backend/scrapers/cache-disco.js).
+# Si rigenerano da sole e sono dati di terzi: stessa regola delle tre qui sopra.
+data/insella-prove-cache.json
+data/safety-gate-cache.json
+data/osm-territorio-cache.json
+data/eprel-cache.json
+data/bilstein-cache.json
+data/wheelsize-cache.json

@@ -23,9 +23,9 @@
  */
 const https = require('https');
 const zlib = require('zlib');
-const fs = require('fs');
 const path = require('path');
 const { fail, kindForStatus } = require('./utils');
+const cacheDisco = require('./cache-disco');
 
 const HOST = 'partsfinder.bilsteingroup.com';
 const CACHE_FILE = path.join(__dirname, '..', '..', 'data', 'bilstein-cache.json');
@@ -76,37 +76,10 @@ async function getJson(percorso) {
 }
 
 // ─── Cache su disco ──────────────────────────────────────────────────────────
-const SCHEMA = 1;
-let memo = null;
-const leggi = () => {
-  if (!memo) {
-    try { memo = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch (_) { memo = { schema: SCHEMA, voci: {} }; }
-    if (memo.schema !== SCHEMA) memo = { schema: SCHEMA, voci: {} };
-    if (!memo.voci) memo.voci = {};
-  }
-  return memo;
-};
-const scrivi = () => { try { fs.writeFileSync(CACHE_FILE, JSON.stringify(leggi())); } catch (_) {} };
-const inVolo = new Map();
-async function conCache(chiave, produci, sospettoSe) {
-  const c = leggi();
-  const v = c.voci[chiave];
-  if (v && Date.now() - v.t < TTL_MS) return v.d;
-  if (inVolo.has(chiave)) return inVolo.get(chiave);
-  const p = (async () => {
-    try {
-      const d = await produci();
-      const sospetto = sospettoSe ? !!sospettoSe(d) : false;
-      c.voci[chiave] = { t: sospetto ? Date.now() - TTL_MS + 15 * 60 * 1000 : Date.now(), d };
-      scrivi(); return d;
-    } catch (e) {
-      if (v) { console.warn('[bilstein] ' + chiave + ' KO (' + e.message + '): servo la cache vecchia'); return v.d; }
-      throw e;
-    } finally { inVolo.delete(chiave); }
-  })();
-  inVolo.set(chiave, p);
-  return p;
-}
+// SCHEMA: da alzare a ogni cambio della FORMA dei record, o la cache serve il vecchio formato
+// per tutto il TTL senza dirlo. Il resto (tetto, dato vecchio se la fonte cade, vita breve per
+// un risultato sospetto) sta in cache-disco.js, uguale per tutti gli scraper.
+const conCache = cacheDisco.crea(CACHE_FILE, { tag: 'bilstein', schema: 1, ttl: TTL_MS, max: 800 });
 
 /** Codice pulito per il confronto: la fonte scrive "85E 819 439 B", noi riceviamo "85E819439B". */
 const normCodice = c => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -147,22 +120,29 @@ function mappa(a) {
  * Cerca per CODICE (originale o aftermarket). `searchType=n` e' la ricerca per numeri: con `a`
  * cerca ovunque e restituisce rumore.
  */
-const perCodice = (codice, tipo = 'CAR') => conCache('n|' + normCodice(codice) + '|' + tipo, async () => {
+const perCodice = (codice, tipo = 'CAR') => {
+  // La chiave descrive la RICHIESTA, non l'intenzione: la frase e' quella che parte davvero
+  // (normalizzarla nella sola chiave faceva servire a "85E 819 439 B" la risposta di
+  // "85E819439B", che e' una ricerca diversa) e il veicolo e' gia' ridotto ai due valori veri,
+  // cosi' 'auto', 'CAR' e 'qualunque cosa' non aprono tre voci per la stessa chiamata.
   const c = String(codice || '').trim();
-  if (!c) throw fail('codice mancante', { kind: 'error' });
-  const par = new URLSearchParams();
-  par.set('filter[phrase]', c);
-  par.set('filter[searchType]', 'n');
-  par.set('filter[vehicleType]', tipo === 'MOTO' ? 'MOTORCYCLE' : 'CAR');
-  par.set('filter[country]', 'IT');
-  const j = await getJson('/api/articles?' + par.toString());
-  const meta = (j.meta && j.meta.page) || {};
-  return {
-    cercato: c,
-    totale: Number(meta.totalElements) || (Array.isArray(j.data) ? j.data.length : 0),
-    articoli: (Array.isArray(j.data) ? j.data : [j.data]).filter(Boolean).map(mappa),
-  };
-}, d => !d || (d.totale > 0 && !d.articoli.length));
+  const veicolo = String(tipo).toUpperCase() === 'MOTO' ? 'MOTORCYCLE' : 'CAR';
+  if (!c) return Promise.reject(fail('codice mancante', { kind: 'error' }));
+  return conCache('n|' + c + '|' + veicolo, async () => {
+    const par = new URLSearchParams();
+    par.set('filter[phrase]', c);
+    par.set('filter[searchType]', 'n');
+    par.set('filter[vehicleType]', veicolo);
+    par.set('filter[country]', 'IT');
+    const j = await getJson('/api/articles?' + par.toString());
+    const meta = (j.meta && j.meta.page) || {};
+    return {
+      cercato: c,
+      totale: Number(meta.totalElements) || (Array.isArray(j.data) ? j.data.length : 0),
+      articoli: (Array.isArray(j.data) ? j.data : [j.data]).filter(Boolean).map(mappa),
+    };
+  }, d => !d || (d.totale > 0 && !d.articoli.length));
+};
 
 /**
  * Da un codice a TUTTI gli equivalenti, appiattiti. E' la domanda che si fa davvero in officina:

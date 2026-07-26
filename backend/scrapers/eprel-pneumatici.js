@@ -23,9 +23,9 @@
  */
 const https = require('https');
 const zlib = require('zlib');
-const fs = require('fs');
 const path = require('path');
 const { fail, kindForStatus } = require('./utils');
+const cacheDisco = require('./cache-disco');
 
 const HOST = 'eprel.ec.europa.eu';
 const CACHE_FILE = path.join(__dirname, '..', '..', 'data', 'eprel-cache.json');
@@ -74,37 +74,10 @@ async function getJson(percorso) {
 }
 
 // ─── Cache su disco ──────────────────────────────────────────────────────────
-const SCHEMA = 1;
-let memo = null;
-const leggi = () => {
-  if (!memo) {
-    try { memo = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch (_) { memo = { schema: SCHEMA, voci: {} }; }
-    if (memo.schema !== SCHEMA) memo = { schema: SCHEMA, voci: {} };
-    if (!memo.voci) memo.voci = {};
-  }
-  return memo;
-};
-const scrivi = () => { try { fs.writeFileSync(CACHE_FILE, JSON.stringify(leggi())); } catch (_) {} };
-const inVolo = new Map();
-async function conCache(chiave, produci, sospettoSe) {
-  const c = leggi();
-  const v = c.voci[chiave];
-  if (v && Date.now() - v.t < TTL_MS) return v.d;
-  if (inVolo.has(chiave)) return inVolo.get(chiave);
-  const p = (async () => {
-    try {
-      const d = await produci();
-      const sospetto = sospettoSe ? !!sospettoSe(d) : false;
-      c.voci[chiave] = { t: sospetto ? Date.now() - TTL_MS + 15 * 60 * 1000 : Date.now(), d };
-      scrivi(); return d;
-    } catch (e) {
-      if (v) { console.warn('[eprel] ' + chiave + ' KO (' + e.message + '): servo la cache vecchia'); return v.d; }
-      throw e;
-    } finally { inVolo.delete(chiave); }
-  })();
-  inVolo.set(chiave, p);
-  return p;
-}
+// SCHEMA: da alzare a ogni cambio della FORMA dei record, o la cache serve il vecchio formato
+// per tutto il TTL senza dirlo. Il resto (tetto, dato vecchio se la fonte cade, vita breve per
+// un risultato sospetto) sta in cache-disco.js, uguale per tutti gli scraper.
+const conCache = cacheDisco.crea(CACHE_FILE, { tag: 'eprel', schema: 1, ttl: TTL_MS, max: 800 });
 
 /**
  * Da un record EPREL a quello che mostriamo. Si tengono anche i campi che nel campione sono
@@ -181,20 +154,27 @@ function mappa(r) {
  *   classe  → tyreClass (C1 auto, C2 furgoni, C3 pesanti)
  * Torna { totale, pneumatici } — `totale` e' quanti ne esistono, non quanti se ne sono presi.
  */
-const cerca = ({ misura, marca, classe, pagina = 1 } = {}) => conCache(
-  ['c', misura || '', marca || '', classe || '', pagina].join('|'), async () => {
+const cerca = ({ misura, marca, classe, pagina = 1 } = {}) => {
+  // Si normalizza PRIMA, e la chiave si costruisce sui valori normalizzati. Prima la chiave
+  // portava quelli grezzi mentre la richiesta partiva ripulita: "205/55 R16" e "205/55R16" — la
+  // stessa identica chiamata — occupavano due voci, e cosi' pagina=0 e pagina=1.
+  const mis = misura ? String(misura).toUpperCase().replace(/\s+/g, '') : '';
+  const mar = marca ? String(marca).trim() : '';
+  const cls = classe ? String(classe).toUpperCase().trim() : '';
   const p = Math.max(1, Number(pagina) || 1);          // `_page=0` risponde 500
-  const par = new URLSearchParams({ _page: String(p), _limit: String(LIMITE) });
-  // La fonte vuole la misura attaccata: "205/55 R16" non aggancia niente, "205/55R16" si'.
-  if (misura) par.set('sizeDesignation', String(misura).toUpperCase().replace(/\s+/g, ''));
-  if (marca) par.set('supplierOrTrademark', String(marca));
-  if (classe) par.set('tyreClass', String(classe).toUpperCase());
-  const j = await getJson('/api/products/tyres?' + par.toString());
-  const hits = j.hits || [];
-  // Se il server ricadesse sul default (25) invece di onorare il limite, il chiamante deve poterlo
-  // vedere: `presi` accanto a `limite` lo rende evidente invece di far credere di avere tutto.
-  return { totale: Number(j.size) || 0, offset: Number(j.offset) || 0, limite: LIMITE, presi: hits.length, pneumatici: hits.map(mappa) };
-}, d => !d || (d.totale > 0 && !d.presi));
+  return conCache(['c', mis, mar, cls, p].join('|'), async () => {
+    const par = new URLSearchParams({ _page: String(p), _limit: String(LIMITE) });
+    // La fonte vuole la misura attaccata: "205/55 R16" non aggancia niente, "205/55R16" si'.
+    if (mis) par.set('sizeDesignation', mis);
+    if (mar) par.set('supplierOrTrademark', mar);
+    if (cls) par.set('tyreClass', cls);
+    const j = await getJson('/api/products/tyres?' + par.toString());
+    const hits = j.hits || [];
+    // Se il server ricadesse sul default (25) invece di onorare il limite, il chiamante deve poterlo
+    // vedere: `presi` accanto a `limite` lo rende evidente invece di far credere di avere tutto.
+    return { totale: Number(j.size) || 0, offset: Number(j.offset) || 0, limite: LIMITE, presi: hits.length, pneumatici: hits.map(mappa) };
+  }, d => !d || (d.totale > 0 && !d.presi));
+};
 
 /** Il conteggio totale, senza scaricare niente: serve a dire quanto grande e' l'archivio. */
 const totale = () => conCache('totale', async () => {

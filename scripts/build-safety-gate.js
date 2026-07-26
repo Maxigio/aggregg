@@ -41,8 +41,11 @@ const arg = (nome, def) => {
 
   const limite = new Date().getFullYear() - anni + 1;
   const gia = new Set(aggiorna ? (esistente.reportLetti || []) : []);
+  // --aggiorna tiene la finestra sugli anni: senza, il primo aggiornamento dopo una costruzione
+  // normale metteva in coda tutti i report dal 2005 (~950 a 1,5 s l'uno, 25 minuti) invece dei
+  // pochi usciti nel frattempo. Solo --tutto scavalca la finestra, ed e' quello che dichiara.
   const daFare = elenco
-    .filter(r => (tutto || aggiorna ? true : r.anno >= limite))
+    .filter(r => (tutto ? true : r.anno >= limite))
     .filter(r => !gia.has(r.id));
 
   if (!daFare.length) { console.log('[safety-gate] niente di nuovo da scaricare.'); return; }

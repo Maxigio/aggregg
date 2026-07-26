@@ -31,13 +31,14 @@ const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ
 function combacia(modelli, cercato) {
   const q = norm(cercato);
   if (!q) return false;
+  // La regex si compila UNA volta per ricerca, non una per modello: dentro il ciclo erano ~400.000
+  // compilazioni per costruire l'elenco marche, cioe' quasi tutti i 296 ms di avvio del modulo.
+  // Niente escape dei metacaratteri: norm() ha gia' ridotto la stringa a [a-z0-9 ].
+  const re = new RegExp('(^| )' + q + '( |$)');   // "Golf A6" aggancia "Golf"; "Golfino" no.
   for (const m of modelli || []) {
     const n = norm(m);
     if (!n) continue;
-    if (n === q) return true;
-    // "Golf A6" combacia con "Golf"; "Golf" NON combacia con "Golfino".
-    const re = new RegExp('(^| )' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '( |$)');
-    if (re.test(n)) return true;
+    if (n === q || re.test(n)) return true;
   }
   return false;
 }
@@ -84,8 +85,14 @@ function cerca({ marca, modello, anno } = {}) {
  * Qui il conteggio si calcola con LA STESSA funzione che serve la ricerca, e le voci che pescano
  * esattamente le stesse allerte si fondono in una sola — quella col nome piu' esteso, che e' anche
  * quello che un operatore riconosce.
+ *
+ * Si costruisce ALLA PRIMA richiesta, non al require: e' un incrocio di 200 candidate per 1.034
+ * allerte, e faceva 296 ms di lavoro bloccante prima che il server aprisse la porta — pagati a
+ * ogni riavvio, anche da chi i richiami non li apre mai.
  */
-const MARCHE = (() => {
+let _marche = null;
+const MARCHE = () => (_marche || (_marche = costruisciMarche()));
+function costruisciMarche() {
   if (!D) return [];
   const candidate = new Map();          // chiave normalizzata → grafia piu' frequente
   for (const a of D.allerte) {
@@ -113,7 +120,7 @@ const MARCHE = (() => {
   return [...perInsieme.values()]
     .map(({ _casi, ...v }) => v)
     .sort((a, b) => b.allerte - a.allerte || a.nome.localeCompare(b.nome, 'it'));
-})();
+}
 
 function mount(app, deps = {}) {
   const clientIp = deps.clientIp || (req => req.ip || '');
@@ -143,7 +150,7 @@ function mount(app, deps = {}) {
     totale: D.allerte.length,
     // Le marche CONSOLIDATE, non le grafie grezze dell'archivio: altrimenti lo stato dice 202
     // e l'elenco sotto ne mostra 198, e chi legge non sa a quale credere.
-    marche: MARCHE.length,
+    marche: MARCHE().length,
     marcheGrezze: D.marche.length,
     reportLetti: (D.reportLetti || []).length,
     generatedAt: D.generatedAt,
@@ -163,11 +170,20 @@ function mount(app, deps = {}) {
   via('/api/richiami/marche', q => {
     if (!D) return { marche: [], motivo: 'archivio non costruito' };
     const f = norm(q.filtro || '');
-    const m = f ? MARCHE.filter(x => norm(x.nome).includes(f)) : MARCHE;
+    const tutte = MARCHE();
+    const m = f ? tutte.filter(x => norm(x.nome).includes(f)) : tutte;
     return { marche: m, totale: m.length };
   });
 
-  via('/api/richiami/cerca', q => cerca({ marca: q.marca, modello: q.modello, anno: q.anno }));
+  // Il tetto e' lo stesso di /ultime. Senza, una richiesta SENZA filtri rispondeva l'archivio
+  // intero — misurato: 1.034 allerte, 1,9 MB — e il limite di 60 al minuto per IP lo moltiplicava
+  // per sessanta. `totale` resta il conto vero, cosi' si sa quanto e' rimasto fuori.
+  via('/api/richiami/cerca', q => {
+    const r = cerca({ marca: q.marca, modello: q.modello, anno: q.anno });
+    if (!r.ok) return r;
+    const n = Math.min(200, Math.max(1, Number(q.quante) || 200));
+    return { ...r, allerte: r.allerte.slice(0, n), mostrate: Math.min(r.totale, n) };
+  });
 
   // Le ultime allerte pubblicate: e' la vista che serve per tenere d'occhio la settimana.
   via('/api/richiami/ultime', q => {
@@ -177,4 +193,8 @@ function mount(app, deps = {}) {
   });
 }
 
-module.exports = { mount, cerca, _combacia: combacia, _combaciaMarca: combaciaMarca, _marche: MARCHE, _dati: D };
+module.exports = {
+  mount, cerca, _combacia: combacia, _combaciaMarca: combaciaMarca, _dati: D,
+  // getter e non valore: leggerlo costruisce l'elenco, senza obbligare chi non lo legge a pagarlo.
+  get _marche() { return MARCHE(); },
+};

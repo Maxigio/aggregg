@@ -234,3 +234,27 @@ test('limite: 40 richieste al minuto per IP, la 41esima no', async () => {
   for (let i = 1; i <= 40; i++) assert.strictEqual(cat._rateOk(ip), true, 'richiesta ' + i);
   assert.strictEqual(cat._rateOk(ip), false, 'la 41esima deve essere respinta');
 });
+
+test('interruttore: una fonte inventata NON apre il listino, nemmeno chiamandola "constructor"', async () => {
+  // `FONTI[fonte]` letto direttamente risolve su Object.prototype: ?fonte=constructor faceva
+  // credere a spegnibile() che quella fonte esistesse e non fosse spegnibile, e con Motornet
+  // spento la route rispondeva l'intero elenco marche del listino — misurato, non ipotizzato.
+  for (const f of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'sconosciuta']) {
+    const { corpo } = await chiama('/api/catalogo/marche', { fonte: f });
+    assert.strictEqual(corpo.ok, false, 'fonte=' + f + ' non deve rispondere dati');
+    assert.strictEqual(corpo.spento, true, 'fonte=' + f + ' deve cadere sull\'interruttore');
+  }
+});
+
+test('modelli: i cataloghi senza livello modelli non ricadono sul listino', async () => {
+  // Rilevamenti e prove sono a due e tre livelli e non hanno "modelli". Prima il ramo Motornet
+  // era il fallimento di "nessun indice su disco", quindi ci finivano dentro: rispondevano col
+  // listino, e per giunta a interruttore spento, perche' quelle fonti non sono spegnibili.
+  for (const f of ['rilevamenti', 'prove']) {
+    const { corpo } = await chiama('/api/catalogo/modelli', { fonte: f, marca: 'AB' });
+    assert.deepStrictEqual(corpo.modelli, [], f + ': non deve arrivare roba dal listino');
+    assert.match(corpo.motivo, /livello modelli/);
+  }
+  // Il listino invece resta spento, come deve.
+  assert.strictEqual((await chiama('/api/catalogo/modelli', { fonte: 'nuovo', marca: 'AB' })).corpo.spento, true);
+});

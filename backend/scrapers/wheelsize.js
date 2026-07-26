@@ -22,9 +22,9 @@
  */
 const https = require('https');
 const zlib = require('zlib');
-const fs = require('fs');
 const path = require('path');
 const { fail, kindForStatus } = require('./utils');
+const cacheDisco = require('./cache-disco');
 
 const HOST = 'www.wheel-size.com';
 const CACHE_FILE = path.join(__dirname, '..', '..', 'data', 'wheelsize-cache.json');
@@ -68,37 +68,10 @@ async function getHtml(percorso) {
 }
 
 // ─── Cache su disco ──────────────────────────────────────────────────────────
-const SCHEMA = 1;
-let memo = null;
-const leggi = () => {
-  if (!memo) {
-    try { memo = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch (_) { memo = { schema: SCHEMA, voci: {} }; }
-    if (memo.schema !== SCHEMA) memo = { schema: SCHEMA, voci: {} };
-    if (!memo.voci) memo.voci = {};
-  }
-  return memo;
-};
-const scrivi = () => { try { fs.writeFileSync(CACHE_FILE, JSON.stringify(leggi())); } catch (_) {} };
-const inVolo = new Map();
-async function conCache(chiave, produci, sospettoSe) {
-  const c = leggi();
-  const v = c.voci[chiave];
-  if (v && Date.now() - v.t < TTL_MS) return v.d;
-  if (inVolo.has(chiave)) return inVolo.get(chiave);
-  const p = (async () => {
-    try {
-      const d = await produci();
-      const sospetto = sospettoSe ? !!sospettoSe(d) : false;
-      c.voci[chiave] = { t: sospetto ? Date.now() - TTL_MS + 15 * 60 * 1000 : Date.now(), d };
-      scrivi(); return d;
-    } catch (e) {
-      if (v) { console.warn('[wheelsize] ' + chiave + ' KO (' + e.message + '): servo la cache vecchia'); return v.d; }
-      throw e;
-    } finally { inVolo.delete(chiave); }
-  })();
-  inVolo.set(chiave, p);
-  return p;
-}
+// SCHEMA: da alzare a ogni cambio della FORMA dei record, o la cache serve il vecchio formato
+// per tutto il TTL senza dirlo. Il resto (tetto, dato vecchio se la fonte cade, vita breve per
+// un risultato sospetto) sta in cache-disco.js, uguale per tutti gli scraper.
+const conCache = cacheDisco.crea(CACHE_FILE, { tag: 'wheelsize', schema: 1, ttl: TTL_MS, max: 800 });
 
 // ─── Parsing ─────────────────────────────────────────────────────────────────
 const testo = s => String(s == null ? '' : s)
@@ -181,9 +154,12 @@ function generazioniDa(html) {
  * JavaScript da endpoint che il robots.txt della fonte vieta, e non li chiamiamo. Offset,
  * backspace, peso e pressione invece ci sono su tutte.
  */
-const calzate = (marca, modello, anno) => conCache(
-  ['c', slug(marca), slug(modello), anno].join('|'), async () => {
-    const p = `/size/${slug(marca)}/${slug(modello)}/${String(anno).replace(/\D/g, '')}/`;
+const calzate = (marca, modello, anno) => {
+  // Chiave e URL si costruiscono dagli STESSI pezzi gia' ripuliti: con l'anno grezzo, "2020" e
+  // "2020 " (o "MY2020") erano tre voci di cache per una richiesta sola.
+  const ma = slug(marca), mo = slug(modello), an = String(anno).replace(/\D/g, '');
+  return conCache(['c', ma, mo, an].join('|'), async () => {
+    const p = `/size/${ma}/${mo}/${an}/`;
     const html = await getHtml(p);
     const righe = calzateDa(html);
     const conMisura = righe.filter(r => r.misura).length;
@@ -200,6 +176,7 @@ const calzate = (marca, modello, anno) => conCache(
         : 'Distanza fori, centraggio e coppia di serraggio non sono disponibili per questa via.',
     };
   }, d => !d || !d.totale);
+};
 
 module.exports = {
   calzate, pausaFinoA,

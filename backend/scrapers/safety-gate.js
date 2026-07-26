@@ -89,7 +89,7 @@ const pausaFinoA = () => (Date.now() < bloccatoFino ? bloccatoFino : 0);
 // significa continuare a servire il vecchio formato per un giorno intero senza accorgersene —
 // e' successo aggiungendo i telai, che risultavano zero su 1.041 mentre erano nei dati.
 // Questo numero va alzato a ogni cambio della forma dei record.
-const SCHEMA = 2;
+const SCHEMA = 3;   // 3: date di produzione separate anche quando la fonte le incolla
 let memo = null;
 const leggi = () => {
   if (!memo) {
@@ -152,24 +152,54 @@ function elencoDaXml(xml) {
 }
 
 /**
- * Le date di produzione arrivano come "29.09.2025 - 05.10.2025". Si estraggono gli anni, che sono
- * l'unico aggancio possibile all'anno di un annuncio: il giorno esatto non ci serve e fingere di
- * usarlo darebbe una precisione che non abbiamo.
+ * Le date, una per una, dal campo di produzione.
+ *
+ * NIENTE `\b` ai bordi, ed e' il punto di tutta la funzione: la fonte incolla gli intervalli senza
+ * separatore, e la seconda data comincia attaccata all'anno della prima —
+ * "08.12.2020 - 09.01.20268.12.2020" e' "09.01.2026" seguito da "8.12.2020". Fra `6` e `8` non
+ * c'e' nessun confine di parola, quindi `\b` scartava proprio le due date che questa funzione
+ * esiste per separare, e le due superstiti finivano appaiate in un periodo inventato di cinque
+ * anni. Misurato sull'archivio: 7 allerte su 962 con date di produzione.
+ *
+ * Al posto del confine si controllano giorno (1-31) e mese (1-12): serve a non leggere come data
+ * un numero di lotto tipo "123.45.2020", e basta perche' una data vera deve comunque avere i
+ * separatori al posto giusto — infatti i numeri di modello incollati all'anno ("...2025308 V3")
+ * non agganciano, non essendo seguiti da un punto.
+ */
+function dateDa(testo) {
+  // Lo spazio dopo il punto e' un refuso della fonte, non una separazione: "01.07. 2010" e' una
+  // data sola. Senza tollerarlo si perdeva l'inizio del periodo e restava solo l'anno di fine.
+  return [...String(testo || '')
+    .matchAll(/(?:0?[1-9]|[12]\d|3[01])\s*[./]\s*(?:0?[1-9]|1[0-2])\s*[./]\s*(?:19|20)\d{2}/g)]
+    .map(m => m[0].replace(/\s+/g, ''));
+}
+
+/**
+ * Gli anni di produzione: sono l'unico aggancio possibile all'anno di un annuncio, il giorno
+ * esatto non ci serve e fingere di usarlo darebbe una precisione che non abbiamo.
+ *
+ * Si prendono dalle DATE — stessa funzione dei periodi, cosi' i due campi non possono raccontare
+ * due storie diverse. Il numero scritto da solo si guarda SOLO se di date non ce n'e' nessuna,
+ * perche' in questo campo un numero di quattro cifre e' quasi sempre un modello e non un anno:
+ * su un richiamo Peugeot "// 2008 V2" e "// 2088.3.2017" (cioe' la 208 seguita da una data)
+ * davano da:2008 a:2088, e con quella finestra il filtro per anno non escludeva piu' niente.
  */
 function anniDa(produzione) {
-  const a = [...String(produzione || '').matchAll(/\b((?:19|20)\d{2})\b/g)].map(m => Number(m[1]));
+  const s = String(produzione || '');
+  let a = dateDa(s).map(d => Number(d.slice(-4)));
+  if (!a.length) a = [...s.matchAll(/\b((?:19|20)\d{2})\b/g)].map(m => Number(m[1]));
   if (!a.length) return null;
   return { da: Math.min(...a), a: Math.max(...a) };
 }
 
 /**
  * Il campo delle date arriva spesso con PIU' intervalli incollati senza separatore — e' la fonte a
- * scriverli cosi': "08.12.2020 - 09.01.20268.12.2020 - 21.08.2025" sono due periodi in cui lo zero
- * del secondo si e' fuso con l'anno del primo. Mostrarlo com'e' fa leggere "09.01.20268". Si
- * estraggono le date una per una e si ricompongono a coppie.
+ * scriverli cosi': "08.12.2020 - 09.01.20268.12.2020 - 21.08.2025" sono due periodi in cui il
+ * giorno del secondo si e' fuso con l'anno del primo. Mostrarlo com'e' fa leggere "09.01.20268".
+ * Si estraggono le date una per una e si ricompongono a coppie.
  */
 function periodiDa(produzione) {
-  const d = [...String(produzione || '').matchAll(/\b\d{1,2}[./]\d{1,2}[./](?:19|20)\d{2}\b/g)].map(m => m[0]);
+  const d = dateDa(produzione);
   const fuori = [];
   for (let i = 0; i < d.length; i += 2) fuori.push(d[i + 1] ? d[i] + ' – ' + d[i + 1] : d[i]);
   return fuori;
@@ -297,5 +327,5 @@ const report = id => conCache('r|' + id, async () => {
 module.exports = {
   elenco, report, pausaFinoA,
   _elencoDaXml: elencoDaXml, _veicoliDaReport: veicoliDaReport, _mappaNotifica: mappaNotifica,
-  _modelliDa: modelliDa, _marcheDa: marcheDa, _anniDa: anniDa, _periodiDa: periodiDa, _telaiDa: telaiDa, _cdata: cdata, _omologazioniDa: omologazioniDa, _CACHE_FILE: CACHE_FILE,
+  _modelliDa: modelliDa, _marcheDa: marcheDa, _anniDa: anniDa, _periodiDa: periodiDa, _dateDa: dateDa, _telaiDa: telaiDa, _cdata: cdata, _omologazioniDa: omologazioniDa, _CACHE_FILE: CACHE_FILE,
 };

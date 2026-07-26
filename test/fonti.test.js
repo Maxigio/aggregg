@@ -32,7 +32,8 @@ async function chiama(percorso, query = {}) {
 test('sono montate tutte le route dell\'area', () => {
   for (const p of ['/api/fonti', '/api/fonti/territorio/categorie', '/api/fonti/territorio/conta',
     '/api/fonti/territorio/oggetti', '/api/fonti/pneumatici/totale', '/api/fonti/pneumatici/cerca',
-    '/api/fonti/ricambi-oe/cerca', '/api/fonti/ricambi-oe/equivalenti', '/api/fonti/cerchi/calzate']) {
+    '/api/fonti/ricambi-oe/cerca', '/api/fonti/ricambi-oe/equivalenti', '/api/fonti/cerchi/calzate',
+    '/api/fonti/costi/provincia', '/api/fonti/costi/classifica']) {
     assert.ok(rotte[p], 'manca ' + p);
   }
 });
@@ -43,8 +44,8 @@ test('ogni fonte dichiara cosa sa E cosa non sa', async () => {
   const { corpo, headers } = await chiama('/api/fonti');
   assert.strictEqual(corpo.ok, true);
   assert.strictEqual(headers['Cache-Control'], 'no-store', 'porta lo stato di pausa: non si caccia');
-  assert.strictEqual(corpo.fonti.length, 4);
-  assert.deepStrictEqual(corpo.fonti.map(f => f.id), ['territorio', 'pneumatici', 'ricambiOe', 'cerchi']);
+  assert.strictEqual(corpo.fonti.length, 5);
+  assert.deepStrictEqual(corpo.fonti.map(f => f.id), ['territorio', 'pneumatici', 'ricambiOe', 'cerchi', 'costi']);
   for (const f of corpo.fonti) {
     assert.ok(f.sa && f.sa.length > 30, f.id + ': manca cosa sa');
     assert.ok(f.nonSa && f.nonSa.length > 30, f.id + ': manca cosa NON sa');
@@ -80,6 +81,45 @@ test('territorio: categoria o regione inventata non va in rete', async () => {
   const b = await chiama('/api/fonti/territorio/oggetti', { categoria: 'concessionari', regione: 'atlantide' });
   assert.strictEqual(b.corpo.ok, false);
   assert.match(b.corpo.motivo, /regione sconosciuta/);
+});
+
+test('costi: una provincia porta premio, percentili, classi e imposta', async () => {
+  const { corpo } = await chiama('/api/fonti/costi/provincia', { provincia: 'mi', tipo: 'auto' });
+  assert.strictEqual(corpo.ok, true);
+  assert.strictEqual(corpo.sigla, 'MI');
+  assert.strictEqual(corpo.nome, 'Milano', 'la sigla da sola non si mostra a un operatore');
+  // La mediana e' il numero da leggere: la media la tirano su le poche polizze carissime.
+  assert.ok(corpo.rc.mediana > 0 && corpo.rc.mediana < corpo.rc.medio, 'a Milano media > mediana');
+  for (const k of ['p10', 'p25', 'p75', 'p90']) assert.ok(corpo.rc[k] > 0, 'manca ' + k);
+  assert.ok(Object.keys(corpo.rc.perClasse).length >= 4, 'mancano le classi bonus-malus');
+  assert.strictEqual(typeof corpo.aliquotaRc, 'number');
+  // Tutti e tre i tipi in una risposta sola: la domanda e' "quanto costa qui", non "quanto costa
+  // l'auto qui", e rifare la richiesta per la moto sarebbe un giro a vuoto.
+  assert.deepStrictEqual(Object.keys(corpo.perTipo), ['auto', 'moto', 'ciclomotore']);
+  assert.ok(corpo.posizione.posto >= 1 && corpo.posizione.posto <= corpo.posizione.su);
+});
+
+test('costi: dove il dato non c\'e\' si dice PERCHE\', non si stima', async () => {
+  // Sette province non hanno l'aliquota e una non ha i premi: e' una ragione della fonte, non
+  // nostra, e nasconderla farebbe sembrare rotta l'app.
+  const bz = (await chiama('/api/fonti/costi/provincia', { provincia: 'BZ' })).corpo;
+  assert.strictEqual(bz.aliquotaRc, null);
+  assert.match(bz.aliquotaMotivo, /statuto speciale|autonom/i);
+  const zz = (await chiama('/api/fonti/costi/provincia', { provincia: 'ZZ' })).corpo;
+  assert.match(zz.motivo, /provincia sconosciuta/);
+  assert.match((await chiama('/api/fonti/costi/provincia')).corpo.motivo, /sigla/);
+});
+
+test('costi: la classifica e\' ordinata e non nasconde le province senza premio', async () => {
+  const { corpo } = await chiama('/api/fonti/costi/classifica', { tipo: 'auto' });
+  assert.ok(corpo.province.length > 100);
+  for (let i = 1; i < corpo.province.length; i++) {
+    assert.ok(corpo.province[i].mediana >= corpo.province[i - 1].mediana, 'classifica non ordinata');
+  }
+  assert.strictEqual(corpo.province[0].posto, 1);
+  // Sud Sardegna non ha i premi: deve comparire fra le assenti, non sparire dall'elenco.
+  assert.ok(corpo.senzaDato.some(x => x.sigla === 'SU'), 'una provincia senza dato non si cancella');
+  assert.ok(corpo.periodo && corpo.fonti && corpo.nota);
 });
 
 test('OSM: l\'area si costruisce col codice ISO, non col nome', () => {

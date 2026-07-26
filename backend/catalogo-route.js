@@ -84,13 +84,23 @@ const SPENTO = { ok: false, motivo: 'catalogo non attivo su questa installazione
 // dall'interfaccia era indistinguibile da un guasto: si diceva "non disponibile" e basta.
 // Qui si tira su l'istante di fine pausa, cosi' la UI puo' dire quanto manca.
 const SCRAPER = { rilevamenti: autoit, prove: insella, nuovo: motornet };
+
+/**
+ * La fonte con questo id, SOLO se e' una delle nostre.
+ *
+ * Il `Object.prototype.hasOwnProperty.call` non e' pedanteria: la query arriva dal browser, e
+ * `?fonte=constructor` (o `toString`, o `__proto__`) su un oggetto normale risolve a qualcosa di
+ * vero. Con `FONTI[fonte]` diretto quel valore faceva passare `spegnibile` per falso e apriva il
+ * listino Motornet a interruttore spento — misurato: rispondeva l'elenco marche intero.
+ */
+const own = (obj, k) => (Object.prototype.hasOwnProperty.call(obj, k) ? obj[k] : undefined);
 const pausaDi = fonte => {
-  const s = SCRAPER[fonte];
+  const s = own(SCRAPER, fonte);
   return s && s.pausaFinoA ? s.pausaFinoA() : 0;
 };
 // Una fonte sconosciuta si comporta come il listino: si spegne. Cosi' un id sbagliato nella query
 // non apre una porta di servizio.
-const spegnibile = fonte => (FONTI[fonte] ? !!FONTI[fonte].spegnibile : true);
+const spegnibile = fonte => { const f = own(FONTI, fonte); return f ? !!f.spegnibile : true; };
 
 function mount(app, deps = {}) {
   const clientIp = deps.clientIp || (req => req.ip || '');
@@ -180,6 +190,10 @@ function mount(app, deps = {}) {
       const b = idx.brands[marca];
       return { fonte: f, acronimo: marca, marcaNome: b.name || marca, modelli: mods };
     }
+    // Sotto c'e' Motornet, e ci si va SOLO se la fonte e' il listino. Prima il ramo era il
+    // fallimento di "nessun indice su disco", quindi ?fonte=rilevamenti finiva li' e rispondeva
+    // col listino — a interruttore spento, per giunta, perche' quelle fonti non sono spegnibili.
+    if (f !== 'nuovo') return { modelli: [], motivo: 'questo catalogo non ha un livello modelli' };
     // Si accetta sia la sigla ("ALF") sia il nome esteso ("Alfa Romeo"): chi arriva da un
     // link della ricerca usato ha il nome, chi naviga il catalogo ha la sigla.
     // Si distingue sigla da nome guardando gli acronimi VERI, non la lunghezza: "DS" e "MG"
