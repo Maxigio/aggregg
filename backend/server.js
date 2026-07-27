@@ -40,7 +40,7 @@ const saved = require('./saved');
 const budget = require('./budget-richieste');     // quante richieste costa una ricerca: contate, non stimate
 const { risolviNodo } = require('./scrapers/subito-nodo');   // testo digitato → id del catalogo Subito
 const { codiciAs24, unisciCodici } = require('./scrapers/as24-modelli');   // traduzione di livello verso AS24
-const { versioniDi } = require('./scrapers/versioni-unificate');           // una lista versioni per tutte e tre le fonti
+const { versioniDi, versioniMotoit } = require('./scrapers/versioni-unificate');           // una lista versioni per tutte e tre le fonti
 const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings, norm } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
 const regionCentroids = require('../data/region-centroids.json');  // capoluoghi regione {lat,lng} → raggio AS24 nativo
@@ -523,13 +523,27 @@ app.get('/api/models', async (req, res) => {
 // vivono sotto una serie ("Serie 3 (E46)" → "316i cat 4 porte Attiva"). Appiattirlo
 // vorrebbe dire perdere l'informazione e poi doverla indovinare.
 app.get('/api/versioni', (req, res) => {
-  const { tipo, marca, modello } = req.query || {};
+  const { tipo, marca, modello, motoitSlug } = req.query || {};
   if (!tipo || !['auto', 'moto'].includes(tipo)) return res.status(400).json({ error: 'tipo deve essere "auto" o "moto"' });
   if (!marca || !String(marca).trim()) return res.status(400).json({ error: 'marca obbligatoria' });
   const nodo = risolviNodo(tipo, String(marca).trim(), modello ? String(modello).trim() : '');
-  if (!nodo) return res.json({ ok: true, tipo, marca: null, generazioni: [], motivo: 'marca non nel catalogo Subito' });
-  if (!nodo.famigliaIds) return res.json({ ok: true, tipo, marca: { id: nodo.marcaId, nome: nodo.marcaNome }, generazioni: [], motivo: 'modello non risolto' });
-  const generazioni = versioniDi(tipo, nodo.marcaId, nodo.generazioni);
+  const generazioni = (nodo && nodo.famigliaIds) ? versioniDi(tipo, nodo.marcaId, nodo.generazioni) : [];
+
+  // LE DUE STRADE NON SI CONTENGONO. Subito risolve per nome; Moto.it ha lo slug del
+  // modello che il menu si porta dietro. Passando solo dalla prima si perdevano 353
+  // voci del menu moto (Aprilia Pegaso 3 650, SL 1000 Falco) che per slug le versioni
+  // ce l'hanno. Si prendono da entrambe, senza duplicare quello che c'e' gia'.
+  if (tipo === 'moto' && motoitSlug) {
+    const brandHit = lookupBrand('moto', String(marca).trim());
+    const bs = (brandHit && brandHit.entry && brandHit.entry.motoit && brandHit.entry.motoit.brandSlug)
+      || resolveMotoitSlug(String(marca).trim()) || null;
+    const gia = new Set();
+    for (const g of generazioni) for (const v of g.versioni) for (const x of (v.motoit || [])) gia.add(String(x));
+    const extra = versioniMotoit(bs, String(motoitSlug), gia);
+    if (extra.length) generazioni.push({ id: 'motoit:' + motoitSlug, nome: (nodo && nodo.famigliaNome) || String(modello || ''), versioni: extra });
+  }
+
+  if (!nodo) return res.json({ ok: true, tipo, marca: null, generazioni, motivo: generazioni.length ? null : 'marca non nel catalogo Subito' });
   res.set('Cache-Control', 'private, max-age=300');
   res.json({
     ok: true, tipo,
@@ -537,6 +551,7 @@ app.get('/api/versioni', (req, res) => {
     modello: { nome: nodo.famigliaNome, ids: nodo.famigliaIds, come: nodo.come },
     generazioni,
     totale: generazioni.reduce((n, g) => n + g.versioni.length, 0),
+    motivo: (!nodo.famigliaIds && !generazioni.length) ? 'modello non risolto' : null,
   });
 });
 
@@ -721,6 +736,7 @@ function parseSearchParams(query) {
   const {
     tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione, raggio,
     mmmvAutoscout, motoitBrandSlug, motoitModelSlug, motoitBikeCode, motoitNeedsVersion,
+    versioneSubito,
   } = query;
 
   const errors = [];
@@ -753,6 +769,10 @@ function parseSearchParams(query) {
       motoitBrandSlug:  motoitBrandSlug  || null,
       motoitModelSlug:  motoitModelSlug  || null,
       motoitBikeCode:   motoitBikeCode   || null,   // versione/allestimento Moto.it (param `bike=`)
+      // Id-versione del catalogo Subito. NON si manda alla fonte come filtro (`cv`
+      // perderebbe il 23% di annunci che la versione non la dichiarano): si usa per
+      // filtrare in locale su quello che l'annuncio dichiara di se'.
+      versioneSubito:   versioneSubito   || null,
       motoitNeedsVersion: motoitNeedsVersion === '1',   // F47.2: versione obbligatoria SOLO Moto.it → skip se non scelta
     }
   };

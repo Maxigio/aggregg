@@ -83,6 +83,45 @@ function versioniDi(tipo, marcaId, generazioni) {
   return out;
 }
 
+/**
+ * Le versioni che Moto.it ha per un suo modello, quando Subito non arriva.
+ *
+ * Serve perche' le due strade coprono cose diverse: passando solo da Subito si
+ * perdevano 353 voci del menu moto (Aprilia Pegaso 3 650, SL 1000 Falco, MX 50…) che
+ * per lo slug Moto.it le versioni ce l'hanno. Nessuna delle due fonti contiene l'altra,
+ * quindi si prendono da entrambe — la stessa regola della lista.
+ *
+ * `gia` sono gli id-versione Moto.it gia' presenti: non si duplica quello che c'e'.
+ */
+function versioniMotoit(brandSlug, modelSlug, gia = new Set()) {
+  if (!brandSlug || !modelSlug) return [];
+  let cat;
+  try { cat = require('../../data/motoit-catalogo.json'); } catch (_) { return []; }
+  const b = (cat.marche || {})[String(brandSlug).toLowerCase()];
+  const m = b && b.modelli && b.modelli[String(modelSlug).toLowerCase()];
+  if (!m) return [];
+  // I nomi del catalogo portano entita' HTML doppie: si decodificano in lettura, con la
+  // stessa funzione dei menu — un secondo decodificatore sarebbe un secondo modo di
+  // sbagliare. (`Caff&amp;egrave;nero 125` → `Caffènero 125`.)
+  const { decodifica } = require('./motoit-models');
+  const out = [];
+  for (const [id, v] of Object.entries(m.versioni || {})) {
+    if (gia.has(String(id))) continue;
+    const nome = decodifica(v.nome).trim();
+    out.push({
+      id: 'm' + id,
+      nome,
+      fonti: ['motoit'],
+      anni: v.anni || null,
+      subito: null,
+      motoit: [id],
+      nomi: [nome],
+      base: false,
+    });
+  }
+  return out;
+}
+
 /** Quante versioni ha una famiglia, senza costruire la lista (per i conteggi). */
 function quante(tipo, marcaId, generazioni) {
   const dati = perMarca(tipo, marcaId);
@@ -92,4 +131,4 @@ function quante(tipo, marcaId, generazioni) {
   return n;
 }
 
-module.exports = { versioniDi, quante, _perMarca: perMarca, _nomeDi: nomeDi };
+module.exports = { versioniDi, versioniMotoit, quante, _perMarca: perMarca, _nomeDi: nomeDi };

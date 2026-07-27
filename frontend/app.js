@@ -645,23 +645,38 @@ async function loadModels(tipo, marca) {
 function resetVersioneOnly() { selectedVersion = null; versioniCorrenti = []; if (versioneSelect) versioneSelect.value = ''; versioneRow?.classList.add('d-none'); versioneNote?.classList.add('d-none'); }
 function resetModelloVersione() { selectedModel = null; resetVersioneOnly(); }
 
-// Lazy-T2: carica le versioni-annata. Famiglia (slug) → bikes; voce-versione catalogo
-// senza slug (es. "Dyna Fat Bob") → il server risolve famiglia+versioni dal nome.
-// Salva il `_familySlug` risolto su selectedModel (= il `motoitModelSlug` da mandare).
+/**
+ * Le versioni del modello scelto — UNA lista, non una per fonte, e adesso anche per le
+ * AUTO. Prima veniva da Moto.it e quindi esisteva solo per le moto: un'auto non aveva
+ * modo di essere cercata per allestimento, pur essendo il livello che distingue una
+ * 320d Business da una 320d M Sport.
+ *
+ * La lista arriva raggruppata per GENERAZIONE, perche' e' cosi' che il dato sta: su
+ * Subito le versioni vivono sotto una serie. Qui si appiattisce per la tendina, ma la
+ * generazione resta attaccata a ogni voce e si vede — senza, "316i cat 4 porte" e'
+ * ambiguo fra E36 ed E46, e sceglieresti alla cieca.
+ */
 async function loadVersioniFor(model) {
   const brand = matchedBrand();
   versioniCorrenti = [];
   if (selectedModel) selectedModel._familySlug = model.slugMotoIt || null;
   if (!brand) { resetVersioneOnly(); return; }
-  const qs = new URLSearchParams({ marca: brand.nome });
-  if (model.slugMotoIt) qs.set('modelSlug', model.slugMotoIt);
-  else if (model.mmmvAutoscout) qs.set('modelNome', model.nome);   // voce-catalogo senza slug → risolvi
-  else { resetVersioneOnly(); return; }
   try {
-    const res = await fetch(`/api/moto-versions?${qs}`);
-    const data = await res.json();
-    versioniCorrenti = data.versioni || [];
-    if (selectedModel && data.familySlug) selectedModel._familySlug = data.familySlug;
+    const qs = new URLSearchParams({ tipo: currentTipo(), marca: brand.nome, modello: model.nome });
+    // lo slug Moto.it che il menu si porta dietro: copre i modelli che Subito non risolve
+    if (model.slugMotoIt) qs.set('motoitSlug', model.slugMotoIt);
+    const data = await fetch(`/api/versioni?${qs}`).then(r => r.json());
+    const piu = (data.generazioni || []).length > 1;
+    for (const g of (data.generazioni || [])) {
+      for (const v of g.versioni) {
+        versioniCorrenti.push({
+          ...v,
+          gen: { id: g.id, nome: g.nome },
+          // la nota distingue voci con lo stesso nome in serie diverse
+          nota: [piu ? g.nome : null, v.anni ? `${v.anni.da}–${v.anni.a}` : null].filter(Boolean).join(' · '),
+        });
+      }
+    }
   } catch { versioniCorrenti = []; }
   if (versioniCorrenti.length) { versioneRow?.classList.remove('d-none'); versioneNote?.classList.add('d-none'); if (versioneSelect) versioneSelect.value = ''; }
   else { resetVersioneOnly(); versioneNote?.classList.remove('d-none'); }   // niente versioni → avviso dismissibile (no sparizione muta)
@@ -681,8 +696,7 @@ function setupModelloAutocomplete() {
     selectedModel = { ...m, _marca: matchedBrand()?.nome || '' };
     selectedVersion = null;
     modelloSelect.value = m.nome; close();
-    if (currentTipo() === 'moto') await loadVersioniFor(m);   // decide slug-famiglia / nome-voce / niente
-    else resetVersioneOnly();
+    await loadVersioniFor(m);   // auto E moto: la lista e' unica e vale per entrambi
   };
   const compute = async () => {
     const brand = matchedBrand();
@@ -720,7 +734,12 @@ function setupVersioneAutocomplete() {
   const close = () => { list.classList.add('d-none'); list.innerHTML = ''; active = -1; versioneSelect.setAttribute('aria-expanded', 'false'); };
   const render = () => {
     if (!matches.length) return close();
-    list.innerHTML = matches.map((v, i) => `<li class="ac-item${i === active ? ' active' : ''}" role="option" data-i="${i}">${escapeHtml(v.nome)}</li>`).join('');
+    // La nota (serie · anni) non e' decorazione: senza, due voci con lo stesso nome in
+    // serie diverse sono indistinguibili e la scelta e' a caso.
+    list.innerHTML = matches.map((v, i) => `<li class="ac-item${i === active ? ' active' : ''}" role="option" data-i="${i}">`
+      + escapeHtml(v.nome)
+      + (v.nota ? `<span class="ac-nota">${escapeHtml(v.nota)}</span>` : '')
+      + '</li>').join('');
     list.classList.remove('d-none'); versioneSelect.setAttribute('aria-expanded', 'true');
   };
   const pick = v => { selectedVersion = v; versioneSelect.value = v.nome; close(); };
@@ -1629,13 +1648,19 @@ async function doSearch() {
     if (selectedModel.mmmvAutoscout) params.mmmvAutoscout = selectedModel.mmmvAutoscout;
     const motoSlug = selectedModel._familySlug || selectedModel.slugMotoIt;   // famiglia risolta (Lazy-T2) o slug diretto
     if (motoSlug) params.motoitModelSlug = motoSlug;
-    if (tipo === 'moto' && selectedVersion && acn(selectedVersion.nome) === acn(versioneSelect?.value || '')) {
-      params.motoitBikeCode = selectedVersion.code;
-      // anni della versione-annata → restringono AS24/Subito alla stessa annata (se l'utente non li ha messi)
-      if (selectedVersion.annoMin && !params.annoMin) params.annoMin = String(selectedVersion.annoMin);
-      if (selectedVersion.annoMax && !params.annoMax) params.annoMax = String(selectedVersion.annoMax);
-    } else if (tipo === 'moto' && versioniCorrenti.length) {
-      params.motoitNeedsVersion = '1';   // F47.2: versioni presenti ma nessuna scelta → salta SOLO Moto.it (Subito/AS24 girano)
+    // VERSIONE — vale per auto e moto, e ogni fonte riceve quello che sa usare:
+    //   Subito    l'id della versione, che l'annuncio dichiara → filtro esatto
+    //   Moto.it   il codice `bike=`, che filtra alla fonte
+    //   Autoscout gli anni, quando la versione li ha (la versione li' e' solo testo)
+    // Niente piu' salto di Moto.it quando la versione non e' scelta: adesso tutte e tre
+    // sanno cos'e' una versione, e saltarne una sbilanciava il confronto.
+    if (selectedVersion && acn(selectedVersion.nome) === acn(versioneSelect?.value || '')) {
+      if (selectedVersion.subito) params.versioneSubito = selectedVersion.subito;
+      if (selectedVersion.motoit && selectedVersion.motoit.length) params.motoitBikeCode = selectedVersion.motoit[0];
+      if (selectedVersion.anni) {
+        if (selectedVersion.anni.da && !params.annoMin) params.annoMin = String(selectedVersion.anni.da);
+        if (selectedVersion.anni.a && !params.annoMax) params.annoMax = String(selectedVersion.anni.a);
+      }
     }
   }
   Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });

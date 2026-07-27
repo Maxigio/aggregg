@@ -588,6 +588,10 @@ body.has-results .search { padding: 14px 0 12px; }
 }
 .ac-item:hover, .ac-item.active { background: var(--surface-2); }
 .ac-item.active { box-shadow: inset 2px 0 0 var(--accent); color: var(--accent); font-weight: 600; }
+/* Serie e anni accanto alla versione: senza, due voci con lo stesso nome in serie
+   diverse ("316i cat 4 porte" fra E36 ed E46) sono indistinguibili. */
+.ac-nota { display: block; font-size: 0.76rem; color: var(--text-muted); font-weight: 400; margin-top: 1px; }
+.ac-item.active .ac-nota { color: var(--text-muted); }
 
 /* ─── Stato ricerca / errore / banner ────────────────────────────────────────── */
 #statusBox { margin-bottom: 16px; }

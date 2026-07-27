@@ -70,6 +70,35 @@ test('marca o modello che non esistono → lista vuota, mai un errore', () => {
   assert.equal(quante('auto', '999999', []), 0);
 });
 
+test('le versioni per slug Moto.it coprono i modelli che Subito non risolve', () => {
+  const { versioniMotoit } = require('../backend/scrapers/versioni-unificate');
+  const v = versioniMotoit('yamaha', 'mt-07');
+  assert.ok(v.length >= 9, 'le nove versioni del catalogo');
+  assert.ok(v.every(x => x.fonti.length === 1 && x.fonti[0] === 'motoit'));
+  assert.ok(v.some(x => /MT-07 ABS/.test(x.nome)));
+});
+
+test('gli id gia\' presenti non si duplicano', () => {
+  const { versioniMotoit } = require('../backend/scrapers/versioni-unificate');
+  const tutte = versioniMotoit('yamaha', 'mt-07');
+  const meno = versioniMotoit('yamaha', 'mt-07', new Set([tutte[0].motoit[0]]));
+  assert.equal(meno.length, tutte.length - 1);
+});
+
+test('anche per slug, le entita HTML non arrivano a schermo', () => {
+  const { versioniMotoit } = require('../backend/scrapers/versioni-unificate');
+  const v = versioniMotoit('betamotor', 'tempo-50');
+  assert.ok(v.length, 'il modello esiste in catalogo');
+  assert.equal(v.filter(x => /&[a-z#0-9]+;/i.test(x.nome)).length, 0);
+});
+
+test('slug che non esiste → lista vuota, mai un errore', () => {
+  const { versioniMotoit } = require('../backend/scrapers/versioni-unificate');
+  assert.deepEqual(versioniMotoit('yamaha', 'modello-inventato'), []);
+  assert.deepEqual(versioniMotoit('', 'mt-07'), []);
+  assert.deepEqual(versioniMotoit('marca-inventata', 'mt-07'), []);
+});
+
 test('il nome mostrato: Subito se c\'e\', altrimenti Moto.it', () => {
   assert.equal(_nomeDi({ subito: { nome: 'ABS' }, motoit: [{ nome: 'MT-07 ABS (2014 - 16)' }] }), 'ABS');
   assert.equal(_nomeDi({ motoit: [{ nome: 'MT-07 (2017 - 18)' }] }), 'MT-07 (2017 - 18)');

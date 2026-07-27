@@ -249,11 +249,24 @@ function riconosci(ad, nodo, opts = {}) {
   if (!nodo || !nodo.marcaId) return 'testo-libero';
   const liv = livelliAnnuncio(ad);
   if (liv.marca && liv.marca.id !== String(nodo.marcaId)) return null;   // altra marca: mai
+  /**
+   * La VERSIONE, quando l'utente ne ha scelta una. Non si chiede alla fonte (`cv`
+   * butterebbe il 23% di annunci che la versione non la dichiarano): si guarda quella
+   * che l'annuncio dichiara di se'.
+   *   la stessa versione   → esatto
+   *   un'altra versione    → fuori, e' un altro allestimento
+   *   nessuna dichiarata   → RESTA, marcato: e' spesso l'annuncio compilato male,
+   *                          cioe' dove sta l'affare
+   */
+  const versione = liv => {
+    if (!opts.versione) return liv.versione && liv.versione.id !== NON_DICHIARATO ? 'esatto' : 'senza-versione';
+    if (!liv.versione || liv.versione.id === NON_DICHIARATO) return 'senza-versione';
+    return liv.versione.id === String(opts.versione) ? 'esatto' : null;
+  };
+
   const ammessi = opts.generazioni;
-  if (!ammessi || !ammessi.size) return liv.versione && liv.versione.id !== NON_DICHIARATO ? 'esatto' : 'senza-versione';
-  if (liv.modello && ammessi.has(liv.modello.id)) {
-    return liv.versione && liv.versione.id !== NON_DICHIARATO ? 'esatto' : 'senza-versione';
-  }
+  if (!ammessi || !ammessi.size) return versione(liv);
+  if (liv.modello && ammessi.has(liv.modello.id)) return versione(liv);
   if (!liv.modello || liv.modello.id === NON_DICHIARATO) {
     // Il venditore non ha dichiarato il modello. E' la passata di recupero: si tiene solo
     // se il TITOLO nomina il modello, e resta marcato — non e' una corrispondenza certa.
@@ -297,7 +310,7 @@ async function scrapeSubitoApi(params, opts = {}) {
   const nodo = params.subitoNodo || null;
   const gen = new Set((nodo && nodo.generazioni || []).map(g => String(g.id)));
   const titoloCombacia = faTitolo(params.modello);
-  const rico = { generazioni: gen, titoloCombacia };
+  const rico = { generazioni: gen, titoloCombacia, versione: params.versioneSubito || null };
   const out = [];
   let truncated = false;
   let total = null;                          // F50 count_all (tetto), additivo
