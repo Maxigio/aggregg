@@ -97,7 +97,11 @@ for (const tipo of ['auto', 'moto']) {
 // ── decisioni del proprietario, 27 luglio ───────────────────────────────────
 const DECISO = {
   // stessa marca, deciso a voce
-  'moto/Vespa|Piaggio': ['stessa', 'proprietario: su Subito le Vespa stanno sotto Piaggio'],
+  // VALE SOLO PER SUBITO. Su Autoscout Vespa e' makeId 50404 con 154 modelli propri e su
+  // Moto.it e' lo slug `vespa`: fonderle li' dirotta ogni ricerca "Vespa" sul secchio Piaggio.
+  // Resta scritto qui perche' e' vero e serve a Subito, ma NON diventa un alias globale —
+  // il generatore degli alias scarta i gruppi con codici diversi fra le fonti.
+  'moto/Vespa|Piaggio': ['stessa-solo-subito', 'proprietario: su Subito le Vespa stanno sotto Piaggio'],
   'moto/TM Racing|TM': ['stessa', 'proprietario'],
   'moto/TM Racing|Tm Moto': ['stessa', 'proprietario'],
   'AUSTIN ROVER|Austin': ['stessa', 'proprietario: Austin Rover va con Austin'],

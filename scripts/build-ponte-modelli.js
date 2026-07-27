@@ -29,6 +29,31 @@ const S = require(R + '/data/subito-catalogo.json');
 const M = require(R + '/data/motoit-catalogo.json');
 const A = require(R + '/data/models.json');
 const AL = require(R + '/data/brand-aliases.json');
+const PM = require(R + '/data/ponte-marche.json');
+
+/**
+ * `distribuisce`: RedMoto vende Honda. Restano marche separate — deciso dal proprietario —
+ * ma i VEICOLI sono gli stessi, quindi i modelli del distributore vanno confrontati con
+ * quelli della casa madre. Senza questo, i 46 modelli di RedMoto, Suzuki Valenti e Honda
+ * Dall'Ara sparivano dal ponte in silenzio: non agganciati e nemmeno dichiarati assenti,
+ * perche' il costruttore salta le marche che dall'altra parte non esistono.
+ * La madre e' quella col catalogo piu' grande: un distributore non e' piu' grande della casa.
+ */
+const MADRE = { auto: new Map(), moto: new Map() };
+for (const tipo of ['auto', 'moto']) {
+  const quanti = n => {
+    let t = 0;
+    for (const b of Object.values(S[tipo])) if (norm(b.nome) === norm(n)) t = Math.max(t, Object.keys(b.modelli || {}).length);
+    for (const [nm, b] of Object.entries(A[tipo])) if (norm(nm) === norm(n)) t = Math.max(t, b.models.length);
+    return t;
+  };
+  for (const v of (PM.voci[tipo] || [])) {
+    if (v.relazione !== 'distribuisce') continue;
+    const madre = quanti(v.a.nome) >= quanti(v.b.nome) ? v.a.nome : v.b.nome;
+    const figlio = madre === v.a.nome ? v.b.nome : v.a.nome;
+    MADRE[tipo].set(norm(figlio), norm(madre));
+  }
+}
 
 const capo = { auto: new Map(), moto: new Map() };
 for (const t of ['auto', 'moto']) for (const g of (AL[t] || [])) for (const x of g) capo[t].set(norm(x), norm(g[0]));
@@ -54,7 +79,9 @@ function numeriLitigano(a, b) {
 }
 
 /** nodi di una fonte, raggruppati per marca canonica. Per le auto Subito il nodo e' la famiglia. */
+let scartatiPerDoppione = 0;      // doppioni tolti dall'ULTIMA chiamata a nodi()
 function nodi(tipo, fonte) {
+  scartatiPerDoppione = 0;
   const out = new Map();
   const agg = (marca, v) => { const k = K(tipo, marca); if (!out.has(k)) out.set(k, []); out.get(k).push(v); };
   if (fonte === 'subito') {
@@ -76,6 +103,22 @@ function nodi(tipo, fonte) {
   } else {
     for (const b of Object.values(M.marche)) for (const [slug, m] of Object.entries(b.modelli || {}))
       agg(b.nome, { id: slug, nome: m.nome, chiave: m.chiave, versioni: Object.keys(m.versioni || {}).length });
+  }
+  /**
+   * Dopo la fusione delle marche due nodi possono avere lo STESSO nome: Nissan e Nissan
+   * Spagna portano ciascuna il proprio "Altro modello", Piaggio e Vespa la stessa "Vespa
+   * Elettrica". Ne resta uno solo — il piu' ricco — altrimenti lo stesso veicolo verrebbe
+   * agganciato due volte e i conti direbbero il falso.
+   */
+  const peso = x => (x.generazioni ? x.generazioni.length : 0) + (x.versioni || 0) + (x.id ? 1 : 0);
+  for (const [k, lista] of out) {
+    const perNome = new Map();
+    for (const v of lista) {
+      const n = norm(v.nome);
+      const gia = perNome.get(n);
+      if (!gia || peso(v) > peso(gia)) perNome.set(n, v);
+    }
+    if (perNome.size !== lista.length) { scartatiPerDoppione += lista.length - perNome.size; out.set(k, [...perNome.values()]); }
   }
   return out;
 }
@@ -121,13 +164,22 @@ const fuori = {
 
 const problemi = [];
 for (const [tipo, fa, fb] of RELAZIONI) {
-  const NA = nodi(tipo, fa), NB = nodi(tipo, fb);
+  // l'ordine conta: nodi() azzera il contatore, quindi si legge subito dopo la chiamata
+  // sull'ORIGINE, che e' quella su cui il conto deve tornare.
+  const NA = nodi(tipo, fa);
+  const doppioniOrigine = scartatiPerDoppione;
+  const NB = nodi(tipo, fb);
   const voci = [], assenti = [];
   const conta = { identico: 0, grossolano: 0, fine: 0, probabile: 0, assente: 0 };
   let marche = 0, nodiTot = 0;
   for (const [marca, listaA] of NA) {
-    const listaB = NB.get(marca);
-    if (!listaB) continue;
+    const viaMadre = !NB.get(marca) && MADRE[tipo].get(marca);
+    const listaB = NB.get(marca) || (viaMadre ? NB.get(viaMadre) : null);
+    if (!listaB) {
+      // marca senza corrispondente: i suoi nodi vanno DICHIARATI assenti, non taciuti.
+      for (const a of listaA) { nodiTot++; conta.assente++; assenti.push({ marca, nome: a.nome, id: a.id, perche: 'marca senza corrispondente in ' + fb }); }
+      continue;
+    }
     marche++;
     const perNome = new Map();
     for (const b of listaB) { const k = norm(b.nome); if (!perNome.has(k)) perNome.set(k, []); perNome.get(k).push(b); }
@@ -182,7 +234,7 @@ for (const [tipo, fa, fb] of RELAZIONI) {
       else grado = (g.come === 'nome identico' || g.come === 'stesse parole, ordine diverso') ? 'identico' : 'probabile';
       conta[grado]++;
       voci.push({
-        marca, grado, prova: g.come + (grado === 'grossolano' ? ' · loro meno granulari: ' + quanti.get(g.b[0].nome) + ' nostri qui' : ''),
+        marca, grado, ...(viaMadre ? { viaCasaMadre: viaMadre } : {}), prova: g.come + (grado === 'grossolano' ? ' · loro meno granulari: ' + quanti.get(g.b[0].nome) + ' nostri qui' : ''),
         da: { fonte: fa, id: g.a.id, nome: g.a.nome, ...(g.a.generazioni ? { generazioni: g.a.generazioni } : {}) },
         a: g.b.map(b => ({ fonte: fb, id: b.id, nome: b.nome, ...(b.mmmv ? { mmmv: b.mmmv } : {}), ...(b.chiave ? { chiave: b.chiave } : {}) })),
       });
@@ -191,7 +243,8 @@ for (const [tipo, fa, fb] of RELAZIONI) {
   const somma = Object.values(conta).reduce((s, x) => s + x, 0);
   if (somma !== nodiTot) problemi.push(tipo + ' ' + fa + '→' + fb + ': ' + somma + ' classificati ma ' + nodiTot + ' nodi');
   if (voci.length + conta.assente !== nodiTot) problemi.push(tipo + ' ' + fa + '→' + fb + ': voci+assenti non torna');
-  fuori.relazioni.push({ tipo, da: fa, a: fb, marcheInComune: marche, nodiEsaminati: nodiTot, conta, voci, assenti });
+  fuori.relazioni.push({ tipo, da: fa, a: fb, marcheInComune: marche, nodiEsaminati: nodiTot,
+    nodiScartatiPerDoppione: doppioniOrigine, conta, voci, assenti });
 }
 
 // Ogni eccezione decisa a mano DEVE essere stata applicata: se un nome cambia nel catalogo

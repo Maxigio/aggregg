@@ -20,6 +20,32 @@ const M = require(R + '/data/motoit-catalogo.json');
 const A = require(R + '/data/models.json');
 const VECCHIO = require(R + '/data/brand-aliases.json');
 const P = require(R + '/data/ponte-marche.json');
+const MB = (() => { try { const x = require(R + '/data/motoit-brands.json'); return Array.isArray(x) ? x : (x.marche || []); } catch (_) { return []; } })();
+
+/**
+ * FALSO ALIAS: due nomi che su una fonte sono lo stesso marchio e su un'altra sono marche
+ * DISTINTE, con codici propri. Fonderli dirotta le ricerche sul secchio sbagliato.
+ * E' successo con [Piaggio, Vespa]: su Subito le Vespa stanno davvero sotto Piaggio, ma su
+ * Autoscout Vespa e' makeId 50404 con 154 modelli suoi e su Moto.it e' lo slug `vespa`.
+ * L'alias non serviva nemmeno a Subito, che interroga a testo libero.
+ * Un gruppo i cui membri hanno makeId Autoscout diversi, o slug Moto.it diversi, NON puo'
+ * essere un alias: e' conoscenza valida per una fonte sola e resta in ponte-marche.json.
+ */
+function conflittoFraFonti(tipo, gruppo) {
+  const ids = new Set(), slugs = new Set();
+  for (const x of gruppo) {
+    const k = Object.keys(A[tipo]).find(n => norm(n) === norm(x));
+    const e = k ? A[tipo][k] : null;
+    if (e && e.autoscout && e.autoscout.makeId != null) ids.add(String(e.autoscout.makeId));
+    if (tipo === 'moto') {
+      const b = MB.find(y => norm(y.name || y.nome || '') === norm(x));
+      if (b && b.slug) slugs.add(b.slug);
+    }
+  }
+  if (ids.size > 1) return 'makeId Autoscout diversi: ' + [...ids].join(' / ');
+  if (slugs.size > 1) return 'slug Moto.it diversi: ' + [...slugs].join(' / ');
+  return null;
+}
 
 // quanti modelli ha un nome, per scegliere il canonico (il piu' ricco)
 const peso = { auto: new Map(), moto: new Map() };
@@ -60,7 +86,16 @@ for (const tipo of ['auto', 'moto']) {
     const ord = g.map(k => ({ k, n: peso[tipo].get(k) || 0 })).sort((a, b) => b.n - a.n);
     return ord.map(x => nomeVero.get(x.k));
   }).sort((a, b) => a[0].localeCompare(b[0]));
-  fuori[tipo] = gruppi;
+  const scartati = [];
+  fuori[tipo] = gruppi.filter(g => {
+    const c = conflittoFraFonti(tipo, g);
+    if (c) { scartati.push(JSON.stringify(g) + '  ' + c); return false; }
+    return true;
+  });
+  if (scartati.length) {
+    console.log('  ' + tipo + ': ' + scartati.length + ' gruppo/i SCARTATO/I perche fonderli dirotta le ricerche');
+    scartati.forEach(x => console.log('     ' + x));
+  }
 
   // ── CONTROLLO: ogni vecchio gruppo dev'essere dentro uno nuovo ────────────
   for (const g of (VECCHIO[tipo] || [])) {

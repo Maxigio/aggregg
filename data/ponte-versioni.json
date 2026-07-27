@@ -1,14 +1,14 @@
 {
- "generatoIl": "2026-07-27T08:43:28.030Z",
+ "generatoIl": "2026-07-27T12:05:08.970Z",
  "nota": "INDICE delle versioni, non una mappa fissa: Subito taglia per allestimento e non ha anni, Moto.it taglia per anni. La scelta si fa quando si ha l'annuncio, che porta l'anno. Ogni versione Moto.it porta la variante ESTRATTA dal suo nome e il periodo.",
  "comeSiUsa": "dato un annuncio Subito con (modelloId, versioneId, anno): prendi la voce del modello, filtra le versioni Moto.it il cui periodo contiene l'anno, e fra quelle preferisci chi ha la stessa variante della versione Subito. Una sola → risposta. Piu' di una → dichiara l'ambiguita', non scegliere.",
  "copertura": {
-  "modelli": 2003,
-  "versioniSubito": 7047,
-  "versioniMotoit": 13312,
-  "versioniSubitoConVariante": 3020,
-  "versioniMotoitConAnni": 12704,
-  "versioniMotoitSenzaAnni": 608,
+  "modelli": 1990,
+  "versioniSubito": 6946,
+  "versioniMotoit": 13285,
+  "versioniSubitoConVariante": 2977,
+  "versioniMotoitConAnni": 12682,
+  "versioniMotoitSenzaAnni": 603,
   "notaMisura": "il solo filtro anno chiude su una versione nel 54,1% dei casi (16.967 prove modello×anno); con la variante si arriva all'88% misurato su annunci a verita' nota"
  },
  "modelli": [
@@ -14988,7 +14988,7 @@
   },
   {
    "marca": "BMW",
-   "gradoModello": "fine",
+   "gradoModello": "identico",
    "subito": {
     "id": "001814",
     "nome": "R 80 GS",
@@ -15011,7 +15011,6 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "9jH9qX",
        "apFspW"
       ],
       "come": "versione base"
@@ -15019,21 +15018,9 @@
     ]
    },
    "motoit": [
-    "r-80-g-s",
     "r-80-gs"
    ],
    "versioniMotoit": [
-    {
-     "id": "9jH9qX",
-     "modelloSlug": "r-80-g-s",
-     "nome": "R 80 G/S (1980 - 87)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1980,
-      "a": 1987
-     }
-    },
     {
      "id": "apFspW",
      "modelloSlug": "r-80-gs",
@@ -15072,7 +15059,6 @@
       "base": true,
       "motoit": [
        "LB774N",
-       "9jH9qX",
        "BkFtcE",
        "WLy86S",
        "bTRqmu"
@@ -15083,7 +15069,6 @@
    },
    "motoit": [
     "r-80",
-    "r-80-g-s",
     "r-80-g-s-paris-dakar",
     "r-80-rt"
    ],
@@ -15097,17 +15082,6 @@
      "anni": {
       "da": 1984,
       "a": 1994
-     }
-    },
-    {
-     "id": "9jH9qX",
-     "modelloSlug": "r-80-g-s",
-     "nome": "R 80 G/S (1980 - 87)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1980,
-      "a": 1987
      }
     },
     {
@@ -32272,71 +32246,7 @@
   },
   {
    "marca": "Ducati",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "001464",
-    "nome": "Monster 696",
-    "versioni": [
-     {
-      "id": "002806",
-      "nome": "25kW",
-      "variante": "25kW",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "tlNTyV"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "monster-696"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "tlNTyV",
-     "modelloSlug": "monster-696",
-     "nome": "Monster 696 (2008 - 13)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2008,
-      "a": 2013
-     }
-    },
-    {
-     "id": "hJdG8c",
-     "modelloSlug": "monster-696",
-     "nome": "Monster 696 ABS (2009 - 14)",
-     "variante": "ABS",
-     "base": false,
-     "anni": {
-      "da": 2009,
-      "a": 2014
-     }
-    },
-    {
-     "id": "oZmMkR",
-     "modelloSlug": "monster-696",
-     "nome": "Monster 696 Plus (2007 - 14)",
-     "variante": "Plus",
-     "base": false,
-     "anni": {
-      "da": 2007,
-      "a": 2014
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Ducati",
-   "gradoModello": "grossolano",
+   "gradoModello": "identico",
    "subito": {
     "id": "001467",
     "nome": "Monster 696+",
@@ -32556,60 +32466,7 @@
   },
   {
    "marca": "Ducati",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "002076",
-    "nome": "Monster 796",
-    "versioni": [
-     {
-      "id": "004442",
-      "nome": "25kW",
-      "variante": "25kW",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "KgI4JO"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "monster-796"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "KgI4JO",
-     "modelloSlug": "monster-796",
-     "nome": "Monster 796 (2010 - 13)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2010,
-      "a": 2013
-     }
-    },
-    {
-     "id": "CbeY4i",
-     "modelloSlug": "monster-796",
-     "nome": "Monster 796 ABS (2010 - 14)",
-     "variante": "ABS",
-     "base": false,
-     "anni": {
-      "da": 2010,
-      "a": 2014
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Ducati",
-   "gradoModello": "grossolano",
+   "gradoModello": "identico",
    "subito": {
     "id": "002222",
     "nome": "Monster 796+",
@@ -32690,7 +32547,7 @@
   },
   {
    "marca": "Ducati",
-   "gradoModello": "grossolano",
+   "gradoModello": "identico",
    "subito": {
     "id": "002783",
     "nome": "Monster 797",
@@ -32733,107 +32590,6 @@
      },
      {
       "id": "006730",
-      "nome": "35kW",
-      "variante": "35kW",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "XHv67F",
-       "4UUsR8"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "monster-797"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "XHv67F",
-     "modelloSlug": "monster-797",
-     "nome": "Monster 797 (2017 - 18)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "4UUsR8",
-     "modelloSlug": "monster-797",
-     "nome": "Monster 797 (2019 - 20)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "EGqA3r",
-     "modelloSlug": "monster-797",
-     "nome": "Monster 797 Plus (2019)",
-     "variante": "Plus",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Ducati",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "002784",
-    "nome": "Monster 797+",
-    "versioni": [
-     {
-      "id": "006193",
-      "nome": "(Dark Stealth)",
-      "variante": "(Dark Stealth)",
-      "base": false
-     },
-     {
-      "id": "006194",
-      "nome": "(Dark Stealth) 35kW",
-      "variante": "(Dark Stealth) 35kW",
-      "base": false
-     },
-     {
-      "id": "006184",
-      "nome": "(Ducati Red)",
-      "variante": "(Ducati Red)",
-      "base": false
-     },
-     {
-      "id": "006190",
-      "nome": "(Ducati Red) 35kW",
-      "variante": "(Ducati Red) 35kW",
-      "base": false
-     },
-     {
-      "id": "006191",
-      "nome": "(Star White Silk)",
-      "variante": "(Star White Silk)",
-      "base": false
-     },
-     {
-      "id": "006192",
-      "nome": "(Star White Silk) 35kW",
-      "variante": "(Star White Silk) 35kW",
-      "base": false
-     },
-     {
-      "id": "006731",
       "nome": "35kW",
       "variante": "35kW",
       "base": false
@@ -94537,6 +94293,426 @@
    ]
   },
   {
+   "marca": "Honda Dall'Ara",
+   "gradoModello": "probabile",
+   "subito": {
+    "id": "000032",
+    "nome": "XR 125",
+    "versioni": [
+     {
+      "id": "000065",
+      "nome": "R",
+      "variante": "R",
+      "base": false
+     },
+     {
+      "id": "000066",
+      "nome": "SM",
+      "variante": "SM",
+      "base": false
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "8U8Y75"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "-125"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "8U8Y75",
+     "modelloSlug": "-125",
+     "nome": "@ 125 (2000 - 06)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2000,
+      "a": 2006
+     }
+    },
+    {
+     "id": "uBz5Dh",
+     "modelloSlug": "-125",
+     "nome": "@ 125 ES (2000 - 04)",
+     "variante": "ES",
+     "base": false,
+     "anni": {
+      "da": 2000,
+      "a": 2004
+     }
+    },
+    {
+     "id": "EY42ze",
+     "modelloSlug": "-125",
+     "nome": "@ 125 Two Tone (2003 - 04)",
+     "variante": "Two Tone",
+     "base": false,
+     "anni": {
+      "da": 2003,
+      "a": 2004
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Honda Dall'Ara",
+   "gradoModello": "probabile",
+   "subito": {
+    "id": "000033",
+    "nome": "XR 250",
+    "versioni": [
+     {
+      "id": "014072",
+      "nome": "R",
+      "variante": "R",
+      "base": false
+     },
+     {
+      "id": "000067",
+      "nome": "R AE",
+      "variante": "R AE",
+      "base": false
+     },
+     {
+      "id": "000068",
+      "nome": "R Avv Pedale",
+      "variante": "R Avv Pedale",
+      "base": false
+     },
+     {
+      "id": "000069",
+      "nome": "SM AE",
+      "variante": "SM AE",
+      "base": false
+     },
+     {
+      "id": "000070",
+      "nome": "SM Avv Pedale",
+      "variante": "SM Avv Pedale",
+      "base": false
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "FSjPeM",
+       "G5nHYQ"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "xr-250-r"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "FSjPeM",
+     "modelloSlug": "xr-250-r",
+     "nome": "XR 250 R (1992 - 02)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 1992,
+      "a": 2002
+     }
+    },
+    {
+     "id": "G5nHYQ",
+     "modelloSlug": "xr-250-r",
+     "nome": "XR 250 R (2003)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2003,
+      "a": 2003
+     }
+    },
+    {
+     "id": "lZAiLz",
+     "modelloSlug": "xr-250-r",
+     "nome": "XR 250 R Supermotard (2002 - 03)",
+     "variante": "Supermotard",
+     "base": false,
+     "anni": {
+      "da": 2002,
+      "a": 2003
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Honda Dall'Ara",
+   "gradoModello": "fine",
+   "subito": {
+    "id": "000034",
+    "nome": "XR 400",
+    "versioni": [
+     {
+      "id": "000071",
+      "nome": "R",
+      "variante": "R",
+      "base": false
+     },
+     {
+      "id": "001806",
+      "nome": "R AE",
+      "variante": "R AE",
+      "base": false
+     },
+     {
+      "id": "000072",
+      "nome": "SM",
+      "variante": "SM",
+      "base": false
+     },
+     {
+      "id": "001808",
+      "nome": "SM AE",
+      "variante": "SM AE",
+      "base": false
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "42u3OS",
+       "h9MDEb"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "xr-400-r",
+    "xr-400-r-a-e-dall-ara"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "42u3OS",
+     "modelloSlug": "xr-400-r",
+     "nome": "XR 400 R (1996 - 02)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 1996,
+      "a": 2002
+     }
+    },
+    {
+     "id": "qGtQf9",
+     "modelloSlug": "xr-400-r",
+     "nome": "XR 400 R Supermotard (1997 - 03)",
+     "variante": "Supermotard",
+     "base": false,
+     "anni": {
+      "da": 1997,
+      "a": 2003
+     }
+    },
+    {
+     "id": "lXJ5IG",
+     "modelloSlug": "xr-400-r",
+     "nome": "XR 400 R Supermotard (2000 - 02)",
+     "variante": "Supermotard",
+     "base": false,
+     "anni": {
+      "da": 2000,
+      "a": 2002
+     }
+    },
+    {
+     "id": "h9MDEb",
+     "modelloSlug": "xr-400-r-a-e-dall-ara",
+     "nome": "XR 400 R A.E. Dall'Ara",
+     "variante": "",
+     "base": true,
+     "anni": null
+    }
+   ]
+  },
+  {
+   "marca": "Honda Dall'Ara",
+   "gradoModello": "probabile",
+   "subito": {
+    "id": "004752",
+    "nome": "XR 600",
+    "versioni": [
+     {
+      "id": "013621",
+      "nome": "R",
+      "variante": "R",
+      "base": false
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "8VKmdM",
+       "pbL7cS"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "xr-600-r"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "8VKmdM",
+     "modelloSlug": "xr-600-r",
+     "nome": "XR 600 R (1988 -89)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 1988,
+      "a": 1989
+     }
+    },
+    {
+     "id": "pbL7cS",
+     "modelloSlug": "xr-600-r",
+     "nome": "XR 600 R (1990 - 94)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 1990,
+      "a": 1994
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Honda Dall'Ara",
+   "gradoModello": "fine",
+   "subito": {
+    "id": "000036",
+    "nome": "XR 650",
+    "versioni": [
+     {
+      "id": "000074",
+      "nome": "R",
+      "variante": "R",
+      "base": false
+     },
+     {
+      "id": "000075",
+      "nome": "R 25kW",
+      "variante": "R 25kW",
+      "base": false
+     },
+     {
+      "id": "001810",
+      "nome": "R AE",
+      "variante": "R AE",
+      "base": false
+     },
+     {
+      "id": "001812",
+      "nome": "R AE 25kW",
+      "variante": "R AE 25kW",
+      "base": false
+     },
+     {
+      "id": "000076",
+      "nome": "SM",
+      "variante": "SM",
+      "base": false
+     },
+     {
+      "id": "000077",
+      "nome": "SM 25kW",
+      "variante": "SM 25kW",
+      "base": false
+     },
+     {
+      "id": "001811",
+      "nome": "SM AE",
+      "variante": "SM AE",
+      "base": false
+     },
+     {
+      "id": "001813",
+      "nome": "SM AE 25kW",
+      "variante": "SM AE 25kW",
+      "base": false
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "JgkZR1",
+       "5szcmd",
+       "GqGrjL"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "xr-650-r",
+    "xr-650-r-a-e-dall-ara",
+    "xr-650-sm-k-s-dall-ara"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "WS9sMM",
+     "modelloSlug": "xr-650-r",
+     "nome": "XR 650 R Supermotard (2002 - 04)",
+     "variante": "Supermotard",
+     "base": false,
+     "anni": {
+      "da": 2002,
+      "a": 2004
+     }
+    },
+    {
+     "id": "JgkZR1",
+     "modelloSlug": "xr-650-r",
+     "nome": "XR 650 R (2000 - 02)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2000,
+      "a": 2002
+     }
+    },
+    {
+     "id": "5szcmd",
+     "modelloSlug": "xr-650-r-a-e-dall-ara",
+     "nome": "XR 650 R A.E. Dall'Ara",
+     "variante": "",
+     "base": true,
+     "anni": null
+    },
+    {
+     "id": "GqGrjL",
+     "modelloSlug": "xr-650-sm-k-s-dall-ara",
+     "nome": "XR 650 SM K.S. Dall'Ara",
+     "variante": "",
+     "base": true,
+     "anni": null
+    }
+   ]
+  },
+  {
    "marca": "Husaberg",
    "gradoModello": "identico",
    "subito": {
@@ -108837,58 +109013,10 @@
   },
   {
    "marca": "KL",
-   "gradoModello": "grossolano",
+   "gradoModello": "identico",
    "subito": {
     "id": "007036",
     "nome": "Brera + 125",
-    "versioni": [
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "C9m3kC",
-       "2agtmb"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "brera-125"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "C9m3kC",
-     "modelloSlug": "brera-125",
-     "nome": "Brera 125 (2022 - 24)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2022,
-      "a": 2024
-     }
-    },
-    {
-     "id": "2agtmb",
-     "modelloSlug": "brera-125",
-     "nome": "Brera 125+ (2025 - 26)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    }
-   ]
-  },
-  {
-   "marca": "KL",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "003790",
-    "nome": "Brera 125",
     "versioni": [
      {
       "id": "000000",
@@ -140387,58 +140515,10 @@
   },
   {
    "marca": "Lifan",
-   "gradoModello": "grossolano",
+   "gradoModello": "identico",
    "subito": {
     "id": "002957",
     "nome": "E3",
-    "versioni": [
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "EaQXI6",
-       "NUvDQW"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "e3"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "EaQXI6",
-     "modelloSlug": "e3",
-     "nome": "E3 (2018 - 26)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2026
-     }
-    },
-    {
-     "id": "NUvDQW",
-     "modelloSlug": "e3",
-     "nome": "E3+ (2021 - 26)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2026
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Lifan",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "003226",
-    "nome": "E3+",
     "versioni": [
      {
       "id": "000000",
@@ -173495,788 +173575,6 @@
   },
   {
    "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "000878",
-    "nome": "Vespa 125 ET4",
-    "versioni": [
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "Z8d8hR",
-       "rFgqGH"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "125-et4"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "Z8d8hR",
-     "modelloSlug": "125-et4",
-     "nome": "125 ET4 (1996 - 01)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1996,
-      "a": 2001
-     }
-    },
-    {
-     "id": "Vj6Ik2",
-     "modelloSlug": "125-et4",
-     "nome": "125 ET4 Base",
-     "variante": "Base",
-     "base": false,
-     "anni": null
-    },
-    {
-     "id": "rFgqGH",
-     "modelloSlug": "125-et4",
-     "nome": "125 ET4 (2002 - 06)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2002,
-      "a": 2006
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "001171",
-    "nome": "Vespa 125 GTS",
-    "versioni": [
-     {
-      "id": "006259",
-      "nome": "ABS i.e.",
-      "variante": "ABS i.e.",
-      "base": false
-     },
-     {
-      "id": "005362",
-      "nome": "Super ABS i.e.",
-      "variante": "Super ABS i.e.",
-      "base": false
-     },
-     {
-      "id": "003259",
-      "nome": "Super i.e.",
-      "variante": "Super i.e.",
-      "base": false
-     },
-     {
-      "id": "006865",
-      "nome": "Super Notte ABS",
-      "variante": "Super Notte ABS",
-      "base": false
-     },
-     {
-      "id": "005403",
-      "nome": "Super Sport ABS i.e.",
-      "variante": "Super Sport ABS i.e.",
-      "base": false
-     },
-     {
-      "id": "004290",
-      "nome": "Super Sport i.e.",
-      "variante": "Super Sport i.e.",
-      "base": false
-     },
-     {
-      "id": "009113",
-      "nome": "Supertech ABS",
-      "variante": "Supertech ABS",
-      "base": false
-     },
-     {
-      "id": "006260",
-      "nome": "Touring ABS i.e.",
-      "variante": "Touring ABS i.e.",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "Axc4cg",
-       "BksG7C",
-       "g8HC7k"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "gts-125"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "Axc4cg",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 (2021 - 24)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2024
-     }
-    },
-    {
-     "id": "BksG7C",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 (2025 - 26)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "L5sy5o",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 ie (2017 - 18)",
-     "variante": "ie",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "IBt724",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super (2025 - 26)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "WzSSb7",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super Tech (2023 - 24)",
-     "variante": "Super Tech",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "U68jbS",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Supertech (2025 - 26)",
-     "variante": "Supertech",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "k3oxaw",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Supersport (2025 - 26)",
-     "variante": "Supersport",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "g8HC7k",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125",
-     "variante": "",
-     "base": true,
-     "anni": null
-    },
-    {
-     "id": "hdn6y3",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 i-get (2019 - 20)",
-     "variante": "i-get",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "2SylEQ",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 i-get Super (2019 - 20)",
-     "variante": "i-get Super",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "72mG7J",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 i-get Super Sport (2019 - 20)",
-     "variante": "i-get Super Sport",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "06HXjx",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 i-get Super Tech (2019)",
-     "variante": "i-get Super Tech",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "hkmSNl",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 i-get Touring (2019 - 20)",
-     "variante": "i-get Touring",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "FGQ3U5",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 i-get Touring (2021 - 22)",
-     "variante": "i-get Touring",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "z1quJr",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super (2008 - 16)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2008,
-      "a": 2016
-     }
-    },
-    {
-     "id": "cFtxYn",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super (2017 - 18)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "31h8gI",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super (2021 - 24)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2024
-     }
-    },
-    {
-     "id": "FglzfU",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super ABS (2014 - 16)",
-     "variante": "Super ABS",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2016
-     }
-    },
-    {
-     "id": "5En2CR",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super Racing Sixties (2020)",
-     "variante": "Super Racing Sixties",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "gtcotz",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super Sport (2017 - 18)",
-     "variante": "Super Sport",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "J4pG19",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super Sport (2021 - 24)",
-     "variante": "Super Sport",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2024
-     }
-    },
-    {
-     "id": "QbfePT",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super Sport ABS (2011 - 16)",
-     "variante": "Super Sport ABS",
-     "base": false,
-     "anni": {
-      "da": 2011,
-      "a": 2016
-     }
-    },
-    {
-     "id": "bz5Hdj",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Touring (2017 - 18)",
-     "variante": "Touring",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "006358",
-    "nome": "Vespa 125 GTS hpe",
-    "versioni": [
-     {
-      "id": "019571",
-      "nome": "Super",
-      "variante": "Super",
-      "base": false,
-      "motoit": [
-       "IBt724",
-       "z1quJr",
-       "cFtxYn",
-       "31h8gI"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "019572",
-      "nome": "Super Sport",
-      "variante": "Super Sport",
-      "base": false,
-      "motoit": [
-       "k3oxaw",
-       "gtcotz",
-       "J4pG19"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "020817",
-      "nome": "Super Tech",
-      "variante": "Super Tech",
-      "base": false,
-      "motoit": [
-       "WzSSb7",
-       "U68jbS"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "Axc4cg",
-       "BksG7C",
-       "g8HC7k"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "gts-125"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "Axc4cg",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 (2021 - 24)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2024
-     }
-    },
-    {
-     "id": "BksG7C",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 (2025 - 26)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "L5sy5o",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 ie (2017 - 18)",
-     "variante": "ie",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "IBt724",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super (2025 - 26)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "WzSSb7",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super Tech (2023 - 24)",
-     "variante": "Super Tech",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "U68jbS",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Supertech (2025 - 26)",
-     "variante": "Supertech",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "k3oxaw",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Supersport (2025 - 26)",
-     "variante": "Supersport",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "g8HC7k",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125",
-     "variante": "",
-     "base": true,
-     "anni": null
-    },
-    {
-     "id": "hdn6y3",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 i-get (2019 - 20)",
-     "variante": "i-get",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "2SylEQ",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 i-get Super (2019 - 20)",
-     "variante": "i-get Super",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "72mG7J",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 i-get Super Sport (2019 - 20)",
-     "variante": "i-get Super Sport",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "06HXjx",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 i-get Super Tech (2019)",
-     "variante": "i-get Super Tech",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "hkmSNl",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 i-get Touring (2019 - 20)",
-     "variante": "i-get Touring",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "FGQ3U5",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 i-get Touring (2021 - 22)",
-     "variante": "i-get Touring",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "z1quJr",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super (2008 - 16)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2008,
-      "a": 2016
-     }
-    },
-    {
-     "id": "cFtxYn",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super (2017 - 18)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "31h8gI",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super (2021 - 24)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2024
-     }
-    },
-    {
-     "id": "FglzfU",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super ABS (2014 - 16)",
-     "variante": "Super ABS",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2016
-     }
-    },
-    {
-     "id": "5En2CR",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super Racing Sixties (2020)",
-     "variante": "Super Racing Sixties",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "gtcotz",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super Sport (2017 - 18)",
-     "variante": "Super Sport",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "J4pG19",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super Sport (2021 - 24)",
-     "variante": "Super Sport",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2024
-     }
-    },
-    {
-     "id": "QbfePT",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Super Sport ABS (2011 - 16)",
-     "variante": "Super Sport ABS",
-     "base": false,
-     "anni": {
-      "da": 2011,
-      "a": 2016
-     }
-    },
-    {
-     "id": "bz5Hdj",
-     "modelloSlug": "gts-125",
-     "nome": "GTS 125 Touring (2017 - 18)",
-     "variante": "Touring",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "000945",
-    "nome": "Vespa 125 LX",
-    "versioni": [
-     {
-      "id": "004941",
-      "nome": "3V i.e.",
-      "variante": "3V i.e.",
-      "base": false
-     },
-     {
-      "id": "004942",
-      "nome": "3V i.e. Touring",
-      "variante": "3V i.e. Touring",
-      "base": false
-     },
-     {
-      "id": "003319",
-      "nome": "FL i.e.",
-      "variante": "FL i.e.",
-      "base": false
-     },
-     {
-      "id": "003876",
-      "nome": "i.e. Rosa Chic",
-      "variante": "i.e. Rosa Chic",
-      "base": false
-     },
-     {
-      "id": "003878",
-      "nome": "i.e. Touring",
-      "variante": "i.e. Touring",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "Un3U4H"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "lx-125"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "Un3U4H",
-     "modelloSlug": "lx-125",
-     "nome": "LX 125 (2005 - 11)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2011
-     }
-    },
-    {
-     "id": "7mkTvX",
-     "modelloSlug": "lx-125",
-     "nome": "LX 125 i.e. (2009 - 12)",
-     "variante": "i.e.",
-     "base": false,
-     "anni": {
-      "da": 2009,
-      "a": 2012
-     }
-    },
-    {
-     "id": "tbvs6N",
-     "modelloSlug": "lx-125",
-     "nome": "LX 125 Touring (2010 - 12)",
-     "variante": "Touring",
-     "base": false,
-     "anni": {
-      "da": 2010,
-      "a": 2012
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
    "gradoModello": "identico",
    "subito": {
     "id": "002435",
@@ -174509,332 +173807,6 @@
   },
   {
    "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "001221",
-    "nome": "Vespa 125 S",
-    "versioni": [
-     {
-      "id": "004943",
-      "nome": "3V i.e.",
-      "variante": "3V i.e.",
-      "base": false
-     },
-     {
-      "id": "004944",
-      "nome": "3V Sport i.e.",
-      "variante": "3V Sport i.e.",
-      "base": false
-     },
-     {
-      "id": "003317",
-      "nome": "i.e.",
-      "variante": "i.e.",
-      "base": false,
-      "motoit": [
-       "t0swle"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "003928",
-      "nome": "i.e. College",
-      "variante": "i.e. College",
-      "base": false
-     },
-     {
-      "id": "004287",
-      "nome": "Sport",
-      "variante": "Sport",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "bM7R9g"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "s-125"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "bM7R9g",
-     "modelloSlug": "s-125",
-     "nome": "S 125 (2007 - 11)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2007,
-      "a": 2011
-     }
-    },
-    {
-     "id": "t0swle",
-     "modelloSlug": "s-125",
-     "nome": "S 125 i.e. (2009 - 12)",
-     "variante": "i.e.",
-     "base": false,
-     "anni": {
-      "da": 2009,
-      "a": 2012
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "002504",
-    "nome": "Vespa 125 Sprint",
-    "versioni": [
-     {
-      "id": "005360",
-      "nome": "3V",
-      "variante": "3V",
-      "base": false,
-      "motoit": [
-       "xi0ia9"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "005402",
-      "nome": "3V ABS",
-      "variante": "3V ABS",
-      "base": false,
-      "motoit": [
-       "aAw67r",
-       "Ainms3"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "006866",
-      "nome": "3V Notte ABS",
-      "variante": "3V Notte ABS",
-      "base": false
-     },
-     {
-      "id": "007537",
-      "nome": "3V Racing Sixties ABS",
-      "variante": "3V Racing Sixties ABS",
-      "base": false
-     },
-     {
-      "id": "007535",
-      "nome": "3V Sport ABS",
-      "variante": "3V Sport ABS",
-      "base": false,
-      "motoit": [
-       "07jnry"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "005685",
-      "nome": "S 3V ABS",
-      "variante": "S 3V ABS",
-      "base": false
-     },
-     {
-      "id": "009112",
-      "nome": "Sport ABS Justin Bieber",
-      "variante": "Sport ABS Justin Bieber",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "2z8PXL"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "sprint-125"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "2z8PXL",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 (2021 - 24)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2024
-     }
-    },
-    {
-     "id": "vDnfHy",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 3V Racing Sixties (2021 - 22)",
-     "variante": "3V Racing Sixties",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "9V58iV",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 Justin Bieber (2022 - 24)",
-     "variante": "Justin Bieber",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2024
-     }
-    },
-    {
-     "id": "yZLvZD",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 S (2023 - 25)",
-     "variante": "S",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2025
-     }
-    },
-    {
-     "id": "xi0ia9",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 3V (2014 - 16)",
-     "variante": "3V",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2016
-     }
-    },
-    {
-     "id": "aAw67r",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 3V ABS (2014 - 16)",
-     "variante": "3V ABS",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2016
-     }
-    },
-    {
-     "id": "Ainms3",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 3V ABS (2016)",
-     "variante": "3V ABS",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "R4GEQN",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 3V i-get ABS (2017 - 18)",
-     "variante": "3V i-get ABS",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "cOABIO",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 3V ie ABS (2018 - 19)",
-     "variante": "3V ie ABS",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2019
-     }
-    },
-    {
-     "id": "ucVI3T",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 3V ie Sport ABS (2018 - 19)",
-     "variante": "3V ie Sport ABS",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2019
-     }
-    },
-    {
-     "id": "5EckmS",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 3V ie Sport ABS (2021 - 22)",
-     "variante": "3V ie Sport ABS",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "d06Tst",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 3V Notte (2018 - 20)",
-     "variante": "3V Notte",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    },
-    {
-     "id": "rRIOTJ",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 3V S ABS (2014 - 16)",
-     "variante": "3V S ABS",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2016
-     }
-    },
-    {
-     "id": "07jnry",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 3V Sport ABS (2016 - 18)",
-     "variante": "3V Sport ABS",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2018
-     }
-    },
-    {
-     "id": "OEnbMI",
-     "modelloSlug": "sprint-125",
-     "nome": "Sprint 125 S (2026)",
-     "variante": "S",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
    "gradoModello": "grossolano",
    "subito": {
     "id": "004741",
@@ -175035,54 +174007,6 @@
   },
   {
    "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "000880",
-    "nome": "Vespa 150 ET4",
-    "versioni": [
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "IbFz0C",
-       "y8kUQD"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "150-et4"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "IbFz0C",
-     "modelloSlug": "150-et4",
-     "nome": "150 ET4 (1999 - 01)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1999,
-      "a": 2001
-     }
-    },
-    {
-     "id": "y8kUQD",
-     "modelloSlug": "150-et4",
-     "nome": "150 ET4 (2002 - 04)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2002,
-      "a": 2004
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
    "gradoModello": "grossolano",
    "subito": {
     "id": "004737",
@@ -175174,566 +174098,6 @@
   },
   {
    "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "002805",
-    "nome": "Vespa 150 GTS",
-    "versioni": [
-     {
-      "id": "006261",
-      "nome": "ABS i.e.",
-      "variante": "ABS i.e.",
-      "base": false
-     },
-     {
-      "id": "006262",
-      "nome": "Super ABS i.e.",
-      "variante": "Super ABS i.e.",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true
-     }
-    ]
-   },
-   "motoit": [
-    "gts-150"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "VEt7lG",
-     "modelloSlug": "gts-150",
-     "nome": "GTS 150 Super ie (2017 - 19)",
-     "variante": "Super ie",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2019
-     }
-    },
-    {
-     "id": "56djsL",
-     "modelloSlug": "gts-150",
-     "nome": "GTS 150 ie (2017 - 19)",
-     "variante": "ie",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2019
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "000946",
-    "nome": "Vespa 150 LX",
-    "versioni": [
-     {
-      "id": "004945",
-      "nome": "3V  i.e.",
-      "variante": "3V  i.e.",
-      "base": false
-     },
-     {
-      "id": "004946",
-      "nome": "3V i.e. Touring",
-      "variante": "3V i.e. Touring",
-      "base": false
-     },
-     {
-      "id": "003320",
-      "nome": "FL i.e.",
-      "variante": "FL i.e.",
-      "base": false
-     },
-     {
-      "id": "003822",
-      "nome": "FL i.e. Touring",
-      "variante": "FL i.e. Touring",
-      "base": false
-     },
-     {
-      "id": "003877",
-      "nome": "i.e. Rosa Chic",
-      "variante": "i.e. Rosa Chic",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "9KoG6f"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "lx-150"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "9KoG6f",
-     "modelloSlug": "lx-150",
-     "nome": "LX 150 (2005 - 11)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2011
-     }
-    },
-    {
-     "id": "zkwSHh",
-     "modelloSlug": "lx-150",
-     "nome": "LX 150 i.e. (2009 - 12)",
-     "variante": "i.e.",
-     "base": false,
-     "anni": {
-      "da": 2009,
-      "a": 2012
-     }
-    },
-    {
-     "id": "8fb2RJ",
-     "modelloSlug": "lx-150",
-     "nome": "LX 150 Touring (2010 - 12)",
-     "variante": "Touring",
-     "base": false,
-     "anni": {
-      "da": 2010,
-      "a": 2012
-     }
-    },
-    {
-     "id": "BUTg2F",
-     "modelloSlug": "lx-150",
-     "nome": "LX 150 Touring (2012 - 14)",
-     "variante": "Touring",
-     "base": false,
-     "anni": {
-      "da": 2012,
-      "a": 2014
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "002479",
-    "nome": "Vespa 150 Primavera",
-    "versioni": [
-     {
-      "id": "005286",
-      "nome": "3V",
-      "variante": "3V",
-      "base": false
-     },
-     {
-      "id": "005404",
-      "nome": "3V ABS",
-      "variante": "3V ABS",
-      "base": false,
-      "motoit": [
-       "fvecFF"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "014417",
-      "nome": "3V Red ABS",
-      "variante": "3V Red ABS",
-      "base": false
-     },
-     {
-      "id": "006867",
-      "nome": "3V Sport ABS",
-      "variante": "3V Sport ABS",
-      "base": false
-     },
-     {
-      "id": "007775",
-      "nome": "3V Sport ABS 75° Anniversario",
-      "variante": "3V Sport ABS 75° Anniversario",
-      "base": false
-     },
-     {
-      "id": "005817",
-      "nome": "3V Touring ABS",
-      "variante": "3V Touring ABS",
-      "base": false
-     },
-     {
-      "id": "006054",
-      "nome": "4T 3V ABS SE 70°",
-      "variante": "4T 3V ABS SE 70°",
-      "base": false
-     },
-     {
-      "id": "019747",
-      "nome": "Batik",
-      "variante": "Batik",
-      "base": false,
-      "motoit": [
-       "32P7lH"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "014754",
-      "nome": "Color Vibe",
-      "variante": "Color Vibe",
-      "base": false,
-      "motoit": [
-       "t10XUm"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "015240",
-      "nome": "Disney Micky Mouse Edition",
-      "variante": "Disney Micky Mouse Edition",
-      "base": false
-     },
-     {
-      "id": "021294",
-      "nome": "Officina 8",
-      "variante": "Officina 8",
-      "base": false,
-      "motoit": [
-       "56RJGa"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "019748",
-      "nome": "Tech",
-      "variante": "Tech",
-      "base": false,
-      "motoit": [
-       "zrq3kr",
-       "0Nw6xW"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "WgPyZr",
-       "zCeMac",
-       "4om3ja"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "primavera-150"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "WgPyZr",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 (2021 - 23)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2023
-     }
-    },
-    {
-     "id": "zCeMac",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 (2024 - 25)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2024,
-      "a": 2025
-     }
-    },
-    {
-     "id": "fvecFF",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 3V ABS (2018 - 19)",
-     "variante": "3V ABS",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2019
-     }
-    },
-    {
-     "id": "rqeDGm",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 3V ie (2014 - 16)",
-     "variante": "3V ie",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2016
-     }
-    },
-    {
-     "id": "pysx3s",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 3V ie ABS (2014 - 16)",
-     "variante": "3V ie ABS",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2016
-     }
-    },
-    {
-     "id": "xJJpJp",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 3V ie ABS (2016)",
-     "variante": "3V ie ABS",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "41igAS",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 Disney Mickey Mouse Edition by Vespa (2023 - 24)",
-     "variante": "Disney Mickey Mouse Edition by Vespa",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "56RJGa",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 Officina 8 (2026)",
-     "variante": "Officina 8",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "7rwfwy",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 S (2023 - 25)",
-     "variante": "S",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2025
-     }
-    },
-    {
-     "id": "IBgEp7",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 S (2026)",
-     "variante": "S",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "zrq3kr",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 Tech (2024 - 25)",
-     "variante": "Tech",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2025
-     }
-    },
-    {
-     "id": "4om3ja",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 (2026)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "32P7lH",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 Batik (2024 - 26)",
-     "variante": "Batik",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2026
-     }
-    },
-    {
-     "id": "GOTCFi",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 RED (2023 - 26)",
-     "variante": "RED",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2026
-     }
-    },
-    {
-     "id": "0Nw6xW",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 Tech (2026)",
-     "variante": "Tech",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "QXLPbk",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 3V 75th (2021)",
-     "variante": "3V 75th",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "kopEvy",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 3V i-get ABS (2017 - 18)",
-     "variante": "3V i-get ABS",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "4cZ91i",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 3V i-get Touring (2017 - 18)",
-     "variante": "3V i-get Touring",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "ETL9HW",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 3V ie ABS Settantesimo (2016)",
-     "variante": "3V ie ABS Settantesimo",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "jDj9iv",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 3V ie Sport ABS (2018 - 19)",
-     "variante": "3V ie Sport ABS",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2019
-     }
-    },
-    {
-     "id": "kS1Wkm",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 3V ie Sport ABS (2021 - 22)",
-     "variante": "3V ie Sport ABS",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "hx5vKN",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 3V ie Touring (2015 - 16)",
-     "variante": "3V ie Touring",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2016
-     }
-    },
-    {
-     "id": "Ly693C",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 3V ie Touring (2018 - 19)",
-     "variante": "3V ie Touring",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2019
-     }
-    },
-    {
-     "id": "NPBVmP",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 3V Sean Wotherspoon (2020)",
-     "variante": "3V Sean Wotherspoon",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "t10XUm",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 Color Vibe (2023 - 24)",
-     "variante": "Color Vibe",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "RIT9yg",
-     "modelloSlug": "primavera-150",
-     "nome": "Primavera 150 Touring (2021 - 24)",
-     "variante": "Touring",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2024
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
    "gradoModello": "grossolano",
    "subito": {
     "id": "000911",
@@ -175805,116 +174169,6 @@
      "variante": "MA",
      "base": false,
      "anni": null
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "002634",
-    "nome": "Vespa 150 Sprint",
-    "versioni": [
-     {
-      "id": "007333",
-      "nome": "3V Sport ABS",
-      "variante": "3V Sport ABS",
-      "base": false
-     },
-     {
-      "id": "005724",
-      "nome": "S 3V ABS",
-      "variante": "S 3V ABS",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true
-     }
-    ]
-   },
-   "motoit": [
-    "sprint-150"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "33kiNB",
-     "modelloSlug": "sprint-150",
-     "nome": "Sprint 150 3V Sport ie ABS (2021 - 22)",
-     "variante": "3V Sport ie ABS",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "VdPNXK",
-     "modelloSlug": "sprint-150",
-     "nome": "Sprint 150 S (2023 - 25)",
-     "variante": "S",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2025
-     }
-    },
-    {
-     "id": "uYT5ky",
-     "modelloSlug": "sprint-150",
-     "nome": "Sprint 150 S (2026)",
-     "variante": "S",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "M6FgIA",
-     "modelloSlug": "sprint-150",
-     "nome": "Sprint 150 3V Racing Sixties (2020)",
-     "variante": "3V Racing Sixties",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "cFzQqj",
-     "modelloSlug": "sprint-150",
-     "nome": "Sprint 150 3V S ie ABS (2015 - 16)",
-     "variante": "3V S ie ABS",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2016
-     }
-    },
-    {
-     "id": "WzYwcV",
-     "modelloSlug": "sprint-150",
-     "nome": "Sprint 150 3V Sport ie ABS (2016 - 18)",
-     "variante": "3V Sport ie ABS",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2018
-     }
-    },
-    {
-     "id": "Tl1Flh",
-     "modelloSlug": "sprint-150",
-     "nome": "Sprint 150 3V Sport ie ABS (2018 - 19)",
-     "variante": "3V Sport ie ABS",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2019
-     }
     }
    ]
   },
@@ -176339,1877 +174593,6 @@
   },
   {
    "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "000959",
-    "nome": "Vespa 250 GTS",
-    "versioni": [
-     {
-      "id": "001744",
-      "nome": "ABS",
-      "variante": "ABS",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true
-     }
-    ]
-   },
-   "motoit": [
-    "gts-250"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "cdZfOc",
-     "modelloSlug": "gts-250",
-     "nome": "GTS 250 i.e.",
-     "variante": "i.e.",
-     "base": false,
-     "anni": null
-    },
-    {
-     "id": "GvtOhg",
-     "modelloSlug": "gts-250",
-     "nome": "GTS 250 GT 60&amp;deg;",
-     "variante": "GT 60&amp;deg;",
-     "base": false,
-     "anni": null
-    },
-    {
-     "id": "zXK6Xn",
-     "modelloSlug": "gts-250",
-     "nome": "GTS 250 i.e. abs",
-     "variante": "i.e. abs",
-     "base": false,
-     "anni": null
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "001069",
-    "nome": "Vespa 250 GTV",
-    "versioni": [
-     {
-      "id": "002772",
-      "nome": "Navy",
-      "variante": "Navy",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "ZCqNMT"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "gtv-250"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "ZCqNMT",
-     "modelloSlug": "gtv-250",
-     "nome": "GTV 250",
-     "variante": "",
-     "base": true,
-     "anni": null
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "001482",
-    "nome": "Vespa 300 GTS",
-    "versioni": [
-     {
-      "id": "006055",
-      "nome": "4T 4V ABS SE 70°",
-      "variante": "4T 4V ABS SE 70°",
-      "base": false
-     },
-     {
-      "id": "005363",
-      "nome": "ABS",
-      "variante": "ABS",
-      "base": false,
-      "motoit": [
-       "lwUxG0"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "002836",
-      "nome": "Super",
-      "variante": "Super",
-      "base": false,
-      "motoit": [
-       "MnmMZX",
-       "FjXGF4",
-       "Nvksl4"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "005364",
-      "nome": "Super ABS",
-      "variante": "Super ABS",
-      "base": false,
-      "motoit": [
-       "TVJLKI"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "006863",
-      "nome": "Super Notte ABS",
-      "variante": "Super Notte ABS",
-      "base": false
-     },
-     {
-      "id": "003879",
-      "nome": "Super Sport",
-      "variante": "Super Sport",
-      "base": false,
-      "motoit": [
-       "PkEiDG",
-       "oLqF2Y"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "005405",
-      "nome": "Super Sport ABS",
-      "variante": "Super Sport ABS",
-      "base": false,
-      "motoit": [
-       "yN17I1"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "004217",
-      "nome": "Touring",
-      "variante": "Touring",
-      "base": false,
-      "motoit": [
-       "6PE5Y5"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "006263",
-      "nome": "Touring ABS",
-      "variante": "Touring ABS",
-      "base": false,
-      "motoit": [
-       "wj2v8D",
-       "rzDCx2"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "006864",
-      "nome": "Yacht Club ABS",
-      "variante": "Yacht Club ABS",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "xLwP3u",
-       "3aLRS1",
-       "80s0nF"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "gts-300"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "xLwP3u",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 (2010 - 14)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2010,
-      "a": 2014
-     }
-    },
-    {
-     "id": "3aLRS1",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 (2017 - 18)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "80s0nF",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 (2023 - 24)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "lwUxG0",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 ABS (2014 - 16)",
-     "variante": "ABS",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2016
-     }
-    },
-    {
-     "id": "7tFXwt",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Hpe (2019)",
-     "variante": "Hpe",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "g2eCHB",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Hpe (2021 - 22)",
-     "variante": "Hpe",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "Mk7CTW",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Hpe Super Tech (2019)",
-     "variante": "Hpe Super Tech",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "vxdmK6",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Hpe Touring (2019)",
-     "variante": "Hpe Touring",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "MnmMZX",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super (2008 - 16)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2008,
-      "a": 2016
-     }
-    },
-    {
-     "id": "FjXGF4",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super (2017 - 18)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "Nvksl4",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super (2023 - 24)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "TVJLKI",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super ABS (2014 - 16)",
-     "variante": "Super ABS",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2016
-     }
-    },
-    {
-     "id": "6sVdA1",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Hpe (2018 - 19)",
-     "variante": "Super Hpe",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2019
-     }
-    },
-    {
-     "id": "0zdkvm",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Hpe (2021 - 22)",
-     "variante": "Super Hpe",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "xOOnFk",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Racing Sixties Hpe (2021 - 22)",
-     "variante": "Super Racing Sixties Hpe",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "PkEiDG",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Sport (2023 - 24)",
-     "variante": "Super Sport",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "yN17I1",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Sport ABS (2010 - 16)",
-     "variante": "Super Sport ABS",
-     "base": false,
-     "anni": {
-      "da": 2010,
-      "a": 2016
-     }
-    },
-    {
-     "id": "0JnoN6",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Sport Hpe (2019)",
-     "variante": "Super Sport Hpe",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "euOqKP",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Sport Hpe (2021 - 22)",
-     "variante": "Super Sport Hpe",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "qAP9wx",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Tech (2023 - 24)",
-     "variante": "Super Tech",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "woh5Xq",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Supertech Hpe (2021 - 22)",
-     "variante": "Supertech Hpe",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "z3ivPD",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Supertech hpe 75th (2021)",
-     "variante": "Supertech hpe 75th",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "wj2v8D",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Touring ABS (2017 - 19)",
-     "variante": "Touring ABS",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2019
-     }
-    },
-    {
-     "id": "eufSFk",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Touring Hpe (2021 - 22)",
-     "variante": "Touring Hpe",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "x5sGNv",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 ABS Settantesimo (2016)",
-     "variante": "ABS Settantesimo",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "vaCHRr",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Notte (2018 - 20)",
-     "variante": "Super Notte",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    },
-    {
-     "id": "oLqF2Y",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Sport (2017 - 19)",
-     "variante": "Super Sport",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2019
-     }
-    },
-    {
-     "id": "6PE5Y5",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Touring (2010 - 13)",
-     "variante": "Touring",
-     "base": false,
-     "anni": {
-      "da": 2010,
-      "a": 2013
-     }
-    },
-    {
-     "id": "rzDCx2",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Touring ABS (2014 - 16)",
-     "variante": "Touring ABS",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2016
-     }
-    },
-    {
-     "id": "6xkfnO",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Yacht Club (2018 - 20)",
-     "variante": "Yacht Club",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "003098",
-    "nome": "Vespa 300 GTS hpe",
-    "versioni": [
-     {
-      "id": "007179",
-      "nome": "ABS",
-      "variante": "ABS",
-      "base": false,
-      "motoit": [
-       "lwUxG0"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "007181",
-      "nome": "Super ABS",
-      "variante": "Super ABS",
-      "base": false,
-      "motoit": [
-       "TVJLKI"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "007182",
-      "nome": "Super Notte ABS",
-      "variante": "Super Notte ABS",
-      "base": false
-     },
-     {
-      "id": "007538",
-      "nome": "Super Racing Sixties ABS",
-      "variante": "Super Racing Sixties ABS",
-      "base": false
-     },
-     {
-      "id": "007184",
-      "nome": "Super Sport ABS",
-      "variante": "Super Sport ABS",
-      "base": false,
-      "motoit": [
-       "yN17I1"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "007185",
-      "nome": "Super Tech ABS",
-      "variante": "Super Tech ABS",
-      "base": false
-     },
-     {
-      "id": "007776",
-      "nome": "Super Tech ABS 75° Anniversario",
-      "variante": "Super Tech ABS 75° Anniversario",
-      "base": false
-     },
-     {
-      "id": "007183",
-      "nome": "Touring ABS",
-      "variante": "Touring ABS",
-      "base": false,
-      "motoit": [
-       "wj2v8D",
-       "rzDCx2"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "007180",
-      "nome": "Yacht Club ABS",
-      "variante": "Yacht Club ABS",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "xLwP3u",
-       "3aLRS1",
-       "80s0nF"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "gts-300"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "xLwP3u",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 (2010 - 14)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2010,
-      "a": 2014
-     }
-    },
-    {
-     "id": "3aLRS1",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 (2017 - 18)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "80s0nF",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 (2023 - 24)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "lwUxG0",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 ABS (2014 - 16)",
-     "variante": "ABS",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2016
-     }
-    },
-    {
-     "id": "7tFXwt",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Hpe (2019)",
-     "variante": "Hpe",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "g2eCHB",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Hpe (2021 - 22)",
-     "variante": "Hpe",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "Mk7CTW",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Hpe Super Tech (2019)",
-     "variante": "Hpe Super Tech",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "vxdmK6",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Hpe Touring (2019)",
-     "variante": "Hpe Touring",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "MnmMZX",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super (2008 - 16)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2008,
-      "a": 2016
-     }
-    },
-    {
-     "id": "FjXGF4",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super (2017 - 18)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "Nvksl4",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super (2023 - 24)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "TVJLKI",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super ABS (2014 - 16)",
-     "variante": "Super ABS",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2016
-     }
-    },
-    {
-     "id": "6sVdA1",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Hpe (2018 - 19)",
-     "variante": "Super Hpe",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2019
-     }
-    },
-    {
-     "id": "0zdkvm",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Hpe (2021 - 22)",
-     "variante": "Super Hpe",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "xOOnFk",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Racing Sixties Hpe (2021 - 22)",
-     "variante": "Super Racing Sixties Hpe",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "PkEiDG",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Sport (2023 - 24)",
-     "variante": "Super Sport",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "yN17I1",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Sport ABS (2010 - 16)",
-     "variante": "Super Sport ABS",
-     "base": false,
-     "anni": {
-      "da": 2010,
-      "a": 2016
-     }
-    },
-    {
-     "id": "0JnoN6",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Sport Hpe (2019)",
-     "variante": "Super Sport Hpe",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "euOqKP",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Sport Hpe (2021 - 22)",
-     "variante": "Super Sport Hpe",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "qAP9wx",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Tech (2023 - 24)",
-     "variante": "Super Tech",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "woh5Xq",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Supertech Hpe (2021 - 22)",
-     "variante": "Supertech Hpe",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "z3ivPD",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Supertech hpe 75th (2021)",
-     "variante": "Supertech hpe 75th",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "wj2v8D",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Touring ABS (2017 - 19)",
-     "variante": "Touring ABS",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2019
-     }
-    },
-    {
-     "id": "eufSFk",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Touring Hpe (2021 - 22)",
-     "variante": "Touring Hpe",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "x5sGNv",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 ABS Settantesimo (2016)",
-     "variante": "ABS Settantesimo",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "vaCHRr",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Notte (2018 - 20)",
-     "variante": "Super Notte",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    },
-    {
-     "id": "oLqF2Y",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Super Sport (2017 - 19)",
-     "variante": "Super Sport",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2019
-     }
-    },
-    {
-     "id": "6PE5Y5",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Touring (2010 - 13)",
-     "variante": "Touring",
-     "base": false,
-     "anni": {
-      "da": 2010,
-      "a": 2013
-     }
-    },
-    {
-     "id": "rzDCx2",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Touring ABS (2014 - 16)",
-     "variante": "Touring ABS",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2016
-     }
-    },
-    {
-     "id": "6xkfnO",
-     "modelloSlug": "gts-300",
-     "nome": "GTS 300 Yacht Club (2018 - 20)",
-     "variante": "Yacht Club",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "002024",
-    "nome": "Vespa 300 GTV",
-    "versioni": [
-     {
-      "id": "003880",
-      "nome": "Via Montenapoleone",
-      "variante": "Via Montenapoleone",
-      "base": false
-     },
-     {
-      "id": "004291",
-      "nome": "Vie della Moda",
-      "variante": "Vie della Moda",
-      "base": false,
-      "motoit": [
-       "btlDFh"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true
-     }
-    ]
-   },
-   "motoit": [
-    "gtv-300"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "By7mwd",
-     "modelloSlug": "gtv-300",
-     "nome": "GTV 300 Hpe (2023 - 25)",
-     "variante": "Hpe",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2025
-     }
-    },
-    {
-     "id": "qIZ629",
-     "modelloSlug": "gtv-300",
-     "nome": "GTV 300 Via Montenapoleone ABS (2010 - 16)",
-     "variante": "Via Montenapoleone ABS",
-     "base": false,
-     "anni": {
-      "da": 2010,
-      "a": 2016
-     }
-    },
-    {
-     "id": "18PVFm",
-     "modelloSlug": "gtv-300",
-     "nome": "Vespa 140th of Piaggio (2024)",
-     "variante": "Vespa 140th of Piaggio",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "btlDFh",
-     "modelloSlug": "gtv-300",
-     "nome": "GTV 300 Vie della Moda (2011 - 14)",
-     "variante": "Vie della Moda",
-     "base": false,
-     "anni": {
-      "da": 2011,
-      "a": 2014
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "006359",
-    "nome": "Vespa 310 GTS hpe",
-    "versioni": [
-     {
-      "id": "019575",
-      "nome": "Super",
-      "variante": "Super",
-      "base": false,
-      "motoit": [
-       "XrNats"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "019576",
-      "nome": "Super Sport",
-      "variante": "Super Sport",
-      "base": false,
-      "motoit": [
-       "Vns4Pv"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "020816",
-      "nome": "Super Tech",
-      "variante": "Super Tech",
-      "base": false,
-      "motoit": [
-       "4mJvqT"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "iNxRSx"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "gts-310"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "iNxRSx",
-     "modelloSlug": "gts-310",
-     "nome": "GTS 310 (2025 - 26)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "NTegYq",
-     "modelloSlug": "gts-310",
-     "nome": "GTS 310 80th (2026)",
-     "variante": "80th",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "yDSeEw",
-     "modelloSlug": "gts-310",
-     "nome": "GTS 310 Edizione Ottantesimo (2026)",
-     "variante": "Edizione Ottantesimo",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "XrNats",
-     "modelloSlug": "gts-310",
-     "nome": "GTS 310 Super (2025 - 26)",
-     "variante": "Super",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "Vns4Pv",
-     "modelloSlug": "gts-310",
-     "nome": "GTS 310 Supersport (2025 - 26)",
-     "variante": "Supersport",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "4mJvqT",
-     "modelloSlug": "gts-310",
-     "nome": "GTS 310 Supertech (2025 - 26)",
-     "variante": "Supertech",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "006650",
-    "nome": "Vespa 310 GTV",
-    "versioni": [
-     {
-      "id": "021295",
-      "nome": "Officina 8",
-      "variante": "Officina 8",
-      "base": false,
-      "motoit": [
-       "nJUAPS"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "muI97n"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "gtv-310"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "muI97n",
-     "modelloSlug": "gtv-310",
-     "nome": "GTV 310 (2025 - 26)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "nJUAPS",
-     "modelloSlug": "gtv-310",
-     "nome": "GTV 310 Officina 8 (2026)",
-     "variante": "Officina 8",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "000883",
-    "nome": "Vespa 50 ET2",
-    "versioni": [
-     {
-      "id": "001544",
-      "nome": "Cat",
-      "variante": "Cat",
-      "base": false,
-      "motoit": [
-       "XUNJNk"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "001545",
-      "nome": "Iniezione",
-      "variante": "Iniezione",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "9dsSfj",
-       "iGtQiV"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "50-et2"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "9dsSfj",
-     "modelloSlug": "50-et2",
-     "nome": "50 ET2 (1997 - 98)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1997,
-      "a": 1998
-     }
-    },
-    {
-     "id": "iGtQiV",
-     "modelloSlug": "50-et2",
-     "nome": "50 ET2 (1999 - 03)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1999,
-      "a": 2003
-     }
-    },
-    {
-     "id": "PngseR",
-     "modelloSlug": "50-et2",
-     "nome": "50 ET2 carb.",
-     "variante": "carb.",
-     "base": false,
-     "anni": null
-    },
-    {
-     "id": "XUNJNk",
-     "modelloSlug": "50-et2",
-     "nome": "50 ET2 Cat (1998 - 04)",
-     "variante": "Cat",
-     "base": false,
-     "anni": {
-      "da": 1998,
-      "a": 2004
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "000944",
-    "nome": "Vespa 50 LX",
-    "versioni": [
-     {
-      "id": "003925",
-      "nome": "2T Rosa Chic",
-      "variante": "2T Rosa Chic",
-      "base": false
-     },
-     {
-      "id": "001714",
-      "nome": "4T",
-      "variante": "4T",
-      "base": false,
-      "motoit": [
-       "9Mbl4y"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "003875",
-      "nome": "4T 4V Rosa Chic",
-      "variante": "4T 4V Rosa Chic",
-      "base": false
-     },
-     {
-      "id": "004984",
-      "nome": "4T 4V Touring",
-      "variante": "4T 4V Touring",
-      "base": false
-     },
-     {
-      "id": "003223",
-      "nome": "FL",
-      "variante": "FL",
-      "base": false
-     },
-     {
-      "id": "003224",
-      "nome": "FL 4T 4V",
-      "variante": "FL 4T 4V",
-      "base": false
-     },
-     {
-      "id": "004983",
-      "nome": "Touring",
-      "variante": "Touring",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "NDYwVG"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "lx-50"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "NDYwVG",
-     "modelloSlug": "lx-50",
-     "nome": "LX 50 (2005 - 08)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2008
-     }
-    },
-    {
-     "id": "H6N4Go",
-     "modelloSlug": "lx-50",
-     "nome": "LX 50 2T (2009 - 14)",
-     "variante": "2T",
-     "base": false,
-     "anni": {
-      "da": 2009,
-      "a": 2014
-     }
-    },
-    {
-     "id": "9Mbl4y",
-     "modelloSlug": "lx-50",
-     "nome": "LX 50 4T (2009 - 14)",
-     "variante": "4T",
-     "base": false,
-     "anni": {
-      "da": 2009,
-      "a": 2014
-     }
-    },
-    {
-     "id": "7Ce7co",
-     "modelloSlug": "lx-50",
-     "nome": "LX 50 Touring 2T (2009 - 13)",
-     "variante": "Touring 2T",
-     "base": false,
-     "anni": {
-      "da": 2009,
-      "a": 2013
-     }
-    },
-    {
-     "id": "57j9zk",
-     "modelloSlug": "lx-50",
-     "nome": "LX 50 Touring 4T (2009 - 13)",
-     "variante": "Touring 4T",
-     "base": false,
-     "anni": {
-      "da": 2009,
-      "a": 2013
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "002434",
-    "nome": "Vespa 50 Primavera",
-    "versioni": [
-     {
-      "id": "005134",
-      "nome": "2T",
-      "variante": "2T",
-      "base": false,
-      "motoit": [
-       "xJrRyX"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "006858",
-      "nome": "3V 50° anniversario",
-      "variante": "3V 50° anniversario",
-      "base": false
-     },
-     {
-      "id": "006560",
-      "nome": "4T 3V",
-      "variante": "4T 3V",
-      "base": false
-     },
-     {
-      "id": "019557",
-      "nome": "4T 3V Batik",
-      "variante": "4T 3V Batik",
-      "base": false
-     },
-     {
-      "id": "011032",
-      "nome": "4T 3V Pic Nic",
-      "variante": "4T 3V Pic Nic",
-      "base": false
-     },
-     {
-      "id": "008603",
-      "nome": "4T 3V Red",
-      "variante": "4T 3V Red",
-      "base": false
-     },
-     {
-      "id": "006859",
-      "nome": "4T 3V Sport",
-      "variante": "4T 3V Sport",
-      "base": false,
-      "motoit": [
-       "VLJ5yL",
-       "5VHG8G"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "007773",
-      "nome": "4T 3V Sport 75° Anniversario",
-      "variante": "4T 3V Sport 75° Anniversario",
-      "base": false
-     },
-     {
-      "id": "019558",
-      "nome": "4T 3V Tech",
-      "variante": "4T 3V Tech",
-      "base": false
-     },
-     {
-      "id": "006561",
-      "nome": "4T 3V Touring",
-      "variante": "4T 3V Touring",
-      "base": false
-     },
-     {
-      "id": "005135",
-      "nome": "4T 4V",
-      "variante": "4T 4V",
-      "base": false
-     },
-     {
-      "id": "006050",
-      "nome": "4T 4V SE 70°",
-      "variante": "4T 4V SE 70°",
-      "base": false
-     },
-     {
-      "id": "005813",
-      "nome": "4T 4V Touring",
-      "variante": "4T 4V Touring",
-      "base": false
-     },
-     {
-      "id": "014752",
-      "nome": "Color Vibe",
-      "variante": "Color Vibe",
-      "base": false,
-      "motoit": [
-       "a2i55L"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "015238",
-      "nome": "Disney Micky Mouse Edition",
-      "variante": "Disney Micky Mouse Edition",
-      "base": false
-     },
-     {
-      "id": "021291",
-      "nome": "Officina 8",
-      "variante": "Officina 8",
-      "base": false,
-      "motoit": [
-       "2tMpS6"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "006860",
-      "nome": "Yacht Club",
-      "variante": "Yacht Club",
-      "base": false,
-      "motoit": [
-       "6GLs8N"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "dxBFS2",
-       "3xh2iR",
-       "3iyEri"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "primavera-50"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "dxBFS2",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 (2021 - 23)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2023
-     }
-    },
-    {
-     "id": "3xh2iR",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 (2024 - 25)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2024,
-      "a": 2025
-     }
-    },
-    {
-     "id": "xJrRyX",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 2T (2014 - 17)",
-     "variante": "2T",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2017
-     }
-    },
-    {
-     "id": "sFVFxr",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 4T (2014 - 17)",
-     "variante": "4T",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2017
-     }
-    },
-    {
-     "id": "E8txY4",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 4T (2018 - 20)",
-     "variante": "4T",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    },
-    {
-     "id": "35gPk0",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 S (2023 - 25)",
-     "variante": "S",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2025
-     }
-    },
-    {
-     "id": "3iyEri",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 (2026)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "uoSVhZ",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 Batik (2024 - 26)",
-     "variante": "Batik",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2026
-     }
-    },
-    {
-     "id": "2tMpS6",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 Officina 8 (2026)",
-     "variante": "Officina 8",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "Y4bjNo",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 RED (2023 - 26)",
-     "variante": "RED",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2026
-     }
-    },
-    {
-     "id": "q6Aet2",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 S (2026)",
-     "variante": "S",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "XKyPKl",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 Tech (2024 - 25)",
-     "variante": "Tech",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2025
-     }
-    },
-    {
-     "id": "J4zdcP",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 Tech (2026)",
-     "variante": "Tech",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "wMsqNK",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 4T 3v 50&amp;deg; Anniversario (2018 - 19)",
-     "variante": "4T 3v 50&amp;deg; Anniversario",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2019
-     }
-    },
-    {
-     "id": "ThEV19",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 4T 3V Settantesimo (2016)",
-     "variante": "4T 3V Settantesimo",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "VLJ5yL",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 4T 3v Sport (2018 - 20)",
-     "variante": "4T 3v Sport",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    },
-    {
-     "id": "5VHG8G",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 4T 3v Sport (2021 - 22)",
-     "variante": "4T 3v Sport",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "tXuTdV",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 4T 75th (2021)",
-     "variante": "4T 75th",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "eLuTjE",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 4T Touring (2015 - 17)",
-     "variante": "4T Touring",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2017
-     }
-    },
-    {
-     "id": "CzdUJs",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 4T Touring (2018 - 20)",
-     "variante": "4T Touring",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    },
-    {
-     "id": "a2i55L",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 Color Vibe (2023 - 24)",
-     "variante": "Color Vibe",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "YRlZxP",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 Disney Mickey Mouse Edition by Vespa (2023 - 24)",
-     "variante": "Disney Mickey Mouse Edition by Vespa",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "dRx4mQ",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 Pic Nic (2022 - 24)",
-     "variante": "Pic Nic",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2024
-     }
-    },
-    {
-     "id": "abNhVv",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 Sean Wotherspoon (2019)",
-     "variante": "Sean Wotherspoon",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "RFeKqs",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 Touring (2021 - 24)",
-     "variante": "Touring",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2024
-     }
-    },
-    {
-     "id": "6GLs8N",
-     "modelloSlug": "primavera-50",
-     "nome": "Primavera 50 Yacht Club (2018 - 20)",
-     "variante": "Yacht Club",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
    "gradoModello": "grossolano",
    "subito": {
     "id": "004747",
@@ -178392,7 +174775,7 @@
   },
   {
    "marca": "Piaggio",
-   "gradoModello": "fine",
+   "gradoModello": "grossolano",
    "subito": {
     "id": "001220",
     "nome": "Vespa 50 S",
@@ -178407,11 +174790,7 @@
       "id": "004282",
       "nome": "4T Sport",
       "variante": "4T Sport",
-      "base": false,
-      "motoit": [
-       "lR175v"
-      ],
-      "come": "stessa variante"
+      "base": false
      },
      {
       "id": "003926",
@@ -178425,84 +174804,6 @@
       "variante": "Sport",
       "base": false
      },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "55ewg9"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "vespa-50-special",
-    "s-50"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "55ewg9",
-     "modelloSlug": "vespa-50-special",
-     "nome": "Vespa 50 Special",
-     "variante": "",
-     "base": true,
-     "anni": null
-    },
-    {
-     "id": "0hB6yU",
-     "modelloSlug": "s-50",
-     "nome": "S 50 2T (2007 - 14)",
-     "variante": "2T",
-     "base": false,
-     "anni": {
-      "da": 2007,
-      "a": 2014
-     }
-    },
-    {
-     "id": "Vki6Ai",
-     "modelloSlug": "s-50",
-     "nome": "S 50 2T Sport (2011 - 13)",
-     "variante": "2T Sport",
-     "base": false,
-     "anni": {
-      "da": 2011,
-      "a": 2013
-     }
-    },
-    {
-     "id": "PB9QyQ",
-     "modelloSlug": "s-50",
-     "nome": "S 50 4T (2007 - 14)",
-     "variante": "4T",
-     "base": false,
-     "anni": {
-      "da": 2007,
-      "a": 2014
-     }
-    },
-    {
-     "id": "lR175v",
-     "modelloSlug": "s-50",
-     "nome": "S 50 4T Sport (2011 - 13)",
-     "variante": "4T Sport",
-     "base": false,
-     "anni": {
-      "da": 2011,
-      "a": 2013
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "004746",
-    "nome": "Vespa 50 Special (V5B3)",
-    "versioni": [
      {
       "id": "000000",
       "nome": "Altro allestimento",
@@ -178533,252 +174834,8 @@
    "marca": "Piaggio",
    "gradoModello": "grossolano",
    "subito": {
-    "id": "002503",
-    "nome": "Vespa 50 Sprint",
-    "versioni": [
-     {
-      "id": "005359",
-      "nome": "2T",
-      "variante": "2T",
-      "base": false,
-      "motoit": [
-       "2dipt1"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "017873",
-      "nome": "4T 2V",
-      "variante": "4T 2V",
-      "base": false
-     },
-     {
-      "id": "006563",
-      "nome": "4T 3V",
-      "variante": "4T 3V",
-      "base": false,
-      "motoit": [
-       "I1ywjQ",
-       "iWU8hT"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "006562",
-      "nome": "4T 3V Sport",
-      "variante": "4T 3V Sport",
-      "base": false
-     },
-     {
-      "id": "005361",
-      "nome": "4T 4V",
-      "variante": "4T 4V",
-      "base": false
-     },
-     {
-      "id": "006861",
-      "nome": "Notte",
-      "variante": "Notte",
-      "base": false,
-      "motoit": [
-       "wRTM6C"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "007536",
-      "nome": "Racing Sixties",
-      "variante": "Racing Sixties",
-      "base": false,
-      "motoit": [
-       "uoIm3K",
-       "nhGdmx"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "005723",
-      "nome": "S 2T",
-      "variante": "S 2T",
-      "base": false,
-      "motoit": [
-       "sgCqlZ"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "009111",
-      "nome": "Sport Justin Bieber",
-      "variante": "Sport Justin Bieber",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "MGmwI1"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "sprint-50"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "MGmwI1",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 (2021 - 24)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2024
-     }
-    },
-    {
-     "id": "2dipt1",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 2T (2014 - 17)",
-     "variante": "2T",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2017
-     }
-    },
-    {
-     "id": "I1ywjQ",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 4T 3V (2014 - 17)",
-     "variante": "4T 3V",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2017
-     }
-    },
-    {
-     "id": "fpa9Xj",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 Justin Bieber (2022 - 24)",
-     "variante": "Justin Bieber",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2024
-     }
-    },
-    {
-     "id": "WSWkjF",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 S (2023 - 25)",
-     "variante": "S",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2025
-     }
-    },
-    {
-     "id": "5dUJKc",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 S (2026)",
-     "variante": "S",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "iWU8hT",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 4T 3V (2018 - 20)",
-     "variante": "4T 3V",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    },
-    {
-     "id": "wRTM6C",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 Notte (2018 - 20)",
-     "variante": "Notte",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    },
-    {
-     "id": "uoIm3K",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 Racing Sixties (2020)",
-     "variante": "Racing Sixties",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "nhGdmx",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 Racing Sixties (2021 - 22)",
-     "variante": "Racing Sixties",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "sgCqlZ",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 S 2T (2015 - 17)",
-     "variante": "S 2T",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2017
-     }
-    },
-    {
-     "id": "xOPRJ7",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 Sport 4T 3V (2018 - 20)",
-     "variante": "Sport 4T 3V",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    },
-    {
-     "id": "Jo427V",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 Sport 4T 3V (2021 - 22)",
-     "variante": "Sport 4T 3V",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "004916",
-    "nome": "Vespa 50 Super Sprint",
+    "id": "004746",
+    "nome": "Vespa 50 Special (V5B3)",
     "versioni": [
      {
       "id": "000000",
@@ -178786,158 +174843,23 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "MGmwI1"
+       "55ewg9"
       ],
       "come": "versione base"
      }
     ]
    },
    "motoit": [
-    "sprint-50"
+    "vespa-50-special"
    ],
    "versioniMotoit": [
     {
-     "id": "MGmwI1",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 (2021 - 24)",
+     "id": "55ewg9",
+     "modelloSlug": "vespa-50-special",
+     "nome": "Vespa 50 Special",
      "variante": "",
      "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2024
-     }
-    },
-    {
-     "id": "2dipt1",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 2T (2014 - 17)",
-     "variante": "2T",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2017
-     }
-    },
-    {
-     "id": "I1ywjQ",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 4T 3V (2014 - 17)",
-     "variante": "4T 3V",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2017
-     }
-    },
-    {
-     "id": "fpa9Xj",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 Justin Bieber (2022 - 24)",
-     "variante": "Justin Bieber",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2024
-     }
-    },
-    {
-     "id": "WSWkjF",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 S (2023 - 25)",
-     "variante": "S",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2025
-     }
-    },
-    {
-     "id": "5dUJKc",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 S (2026)",
-     "variante": "S",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "iWU8hT",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 4T 3V (2018 - 20)",
-     "variante": "4T 3V",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    },
-    {
-     "id": "wRTM6C",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 Notte (2018 - 20)",
-     "variante": "Notte",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    },
-    {
-     "id": "uoIm3K",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 Racing Sixties (2020)",
-     "variante": "Racing Sixties",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "nhGdmx",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 Racing Sixties (2021 - 22)",
-     "variante": "Racing Sixties",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "sgCqlZ",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 S 2T (2015 - 17)",
-     "variante": "S 2T",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2017
-     }
-    },
-    {
-     "id": "xOPRJ7",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 Sport 4T 3V (2018 - 20)",
-     "variante": "Sport 4T 3V",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    },
-    {
-     "id": "Jo427V",
-     "modelloSlug": "sprint-50",
-     "nome": "Sprint 50 Sport 4T 3V (2021 - 22)",
-     "variante": "Sport 4T 3V",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
+     "anni": null
     }
    ]
   },
@@ -179024,364 +174946,6 @@
      "modelloSlug": "1",
      "nome": "1 Feng Chen Wang (2022 - 24)",
      "variante": "Feng Chen Wang",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2024
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "002391",
-    "nome": "Vespa 946 125",
-    "versioni": [
-     {
-      "id": "018497",
-      "nome": "Bunny",
-      "variante": "Bunny",
-      "base": false
-     },
-     {
-      "id": "013616",
-      "nome": "Christian Dior",
-      "variante": "Christian Dior",
-      "base": false
-     },
-     {
-      "id": "018498",
-      "nome": "Dragon",
-      "variante": "Dragon",
-      "base": false
-     },
-     {
-      "id": "005818",
-      "nome": "Emporio Armani",
-      "variante": "Emporio Armani",
-      "base": false
-     },
-     {
-      "id": "020386",
-      "nome": "Snake",
-      "variante": "Snake",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true
-     }
-    ]
-   },
-   "motoit": [
-    "vespa-946"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "Qkpdmm",
-     "modelloSlug": "vespa-946",
-     "nome": "Vespa 946 ABS (2013 - 15)",
-     "variante": "ABS",
-     "base": false,
-     "anni": {
-      "da": 2013,
-      "a": 2015
-     }
-    },
-    {
-     "id": "6NpGR2",
-     "modelloSlug": "vespa-946",
-     "nome": "Vespa 946 Dragon 125 (2024)",
-     "variante": "Dragon 125",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "5jwCB5",
-     "modelloSlug": "vespa-946",
-     "nome": "Vespa 946 Horse 125 (2026)",
-     "variante": "Horse 125",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "rWXHSz",
-     "modelloSlug": "vespa-946",
-     "nome": "Vespa 946 Snake 125 (2025)",
-     "variante": "Snake 125",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "sb9xX5",
-     "modelloSlug": "vespa-946",
-     "nome": "Vespa 946 Snake 150 (2025)",
-     "variante": "Snake 150",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "JLY5jh",
-     "modelloSlug": "vespa-946",
-     "nome": "946 10&amp;deg; Anniversario 125 (2023)",
-     "variante": "946 10&amp;deg; Anniversario 125",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "SB0TWs",
-     "modelloSlug": "vespa-946",
-     "nome": "946 Christian Dior ABS (2020)",
-     "variante": "946 Christian Dior ABS",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "TFU1iK",
-     "modelloSlug": "vespa-946",
-     "nome": "946 Dragon 150 (2024)",
-     "variante": "946 Dragon 150",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "g8AW3T",
-     "modelloSlug": "vespa-946",
-     "nome": "946 EA ABS (2015 - 16)",
-     "variante": "946 EA ABS",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2016
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "006354",
-    "nome": "Vespa 946 150",
-    "versioni": [
-     {
-      "id": "019556",
-      "nome": "Dragon",
-      "variante": "Dragon",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true
-     }
-    ]
-   },
-   "motoit": [
-    "vespa-946"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "Qkpdmm",
-     "modelloSlug": "vespa-946",
-     "nome": "Vespa 946 ABS (2013 - 15)",
-     "variante": "ABS",
-     "base": false,
-     "anni": {
-      "da": 2013,
-      "a": 2015
-     }
-    },
-    {
-     "id": "6NpGR2",
-     "modelloSlug": "vespa-946",
-     "nome": "Vespa 946 Dragon 125 (2024)",
-     "variante": "Dragon 125",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "5jwCB5",
-     "modelloSlug": "vespa-946",
-     "nome": "Vespa 946 Horse 125 (2026)",
-     "variante": "Horse 125",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "rWXHSz",
-     "modelloSlug": "vespa-946",
-     "nome": "Vespa 946 Snake 125 (2025)",
-     "variante": "Snake 125",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "sb9xX5",
-     "modelloSlug": "vespa-946",
-     "nome": "Vespa 946 Snake 150 (2025)",
-     "variante": "Snake 150",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "JLY5jh",
-     "modelloSlug": "vespa-946",
-     "nome": "946 10&amp;deg; Anniversario 125 (2023)",
-     "variante": "946 10&amp;deg; Anniversario 125",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "SB0TWs",
-     "modelloSlug": "vespa-946",
-     "nome": "946 Christian Dior ABS (2020)",
-     "variante": "946 Christian Dior ABS",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "TFU1iK",
-     "modelloSlug": "vespa-946",
-     "nome": "946 Dragon 150 (2024)",
-     "variante": "946 Dragon 150",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "g8AW3T",
-     "modelloSlug": "vespa-946",
-     "nome": "946 EA ABS (2015 - 16)",
-     "variante": "946 EA ABS",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2016
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "002987",
-    "nome": "Vespa Elettrica",
-    "versioni": [
-     {
-      "id": "006862",
-      "nome": "Pure Electric 45 Km/h (L1)",
-      "variante": "Pure Electric 45 Km/h (L1)",
-      "base": false
-     },
-     {
-      "id": "007187",
-      "nome": "Pure Electric 52 Km/h (L3)",
-      "variante": "Pure Electric 52 Km/h (L3)",
-      "base": false
-     },
-     {
-      "id": "007334",
-      "nome": "Pure Electric 70 Km/h (L3)",
-      "variante": "Pure Electric 70 Km/h (L3)",
-      "base": false
-     },
-     {
-      "id": "011031",
-      "nome": "Red-Pure Electric 70 Km/h (L3)",
-      "variante": "Red-Pure Electric 70 Km/h (L3)",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "MK4CFB"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "vespa-elettrica"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "MK4CFB",
-     "modelloSlug": "vespa-elettrica",
-     "nome": "Vespa Elettrica (2018 - 19)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2019
-     }
-    },
-    {
-     "id": "YpVFzR",
-     "modelloSlug": "vespa-elettrica",
-     "nome": "Vespa Elettrica 70 (2020 - 24)",
-     "variante": "70",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2024
-     }
-    },
-    {
-     "id": "UsRSNA",
-     "modelloSlug": "vespa-elettrica",
-     "nome": "Vespa Elettrica 70 Red (2022 - 24)",
-     "variante": "70 Red",
      "base": false,
      "anni": {
       "da": 2022,
@@ -179618,230 +175182,6 @@
      "variante": "Vespa 50 PKS",
      "base": false,
      "anni": null
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "fine",
-   "subito": {
-    "id": "005771",
-    "nome": "Vespa Primavera Elettrica 45",
-    "versioni": [
-     {
-      "id": "019563",
-      "nome": "RED",
-      "variante": "RED",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "MK4CFB"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "primavera-elettrica",
-    "vespa-elettrica"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "mI50Jl",
-     "modelloSlug": "primavera-elettrica",
-     "nome": "Primavera Elettrica 45 (2024 - 26)",
-     "variante": "45",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2026
-     }
-    },
-    {
-     "id": "J59jkD",
-     "modelloSlug": "primavera-elettrica",
-     "nome": "Primavera Elettrica 45 Red (2024 - 26)",
-     "variante": "45 Red",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2026
-     }
-    },
-    {
-     "id": "NjgFfb",
-     "modelloSlug": "primavera-elettrica",
-     "nome": "Primavera Elettrica 70 Red (2024 - 26)",
-     "variante": "70 Red",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2026
-     }
-    },
-    {
-     "id": "1TyeNs",
-     "modelloSlug": "primavera-elettrica",
-     "nome": "Primavera Elettrica 70 Tech (2024 - 26)",
-     "variante": "70 Tech",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2026
-     }
-    },
-    {
-     "id": "MK4CFB",
-     "modelloSlug": "vespa-elettrica",
-     "nome": "Vespa Elettrica (2018 - 19)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2019
-     }
-    },
-    {
-     "id": "YpVFzR",
-     "modelloSlug": "vespa-elettrica",
-     "nome": "Vespa Elettrica 70 (2020 - 24)",
-     "variante": "70",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2024
-     }
-    },
-    {
-     "id": "UsRSNA",
-     "modelloSlug": "vespa-elettrica",
-     "nome": "Vespa Elettrica 70 Red (2022 - 24)",
-     "variante": "70 Red",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2024
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "fine",
-   "subito": {
-    "id": "006356",
-    "nome": "Vespa Primavera Elettrica 70",
-    "versioni": [
-     {
-      "id": "019564",
-      "nome": "RED",
-      "variante": "RED",
-      "base": false
-     },
-     {
-      "id": "019561",
-      "nome": "Tech",
-      "variante": "Tech",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "MK4CFB"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "primavera-elettrica",
-    "vespa-elettrica"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "mI50Jl",
-     "modelloSlug": "primavera-elettrica",
-     "nome": "Primavera Elettrica 45 (2024 - 26)",
-     "variante": "45",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2026
-     }
-    },
-    {
-     "id": "J59jkD",
-     "modelloSlug": "primavera-elettrica",
-     "nome": "Primavera Elettrica 45 Red (2024 - 26)",
-     "variante": "45 Red",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2026
-     }
-    },
-    {
-     "id": "NjgFfb",
-     "modelloSlug": "primavera-elettrica",
-     "nome": "Primavera Elettrica 70 Red (2024 - 26)",
-     "variante": "70 Red",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2026
-     }
-    },
-    {
-     "id": "1TyeNs",
-     "modelloSlug": "primavera-elettrica",
-     "nome": "Primavera Elettrica 70 Tech (2024 - 26)",
-     "variante": "70 Tech",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2026
-     }
-    },
-    {
-     "id": "MK4CFB",
-     "modelloSlug": "vespa-elettrica",
-     "nome": "Vespa Elettrica (2018 - 19)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2019
-     }
-    },
-    {
-     "id": "YpVFzR",
-     "modelloSlug": "vespa-elettrica",
-     "nome": "Vespa Elettrica 70 (2020 - 24)",
-     "variante": "70",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2024
-     }
-    },
-    {
-     "id": "UsRSNA",
-     "modelloSlug": "vespa-elettrica",
-     "nome": "Vespa Elettrica 70 Red (2022 - 24)",
-     "variante": "70 Red",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2024
-     }
     }
    ]
   },
@@ -180087,70 +175427,6 @@
      "variante": "MA a.e.",
      "base": false,
      "anni": null
-    }
-   ]
-  },
-  {
-   "marca": "Piaggio",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "006357",
-    "nome": "Vespa Sprint Elettrica 45",
-    "versioni": [
-     {
-      "id": "019562",
-      "nome": "S",
-      "variante": "S",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "MK4CFB"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "vespa-elettrica"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "MK4CFB",
-     "modelloSlug": "vespa-elettrica",
-     "nome": "Vespa Elettrica (2018 - 19)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2019
-     }
-    },
-    {
-     "id": "YpVFzR",
-     "modelloSlug": "vespa-elettrica",
-     "nome": "Vespa Elettrica 70 (2020 - 24)",
-     "variante": "70",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2024
-     }
-    },
-    {
-     "id": "UsRSNA",
-     "modelloSlug": "vespa-elettrica",
-     "nome": "Vespa Elettrica 70 Red (2022 - 24)",
-     "variante": "70 Red",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2024
-     }
     }
    ]
   },
@@ -182626,6 +177902,2017 @@
      "anni": {
       "da": 2019,
       "a": 2019
+     }
+    }
+   ]
+  },
+  {
+   "marca": "RedMoto Honda",
+   "gradoModello": "probabile",
+   "subito": {
+    "id": "002662",
+    "nome": "CRF 150",
+    "versioni": [
+     {
+      "id": "005786",
+      "nome": "R",
+      "variante": "R",
+      "base": false
+     },
+     {
+      "id": "006885",
+      "nome": "RB",
+      "variante": "RB",
+      "base": false
+     },
+     {
+      "id": "019624",
+      "nome": "RBS",
+      "variante": "RBS",
+      "base": false
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "PFyqJu",
+       "sOVddG",
+       "9vj2d7",
+       "0UZxi8",
+       "w6fF9l",
+       "CpdSil",
+       "j028ud",
+       "hQPY6J"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "crf-150r"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "PFyqJu",
+     "modelloSlug": "crf-150r",
+     "nome": "CRF 150R (2009)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2009,
+      "a": 2009
+     }
+    },
+    {
+     "id": "sOVddG",
+     "modelloSlug": "crf-150r",
+     "nome": "CRF 150R (2015 - 16)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2015,
+      "a": 2016
+     }
+    },
+    {
+     "id": "JV4yLC",
+     "modelloSlug": "crf-150r",
+     "nome": "CRF 150RB (2025)",
+     "variante": "CRF 150RB",
+     "base": false,
+     "anni": {
+      "da": 2025,
+      "a": 2025
+     }
+    },
+    {
+     "id": "z55chw",
+     "modelloSlug": "crf-150r",
+     "nome": "CRF 150RB (2026)",
+     "variante": "CRF 150RB",
+     "base": false,
+     "anni": {
+      "da": 2026,
+      "a": 2026
+     }
+    },
+    {
+     "id": "9vj2d7",
+     "modelloSlug": "crf-150r",
+     "nome": "CRF 150R (2006)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2006,
+      "a": 2006
+     }
+    },
+    {
+     "id": "0UZxi8",
+     "modelloSlug": "crf-150r",
+     "nome": "CRF 150R (2010 - 11)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2010,
+      "a": 2011
+     }
+    },
+    {
+     "id": "w6fF9l",
+     "modelloSlug": "crf-150r",
+     "nome": "CRF 150R (2012 - 13)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2012,
+      "a": 2013
+     }
+    },
+    {
+     "id": "CpdSil",
+     "modelloSlug": "crf-150r",
+     "nome": "CRF 150R (2017)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2017,
+      "a": 2017
+     }
+    },
+    {
+     "id": "j028ud",
+     "modelloSlug": "crf-150r",
+     "nome": "CRF 150R (2018 - 20)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2018,
+      "a": 2020
+     }
+    },
+    {
+     "id": "hQPY6J",
+     "modelloSlug": "crf-150r",
+     "nome": "CRF 150R (2022)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2022,
+      "a": 2022
+     }
+    },
+    {
+     "id": "YrZBDA",
+     "modelloSlug": "crf-150r",
+     "nome": "CRF 150RB (2011 - 12)",
+     "variante": "CRF 150RB",
+     "base": false,
+     "anni": {
+      "da": 2011,
+      "a": 2012
+     }
+    },
+    {
+     "id": "o6qAPP",
+     "modelloSlug": "crf-150r",
+     "nome": "CRF 150RB (2023 - 24)",
+     "variante": "CRF 150RB",
+     "base": false,
+     "anni": {
+      "da": 2023,
+      "a": 2024
+     }
+    }
+   ]
+  },
+  {
+   "marca": "RedMoto Honda",
+   "gradoModello": "fine",
+   "subito": {
+    "id": "002410",
+    "nome": "CRF 250",
+    "versioni": [
+     {
+      "id": "005067",
+      "nome": "R",
+      "variante": "R",
+      "base": false
+     },
+     {
+      "id": "006554",
+      "nome": "R Special",
+      "variante": "R Special",
+      "base": false
+     },
+     {
+      "id": "019625",
+      "nome": "R Works Edition",
+      "variante": "R Works Edition",
+      "base": false
+     },
+     {
+      "id": "005787",
+      "nome": "RG",
+      "variante": "RG",
+      "base": false
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "t4vtpL",
+       "E7D3JX",
+       "3A4U39",
+       "88ULjX",
+       "Syd0KC",
+       "m0tNYa",
+       "Bp9HLS",
+       "x6VwUm",
+       "8mmwno",
+       "bA0pnu",
+       "elYpYO",
+       "jjNGt3",
+       "y0Rc89",
+       "QeHr2v",
+       "u2rQpg",
+       "Bk7tXS",
+       "gP5Qom",
+       "0SGJeX",
+       "LmkGbl",
+       "9YelZ9",
+       "RnVLA7",
+       "gjmBa5",
+       "eqqA9U",
+       "KUfC5F",
+       "5GIlXZ",
+       "ue4bUn",
+       "PD9w7b",
+       "85odk3"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "crf-250-rally",
+    "crf-250l",
+    "crf-250m",
+    "crf-250r",
+    "crf-250rx",
+    "crf-250x"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "t4vtpL",
+     "modelloSlug": "crf-250-rally",
+     "nome": "CRF 250 Rally (2017 - 20)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2017,
+      "a": 2020
+     }
+    },
+    {
+     "id": "E7D3JX",
+     "modelloSlug": "crf-250l",
+     "nome": "CRF 250L (2012 - 13)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2012,
+      "a": 2013
+     }
+    },
+    {
+     "id": "3A4U39",
+     "modelloSlug": "crf-250l",
+     "nome": "CRF 250L (2017 - 20)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2017,
+      "a": 2020
+     }
+    },
+    {
+     "id": "88ULjX",
+     "modelloSlug": "crf-250l",
+     "nome": "CRF 250L (2021 - 22)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2021,
+      "a": 2022
+     }
+    },
+    {
+     "id": "Syd0KC",
+     "modelloSlug": "crf-250m",
+     "nome": "CRF 250M (2013 - 17)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2013,
+      "a": 2017
+     }
+    },
+    {
+     "id": "m0tNYa",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2005)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2005,
+      "a": 2005
+     }
+    },
+    {
+     "id": "Bp9HLS",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2006)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2006,
+      "a": 2006
+     }
+    },
+    {
+     "id": "x6VwUm",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2007)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2007,
+      "a": 2007
+     }
+    },
+    {
+     "id": "8mmwno",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2008)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2008,
+      "a": 2008
+     }
+    },
+    {
+     "id": "bA0pnu",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2009)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2009,
+      "a": 2009
+     }
+    },
+    {
+     "id": "elYpYO",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2010 - 11)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2010,
+      "a": 2011
+     }
+    },
+    {
+     "id": "jjNGt3",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2011 - 12)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2011,
+      "a": 2012
+     }
+    },
+    {
+     "id": "y0Rc89",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2014)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2014,
+      "a": 2014
+     }
+    },
+    {
+     "id": "QeHr2v",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2017)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2017,
+      "a": 2017
+     }
+    },
+    {
+     "id": "u2rQpg",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2018)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2018,
+      "a": 2018
+     }
+    },
+    {
+     "id": "Bk7tXS",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2019)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2019,
+      "a": 2019
+     }
+    },
+    {
+     "id": "gP5Qom",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2020)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2020,
+      "a": 2020
+     }
+    },
+    {
+     "id": "0SGJeX",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2021)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2021,
+      "a": 2021
+     }
+    },
+    {
+     "id": "LmkGbl",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2022)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2022,
+      "a": 2022
+     }
+    },
+    {
+     "id": "9YelZ9",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2023)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2023,
+      "a": 2023
+     }
+    },
+    {
+     "id": "RnVLA7",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2024)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2024,
+      "a": 2024
+     }
+    },
+    {
+     "id": "gjmBa5",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2025)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2025,
+      "a": 2025
+     }
+    },
+    {
+     "id": "eqqA9U",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2026)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2026,
+      "a": 2026
+     }
+    },
+    {
+     "id": "dHgt0u",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R Enduro (2018)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2018,
+      "a": 2018
+     }
+    },
+    {
+     "id": "eKh3Eo",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R WE (2025)",
+     "variante": "WE",
+     "base": false,
+     "anni": {
+      "da": 2025,
+      "a": 2025
+     }
+    },
+    {
+     "id": "KUfC5F",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2027)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2027,
+      "a": 2027
+     }
+    },
+    {
+     "id": "UHrvAp",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R HRC-WE (2027)",
+     "variante": "HRC-WE",
+     "base": false,
+     "anni": {
+      "da": 2027,
+      "a": 2027
+     }
+    },
+    {
+     "id": "HH8s9P",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R WE (2026)",
+     "variante": "WE",
+     "base": false,
+     "anni": {
+      "da": 2026,
+      "a": 2026
+     }
+    },
+    {
+     "id": "5GIlXZ",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2003 - 04)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2003,
+      "a": 2004
+     }
+    },
+    {
+     "id": "ue4bUn",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R (2013)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2013,
+      "a": 2013
+     }
+    },
+    {
+     "id": "LKl4Gv",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R Carbon Edition (2020)",
+     "variante": "Carbon Edition",
+     "base": false,
+     "anni": {
+      "da": 2020,
+      "a": 2020
+     }
+    },
+    {
+     "id": "mT06xR",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R Carbon Edition Pro (2020)",
+     "variante": "Carbon Edition Pro",
+     "base": false,
+     "anni": {
+      "da": 2020,
+      "a": 2020
+     }
+    },
+    {
+     "id": "GYbGYM",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R Enduro (2014)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2014,
+      "a": 2014
+     }
+    },
+    {
+     "id": "GQhAFT",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R Enduro (2017)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2017,
+      "a": 2017
+     }
+    },
+    {
+     "id": "K9ingm",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R Enduro (2019)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2019,
+      "a": 2019
+     }
+    },
+    {
+     "id": "XaZmz1",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R Enduro Six Days (2018)",
+     "variante": "Enduro Six Days",
+     "base": false,
+     "anni": {
+      "da": 2018,
+      "a": 2018
+     }
+    },
+    {
+     "id": "qAuTKw",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R Enduro Special (2018)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2018,
+      "a": 2018
+     }
+    },
+    {
+     "id": "D2nFod",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250R Special (2018)",
+     "variante": "Special",
+     "base": false,
+     "anni": {
+      "da": 2018,
+      "a": 2018
+     }
+    },
+    {
+     "id": "v4RwJp",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250RF (2015)",
+     "variante": "CRF 250RF",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "qbIaVM",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250RF (2016)",
+     "variante": "CRF 250RF",
+     "base": false,
+     "anni": {
+      "da": 2016,
+      "a": 2016
+     }
+    },
+    {
+     "id": "Ol64rF",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250RF Enduro (2015)",
+     "variante": "CRF 250RF Enduro",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "gaSJMh",
+     "modelloSlug": "crf-250r",
+     "nome": "CRF 250RG Enduro (2016)",
+     "variante": "CRF 250RG Enduro",
+     "base": false,
+     "anni": {
+      "da": 2016,
+      "a": 2016
+     }
+    },
+    {
+     "id": "FGrbtG",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro (2019)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2019,
+      "a": 2019
+     }
+    },
+    {
+     "id": "q1mbbf",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro (2022)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2022,
+      "a": 2022
+     }
+    },
+    {
+     "id": "minzxg",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro (2023)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2023,
+      "a": 2023
+     }
+    },
+    {
+     "id": "saK9X6",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro (2024)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2024,
+      "a": 2024
+     }
+    },
+    {
+     "id": "eKHxm6",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro (2025)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2025,
+      "a": 2025
+     }
+    },
+    {
+     "id": "8sSHUj",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro (2026)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2026,
+      "a": 2026
+     }
+    },
+    {
+     "id": "2biWp7",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro Special (2022)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2022,
+      "a": 2022
+     }
+    },
+    {
+     "id": "WrAAhz",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro Special (2026)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2026,
+      "a": 2026
+     }
+    },
+    {
+     "id": "PD9w7b",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX (2019)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2019,
+      "a": 2019
+     }
+    },
+    {
+     "id": "PDReQi",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX 50&amp;deg; Anniversario (2023)",
+     "variante": "50&amp;deg; Anniversario",
+     "base": false,
+     "anni": {
+      "da": 2023,
+      "a": 2023
+     }
+    },
+    {
+     "id": "XSYYbK",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro (2020)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2020,
+      "a": 2020
+     }
+    },
+    {
+     "id": "YEDuFb",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro (2021)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2021,
+      "a": 2021
+     }
+    },
+    {
+     "id": "xWOc5C",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro Special (2020)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2020,
+      "a": 2020
+     }
+    },
+    {
+     "id": "N1z0Y1",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro Special (2021)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2021,
+      "a": 2021
+     }
+    },
+    {
+     "id": "17VI4P",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro Special (2023)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2023,
+      "a": 2023
+     }
+    },
+    {
+     "id": "AI5L9c",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro Special (2024)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2024,
+      "a": 2024
+     }
+    },
+    {
+     "id": "xfMzb2",
+     "modelloSlug": "crf-250rx",
+     "nome": "CRF 250RX Enduro Special (2025)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2025,
+      "a": 2025
+     }
+    },
+    {
+     "id": "85odk3",
+     "modelloSlug": "crf-250x",
+     "nome": "CRF 250X (2013 - 14 )",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2013,
+      "a": 2014
+     }
+    },
+    {
+     "id": "8gQD2i",
+     "modelloSlug": "crf-250x",
+     "nome": "CRF 250X Enduro (2014)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2014,
+      "a": 2014
+     }
+    },
+    {
+     "id": "QNUBm8",
+     "modelloSlug": "crf-250x",
+     "nome": "CRF 250X Enduro (2017)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2017,
+      "a": 2017
+     }
+    },
+    {
+     "id": "5K8Ff3",
+     "modelloSlug": "crf-250x",
+     "nome": "CRF 250XF Enduro (2015)",
+     "variante": "CRF 250XF Enduro",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "z3jswi",
+     "modelloSlug": "crf-250x",
+     "nome": "CRF 250XG Enduro (2016)",
+     "variante": "CRF 250XG Enduro",
+     "base": false,
+     "anni": {
+      "da": 2016,
+      "a": 2016
+     }
+    }
+   ]
+  },
+  {
+   "marca": "RedMoto Honda",
+   "gradoModello": "fine",
+   "subito": {
+    "id": "002411",
+    "nome": "CRF 450",
+    "versioni": [
+     {
+      "id": "005068",
+      "nome": "R",
+      "variante": "R",
+      "base": false,
+      "motoit": [
+       "t4osxO"
+      ],
+      "come": "stessa variante"
+     },
+     {
+      "id": "006555",
+      "nome": "R Special",
+      "variante": "R Special",
+      "base": false
+     },
+     {
+      "id": "019626",
+      "nome": "R Works Edition",
+      "variante": "R Works Edition",
+      "base": false
+     },
+     {
+      "id": "005788",
+      "nome": "RG",
+      "variante": "RG",
+      "base": false,
+      "motoit": [
+       "VNOxq9"
+      ],
+      "come": "stessa variante"
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "9IugDO",
+       "X5nHw0",
+       "uV0hw7",
+       "sy6LjG",
+       "kzLRW8",
+       "WUYqE3",
+       "hL1qvU",
+       "h19Qdy",
+       "95Is8M",
+       "onIo8L",
+       "lLA5Ar",
+       "0cMG9g",
+       "XUhBw4",
+       "foTg61",
+       "qdXzCp",
+       "DR03B9",
+       "ToUEJQ",
+       "Ek4HDN",
+       "j82gad",
+       "6A3UO4",
+       "wzWWxN",
+       "Z6v1lW",
+       "6yQSul",
+       "n7lwo3",
+       "SSFxHC",
+       "eExzwp",
+       "fWFXLG",
+       "eb5AUY",
+       "gtmlwr",
+       "QP0URz",
+       "zY8b0Y",
+       "ZL0e1H",
+       "bxBPwA"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "crf-450-supermoto",
+    "crf-450r",
+    "crf-450r-smt",
+    "crf-450rx",
+    "crf-450rx-rally",
+    "crf-450rx-supermoto",
+    "crf-450x"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "Dzu9VF",
+     "modelloSlug": "crf-450-supermoto",
+     "nome": "CRF 450 Supermoto RF (2015)",
+     "variante": "RF",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "t4osxO",
+     "modelloSlug": "crf-450-supermoto",
+     "nome": "CRF 450 Supermoto R (2014)",
+     "variante": "R",
+     "base": false,
+     "anni": {
+      "da": 2014,
+      "a": 2014
+     }
+    },
+    {
+     "id": "VNOxq9",
+     "modelloSlug": "crf-450-supermoto",
+     "nome": "CRF 450 Supermoto RG (2016)",
+     "variante": "RG",
+     "base": false,
+     "anni": {
+      "da": 2016,
+      "a": 2016
+     }
+    },
+    {
+     "id": "kYnjt2",
+     "modelloSlug": "crf-450-supermoto",
+     "nome": "CRF 450 Supermoto X (2014)",
+     "variante": "X",
+     "base": false,
+     "anni": {
+      "da": 2014,
+      "a": 2014
+     }
+    },
+    {
+     "id": "q94i1Y",
+     "modelloSlug": "crf-450-supermoto",
+     "nome": "CRF 450 Supermoto XF (2015)",
+     "variante": "XF",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "IBbOYs",
+     "modelloSlug": "crf-450-supermoto",
+     "nome": "CRF 450 Supermoto XG (2016)",
+     "variante": "XG",
+     "base": false,
+     "anni": {
+      "da": 2016,
+      "a": 2016
+     }
+    },
+    {
+     "id": "9IugDO",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2001 - 02)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2001,
+      "a": 2002
+     }
+    },
+    {
+     "id": "X5nHw0",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2003 - 04)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2003,
+      "a": 2004
+     }
+    },
+    {
+     "id": "uV0hw7",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2005)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2005,
+      "a": 2005
+     }
+    },
+    {
+     "id": "sy6LjG",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2006)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2006,
+      "a": 2006
+     }
+    },
+    {
+     "id": "kzLRW8",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2007)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2007,
+      "a": 2007
+     }
+    },
+    {
+     "id": "WUYqE3",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2008)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2008,
+      "a": 2008
+     }
+    },
+    {
+     "id": "hL1qvU",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2009)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2009,
+      "a": 2009
+     }
+    },
+    {
+     "id": "h19Qdy",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2010 - 11)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2010,
+      "a": 2011
+     }
+    },
+    {
+     "id": "95Is8M",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2011 - 12)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2011,
+      "a": 2012
+     }
+    },
+    {
+     "id": "onIo8L",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2013)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2013,
+      "a": 2013
+     }
+    },
+    {
+     "id": "lLA5Ar",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2014)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2014,
+      "a": 2014
+     }
+    },
+    {
+     "id": "0cMG9g",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2017)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2017,
+      "a": 2017
+     }
+    },
+    {
+     "id": "XUhBw4",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2018)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2018,
+      "a": 2018
+     }
+    },
+    {
+     "id": "foTg61",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2019)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2019,
+      "a": 2019
+     }
+    },
+    {
+     "id": "qdXzCp",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2020)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2020,
+      "a": 2020
+     }
+    },
+    {
+     "id": "DR03B9",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2021)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2021,
+      "a": 2021
+     }
+    },
+    {
+     "id": "ToUEJQ",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2022)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2022,
+      "a": 2022
+     }
+    },
+    {
+     "id": "Ek4HDN",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2023)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2023,
+      "a": 2023
+     }
+    },
+    {
+     "id": "j82gad",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2024)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2024,
+      "a": 2024
+     }
+    },
+    {
+     "id": "6A3UO4",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2025)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2025,
+      "a": 2025
+     }
+    },
+    {
+     "id": "wzWWxN",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2026)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2026,
+      "a": 2026
+     }
+    },
+    {
+     "id": "W2Owum",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450RF (2015)",
+     "variante": "CRF 450RF",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "Z6v1lW",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R (2027)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2027,
+      "a": 2027
+     }
+    },
+    {
+     "id": "zX3nDq",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R HRC-WE (2027)",
+     "variante": "HRC-WE",
+     "base": false,
+     "anni": {
+      "da": 2027,
+      "a": 2027
+     }
+    },
+    {
+     "id": "td9jDA",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R WE (2026)",
+     "variante": "WE",
+     "base": false,
+     "anni": {
+      "da": 2026,
+      "a": 2026
+     }
+    },
+    {
+     "id": "8UQHqZ",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R Enduro (2014)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2014,
+      "a": 2014
+     }
+    },
+    {
+     "id": "NrLubi",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R Special (2018)",
+     "variante": "Special",
+     "base": false,
+     "anni": {
+      "da": 2018,
+      "a": 2018
+     }
+    },
+    {
+     "id": "Dj4q3u",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450R WE (2025)",
+     "variante": "WE",
+     "base": false,
+     "anni": {
+      "da": 2025,
+      "a": 2025
+     }
+    },
+    {
+     "id": "fi3OLd",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450RF (2016)",
+     "variante": "CRF 450RF",
+     "base": false,
+     "anni": {
+      "da": 2016,
+      "a": 2016
+     }
+    },
+    {
+     "id": "fNndq9",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450RF Enduro (2015)",
+     "variante": "CRF 450RF Enduro",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "w1RLZj",
+     "modelloSlug": "crf-450r",
+     "nome": "CRF 450RG Enduro (2016)",
+     "variante": "CRF 450RG Enduro",
+     "base": false,
+     "anni": {
+      "da": 2016,
+      "a": 2016
+     }
+    },
+    {
+     "id": "6yQSul",
+     "modelloSlug": "crf-450r-smt",
+     "nome": "CRF 450R SMT (2025 - 26)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2025,
+      "a": 2026
+     }
+    },
+    {
+     "id": "5kH4uw",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro (2017)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2017,
+      "a": 2017
+     }
+    },
+    {
+     "id": "gAE4Ns",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro (2019)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2019,
+      "a": 2019
+     }
+    },
+    {
+     "id": "7xtTP9",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro (2020)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2020,
+      "a": 2020
+     }
+    },
+    {
+     "id": "yiBLsQ",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro (2021)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2021,
+      "a": 2021
+     }
+    },
+    {
+     "id": "b54KED",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro (2022)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2022,
+      "a": 2022
+     }
+    },
+    {
+     "id": "RkqgmC",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro (2023)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2023,
+      "a": 2023
+     }
+    },
+    {
+     "id": "ucjBhn",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro (2024)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2024,
+      "a": 2024
+     }
+    },
+    {
+     "id": "VRyQ81",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro (2026)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2026,
+      "a": 2026
+     }
+    },
+    {
+     "id": "kkz6g7",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro Special (2023)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2023,
+      "a": 2023
+     }
+    },
+    {
+     "id": "CQuLTE",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro Special (2026)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2026,
+      "a": 2026
+     }
+    },
+    {
+     "id": "50hMvw",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX 50&amp;deg; Anniversario (2023)",
+     "variante": "50&amp;deg; Anniversario",
+     "base": false,
+     "anni": {
+      "da": 2023,
+      "a": 2023
+     }
+    },
+    {
+     "id": "I70yuM",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro (2018)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2018,
+      "a": 2018
+     }
+    },
+    {
+     "id": "8nu4A0",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro (2025)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2025,
+      "a": 2025
+     }
+    },
+    {
+     "id": "iDiINI",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro Country (2017)",
+     "variante": "Enduro Country",
+     "base": false,
+     "anni": {
+      "da": 2017,
+      "a": 2017
+     }
+    },
+    {
+     "id": "nfI8cr",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro Six Days (2018)",
+     "variante": "Enduro Six Days",
+     "base": false,
+     "anni": {
+      "da": 2018,
+      "a": 2018
+     }
+    },
+    {
+     "id": "EFlafz",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro Special (2018)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2018,
+      "a": 2018
+     }
+    },
+    {
+     "id": "JqXHTq",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro Special (2020)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2020,
+      "a": 2020
+     }
+    },
+    {
+     "id": "vtP5Eb",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro Special (2021)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2021,
+      "a": 2021
+     }
+    },
+    {
+     "id": "bX1420",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro Special (2022)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2022,
+      "a": 2022
+     }
+    },
+    {
+     "id": "INldpF",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro Special (2024)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2024,
+      "a": 2024
+     }
+    },
+    {
+     "id": "bQNA3T",
+     "modelloSlug": "crf-450rx",
+     "nome": "CRF 450RX Enduro Special (2025)",
+     "variante": "Enduro Special",
+     "base": false,
+     "anni": {
+      "da": 2025,
+      "a": 2025
+     }
+    },
+    {
+     "id": "n7lwo3",
+     "modelloSlug": "crf-450rx-rally",
+     "nome": "CRF 450RX Rally (2024 - 25)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2024,
+      "a": 2025
+     }
+    },
+    {
+     "id": "SSFxHC",
+     "modelloSlug": "crf-450rx-rally",
+     "nome": "CRF 450RX Rally (2027)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2027,
+      "a": 2027
+     }
+    },
+    {
+     "id": "eExzwp",
+     "modelloSlug": "crf-450rx-rally",
+     "nome": "CRF 450RX Rally (2026)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2026,
+      "a": 2026
+     }
+    },
+    {
+     "id": "fWFXLG",
+     "modelloSlug": "crf-450rx-supermoto",
+     "nome": "CRF 450RX Supermoto (2018)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2018,
+      "a": 2018
+     }
+    },
+    {
+     "id": "eb5AUY",
+     "modelloSlug": "crf-450rx-supermoto",
+     "nome": "CRF 450RX Supermoto (2021 - 22)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2021,
+      "a": 2022
+     }
+    },
+    {
+     "id": "gtmlwr",
+     "modelloSlug": "crf-450rx-supermoto",
+     "nome": "CRF 450RX Supermoto (2023 - 24)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2023,
+      "a": 2024
+     }
+    },
+    {
+     "id": "QP0URz",
+     "modelloSlug": "crf-450rx-supermoto",
+     "nome": "CRF 450RX Supermoto (2025 - 26)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2025,
+      "a": 2026
+     }
+    },
+    {
+     "id": "zY8b0Y",
+     "modelloSlug": "crf-450rx-supermoto",
+     "nome": "CRF 450RX Supermoto (2017)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2017,
+      "a": 2017
+     }
+    },
+    {
+     "id": "ZL0e1H",
+     "modelloSlug": "crf-450rx-supermoto",
+     "nome": "CRF 450RX Supermoto (2020)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2020,
+      "a": 2020
+     }
+    },
+    {
+     "id": "bxBPwA",
+     "modelloSlug": "crf-450x",
+     "nome": "CRF 450X (2007 - 08)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2007,
+      "a": 2008
+     }
+    },
+    {
+     "id": "PshJZe",
+     "modelloSlug": "crf-450x",
+     "nome": "CRF 450X Enduro (2012 - 14)",
+     "variante": "Enduro",
+     "base": false,
+     "anni": {
+      "da": 2012,
+      "a": 2014
+     }
+    },
+    {
+     "id": "ywU09U",
+     "modelloSlug": "crf-450x",
+     "nome": "CRF 450XF Enduro (2015)",
+     "variante": "CRF 450XF Enduro",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "5UToH8",
+     "modelloSlug": "crf-450x",
+     "nome": "CRF 450XG Enduro (2016)",
+     "variante": "CRF 450XG Enduro",
+     "base": false,
+     "anni": {
+      "da": 2016,
+      "a": 2016
+     }
+    }
+   ]
+  },
+  {
+   "marca": "RedMoto Honda",
+   "gradoModello": "identico",
+   "subito": {
+    "id": "002444",
+    "nome": "CRF 450 Supermoto",
+    "versioni": [
+     {
+      "id": "005153",
+      "nome": "R",
+      "variante": "R",
+      "base": false,
+      "motoit": [
+       "t4osxO"
+      ],
+      "come": "stessa variante"
+     },
+     {
+      "id": "005797",
+      "nome": "RG",
+      "variante": "RG",
+      "base": false,
+      "motoit": [
+       "VNOxq9"
+      ],
+      "come": "stessa variante"
+     },
+     {
+      "id": "006550",
+      "nome": "RS",
+      "variante": "RS",
+      "base": false
+     },
+     {
+      "id": "006278",
+      "nome": "RS Sport",
+      "variante": "RS Sport",
+      "base": false
+     },
+     {
+      "id": "006276",
+      "nome": "RX",
+      "variante": "RX",
+      "base": false
+     },
+     {
+      "id": "006277",
+      "nome": "RXC",
+      "variante": "RXC",
+      "base": false
+     },
+     {
+      "id": "005145",
+      "nome": "X",
+      "variante": "X",
+      "base": false,
+      "motoit": [
+       "kYnjt2"
+      ],
+      "come": "stessa variante"
+     },
+     {
+      "id": "005798",
+      "nome": "XG",
+      "variante": "XG",
+      "base": false,
+      "motoit": [
+       "IBbOYs"
+      ],
+      "come": "stessa variante"
+     },
+     {
+      "id": "006891",
+      "nome": "XR",
+      "variante": "XR",
+      "base": false
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true
+     }
+    ]
+   },
+   "motoit": [
+    "crf-450-supermoto"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "Dzu9VF",
+     "modelloSlug": "crf-450-supermoto",
+     "nome": "CRF 450 Supermoto RF (2015)",
+     "variante": "RF",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "t4osxO",
+     "modelloSlug": "crf-450-supermoto",
+     "nome": "CRF 450 Supermoto R (2014)",
+     "variante": "R",
+     "base": false,
+     "anni": {
+      "da": 2014,
+      "a": 2014
+     }
+    },
+    {
+     "id": "VNOxq9",
+     "modelloSlug": "crf-450-supermoto",
+     "nome": "CRF 450 Supermoto RG (2016)",
+     "variante": "RG",
+     "base": false,
+     "anni": {
+      "da": 2016,
+      "a": 2016
+     }
+    },
+    {
+     "id": "kYnjt2",
+     "modelloSlug": "crf-450-supermoto",
+     "nome": "CRF 450 Supermoto X (2014)",
+     "variante": "X",
+     "base": false,
+     "anni": {
+      "da": 2014,
+      "a": 2014
+     }
+    },
+    {
+     "id": "q94i1Y",
+     "modelloSlug": "crf-450-supermoto",
+     "nome": "CRF 450 Supermoto XF (2015)",
+     "variante": "XF",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "IBbOYs",
+     "modelloSlug": "crf-450-supermoto",
+     "nome": "CRF 450 Supermoto XG (2016)",
+     "variante": "XG",
+     "base": false,
+     "anni": {
+      "da": 2016,
+      "a": 2016
      }
     }
    ]
@@ -198724,6 +196011,1550 @@
      "anni": {
       "da": 1997,
       "a": 2003
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Suzuki Valenti",
+   "gradoModello": "probabile",
+   "subito": {
+    "id": "001251",
+    "nome": "DR-Z 400 E",
+    "versioni": [
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "rTwRkV"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "dr-z-400"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "gsxDd7",
+     "modelloSlug": "dr-z-400",
+     "nome": "DR-Z 400 E (2000- 06)",
+     "variante": "E",
+     "base": false,
+     "anni": {
+      "da": 2000,
+      "a": 2006
+     }
+    },
+    {
+     "id": "3xUEHa",
+     "modelloSlug": "dr-z-400",
+     "nome": "DR-Z 400 E Valenti Racing (2006 - 07)",
+     "variante": "E Valenti Racing",
+     "base": false,
+     "anni": {
+      "da": 2006,
+      "a": 2007
+     }
+    },
+    {
+     "id": "gaNDs3",
+     "modelloSlug": "dr-z-400",
+     "nome": "DR-Z 400 S (2000 - 06)",
+     "variante": "S",
+     "base": false,
+     "anni": {
+      "da": 2000,
+      "a": 2006
+     }
+    },
+    {
+     "id": "rTwRkV",
+     "modelloSlug": "dr-z-400",
+     "nome": "DR-Z 400 (2000 - 02)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2000,
+      "a": 2002
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Suzuki Valenti",
+   "gradoModello": "grossolano",
+   "subito": {
+    "id": "001244",
+    "nome": "RM 125",
+    "versioni": [
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "U8QfB3",
+       "x8PlXB",
+       "SsJlCI",
+       "wEuULC",
+       "Cj4p7G"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "rm-125"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "U8QfB3",
+     "modelloSlug": "rm-125",
+     "nome": "RM 125 (1995 - 01)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 1995,
+      "a": 2001
+     }
+    },
+    {
+     "id": "x8PlXB",
+     "modelloSlug": "rm-125",
+     "nome": "RM 125 (2002 - 03)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2002,
+      "a": 2003
+     }
+    },
+    {
+     "id": "SsJlCI",
+     "modelloSlug": "rm-125",
+     "nome": "RM 125 (2004)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2004,
+      "a": 2004
+     }
+    },
+    {
+     "id": "wEuULC",
+     "modelloSlug": "rm-125",
+     "nome": "RM 125 (2005 - 06)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2005,
+      "a": 2006
+     }
+    },
+    {
+     "id": "Cj4p7G",
+     "modelloSlug": "rm-125",
+     "nome": "RM 125 (2008 - 12)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2008,
+      "a": 2012
+     }
+    },
+    {
+     "id": "lor2oW",
+     "modelloSlug": "rm-125",
+     "nome": "RM 125 Valenti Racing (2006 - 07)",
+     "variante": "Valenti Racing",
+     "base": false,
+     "anni": {
+      "da": 2006,
+      "a": 2007
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Suzuki Valenti",
+   "gradoModello": "grossolano",
+   "subito": {
+    "id": "001248",
+    "nome": "RM 125 E",
+    "versioni": [
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "U8QfB3",
+       "x8PlXB",
+       "SsJlCI",
+       "wEuULC",
+       "Cj4p7G"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "rm-125"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "U8QfB3",
+     "modelloSlug": "rm-125",
+     "nome": "RM 125 (1995 - 01)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 1995,
+      "a": 2001
+     }
+    },
+    {
+     "id": "x8PlXB",
+     "modelloSlug": "rm-125",
+     "nome": "RM 125 (2002 - 03)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2002,
+      "a": 2003
+     }
+    },
+    {
+     "id": "SsJlCI",
+     "modelloSlug": "rm-125",
+     "nome": "RM 125 (2004)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2004,
+      "a": 2004
+     }
+    },
+    {
+     "id": "wEuULC",
+     "modelloSlug": "rm-125",
+     "nome": "RM 125 (2005 - 06)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2005,
+      "a": 2006
+     }
+    },
+    {
+     "id": "Cj4p7G",
+     "modelloSlug": "rm-125",
+     "nome": "RM 125 (2008 - 12)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2008,
+      "a": 2012
+     }
+    },
+    {
+     "id": "lor2oW",
+     "modelloSlug": "rm-125",
+     "nome": "RM 125 Valenti Racing (2006 - 07)",
+     "variante": "Valenti Racing",
+     "base": false,
+     "anni": {
+      "da": 2006,
+      "a": 2007
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Suzuki Valenti",
+   "gradoModello": "grossolano",
+   "subito": {
+    "id": "001245",
+    "nome": "RM 250",
+    "versioni": [
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "DfKbc2",
+       "YGy3v3",
+       "8OcQzs",
+       "QKjPMi",
+       "Kg2k9w"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "rm-250"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "DfKbc2",
+     "modelloSlug": "rm-250",
+     "nome": "RM 250 (1995 - 01)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 1995,
+      "a": 2001
+     }
+    },
+    {
+     "id": "YGy3v3",
+     "modelloSlug": "rm-250",
+     "nome": "RM 250 (2005 - 06)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2005,
+      "a": 2006
+     }
+    },
+    {
+     "id": "8OcQzs",
+     "modelloSlug": "rm-250",
+     "nome": "RM 250 (2002 - 03)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2002,
+      "a": 2003
+     }
+    },
+    {
+     "id": "QKjPMi",
+     "modelloSlug": "rm-250",
+     "nome": "RM 250 (2004)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2004,
+      "a": 2004
+     }
+    },
+    {
+     "id": "Kg2k9w",
+     "modelloSlug": "rm-250",
+     "nome": "RM 250 (2008 - 11)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2008,
+      "a": 2011
+     }
+    },
+    {
+     "id": "62a0r2",
+     "modelloSlug": "rm-250",
+     "nome": "RM 250 E (2008 - 11)",
+     "variante": "E",
+     "base": false,
+     "anni": {
+      "da": 2008,
+      "a": 2011
+     }
+    },
+    {
+     "id": "1oiIS1",
+     "modelloSlug": "rm-250",
+     "nome": "RM 250 Valenti Racing (2006 - 07)",
+     "variante": "Valenti Racing",
+     "base": false,
+     "anni": {
+      "da": 2006,
+      "a": 2007
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Suzuki Valenti",
+   "gradoModello": "grossolano",
+   "subito": {
+    "id": "001249",
+    "nome": "RM 250 E",
+    "versioni": [
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "DfKbc2",
+       "YGy3v3",
+       "8OcQzs",
+       "QKjPMi",
+       "Kg2k9w"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "rm-250"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "DfKbc2",
+     "modelloSlug": "rm-250",
+     "nome": "RM 250 (1995 - 01)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 1995,
+      "a": 2001
+     }
+    },
+    {
+     "id": "YGy3v3",
+     "modelloSlug": "rm-250",
+     "nome": "RM 250 (2005 - 06)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2005,
+      "a": 2006
+     }
+    },
+    {
+     "id": "8OcQzs",
+     "modelloSlug": "rm-250",
+     "nome": "RM 250 (2002 - 03)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2002,
+      "a": 2003
+     }
+    },
+    {
+     "id": "QKjPMi",
+     "modelloSlug": "rm-250",
+     "nome": "RM 250 (2004)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2004,
+      "a": 2004
+     }
+    },
+    {
+     "id": "Kg2k9w",
+     "modelloSlug": "rm-250",
+     "nome": "RM 250 (2008 - 11)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2008,
+      "a": 2011
+     }
+    },
+    {
+     "id": "62a0r2",
+     "modelloSlug": "rm-250",
+     "nome": "RM 250 E (2008 - 11)",
+     "variante": "E",
+     "base": false,
+     "anni": {
+      "da": 2008,
+      "a": 2011
+     }
+    },
+    {
+     "id": "1oiIS1",
+     "modelloSlug": "rm-250",
+     "nome": "RM 250 Valenti Racing (2006 - 07)",
+     "variante": "Valenti Racing",
+     "base": false,
+     "anni": {
+      "da": 2006,
+      "a": 2007
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Suzuki Valenti",
+   "gradoModello": "identico",
+   "subito": {
+    "id": "001811",
+    "nome": "RM-X 450 E",
+    "versioni": [
+     {
+      "id": "004439",
+      "nome": "L0",
+      "variante": "L0",
+      "base": false
+     },
+     {
+      "id": "005111",
+      "nome": "L1",
+      "variante": "L1",
+      "base": false
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "CUnIX5"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "rm-x-450-e"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "CUnIX5",
+     "modelloSlug": "rm-x-450-e",
+     "nome": "RM-X 450 E (2010 - 17)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2010,
+      "a": 2017
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Suzuki Valenti",
+   "gradoModello": "grossolano",
+   "subito": {
+    "id": "005384",
+    "nome": "RM-X 450 Z",
+    "versioni": [
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "P10ueu",
+       "fbThnJ",
+       "gfKIPN"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "rm-z450"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "jpPd0T",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2005 - 06)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2005,
+      "a": 2006
+     }
+    },
+    {
+     "id": "WE5ykM",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2008 - 11)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2008,
+      "a": 2011
+     }
+    },
+    {
+     "id": "wVA2vB",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2018)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2018,
+      "a": 2018
+     }
+    },
+    {
+     "id": "P10ueu",
+     "modelloSlug": "rm-z450",
+     "nome": "RM-Z450 (2025 - 26)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2025,
+      "a": 2026
+     }
+    },
+    {
+     "id": "V3M049",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2011 - 12)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2011,
+      "a": 2012
+     }
+    },
+    {
+     "id": "d8VfRt",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2013)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2013,
+      "a": 2013
+     }
+    },
+    {
+     "id": "UBh4AQ",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2014)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2014,
+      "a": 2014
+     }
+    },
+    {
+     "id": "jCRySf",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2015)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "ptPxUq",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2016)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2016,
+      "a": 2016
+     }
+    },
+    {
+     "id": "K1g9Ll",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2017)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2017,
+      "a": 2017
+     }
+    },
+    {
+     "id": "PRvCXP",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z E (2011 - 13)",
+     "variante": "RM 450 Z E",
+     "base": false,
+     "anni": {
+      "da": 2011,
+      "a": 2013
+     }
+    },
+    {
+     "id": "XgNB3h",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z E (2015)",
+     "variante": "RM 450 Z E",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "TNO1AO",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z Valenti Racing (2006 - 07)",
+     "variante": "RM 450 Z Valenti Racing",
+     "base": false,
+     "anni": {
+      "da": 2006,
+      "a": 2007
+     }
+    },
+    {
+     "id": "fbThnJ",
+     "modelloSlug": "rm-z450",
+     "nome": "RM-Z450 (2019 - 20)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2019,
+      "a": 2020
+     }
+    },
+    {
+     "id": "gfKIPN",
+     "modelloSlug": "rm-z450",
+     "nome": "RM-Z450 (2023 - 24)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2023,
+      "a": 2024
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Suzuki Valenti",
+   "gradoModello": "grossolano",
+   "subito": {
+    "id": "001246",
+    "nome": "RM-Z 250",
+    "versioni": [
+     {
+      "id": "006072",
+      "nome": "I.S.",
+      "variante": "I.S.",
+      "base": false
+     },
+     {
+      "id": "005832",
+      "nome": "L.E.",
+      "variante": "L.E.",
+      "base": false
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "QSixja",
+       "Byq9hi",
+       "MOQeR2",
+       "F4AS54",
+       "yQyZ9b",
+       "MBQekW",
+       "rvlzdI",
+       "T4t0v7",
+       "ZswNZq",
+       "Q5rREi",
+       "BbIUWc"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "rm-z250"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "QSixja",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2008 - 11)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2008,
+      "a": 2011
+     }
+    },
+    {
+     "id": "Byq9hi",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2011 - 2012)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2011,
+      "a": 2012
+     }
+    },
+    {
+     "id": "MOQeR2",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2014)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2014,
+      "a": 2014
+     }
+    },
+    {
+     "id": "F4AS54",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2015)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "yQyZ9b",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2004)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2004,
+      "a": 2004
+     }
+    },
+    {
+     "id": "MBQekW",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2005 - 06)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2005,
+      "a": 2006
+     }
+    },
+    {
+     "id": "rvlzdI",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2013)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2013,
+      "a": 2013
+     }
+    },
+    {
+     "id": "T4t0v7",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2016)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2016,
+      "a": 2016
+     }
+    },
+    {
+     "id": "ZswNZq",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2017- 18)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2017,
+      "a": 2018
+     }
+    },
+    {
+     "id": "gEcoeT",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 E (2011 - 13)",
+     "variante": "E",
+     "base": false,
+     "anni": {
+      "da": 2011,
+      "a": 2013
+     }
+    },
+    {
+     "id": "AaBriS",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 E (2015)",
+     "variante": "E",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "x0t2Lb",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 Valenti Racing (2006 - 07)",
+     "variante": "Valenti Racing",
+     "base": false,
+     "anni": {
+      "da": 2006,
+      "a": 2007
+     }
+    },
+    {
+     "id": "Q5rREi",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z250 (2019 - 20)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2019,
+      "a": 2020
+     }
+    },
+    {
+     "id": "BbIUWc",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z250 (2023 - 24)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2023,
+      "a": 2024
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Suzuki Valenti",
+   "gradoModello": "grossolano",
+   "subito": {
+    "id": "001250",
+    "nome": "RM-Z 250 E",
+    "versioni": [
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "QSixja",
+       "Byq9hi",
+       "MOQeR2",
+       "F4AS54",
+       "yQyZ9b",
+       "MBQekW",
+       "rvlzdI",
+       "T4t0v7",
+       "ZswNZq",
+       "Q5rREi",
+       "BbIUWc"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "rm-z250"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "QSixja",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2008 - 11)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2008,
+      "a": 2011
+     }
+    },
+    {
+     "id": "Byq9hi",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2011 - 2012)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2011,
+      "a": 2012
+     }
+    },
+    {
+     "id": "MOQeR2",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2014)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2014,
+      "a": 2014
+     }
+    },
+    {
+     "id": "F4AS54",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2015)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "yQyZ9b",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2004)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2004,
+      "a": 2004
+     }
+    },
+    {
+     "id": "MBQekW",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2005 - 06)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2005,
+      "a": 2006
+     }
+    },
+    {
+     "id": "rvlzdI",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2013)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2013,
+      "a": 2013
+     }
+    },
+    {
+     "id": "T4t0v7",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2016)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2016,
+      "a": 2016
+     }
+    },
+    {
+     "id": "ZswNZq",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 (2017- 18)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2017,
+      "a": 2018
+     }
+    },
+    {
+     "id": "gEcoeT",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 E (2011 - 13)",
+     "variante": "E",
+     "base": false,
+     "anni": {
+      "da": 2011,
+      "a": 2013
+     }
+    },
+    {
+     "id": "AaBriS",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 E (2015)",
+     "variante": "E",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "x0t2Lb",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z 250 Valenti Racing (2006 - 07)",
+     "variante": "Valenti Racing",
+     "base": false,
+     "anni": {
+      "da": 2006,
+      "a": 2007
+     }
+    },
+    {
+     "id": "Q5rREi",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z250 (2019 - 20)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2019,
+      "a": 2020
+     }
+    },
+    {
+     "id": "BbIUWc",
+     "modelloSlug": "rm-z250",
+     "nome": "RM-Z250 (2023 - 24)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2023,
+      "a": 2024
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Suzuki Valenti",
+   "gradoModello": "grossolano",
+   "subito": {
+    "id": "001247",
+    "nome": "RM-Z 450",
+    "versioni": [
+     {
+      "id": "006073",
+      "nome": "I.S.",
+      "variante": "I.S.",
+      "base": false
+     },
+     {
+      "id": "005833",
+      "nome": "L.E.",
+      "variante": "L.E.",
+      "base": false
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "P10ueu",
+       "fbThnJ",
+       "gfKIPN"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "rm-z450"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "jpPd0T",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2005 - 06)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2005,
+      "a": 2006
+     }
+    },
+    {
+     "id": "WE5ykM",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2008 - 11)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2008,
+      "a": 2011
+     }
+    },
+    {
+     "id": "wVA2vB",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2018)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2018,
+      "a": 2018
+     }
+    },
+    {
+     "id": "P10ueu",
+     "modelloSlug": "rm-z450",
+     "nome": "RM-Z450 (2025 - 26)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2025,
+      "a": 2026
+     }
+    },
+    {
+     "id": "V3M049",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2011 - 12)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2011,
+      "a": 2012
+     }
+    },
+    {
+     "id": "d8VfRt",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2013)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2013,
+      "a": 2013
+     }
+    },
+    {
+     "id": "UBh4AQ",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2014)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2014,
+      "a": 2014
+     }
+    },
+    {
+     "id": "jCRySf",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2015)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "ptPxUq",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2016)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2016,
+      "a": 2016
+     }
+    },
+    {
+     "id": "K1g9Ll",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2017)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2017,
+      "a": 2017
+     }
+    },
+    {
+     "id": "PRvCXP",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z E (2011 - 13)",
+     "variante": "RM 450 Z E",
+     "base": false,
+     "anni": {
+      "da": 2011,
+      "a": 2013
+     }
+    },
+    {
+     "id": "XgNB3h",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z E (2015)",
+     "variante": "RM 450 Z E",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "TNO1AO",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z Valenti Racing (2006 - 07)",
+     "variante": "RM 450 Z Valenti Racing",
+     "base": false,
+     "anni": {
+      "da": 2006,
+      "a": 2007
+     }
+    },
+    {
+     "id": "fbThnJ",
+     "modelloSlug": "rm-z450",
+     "nome": "RM-Z450 (2019 - 20)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2019,
+      "a": 2020
+     }
+    },
+    {
+     "id": "gfKIPN",
+     "modelloSlug": "rm-z450",
+     "nome": "RM-Z450 (2023 - 24)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2023,
+      "a": 2024
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Suzuki Valenti",
+   "gradoModello": "grossolano",
+   "subito": {
+    "id": "001252",
+    "nome": "RM-Z 450 E",
+    "versioni": [
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "P10ueu",
+       "fbThnJ",
+       "gfKIPN"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "rm-z450"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "jpPd0T",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2005 - 06)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2005,
+      "a": 2006
+     }
+    },
+    {
+     "id": "WE5ykM",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2008 - 11)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2008,
+      "a": 2011
+     }
+    },
+    {
+     "id": "wVA2vB",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2018)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2018,
+      "a": 2018
+     }
+    },
+    {
+     "id": "P10ueu",
+     "modelloSlug": "rm-z450",
+     "nome": "RM-Z450 (2025 - 26)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2025,
+      "a": 2026
+     }
+    },
+    {
+     "id": "V3M049",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2011 - 12)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2011,
+      "a": 2012
+     }
+    },
+    {
+     "id": "d8VfRt",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2013)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2013,
+      "a": 2013
+     }
+    },
+    {
+     "id": "UBh4AQ",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2014)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2014,
+      "a": 2014
+     }
+    },
+    {
+     "id": "jCRySf",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2015)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "ptPxUq",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2016)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2016,
+      "a": 2016
+     }
+    },
+    {
+     "id": "K1g9Ll",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z (2017)",
+     "variante": "RM 450 Z",
+     "base": false,
+     "anni": {
+      "da": 2017,
+      "a": 2017
+     }
+    },
+    {
+     "id": "PRvCXP",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z E (2011 - 13)",
+     "variante": "RM 450 Z E",
+     "base": false,
+     "anni": {
+      "da": 2011,
+      "a": 2013
+     }
+    },
+    {
+     "id": "XgNB3h",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z E (2015)",
+     "variante": "RM 450 Z E",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2015
+     }
+    },
+    {
+     "id": "TNO1AO",
+     "modelloSlug": "rm-z450",
+     "nome": "RM 450 Z Valenti Racing (2006 - 07)",
+     "variante": "RM 450 Z Valenti Racing",
+     "base": false,
+     "anni": {
+      "da": 2006,
+      "a": 2007
+     }
+    },
+    {
+     "id": "fbThnJ",
+     "modelloSlug": "rm-z450",
+     "nome": "RM-Z450 (2019 - 20)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2019,
+      "a": 2020
+     }
+    },
+    {
+     "id": "gfKIPN",
+     "modelloSlug": "rm-z450",
+     "nome": "RM-Z450 (2023 - 24)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2023,
+      "a": 2024
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Suzuki Valenti",
+   "gradoModello": "probabile",
+   "subito": {
+    "id": "001255",
+    "nome": "SM 400 Z",
+    "versioni": [
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "NDJReP"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "dr-z-400-sm"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "it4Vah",
+     "modelloSlug": "dr-z-400-sm",
+     "nome": "DR-Z 400 SM Valenti Racing (2006 - 07)",
+     "variante": "Valenti Racing",
+     "base": false,
+     "anni": {
+      "da": 2006,
+      "a": 2007
+     }
+    },
+    {
+     "id": "NDJReP",
+     "modelloSlug": "dr-z-400-sm",
+     "nome": "DR-Z 400 SM (2005 - 06)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2005,
+      "a": 2006
      }
     }
    ]

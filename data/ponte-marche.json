@@ -1,5 +1,5 @@
 {
- "generatoIl": "2026-07-27T08:37:46.044Z",
+ "generatoIl": "2026-07-27T12:05:07.175Z",
  "nota": "Ponte a livello MARCA fra Subito, Autoscout e Moto.it. I cataloghi di origine non sono stati modificati. Ogni voce porta la prova (modelli in comune) o chi l'ha decisa. `distribuisce` = marchi commerciali distinti che vendono veicoli della casa madre: restano separati come marca, ma i loro modelli sono gli stessi veicoli.",
  "relazioni": {
   "stessa": "fondere",
@@ -1025,7 +1025,7 @@
     "modelliInComune": 0
    },
    {
-    "relazione": "stessa",
+    "relazione": "stessa-solo-subito",
     "perche": "proprietario: su Subito le Vespa stanno sotto Piaggio",
     "a": {
      "fonte": "*",
