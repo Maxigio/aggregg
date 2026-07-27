@@ -40,6 +40,7 @@ const saved = require('./saved');
 const budget = require('./budget-richieste');     // quante richieste costa una ricerca: contate, non stimate
 const { risolviNodo } = require('./scrapers/subito-nodo');   // testo digitato → id del catalogo Subito
 const { codiciAs24, unisciCodici } = require('./scrapers/as24-modelli');   // traduzione di livello verso AS24
+const { versioniDi } = require('./scrapers/versioni-unificate');           // una lista versioni per tutte e tre le fonti
 const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings, norm } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
 const regionCentroids = require('../data/region-centroids.json');  // capoluoghi regione {lat,lng} → raggio AS24 nativo
@@ -513,6 +514,32 @@ app.get('/api/models', async (req, res) => {
 //  - `modelSlug` = famiglia Moto.it scelta direttamente → bikes della famiglia.
 //  - `modelNome` = voce-catalogo (es. "Dyna Fat Bob") senza slug → risolve famiglia+versioni.
 // Ritorna `{ familySlug, versioni:[{nome,code,annoMin,annoMax}] }`.
+// ─── Versioni: UNA lista per tutte e tre le fonti ─────────────────────────────
+// Il campo versione funziona come marca e modello: si scrive libero e la tendina
+// risolve. Qui si serve l'elenco da cui la tendina pesca — unito dal ponte, non uno
+// per fonte: chi cerca scrive "abs" e vede una voce, non due con due nomi diversi.
+//
+// Raggruppato per GENERAZIONE perche' e' cosi' che il dato sta: su Subito le versioni
+// vivono sotto una serie ("Serie 3 (E46)" → "316i cat 4 porte Attiva"). Appiattirlo
+// vorrebbe dire perdere l'informazione e poi doverla indovinare.
+app.get('/api/versioni', (req, res) => {
+  const { tipo, marca, modello } = req.query || {};
+  if (!tipo || !['auto', 'moto'].includes(tipo)) return res.status(400).json({ error: 'tipo deve essere "auto" o "moto"' });
+  if (!marca || !String(marca).trim()) return res.status(400).json({ error: 'marca obbligatoria' });
+  const nodo = risolviNodo(tipo, String(marca).trim(), modello ? String(modello).trim() : '');
+  if (!nodo) return res.json({ ok: true, tipo, marca: null, generazioni: [], motivo: 'marca non nel catalogo Subito' });
+  if (!nodo.famigliaIds) return res.json({ ok: true, tipo, marca: { id: nodo.marcaId, nome: nodo.marcaNome }, generazioni: [], motivo: 'modello non risolto' });
+  const generazioni = versioniDi(tipo, nodo.marcaId, nodo.generazioni);
+  res.set('Cache-Control', 'private, max-age=300');
+  res.json({
+    ok: true, tipo,
+    marca: { id: nodo.marcaId, nome: nodo.marcaNome },
+    modello: { nome: nodo.famigliaNome, ids: nodo.famigliaIds, come: nodo.come },
+    generazioni,
+    totale: generazioni.reduce((n, g) => n + g.versioni.length, 0),
+  });
+});
+
 // ─── Liquidita per MARCA: alimenta il segno accanto a ogni annuncio ───────────
 // Si serve solo la marca cercata (poche decine di modelli, non i 1.997 totali), cosi'
 // il client puo' attribuire il dato riga per riga senza scaricare tutto l'archivio.
