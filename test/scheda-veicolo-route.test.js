@@ -90,3 +90,34 @@ test('resolveMoto: "Caballero 500" ora ha una scheda (prima notFound)', () => {
   assert.ok(r.motorizzazioni.length >= 4);
   assert.ok(r.motorizzazioni.every(m => /500/.test(m.label)), 'solo varianti 500');
 });
+
+/**
+ * REGRESSIONE. Con piu' candidati per prefisso si prendeva il piu' CORTO, cioe' si
+ * sorteggiava: "Silverado" (1500, 2500 HD, 3500 HD, EV) finiva sulla EV e "Hover"
+ * (CUV, H5, H6) sulla H5 — veicoli diversi, scheda tecnica data per giusta.
+ * Un candidato solo resta la migliore risposta disponibile: nel catalogo tecnico la
+ * "575M" si chiama "575M Maranello" e non esiste altrimenti.
+ */
+test('matchModel: piu candidati per prefisso → nessuna scheda, mai un sorteggio', () => {
+  const models = [
+    { name: 'Silverado 1500 2018 -', slug: 'a' },
+    { name: 'Silverado 2500 HD 2019 -', slug: 'b' },
+    { name: 'Silverado EV 2023 -', slug: 'c' },
+  ];
+  assert.strictEqual(matchModel(models, 'Silverado'), null);
+});
+
+test('matchModel: un solo candidato per prefisso resta valido', () => {
+  const models = [{ name: '575M Maranello 2002 - 2006', slug: 'x' }];
+  const m = matchModel(models, '575M');
+  assert.ok(m && m.slug === 'x');
+});
+
+test('matchModel: la corrispondenza esatta non e toccata dalla stretta', () => {
+  const models = [
+    { name: 'Transit 2014 -', slug: 'big' },
+    { name: 'Transit Connect 2006 -', slug: 'small' },
+  ];
+  const m = matchModel(models, 'Transit');
+  assert.ok(m && m.slug === 'big', 'con l esatto presente vince l esatto');
+});

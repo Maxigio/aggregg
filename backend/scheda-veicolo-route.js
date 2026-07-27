@@ -64,8 +64,17 @@ function specsHostKind(url) {
 // nome modello senza gli anni finali ("Golf 1974 -" → "Golf", "A3 2003 -" → "A3") per display E match
 const cleanName = n => String(n).replace(/\s+(19|20)\d{2}\s*(-\s*((19|20)\d{2})?)?\s*$/, '').trim() || String(n);
 
-// Match modello SICURO: esatto-normalizzato, altrimenti la query è PREFISSO del candidato
-// (golf → golf1974). NON il contrario → evita falsi positivi tipo "classea" → "cla".
+/**
+ * Match modello SICURO: esatto-normalizzato, altrimenti la query è PREFISSO del candidato
+ * (golf → golf1974). NON il contrario → evita falsi positivi tipo "classea" → "cla".
+ *
+ * UN SOLO CANDIDATO O NIENTE. Prima, con più candidati, si prendeva il più CORTO — cioè si
+ * sorteggiava: "Silverado" (4 candidati: 1500, 2500 HD, 3500 HD, EV) finiva sulla EV, e
+ * "Hover" (CUV, H5, H6) sulla H5. Sono veicoli diversi, e la scheda tecnica usciva
+ * dichiarata come quella giusta. Con un candidato solo il prefisso resta la migliore
+ * risposta disponibile ("575M" → "575M Maranello", che nel catalogo tecnico si chiama così).
+ * Misurato sulle famiglie Subito: 21 match per prefisso, 4 con più di un candidato.
+ */
 function matchModel(models, query) {
   const q = norm(query);
   if (!q) return null;
@@ -74,7 +83,7 @@ function matchModel(models, query) {
   if (exact) return exact.m;
   if (q.length >= 3) {
     const pref = items.filter(x => x.n.length >= 3 && x.n.startsWith(q));
-    if (pref.length) { pref.sort((a, b) => a.n.length - b.n.length); return pref[0].m; }
+    if (pref.length === 1) return pref[0].m;
   }
   return null;
 }
