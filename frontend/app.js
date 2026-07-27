@@ -824,6 +824,7 @@ const AREE = {
   catalogo: { pannello: 'catalogoPanel', apri: () => catApri(), chiudi: () => catChiudi() },
   richiami: { pannello: 'richiamiPanel', apri: () => rcaApri(), chiudi: () => rcaChiudi() },
   fonti: { pannello: 'fontiPanel', apri: () => fnApri(), chiudi: () => fnChiudi() },
+  ponte: { pannello: 'pontePanel', apri: () => pnApri(), chiudi: () => pnChiudi() },
 };
 
 /**
@@ -4597,3 +4598,183 @@ document.getElementById('fontiPanel')?.addEventListener('keydown', e => {
 
 // ─── Avvio ────────────────────────────────────────────────────────────────────
 init();
+
+// ── Area CORRISPONDENZE ───────────────────────────────────────────────────────
+/**
+ * Lo stesso veicolo sulle tre fonti. Subito, Autoscout e Moto.it hanno cataloghi diversi e
+ * senza identificativi in comune: qui si vede come un modello di Subito si chiama altrove,
+ * CON IL GRADO dell'aggancio accanto.
+ *
+ * Il grado non e' un dettaglio da nascondere: `identico` e `probabile` non sono la stessa
+ * cosa, e un aggancio probabile mostrato come certo e' il difetto che quest'area esiste per
+ * non commettere. Stessa regola sulle versioni: `ambigua` e `ripiego` restano tali.
+ *
+ * Non sostituisce niente. La ricerca annunci e la scheda tecnica continuano come prima.
+ */
+const pnEl = () => document.getElementById('pontePanel');
+let pnStato = 'mai';        // mai | carico | ok | ko
+let pnMotivo = '';
+let pnTipo = 'moto';
+let pnMarche = null;
+let pnMarca = '';
+let pnModelli = null;
+let pnFiltro = '';
+let pnVers = null;          // esito dell'ultima risoluzione versione
+let pnVersPer = '';         // quale modello
+let pnAnno = '';
+let pnGen = 0;
+
+async function pnChiedi(percorso) {
+  const mia = ++pnGen;
+  pnStato = 'carico'; pnRender();
+  try {
+    const d = await fetch(percorso).then(r => r.json());
+    if (mia !== pnGen) return null;
+    if (d && d.ok) { pnStato = 'ok'; return d; }
+    pnStato = 'ko'; pnMotivo = (d && (d.errore || d.motivo)) || 'non disponibile';
+  } catch (_) { if (mia !== pnGen) return null; pnStato = 'ko'; pnMotivo = 'richiesta non riuscita'; }
+  pnRender();
+  return null;
+}
+
+function pnChiudi() { const el = pnEl(); if (el) el.innerHTML = ''; }
+
+async function pnApri() {
+  if (pnMarche) return pnRender();
+  const d = await pnChiedi('/api/ponte/marche?tipo=' + pnTipo);
+  if (!d) return;
+  pnMarche = d.marche;
+  pnRender();
+}
+
+async function pnCambiaTipo(t) {
+  pnTipo = t === 'auto' ? 'auto' : 'moto';
+  pnMarche = null; pnMarca = ''; pnModelli = null; pnVers = null;
+  const d = await pnChiedi('/api/ponte/marche?tipo=' + pnTipo);
+  if (!d) return;
+  pnMarche = d.marche; pnRender();
+}
+
+async function pnApriMarca(chiave) {
+  pnMarca = chiave; pnModelli = null; pnVers = null; pnFiltro = '';
+  const d = await pnChiedi('/api/ponte/modelli?tipo=' + pnTipo + '&marca=' + encodeURIComponent(chiave));
+  if (!d) return;
+  pnModelli = d.modelli; pnRender();
+}
+
+async function pnRisolvi(modelloId, nome) {
+  pnVersPer = modelloId;
+  const q = '/api/ponte/versione?marca=' + encodeURIComponent(pnMarca)
+    + '&modelloId=' + encodeURIComponent(modelloId)
+    + (pnAnno ? '&anno=' + encodeURIComponent(pnAnno) : '')
+    + '&versione=' + encodeURIComponent(nome || '');
+  const d = await pnChiedi(q);
+  if (!d) return;
+  pnVers = d; pnRender();
+}
+
+/** Il grado, col suo colore e la sua spiegazione: mai un aggancio senza etichetta. */
+const PN_GRADO = {
+  identico:   { et: 'identico',   cl: 'pn-ok' },
+  grossolano: { et: 'piu ampio',  cl: 'pn-med' },
+  fine:       { et: 'piu stretto', cl: 'pn-med' },
+  probabile:  { et: 'probabile',  cl: 'pn-med' },
+  eccezione:  { et: 'a mano',     cl: 'pn-ok' },
+  assente:    { et: 'assente',    cl: 'pn-ko' },
+};
+const PN_ESITO = {
+  una:      { et: 'corrispondenza', cl: 'pn-ok' },
+  ripiego:  { et: 'ripiego',        cl: 'pn-med' },
+  ambigua:  { et: 'ambigua',        cl: 'pn-med' },
+  nessuna:  { et: 'nessuna',        cl: 'pn-ko' },
+  'senza-indice': { et: 'senza indice', cl: 'pn-ko' },
+};
+
+function pnRender() {
+  const el = pnEl();
+  if (!el) return;
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const badge = (t, cl) => '<span class="pn-badge ' + cl + '">' + esc(t) + '</span>';
+
+  let h = '<div class="pn-head">'
+    + '<div class="pn-tipo">'
+    + ['moto', 'auto'].map(t => '<button type="button" class="pn-tipo-btn' + (pnTipo === t ? ' active' : '') + '" data-pntipo="' + t + '">' + (t === 'moto' ? 'Moto' : 'Auto') + '</button>').join('')
+    + '</div>'
+    + '<span class="pn-nota">Lo stesso veicolo sulle tre fonti. Ogni aggancio porta il suo grado.</span>'
+    + '</div>';
+
+  if (pnStato === 'ko') h += '<div class="amr-alert-error">' + esc(pnMotivo) + '</div>';
+
+  // marche
+  if (pnMarche) {
+    h += '<div class="pn-marche">'
+      + '<input type="text" id="pnCerca" class="field-input" placeholder="Filtra marca…" value="' + esc(pnFiltro) + '" autocomplete="off">'
+      + '<div class="pn-marche-lista">'
+      + pnMarche.filter(m => !pnFiltro || m.nome.toLowerCase().includes(pnFiltro.toLowerCase()))
+        .slice(0, 400)
+        .map(m => '<button type="button" class="pn-marca' + (pnMarca === m.chiave ? ' active' : '') + '" data-pnmarca="' + esc(m.chiave) + '">' + esc(m.nome) + '</button>').join('')
+      + '</div></div>';
+  }
+
+  // modelli
+  if (pnModelli) {
+    if (!pnModelli.length) h += '<p class="pn-vuoto">Nessun modello agganciato per questa marca.</p>';
+    else {
+      h += '<div class="pn-anno"><label>Anno dell\'annuncio <input type="number" id="pnAnno" min="1900" max="2030" placeholder="es. 2016" value="' + esc(pnAnno) + '"></label>'
+        + '<span class="pn-nota">serve a scegliere la versione: Moto.it divide per periodo</span></div>';
+      h += '<div class="pn-tabella">';
+      for (const m of pnModelli) {
+        h += '<div class="pn-riga">'
+          + '<div class="pn-mod"><b>' + esc(m.nome) + '</b>'
+          + (m.generazioni ? '<span class="pn-gen">' + m.generazioni + ' generazioni</span>' : '')
+          + '</div>';
+        for (const fonte of ['autoscout', 'motoit']) {
+          const v = m.verso[fonte];
+          if (!v) { h += '<div class="pn-cella pn-na"><span class="pn-fonte">' + fonte + '</span>—</div>'; continue; }
+          const g = PN_GRADO[v.grado] || { et: v.grado, cl: 'pn-med' };
+          h += '<div class="pn-cella"><span class="pn-fonte">' + fonte + '</span>'
+            + badge(g.et, g.cl)
+            + '<span class="pn-nodi">' + (v.nodi.length ? v.nodi.map(n => esc(n.nome)).join(', ') : '<i>' + esc(v.prova) + '</i>') + '</span>'
+            + (v.viaCasaMadre ? '<span class="pn-via">via ' + esc(v.viaCasaMadre) + '</span>' : '')
+            + '</div>';
+        }
+        h += m.haVersioni
+          ? '<button type="button" class="pn-vers-btn" data-pnvers="' + esc(m.id) + '" data-pnnome="' + esc(m.nome) + '">Versione →</button>'
+          : '<span class="pn-cella pn-na">nessun indice versioni</span>';
+        h += '</div>';
+        if (pnVers && pnVersPer === m.id) h += pnRenderVersione(esc, badge);
+      }
+      h += '</div>';
+    }
+  }
+  el.innerHTML = h;
+  el.classList.toggle('d-none', false);
+}
+
+function pnRenderVersione(esc, badge) {
+  const d = pnVers;
+  if (!d.trovato) return '<div class="pn-vers"><i>' + esc(d.motivo) + '</i></div>';
+  const e = PN_ESITO[d.esito] || { et: d.esito, cl: 'pn-med' };
+  let h = '<div class="pn-vers">' + badge(e.et, e.cl)
+    + '<span class="pn-perche">' + esc(d.perche) + '</span>'
+    + '<div class="pn-vers-lista">';
+  for (const v of d.versioni) {
+    h += '<a class="pn-vers-voce" href="' + esc(v.scheda) + '" target="_blank" rel="noopener">'
+      + esc(v.nome) + (v.anni ? ' <span class="pn-gen">' + v.anni.da + '–' + v.anni.a + '</span>' : '')
+      + '</a>';
+  }
+  h += '</div>';
+  if (d.esito !== 'una') h += '<p class="pn-nota">Piu di una possibilita: la scheda giusta va scelta a mano.</p>';
+  h += '<p class="pn-nota">' + d.tutte + ' versioni Moto.it per questo modello</p></div>';
+  return h;
+}
+
+document.getElementById('pontePanel')?.addEventListener('click', e => {
+  const t = e.target.closest('[data-pntipo]'); if (t) return void pnCambiaTipo(t.dataset.pntipo);
+  const m = e.target.closest('[data-pnmarca]'); if (m) return void pnApriMarca(m.dataset.pnmarca);
+  const v = e.target.closest('[data-pnvers]'); if (v) return void pnRisolvi(v.dataset.pnvers, v.dataset.pnnome);
+});
+document.getElementById('pontePanel')?.addEventListener('input', e => {
+  if (e.target.id === 'pnCerca') { pnFiltro = e.target.value; pnRender(); const c = document.getElementById('pnCerca'); if (c) { c.focus(); c.setSelectionRange(c.value.length, c.value.length); } }
+  if (e.target.id === 'pnAnno') pnAnno = e.target.value;
+});

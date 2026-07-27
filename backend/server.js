@@ -810,6 +810,11 @@ require('./catalogo-route').mount(app, { clientIp });
 // ─── Richiami di sicurezza (Safety Gate UE) — vedi richiami-route.js ───────────
 require('./richiami-route').mount(app, { clientIp });
 
+// ─── Corrispondenze fra i cataloghi delle tre fonti — vedi ponte-route.js ──────
+// Area a se': non sostituisce ne' la ricerca ne' la scheda tecnica. I due file del ponte
+// (una decina di MB) si leggono alla PRIMA richiesta, non qui: chi non apre l'area non li paga.
+require('./ponte-route').mount(app, { clientIp });
+
 // ─── Fonti dati aperte (OSM, EPREL, bilstein, Wheel-Size) — vedi fonti-route.js ──
 require('./fonti-route').mount(app, { clientIp });
 

@@ -1310,3 +1310,55 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .fn-tab td b { font-family: var(--num); }
 .fn-tab td i { font-style: normal; font-size: 0.7rem; color: var(--text-faint); font-family: var(--num); }
 .fn-sospetto { margin-top: 4px; padding: 2px 6px; border-radius: 3px; background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); font-size: 0.68rem; }
+
+/* ── Area CORRISPONDENZE ──────────────────────────────────────────────────────
+   Il GRADO dell'aggancio e' la cosa piu' importante da vedere, non un dettaglio:
+   verde = identico, ambra = da guardare, rosso = assente. Chi legge deve capire a
+   colpo d'occhio se puo' fidarsi di quel collegamento. */
+.pn-head { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:12px; }
+.pn-tipo { display:inline-flex; border:1px solid var(--bordo); border-radius:8px; overflow:hidden; }
+.pn-tipo-btn { padding:6px 16px; background:transparent; border:0; color:var(--testo); cursor:pointer; font-size:.9rem; }
+.pn-tipo-btn.active { background:var(--accento); color:#fff; }
+.pn-nota { color:var(--testo-tenue); font-size:.82rem; }
+
+.pn-marche { margin-bottom:14px; }
+.pn-marche-lista { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; max-height:180px; overflow-y:auto; }
+.pn-marca { padding:4px 10px; border:1px solid var(--bordo); border-radius:999px; background:transparent;
+            color:var(--testo); cursor:pointer; font-size:.85rem; }
+.pn-marca.active { background:var(--accento); color:#fff; border-color:var(--accento); }
+
+.pn-anno { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:10px 0; }
+.pn-anno input { width:110px; margin-left:8px; padding:4px 8px; border:1px solid var(--bordo);
+                 border-radius:6px; background:var(--sfondo); color:var(--testo); }
+
+.pn-tabella { display:flex; flex-direction:column; gap:2px; }
+.pn-riga { display:grid; grid-template-columns:minmax(160px,1.2fr) 1fr 1fr auto; gap:10px; align-items:center;
+           padding:8px 10px; border-radius:8px; }
+.pn-riga:nth-child(odd) { background:var(--sfondo-alt); }
+.pn-mod { display:flex; flex-direction:column; gap:2px; }
+.pn-gen { color:var(--testo-tenue); font-size:.78rem; }
+.pn-cella { display:flex; align-items:center; gap:7px; flex-wrap:wrap; font-size:.86rem; min-width:0; }
+.pn-fonte { color:var(--testo-tenue); font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; }
+.pn-nodi { min-width:0; overflow-wrap:anywhere; }
+.pn-via { color:var(--testo-tenue); font-size:.75rem; font-style:italic; }
+.pn-na { color:var(--testo-tenue); font-size:.8rem; }
+
+.pn-badge { padding:1px 8px; border-radius:999px; font-size:.72rem; white-space:nowrap; }
+.pn-ok  { background:rgba(34,160,80,.16);  color:#1e8a48; }
+.pn-med { background:rgba(210,150,20,.18); color:#a37010; }
+.pn-ko  { background:rgba(190,60,60,.14);  color:#a63b3b; }
+
+.pn-vers-btn { padding:4px 12px; border:1px solid var(--bordo); border-radius:6px; background:transparent;
+               color:var(--testo); cursor:pointer; font-size:.84rem; white-space:nowrap; }
+.pn-vers { grid-column:1/-1; padding:10px 12px; margin:2px 0 8px; border-left:3px solid var(--accento);
+           background:var(--sfondo-alt); border-radius:0 8px 8px 0; }
+.pn-perche { margin-left:8px; color:var(--testo-tenue); font-size:.82rem; }
+.pn-vers-lista { display:flex; flex-direction:column; gap:4px; margin-top:8px; }
+.pn-vers-voce { color:var(--accento); text-decoration:none; font-size:.88rem; }
+.pn-vers-voce:hover { text-decoration:underline; }
+.pn-vuoto { color:var(--testo-tenue); }
+
+@media (max-width:860px) {
+  .pn-riga { grid-template-columns:1fr; gap:6px; }
+  .pn-marche-lista { max-height:120px; }
+}

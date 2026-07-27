@@ -63,6 +63,7 @@
           <button type="button" class="mode-btn" data-mode="catalogo" role="tab">Catalogo</button>
           <button type="button" class="mode-btn" data-mode="richiami" role="tab">Richiami</button>
           <button type="button" class="mode-btn" data-mode="fonti" role="tab">Fonti</button>
+          <button type="button" class="mode-btn" data-mode="ponte" role="tab">Corrispondenze</button>
         </div>
         <!-- Tipo veicolo: radio nascosti, source-of-truth per currentTipo(); pilotati dai bottoni Auto/Moto -->
         <div class="seg-toggle" role="radiogroup" aria-label="Tipo veicolo" style="display:none">
@@ -142,6 +143,9 @@
 
     <!-- Area Fonti: OSM, EPREL, bilstein, Wheel-Size. Disegnata da app.js. -->
     <div id="fontiPanel" class="d-none"></div>
+
+    <!-- Area Corrispondenze: lo stesso veicolo sulle tre fonti. Disegnata da app.js. -->
+    <div id="pontePanel" class="d-none"></div>
 
     <!-- STATO RICERCA / ERRORE / BANNER -->
     <div id="statusBox" class="d-none">
