@@ -39,6 +39,7 @@ const carburanti     = require('./carburanti');   // prezzi carburante MIMIT per
 const saved = require('./saved');
 const budget = require('./budget-richieste');     // quante richieste costa una ricerca: contate, non stimate
 const { risolviNodo } = require('./scrapers/subito-nodo');   // testo digitato → id del catalogo Subito
+const { codiciAs24, unisciCodici } = require('./scrapers/as24-modelli');   // traduzione di livello verso AS24
 const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings, norm } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
 const regionCentroids = require('../data/region-centroids.json');  // capoluoghi regione {lat,lng} → raggio AS24 nativo
@@ -910,6 +911,35 @@ async function runSearchCore(params) {
     params.asFilterToken = modelEntry.asFilterToken || null;
   }
 
+  // ── TRADUZIONE DI LIVELLO: il ponte dice ad Autoscout quali modelli sono ────
+  // Le tre fonti tagliano il veicolo su piani diversi. "Serie 3" e' una voce su Subito
+  // e undici modelli su Autoscout, perche' li' il motore E' il modello. Senza questo,
+  // per quei veicoli si scende a livello marca e si restringe filtrando i titoli —
+  // misurato su "Beta R-12": 100 annunci mostrati, 100 di un altro modello.
+  //
+  // Si UNISCE a quello che l'app trova gia' (mai si sostituisce): un codice in piu'
+  // allarga dentro la stessa marca, un codice al posto di un altro sposterebbe la
+  // ricerca su un veicolo diverso. Misurati 7 casi auto e 8 moto dove i due indicano
+  // modelli diversi ed entrambi sono legittimi (Ford "Focus/Focus C-Max").
+  //
+  // Autoscout accetta piu' modelli nella STESSA query (verificato) → zero richieste
+  // in piu'. E dove il codice compare, il ramo multi-grafia (una richiesta per grafia)
+  // smette di servire: il costo scende, non sale.
+  // AMR_PONTE_AS24=0 spegne la traduzione senza toccare il codice: serve a confrontare
+  // vecchio e nuovo sulla stessa app, ed e' la leva se il ponte sbagliasse un aggancio.
+  if (params.subitoNodo && params.subitoNodo.famigliaNome && process.env.AMR_PONTE_AS24 !== '0') {
+    const dalPonte = codiciAs24(params.tipo, params.subitoNodo.marcaNome, params.subitoNodo.famigliaNome);
+    const uniti = unisciCodici(params.mmmvAutoscout, dalPonte);
+    if (uniti.length > 1) {
+      params.autoscoutModelli = uniti;
+      if (!params.mmmvAutoscout) params.mmmvAutoscout = uniti[0];   // il resto del codice legge questo
+      console.log(`[ponte] AS24 "${params.marca} ${params.modello}": ${uniti.length} modelli — ${uniti.join(' ')}`);
+    } else if (uniti.length === 1 && !params.mmmvAutoscout) {
+      params.mmmvAutoscout = uniti[0];
+      console.log(`[ponte] AS24 "${params.marca} ${params.modello}": codice dal ponte ${uniti[0]} (l'app non lo trovava)`);
+    }
+  }
+
   // ── Slug brand Moto.it — SOLO slug REALI (niente guess) ───────────────────
   // Fonte 1: catalogo (brandEntry.motoit.brandSlug, quando presente).
   // Fonte 2: data/motoit-brands.json (slug veri harvestati da Moto.it), risolto
@@ -1120,9 +1150,25 @@ async function runSearchCore(params) {
   // misurato su Beta R-12: 100 annunci mostrati, 100 di un altro modello, nessuno
   // marcato. Ogni riga deve dire cosa è, non solo il totale.
   if (params.modello) {
+    // Quando AS24 ha filtrato per CODICE-modello (suo o tradotto dal ponte), il modello
+    // e' garantito dalla fonte: confrontarlo col testo digitato darebbe il falso allarme
+    // piu' odioso — cercando "Serie 3" gli annunci tornano come "320", che e' giusto.
+    // Il confronto sul nome serve SOLO sul ramo allargato a livello marca.
+    const as24HaFiltrato = Boolean(String(params.autoscoutMmmv || params.mmmvAutoscout || '').split('|')[1]);
+    // I nomi che valgono come risposta: quello digitato PIU' i membri della serie
+    // commerciale. Cercando "Serie 3" gli annunci tornano come "320" o "318": senza i
+    // membri verrebbero marcati "altro modello", che e' un falso allarme — sono
+    // esattamente quello che si e' chiesto, con il nome che usa Autoscout.
+    const nomiAmmessi = [params.modello, ...(groupMembers || [])].filter(Boolean);
     for (const r of risultati) {
       if (r.fonte !== 'autoscout' || r.dichiarazione) continue;
-      const c = combaciaModello(r.modelloDichiarato, params.modello);
+      if (as24HaFiltrato) { r.dichiarazione = r.variante ? 'esatto' : 'senza-versione'; continue; }
+      let c = null;
+      for (const nome of nomiAmmessi) {
+        const x = combaciaModello(r.modelloDichiarato, nome);
+        if (x === true) { c = true; break; }
+        if (x === false) c = false;          // nessuno combacia finora, ma il dato c'e'
+      }
       if (c === true) r.dichiarazione = r.variante ? 'esatto' : 'senza-versione';
       else if (c === false) r.dichiarazione = 'altro-modello';
       // c === null: AS24 non dichiara il modello ("Altro") → nessuna pretesa, nessun marchio

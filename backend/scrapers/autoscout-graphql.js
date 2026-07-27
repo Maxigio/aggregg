@@ -108,15 +108,40 @@ function buildVariables(params, page, opts = {}) {
 
   const classification = { make };
   if (model) classification.model = model;
+
+  /**
+   * PIU' MODELLI IN UNA QUERY SOLA — la traduzione di livello (vedi as24-modelli.js).
+   * Su Subito "Serie 3" e' una voce, su Autoscout sono undici modelli perche' li' il
+   * motore E' il modello. `classification` e' una lista, e AS24 la tratta in OR:
+   * verificato live, 316+318+320 torna un misto dei tre. Una richiesta, non tre.
+   * Il filtro testuale non si applica qui: con i codici non serve indovinare le grafie.
+   */
+  const multi = (params.autoscoutModelli || [])
+    .map(m => { const p = String(m).split('|'); return { make: parseInt(p[0], 10), model: parseInt(p[1], 10) }; })
+    .filter(x => x.make && x.model);
+  if (multi.length > 1) {
+    const v0 = { classification: multi, vehicleType: [params.tipo === 'moto' ? 'Bike' : 'Car'] };
+    return finisci(v0, params, page, opts);
+  }
+
   // Filtro testuale NATIVO AS24 (F50 fase 1): usato per i modelli senza codice-modello.
   // Verificato live: cerca sia in classification.model sia in modelVersionInput, per
   // parola intera, più token in AND, case-insensitive, senza wildcard.
   if (params.autoscoutVersionText) classification.modelVersionInput = String(params.autoscoutVersionText);
 
-  const v = {
+  return finisci({
     classification: [classification],
     vehicleType: [params.tipo === 'moto' ? 'Bike' : 'Car'],   // niente moto nelle ricerche auto e viceversa
-  };
+  }, params, page, opts);
+}
+
+/**
+ * Il resto delle variabili — luogo, pagina, km, anno, prezzo. Separato perche' ci si
+ * arriva da due strade (un modello solo o la lista tradotta) e i filtri devono essere
+ * IDENTICI: un ramo che dimentica l'anno darebbe risultati fuori intervallo senza che
+ * si veda.
+ */
+function finisci(v, params, page, opts) {
   const loc = { country: ['Italy'] };
   // Regione AS24 NATIVA = location + raggio (come il sito ufficiale: per "Lombardia"
   // manda zip="Lombardia (italy)" + zipr + lat/lon del capoluogo). `params.autoscoutGeo`
