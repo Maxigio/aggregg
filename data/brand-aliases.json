@@ -1,21 +1,140 @@
 {
   "_note": "Gruppi di nomi che sono LO STESSO brand reale (curati a mano dall'audit). Primo = nome canonico (entry più ricca). Esclusi i falsi-alias: Ariel Motor (auto, Atom) ≠ Ariel Motorcycles (moto); Benda Scooter (makeId AS24 diverso) ≠ Benda. Ogni gruppo va VERIFICATO sui modelli, non sul nome: Enfield è entrata solo dopo aver visto che il catalogo elenca Bullet-350, Classic-350, Himalayan e Interceptor-650.",
-  "moto": [
-    ["Royal Enfield", "Enfield"],
-    ["Beta", "Betamotor"],
-    ["Fantic", "Fantic Motor"],
-    ["Benda", "Benda Motorcycles"],
-    ["Brixton", "Brixton Motorcycles"],
-    ["Can-Am", "Can-Am Brp"],
-    ["Keeway", "Keeway Motor"],
-    ["Mash", "Mash Italia"],
-    ["Mondial", "FB Mondial"],
-    ["Talaria", "Talaria Moto"],
-    ["Zero", "Zero Motorcycles"]
-  ],
   "auto": [
-    ["DS Automobiles", "DS"],
-    ["DR Automobiles", "DR"],
-    ["Mercedes-Benz", "MERCEDES"]
+    [
+      "Alpina",
+      "ALPINA-BMW"
+    ],
+    [
+      "ARIEL",
+      "Ariel Motor"
+    ],
+    [
+      "Austin",
+      "AUSTIN ROVER"
+    ],
+    [
+      "DR",
+      "DR Automobiles"
+    ],
+    [
+      "DS Automobiles",
+      "DS"
+    ],
+    [
+      "GAZ",
+      "GAZ AUTOMOBILE"
+    ],
+    [
+      "Great Wall",
+      "GREAT WALL MOTOR"
+    ],
+    [
+      "Mercedes-Benz",
+      "MERCEDES"
+    ],
+    [
+      "MICROLINO",
+      "Micro"
+    ],
+    [
+      "Nissan",
+      "NISSAN SPAGNA"
+    ],
+    [
+      "Panther Westwinds",
+      "PANTHER"
+    ]
+  ],
+  "moto": [
+    [
+      "Benda",
+      "Benda Motorcycles"
+    ],
+    [
+      "Beta",
+      "Betamotor"
+    ],
+    [
+      "Brixton",
+      "Brixton Motorcycles"
+    ],
+    [
+      "Can-Am",
+      "Can-Am Brp"
+    ],
+    [
+      "Fantic",
+      "Fantic Motor"
+    ],
+    [
+      "Italjet",
+      "Italjet Moto"
+    ],
+    [
+      "Keeway",
+      "Keeway Motor"
+    ],
+    [
+      "KL",
+      "KL Motors"
+    ],
+    [
+      "Mash",
+      "Mash Italia"
+    ],
+    [
+      "Mondial",
+      "FB Mondial"
+    ],
+    [
+      "Mutt",
+      "Mutt Motorcycles"
+    ],
+    [
+      "Over",
+      "Over Bikes"
+    ],
+    [
+      "Piaggio",
+      "Vespa"
+    ],
+    [
+      "Royal Enfield",
+      "Enfield"
+    ],
+    [
+      "Sachs/SFM",
+      "Sachs"
+    ],
+    [
+      "Talaria",
+      "Talaria Moto"
+    ],
+    [
+      "TM",
+      "TM Racing",
+      "Tm Moto"
+    ],
+    [
+      "TVS",
+      "TVS Motor"
+    ],
+    [
+      "UM",
+      "um-italia"
+    ],
+    [
+      "VOR Vertemati",
+      "Vor"
+    ],
+    [
+      "WRM Motorcycles",
+      "WRM"
+    ],
+    [
+      "Zero",
+      "Zero Motorcycles"
+    ]
   ]
 }
