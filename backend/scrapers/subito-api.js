@@ -17,6 +17,7 @@ const https = require('https');
 
 const { kindForStatus, fail } = require('./utils');   // classificazione salute crawler (F1.5)
 const budget = require('../budget-richieste');        // conta le richieste, non le limita
+const { livelliAnnuncio } = require('./subito-nodo'); // cosa l'annuncio dichiara di se'
 
 const HOST = 'hades.subito.it';
 // Categorie hades (macro Motori=1). accessoriAuto/Moto scoperti live 2026-07-07 per la sezione Ricambi.
@@ -153,11 +154,44 @@ function kmToKey(km) {
   return 36; // oltre 499.999 km
 }
 
+/**
+ * I nomi dei parametri NON sono gli stessi per auto e moto. Sbagliarli non da' errore:
+ * da' zero risultati, che si legge come "questa fonte non ha niente".
+ *   auto  cb = marca   cm = famiglia      moto  bb = marca   bm = modello
+ */
+const PARAM = { auto: { marca: 'cb', modello: 'cm' }, moto: { marca: 'bb', modello: 'bm' } };
+/** Il segnaposto "Altro modello"/"Altro allestimento": il venditore non l'ha dichiarato. */
+const NON_DICHIARATO = '000000';
+
+/**
+ * Il valore per il parametro-modello. Sulle auto la virgola unisce piu' voci (verificato:
+ * `cm=001704,000000` → 1618 = 1250 + 368, la somma esatta). Sulle moto la stessa virgola
+ * risponde 400 — il menu di Subito per le moto dichiara il solo filtro marca, e la lettura
+ * multi-valore li' non l'hanno mai scritta. Quindi: auto tutte, moto la prima.
+ */
+function valoreModello(tipo, ids) {
+  if (!ids || !ids.length) return null;
+  return tipo === 'moto' ? String(ids[0]) : ids.map(String).join(',');
+}
+
 function buildPath(params, start) {
   const c = CAT[params.tipo] || CAT.auto;
-  const q = [params.marca, params.modello].filter(Boolean).join(' ').trim();
   const qs = new URLSearchParams({ c, t: 's', lim: String(PAGE_SIZE), start: String(start) });
-  if (q) qs.set('q', q);
+  // Ricerca per ID quando il nodo e' risolto; testo libero quando non lo e'. Mai i due
+  // insieme: `q` restringerebbe ancora sul titolo, e un venditore che scrive "Sv650" nel
+  // titolo verrebbe escluso da una ricerca che per id lo trova.
+  const nodo = params.subitoNodo;
+  const p = PARAM[params.tipo === 'moto' ? 'moto' : 'auto'];
+  if (nodo && nodo.marcaId) {
+    qs.set(p.marca, String(nodo.marcaId));
+    const v = params.subitoSoloNonDichiarati
+      ? NON_DICHIARATO                       // la passata di RECUPERO, vedi scrapeSubitoApi
+      : valoreModello(params.tipo, nodo.famigliaIds);
+    if (v) qs.set(p.modello, v);
+  } else {
+    const q = [params.marca, params.modello].filter(Boolean).join(' ').trim();
+    if (q) qs.set('q', q);
+  }
   // Regione nativa (se mappabile; altrimenti resta il post-filtro client difensivo).
   const regKey = params.regione && SUBITO_REGION_KEY[String(params.regione).trim().toLowerCase()];
   if (regKey) qs.set('r', regKey);
@@ -201,6 +235,58 @@ async function fetchPage(params, start) {
  */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+/**
+ * La GENERAZIONE, che Subito non sa filtrare ma ogni annuncio dichiara.
+ *
+ * Non esiste un parametro per "Passat 5ª serie": il menu di Subito si ferma alla
+ * famiglia. Ma il livello e' dentro l'annuncio, misurato su 400 annunci: 400 lo
+ * dichiarano, il 100%. Quindi si filtra qui invece di chiederlo alla fonte —
+ * precisione piena e zero richieste in piu'.
+ *
+ * Ritorna null se l'annuncio va scartato, altrimenti come si e' riconosciuto.
+ */
+function riconosci(ad, nodo, opts = {}) {
+  if (!nodo || !nodo.marcaId) return 'testo-libero';
+  const liv = livelliAnnuncio(ad);
+  if (liv.marca && liv.marca.id !== String(nodo.marcaId)) return null;   // altra marca: mai
+  const ammessi = opts.generazioni;
+  if (!ammessi || !ammessi.size) return liv.versione && liv.versione.id !== NON_DICHIARATO ? 'esatto' : 'senza-versione';
+  if (liv.modello && ammessi.has(liv.modello.id)) {
+    return liv.versione && liv.versione.id !== NON_DICHIARATO ? 'esatto' : 'senza-versione';
+  }
+  if (!liv.modello || liv.modello.id === NON_DICHIARATO) {
+    // Il venditore non ha dichiarato il modello. E' la passata di recupero: si tiene solo
+    // se il TITOLO nomina il modello, e resta marcato — non e' una corrispondenza certa.
+    return opts.titoloCombacia && opts.titoloCombacia(ad) ? 'senza-modello' : null;
+  }
+  return null;                                                          // altro modello dichiarato
+}
+
+/** Il titolo nomina il modello cercato? Parole intere, tutte presenti. */
+function faTitolo(testo) {
+  const parole = String(testo || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .split(/[^a-z0-9]+/).filter(w => w.length > 1);
+  if (!parole.length) return null;
+  return ad => {
+    const t = String((ad && ad.subject) || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    return parole.every(w => new RegExp('(^|[^a-z0-9])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z0-9]|$)').test(t));
+  };
+}
+
+/** Recupero per marca: la stessa lista serve OGNI modello di quella marca → in cache. */
+const RECUPERO_TTL = 10 * 60 * 1000;
+const recuperoCache = new Map();   // `${tipo}|${marcaId}` → { ts, ads }
+
+async function paginaRecupero(params) {
+  const chiave = `${params.tipo}|${params.subitoNodo.marcaId}`;
+  const hit = recuperoCache.get(chiave);
+  if (hit && Date.now() - hit.ts < RECUPERO_TTL) return hit.ads;
+  const page = await fetchPage({ ...params, subitoSoloNonDichiarati: true }, 0);
+  recuperoCache.set(chiave, { ts: Date.now(), ads: page.ads });
+  if (recuperoCache.size > 200) recuperoCache.delete(recuperoCache.keys().next().value);
+  return page.ads;
+}
+
 async function scrapeSubitoApi(params, opts = {}) {
   const regione = params.regione ? String(params.regione).trim().toLowerCase() : null;
   const maxPages = opts.maxPages || MAX_PAGES;
@@ -208,9 +294,14 @@ async function scrapeSubitoApi(params, opts = {}) {
   // Ordinamento esplicito (on-search passa 'priceasc' per le occasioni in cima).
   // Il crawler NON passa opts.sort → ordine naturale, vista profonda invariata.
   const reqParams = opts.sort ? { ...params, _sort: opts.sort } : params;
+  const nodo = params.subitoNodo || null;
+  const gen = new Set((nodo && nodo.generazioni || []).map(g => String(g.id)));
+  const titoloCombacia = faTitolo(params.modello);
+  const rico = { generazioni: gen, titoloCombacia };
   const out = [];
   let truncated = false;
   let total = null;                          // F50 count_all (tetto), additivo
+  let scartati = 0;
   for (let p = 0; p < maxPages; p++) {
     if (p > 0 && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
     const page = await fetchPage(reqParams, p * PAGE_SIZE);
@@ -222,12 +313,37 @@ async function scrapeSubitoApi(params, opts = {}) {
         const r = ad.geo && ad.geo.region && ad.geo.region.friendly_name;
         if (r && r.toLowerCase() !== regione) continue;
       }
+      const come = riconosci(ad, nodo, rico);
+      if (!come) { scartati++; continue; }
       const m = mapAd(ad, opts);
-      if (m && m.prezzo != null) out.push(m);
+      if (m && m.prezzo != null) out.push(come === 'testo-libero' ? m : { ...m, dichiarazione: come });
     }
     if (page.ads.length < PAGE_SIZE) break;  // lista esaurita = vista completa
     if (p === maxPages - 1) truncated = true; // ultima pagina piena al cap → forse altro
   }
+
+  // RECUPERO. Cercando per id, gli annunci che il venditore ha archiviato come "Altro
+  // modello" diventano irraggiungibili: misurati sul 3,7% del totale, e sono spesso
+  // quelli compilati male — cioe' dove sta l'affare. Una richiesta in piu', per MARCA
+  // e in cache: la stessa lista serve ogni modello di quella marca.
+  if (nodo && nodo.marcaId && gen.size && titoloCombacia && !opts.senzaRecupero) {
+    try {
+      const visti = new Set(out.map(x => x.url));
+      for (const ad of await paginaRecupero(reqParams)) {
+        if (regione) {
+          const r = ad.geo && ad.geo.region && ad.geo.region.friendly_name;
+          if (r && r.toLowerCase() !== regione) continue;
+        }
+        if (riconosci(ad, nodo, rico) !== 'senza-modello') continue;
+        const m = mapAd(ad, opts);
+        if (m && m.prezzo != null && !visti.has(m.url)) { visti.add(m.url); out.push({ ...m, dichiarazione: 'senza-modello' }); }
+      }
+    } catch (e) {
+      // Il recupero e' un di piu': se cade, la ricerca vale lo stesso.
+      console.warn('[subito] recupero non dichiarati KO: ' + e.message);
+    }
+  }
+  if (nodo && scartati) console.log(`[subito] per id "${params.marca} ${params.modello || ''}": ${out.length} tenuti, ${scartati} scartati (altro modello)`);
   return opts.withMeta ? { items: out, truncated, total } : out;
 }
 
@@ -256,3 +372,5 @@ module.exports.searchAccessori = searchAccessori;
 module.exports._mapAd = mapAd;
 module.exports._buildPath = buildPath;
 module.exports._extractTotal = extractTotal;   // F50 copertura
+module.exports._riconosci = riconosci;         // filtro sui livelli dichiarati dall'annuncio
+module.exports._faTitolo = faTitolo;

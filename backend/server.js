@@ -37,6 +37,7 @@ const motornet       = require('./scrapers/motornet');  // kW ufficiali di listi
 const carburanti     = require('./carburanti');   // prezzi carburante MIMIT per provincia
 const saved = require('./saved');
 const budget = require('./budget-richieste');     // quante richieste costa una ricerca: contate, non stimate
+const { risolviNodo } = require('./scrapers/subito-nodo');   // testo digitato → id del catalogo Subito
 const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings, norm } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
 const regionCentroids = require('../data/region-centroids.json');  // capoluoghi regione {lat,lng} → raggio AS24 nativo
@@ -865,9 +866,22 @@ async function runSearch(params) {
 // così UI e avvisi danno risultati/rating coerenti. Ritorna l'oggetto-response.
 async function runSearchCore(params) {
   // ── Risoluzione metadata per-sito dal catalogo unificato ──────────────────
-  // Subito: niente metadata da risolvere — usa sempre ?q=marca+modello.
+  // Subito: gli id del suo catalogo (cb/cm auto, bb/bm moto) — vedi subito-nodo.
   // Autoscout24: serve mmmvAutoscout (livello modello, fallback livello brand).
   // Moto.it: servono motoitBrandSlug + motoitModelSlug (slug-based, niente fallback).
+
+  // SUBITO PER ID. Il testo libero resta il ripiego, non la regola: misurato sui primi
+  // 50 risultati di sei veicoli, il testo dava 213 su 300 giusti (71%) e su "Audi 80"
+  // zero. Quando il nodo non si risolve si torna al testo, e lo si DICHIARA nello stato
+  // della fonte: una ricerca approssimata deve dirsi tale.
+  // AMR_SUBITO_TESTO=1 rimette il testo libero senza toccare il codice: serve per
+  // confrontare vecchio e nuovo sulla stessa app, ed e' la leva se la fonte cambia idea.
+  params.subitoNodo = process.env.AMR_SUBITO_TESTO === '1'
+    ? null : (risolviNodo(params.tipo, params.marca, params.modello) || null);
+  if (params.subitoNodo && !params.subitoNodo.famigliaIds && params.modello) {
+    params.subitoNodo = null;   // marca sola con un modello chiesto: il testo fa meglio
+  }
+
   const brandHit   = lookupBrand(params.tipo, params.marca);
   const brandEntry = brandHit?.entry || null;
   const brandName  = brandHit?.nome  || null;   // nome canonico catalogo (chiave gruppi-serie)
@@ -1122,7 +1136,11 @@ async function runSearchCore(params) {
     subitoReason: subitoRes.reason || null,   // 'captcha' | '403' | 'no_data' | timeout msg
     // Stato per-fonte: la UI distingue saltato / vuoto / errore / ok.
     sources: {
-      subito:    { status: subitoRes.status, reason: subitoRes.reason || null, count: countBy('subito') },
+      // `come` dice SU COSA si e' cercato: gli id del catalogo Subito, oppure il testo.
+      // Il testo e' il ripiego (71% di precisione misurata) e deve risultare, non passare
+      // per una ricerca precisa che non e'.
+      subito:    { status: subitoRes.status, reason: subitoRes.reason || null, count: countBy('subito'),
+                   come: params.subitoNodo ? (params.subitoNodo.come || 'id') : 'testo libero' },
       autoscout: { status: asRes.status,     reason: asReason,                 count: asCount },
       moto:      { status: motoRes.status,   reason: motoRes.reason || null,   count: countBy('moto') },
     },
