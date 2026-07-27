@@ -21,6 +21,7 @@
   --pos:         #117a37;   /* miglior prezzo */
   --pos-weak:    #e1f3e8;
   --neg:         #c2362f;
+  --neg-weak:    #fbe6e4;
   --warn:        #8a6100;
   --warn-weak:   #fbf0d5;
 
@@ -51,6 +52,7 @@
   --pos:         #3fb950;
   --pos-weak:    #11271a;
   --neg:         #f0726a;
+  --neg-weak:    #2c1614;
   --warn:        #d6a838;
   --warn-weak:   #2a2310;
 
@@ -976,6 +978,13 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
 .vend-badge { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.02em; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
 .vend-priv { background: var(--surface-2); color: var(--text-muted); }
 .vend-conc { background: var(--accent-weak); color: var(--accent); }
+
+/* Quanto e' certo che la riga sia il veicolo cercato. Compare SOLO quando c'e' un
+   dubbio: marcare anche i casi esatti renderebbe invisibile l'eccezione. */
+.dich-badge { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.02em; padding: 1px 5px;
+  border-radius: 3px; white-space: nowrap; margin-left: 6px; vertical-align: middle; }
+.dich-med { background: var(--warn-weak); color: var(--warn); }
+.dich-ko  { background: var(--neg-weak);  color: var(--neg); }
 
 /* ─── Dettaglio inline (ℹ → fisarmonica sotto la riga) ──────────────────────── */
 .row-detail { background: var(--surface-2); border-bottom: 1px solid var(--line); }

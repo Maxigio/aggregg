@@ -1937,6 +1937,16 @@ function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/**
+ * Cosa la fonte dichiara di questo annuncio. `esatto` non compare: e' il caso normale,
+ * e marcare la normalita' rende invisibile l'eccezione.
+ */
+const DICHIARAZIONE = {
+  'senza-versione': { et: 'versione n.d.', cl: 'med', tit: 'Il venditore non ha indicato la versione: il modello e\' quello giusto, l\'allestimento non e\' dichiarato.' },
+  'senza-modello':  { et: 'da verificare', cl: 'med', tit: 'Il venditore non ha indicato il modello: riconosciuto dal titolo, non dal catalogo.' },
+  'altro-modello':  { et: 'altro modello', cl: 'ko',  tit: 'Questa fonte non ha il modello cercato: la ricerca si e\' allargata alla marca e questo e\' un modello diverso.' },
+};
+
 function rowHTML(item, bestSet) {
   const pr = vPricing(item.prezzo, passDi(item));
   const prezzoStr = pr ? eurRound(pr.finale) : 'n/d';
@@ -1959,6 +1969,13 @@ function rowHTML(item, bestSet) {
 
   const conc = item.venditore && /conc/i.test(item.venditore);
   const vendBadge = item.venditore ? `<span class="vend-badge vend-${conc ? 'conc' : 'priv'}">${conc ? 'Conc.' : 'Privato'}</span>` : '';
+  // Quanto e' sicuro che QUESTO annuncio sia il veicolo che hai chiesto. Il backend lo
+  // sa per certo — Subito dai livelli che l'annuncio dichiara, Autoscout dal modello che
+  // dichiara — e finora restava nel JSON. Un annuncio di un altro modello, o senza la
+  // versione, deve dirlo sulla riga: il totale in cima non basta a fidarsi di una riga.
+  // `esatto` non si marca: e' la normalita', e un pallino su ogni riga non e' un segnale.
+  const dich = DICHIARAZIONE[item.dichiarazione];
+  const dichBadge = dich ? `<span class="dich-badge dich-${dich.cl}" title="${escapeHtml(dich.tit)}">${escapeHtml(dich.et)}</span>` : '';
   const sub = [item.provincia ? escapeHtml(item.provincia) : '', vendBadge].filter(Boolean).join(' ');
   const subM = [item.anno || null, item.km != null ? `${item.km.toLocaleString('it-IT')} km` : null, item.carburante || null, item.potenzaCv != null ? `${item.potenzaCv} CV` : null, fonteLabel].filter(Boolean).join(' · ');
 
@@ -1966,7 +1983,7 @@ function rowHTML(item, bestSet) {
     switch (key) {
       case 'foto':    return thumbHTML;
       case 'veicolo': return `<div class="row-main">
-          <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}</div>
+          <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}${dichBadge}</div>
           ${item.variante ? `<div class="row-variante">${escapeHtml(item.variante)}</div>` : ''}
           ${sub ? `<div class="row-sub">${sub}</div>` : ''}
           <div class="row-sub-m">${escapeHtml(subM)}${liqBadgeHTML(item)}</div>

@@ -45,6 +45,31 @@ const QUERY = `query Search($v:Vehicle_,$loc:Location_,$pr:Price_,$m:Metadata_){
   } }
 }`.replace(/\s+/g, ' ');
 
+/**
+ * Il modello che AS24 DICHIARA e' quello cercato?
+ *
+ * Confronto per INSIEME di parole, non per sottostringa: AS24 scrive "390 Duke" dove
+ * l'utente scrive "Duke 390" — stessa moto, ordine diverso. E la sottostringa e' la
+ * trappola di sempre: "r12" si trova dentro "gsr125".
+ *
+ * Un insieme contenuto nell'altro basta, perche' le due fonti hanno granularita'
+ * diverse: AS24 tiene "Bonneville T100" dove Subito ha "Bonneville" + versione T100.
+ * `Altro` e' il secchio catch-all di AS24: non dice niente, quindi non decide.
+ */
+const parole = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .split(/[^a-z0-9]+/).filter(Boolean);
+function combaciaModello(dichiarato, cercato) {
+  if (/^(altro|other)$/i.test(String(dichiarato || '').trim())) return null;   // non si sa
+  const A = new Set(parole(dichiarato)), B = new Set(parole(cercato));
+  if (!A.size || !B.size) return null;
+  if ([...B].every(w => A.has(w)) || [...A].every(w => B.has(w))) return true;
+  // Chi scrive "sv650" attaccato intende "SV 650": le parole non combaciano ma la
+  // scritta si'. UGUAGLIANZA senza separatori, mai contenimento — "gsr125" contiene
+  // "r12" e sono due moto diverse.
+  const senzaSpazi = s => parole(s).join('');
+  return senzaSpazi(dichiarato) === senzaSpazi(cercato);
+}
+
 function httpPost(body, auth = AUTH) {
   budget.conta('as24');
   return new Promise((resolve, reject) => {
@@ -196,6 +221,11 @@ function mapListing(node, opts = {}) {
     cambio: (v.engine && v.engine.transmissionType && v.engine.transmissionType.formatted) || null,
     cilindrata: ccm ? (parseInt(String(ccm).replace(/[^\d]/g, ''), 10) || null) : null,
     variante,
+    // Il MODELLO come lo dichiara AS24, separato dal titolo. Il titolo e' un
+    // concatenato (marca + modello + allestimento) e chi filtra su quello non puo'
+    // distinguere i tre pezzi: "r12" si trova dentro "gsr125". Qui il pezzo resta
+    // intero e confrontabile. Additivo: nessuno lo usa ancora.
+    modelloDichiarato: modelName || null,
     // Specs ricche NATIVE; null se assenti (gap onesto, niente fabbricazione).
     potenzaCv: hp,
     cilindri: eng.numberOfCylinders ?? null,
@@ -369,3 +399,4 @@ module.exports.planBuckets = planBuckets;               // M-K split (crawler + 
 module.exports.SPLIT_OVER = SPLIT_OVER;
 module.exports._countQueryString = countQueryString;    // PURO, testabile senza rete
 module.exports._parseTotalCount = parseTotalCount;      // PURO, testabile senza rete
+module.exports.combaciaModello = combaciaModello;       // PURO: modello dichiarato vs cercato

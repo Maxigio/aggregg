@@ -23,6 +23,7 @@ const qrcode = require('qrcode-generator');
 const scrapeSubito    = require('./scrapers/subito-playwright');
 const scrapeAutoscout = require('./scrapers/autoscout-playwright');
 const scrapeAutoscoutGraphql = require('./scrapers/autoscout-graphql');
+const { combaciaModello } = require('./scrapers/autoscout-graphql');   // modello dichiarato vs cercato
 const scrapeSubitoApi = require('./scrapers/subito-api');
 const scrapeMotoIt    = require('./scrapers/motoit');
 const subitoSession   = require('./scrapers/subito-session');
@@ -1108,6 +1109,25 @@ async function runSearchCore(params) {
 
     return true;
   });
+
+  // ── Marcatura: cosa è DAVVERO ogni annuncio rispetto a quello che hai chiesto ──
+  // Subito lo dice già da sé (scrapers/subito-api: `dichiarazione` dai livelli che
+  // l'annuncio dichiara). Qui si fa lo stesso per Autoscout, col modello che dichiara.
+  //
+  // Serve al ramo ALLARGATO: quando un modello non ha codice su AS24 (Beta R-12,
+  // Ducati Scrambler 1100, Triumph Bonneville) la ricerca scende a livello marca, e fra
+  // i risultati restano altri modelli. Oggi lo dice solo l'intestazione della fonte —
+  // misurato su Beta R-12: 100 annunci mostrati, 100 di un altro modello, nessuno
+  // marcato. Ogni riga deve dire cosa è, non solo il totale.
+  if (params.modello) {
+    for (const r of risultati) {
+      if (r.fonte !== 'autoscout' || r.dichiarazione) continue;
+      const c = combaciaModello(r.modelloDichiarato, params.modello);
+      if (c === true) r.dichiarazione = r.variante ? 'esatto' : 'senza-versione';
+      else if (c === false) r.dichiarazione = 'altro-modello';
+      // c === null: AS24 non dichiara il modello ("Altro") → nessuna pretesa, nessun marchio
+    }
+  }
 
   // Conteggio per fonte DOPO il post-filter (riflette ciò che l'utente vede)
   const countBy = f => risultati.filter(r => r.fonte === f).length;
