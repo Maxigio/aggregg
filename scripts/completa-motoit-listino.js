@@ -29,16 +29,33 @@ const zlib = require('zlib');
 const fs = require('fs');
 const path = require('path');
 
-const OUT = path.join(__dirname, '..', 'data', 'motoit-catalogo.json');
+const R = path.join(__dirname, '..');
+const OUT = path.join(R, 'data', 'motoit-catalogo.json');
 const HOST = 'www.moto.it';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-const PAUSA_MS = 1500;
+const PAUSA_MS = 1500;   // per CONNESSIONE: con --parallele 2 il ritmo aggregato e' 1,3 req/s
 const TIMEOUT_MS = 30000;
 const SALVA_OGNI = 20;
 
 const arg = (n, d) => { const i = process.argv.indexOf('--' + n); return i > 0 ? process.argv[i + 1] : d; };
 const BUDGET = Math.max(1, Number(arg('budget', 3000)) || 3000);
 const SOLO = (arg('marche', '') || '').split(',').map(s => s.trim()).filter(Boolean);
+const SOLO_PONTE = process.argv.includes('--solo-ponte');
+const PARALLELE = Math.max(1, Math.min(6, Number(arg("parallele", 1)) || 1));
+
+/**
+ * `--solo-ponte`: prende le versioni SOLO dei modelli che il ponte usa davvero come
+ * bersaglio di un aggancio. Gli altri sono moto che nessuna fonte di partenza nomina, e
+ * scaricarne le versioni non serve a niente. Non e' un giudizio: e' il ponte a dirlo.
+ * Misurato: 1.360 modelli utili su 1.826 senza versioni.
+ */
+const BERSAGLI = (() => {
+  if (!SOLO_PONTE) return null;
+  const P = require(path.join(R, 'data', 'ponte-modelli.json'));
+  const s = new Set();
+  for (const r of P.relazioni) if (r.a === 'motoit') for (const v of r.voci) for (const b of v.a) s.add(b.id);
+  return s;
+})();
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 class Bloccati extends Error {}
@@ -165,16 +182,27 @@ function senzaMarca(titolo, marcaNome) {
   console.log('[listino] partenza: ' + prima.modelli + ' modelli · ' + prima.versioni + ' versioni · budget ' + BUDGET);
 
   let fatti = 0, aggiunte = 0, saltati = 0;
+  // CODA PIATTA + N LAVORATORI. La pausa resta PER CONNESSIONE, quindi con 2 il ritmo
+  // aggregato passa da 0,67 a 1,3 richieste al secondo — modesto per un sito di quelle
+  // dimensioni, e ci si ferma comunque al primo 403/429.
+  const coda = [];
   for (const [marcaSlug, marca] of Object.entries(cat.marche)) {
-    if (bloccato || spese >= BUDGET) break;
     if (SOLO.length && !SOLO.includes(marcaSlug)) continue;
-    let addMarca = 0, koMarca = 0;
-
     for (const [modSlug, mod] of Object.entries(marca.modelli || {})) {
-      if (bloccato) break;
       if (mod.completoListino) { saltati++; continue; }
-      if (spese >= BUDGET) break;
+      if (BERSAGLI && !BERSAGLI.has(modSlug)) { saltati++; continue; }
+      coda.push({ marcaSlug, marca, modSlug, mod });
+    }
+  }
+  console.log('[listino] da fare ' + coda.length + ' modelli · ' + PARALLELE + ' connessione/i');
 
+  let i = 0;
+  async function lavoratore() {
+    while (!bloccato) {
+      const job = coda[i++];
+      if (!job) return;
+      if (spese >= BUDGET) return;
+      const { marcaSlug, marca, modSlug, mod } = job;
       let trovate = null, motivo = null;
       for (const p of ['/listino/' + marcaSlug + '/' + modSlug,
                        '/listino/fuori-listino/' + marcaSlug + '/' + modSlug]) {
@@ -186,42 +214,34 @@ function senzaMarca(titolo, marcaNome) {
         }
         await sleep(PAUSA_MS);
         const v = versioniNella(html, marcaSlug, modSlug);
-        // criterio: NON "status 200" ma "questa pagina parla di questo modello". La pagina in
-        // produzione si reindirizza al listino di marca quando il modello e' fuori produzione.
         if (v.size) { trovate = v; motivo = null; break; }
       }
-      if (bloccato) break;
-
+      if (bloccato) return;
       if (!trovate) {
-        koMarca++;
         mod.motivoListino = motivo || 'nessuna versione nella pagina';
         falliti.push(marcaSlug + '/' + modSlug + ': ' + mod.motivoListino);
         continue;
       }
-
-      // MERGE che non distrugge: l'API vince sul nome, l'HTML aggiunge solo id nuovi.
       mod.versioni = mod.versioni || {};
       for (const v of trovate.values()) {
         if (mod.versioni[v.id]) continue;
         const nome = senzaMarca(v.titolo, marca.nome) || v.slug;
         mod.versioni[v.id] = { nome, anni: anniDa(v.titolo) || anniDa(v.slug), fonte: 'listino' };
-        addMarca++; aggiunte++;
+        aggiunte++;
       }
       mod.completoListino = true;
       delete mod.motivoListino;
       fatti++;
-      if (fatti % SALVA_OGNI === 0) salva();
+      if (fatti % SALVA_OGNI === 0) {
+        salva();
+        console.log('  ' + String(fatti).padStart(5) + '/' + coda.length
+          + ' · versioni +' + aggiunte + ' · falliti ' + falliti.length + ' · richieste ' + spese);
+      }
     }
-
-    marca.completaListino = Object.values(marca.modelli || {}).every(m => m.completoListino);
-    console.log('  ' + marcaSlug.padEnd(22)
-      + 'modelli ' + String(Object.keys(marca.modelli || {}).length).padStart(3)
-      + ' · versioni aggiunte ' + String(addMarca).padStart(4)
-      + (koMarca ? ' · falliti ' + koMarca : '')
-      + (marca.completaListino ? ' · completa' : ' · INCOMPLETA')
-      + ' · richieste ' + spese);
-    salva();
   }
+  await Promise.all(Array.from({ length: PARALLELE }, lavoratore));
+  for (const marca of Object.values(cat.marche))
+    marca.completaListino = Object.values(marca.modelli || {}).every(m => m.completoListino);
 
   salva();
   const dopo = conta();
