@@ -65,8 +65,17 @@ function makeResolver(candidates, opts = {}) {
   return function resolve(query) {
     const q = norm(query);
     if (!q) return null;
-    // L'alias puo' essere un gruppo di grafie o (forma storica) il solo nome canonico:
-    // si prova ogni grafia, e vince la prima che esiste davvero fra i candidati.
+    /**
+     * LA CORRISPONDENZA ESATTA VIENE PRIMA DELL'ALIAS. Chi chiede un nome che esiste tale
+     * e quale deve ricevere quello, non il capogruppo.
+     * Prima era il contrario, e faceva danno in due modi:
+     *  - "KL Motors" (10 modelli CON codice Autoscout) veniva dirottato su "Kl" (8 modelli
+     *    senza nessun codice): la ricerca su Autoscout restava senza modello;
+     *  - "Vespa" (marca a se' su Autoscout, makeId 50404) finiva su "Piaggio".
+     * L'alias resta per chi chiede una grafia che NON esiste fra i candidati ("TM Racing"
+     * quando in catalogo c'e' solo "TM"), che e' il suo mestiere.
+     */
+    if (exact.has(q)) return exact.get(q);
     const a = alias[q];
     if (a) {
       for (const name of (Array.isArray(a) ? a : [a])) {
@@ -74,7 +83,7 @@ function makeResolver(candidates, opts = {}) {
         if (exact.has(ck)) return exact.get(ck);
       }
     }
-    return exact.has(q) ? exact.get(q) : null;
+    return null;
   };
 }
 

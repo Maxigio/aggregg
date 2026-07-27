@@ -20,7 +20,10 @@ const CONFERMATE = [
   ['TM Racing', 'TM', 'Tm Moto'],  // detto dal proprietario
 ];
 const canon = new Map();
-for (const g of (Array.isArray(ALIAS) ? ALIAS : Object.values(ALIAS))) {
+// brand-aliases.json e' {_note, auto:[[...]], moto:[[...]]}: Object.values() darebbe la
+// stringa della nota e poi gli ARRAY DI GRUPPI, non i gruppi. Cosi' gli alias non facevano
+// nulla e marche gia' fuse ricevevano 'distinta / mai unire'.
+for (const g of [...(ALIAS.auto || []), ...(ALIAS.moto || [])]) {
   const l = Array.isArray(g) ? g : [g]; const capo = norm(l[0]);
   for (const x of l) canon.set(norm(x), capo);
 }
@@ -104,34 +107,45 @@ const DECISO = {
   'moto/Vespa|Piaggio': ['stessa-solo-subito', 'proprietario: su Subito le Vespa stanno sotto Piaggio'],
   'moto/TM Racing|TM': ['stessa', 'proprietario'],
   'moto/TM Racing|Tm Moto': ['stessa', 'proprietario'],
-  'AUSTIN ROVER|Austin': ['stessa', 'proprietario: Austin Rover va con Austin'],
-  'AUSTIN ROVER|Rover': ['distinta', 'proprietario: va con Austin, non con Rover'],
+  'auto/AUSTIN ROVER|Austin': ['stessa', 'proprietario: Austin Rover va con Austin'],
+  'auto/AUSTIN ROVER|Rover': ['distinta', 'proprietario: va con Austin, non con Rover'],
   // preparatori e importatori: marche separate, ma vendono veicoli della casa madre
-  'RedMoto Honda|Honda': ['distribuisce', 'proprietario: preparatori separati'],
-  "Honda Dall'Ara|Honda": ['distribuisce', 'proprietario: preparatori separati'],
-  'Suzuki Valenti|Suzuki': ['distribuisce', 'proprietario: preparatori separati'],
+  'moto/RedMoto Honda|Honda': ['distribuisce', 'proprietario: preparatori separati'],
+  "moto/Honda Dall'Ara|Honda": ['distribuisce', 'proprietario: preparatori separati'],
+  'moto/Suzuki Valenti|Suzuki': ['distribuisce', 'proprietario: preparatori separati'],
+  // Il secchio Subito "Suzuki Valenti" e' MISTO: quasi tutte Suzuki distribuite da Valenti,
+  // piu' i modelli Valenti veri (N01 50, S01 50, SM 50...). "Valenti Racing" esiste su
+  // Autoscout e Moto.it con sei modelli: senza questa seconda casa madre, N01 50 andava
+  // cercata fra le Suzuki e non si trovava.
+  'moto/Suzuki Valenti|Valenti Racing': ['distribuisce', 'verificato: il secchio Subito contiene anche i modelli Valenti veri'],
   // veicoli industriali: separati
-  'RENAULT TRUCKS|Renault': ['distinta', 'proprietario: trucks separati'],
-  'RENAULT V.I.|Renault': ['distinta', 'proprietario: trucks separati'],
-  'MITSUBISHI FUSO|Mitsubishi': ['distinta', 'proprietario: trucks separati'],
-  'MITSUBISHI TRUCKS|Mitsubishi': ['distinta', 'proprietario: trucks separati'],
+  'auto/RENAULT TRUCKS|Renault': ['distinta', 'proprietario: trucks separati'],
+  'auto/RENAULT V.I.|Renault': ['distinta', 'proprietario: trucks separati'],
+  'auto/MITSUBISHI FUSO|Mitsubishi': ['distinta', 'proprietario: trucks separati'],
+  'auto/MITSUBISHI TRUCKS|Mitsubishi': ['distinta', 'proprietario: trucks separati'],
   // le sei con un solo modello in comune, approvate a voce il 27 luglio
-  'GAZ AUTOMOBILE|GAZ': ['stessa', 'proprietario'],
-  'MICROLINO|Micro': ['stessa', 'proprietario'],
-  'NISSAN SPAGNA|Nissan': ['stessa', 'proprietario'],
-  'PANTHER|Panther Westwinds': ['stessa', 'proprietario'],
-  'WRM Motorcycles|WRM': ['stessa', 'proprietario'],
-  'Can-Am|Can-Am Brp': ['stessa', 'proprietario'],
+  'auto/GAZ AUTOMOBILE|GAZ': ['stessa', 'proprietario'],
+  'auto/MICROLINO|Micro': ['stessa', 'proprietario'],
+  'auto/NISSAN SPAGNA|Nissan': ['stessa', 'proprietario'],
+  'auto/PANTHER|Panther Westwinds': ['stessa', 'proprietario'],
+  'moto/WRM Motorcycles|WRM': ['stessa', 'proprietario'],
+  'moto/Can-Am|Can-Am Brp': ['stessa', 'proprietario'],
 };
 const chiaveDec = (a, b) => [a, b].sort().join('|');
 const decisioni = new Map();      // chiave coppia → [relazione, perche]
 const tipoDi = new Map();         // chiave coppia → 'auto'|'moto' quando dichiarato
+const direzione = new Map();      // chiave coppia → {figlio, madre}, per `distribuisce`
 for (const [k, v] of Object.entries(DECISO)) {
   const m = k.match(/^(auto|moto)\/(.*)$/);
   const corpo = m ? m[2] : k;
-  const kk = chiaveDec(...corpo.split('|'));
+  const [primo, secondo] = corpo.split('|');
+  const kk = chiaveDec(primo, secondo);
   decisioni.set(kk, v);
   if (m) tipoDi.set(kk, m[1]);
+  // Nella chiave il FIGLIO viene sempre per primo: 'RedMoto Honda|Honda'. La direzione va
+  // scritta, non dedotta dalla dimensione — il secchio Subito "Suzuki Valenti" (25 modelli,
+  // misto) e' piu' grande di "Valenti Racing" (6), e l'euristica si invertiva.
+  if (v[0] === 'distribuisce') direzione.set(kk, { figlio: primo, madre: secondo });
 }
 const usate = new Set();
 
@@ -161,6 +175,7 @@ for (const tipo of ['auto', 'moto']) {
     if (!rel) n.aperta++; else n[rel]++;
     fuori.voci[tipo].push({
       relazione: rel, perche,
+      ...(direzione.get(chiaveDec(na, nb)) || {}),
       a: { fonte: fonteDi(c.a), nome: na }, b: { fonte: fonteDi(c.b), nome: nb },
       modelliInComune: c.comuni,
     });
@@ -175,7 +190,8 @@ for (const [kk, [rel, perche]] of decisioni) {
   const t = tipoDi.get(kk);
   if (!t) { console.error('DECISIONE SENZA TIPO e senza candidata: ' + kk + ' — non so dove metterla'); process.exit(1); }
   const [x, y] = kk.split('|');
-  fuori.voci[t].push({ relazione: rel, perche, a: { fonte: '*', nome: x }, b: { fonte: '*', nome: y }, modelliInComune: null });
+  fuori.voci[t].push({ relazione: rel, perche, ...(direzione.get(kk) || {}),
+    a: { fonte: '*', nome: x }, b: { fonte: '*', nome: y }, modelliInComune: null });
   n[rel]++;
 }
 // CONTROLLO: ogni decisione presa a voce dev'essere finita nel file.

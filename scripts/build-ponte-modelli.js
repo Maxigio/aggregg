@@ -30,6 +30,20 @@ const M = require(R + '/data/motoit-catalogo.json');
 const A = require(R + '/data/models.json');
 const AL = require(R + '/data/brand-aliases.json');
 const PM = require(R + '/data/ponte-marche.json');
+const GRUPPI = (() => { try { return require(R + '/data/model-groups.json'); } catch (_) { return { auto: {}, moto: {} }; } })();
+
+/**
+ * FAMIGLIE A BARRE. Autoscout non ha un modello "Serie 3": ha 315, 316, 318, 320, 325...
+ * come modelli distinti, e Mercedes 180, 200, 220, 250. La famiglia esiste, sparsa su
+ * decine di codici. Senza questa mappa il ponte dichiarava ASSENTI proprio le auto usate
+ * piu' vendute d'Italia — Serie 1/2/3/5, Classe A/B/C/E — cioe' 7.612 versioni Subito.
+ * data/model-groups.json ce l'aveva gia' e lo legge anche server.js: era il ponte a
+ * ignorarlo.
+ */
+const membriDi = { auto: new Map(), moto: new Map() };
+for (const tipo of ['auto', 'moto']) for (const [marca, fam] of Object.entries(GRUPPI[tipo] || {}))
+  for (const [nome, membri] of Object.entries(fam || {}))
+    membriDi[tipo].set(norm(marca) + '|' + norm(nome), membri.map(norm));
 
 /**
  * `distribuisce`: RedMoto vende Honda. Restano marche separate — deciso dal proprietario —
@@ -49,9 +63,15 @@ for (const tipo of ['auto', 'moto']) {
   };
   for (const v of (PM.voci[tipo] || [])) {
     if (v.relazione !== 'distribuisce') continue;
-    const madre = quanti(v.a.nome) >= quanti(v.b.nome) ? v.a.nome : v.b.nome;
-    const figlio = madre === v.a.nome ? v.b.nome : v.a.nome;
-    MADRE[tipo].set(norm(figlio), norm(madre));
+    // la direzione la dichiara il ponte marche. Il ripiego sulla dimensione resta solo per
+    // le voci vecchie che non la portano.
+    const madre = v.madre || (quanti(v.a.nome) >= quanti(v.b.nome) ? v.a.nome : v.b.nome);
+    const figlio = v.figlio || (madre === v.a.nome ? v.b.nome : v.a.nome);
+    // un distributore puo' avere PIU' case madri: "Suzuki Valenti" vende Suzuki e produce
+    // Valenti. Si prova ciascuna e si tiene l'unione dei candidati.
+    const k = norm(figlio);
+    if (!MADRE[tipo].has(k)) MADRE[tipo].set(k, []);
+    if (!MADRE[tipo].get(k).includes(norm(madre))) MADRE[tipo].get(k).push(norm(madre));
   }
 }
 
@@ -114,7 +134,10 @@ function nodi(tipo, fonte) {
   for (const [k, lista] of out) {
     const perNome = new Map();
     for (const v of lista) {
-      const n = norm(v.nome);
+      // NON norm(): toglie '+', '.' e '/', e "Monster 696" e "Monster 696+" diventerebbero
+      // lo stesso nome. Sono due moto diverse con id diversi, e il perdente spariva senza
+      // finire nemmeno fra gli assenti. Qui si uniforma solo maiuscole, accenti e spazi.
+      const n = String(v.nome).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
       const gia = perNome.get(n);
       if (!gia || peso(v) > peso(gia)) perNome.set(n, v);
     }
@@ -173,8 +196,10 @@ for (const [tipo, fa, fb] of RELAZIONI) {
   const conta = { identico: 0, grossolano: 0, fine: 0, probabile: 0, assente: 0 };
   let marche = 0, nodiTot = 0;
   for (const [marca, listaA] of NA) {
-    const viaMadre = !NB.get(marca) && MADRE[tipo].get(marca);
-    const listaB = NB.get(marca) || (viaMadre ? NB.get(viaMadre) : null);
+    const madri = !NB.get(marca) ? (MADRE[tipo].get(marca) || []) : [];
+    const daMadri = madri.flatMap(m => NB.get(m) || []);
+    const viaMadre = daMadri.length ? madri.join('+') : null;
+    const listaB = NB.get(marca) || (daMadri.length ? daMadri : null);
     if (!listaB) {
       // marca senza corrispondente: i suoi nodi vanno DICHIARATI assenti, non taciuti.
       for (const a of listaA) { nodiTot++; conta.assente++; assenti.push({ marca, nome: a.nome, id: a.id, perche: 'marca senza corrispondente in ' + fb }); }
@@ -188,6 +213,12 @@ for (const [tipo, fa, fb] of RELAZIONI) {
       nodiTot++;
       const k = norm(a.nome);
       if (perNome.has(k)) return { a, b: perNome.get(k), come: 'nome identico' };
+      // famiglia a barre dichiarata da model-groups.json: "Serie 3" → 315,316,318,...
+      const membri = membriDi[tipo].get(marca + '|' + k);
+      if (membri) {
+        const trovati = listaB.filter(x => membri.includes(norm(x.nome)));
+        if (trovati.length) return { a, b: trovati, come: 'famiglia da model-groups.json' };
+      }
       const ta = tok(a.nome);
       // stesse parole in ordine diverso = stesso nome, non un candidato fra i tanti
       const riordinati = listaB.filter(b => stesseParole(ta, tok(b.nome)));
@@ -213,8 +244,14 @@ for (const [tipo, fa, fb] of RELAZIONI) {
       return { a, b: cand, come: cand.length ? 'parole o prefisso' : null };
     });
     // secondo giro: quanti nostri puntano allo stesso loro nodo → grossolano
+    // Le ECCEZIONI escono di scena PRIMA di contare chi rivendica cosa: un nodo che diventa
+    // eccezione non deve far marcare 'grossolano' un altro nodo che punta allo stesso
+    // bersaglio. Prova falsa gia' vista su Ferrari Testarossa.
     const quanti = new Map();
-    for (const g of grezzi) if (g.b.length === 1) quanti.set(g.b[0].nome, (quanti.get(g.b[0].nome) || 0) + 1);
+    for (const g of grezzi) {
+      if (eccezioneDi(tipo, fa, fb, marca, g.a.nome)) continue;
+      if (g.b.length === 1) quanti.set(g.b[0].nome, (quanti.get(g.b[0].nome) || 0) + 1);
+    }
     for (const g of grezzi) {
       const ecc = eccezioneDi(tipo, fa, fb, marca, g.a.nome);
       if (ecc) {

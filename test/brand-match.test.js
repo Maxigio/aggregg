@@ -59,3 +59,27 @@ test('makeModelResolver: esatto + prefix bidirezionale', () => {
   assert.strictEqual(r('alp 4.0'), 'alp40');     // normalizzazione punteggiatura/spazi
   assert.strictEqual(r('zz'), null);             // <3 char / nessun match
 });
+
+/**
+ * REGRESSIONE. L'alias veniva consultato PRIMA della corrispondenza esatta, quindi un nome
+ * che esiste tale e quale veniva dirottato sul capogruppo. In data/models.json alcune marche
+ * hanno DUE voci complementari — una coi codici Autoscout, una con gli slug Moto.it — e
+ * dirottare significava perdere meta' dei dati:
+ *   "KL Motors" (10 modelli con codice AS24) finiva su "Kl" (8 modelli, zero codici)
+ *   "Vespa"     (marca a se', makeId 50404)  finiva su "Piaggio"
+ * L'alias serve per le grafie che NON esistono fra i candidati, ed e' li' che deve agire.
+ */
+test('la corrispondenza esatta vince sull alias', () => {
+  const candidati = [
+    { name: 'Kl', value: 'moto-it' },
+    { name: 'KL Motors', value: 'autoscout' },
+    { name: 'TM', value: 'tm-autoscout' },
+  ];
+  const alias = { kl: ['KL', 'KL Motors'], klmotors: ['KL', 'KL Motors'], tmracing: ['TM', 'TM Racing'] };
+  const r = makeResolver(candidati, { alias });
+  assert.strictEqual(r('KL Motors'), 'autoscout', 'un nome che esiste deve dare se stesso');
+  assert.strictEqual(r('Kl'), 'moto-it');
+  // e l'alias continua a fare il suo mestiere quando la grafia chiesta non esiste
+  assert.strictEqual(r('TM Racing'), 'tm-autoscout');
+  assert.strictEqual(r('inesistente'), null);
+});

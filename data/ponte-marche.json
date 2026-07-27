@@ -1,5 +1,5 @@
 {
- "generatoIl": "2026-07-27T12:05:07.175Z",
+ "generatoIl": "2026-07-27T12:21:19.826Z",
  "nota": "Ponte a livello MARCA fra Subito, Autoscout e Moto.it. I cataloghi di origine non sono stati modificati. Ogni voce porta la prova (modelli in comune) o chi l'ha decisa. `distribuisce` = marchi commerciali distinti che vendono veicoli della casa madre: restano separati come marca, ma i loro modelli sono gli stessi veicoli.",
  "relazioni": {
   "stessa": "fondere",
@@ -8,71 +8,6 @@
  },
  "voci": {
   "auto": [
-   {
-    "relazione": "stessa",
-    "perche": "15 modelli in comune: citycross, dr1, dr2",
-    "a": {
-     "fonte": "subito",
-     "nome": "DR"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "DR Automobiles"
-    },
-    "modelliInComune": 15
-   },
-   {
-    "relazione": "stessa",
-    "perche": "15 modelli in comune: 190, citan, classet",
-    "a": {
-     "fonte": "subito",
-     "nome": "MERCEDES"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Mercedes-Benz"
-    },
-    "modelliInComune": 15
-   },
-   {
-    "relazione": "stessa",
-    "perche": "6 modelli in comune: b10, b3, b5",
-    "a": {
-     "fonte": "subito",
-     "nome": "ALPINA-BMW"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Alpina"
-    },
-    "modelliInComune": 6
-   },
-   {
-    "relazione": "stessa",
-    "perche": "5 modelli in comune: ds3, ds4, ds5",
-    "a": {
-     "fonte": "subito",
-     "nome": "DS"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "DS Automobiles"
-    },
-    "modelliInComune": 5
-   },
-   {
-    "relazione": "stessa",
-    "perche": "proprietario: Austin Rover va con Austin",
-    "a": {
-     "fonte": "subito",
-     "nome": "AUSTIN ROVER"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Austin"
-    },
-    "modelliInComune": 4
-   },
    {
     "relazione": "distinta",
     "perche": "proprietario: va con Austin, non con Rover",
@@ -83,19 +18,6 @@
     "b": {
      "fonte": "autoscout",
      "nome": "Rover"
-    },
-    "modelliInComune": 3
-   },
-   {
-    "relazione": "stessa",
-    "perche": "3 modelli in comune: h6, hover, steed",
-    "a": {
-     "fonte": "subito",
-     "nome": "GREAT WALL MOTOR"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Great Wall"
     },
     "modelliInComune": 3
    },
@@ -126,45 +48,6 @@
     "modelliInComune": 3
    },
    {
-    "relazione": "stessa",
-    "perche": "2 modelli in comune: atom, nomad",
-    "a": {
-     "fonte": "subito",
-     "nome": "ARIEL"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Ariel Motor"
-    },
-    "modelliInComune": 2
-   },
-   {
-    "relazione": "stessa",
-    "perche": "proprietario",
-    "a": {
-     "fonte": "subito",
-     "nome": "GAZ AUTOMOBILE"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "GAZ"
-    },
-    "modelliInComune": 1
-   },
-   {
-    "relazione": "stessa",
-    "perche": "proprietario",
-    "a": {
-     "fonte": "subito",
-     "nome": "MICROLINO"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Micro"
-    },
-    "modelliInComune": 1
-   },
-   {
     "relazione": "distinta",
     "perche": "proprietario: trucks separati",
     "a": {
@@ -191,32 +74,6 @@
     "modelliInComune": 1
    },
    {
-    "relazione": "stessa",
-    "perche": "proprietario",
-    "a": {
-     "fonte": "subito",
-     "nome": "NISSAN SPAGNA"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Nissan"
-    },
-    "modelliInComune": 1
-   },
-   {
-    "relazione": "stessa",
-    "perche": "proprietario",
-    "a": {
-     "fonte": "subito",
-     "nome": "PANTHER"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Panther Westwinds"
-    },
-    "modelliInComune": 1
-   },
-   {
     "relazione": "distinta",
     "perche": "zero modelli in comune",
     "a": {
@@ -239,6 +96,19 @@
     "b": {
      "fonte": "autoscout",
      "nome": "Martin"
+    },
+    "modelliInComune": 0
+   },
+   {
+    "relazione": "distinta",
+    "perche": "zero modelli in comune",
+    "a": {
+     "fonte": "subito",
+     "nome": "AUSTIN ROVER"
+    },
+    "b": {
+     "fonte": "autoscout",
+     "nome": "Austin-Healey"
     },
     "modelliInComune": 0
    },
@@ -325,19 +195,6 @@
     "perche": "zero modelli in comune",
     "a": {
      "fonte": "subito",
-     "nome": "MICROCAR"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Micro"
-    },
-    "modelliInComune": 0
-   },
-   {
-    "relazione": "distinta",
-    "perche": "zero modelli in comune",
-    "a": {
-     "fonte": "subito",
      "nome": "ROVER"
     },
     "b": {
@@ -358,233 +215,79 @@
      "nome": "Volkswagen"
     },
     "modelliInComune": 0
+   },
+   {
+    "relazione": "stessa",
+    "perche": "proprietario: Austin Rover va con Austin",
+    "a": {
+     "fonte": "*",
+     "nome": "AUSTIN ROVER"
+    },
+    "b": {
+     "fonte": "*",
+     "nome": "Austin"
+    },
+    "modelliInComune": null
+   },
+   {
+    "relazione": "stessa",
+    "perche": "proprietario",
+    "a": {
+     "fonte": "*",
+     "nome": "GAZ"
+    },
+    "b": {
+     "fonte": "*",
+     "nome": "GAZ AUTOMOBILE"
+    },
+    "modelliInComune": null
+   },
+   {
+    "relazione": "stessa",
+    "perche": "proprietario",
+    "a": {
+     "fonte": "*",
+     "nome": "MICROLINO"
+    },
+    "b": {
+     "fonte": "*",
+     "nome": "Micro"
+    },
+    "modelliInComune": null
+   },
+   {
+    "relazione": "stessa",
+    "perche": "proprietario",
+    "a": {
+     "fonte": "*",
+     "nome": "NISSAN SPAGNA"
+    },
+    "b": {
+     "fonte": "*",
+     "nome": "Nissan"
+    },
+    "modelliInComune": null
+   },
+   {
+    "relazione": "stessa",
+    "perche": "proprietario",
+    "a": {
+     "fonte": "*",
+     "nome": "PANTHER"
+    },
+    "b": {
+     "fonte": "*",
+     "nome": "Panther Westwinds"
+    },
+    "modelliInComune": null
    }
   ],
   "moto": [
    {
-    "relazione": "stessa",
-    "perche": "42 modelli in comune: alp200, alp250, alp40",
-    "a": {
-     "fonte": "autoscout",
-     "nome": "Beta"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Betamotor"
-    },
-    "modelliInComune": 42
-   },
-   {
-    "relazione": "stessa",
-    "perche": "28 modelli in comune: caballero125, caballero250, caballero50",
-    "a": {
-     "fonte": "autoscout",
-     "nome": "Fantic"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Fantic Motor"
-    },
-    "modelliInComune": 28
-   },
-   {
-    "relazione": "stessa",
-    "perche": "23 modelli in comune: caballero125, caballero250, caballero500",
-    "a": {
-     "fonte": "subito",
-     "nome": "Fantic"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Fantic Motor"
-    },
-    "modelliInComune": 23
-   },
-   {
-    "relazione": "stessa",
-    "perche": "17 modelli in comune: rkf125, rkv125, icon125",
-    "a": {
-     "fonte": "autoscout",
-     "nome": "Keeway"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Keeway Motor"
-    },
-    "modelliInComune": 17
-   },
-   {
-    "relazione": "stessa",
-    "perche": "17 modelli in comune: caferacer, fifty, fivehundred400",
-    "a": {
-     "fonte": "autoscout",
-     "nome": "Mash"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Mash Italia"
-    },
-    "modelliInComune": 17
-   },
-   {
-    "relazione": "stessa",
-    "perche": "13 modelli in comune: alp200, alp250, alp40",
-    "a": {
-     "fonte": "subito",
-     "nome": "Beta"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Betamotor"
-    },
-    "modelliInComune": 13
-   },
-   {
-    "relazione": "stessa",
-    "perche": "13 modelli in comune: bx125, cromwell1200, cromwell125",
-    "a": {
-     "fonte": "autoscout",
-     "nome": "Brixton"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Brixton Motorcycles"
-    },
-    "modelliInComune": 13
-   },
-   {
-    "relazione": "stessa",
-    "perche": "12 modelli in comune: ds, dsr, dsrx",
-    "a": {
-     "fonte": "subito",
-     "nome": "Zero Motorcycles"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Zero"
-    },
-    "modelliInComune": 12
-   },
-   {
-    "relazione": "stessa",
-    "perche": "11 modelli in comune: bx125, cromwell1200, cromwell125",
-    "a": {
-     "fonte": "subito",
-     "nome": "Brixton"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Brixton Motorcycles"
-    },
-    "modelliInComune": 11
-   },
-   {
-    "relazione": "stessa",
-    "perche": "11 modelli in comune: akita250, fatsabbath250, gtsr125",
-    "a": {
-     "fonte": "subito",
-     "nome": "Mutt"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Mutt Motorcycles"
-    },
-    "modelliInComune": 11
-   },
-   {
-    "relazione": "stessa",
-    "perche": "10 modelli in comune: blackseven125, blackseven250, caferacer250",
-    "a": {
-     "fonte": "subito",
-     "nome": "Mash"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Mash Italia"
-    },
-    "modelliInComune": 10
-   },
-   {
-    "relazione": "stessa",
-    "perche": "10 modelli in comune: flattrack, flex300, hps125",
-    "a": {
-     "fonte": "autoscout",
-     "nome": "Mondial"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "FB Mondial"
-    },
-    "modelliInComune": 10
-   },
-   {
-    "relazione": "stessa",
-    "perche": "9 modelli in comune: flex300, hps125, hps300",
-    "a": {
-     "fonte": "subito",
-     "nome": "F.B. Mondial"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Mondial"
-    },
-    "modelliInComune": 9
-   },
-   {
-    "relazione": "stessa",
-    "perche": "9 modelli in comune: akita250, fatsabbath250, hilts125",
-    "a": {
-     "fonte": "subito",
-     "nome": "Mutt"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Mutt Motorcycles"
-    },
-    "modelliInComune": 9
-   },
-   {
-    "relazione": "stessa",
-    "perche": "9 modelli in comune: cityblade125, iskia125, klight125",
-    "a": {
-     "fonte": "subito",
-     "nome": "Keeway"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Keeway Motor"
-    },
-    "modelliInComune": 9
-   },
-   {
-    "relazione": "stessa",
-    "perche": "8 modelli in comune: ds, dsr, dsrx",
-    "a": {
-     "fonte": "subito",
-     "nome": "Zero Motorcycles"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Zero"
-    },
-    "modelliInComune": 8
-   },
-   {
-    "relazione": "stessa",
-    "perche": "7 modelli in comune: chinchilla500, darkflag500, lfc700",
-    "a": {
-     "fonte": "autoscout",
-     "nome": "Benda"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Benda Motorcycles"
-    },
-    "modelliInComune": 7
-   },
-   {
     "relazione": "distribuisce",
     "perche": "proprietario: preparatori separati",
+    "figlio": "RedMoto Honda",
+    "madre": "Honda",
     "a": {
      "fonte": "subito",
      "nome": "RedMoto Honda"
@@ -598,6 +301,8 @@
    {
     "relazione": "distribuisce",
     "perche": "proprietario: preparatori separati",
+    "figlio": "Suzuki Valenti",
+    "madre": "Suzuki",
     "a": {
      "fonte": "subito",
      "nome": "Suzuki Valenti"
@@ -611,6 +316,8 @@
    {
     "relazione": "distribuisce",
     "perche": "proprietario: preparatori separati",
+    "figlio": "Honda Dall'Ara",
+    "madre": "Honda",
     "a": {
      "fonte": "subito",
      "nome": "Honda Dall'Ara"
@@ -622,21 +329,10 @@
     "modelliInComune": 5
    },
    {
-    "relazione": "stessa",
-    "perche": "5 modelli in comune: brera125, brera300, brera318",
-    "a": {
-     "fonte": "subito",
-     "nome": "KL"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "KL Motors"
-    },
-    "modelliInComune": 5
-   },
-   {
     "relazione": "distribuisce",
     "perche": "proprietario: preparatori separati",
+    "figlio": "Suzuki Valenti",
+    "madre": "Suzuki",
     "a": {
      "fonte": "subito",
      "nome": "Suzuki Valenti"
@@ -648,151 +344,10 @@
     "modelliInComune": 5
    },
    {
-    "relazione": "stessa",
-    "perche": "5 modelli in comune: jupiter125, ntorq125, raider125",
-    "a": {
-     "fonte": "subito",
-     "nome": "TVS"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "TVS Motor"
-    },
-    "modelliInComune": 5
-   },
-   {
-    "relazione": "stessa",
-    "perche": "5 modelli in comune: renegadesport125, renegadevegas125, renegadevegas300",
-    "a": {
-     "fonte": "subito",
-     "nome": "UM"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "um-italia"
-    },
-    "modelliInComune": 5
-   },
-   {
-    "relazione": "stessa",
-    "perche": "5 modelli in comune: btre, brera125, brera300",
-    "a": {
-     "fonte": "autoscout",
-     "nome": "KL Motors"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Kl"
-    },
-    "modelliInComune": 5
-   },
-   {
-    "relazione": "stessa",
-    "perche": "4 modelli in comune: chinchilla500, lfc700, napoleonbob250",
-    "a": {
-     "fonte": "subito",
-     "nome": "Benda Motorcycles"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Benda"
-    },
-    "modelliInComune": 4
-   },
-   {
-    "relazione": "stessa",
-    "perche": "4 modelli in comune: madass, roadster125, roadster650",
-    "a": {
-     "fonte": "subito",
-     "nome": "Sachs"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Sachs/SFM"
-    },
-    "modelliInComune": 4
-   },
-   {
-    "relazione": "stessa",
-    "perche": "proprietario",
-    "a": {
-     "fonte": "autoscout",
-     "nome": "Can-Am"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Can-Am Brp"
-    },
-    "modelliInComune": 4
-   },
-   {
-    "relazione": "stessa",
-    "perche": "3 modelli in comune: en400, en503, sm503",
-    "a": {
-     "fonte": "subito",
-     "nome": "Vor"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "VOR Vertemati"
-    },
-    "modelliInComune": 3
-   },
-   {
-    "relazione": "stessa",
-    "perche": "3 modelli in comune: dragster200, dragster300, dragster700twin",
-    "a": {
-     "fonte": "subito",
-     "nome": "Italjet"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Italjet Moto"
-    },
-    "modelliInComune": 3
-   },
-   {
-    "relazione": "stessa",
-    "perche": "2 modelli in comune: brera125, brera300",
-    "a": {
-     "fonte": "subito",
-     "nome": "Over"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "Over Bikes"
-    },
-    "modelliInComune": 2
-   },
-   {
-    "relazione": "stessa",
-    "perche": "proprietario",
-    "a": {
-     "fonte": "subito",
-     "nome": "WRM Motorcycles"
-    },
-    "b": {
-     "fonte": "autoscout",
-     "nome": "WRM"
-    },
-    "modelliInComune": 1
-   },
-   {
-    "relazione": "stessa",
-    "perche": "proprietario",
-    "a": {
-     "fonte": "subito",
-     "nome": "Can-Am"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "Can-Am Brp"
-    },
-    "modelliInComune": 1
-   },
-   {
     "relazione": "distribuisce",
     "perche": "proprietario: preparatori separati",
+    "figlio": "RedMoto Honda",
+    "madre": "Honda",
     "a": {
      "fonte": "subito",
      "nome": "RedMoto Honda"
@@ -813,6 +368,19 @@
     "b": {
      "fonte": "autoscout",
      "nome": "Arc"
+    },
+    "modelliInComune": 0
+   },
+   {
+    "relazione": "distinta",
+    "perche": "zero modelli in comune",
+    "a": {
+     "fonte": "subito",
+     "nome": "Benda Motorcycles"
+    },
+    "b": {
+     "fonte": "autoscout",
+     "nome": "Benda Scooter"
     },
     "modelliInComune": 0
    },
@@ -923,6 +491,8 @@
    {
     "relazione": "distribuisce",
     "perche": "proprietario: preparatori separati",
+    "figlio": "Honda Dall'Ara",
+    "madre": "Honda",
     "a": {
      "fonte": "subito",
      "nome": "Honda Dall'Ara"
@@ -930,19 +500,6 @@
     "b": {
      "fonte": "motoit",
      "nome": "Honda"
-    },
-    "modelliInComune": 0
-   },
-   {
-    "relazione": "distinta",
-    "perche": "zero modelli in comune",
-    "a": {
-     "fonte": "subito",
-     "nome": "Mondial"
-    },
-    "b": {
-     "fonte": "motoit",
-     "nome": "FB Mondial"
     },
     "modelliInComune": 0
    },
@@ -990,11 +547,11 @@
     "perche": "zero modelli in comune",
     "a": {
      "fonte": "autoscout",
-     "nome": "Italjet"
+     "nome": "Benda Scooter"
     },
     "b": {
      "fonte": "motoit",
-     "nome": "Italjet Moto"
+     "nome": "Benda Motorcycles"
     },
     "modelliInComune": 0
    },
@@ -1060,6 +617,47 @@
     "b": {
      "fonte": "*",
      "nome": "Tm Moto"
+    },
+    "modelliInComune": null
+   },
+   {
+    "relazione": "distribuisce",
+    "perche": "verificato: il secchio Subito contiene anche i modelli Valenti veri",
+    "figlio": "Suzuki Valenti",
+    "madre": "Valenti Racing",
+    "a": {
+     "fonte": "*",
+     "nome": "Suzuki Valenti"
+    },
+    "b": {
+     "fonte": "*",
+     "nome": "Valenti Racing"
+    },
+    "modelliInComune": null
+   },
+   {
+    "relazione": "stessa",
+    "perche": "proprietario",
+    "a": {
+     "fonte": "*",
+     "nome": "WRM"
+    },
+    "b": {
+     "fonte": "*",
+     "nome": "WRM Motorcycles"
+    },
+    "modelliInComune": null
+   },
+   {
+    "relazione": "stessa",
+    "perche": "proprietario",
+    "a": {
+     "fonte": "*",
+     "nome": "Can-Am"
+    },
+    "b": {
+     "fonte": "*",
+     "nome": "Can-Am Brp"
     },
     "modelliInComune": null
    }

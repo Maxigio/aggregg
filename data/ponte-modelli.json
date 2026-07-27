@@ -1,5 +1,5 @@
 {
- "generatoIl": "2026-07-27T12:05:07.630Z",
+ "generatoIl": "2026-07-27T12:21:42.812Z",
  "nota": "Ponte a livello MODELLO. Costruito dai cataloghi senza modificarli. Ogni voce porta il grado e la prova. `grossolano` non e' un errore: la fonte di arrivo e' meno granulare, e piu' nostri nodi finiscono legittimamente sullo stesso loro nodo.",
  "gradi": {
   "identico": "stesso nome, uno solo da entrambe le parti",
@@ -14,14 +14,14 @@
    "da": "subito",
    "a": "autoscout",
    "marcheInComune": 158,
-   "nodiEsaminati": 2039,
-   "nodiScartatiPerDoppione": 8,
+   "nodiEsaminati": 2040,
+   "nodiScartatiPerDoppione": 7,
    "conta": {
     "identico": 1164,
-    "grossolano": 125,
-    "fine": 74,
-    "probabile": 86,
-    "assente": 590
+    "grossolano": 126,
+    "fine": 91,
+    "probabile": 84,
+    "assente": 575
    },
    "voci": [
     {
@@ -3933,6 +3933,742 @@
        "id": "75603",
        "nome": "iX3",
        "mmmv": "13|75603||"
+      }
+     ]
+    },
+    {
+     "marca": "bmw",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "001661",
+      "nome": "Serie 1",
+      "generazioni": [
+       {
+        "id": "003756",
+        "nome": "Serie 1 (E81)",
+        "versioni": 39
+       },
+       {
+        "id": "003495",
+        "nome": "Serie 1 (E87)",
+        "versioni": 45
+       },
+       {
+        "id": "004052",
+        "nome": "Serie 1 (F20)",
+        "versioni": 99
+       },
+       {
+        "id": "004130",
+        "nome": "Serie 1 (F21)",
+        "versioni": 86
+       },
+       {
+        "id": "004632",
+        "nome": "Serie 1 (F40)",
+        "versioni": 59
+       },
+       {
+        "id": "005099",
+        "nome": "Serie 1 (F70)",
+        "versioni": 26
+       },
+       {
+        "id": "003800",
+        "nome": "Serie 1 Cabrio(E88)",
+        "versioni": 25
+       },
+       {
+        "id": "003783",
+        "nome": "Serie 1 Coupé (E82)",
+        "versioni": 18
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "20149",
+       "nome": "114",
+       "mmmv": "13|20149||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18480",
+       "nome": "116",
+       "mmmv": "13|18480||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18481",
+       "nome": "118",
+       "mmmv": "13|18481||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18482",
+       "nome": "120",
+       "mmmv": "13|18482||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "19078",
+       "nome": "123",
+       "mmmv": "13|19078||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "19084",
+       "nome": "125",
+       "mmmv": "13|19084||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "75736",
+       "nome": "128",
+       "mmmv": "13|75736||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18588",
+       "nome": "130",
+       "mmmv": "13|18588||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "19079",
+       "nome": "135",
+       "mmmv": "13|19079||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "74386",
+       "nome": "140",
+       "mmmv": "13|74386||"
+      }
+     ]
+    },
+    {
+     "marca": "bmw",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "001662",
+      "nome": "Serie 2",
+      "generazioni": [
+       {
+        "id": "004337",
+        "nome": "Serie 2 Cabrio(F23)",
+        "versioni": 42
+       },
+       {
+        "id": "004231",
+        "nome": "Serie 2 Cpé(F22/87)",
+        "versioni": 57
+       },
+       {
+        "id": "004805",
+        "nome": "Serie 2 Cpé(G42/87)",
+        "versioni": 18
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "20958",
+       "nome": "214",
+       "mmmv": "13|20958||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20397",
+       "nome": "216",
+       "mmmv": "13|20397||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20327",
+       "nome": "218",
+       "mmmv": "13|20327||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20326",
+       "nome": "220",
+       "mmmv": "13|20326||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "76192",
+       "nome": "223",
+       "mmmv": "13|76192||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20328",
+       "nome": "225",
+       "mmmv": "13|20328||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20481",
+       "nome": "228",
+       "mmmv": "13|20481||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "74387",
+       "nome": "230",
+       "mmmv": "13|74387||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20329",
+       "nome": "235",
+       "mmmv": "13|20329||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "74388",
+       "nome": "240",
+       "mmmv": "13|74388||"
+      }
+     ]
+    },
+    {
+     "marca": "bmw",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "000349",
+      "nome": "Serie 3",
+      "generazioni": [
+       {
+        "id": "002455",
+        "nome": "Serie 3 (E21)",
+        "versioni": 8
+       },
+       {
+        "id": "002456",
+        "nome": "Serie 3 (E30)",
+        "versioni": 63
+       },
+       {
+        "id": "000675",
+        "nome": "Serie 3 (E36)",
+        "versioni": 83
+       },
+       {
+        "id": "003007",
+        "nome": "Serie 3 (E46)",
+        "versioni": 156
+       },
+       {
+        "id": "003553",
+        "nome": "Serie 3 (E90/91)",
+        "versioni": 174
+       },
+       {
+        "id": "003687",
+        "nome": "Serie 3 (E92)",
+        "versioni": 72
+       },
+       {
+        "id": "003751",
+        "nome": "Serie 3 (E93)",
+        "versioni": 32
+       },
+       {
+        "id": "004080",
+        "nome": "Serie 3 (F30/31)",
+        "versioni": 279
+       },
+       {
+        "id": "004588",
+        "nome": "Serie 3(G20/1-80/1)",
+        "versioni": 232
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "16558",
+       "nome": "315",
+       "mmmv": "13|16558||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1639",
+       "nome": "316",
+       "mmmv": "13|1639||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1640",
+       "nome": "318",
+       "mmmv": "13|1640||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1641",
+       "nome": "320",
+       "mmmv": "13|1641||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1642",
+       "nome": "323",
+       "mmmv": "13|1642||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1643",
+       "nome": "324",
+       "mmmv": "13|1643||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1644",
+       "nome": "325",
+       "mmmv": "13|1644||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1645",
+       "nome": "328",
+       "mmmv": "13|1645||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15779",
+       "nome": "330",
+       "mmmv": "13|15779||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18805",
+       "nome": "335",
+       "mmmv": "13|18805||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "21097",
+       "nome": "340",
+       "mmmv": "13|21097||"
+      }
+     ]
+    },
+    {
+     "marca": "bmw",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "001572",
+      "nome": "Serie 4",
+      "generazioni": [
+       {
+        "id": "004240",
+        "nome": "Serie 4 Cbr(F33/83)",
+        "versioni": 74
+       },
+       {
+        "id": "004745",
+        "nome": "Serie 4 Cbr(G23/83)",
+        "versioni": 23
+       },
+       {
+        "id": "004217",
+        "nome": "Serie 4 Cpé(F32/82)",
+        "versioni": 103
+       },
+       {
+        "id": "004719",
+        "nome": "Serie 4 Cpé(G22/82)",
+        "versioni": 31
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "20398",
+       "nome": "418",
+       "mmmv": "13|20398||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20289",
+       "nome": "420",
+       "mmmv": "13|20289||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20399",
+       "nome": "425",
+       "mmmv": "13|20399||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20287",
+       "nome": "428",
+       "mmmv": "13|20287||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20330",
+       "nome": "430",
+       "mmmv": "13|20330||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20288",
+       "nome": "435",
+       "mmmv": "13|20288||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "74335",
+       "nome": "440",
+       "mmmv": "13|74335||"
+      }
+     ]
+    },
+    {
+     "marca": "bmw",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "000354",
+      "nome": "Serie 5",
+      "generazioni": [
+       {
+        "id": "004976",
+        "nome": "S. 5(G60/61/90/99)",
+        "versioni": 53
+       },
+       {
+        "id": "000676",
+        "nome": "Serie 5 (E12/28/34)",
+        "versioni": 67
+       },
+       {
+        "id": "002781",
+        "nome": "Serie 5 (E39)",
+        "versioni": 127
+       },
+       {
+        "id": "003399",
+        "nome": "Serie 5 (E60/61)",
+        "versioni": 156
+       },
+       {
+        "id": "003944",
+        "nome": "Serie 5 (F10/11)",
+        "versioni": 276
+       },
+       {
+        "id": "004461",
+        "nome": "Serie 5(G30/31/F90)",
+        "versioni": 202
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "1647",
+       "nome": "518",
+       "mmmv": "13|1647||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1648",
+       "nome": "520",
+       "mmmv": "13|1648||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1649",
+       "nome": "523",
+       "mmmv": "13|1649||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1650",
+       "nome": "524",
+       "mmmv": "13|1650||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1651",
+       "nome": "525",
+       "mmmv": "13|1651||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "2145",
+       "nome": "528",
+       "mmmv": "13|2145||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1652",
+       "nome": "530",
+       "mmmv": "13|1652||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1653",
+       "nome": "535",
+       "mmmv": "13|1653||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1654",
+       "nome": "540",
+       "mmmv": "13|1654||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18383",
+       "nome": "545",
+       "mmmv": "13|18383||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18710",
+       "nome": "550",
+       "mmmv": "13|18710||"
+      }
+     ]
+    },
+    {
+     "marca": "bmw",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "000357",
+      "nome": "Serie 6",
+      "generazioni": [
+       {
+        "id": "000677",
+        "nome": "Serie 6 (E24)",
+        "versioni": 5
+       },
+       {
+        "id": "003454",
+        "nome": "Serie 6 (E63/64)",
+        "versioni": 11
+       },
+       {
+        "id": "004017",
+        "nome": "Serie 6 (F12/F13)",
+        "versioni": 51
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "74993",
+       "nome": "620",
+       "mmmv": "13|74993||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15780",
+       "nome": "628",
+       "mmmv": "13|15780||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18491",
+       "nome": "630",
+       "mmmv": "13|18491||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "16436",
+       "nome": "633",
+       "mmmv": "13|16436||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1656",
+       "nome": "635",
+       "mmmv": "13|1656||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "19714",
+       "nome": "640",
+       "mmmv": "13|19714||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18400",
+       "nome": "645",
+       "mmmv": "13|18400||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18709",
+       "nome": "650",
+       "mmmv": "13|18709||"
+      }
+     ]
+    },
+    {
+     "marca": "bmw",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "000359",
+      "nome": "Serie 7",
+      "generazioni": [
+       {
+        "id": "000678",
+        "nome": "Serie 7 (E23/E32)",
+        "versioni": 26
+       },
+       {
+        "id": "002596",
+        "nome": "Serie 7 (E38)",
+        "versioni": 23
+       },
+       {
+        "id": "003240",
+        "nome": "Serie 7 (E65/66)",
+        "versioni": 66
+       },
+       {
+        "id": "003862",
+        "nome": "Serie 7 (F01/02/04)",
+        "versioni": 54
+       },
+       {
+        "id": "004366",
+        "nome": "Serie 7 (G11/12)",
+        "versioni": 46
+       },
+       {
+        "id": "004921",
+        "nome": "Serie 7 (G70)",
+        "versioni": 9
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "1657",
+       "nome": "725",
+       "mmmv": "13|1657||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1658",
+       "nome": "728",
+       "mmmv": "13|1658||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1659",
+       "nome": "730",
+       "mmmv": "13|1659||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15953",
+       "nome": "732",
+       "mmmv": "13|15953||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1660",
+       "nome": "735",
+       "mmmv": "13|1660||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1661",
+       "nome": "740",
+       "mmmv": "13|1661||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "16598",
+       "nome": "745",
+       "mmmv": "13|16598||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1662",
+       "nome": "750",
+       "mmmv": "13|1662||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18327",
+       "nome": "760",
+       "mmmv": "13|18327||"
+      }
+     ]
+    },
+    {
+     "marca": "bmw",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "001254",
+      "nome": "Serie 8",
+      "generazioni": [
+       {
+        "id": "001681",
+        "nome": "Serie 8 (E31)",
+        "versioni": 13
+       },
+       {
+        "id": "004601",
+        "nome": "Serie 8 (G14/F91)",
+        "versioni": 8
+       },
+       {
+        "id": "004571",
+        "nome": "Serie 8 (G15/F92)",
+        "versioni": 8
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "21100",
+       "nome": "830",
+       "mmmv": "13|21100||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1663",
+       "nome": "840",
+       "mmmv": "13|1663||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1664",
+       "nome": "850",
+       "mmmv": "13|1664||"
       }
      ]
     },
@@ -11678,8 +12414,8 @@
     },
     {
      "marca": "ferrari",
-     "grado": "grossolano",
-     "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
+     "grado": "probabile",
+     "prova": "parole o prefisso",
      "da": {
       "fonte": "subito",
       "id": "000060",
@@ -13787,8 +14523,8 @@
     },
     {
      "marca": "ford",
-     "grado": "probabile",
-     "prova": "parole o prefisso",
+     "grado": "grossolano",
+     "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "000202",
@@ -13802,6 +14538,31 @@
        {
         "id": "003879",
         "nome": "Ka 2ª serie",
+        "versioni": 13
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "1761",
+       "nome": "Ka/Ka+",
+       "mmmv": "29|1761||"
+      }
+     ]
+    },
+    {
+     "marca": "ford",
+     "grado": "grossolano",
+     "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
+     "da": {
+      "fonte": "subito",
+      "id": "001710",
+      "nome": "Ka+",
+      "generazioni": [
+       {
+        "id": "004437",
+        "nome": "Ka+",
         "versioni": 13
        }
       ]
@@ -24251,7 +25012,7 @@
     {
      "marca": "mercedesbenz",
      "grado": "fine",
-     "prova": "parole o prefisso",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "001558",
@@ -24331,6 +25092,367 @@
        "id": "20301",
        "nome": "CLA 45 AMG",
        "mmmv": "47|20301||"
+      }
+     ]
+    },
+    {
+     "marca": "mercedesbenz",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "000121",
+      "nome": "Classe A",
+      "generazioni": [
+       {
+        "id": "004580",
+        "nome": "Classe A (V177)",
+        "versioni": 129
+       },
+       {
+        "id": "003513",
+        "nome": "Classe A (W/C169)",
+        "versioni": 212
+       },
+       {
+        "id": "002917",
+        "nome": "Classe A (W/V168)",
+        "versioni": 37
+       },
+       {
+        "id": "004134",
+        "nome": "Classe A (W176)",
+        "versioni": 147
+       },
+       {
+        "id": "004552",
+        "nome": "Classe A (W177)",
+        "versioni": 152
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "15701",
+       "nome": "A 140",
+       "mmmv": "47|15701||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18485",
+       "nome": "A 150",
+       "mmmv": "47|18485||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "14869",
+       "nome": "A 160",
+       "mmmv": "47|14869||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15702",
+       "nome": "A 170",
+       "mmmv": "47|15702||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18486",
+       "nome": "A 180",
+       "mmmv": "47|18486||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15703",
+       "nome": "A 190",
+       "mmmv": "47|15703||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18487",
+       "nome": "A 200",
+       "mmmv": "47|18487||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18273",
+       "nome": "A 210",
+       "mmmv": "47|18273||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20218",
+       "nome": "A 220",
+       "mmmv": "47|20218||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20165",
+       "nome": "A 250",
+       "mmmv": "47|20165||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "75201",
+       "nome": "A 35 AMG",
+       "mmmv": "47|75201||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20255",
+       "nome": "A 45 AMG",
+       "mmmv": "47|20255||"
+      }
+     ]
+    },
+    {
+     "marca": "mercedesbenz",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "000123",
+      "nome": "Classe B",
+      "generazioni": [
+       {
+        "id": "003586",
+        "nome": "Classe B (T245)",
+        "versioni": 65
+       },
+       {
+        "id": "004065",
+        "nome": "Classe B (T246/242)",
+        "versioni": 129
+       },
+       {
+        "id": "004604",
+        "nome": "Classe B (W247)",
+        "versioni": 124
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "18606",
+       "nome": "B 150",
+       "mmmv": "47|18606||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "19240",
+       "nome": "B 160",
+       "mmmv": "47|19240||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18607",
+       "nome": "B 170",
+       "mmmv": "47|18607||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18608",
+       "nome": "B 180",
+       "mmmv": "47|18608||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18609",
+       "nome": "B 200",
+       "mmmv": "47|18609||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20185",
+       "nome": "B 220",
+       "mmmv": "47|20185||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20166",
+       "nome": "B 250",
+       "mmmv": "47|20166||"
+      }
+     ]
+    },
+    {
+     "marca": "mercedesbenz",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "000124",
+      "nome": "Classe C",
+      "generazioni": [
+       {
+        "id": "002395",
+        "nome": "Classe C (W/S202)",
+        "versioni": 164
+       },
+       {
+        "id": "003125",
+        "nome": "Classe C (W/S203)",
+        "versioni": 207
+       },
+       {
+        "id": "003755",
+        "nome": "Classe C (W/S204)",
+        "versioni": 331
+       },
+       {
+        "id": "004238",
+        "nome": "Classe C (W/S205)",
+        "versioni": 338
+       },
+       {
+        "id": "004781",
+        "nome": "Classe C (W/S206)",
+        "versioni": 233
+       },
+       {
+        "id": "004442",
+        "nome": "Classe C Cbr (A205)",
+        "versioni": 63
+       },
+       {
+        "id": "004039",
+        "nome": "Classe C Cpé (C204)",
+        "versioni": 29
+       },
+       {
+        "id": "004385",
+        "nome": "Classe C Cpé (C205)",
+        "versioni": 70
+       },
+       {
+        "id": "003171",
+        "nome": "Classe C Sportcoupé",
+        "versioni": 53
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "18613",
+       "nome": "C 160",
+       "mmmv": "47|18613||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1859",
+       "nome": "C 180",
+       "mmmv": "47|1859||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1860",
+       "nome": "C 200",
+       "mmmv": "47|1860||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "2147",
+       "nome": "C 220",
+       "mmmv": "47|2147||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1861",
+       "nome": "C 230",
+       "mmmv": "47|1861||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15693",
+       "nome": "C 240",
+       "mmmv": "47|15693||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15384",
+       "nome": "C 250",
+       "mmmv": "47|15384||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "16488",
+       "nome": "C 270",
+       "mmmv": "47|16488||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "2099",
+       "nome": "C 280",
+       "mmmv": "47|2099||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18371",
+       "nome": "C 30 AMG",
+       "mmmv": "47|18371||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "19249",
+       "nome": "C 300",
+       "mmmv": "47|19249||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "16582",
+       "nome": "C 32 AMG",
+       "mmmv": "47|16582||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15973",
+       "nome": "C 320",
+       "mmmv": "47|15973||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18614",
+       "nome": "C 350",
+       "mmmv": "47|18614||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "14807",
+       "nome": "C 36 AMG",
+       "mmmv": "47|14807||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20916",
+       "nome": "C 400",
+       "mmmv": "47|20916||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15632",
+       "nome": "C 43 AMG",
+       "mmmv": "47|15632||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20918",
+       "nome": "C 450",
+       "mmmv": "47|20918||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18422",
+       "nome": "C 55 AMG",
+       "mmmv": "47|18422||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "19107",
+       "nome": "C 63 AMG",
+       "mmmv": "47|19107||"
       }
      ]
     },
@@ -24426,8 +25548,217 @@
     },
     {
      "marca": "mercedesbenz",
-     "grado": "probabile",
-     "prova": "parole o prefisso",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "000132",
+      "nome": "Classe E",
+      "generazioni": [
+       {
+        "id": "002675",
+        "nome": "Classe E (W/S210)",
+        "versioni": 166
+       },
+       {
+        "id": "003309",
+        "nome": "Classe E (W/S211)",
+        "versioni": 250
+       },
+       {
+        "id": "003888",
+        "nome": "Classe E (W/S212)",
+        "versioni": 422
+       },
+       {
+        "id": "004401",
+        "nome": "Classe E (W/S213)",
+        "versioni": 332
+       },
+       {
+        "id": "005004",
+        "nome": "Classe E (W/S214)",
+        "versioni": 156
+       },
+       {
+        "id": "003949",
+        "nome": "Classe E Cbr (A207)",
+        "versioni": 71
+       },
+       {
+        "id": "004512",
+        "nome": "Classe E Cbr (A238)",
+        "versioni": 64
+       },
+       {
+        "id": "003895",
+        "nome": "Classe E Cpé (C207)",
+        "versioni": 82
+       },
+       {
+        "id": "004479",
+        "nome": "Classe E Cpé (C238)",
+        "versioni": 67
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "1862",
+       "nome": "E 200",
+       "mmmv": "47|1862||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1863",
+       "nome": "E 220",
+       "mmmv": "47|1863||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15029",
+       "nome": "E 230",
+       "mmmv": "47|15029||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15517",
+       "nome": "E 240",
+       "mmmv": "47|15517||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15695",
+       "nome": "E 250",
+       "mmmv": "47|15695||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15955",
+       "nome": "E 260",
+       "mmmv": "47|15955||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15763",
+       "nome": "E 270",
+       "mmmv": "47|15763||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1864",
+       "nome": "E 280",
+       "mmmv": "47|1864||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1865",
+       "nome": "E 290",
+       "mmmv": "47|1865||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15543",
+       "nome": "E 300",
+       "mmmv": "47|15543||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "2117",
+       "nome": "E 320",
+       "mmmv": "47|2117||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18546",
+       "nome": "E 350",
+       "mmmv": "47|18546||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15694",
+       "nome": "E 36 AMG",
+       "mmmv": "47|15694||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18368",
+       "nome": "E 400",
+       "mmmv": "47|18368||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "1866",
+       "nome": "E 420",
+       "mmmv": "47|1866||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "74457",
+       "nome": "E 43 AMG",
+       "mmmv": "47|74457||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15698",
+       "nome": "E 430",
+       "mmmv": "47|15698||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "75191",
+       "nome": "E 450",
+       "mmmv": "47|75191||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15549",
+       "nome": "E 50 AMG",
+       "mmmv": "47|15549||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "2162",
+       "nome": "E 500",
+       "mmmv": "47|2162||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "74965",
+       "nome": "E 53 AMG",
+       "mmmv": "47|74965||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15699",
+       "nome": "E 55 AMG",
+       "mmmv": "47|15699||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20176",
+       "nome": "E 550",
+       "mmmv": "47|20176||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18476",
+       "nome": "E 60 AMG",
+       "mmmv": "47|18476||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18804",
+       "nome": "E 63 AMG",
+       "mmmv": "47|18804||"
+      }
+     ]
+    },
+    {
+     "marca": "mercedesbenz",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "000134",
@@ -24448,9 +25779,336 @@
      "a": [
       {
        "fonte": "autoscout",
-       "id": "15776",
-       "nome": "G",
-       "mmmv": "47|15776||"
+       "id": "20245",
+       "nome": "G 230",
+       "mmmv": "47|20245||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20246",
+       "nome": "G 240",
+       "mmmv": "47|20246||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20247",
+       "nome": "G 250",
+       "mmmv": "47|20247||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20325",
+       "nome": "G 270",
+       "mmmv": "47|20325||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20248",
+       "nome": "G 280",
+       "mmmv": "47|20248||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20249",
+       "nome": "G 290",
+       "mmmv": "47|20249||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20169",
+       "nome": "G 300",
+       "mmmv": "47|20169||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20250",
+       "nome": "G 320",
+       "mmmv": "47|20250||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20215",
+       "nome": "G 350",
+       "mmmv": "47|20215||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20251",
+       "nome": "G 400",
+       "mmmv": "47|20251||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "76781",
+       "nome": "G 450",
+       "mmmv": "47|76781||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20216",
+       "nome": "G 500",
+       "mmmv": "47|20216||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18425",
+       "nome": "G 55 AMG",
+       "mmmv": "47|18425||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "76780",
+       "nome": "G 580",
+       "mmmv": "47|76780||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20167",
+       "nome": "G 63 AMG",
+       "mmmv": "47|20167||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20168",
+       "nome": "G 65 AMG",
+       "mmmv": "47|20168||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "74574",
+       "nome": "G 650",
+       "mmmv": "47|74574||"
+      }
+     ]
+    },
+    {
+     "marca": "mercedesbenz",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "001436",
+      "nome": "Classe R",
+      "generazioni": [
+       {
+        "id": "003628",
+        "nome": "Classe R (BR251)",
+        "versioni": 103
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "18801",
+       "nome": "R 280",
+       "mmmv": "47|18801||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "19251",
+       "nome": "R 300",
+       "mmmv": "47|19251||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18603",
+       "nome": "R 320",
+       "mmmv": "47|18603||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18604",
+       "nome": "R 350",
+       "mmmv": "47|18604||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18605",
+       "nome": "R 500",
+       "mmmv": "47|18605||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18802",
+       "nome": "R 63 AMG",
+       "mmmv": "47|18802||"
+      }
+     ]
+    },
+    {
+     "marca": "mercedesbenz",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "000140",
+      "nome": "Classe S",
+      "generazioni": [
+       {
+        "id": "003035",
+        "nome": "Classe S (W/V220)",
+        "versioni": 29
+       },
+       {
+        "id": "003615",
+        "nome": "Classe S (W/V221)",
+        "versioni": 124
+       },
+       {
+        "id": "004207",
+        "nome": "Classe S (W/V222)",
+        "versioni": 98
+       },
+       {
+        "id": "004738",
+        "nome": "Classe S (W/V223)",
+        "versioni": 77
+       },
+       {
+        "id": "004397",
+        "nome": "Classe S Cbr (A217)",
+        "versioni": 8
+       },
+       {
+        "id": "004274",
+        "nome": "Classe S Cpé (C217)",
+        "versioni": 22
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "19726",
+       "nome": "S 250",
+       "mmmv": "47|19726||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "19727",
+       "nome": "S 260",
+       "mmmv": "47|19727||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15103",
+       "nome": "S 280",
+       "mmmv": "47|15103||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15696",
+       "nome": "S 300",
+       "mmmv": "47|15696||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15105",
+       "nome": "S 320",
+       "mmmv": "47|15105||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15697",
+       "nome": "S 350",
+       "mmmv": "47|15697||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "76357",
+       "nome": "S 380",
+       "mmmv": "47|76357||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15775",
+       "nome": "S 400",
+       "mmmv": "47|15775||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15107",
+       "nome": "S 420",
+       "mmmv": "47|15107||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15704",
+       "nome": "S 430",
+       "mmmv": "47|15704||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18895",
+       "nome": "S 450",
+       "mmmv": "47|18895||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15108",
+       "nome": "S 500",
+       "mmmv": "47|15108||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "16489",
+       "nome": "S 55 AMG",
+       "mmmv": "47|16489||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18787",
+       "nome": "S 550",
+       "mmmv": "47|18787||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15724",
+       "nome": "S 560",
+       "mmmv": "47|15724||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "75906",
+       "nome": "S 560 E",
+       "mmmv": "47|75906||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "75907",
+       "nome": "S 580",
+       "mmmv": "47|75907||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15109",
+       "nome": "S 600",
+       "mmmv": "47|15109||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18990",
+       "nome": "S 63 AMG",
+       "mmmv": "47|18990||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "18580",
+       "nome": "S 65 AMG",
+       "mmmv": "47|18580||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "74630",
+       "nome": "S 650",
+       "mmmv": "47|74630||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "76139",
+       "nome": "S 680",
+       "mmmv": "47|76139||"
       }
      ]
     },
@@ -24481,8 +26139,8 @@
     },
     {
      "marca": "mercedesbenz",
-     "grado": "probabile",
-     "prova": "parole o prefisso",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "001437",
@@ -24503,16 +26161,83 @@
      "a": [
       {
        "fonte": "autoscout",
-       "id": "15945",
-       "nome": "V",
-       "mmmv": "47|15945||"
+       "id": "18562",
+       "nome": "V 200",
+       "mmmv": "47|18562||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15700",
+       "nome": "V 220",
+       "mmmv": "47|15700||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15199",
+       "nome": "V 230",
+       "mmmv": "47|15199||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "20637",
+       "nome": "V 250",
+       "mmmv": "47|20637||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "15200",
+       "nome": "V 280",
+       "mmmv": "47|15200||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "75284",
+       "nome": "V 300",
+       "mmmv": "47|75284||"
       }
      ]
     },
     {
      "marca": "mercedesbenz",
      "grado": "fine",
-     "prova": "parole o prefisso",
+     "prova": "famiglia da model-groups.json",
+     "da": {
+      "fonte": "subito",
+      "id": "001761",
+      "nome": "Classe X",
+      "generazioni": [
+       {
+        "id": "004522",
+        "nome": "Classe X (BR470)",
+        "versioni": 13
+       }
+      ]
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "74743",
+       "nome": "X 220",
+       "mmmv": "47|74743||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "74744",
+       "nome": "X 250",
+       "mmmv": "47|74744||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "75193",
+       "nome": "X 350",
+       "mmmv": "47|75193||"
+      }
+     ]
+    },
+    {
+     "marca": "mercedesbenz",
+     "grado": "fine",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "002103",
@@ -24638,7 +26363,7 @@
     {
      "marca": "mercedesbenz",
      "grado": "fine",
-     "prova": "parole o prefisso",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "001956",
@@ -24675,7 +26400,7 @@
     {
      "marca": "mercedesbenz",
      "grado": "probabile",
-     "prova": "parole o prefisso",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "001827",
@@ -24700,7 +26425,7 @@
     {
      "marca": "mercedesbenz",
      "grado": "fine",
-     "prova": "parole o prefisso",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "001968",
@@ -24748,12 +26473,6 @@
        "id": "76343",
        "nome": "EQE 53",
        "mmmv": "47|76343||"
-      },
-      {
-       "fonte": "autoscout",
-       "id": "76450",
-       "nome": "EQE SUV",
-       "mmmv": "47|76450||"
       }
      ]
     },
@@ -24815,7 +26534,7 @@
     {
      "marca": "mercedesbenz",
      "grado": "fine",
-     "prova": "parole o prefisso",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "001877",
@@ -24846,7 +26565,7 @@
     {
      "marca": "mercedesbenz",
      "grado": "fine",
-     "prova": "parole o prefisso",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "001584",
@@ -24906,7 +26625,7 @@
     {
      "marca": "mercedesbenz",
      "grado": "fine",
-     "prova": "parole o prefisso",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "001837",
@@ -24960,7 +26679,7 @@
     {
      "marca": "mercedesbenz",
      "grado": "fine",
-     "prova": "parole o prefisso",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "001668",
@@ -25053,7 +26772,7 @@
     {
      "marca": "mercedesbenz",
      "grado": "fine",
-     "prova": "parole o prefisso",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "001651",
@@ -25147,7 +26866,7 @@
     {
      "marca": "mercedesbenz",
      "grado": "fine",
-     "prova": "parole o prefisso",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "001682",
@@ -25207,12 +26926,6 @@
        "id": "74257",
        "nome": "GLS 63 AMG",
        "mmmv": "47|74257||"
-      },
-      {
-       "fonte": "autoscout",
-       "id": "76367",
-       "nome": "Maybach GLS",
-       "mmmv": "47|76367||"
       }
      ]
     },
@@ -25396,7 +27109,7 @@
     {
      "marca": "mercedesbenz",
      "grado": "fine",
-     "prova": "parole o prefisso",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "000142",
@@ -25550,19 +27263,13 @@
        "id": "19548",
        "nome": "SL 73 AMG",
        "mmmv": "47|19548||"
-      },
-      {
-       "fonte": "autoscout",
-       "id": "77654",
-       "nome": "SL Roadster AMG",
-       "mmmv": "47|77654||"
       }
      ]
     },
     {
      "marca": "mercedesbenz",
      "grado": "fine",
-     "prova": "parole o prefisso",
+     "prova": "famiglia da model-groups.json",
      "da": {
       "fonte": "subito",
       "id": "001686",
@@ -41843,16 +43550,6 @@
     },
     {
      "marca": "bmw",
-     "nome": "Serie 1",
-     "id": "001661"
-    },
-    {
-     "marca": "bmw",
-     "nome": "Serie 2",
-     "id": "001662"
-    },
-    {
-     "marca": "bmw",
      "nome": "Serie 2 Active Tourer",
      "id": "001776"
     },
@@ -41868,18 +43565,8 @@
     },
     {
      "marca": "bmw",
-     "nome": "Serie 3",
-     "id": "000349"
-    },
-    {
-     "marca": "bmw",
      "nome": "Serie 3 Gran Turismo",
      "id": "001780"
-    },
-    {
-     "marca": "bmw",
-     "nome": "Serie 4",
-     "id": "001572"
     },
     {
      "marca": "bmw",
@@ -41888,18 +43575,8 @@
     },
     {
      "marca": "bmw",
-     "nome": "Serie 5",
-     "id": "000354"
-    },
-    {
-     "marca": "bmw",
      "nome": "Serie 5 Gran Turismo",
      "id": "001782"
-    },
-    {
-     "marca": "bmw",
-     "nome": "Serie 6",
-     "id": "000357"
     },
     {
      "marca": "bmw",
@@ -41910,16 +43587,6 @@
      "marca": "bmw",
      "nome": "Serie 6 Gran Turismo",
      "id": "001783"
-    },
-    {
-     "marca": "bmw",
-     "nome": "Serie 7",
-     "id": "000359"
-    },
-    {
-     "marca": "bmw",
-     "nome": "Serie 8",
-     "id": "001254"
     },
     {
      "marca": "bmw",
@@ -43273,26 +44940,6 @@
     },
     {
      "marca": "mercedesbenz",
-     "nome": "Classe A",
-     "id": "000121"
-    },
-    {
-     "marca": "mercedesbenz",
-     "nome": "Classe B",
-     "id": "000123"
-    },
-    {
-     "marca": "mercedesbenz",
-     "nome": "Classe C",
-     "id": "000124"
-    },
-    {
-     "marca": "mercedesbenz",
-     "nome": "Classe E",
-     "id": "000132"
-    },
-    {
-     "marca": "mercedesbenz",
      "nome": "Classe GL",
      "id": "000136"
     },
@@ -43305,21 +44952,6 @@
      "marca": "mercedesbenz",
      "nome": "Classe M",
      "id": "000137"
-    },
-    {
-     "marca": "mercedesbenz",
-     "nome": "Classe R",
-     "id": "001436"
-    },
-    {
-     "marca": "mercedesbenz",
-     "nome": "Classe S",
-     "id": "000140"
-    },
-    {
-     "marca": "mercedesbenz",
-     "nome": "Classe X",
-     "id": "001761"
     },
     {
      "marca": "mercedesbenz",
@@ -44792,14 +46424,14 @@
    "da": "subito",
    "a": "autoscout",
    "marcheInComune": 153,
-   "nodiEsaminati": 4596,
-   "nodiScartatiPerDoppione": 9,
+   "nodiEsaminati": 4604,
+   "nodiScartatiPerDoppione": 1,
    "conta": {
-    "identico": 2769,
-    "grossolano": 325,
-    "fine": 43,
+    "identico": 2766,
+    "grossolano": 339,
+    "fine": 45,
     "probabile": 223,
-    "assente": 1236
+    "assente": 1231
    },
    "voci": [
     {
@@ -55342,6 +56974,30 @@
      ]
     },
     {
+     "marca": "cake",
+     "grado": "fine",
+     "prova": "parole o prefisso",
+     "da": {
+      "fonte": "subito",
+      "id": "005400",
+      "nome": "Osa+"
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "76100",
+       "nome": "Kalk ÖSA Flex",
+       "mmmv": "51898|76100||"
+      },
+      {
+       "fonte": "autoscout",
+       "id": "76099",
+       "nome": "Kalk ÖSA Plus",
+       "mmmv": "51898|76099||"
+      }
+     ]
+    },
+    {
      "marca": "canam",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
@@ -57805,8 +59461,26 @@
     },
     {
      "marca": "ducati",
-     "grado": "identico",
-     "prova": "nome identico",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
+     "da": {
+      "fonte": "subito",
+      "id": "001464",
+      "nome": "Monster 696"
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "61127",
+       "nome": "Monster 696+",
+       "mmmv": "50030|61127||"
+      }
+     ]
+    },
+    {
+     "marca": "ducati",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "001467",
@@ -57841,8 +59515,26 @@
     },
     {
      "marca": "ducati",
-     "grado": "identico",
-     "prova": "nome identico",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
+     "da": {
+      "fonte": "subito",
+      "id": "002076",
+      "nome": "Monster 796"
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "62023",
+       "nome": "Monster 796+",
+       "mmmv": "50030|62023||"
+      }
+     ]
+    },
+    {
+     "marca": "ducati",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "002222",
@@ -57859,12 +59551,30 @@
     },
     {
      "marca": "ducati",
-     "grado": "identico",
-     "prova": "nome identico",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "002783",
       "nome": "Monster 797"
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "74558",
+       "nome": "Monster 797+",
+       "mmmv": "50030|74558||"
+      }
+     ]
+    },
+    {
+     "marca": "ducati",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
+     "da": {
+      "fonte": "subito",
+      "id": "002784",
+      "nome": "Monster 797+"
      },
      "a": [
       {
@@ -70215,12 +71925,30 @@
     },
     {
      "marca": "kl",
-     "grado": "identico",
-     "prova": "nome identico",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "007036",
       "nome": "Brera + 125"
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "76834",
+       "nome": "Brera 125",
+       "mmmv": "51997|76834||"
+      }
+     ]
+    },
+    {
+     "marca": "kl",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
+     "da": {
+      "fonte": "subito",
+      "id": "003790",
+      "nome": "Brera 125"
      },
      "a": [
       {
@@ -77679,12 +79407,30 @@
     },
     {
      "marca": "lifan",
-     "grado": "identico",
-     "prova": "nome identico",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "002957",
       "nome": "E3"
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": "76251",
+       "nome": "E3",
+       "mmmv": "16393|76251||"
+      }
+     ]
+    },
+    {
+     "marca": "lifan",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
+     "da": {
+      "fonte": "subito",
+      "id": "003226",
+      "nome": "E3+"
      },
      "a": [
       {
@@ -91228,8 +92974,25 @@
     },
     {
      "marca": "sherco",
-     "grado": "identico",
-     "prova": "nome identico",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
+     "da": {
+      "fonte": "subito",
+      "id": "002100",
+      "nome": "SE 1.25"
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": null,
+       "nome": "SE 125"
+      }
+     ]
+    },
+    {
+     "marca": "sherco",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "002826",
@@ -91551,8 +93314,25 @@
     },
     {
      "marca": "sherco",
-     "grado": "identico",
-     "prova": "nome identico",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
+     "da": {
+      "fonte": "subito",
+      "id": "002105",
+      "nome": "SM 1.25"
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": null,
+       "nome": "SM 125"
+      }
+     ]
+    },
+    {
+     "marca": "sherco",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "001570",
@@ -94520,7 +96300,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "probabile",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso",
      "da": {
       "fonte": "subito",
@@ -94538,8 +96318,26 @@
     },
     {
      "marca": "suzukivalenti",
+     "grado": "identico",
+     "viaCasaMadre": "suzuki+valentiracing",
+     "prova": "nome identico",
+     "da": {
+      "fonte": "subito",
+      "id": "002485",
+      "nome": "N01 50"
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": null,
+       "nome": "N01 50"
+      }
+     ]
+    },
+    {
+     "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
@@ -94558,7 +96356,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
@@ -94577,7 +96375,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "nome identico · loro meno granulari: 3 nostri qui",
      "da": {
       "fonte": "subito",
@@ -94596,7 +96394,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso · loro meno granulari: 3 nostri qui",
      "da": {
       "fonte": "subito",
@@ -94615,7 +96413,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "identico",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "nome identico",
      "da": {
       "fonte": "subito",
@@ -94634,7 +96432,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "identico",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "nome identico",
      "da": {
       "fonte": "subito",
@@ -94652,7 +96450,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "probabile",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso",
      "da": {
       "fonte": "subito",
@@ -94671,7 +96469,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "identico",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "nome identico",
      "da": {
       "fonte": "subito",
@@ -94690,7 +96488,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso · loro meno granulari: 3 nostri qui",
      "da": {
       "fonte": "subito",
@@ -94709,7 +96507,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
@@ -94728,7 +96526,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
@@ -94747,7 +96545,61 @@
     {
      "marca": "suzukivalenti",
      "grado": "probabile",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
+     "prova": "parole o prefisso",
+     "da": {
+      "fonte": "subito",
+      "id": "003054",
+      "nome": "RME 125"
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": null,
+       "nome": "RME 125 Z"
+      }
+     ]
+    },
+    {
+     "marca": "suzukivalenti",
+     "grado": "identico",
+     "viaCasaMadre": "suzuki+valentiracing",
+     "prova": "nome identico",
+     "da": {
+      "fonte": "subito",
+      "id": "002240",
+      "nome": "RME 50"
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": null,
+       "nome": "RME 50"
+      }
+     ]
+    },
+    {
+     "marca": "suzukivalenti",
+     "grado": "identico",
+     "viaCasaMadre": "suzuki+valentiracing",
+     "prova": "nome identico",
+     "da": {
+      "fonte": "subito",
+      "id": "002484",
+      "nome": "S01 50"
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": null,
+       "nome": "S01 50"
+      }
+     ]
+    },
+    {
+     "marca": "suzukivalenti",
+     "grado": "fine",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso",
      "da": {
       "fonte": "subito",
@@ -94759,13 +96611,18 @@
        "fonte": "autoscout",
        "id": null,
        "nome": "DR 125 SM"
+      },
+      {
+       "fonte": "autoscout",
+       "id": null,
+       "nome": "SM 125 Z"
       }
      ]
     },
     {
      "marca": "suzukivalenti",
      "grado": "probabile",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso",
      "da": {
       "fonte": "subito",
@@ -94777,6 +96634,24 @@
        "fonte": "autoscout",
        "id": null,
        "nome": "DR-Z 400 SM"
+      }
+     ]
+    },
+    {
+     "marca": "suzukivalenti",
+     "grado": "identico",
+     "viaCasaMadre": "suzuki+valentiracing",
+     "prova": "nome identico",
+     "da": {
+      "fonte": "subito",
+      "id": "002241",
+      "nome": "SM 50"
+     },
+     "a": [
+      {
+       "fonte": "autoscout",
+       "id": null,
+       "nome": "SM 50"
       }
      ]
     },
@@ -109879,26 +111754,6 @@
     },
     {
      "marca": "suzukivalenti",
-     "nome": "N01 50",
-     "id": "002485"
-    },
-    {
-     "marca": "suzukivalenti",
-     "nome": "RME 125",
-     "id": "003054"
-    },
-    {
-     "marca": "suzukivalenti",
-     "nome": "RME 50",
-     "id": "002240"
-    },
-    {
-     "marca": "suzukivalenti",
-     "nome": "S01 50",
-     "id": "002484"
-    },
-    {
-     "marca": "suzukivalenti",
      "nome": "SM 250 Z",
      "id": "001254"
     },
@@ -109916,11 +111771,6 @@
      "marca": "suzukivalenti",
      "nome": "SM 450 Z",
      "id": "001256"
-    },
-    {
-     "marca": "suzukivalenti",
-     "nome": "SM 50",
-     "id": "002241"
     },
     {
      "marca": "suzukivalenti",
@@ -111143,14 +112993,14 @@
    "da": "subito",
    "a": "motoit",
    "marcheInComune": 75,
-   "nodiEsaminati": 4596,
-   "nodiScartatiPerDoppione": 9,
+   "nodiEsaminati": 4604,
+   "nodiScartatiPerDoppione": 1,
    "conta": {
-    "identico": 1278,
-    "grossolano": 378,
-    "fine": 79,
-    "probabile": 255,
-    "assente": 2606
+    "identico": 1276,
+    "grossolano": 388,
+    "fine": 80,
+    "probabile": 257,
+    "assente": 2603
    },
    "voci": [
     {
@@ -114767,7 +116617,7 @@
     },
     {
      "marca": "bmw",
-     "grado": "identico",
+     "grado": "fine",
      "prova": "nome identico",
      "da": {
       "fonte": "subito",
@@ -114775,6 +116625,12 @@
       "nome": "R 80 GS"
      },
      "a": [
+      {
+       "fonte": "motoit",
+       "id": "r-80-g-s",
+       "nome": "R 80 G/S",
+       "chiave": "bmw|r-80-g-s"
+      },
       {
        "fonte": "motoit",
        "id": "r-80-gs",
@@ -114798,6 +116654,12 @@
        "id": "r-80",
        "nome": "R 80",
        "chiave": "bmw|r-80"
+      },
+      {
+       "fonte": "motoit",
+       "id": "r-80-g-s",
+       "nome": "R 80 G/S",
+       "chiave": "bmw|r-80-g-s"
       },
       {
        "fonte": "motoit",
@@ -118673,8 +120535,26 @@
     },
     {
      "marca": "ducati",
-     "grado": "identico",
-     "prova": "nome identico",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
+     "da": {
+      "fonte": "subito",
+      "id": "001464",
+      "nome": "Monster 696"
+     },
+     "a": [
+      {
+       "fonte": "motoit",
+       "id": "monster-696",
+       "nome": "Monster 696",
+       "chiave": "ducati|monster-696"
+      }
+     ]
+    },
+    {
+     "marca": "ducati",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "001467",
@@ -118709,8 +120589,26 @@
     },
     {
      "marca": "ducati",
-     "grado": "identico",
-     "prova": "nome identico",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
+     "da": {
+      "fonte": "subito",
+      "id": "002076",
+      "nome": "Monster 796"
+     },
+     "a": [
+      {
+       "fonte": "motoit",
+       "id": "monster-796",
+       "nome": "Monster 796",
+       "chiave": "ducati|monster-796"
+      }
+     ]
+    },
+    {
+     "marca": "ducati",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "002222",
@@ -118727,12 +120625,30 @@
     },
     {
      "marca": "ducati",
-     "grado": "identico",
-     "prova": "nome identico",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "002783",
       "nome": "Monster 797"
+     },
+     "a": [
+      {
+       "fonte": "motoit",
+       "id": "monster-797",
+       "nome": "Monster 797",
+       "chiave": "ducati|monster-797"
+      }
+     ]
+    },
+    {
+     "marca": "ducati",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
+     "da": {
+      "fonte": "subito",
+      "id": "002784",
+      "nome": "Monster 797+"
      },
      "a": [
       {
@@ -127096,12 +129012,30 @@
     },
     {
      "marca": "kl",
-     "grado": "identico",
-     "prova": "nome identico",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "007036",
       "nome": "Brera + 125"
+     },
+     "a": [
+      {
+       "fonte": "motoit",
+       "id": "brera-125",
+       "nome": "Brera 125",
+       "chiave": "kl|brera-125"
+      }
+     ]
+    },
+    {
+     "marca": "kl",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
+     "da": {
+      "fonte": "subito",
+      "id": "003790",
+      "nome": "Brera 125"
      },
      "a": [
       {
@@ -132004,12 +133938,30 @@
     },
     {
      "marca": "lifan",
-     "grado": "identico",
-     "prova": "nome identico",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "002957",
       "nome": "E3"
+     },
+     "a": [
+      {
+       "fonte": "motoit",
+       "id": "e3",
+       "nome": "E3",
+       "chiave": "lifan|e3"
+      }
+     ]
+    },
+    {
+     "marca": "lifan",
+     "grado": "grossolano",
+     "prova": "nome identico · loro meno granulari: 2 nostri qui",
+     "da": {
+      "fonte": "subito",
+      "id": "003226",
+      "nome": "E3+"
      },
      "a": [
       {
@@ -136739,7 +138691,7 @@
     {
      "marca": "piaggio",
      "grado": "grossolano",
-     "prova": "parole o prefisso · loro meno granulari: 13 nostri qui",
+     "prova": "parole o prefisso · loro meno granulari: 12 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "003317",
@@ -136757,7 +138709,7 @@
     {
      "marca": "piaggio",
      "grado": "grossolano",
-     "prova": "parole o prefisso · loro meno granulari: 13 nostri qui",
+     "prova": "parole o prefisso · loro meno granulari: 12 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "003593",
@@ -136901,7 +138853,7 @@
     {
      "marca": "piaggio",
      "grado": "grossolano",
-     "prova": "parole o prefisso · loro meno granulari: 13 nostri qui",
+     "prova": "parole o prefisso · loro meno granulari: 12 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "004741",
@@ -136919,7 +138871,7 @@
     {
      "marca": "piaggio",
      "grado": "grossolano",
-     "prova": "parole o prefisso · loro meno granulari: 13 nostri qui",
+     "prova": "parole o prefisso · loro meno granulari: 12 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "004720",
@@ -136937,7 +138889,7 @@
     {
      "marca": "piaggio",
      "grado": "grossolano",
-     "prova": "parole o prefisso · loro meno granulari: 13 nostri qui",
+     "prova": "parole o prefisso · loro meno granulari: 12 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "004737",
@@ -136973,7 +138925,7 @@
     {
      "marca": "piaggio",
      "grado": "grossolano",
-     "prova": "parole o prefisso · loro meno granulari: 13 nostri qui",
+     "prova": "parole o prefisso · loro meno granulari: 12 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "004727",
@@ -136991,7 +138943,7 @@
     {
      "marca": "piaggio",
      "grado": "grossolano",
-     "prova": "parole o prefisso · loro meno granulari: 13 nostri qui",
+     "prova": "parole o prefisso · loro meno granulari: 12 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "004728",
@@ -137009,7 +138961,7 @@
     {
      "marca": "piaggio",
      "grado": "grossolano",
-     "prova": "parole o prefisso · loro meno granulari: 13 nostri qui",
+     "prova": "parole o prefisso · loro meno granulari: 12 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "004731",
@@ -137045,7 +138997,7 @@
     {
      "marca": "piaggio",
      "grado": "grossolano",
-     "prova": "parole o prefisso · loro meno granulari: 13 nostri qui",
+     "prova": "parole o prefisso · loro meno granulari: 12 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "004738",
@@ -137063,7 +139015,7 @@
     {
      "marca": "piaggio",
      "grado": "grossolano",
-     "prova": "parole o prefisso · loro meno granulari: 13 nostri qui",
+     "prova": "parole o prefisso · loro meno granulari: 12 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "004747",
@@ -137081,7 +139033,7 @@
     {
      "marca": "piaggio",
      "grado": "grossolano",
-     "prova": "parole o prefisso · loro meno granulari: 13 nostri qui",
+     "prova": "parole o prefisso · loro meno granulari: 12 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "004745",
@@ -137135,7 +139087,7 @@
     {
      "marca": "piaggio",
      "grado": "grossolano",
-     "prova": "parole o prefisso · loro meno granulari: 13 nostri qui",
+     "prova": "parole o prefisso · loro meno granulari: 12 nostri qui",
      "da": {
       "fonte": "subito",
       "id": "004740",
@@ -141225,7 +143177,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "probabile",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso",
      "da": {
       "fonte": "subito",
@@ -141243,8 +143195,27 @@
     },
     {
      "marca": "suzukivalenti",
+     "grado": "identico",
+     "viaCasaMadre": "suzuki+valentiracing",
+     "prova": "nome identico",
+     "da": {
+      "fonte": "subito",
+      "id": "002485",
+      "nome": "N01 50"
+     },
+     "a": [
+      {
+       "fonte": "motoit",
+       "id": "n01-50",
+       "nome": "N01 50",
+       "chiave": "valenti-racing|n01-50"
+      }
+     ]
+    },
+    {
+     "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
@@ -141263,7 +143234,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
@@ -141282,7 +143253,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
@@ -141301,7 +143272,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
@@ -141320,7 +143291,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "identico",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "nome identico",
      "da": {
       "fonte": "subito",
@@ -141339,7 +143310,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso · loro meno granulari: 3 nostri qui",
      "da": {
       "fonte": "subito",
@@ -141358,7 +143329,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
@@ -141377,7 +143348,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
       "fonte": "subito",
@@ -141396,7 +143367,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "nome identico · loro meno granulari: 3 nostri qui",
      "da": {
       "fonte": "subito",
@@ -141415,7 +143386,7 @@
     {
      "marca": "suzukivalenti",
      "grado": "grossolano",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso · loro meno granulari: 3 nostri qui",
      "da": {
       "fonte": "subito",
@@ -141434,7 +143405,83 @@
     {
      "marca": "suzukivalenti",
      "grado": "probabile",
-     "viaCasaMadre": "suzuki",
+     "viaCasaMadre": "suzuki+valentiracing",
+     "prova": "parole o prefisso",
+     "da": {
+      "fonte": "subito",
+      "id": "003054",
+      "nome": "RME 125"
+     },
+     "a": [
+      {
+       "fonte": "motoit",
+       "id": "rme-125-z",
+       "nome": "RME 125 Z",
+       "chiave": "valenti-racing|rme-125-z"
+      }
+     ]
+    },
+    {
+     "marca": "suzukivalenti",
+     "grado": "identico",
+     "viaCasaMadre": "suzuki+valentiracing",
+     "prova": "nome identico",
+     "da": {
+      "fonte": "subito",
+      "id": "002240",
+      "nome": "RME 50"
+     },
+     "a": [
+      {
+       "fonte": "motoit",
+       "id": "rme-50",
+       "nome": "RME 50",
+       "chiave": "valenti-racing|rme-50"
+      }
+     ]
+    },
+    {
+     "marca": "suzukivalenti",
+     "grado": "identico",
+     "viaCasaMadre": "suzuki+valentiracing",
+     "prova": "nome identico",
+     "da": {
+      "fonte": "subito",
+      "id": "002484",
+      "nome": "S01 50"
+     },
+     "a": [
+      {
+       "fonte": "motoit",
+       "id": "s01-50",
+       "nome": "S01 50",
+       "chiave": "valenti-racing|s01-50"
+      }
+     ]
+    },
+    {
+     "marca": "suzukivalenti",
+     "grado": "probabile",
+     "viaCasaMadre": "suzuki+valentiracing",
+     "prova": "parole o prefisso",
+     "da": {
+      "fonte": "subito",
+      "id": "001253",
+      "nome": "SM 125"
+     },
+     "a": [
+      {
+       "fonte": "motoit",
+       "id": "sm-125-z",
+       "nome": "SM 125 Z",
+       "chiave": "valenti-racing|sm-125-z"
+      }
+     ]
+    },
+    {
+     "marca": "suzukivalenti",
+     "grado": "probabile",
+     "viaCasaMadre": "suzuki+valentiracing",
      "prova": "parole o prefisso",
      "da": {
       "fonte": "subito",
@@ -141447,6 +143494,25 @@
        "id": "dr-z-400-sm",
        "nome": "DR-Z 400 SM",
        "chiave": "suzuki|dr-z-400-sm"
+      }
+     ]
+    },
+    {
+     "marca": "suzukivalenti",
+     "grado": "identico",
+     "viaCasaMadre": "suzuki+valentiracing",
+     "prova": "nome identico",
+     "da": {
+      "fonte": "subito",
+      "id": "002241",
+      "nome": "SM 50"
+     },
+     "a": [
+      {
+       "fonte": "motoit",
+       "id": "sm-50",
+       "nome": "SM 50",
+       "chiave": "valenti-racing|sm-50"
       }
      ]
     },
@@ -150035,6 +152101,12 @@
      "marca": "cake",
      "nome": "Osa",
      "id": "005399",
+     "perche": "marca senza corrispondente in motoit"
+    },
+    {
+     "marca": "cake",
+     "nome": "Osa+",
+     "id": "005400",
      "perche": "marca senza corrispondente in motoit"
     },
     {
@@ -159224,6 +161296,11 @@
     },
     {
      "marca": "sherco",
+     "nome": "SE 1.25",
+     "id": "002100"
+    },
+    {
+     "marca": "sherco",
      "nome": "SE 2.5i",
      "id": "002097"
     },
@@ -159266,6 +161343,11 @@
      "marca": "sherco",
      "nome": "SM 0.5",
      "id": "002104"
+    },
+    {
+     "marca": "sherco",
+     "nome": "SM 1.25",
+     "id": "002105"
     },
     {
      "marca": "sherco",
@@ -159826,33 +161908,8 @@
     },
     {
      "marca": "suzukivalenti",
-     "nome": "N01 50",
-     "id": "002485"
-    },
-    {
-     "marca": "suzukivalenti",
      "nome": "RM 85",
      "id": "001243"
-    },
-    {
-     "marca": "suzukivalenti",
-     "nome": "RME 125",
-     "id": "003054"
-    },
-    {
-     "marca": "suzukivalenti",
-     "nome": "RME 50",
-     "id": "002240"
-    },
-    {
-     "marca": "suzukivalenti",
-     "nome": "S01 50",
-     "id": "002484"
-    },
-    {
-     "marca": "suzukivalenti",
-     "nome": "SM 125",
-     "id": "001253"
     },
     {
      "marca": "suzukivalenti",
@@ -159873,11 +161930,6 @@
      "marca": "suzukivalenti",
      "nome": "SM 450 Z",
      "id": "001256"
-    },
-    {
-     "marca": "suzukivalenti",
-     "nome": "SM 50",
-     "id": "002241"
     },
     {
      "marca": "suzukivalenti",
@@ -162144,9 +164196,9 @@
    "nodiEsaminati": 9547,
    "nodiScartatiPerDoppione": 15,
    "conta": {
-    "identico": 1441,
+    "identico": 1440,
     "grossolano": 1465,
-    "fine": 187,
+    "fine": 188,
     "probabile": 30,
     "assente": 6424
    },
@@ -167547,7 +169599,7 @@
     },
     {
      "marca": "bmw",
-     "grado": "identico",
+     "grado": "fine",
      "prova": "nome identico",
      "da": {
       "fonte": "autoscout",
@@ -167555,6 +169607,12 @@
       "nome": "R 80 GS"
      },
      "a": [
+      {
+       "fonte": "motoit",
+       "id": "r-80-g-s",
+       "nome": "R 80 G/S",
+       "chiave": "bmw|r-80-g-s"
+      },
       {
        "fonte": "motoit",
        "id": "r-80-gs",
@@ -167578,6 +169636,12 @@
        "id": "r-80",
        "nome": "R 80",
        "chiave": "bmw|r-80"
+      },
+      {
+       "fonte": "motoit",
+       "id": "r-80-g-s",
+       "nome": "R 80 G/S",
+       "chiave": "bmw|r-80-g-s"
       },
       {
        "fonte": "motoit",

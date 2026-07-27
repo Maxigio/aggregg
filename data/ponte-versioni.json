@@ -1,13 +1,13 @@
 {
- "generatoIl": "2026-07-27T12:08:58.352Z",
+ "generatoIl": "2026-07-27T12:21:44.049Z",
  "nota": "INDICE delle versioni, non una mappa fissa: Subito taglia per allestimento e non ha anni, Moto.it taglia per anni. La scelta si fa quando si ha l'annuncio, che porta l'anno. Ogni versione Moto.it porta la variante ESTRATTA dal suo nome e il periodo.",
  "comeSiUsa": "dato un annuncio Subito con (modelloId, versioneId, anno): prendi la voce del modello, filtra le versioni Moto.it il cui periodo contiene l'anno, e fra quelle preferisci chi ha la stessa variante della versione Subito. Una sola → risposta. Piu' di una → dichiara l'ambiguita', non scegliere.",
  "copertura": {
-  "modelli": 1969,
-  "versioniSubito": 6879,
-  "versioniMotoit": 12857,
-  "versioniSubitoConVariante": 2954,
-  "versioniMotoitConAnni": 12246,
+  "modelli": 1974,
+  "versioniSubito": 6893,
+  "versioniMotoit": 12871,
+  "versioniSubitoConVariante": 2959,
+  "versioniMotoitConAnni": 12260,
   "versioniMotoitSenzaAnni": 611,
   "notaMisura": "il solo filtro anno chiude su una versione nel 54,1% dei casi (16.967 prove modello×anno); con la variante si arriva all'88% misurato su annunci a verita' nota"
  },
@@ -14457,7 +14457,7 @@
   },
   {
    "marca": "BMW",
-   "gradoModello": "identico",
+   "gradoModello": "fine",
    "subito": {
     "id": "001814",
     "nome": "R 80 GS",
@@ -14480,6 +14480,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
+       "9jH9qX",
        "apFspW"
       ],
       "come": "versione base"
@@ -14487,9 +14488,21 @@
     ]
    },
    "motoit": [
+    "r-80-g-s",
     "r-80-gs"
    ],
    "versioniMotoit": [
+    {
+     "id": "9jH9qX",
+     "modelloSlug": "r-80-g-s",
+     "nome": "R 80 G/S (1980 - 87)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 1980,
+      "a": 1987
+     }
+    },
     {
      "id": "apFspW",
      "modelloSlug": "r-80-gs",
@@ -14528,6 +14541,7 @@
       "base": true,
       "motoit": [
        "LB774N",
+       "9jH9qX",
        "BkFtcE",
        "WLy86S",
        "bTRqmu"
@@ -14538,6 +14552,7 @@
    },
    "motoit": [
     "r-80",
+    "r-80-g-s",
     "r-80-g-s-paris-dakar",
     "r-80-rt"
    ],
@@ -14551,6 +14566,17 @@
      "anni": {
       "da": 1984,
       "a": 1994
+     }
+    },
+    {
+     "id": "9jH9qX",
+     "modelloSlug": "r-80-g-s",
+     "nome": "R 80 G/S (1980 - 87)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 1980,
+      "a": 1987
      }
     },
     {
@@ -31687,7 +31713,71 @@
   },
   {
    "marca": "Ducati",
-   "gradoModello": "identico",
+   "gradoModello": "grossolano",
+   "subito": {
+    "id": "001464",
+    "nome": "Monster 696",
+    "versioni": [
+     {
+      "id": "002806",
+      "nome": "25kW",
+      "variante": "25kW",
+      "base": false
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "tlNTyV"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "monster-696"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "tlNTyV",
+     "modelloSlug": "monster-696",
+     "nome": "Monster 696 (2008 - 13)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2008,
+      "a": 2013
+     }
+    },
+    {
+     "id": "hJdG8c",
+     "modelloSlug": "monster-696",
+     "nome": "Monster 696 ABS (2009 - 14)",
+     "variante": "ABS",
+     "base": false,
+     "anni": {
+      "da": 2009,
+      "a": 2014
+     }
+    },
+    {
+     "id": "oZmMkR",
+     "modelloSlug": "monster-696",
+     "nome": "Monster 696 Plus (2007 - 14)",
+     "variante": "Plus",
+     "base": false,
+     "anni": {
+      "da": 2007,
+      "a": 2014
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Ducati",
+   "gradoModello": "grossolano",
    "subito": {
     "id": "001467",
     "nome": "Monster 696+",
@@ -31907,7 +31997,60 @@
   },
   {
    "marca": "Ducati",
-   "gradoModello": "identico",
+   "gradoModello": "grossolano",
+   "subito": {
+    "id": "002076",
+    "nome": "Monster 796",
+    "versioni": [
+     {
+      "id": "004442",
+      "nome": "25kW",
+      "variante": "25kW",
+      "base": false
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "KgI4JO"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "monster-796"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "KgI4JO",
+     "modelloSlug": "monster-796",
+     "nome": "Monster 796 (2010 - 13)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2010,
+      "a": 2013
+     }
+    },
+    {
+     "id": "CbeY4i",
+     "modelloSlug": "monster-796",
+     "nome": "Monster 796 ABS (2010 - 14)",
+     "variante": "ABS",
+     "base": false,
+     "anni": {
+      "da": 2010,
+      "a": 2014
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Ducati",
+   "gradoModello": "grossolano",
    "subito": {
     "id": "002222",
     "nome": "Monster 796+",
@@ -31988,7 +32131,7 @@
   },
   {
    "marca": "Ducati",
-   "gradoModello": "identico",
+   "gradoModello": "grossolano",
    "subito": {
     "id": "002783",
     "nome": "Monster 797",
@@ -32031,6 +32174,107 @@
      },
      {
       "id": "006730",
+      "nome": "35kW",
+      "variante": "35kW",
+      "base": false
+     },
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "XHv67F",
+       "4UUsR8"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "monster-797"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "XHv67F",
+     "modelloSlug": "monster-797",
+     "nome": "Monster 797 (2017 - 18)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2017,
+      "a": 2018
+     }
+    },
+    {
+     "id": "4UUsR8",
+     "modelloSlug": "monster-797",
+     "nome": "Monster 797 (2019 - 20)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2019,
+      "a": 2020
+     }
+    },
+    {
+     "id": "EGqA3r",
+     "modelloSlug": "monster-797",
+     "nome": "Monster 797 Plus (2019)",
+     "variante": "Plus",
+     "base": false,
+     "anni": {
+      "da": 2019,
+      "a": 2019
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Ducati",
+   "gradoModello": "grossolano",
+   "subito": {
+    "id": "002784",
+    "nome": "Monster 797+",
+    "versioni": [
+     {
+      "id": "006193",
+      "nome": "(Dark Stealth)",
+      "variante": "(Dark Stealth)",
+      "base": false
+     },
+     {
+      "id": "006194",
+      "nome": "(Dark Stealth) 35kW",
+      "variante": "(Dark Stealth) 35kW",
+      "base": false
+     },
+     {
+      "id": "006184",
+      "nome": "(Ducati Red)",
+      "variante": "(Ducati Red)",
+      "base": false
+     },
+     {
+      "id": "006190",
+      "nome": "(Ducati Red) 35kW",
+      "variante": "(Ducati Red) 35kW",
+      "base": false
+     },
+     {
+      "id": "006191",
+      "nome": "(Star White Silk)",
+      "variante": "(Star White Silk)",
+      "base": false
+     },
+     {
+      "id": "006192",
+      "nome": "(Star White Silk) 35kW",
+      "variante": "(Star White Silk) 35kW",
+      "base": false
+     },
+     {
+      "id": "006731",
       "nome": "35kW",
       "variante": "35kW",
       "base": false
@@ -106908,10 +107152,58 @@
   },
   {
    "marca": "KL",
-   "gradoModello": "identico",
+   "gradoModello": "grossolano",
    "subito": {
     "id": "007036",
     "nome": "Brera + 125",
+    "versioni": [
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "C9m3kC",
+       "2agtmb"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "brera-125"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "C9m3kC",
+     "modelloSlug": "brera-125",
+     "nome": "Brera 125 (2022 - 24)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2022,
+      "a": 2024
+     }
+    },
+    {
+     "id": "2agtmb",
+     "modelloSlug": "brera-125",
+     "nome": "Brera 125+ (2025 - 26)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2025,
+      "a": 2026
+     }
+    }
+   ]
+  },
+  {
+   "marca": "KL",
+   "gradoModello": "grossolano",
+   "subito": {
+    "id": "003790",
+    "nome": "Brera 125",
     "versioni": [
      {
       "id": "000000",
@@ -138366,10 +138658,58 @@
   },
   {
    "marca": "Lifan",
-   "gradoModello": "identico",
+   "gradoModello": "grossolano",
    "subito": {
     "id": "002957",
     "nome": "E3",
+    "versioni": [
+     {
+      "id": "000000",
+      "nome": "Altro allestimento",
+      "variante": "Altro allestimento",
+      "base": true,
+      "motoit": [
+       "EaQXI6",
+       "NUvDQW"
+      ],
+      "come": "versione base"
+     }
+    ]
+   },
+   "motoit": [
+    "e3"
+   ],
+   "versioniMotoit": [
+    {
+     "id": "EaQXI6",
+     "modelloSlug": "e3",
+     "nome": "E3 (2018 - 26)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2018,
+      "a": 2026
+     }
+    },
+    {
+     "id": "NUvDQW",
+     "modelloSlug": "e3",
+     "nome": "E3+ (2021 - 26)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2021,
+      "a": 2026
+     }
+    }
+   ]
+  },
+  {
+   "marca": "Lifan",
+   "gradoModello": "grossolano",
+   "subito": {
+    "id": "003226",
+    "nome": "E3+",
     "versioni": [
      {
       "id": "000000",
