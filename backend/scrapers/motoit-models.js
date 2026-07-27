@@ -14,6 +14,7 @@
  */
 const https = require('https');
 const { makeModelResolver } = require('./brand-match');
+const budget = require('../budget-richieste');        // conta le richieste, non le limita
 
 const BASE = 'https://www.moto.it';
 const API  = `${BASE}/api-50/market/search`;
@@ -27,6 +28,8 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 // GET JSON con segui-redirect. L'API risponde a GET (verificato) — niente cookie.
 function fetchJson(url, hops = 0) {
+  // Questi menu hanno cache 12h: quando si contano, e' perche' la cache era fredda.
+  budget.conta('motoit', hops ? 'redirect' : 'menu cache-miss');
   return new Promise((resolve, reject) => {
     if (hops > 5) return reject(new Error('too many redirects'));
     const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept': 'application/json', 'Accept-Language': 'it-IT,it;q=0.9' } }, res => {

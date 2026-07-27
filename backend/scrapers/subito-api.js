@@ -16,6 +16,7 @@
 const https = require('https');
 
 const { kindForStatus, fail } = require('./utils');   // classificazione salute crawler (F1.5)
+const budget = require('../budget-richieste');        // conta le richieste, non le limita
 
 const HOST = 'hades.subito.it';
 // Categorie hades (macro Motori=1). accessoriAuto/Moto scoperti live 2026-07-07 per la sezione Ricambi.
@@ -26,6 +27,7 @@ const TIMEOUT_MS = 12000;
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1';
 
 function httpGetJson(path) {
+  budget.conta('subito');
   return new Promise((resolve, reject) => {
     const req = https.get({
       host: HOST, path,

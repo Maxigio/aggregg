@@ -36,6 +36,7 @@ const provSigla      = require('./province-sigla'); // localita' dell'annuncio -
 const motornet       = require('./scrapers/motornet');  // kW ufficiali di listino (SPENTO se AMR_MOTORNET!=1)
 const carburanti     = require('./carburanti');   // prezzi carburante MIMIT per provincia
 const saved = require('./saved');
+const budget = require('./budget-richieste');     // quante richieste costa una ricerca: contate, non stimate
 const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings, norm } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
 const regionCentroids = require('../data/region-centroids.json');  // capoluoghi regione {lat,lng} → raggio AS24 nativo
@@ -847,7 +848,10 @@ async function runSearch(params) {
     searchCache.delete(key); searchCache.set(key, hit);   // LRU touch
     return hit.data;
   }
-  const data = await runSearchCore(params);
+  // Il conto delle richieste si apre QUI, non attorno a runSearch: una risposta servita
+  // dalla cache non costa richieste, e contarla come "0" annacquerebbe la misura.
+  const etichetta = [params.tipo, params.marca, params.modello].filter(Boolean).join(' ');
+  const data = await budget.perRicerca(etichetta || 'ricerca', () => runSearchCore(params));
   if (cacheable(data)) {
     searchCache.set(key, { ts: Date.now(), data });
     if (searchCache.size > SEARCH_CACHE_MAX) searchCache.delete(searchCache.keys().next().value);

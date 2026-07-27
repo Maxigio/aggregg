@@ -14,6 +14,7 @@
 const https = require('https');
 
 const { kindForStatus, fail } = require('./utils');   // classificazione salute crawler (F1.5)
+const budget = require('../budget-richieste');        // conta le richieste, non le limita
 
 const HOST = 'listing-search.api.autoscout24.com';
 const AUTH = 'Basic YXMyNC1zZWFyY2gtZnVubmVsOnZucmZiYkJqSTMyT2wxV2thNnVOSFJwM0VZbjRkag==';
@@ -45,6 +46,7 @@ const QUERY = `query Search($v:Vehicle_,$loc:Location_,$pr:Price_,$m:Metadata_){
 }`.replace(/\s+/g, ' ');
 
 function httpPost(body, auth = AUTH) {
+  budget.conta('as24');
   return new Promise((resolve, reject) => {
     const data = Buffer.from(body, 'utf8');
     const req = https.request({

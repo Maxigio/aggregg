@@ -23,6 +23,7 @@ const https        = require('https');
 const cheerio      = require('cheerio');
 
 const { kindForStatus, fail } = require('./utils');   // salute crawler (come AS24/Subito)
+const budget = require('../budget-richieste');        // conta le richieste, non le limita
 
 const BASE = 'https://www.moto.it';
 const MAX_PAGES = 3;                  // on-search: ~30 annunci (~10-13/pag), cheapest-first.
@@ -34,6 +35,8 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function httpGetText(url, hops = 0, timeoutMs = HTTP_TIMEOUT_DEFAULT) {
+  // Anche un redirect e' una richiesta: si conta ogni salto, non solo il primo.
+  budget.conta('motoit', hops ? 'redirect' : null);
   return new Promise((resolve, reject) => {
     if (hops > 5) return reject(new Error('too many redirects'));
     const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'it-IT,it;q=0.9' } }, res => {
