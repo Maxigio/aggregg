@@ -1160,6 +1160,17 @@ async function runSearchCore(params) {
     // membri verrebbero marcati "altro modello", che e' un falso allarme — sono
     // esattamente quello che si e' chiesto, con il nome che usa Autoscout.
     const nomiAmmessi = [params.modello, ...(groupMembers || [])].filter(Boolean);
+
+    // MOTO.IT. Il filtro e' server-side quando lo slug-modello e' risolto (`model=`);
+    // altrimenti si e' allargato alla marca e il post-filtro tiene solo i titoli che
+    // nominano il modello — quegli annunci sono corretti ma riconosciuti dal titolo,
+    // non dal catalogo, ed e' giusto che lo dicano. Con `bike=` c'e' anche la versione.
+    for (const r of risultati) {
+      if (r.fonte !== 'moto' || r.dichiarazione) continue;
+      if (!params.motoitModelSlug) r.dichiarazione = 'senza-modello';
+      else r.dichiarazione = params.motoitBikeCode ? 'esatto' : 'senza-versione';
+    }
+
     for (const r of risultati) {
       if (r.fonte !== 'autoscout' || r.dichiarazione) continue;
       if (as24HaFiltrato) { r.dichiarazione = r.variante ? 'esatto' : 'senza-versione'; continue; }

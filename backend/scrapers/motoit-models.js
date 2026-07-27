@@ -66,9 +66,74 @@ function cached(store, key, ttl, producer) {
   return p;
 }
 
+/**
+ * IL CATALOGO CHE ABBIAMO SU DISCO, non quello che e' in vendita oggi.
+ *
+ * `/models/<marca>/Used` e `/bikes/<marca>|<modello>/Used` sono la VISTA MERCATO: danno
+ * solo cio' che ha annunci usati adesso. Misurato: Yamaha 163 modelli contro i 231 del
+ * catalogo (+42%), Honda 199 contro 284 (+43%), Ducati 121 contro 153 (+26%).
+ * `data/motoit-catalogo.json` viene dalle pagine /listino, che sono la lista intera.
+ *
+ * Gli id sono gli STESSI: verificato che i codici-versione del catalogo coincidono con
+ * quelli che l'API mette in `bike=` (MT-07 9 su 9, Monster 821 5 su 5). Se non fosse
+ * cosi', il filtro versione smetterebbe di funzionare in silenzio.
+ *
+ * L'API resta come RIPIEGO per le marche che il catalogo non ha. E dove risponde il
+ * catalogo non parte nessuna richiesta: il costo scende.
+ */
+/**
+ * I nomi del catalogo portano entita' HTML DOPPIE — 33 modelli e 128 versioni:
+ * `Caff&amp;egrave;nero 125`, `Monster 1200 25&amp;deg; Anniversario`, `C1 125
+ * Family&amp;#039;s Friend`. Finora non si vedevano perche' i menu venivano dall'API;
+ * passando al catalogo finirebbero a schermo cosi' come sono. Doppie: `&amp;egrave;`
+ * diventa `&egrave;` e poi `è`, quindi si decodifica finche' smette di cambiare.
+ * Il catalogo NON si tocca: si decodifica in lettura.
+ */
+const ENT_NOMI = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', deg: '°',
+  laquo: '«', raquo: '»', hellip: '…', ndash: '–', mdash: '—',
+  lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”',
+  euro: '€', pound: '£', reg: '®', copy: '©', trade: '™', middot: '·',
+  szlig: 'ß', aelig: 'æ', oslash: 'ø', aring: 'å', ccedil: 'ç', ntilde: 'ñ',
+};
+const ENT_SEGNI = { grave: '̀', acute: '́', circ: '̂', tilde: '̃', uml: '̈', ring: '̊', cedil: '̧' };
+function passataEntita(s) {
+  return String(s).replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (tutto, e) => {
+    if (e[0] === '#') {
+      const n = e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+      return Number.isFinite(n) && n > 0 && n < 0x110000 ? String.fromCodePoint(n) : tutto;
+    }
+    const k = e.toLowerCase();
+    if (ENT_NOMI[k]) return ENT_NOMI[k];
+    const m = /^([a-z])(grave|acute|circ|tilde|uml|ring|cedil)$/.exec(k);
+    if (m) return (e[0] === e[0].toUpperCase() ? m[1].toUpperCase() : m[1]) + ENT_SEGNI[m[2]];
+    return tutto;
+  });
+}
+function decodifica(s) {
+  let a = String(s == null ? '' : s), b = passataEntita(a), giri = 0;
+  while (b !== a && giri++ < 4) { a = b; b = passataEntita(a); }
+  return b.normalize('NFC');
+}
+
+let CAT = null;
+function catalogo() {
+  if (CAT) return CAT;
+  try { CAT = require('../../data/motoit-catalogo.json'); }
+  catch (e) { console.warn('[motoit-models] catalogo assente (' + e.message + ') → si resta sull\'API'); CAT = { marche: {} }; }
+  return CAT;
+}
+const marcaCat = slug => (catalogo().marche || {})[String(slug || '').toLowerCase()] || null;
+
 /** Modelli (famiglie) di una marca: [{name, slug}]. `slug` = parte dopo `<brand>|`. */
 async function getBrandModels(brandSlug) {
   if (!brandSlug) return [];
+  const locale = marcaCat(brandSlug);
+  if (locale && Object.keys(locale.modelli || {}).length) {
+    return Object.entries(locale.modelli)
+      .map(([slug, m]) => ({ name: decodifica(m.nome).trim(), slug }))
+      .filter(x => x.name && x.slug);
+  }
   return cached(modelsCache, `m:${brandSlug}`, TTL_MS, async () => {
     try {
       const j = await fetchJson(`${API}/models/${encodeURIComponent(brandSlug)}/Used`);
@@ -91,6 +156,17 @@ async function getBrandModels(brandSlug) {
 /** Versioni di un modello: [{name, code}]. `code` (opaco) = il param `bike=`. */
 async function getModelBikes(brandSlug, modelSlug) {
   if (!brandSlug || !modelSlug) return [];
+  // Dal catalogo, se quel modello ce l'ha con le versioni dentro. Gli anni non si
+  // ricavano piu' dal nome a forza di espressioni regolari: il catalogo li ha gia'.
+  const mod = (marcaCat(brandSlug) || { modelli: {} }).modelli[String(modelSlug).toLowerCase()];
+  if (mod && Object.keys(mod.versioni || {}).length) {
+    return Object.entries(mod.versioni).map(([code, v]) => ({
+      name: decodifica(v.nome).trim(),
+      code,
+      annoMin: (v.anni && v.anni.da) || null,
+      annoMax: (v.anni && v.anni.a) || null,
+    })).filter(x => x.name);
+  }
   const key = `b:${brandSlug}|${modelSlug}`;
   return cached(bikesCache, key, TTL_MS, async () => {
     try {
