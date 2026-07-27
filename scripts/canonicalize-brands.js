@@ -22,14 +22,20 @@ for (const tipo of ['auto', 'moto']) {
   for (const group of groups) {
     if (!Array.isArray(group) || group.length < 2) continue;
     const [canonical, ...variants] = group;
-    const cEntry = models[tipo]?.[canonical];
+    // Le fonti scrivono le marche con maiuscole diverse ("KL" su Subito, "Kl" da Moto.it):
+    // la voce si cerca per nome NORMALIZZATO, non per chiave esatta, altrimenti la variante
+    // non viene trovata e la fusione salta in silenzio.
+    const chiaveDi = n => Object.keys(models[tipo] || {}).find(k => norm(k) === norm(n));
+    const cKey = chiaveDi(canonical);
+    const cEntry = cKey ? models[tipo][cKey] : null;
     if (!cEntry) { console.warn(`[skip] canonico assente: ${tipo}/${canonical}`); continue; }
     cEntry.models = cEntry.models || [];
     const modelByNorm = new Map(cEntry.models.map(m => [norm(m.nome), m]));
 
     for (const v of variants) {
-      const vEntry = models[tipo]?.[v];
-      if (!vEntry) continue;
+      const vKey = chiaveDi(v);
+      if (!vKey || vKey === cKey) continue;
+      const vEntry = models[tipo][vKey];
       // metadata: riempi i buchi del canonico con la variante
       if (!cEntry.autoscout && vEntry.autoscout) cEntry.autoscout = vEntry.autoscout;
       if (!cEntry.motoit && vEntry.motoit)       cEntry.motoit = vEntry.motoit;
@@ -45,9 +51,9 @@ for (const tipo of ['auto', 'moto']) {
           if ((ex[k] == null || ex[k] === '') && val != null && val !== '') { ex[k] = val; mergedFields++; }
         }
       }
-      delete models[tipo][v];
+      delete models[tipo][vKey];
       removed++;
-      console.log(`[merge] ${tipo}: "${v}" → "${canonical}"  (+${added} modelli, +${mergedFields} campi, motoit=${cEntry.motoit?.brandSlug || '-'}, as=${cEntry.autoscout?.makeId || '-'})`);
+      console.log(`[merge] ${tipo}: "${vKey}" → "${cKey}"  (+${added} modelli, +${mergedFields} campi, motoit=${cEntry.motoit?.brandSlug || '-'}, as=${cEntry.autoscout?.makeId || '-'})`);
     }
     merges++;
   }

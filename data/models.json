@@ -114952,7 +114952,8 @@
     "KL Motors": {
       "sites": [
         "subito",
-        "autoscout"
+        "autoscout",
+        "motoit"
       ],
       "autoscout": {
         "makeId": 51997,
@@ -114968,7 +114969,8 @@
           ],
           "mmmvAutoscout": "51997|76835||",
           "modelIdAS": 76835,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "b-tre"
         },
         {
           "nome": "Brera 125",
@@ -114978,7 +114980,8 @@
           ],
           "mmmvAutoscout": "51997|76834||",
           "modelIdAS": 76834,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "brera-125"
         },
         {
           "nome": "Brera 300",
@@ -114988,7 +114991,8 @@
           ],
           "mmmvAutoscout": "51997|76833||",
           "modelIdAS": 76833,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "brera-300"
         },
         {
           "nome": "Brera 318",
@@ -115008,7 +115012,8 @@
           ],
           "mmmvAutoscout": "51997|76832||",
           "modelIdAS": 76832,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "brera-x-125"
         },
         {
           "nome": "Brera X 300",
@@ -115018,7 +115023,8 @@
           ],
           "mmmvAutoscout": "51997|76831||",
           "modelIdAS": 76831,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "brera-x-300"
         },
         {
           "nome": "Duel",
@@ -115059,8 +115065,35 @@
           "mmmvAutoscout": "51997|76838||",
           "modelIdAS": 76838,
           "kindAS": "model"
+        },
+        {
+          "nome": "Ariic Brera 318",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "ariic-brera-318"
+        },
+        {
+          "nome": "Duel 125",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "duel-125"
+        },
+        {
+          "nome": "KXE 125",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "kxe-125"
         }
-      ]
+      ],
+      "motoit": {
+        "brandSlug": "kl"
+      }
     },
     "Kove": {
       "sites": [
@@ -137550,7 +137583,8 @@
     "TM": {
       "sites": [
         "subito",
-        "autoscout"
+        "autoscout",
+        "motoit"
       ],
       "autoscout": {
         "makeId": 50431,
@@ -137607,7 +137641,8 @@
           "mmmvAutoscout": "50431|71505||",
           "modelIdAS": 71505,
           "modelLineIdAS": 111,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "en-125"
         },
         {
           "nome": "EN 144",
@@ -137629,7 +137664,8 @@
           "mmmvAutoscout": "50431|71507||",
           "modelIdAS": 71507,
           "modelLineIdAS": 111,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "en-250"
         },
         {
           "nome": "EN 250 2T",
@@ -137673,7 +137709,8 @@
           "mmmvAutoscout": "50431|71511||",
           "modelIdAS": 71511,
           "modelLineIdAS": 111,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "en-300"
         },
         {
           "nome": "EN 300 2T",
@@ -137761,7 +137798,8 @@
           "mmmvAutoscout": "50431|71519||",
           "modelIdAS": 71519,
           "modelLineIdAS": 112,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "mx-125"
         },
         {
           "nome": "MX 125 2T",
@@ -137783,7 +137821,8 @@
           "mmmvAutoscout": "50431|71521||",
           "modelIdAS": 71521,
           "modelLineIdAS": 112,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "mx-144"
         },
         {
           "nome": "MX 144 2T",
@@ -138003,7 +138042,8 @@
           "mmmvAutoscout": "50431|71541||",
           "modelIdAS": 71541,
           "modelLineIdAS": 113,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "smm-450-f"
         },
         {
           "nome": "SMM 450 Fi ES",
@@ -138036,7 +138076,8 @@
           "mmmvAutoscout": "50431|71544||",
           "modelIdAS": 71544,
           "modelLineIdAS": 113,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "smm-530-f"
         },
         {
           "nome": "SMM 530 Fi ES",
@@ -138058,7 +138099,8 @@
           "mmmvAutoscout": "50431|71546||",
           "modelIdAS": 71546,
           "modelLineIdAS": 113,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "smr-125"
         },
         {
           "nome": "SMR 125 2T",
@@ -138135,7 +138177,8 @@
           "mmmvAutoscout": "50431|71553||",
           "modelIdAS": 71553,
           "modelLineIdAS": 113,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "smr-450-f"
         },
         {
           "nome": "SMR 450 Fi ES",
@@ -138168,7 +138211,8 @@
           "mmmvAutoscout": "50431|71556||",
           "modelIdAS": 71556,
           "modelLineIdAS": 113,
-          "kindAS": "model"
+          "kindAS": "model",
+          "slugMotoIt": "smr-530-f"
         },
         {
           "nome": "SMR 530 Fi ES",
@@ -138279,8 +138323,83 @@
           "modelIdAS": 71566,
           "modelLineIdAS": 113,
           "kindAS": "model"
+        },
+        {
+          "nome": "EN 250 F",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "en-250-f"
+        },
+        {
+          "nome": "EN 300 F",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "en-300-f"
+        },
+        {
+          "nome": "EN 450 F",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "en-450-f"
+        },
+        {
+          "nome": "MX 250 F",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "mx-250-f"
+        },
+        {
+          "nome": "MX 300 F",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "mx-300-f"
+        },
+        {
+          "nome": "MX 85",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "mx-85"
+        },
+        {
+          "nome": "Sinfonia 22 RR",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "sinfonia-22-rr"
+        },
+        {
+          "nome": "SMK 450",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "smk-450"
+        },
+        {
+          "nome": "SMX 450 F",
+          "sites": [
+            "subito",
+            "motoit"
+          ],
+          "slugMotoIt": "smx-450-f"
         }
-      ]
+      ],
+      "motoit": {
+        "brandSlug": "tm-moto"
+      }
     },
     "Tomaszo": {
       "sites": [
@@ -148754,85 +148873,6 @@
         }
       ]
     },
-    "Kl": {
-      "sites": [
-        "subito",
-        "motoit",
-        "autoscout"
-      ],
-      "motoit": {
-        "brandSlug": "kl"
-      },
-      "models": [
-        {
-          "nome": "Ariic Brera 318",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "ariic-brera-318"
-        },
-        {
-          "nome": "B-Tre",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "b-tre"
-        },
-        {
-          "nome": "Brera 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "brera-125"
-        },
-        {
-          "nome": "Brera 300",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "brera-300"
-        },
-        {
-          "nome": "Brera X 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "brera-x-125"
-        },
-        {
-          "nome": "Brera X 300",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "brera-x-300"
-        },
-        {
-          "nome": "Duel 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "duel-125"
-        },
-        {
-          "nome": "KXE 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "kxe-125"
-        }
-      ],
-      "autoscout": {
-        "makeId": 51997
-      }
-    },
     "Morbidelli": {
       "sites": [
         "subito",
@@ -148915,173 +148955,6 @@
           "slugMotoIt": "t502x"
         }
       ]
-    },
-    "Tm Moto": {
-      "sites": [
-        "subito",
-        "motoit",
-        "autoscout"
-      ],
-      "motoit": {
-        "brandSlug": "tm-moto"
-      },
-      "models": [
-        {
-          "nome": "EN 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "en-125"
-        },
-        {
-          "nome": "EN 250",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "en-250"
-        },
-        {
-          "nome": "EN 250 F",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "en-250-f"
-        },
-        {
-          "nome": "EN 300",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "en-300"
-        },
-        {
-          "nome": "EN 300 F",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "en-300-f"
-        },
-        {
-          "nome": "EN 450 F",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "en-450-f"
-        },
-        {
-          "nome": "MX 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "mx-125"
-        },
-        {
-          "nome": "MX 144",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "mx-144"
-        },
-        {
-          "nome": "MX 250 F",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "mx-250-f"
-        },
-        {
-          "nome": "MX 300 F",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "mx-300-f"
-        },
-        {
-          "nome": "MX 85",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "mx-85"
-        },
-        {
-          "nome": "Sinfonia 22 RR",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "sinfonia-22-rr"
-        },
-        {
-          "nome": "SMK 450",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "smk-450"
-        },
-        {
-          "nome": "SMM 450 F",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "smm-450-f"
-        },
-        {
-          "nome": "SMM 530 F",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "smm-530-f"
-        },
-        {
-          "nome": "SMR 125",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "smr-125"
-        },
-        {
-          "nome": "SMR 450 F",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "smr-450-f"
-        },
-        {
-          "nome": "SMR 530 F",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "smr-530-f"
-        },
-        {
-          "nome": "SMX 450 F",
-          "sites": [
-            "subito",
-            "motoit"
-          ],
-          "slugMotoIt": "smx-450-f"
-        }
-      ],
-      "autoscout": {
-        "makeId": 50431
-      }
     },
     "Valenti Racing": {
       "sites": [

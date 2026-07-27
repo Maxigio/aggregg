@@ -1,5 +1,5 @@
 {
- "generatoIl": "2026-07-27T12:21:19.826Z",
+ "generatoIl": "2026-07-27T12:32:58.612Z",
  "nota": "Ponte a livello MARCA fra Subito, Autoscout e Moto.it. I cataloghi di origine non sono stati modificati. Ogni voce porta la prova (modelli in comune) o chi l'ha decisa. `distribuisce` = marchi commerciali distinti che vendono veicoli della casa madre: restano separati come marca, ma i loro modelli sono gli stessi veicoli.",
  "relazioni": {
   "stessa": "fondere",
@@ -187,6 +187,32 @@
     "b": {
      "fonte": "autoscout",
      "nome": "Micro"
+    },
+    "modelliInComune": 0
+   },
+   {
+    "relazione": "distinta",
+    "perche": "zero modelli in comune",
+    "a": {
+     "fonte": "subito",
+     "nome": "MICROCAR"
+    },
+    "b": {
+     "fonte": "autoscout",
+     "nome": "Micro"
+    },
+    "modelliInComune": 0
+   },
+   {
+    "relazione": "distinta",
+    "perche": "zero modelli in comune",
+    "a": {
+     "fonte": "subito",
+     "nome": "MICROLINO"
+    },
+    "b": {
+     "fonte": "autoscout",
+     "nome": "Microcar"
     },
     "modelliInComune": 0
    },

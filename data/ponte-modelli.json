@@ -1,5 +1,5 @@
 {
- "generatoIl": "2026-07-27T12:21:42.812Z",
+ "generatoIl": "2026-07-27T12:32:59.052Z",
  "nota": "Ponte a livello MODELLO. Costruito dai cataloghi senza modificarli. Ogni voce porta il grado e la prova. `grossolano` non e' un errore: la fonte di arrivo e' meno granulare, e piu' nostri nodi finiscono legittimamente sullo stesso loro nodo.",
  "gradi": {
   "identico": "stesso nome, uno solo da entrambe le parti",
@@ -1759,7 +1759,7 @@
      ]
     },
     {
-     "marca": "ariel",
+     "marca": "arielmotor",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 3 nostri qui",
      "da": {
@@ -1784,7 +1784,7 @@
      ]
     },
     {
-     "marca": "ariel",
+     "marca": "arielmotor",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 3 nostri qui",
      "da": {
@@ -1809,7 +1809,7 @@
      ]
     },
     {
-     "marca": "ariel",
+     "marca": "arielmotor",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 3 nostri qui",
      "da": {
@@ -1834,7 +1834,7 @@
      ]
     },
     {
-     "marca": "ariel",
+     "marca": "arielmotor",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -10353,7 +10353,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -10378,7 +10378,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -10403,7 +10403,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "probabile",
      "prova": "parole o prefisso",
      "da": {
@@ -10428,7 +10428,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -10453,7 +10453,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -10483,7 +10483,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -10508,7 +10508,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -10533,7 +10533,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -10563,7 +10563,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -10588,7 +10588,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
@@ -10613,7 +10613,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -10638,7 +10638,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 3 nostri qui",
      "da": {
@@ -10663,7 +10663,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 3 nostri qui",
      "da": {
@@ -10688,7 +10688,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 3 nostri qui",
      "da": {
@@ -10713,7 +10713,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -10738,7 +10738,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
@@ -10763,7 +10763,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -10788,7 +10788,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "probabile",
      "prova": "parole o prefisso",
      "da": {
@@ -10813,7 +10813,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -10838,7 +10838,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -10863,7 +10863,7 @@
      ]
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -28222,7 +28222,7 @@
      ]
     },
     {
-     "marca": "microlino",
+     "marca": "micro",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -43363,7 +43363,7 @@
      "perche": "marca senza corrispondente in autoscout"
     },
     {
-     "marca": "ariel",
+     "marca": "arielmotor",
      "nome": "Altro modello",
      "id": "000000"
     },
@@ -43995,12 +43995,12 @@
      "id": "000000"
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "nome": "City Van",
      "id": "001684"
     },
     {
-     "marca": "dr",
+     "marca": "drautomobiles",
      "nome": "Altro modello",
      "id": "000000"
     },
@@ -45075,7 +45075,7 @@
      "id": "000000"
     },
     {
-     "marca": "microlino",
+     "marca": "micro",
      "nome": "Altro modello",
      "id": "000000"
     },
@@ -71906,7 +71906,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "probabile",
      "prova": "parole o prefisso",
      "da": {
@@ -71924,7 +71924,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
@@ -71942,7 +71942,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
@@ -71960,7 +71960,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -71978,7 +71978,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -71996,7 +71996,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -72014,7 +72014,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -72032,7 +72032,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
@@ -72049,7 +72049,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -72066,7 +72066,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -72084,7 +72084,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -72102,7 +72102,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -84503,7 +84503,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "probabile",
      "prova": "parole o prefisso",
      "da": {
@@ -84521,7 +84521,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -84538,7 +84538,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "probabile",
      "prova": "parole o prefisso",
      "da": {
@@ -84556,7 +84556,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -84573,7 +84573,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -84591,7 +84591,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -84609,7 +84609,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -84627,7 +84627,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -84645,7 +84645,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -84663,7 +84663,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -84681,7 +84681,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -84698,7 +84698,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -84715,7 +84715,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "probabile",
      "prova": "parole o prefisso",
      "da": {
@@ -84733,7 +84733,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -84750,7 +84750,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -84767,7 +84767,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -84784,7 +84784,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -84802,7 +84802,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -84820,7 +84820,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -84837,7 +84837,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "probabile",
      "prova": "parole o prefisso",
      "da": {
@@ -84855,7 +84855,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "probabile",
      "prova": "parole o prefisso",
      "da": {
@@ -84873,7 +84873,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -85271,7 +85271,7 @@
      ]
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -85289,7 +85289,7 @@
      ]
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -101757,7 +101757,7 @@
      ]
     },
     {
-     "marca": "wrmmotorcycles",
+     "marca": "wrm",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -109012,182 +109012,182 @@
      "id": "000000"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Argon",
      "id": "000829"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Brera GT 350",
      "id": "006515"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Extra 50",
      "id": "000830"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Extra Pro 50",
      "id": "000831"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Galileo 125",
      "id": "000832"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Helios 50",
      "id": "000833"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Hyper 125",
      "id": "000834"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Hyper 150",
      "id": "000835"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KLX 450",
      "id": "001397"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KRX",
      "id": "000836"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Krypton",
      "id": "000837"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KX 125",
      "id": "001341"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KX 250",
      "id": "001342"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KX 250 F",
      "id": "001343"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KX 450 F",
      "id": "001344"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KX 65",
      "id": "001339"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KX 85",
      "id": "001340"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KXE 250",
      "id": "000839"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KXE 450",
      "id": "001006"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KXE 50",
      "id": "000840"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Nexy 125",
      "id": "006514"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Nox 125",
      "id": "000841"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Nox 150",
      "id": "000842"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Nox 50",
      "id": "000843"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Proxy 125",
      "id": "000844"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Proxy 150",
      "id": "000845"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Pulsar 125",
      "id": "000846"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Pulsar 150",
      "id": "000847"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "SM 125",
      "id": "000848"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "SM 250",
      "id": "000849"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "SM 450",
      "id": "001005"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "SMX 450",
      "id": "001497"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Tommy 50",
      "id": "000850"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "TRX",
      "id": "000851"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "XR7 50",
      "id": "000852"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Altro modello",
      "id": "000000"
     },
@@ -110354,7 +110354,7 @@
      "id": "000000"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "Altro modello",
      "id": "000000"
     },
@@ -110745,42 +110745,42 @@
      "id": "000000"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "B-Tre 125",
      "id": "002596"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "B-Tre 50",
      "id": "002595"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "B-Uno 50",
      "id": "002592"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "Kolà",
      "id": "002611"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "Thor 125",
      "id": "002594"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "Thor 50",
      "id": "002593"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "Tourer 250",
      "id": "002610"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "Altro modello",
      "id": "000000"
     },
@@ -112779,12 +112779,12 @@
      "perche": "marca senza corrispondente in autoscout"
     },
     {
-     "marca": "wrmmotorcycles",
+     "marca": "wrm",
      "nome": "450 SM1",
      "id": "001295"
     },
     {
-     "marca": "wrmmotorcycles",
+     "marca": "wrm",
      "nome": "Altro modello",
      "id": "000000"
     },
@@ -128993,7 +128993,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "probabile",
      "prova": "parole o prefisso",
      "da": {
@@ -129011,7 +129011,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
@@ -129029,7 +129029,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
@@ -129047,7 +129047,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -129065,7 +129065,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "probabile",
      "prova": "parole o prefisso",
      "da": {
@@ -129083,7 +129083,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -129101,7 +129101,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -129119,7 +129119,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
@@ -129137,7 +129137,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -129155,7 +129155,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -136895,7 +136895,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -136913,7 +136913,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -136931,7 +136931,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -136949,7 +136949,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -136967,7 +136967,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -136985,7 +136985,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -137003,7 +137003,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -137021,7 +137021,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -137039,7 +137039,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -137057,7 +137057,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -137075,7 +137075,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -155846,192 +155846,192 @@
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Argon",
      "id": "000829"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Brera GT 350",
      "id": "006515"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Extra 50",
      "id": "000830"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Extra Pro 50",
      "id": "000831"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Galileo 125",
      "id": "000832"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Gemma 125",
      "id": "005747"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Gemma 50",
      "id": "007037"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Helios 50",
      "id": "000833"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Hyper 125",
      "id": "000834"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Hyper 150",
      "id": "000835"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KLX 450",
      "id": "001397"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KRX",
      "id": "000836"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Krypton",
      "id": "000837"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KX 125",
      "id": "001341"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KX 250",
      "id": "001342"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KX 250 F",
      "id": "001343"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KX 450 F",
      "id": "001344"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KX 65",
      "id": "001339"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KX 85",
      "id": "001340"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KXE 250",
      "id": "000839"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KXE 450",
      "id": "001006"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "KXE 50",
      "id": "000840"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Nexy 125",
      "id": "006514"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Nox 125",
      "id": "000841"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Nox 150",
      "id": "000842"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Nox 50",
      "id": "000843"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Proxy 125",
      "id": "000844"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Proxy 150",
      "id": "000845"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Pulsar 125",
      "id": "000846"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Pulsar 150",
      "id": "000847"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "SM 125",
      "id": "000848"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "SM 250",
      "id": "000849"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "SM 450",
      "id": "001005"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "SMX 450",
      "id": "001497"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Tommy 50",
      "id": "000850"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "TRX",
      "id": "000851"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "XR7 50",
      "id": "000852"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Altro modello",
      "id": "000000"
     },
@@ -158737,62 +158737,62 @@
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "Akita 125",
      "id": "003374"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "Fat Sabbath 125",
      "id": "003371"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "FSR 125",
      "id": "003362"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "FSR 250",
      "id": "003383"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "GT-SR 250",
      "id": "006302"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "GT-SS 125",
      "id": "006300"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "GT-SS 250",
      "id": "003384"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "Mushman 125",
      "id": "006303"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "Mushman 250",
      "id": "006304"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "RazorBack 250",
      "id": "003386"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "RS-13 125",
      "id": "003372"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "Altro modello",
      "id": "000000"
     },
@@ -159261,61 +159261,61 @@
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "B-Tre 125",
      "id": "002596",
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "B-Tre 50",
      "id": "002595",
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "B-Uno 50",
      "id": "002592",
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "Brera 125",
      "id": "003196",
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "Brera 300",
      "id": "003197",
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "Kolà",
      "id": "002611",
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "Thor 125",
      "id": "002594",
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "Thor 50",
      "id": "002593",
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "Tourer 250",
      "id": "002610",
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "Altro modello",
      "id": "000000",
      "perche": "marca senza corrispondente in motoit"
@@ -163616,19 +163616,19 @@
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "wrmmotorcycles",
+     "marca": "wrm",
      "nome": "450 MX1",
      "id": "001264",
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "wrmmotorcycles",
+     "marca": "wrm",
      "nome": "450 SM1",
      "id": "001295",
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "wrmmotorcycles",
+     "marca": "wrm",
      "nome": "Altro modello",
      "id": "000000",
      "perche": "marca senza corrispondente in motoit"
@@ -164194,7 +164194,7 @@
    "a": "motoit",
    "marcheInComune": 73,
    "nodiEsaminati": 9547,
-   "nodiScartatiPerDoppione": 15,
+   "nodiScartatiPerDoppione": 0,
    "conta": {
     "identico": 1440,
     "grossolano": 1465,
@@ -211784,7 +211784,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -211802,7 +211802,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -211820,7 +211820,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -211838,7 +211838,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -211856,7 +211856,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -211874,7 +211874,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -211892,7 +211892,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -211910,7 +211910,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
@@ -211928,7 +211928,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
@@ -211946,7 +211946,7 @@
      ]
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -214622,7 +214622,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -214640,7 +214640,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
@@ -214658,7 +214658,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
@@ -214676,7 +214676,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "probabile",
      "prova": "parole o prefisso",
      "da": {
@@ -214694,7 +214694,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "fine",
      "prova": "parole o prefisso",
      "da": {
@@ -214718,7 +214718,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -214736,7 +214736,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -214754,7 +214754,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "fine",
      "prova": "parole o prefisso",
      "da": {
@@ -214778,7 +214778,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -214796,7 +214796,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "fine",
      "prova": "parole o prefisso",
      "da": {
@@ -214820,7 +214820,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -214838,7 +214838,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "identico",
      "prova": "nome identico",
      "da": {
@@ -214856,7 +214856,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -214874,7 +214874,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
@@ -214892,7 +214892,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "nome identico · loro meno granulari: 2 nostri qui",
      "da": {
@@ -214910,7 +214910,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -214928,7 +214928,7 @@
      ]
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "grado": "grossolano",
      "prova": "parole o prefisso · loro meno granulari: 2 nostri qui",
      "da": {
@@ -243602,17 +243602,17 @@
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "Gemma",
      "id": "76829"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "XKE Enduro",
      "id": "76837"
     },
     {
-     "marca": "kl",
+     "marca": "klmotors",
      "nome": "XKE Motard",
      "id": "76838"
     },
@@ -246853,17 +246853,17 @@
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "FSR",
      "id": "76542"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "GT-SS",
      "id": "76544"
     },
     {
-     "marca": "mutt",
+     "marca": "muttmotorcycles",
      "nome": "Mushman",
      "id": "76548"
     },
@@ -247834,13 +247834,13 @@
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "Brera 125",
      "id": "75774",
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "over",
+     "marca": "overbikes",
      "nome": "Brera 300",
      "id": "75775",
      "perche": "marca senza corrispondente in motoit"
@@ -256578,13 +256578,13 @@
      "id": "77795"
     },
     {
-     "marca": "wrmmotorcycles",
+     "marca": "wrm",
      "nome": "450 MX1",
      "id": "71373",
      "perche": "marca senza corrispondente in motoit"
     },
     {
-     "marca": "wrmmotorcycles",
+     "marca": "wrm",
      "nome": "WRM 450 Supermoto",
      "id": "71374",
      "perche": "marca senza corrispondente in motoit"

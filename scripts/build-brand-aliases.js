@@ -82,8 +82,20 @@ for (const tipo of ['auto', 'moto']) {
     coppie.push([ricorda(x.a.nome), ricorda(x.b.nome)]);
   }
   const gruppi = unisci(coppie).map(g => {
-    // canonico = il nome col maggior numero di modelli
-    const ord = g.map(k => ({ k, n: peso[tipo].get(k) || 0 })).sort((a, b) => b.n - a.n);
+    /**
+     * Il CANONICO deve essere un nome che esiste in models.json, che e' dove l'applicazione
+     * risolve le marche e dove canonicalize-brands.js fonde le voci. Sceglierlo solo per
+     * numero di modelli produceva "KL" — che in models.json non c'e' (ci sono "Kl" e
+     * "KL Motors") — e la fusione veniva saltata con "[skip] canonico assente".
+     * A parita' di presenza vince chi ha piu' modelli.
+     */
+    const inModels = k => {
+      const nome = nomeVero.get(k);
+      const key = Object.keys(A[tipo]).find(n => norm(n) === norm(nome));
+      return key ? A[tipo][key].models.length : -1;
+    };
+    const ord = g.map(k => ({ k, dentro: inModels(k), n: peso[tipo].get(k) || 0 }))
+      .sort((a, b) => (b.dentro >= 0) - (a.dentro >= 0) || b.dentro - a.dentro || b.n - a.n);
     return ord.map(x => nomeVero.get(x.k));
   }).sort((a, b) => a[0].localeCompare(b[0]));
   const scartati = [];

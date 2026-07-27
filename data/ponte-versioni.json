@@ -1,5 +1,5 @@
 {
- "generatoIl": "2026-07-27T12:21:44.049Z",
+ "generatoIl": "2026-07-27T12:33:00.400Z",
  "nota": "INDICE delle versioni, non una mappa fissa: Subito taglia per allestimento e non ha anni, Moto.it taglia per anni. La scelta si fa quando si ha l'annuncio, che porta l'anno. Ogni versione Moto.it porta la variante ESTRATTA dal suo nome e il periodo.",
  "comeSiUsa": "dato un annuncio Subito con (modelloId, versioneId, anno): prendi la voce del modello, filtra le versioni Moto.it il cui periodo contiene l'anno, e fra quelle preferisci chi ha la stessa variante della versione Subito. Una sola → risposta. Piu' di una → dichiara l'ambiguita', non scegliere.",
  "copertura": {
