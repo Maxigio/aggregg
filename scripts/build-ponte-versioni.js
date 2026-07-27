@@ -26,13 +26,25 @@ const S = require(path.join(R, 'data/subito-catalogo.json'));
 const M = require(path.join(R, 'data/motoit-catalogo.json'));
 const P = require(path.join(R, 'data/ponte-modelli.json'));
 
+/** la marca canonica di un nome, come la calcola il ponte modelli */
+const AL2 = require(path.join(R, 'data/brand-aliases.json'));
+const capoDi = new Map();
+for (const t of ['auto', 'moto']) for (const g of (AL2[t] || [])) for (const x of g) capoDi.set(norm(x), norm(g[0]));
+const capoMarca = s => capoDi.get(norm(s)) || norm(s);
+
 const rel = P.relazioni.find(r => r.tipo === 'moto' && r.da === 'subito' && r.a === 'motoit');
 if (!rel) { console.error('manca la relazione moto subito→motoit nel ponte modelli'); process.exit(1); }
 
 const subMod = new Map();
 for (const b of Object.values(S.moto)) for (const [id, m] of Object.entries(b.modelli || {})) subMod.set(id, { ...m, marca: b.nome });
+/**
+ * Chiave MARCA|SLUG, non solo slug: su Moto.it 28 slug esistono sotto piu' marche
+ * ("mx-125" e' Aprilia E Tm Moto, "scrambler-400" e' Ducati E Mash Italia). Indicizzando
+ * per solo slug, 60 voci dell'indice prendevano le versioni — e gli ANNI — di un'altra casa,
+ * e risolviVersione filtra proprio sull'anno: rispondeva 'una' con la scheda sbagliata.
+ */
 const motoMod = new Map();
-for (const b of Object.values(M.marche)) for (const [slug, m] of Object.entries(b.modelli || {})) motoMod.set(slug, m);
+for (const b of Object.values(M.marche)) for (const [slug, m] of Object.entries(b.modelli || {})) motoMod.set(norm(b.nome) + '|' + slug, m);
 
 /** nome versione meno nome modello meno anni = la variante. Vuota = versione base. */
 function variante(nomeVersione, nomeModello) {
@@ -76,7 +88,16 @@ const fuori = {
 let conAnni = 0, senzaAnni = 0, varEsatte = 0, versS = 0, versM = 0;
 for (const v of rel.voci) {
   const s = subMod.get(v.da.id);
-  const ms = v.a.map(x => ({ slug: x.id, m: motoMod.get(x.id) })).filter(x => x.m);
+  // la marca del ponte e' la chiave canonica: si prova quella e, se manca, i nomi delle
+  // marche Moto.it che ci ricadono. Mai lo slug da solo.
+  const ms = v.a.map(x => {
+    let m = motoMod.get(v.marca + '|' + x.id);
+    if (!m) for (const b of Object.values(M.marche)) {
+      if (norm(b.nome) !== v.marca && !(b.modelli || {})[x.id]) continue;
+      if (norm(b.nome) === v.marca || (capoMarca(b.nome) === v.marca && (b.modelli || {})[x.id])) { m = b.modelli[x.id]; break; }
+    }
+    return { slug: x.id, m };
+  }).filter(x => x.m);
   if (!s || !ms.length) continue;
 
   const versioniS = Object.entries(s.versioni || {})

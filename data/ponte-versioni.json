@@ -1,14 +1,14 @@
 {
- "generatoIl": "2026-07-27T12:05:08.970Z",
+ "generatoIl": "2026-07-27T12:08:58.352Z",
  "nota": "INDICE delle versioni, non una mappa fissa: Subito taglia per allestimento e non ha anni, Moto.it taglia per anni. La scelta si fa quando si ha l'annuncio, che porta l'anno. Ogni versione Moto.it porta la variante ESTRATTA dal suo nome e il periodo.",
  "comeSiUsa": "dato un annuncio Subito con (modelloId, versioneId, anno): prendi la voce del modello, filtra le versioni Moto.it il cui periodo contiene l'anno, e fra quelle preferisci chi ha la stessa variante della versione Subito. Una sola → risposta. Piu' di una → dichiara l'ambiguita', non scegliere.",
  "copertura": {
-  "modelli": 1990,
-  "versioniSubito": 6946,
-  "versioniMotoit": 13285,
-  "versioniSubitoConVariante": 2977,
-  "versioniMotoitConAnni": 12682,
-  "versioniMotoitSenzaAnni": 603,
+  "modelli": 1969,
+  "versioniSubito": 6879,
+  "versioniMotoit": 12857,
+  "versioniSubitoConVariante": 2954,
+  "versioniMotoitConAnni": 12246,
+  "versioniMotoitSenzaAnni": 611,
   "notaMisura": "il solo filtro anno chiude su una versione nel 54,1% dei casi (16.967 prove modello×anno); con la variante si arriva all'88% misurato su annunci a verita' nota"
  },
  "modelli": [
@@ -814,7 +814,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "Wd0iQN"
+       "LvsH8z"
       ],
       "come": "versione base"
      }
@@ -825,15 +825,12 @@
    ],
    "versioniMotoit": [
     {
-     "id": "Wd0iQN",
+     "id": "LvsH8z",
      "modelloSlug": "classic-125",
-     "nome": "Classic 125 (2017 - 19)",
+     "nome": "Classic 125",
      "variante": "",
      "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2019
-     }
+     "anni": null
     }
    ]
   },
@@ -1532,18 +1529,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "dH1Zxy",
-       "HTuAng",
-       "2ha44s",
-       "XEb6Qq",
-       "rUCwQz",
-       "NktZdv",
-       "MY4hnn",
-       "Cw9f0r",
-       "iG5ndM",
-       "4swNhs",
-       "y9p5O6",
-       "QGYYTl"
+       "qdKXKI"
       ],
       "come": "versione base"
      }
@@ -1554,267 +1540,14 @@
    ],
    "versioniMotoit": [
     {
-     "id": "dH1Zxy",
+     "id": "qdKXKI",
      "modelloSlug": "mx-125",
-     "nome": "MX 125 (1999-2004)",
+     "nome": "MX 125 (2003 - 08)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 1999,
-      "a": 2004
-     }
-    },
-    {
-     "id": "qUQPKr",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 2t (2020)",
-     "variante": "2t",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "OwyiIY",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 2T (2024)",
-     "variante": "2T",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "BO5eWK",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 ES 2T (2025)",
-     "variante": "ES 2T",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "lyqxPu",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 ES 2T (2026)",
-     "variante": "ES 2T",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "UQwfIY",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 ES 2T TM Corse (2026)",
-     "variante": "ES 2T TM Corse",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "hAhbBE",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 ES Fi 2T (2026)",
-     "variante": "ES Fi 2T",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "onuMhM",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 ES Fi 2T TM Corse (2026)",
-     "variante": "ES Fi 2T TM Corse",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "HTuAng",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2005)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2005
-     }
-    },
-    {
-     "id": "2ha44s",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2006)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2006,
-      "a": 2006
-     }
-    },
-    {
-     "id": "XEb6Qq",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2008 - 09)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2008,
-      "a": 2009
-     }
-    },
-    {
-     "id": "rUCwQz",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2012)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2012,
-      "a": 2012
-     }
-    },
-    {
-     "id": "NktZdv",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2013)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2013,
-      "a": 2013
-     }
-    },
-    {
-     "id": "MY4hnn",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2014)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "Cw9f0r",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2015)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "iG5ndM",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2016)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "4swNhs",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2017)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "y9p5O6",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2018)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "QGYYTl",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2019)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "yb9t4T",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 2t (2021 - 22)",
-     "variante": "2t",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "hT43IS",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 2t (2022)",
-     "variante": "2t",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "Yiagi2",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 2T (2023)",
-     "variante": "2T",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "1ZRfyc",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 ES 2T (2024)",
-     "variante": "ES 2T",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "NvUjj3",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 ES Fi 2T (2025)",
-     "variante": "ES Fi 2T",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
+      "da": 2003,
+      "a": 2008
      }
     }
    ]
@@ -1832,18 +1565,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "dH1Zxy",
-       "HTuAng",
-       "2ha44s",
-       "XEb6Qq",
-       "rUCwQz",
-       "NktZdv",
-       "MY4hnn",
-       "Cw9f0r",
-       "iG5ndM",
-       "4swNhs",
-       "y9p5O6",
-       "QGYYTl"
+       "qdKXKI"
       ],
       "come": "versione base"
      }
@@ -1854,267 +1576,14 @@
    ],
    "versioniMotoit": [
     {
-     "id": "dH1Zxy",
+     "id": "qdKXKI",
      "modelloSlug": "mx-125",
-     "nome": "MX 125 (1999-2004)",
+     "nome": "MX 125 (2003 - 08)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 1999,
-      "a": 2004
-     }
-    },
-    {
-     "id": "qUQPKr",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 2t (2020)",
-     "variante": "2t",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "OwyiIY",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 2T (2024)",
-     "variante": "2T",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "BO5eWK",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 ES 2T (2025)",
-     "variante": "ES 2T",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "lyqxPu",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 ES 2T (2026)",
-     "variante": "ES 2T",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "UQwfIY",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 ES 2T TM Corse (2026)",
-     "variante": "ES 2T TM Corse",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "hAhbBE",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 ES Fi 2T (2026)",
-     "variante": "ES Fi 2T",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "onuMhM",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 ES Fi 2T TM Corse (2026)",
-     "variante": "ES Fi 2T TM Corse",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "HTuAng",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2005)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2005
-     }
-    },
-    {
-     "id": "2ha44s",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2006)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2006,
-      "a": 2006
-     }
-    },
-    {
-     "id": "XEb6Qq",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2008 - 09)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2008,
-      "a": 2009
-     }
-    },
-    {
-     "id": "rUCwQz",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2012)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2012,
-      "a": 2012
-     }
-    },
-    {
-     "id": "NktZdv",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2013)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2013,
-      "a": 2013
-     }
-    },
-    {
-     "id": "MY4hnn",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2014)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "Cw9f0r",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2015)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "iG5ndM",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2016)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "4swNhs",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2017)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "y9p5O6",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2018)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "QGYYTl",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 (2019)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "yb9t4T",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 2t (2021 - 22)",
-     "variante": "2t",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "hT43IS",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 2t (2022)",
-     "variante": "2t",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "Yiagi2",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 2T (2023)",
-     "variante": "2T",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "1ZRfyc",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 ES 2T (2024)",
-     "variante": "ES 2T",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "NvUjj3",
-     "modelloSlug": "mx-125",
-     "nome": "MX 125 ES Fi 2T (2025)",
-     "variante": "ES Fi 2T",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
+      "da": 2003,
+      "a": 2008
      }
     }
    ]
@@ -16460,7 +15929,7 @@
       "base": true,
       "motoit": [
        "sHNzxN",
-       "bM7R9g"
+       "6lB0Nm"
       ],
       "come": "versione base"
      }
@@ -16494,26 +15963,12 @@
      }
     },
     {
-     "id": "bM7R9g",
+     "id": "6lB0Nm",
      "modelloSlug": "s-125",
-     "nome": "S 125 (2007 - 11)",
+     "nome": "S 125",
      "variante": "",
      "base": true,
-     "anni": {
-      "da": 2007,
-      "a": 2011
-     }
-    },
-    {
-     "id": "t0swle",
-     "modelloSlug": "s-125",
-     "nome": "S 125 i.e. (2009 - 12)",
-     "variante": "i.e.",
-     "base": false,
-     "anni": {
-      "da": 2009,
-      "a": 2012
-     }
+     "anni": null
     }
    ]
   },
@@ -17454,7 +16909,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "bM7R9g"
+       "6lB0Nm"
       ],
       "come": "versione base"
      }
@@ -17465,26 +16920,12 @@
    ],
    "versioniMotoit": [
     {
-     "id": "bM7R9g",
+     "id": "6lB0Nm",
      "modelloSlug": "s-125",
-     "nome": "S 125 (2007 - 11)",
+     "nome": "S 125",
      "variante": "",
      "base": true,
-     "anni": {
-      "da": 2007,
-      "a": 2011
-     }
-    },
-    {
-     "id": "t0swle",
-     "modelloSlug": "s-125",
-     "nome": "S 125 i.e. (2009 - 12)",
-     "variante": "i.e.",
-     "base": false,
-     "anni": {
-      "da": 2009,
-      "a": 2012
-     }
+     "anni": null
     }
    ]
   },
@@ -35549,7 +34990,11 @@
       "id": "005887",
       "nome": "Sixty2",
       "variante": "Sixty2",
-      "base": false
+      "base": false,
+      "motoit": [
+       "xTIYa9"
+      ],
+      "come": "stessa variante"
      },
      {
       "id": "006488",
@@ -35600,9 +35045,7 @@
       "base": true,
       "motoit": [
        "hquiXA",
-       "fzD6wu",
-       "07wfX6",
-       "wshr9X"
+       "fzD6wu"
       ],
       "come": "versione base"
      }
@@ -35712,36 +35155,14 @@
      "anni": null
     },
     {
-     "id": "07wfX6",
+     "id": "xTIYa9",
      "modelloSlug": "scrambler-400",
-     "nome": "Scrambler 400 (2015 - 16)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2015,
-      "a": 2016
-     }
-    },
-    {
-     "id": "wshr9X",
-     "modelloSlug": "scrambler-400",
-     "nome": "Scrambler 400 (2017 - 20)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2020
-     }
-    },
-    {
-     "id": "bpJp6x",
-     "modelloSlug": "scrambler-400",
-     "nome": "Scrambler 400 Chromuim (2018 - 20)",
-     "variante": "Chromuim",
+     "nome": "Scrambler 400 Sixty 2 (2016 - 21)",
+     "variante": "Sixty 2",
      "base": false,
      "anni": {
-      "da": 2018,
-      "a": 2020
+      "da": 2016,
+      "a": 2021
      }
     },
     {
@@ -45042,7 +44463,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "GV5QAI"
+       "ryoVvg"
       ],
       "come": "versione base"
      }
@@ -45053,37 +44474,20 @@
    ],
    "versioniMotoit": [
     {
-     "id": "GV5QAI",
+     "id": "cetUJv",
      "modelloSlug": "rc-125",
-     "nome": "RC 125 (2022 - 26)",
+     "nome": "RC 125 a.e.",
+     "variante": "a.e.",
+     "base": false,
+     "anni": null
+    },
+    {
+     "id": "ryoVvg",
+     "modelloSlug": "rc-125",
+     "nome": "RC 125",
      "variante": "",
      "base": true,
-     "anni": {
-      "da": 2022,
-      "a": 2026
-     }
-    },
-    {
-     "id": "mMubKi",
-     "modelloSlug": "rc-125",
-     "nome": "RC 125 ABS (2015 - 16)",
-     "variante": "ABS",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2016
-     }
-    },
-    {
-     "id": "QGtfRO",
-     "modelloSlug": "rc-125",
-     "nome": "RC 125 ABS (2017 - 20)",
-     "variante": "ABS",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2020
-     }
+     "anni": null
     }
    ]
   },
@@ -45853,7 +45257,11 @@
       "id": "003869",
       "nome": "X",
       "variante": "X",
-      "base": false
+      "base": false,
+      "motoit": [
+       "QZ2xuw"
+      ],
+      "come": "stessa variante"
      },
      {
       "id": "000834",
@@ -45867,10 +45275,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "8HUt4I",
-       "ynODno",
-       "9NtOGw",
-       "Zf8IS2"
+       "OVossZ"
       ],
       "come": "versione base"
      }
@@ -45881,62 +45286,58 @@
    ],
    "versioniMotoit": [
     {
-     "id": "8HUt4I",
+     "id": "OVossZ",
      "modelloSlug": "typhoon-50",
-     "nome": "Typhoon 50 (2011 - 18)",
+     "nome": "Typhoon 50",
      "variante": "",
      "base": true,
-     "anni": {
-      "da": 2011,
-      "a": 2018
-     }
+     "anni": null
     },
     {
-     "id": "ynODno",
+     "id": "RPwtqn",
      "modelloSlug": "typhoon-50",
-     "nome": "Typhoon 50 (2018 - 20)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    },
-    {
-     "id": "9NtOGw",
-     "modelloSlug": "typhoon-50",
-     "nome": "Typhoon 50 (2000 - 01)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2000,
-      "a": 2001
-     }
-    },
-    {
-     "id": "Zf8IS2",
-     "modelloSlug": "typhoon-50",
-     "nome": "Typhoon 50 (2007 - 11)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2007,
-      "a": 2011
-     }
-    },
-    {
-     "id": "gibvjF",
-     "modelloSlug": "typhoon-50",
-     "nome": "Typhoon 50 X Cat",
-     "variante": "X Cat",
+     "nome": "Typhoon 50 Benetton F1",
+     "variante": "Benetton F1",
      "base": false,
      "anni": null
     },
     {
-     "id": "P2CKxw",
+     "id": "nJi0ic",
      "modelloSlug": "typhoon-50",
-     "nome": "Typhoon 50 X-R",
-     "variante": "X-R",
+     "nome": "Typhoon 50 Martini R.",
+     "variante": "Martini R.",
+     "base": false,
+     "anni": null
+    },
+    {
+     "id": "5Pcz5F",
+     "modelloSlug": "typhoon-50",
+     "nome": "Typhoon 50 Street",
+     "variante": "Street",
+     "base": false,
+     "anni": null
+    },
+    {
+     "id": "QZ2xuw",
+     "modelloSlug": "typhoon-50",
+     "nome": "Typhoon 50 X",
+     "variante": "X",
+     "base": false,
+     "anni": null
+    },
+    {
+     "id": "STMRD7",
+     "modelloSlug": "typhoon-50",
+     "nome": "Typhoon 50 X Kat",
+     "variante": "X Kat",
+     "base": false,
+     "anni": null
+    },
+    {
+     "id": "Vyd0eE",
+     "modelloSlug": "typhoon-50",
+     "nome": "Typhoon 50 XR Kat",
+     "variante": "XR Kat",
      "base": false,
      "anni": null
     }
@@ -46019,14 +45420,7 @@
       "id": "002333",
       "nome": "RR",
       "variante": "RR",
-      "base": false,
-      "motoit": [
-       "g9QfnG",
-       "zrLKsQ",
-       "qrROnh",
-       "as0oZu"
-      ],
-      "come": "stessa variante"
+      "base": false
      },
      {
       "id": "000000",
@@ -46034,10 +45428,8 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "MY8wAz",
-       "Kt648c",
-       "AZ4sYA",
-       "q4Dp2E"
+       "Rdqt1A",
+       "HpkI4o"
       ],
       "come": "versione base"
      }
@@ -46048,102 +45440,58 @@
    ],
    "versioniMotoit": [
     {
-     "id": "MY8wAz",
+     "id": "Rdqt1A",
      "modelloSlug": "baja-50",
-     "nome": "Baja 50 (2019 - 20)",
+     "nome": "Baja 50 (2009 - 11) ",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2019,
-      "a": 2020
+      "da": 2009,
+      "a": 2011
      }
     },
     {
-     "id": "Kt648c",
+     "id": "HpkI4o",
      "modelloSlug": "baja-50",
-     "nome": "Baja 50 (2021 - 25)",
+     "nome": "Baja 50 (2007 - 08)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2021,
-      "a": 2025
+      "da": 2007,
+      "a": 2008
      }
     },
     {
-     "id": "g9QfnG",
+     "id": "zobRlw",
      "modelloSlug": "baja-50",
-     "nome": "Baja 50 RR (2013 - 18)",
-     "variante": "RR",
+     "nome": "Baja 50 10/10 Junior  (2000 - 05)",
+     "variante": "10/10 Junior",
      "base": false,
      "anni": {
-      "da": 2013,
-      "a": 2018
+      "da": 2000,
+      "a": 2005
      }
     },
     {
-     "id": "zrLKsQ",
+     "id": "5FYiBc",
      "modelloSlug": "baja-50",
-     "nome": "Baja 50 RR (2019 - 20)",
-     "variante": "RR",
+     "nome": "Baja 50 10/10 Senior  (2000 - 05)",
+     "variante": "10/10 Senior",
      "base": false,
      "anni": {
-      "da": 2019,
-      "a": 2020
+      "da": 2000,
+      "a": 2005
      }
     },
     {
-     "id": "qrROnh",
+     "id": "xAmzNd",
      "modelloSlug": "baja-50",
-     "nome": "Baja 50 RR (2021 - 25)",
-     "variante": "RR",
+     "nome": "Baja 50 12/15 (2000 - 05)",
+     "variante": "12/15",
      "base": false,
      "anni": {
-      "da": 2021,
-      "a": 2025
-     }
-    },
-    {
-     "id": "AZ4sYA",
-     "modelloSlug": "baja-50",
-     "nome": "Baja 50 (2026)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "as0oZu",
-     "modelloSlug": "baja-50",
-     "nome": "Baja 50 RR (2026)",
-     "variante": "RR",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "q4Dp2E",
-     "modelloSlug": "baja-50",
-     "nome": "Baja 50 (2013 - 18)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2013,
-      "a": 2018
-     }
-    },
-    {
-     "id": "0BXjF8",
-     "modelloSlug": "baja-50",
-     "nome": "Baja 50 2T Kids (2021 - 23)",
-     "variante": "2T Kids",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2023
+      "da": 2000,
+      "a": 2005
      }
     }
    ]
@@ -47406,14 +46754,7 @@
       "id": "002334",
       "nome": "RR",
       "variante": "RR",
-      "base": false,
-      "motoit": [
-       "1t0Hdf",
-       "i25SKY",
-       "9aVLGx",
-       "23M7gW"
-      ],
-      "come": "stessa variante"
+      "base": false
      },
      {
       "id": "002211",
@@ -47433,10 +46774,10 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "VUkkZ4",
-       "wAXaSF",
-       "Jfpt18",
-       "UXdd3H"
+       "LqZvIy",
+       "YUpeEB",
+       "gnh0Xx",
+       "QW1UDc"
       ],
       "come": "versione base"
      }
@@ -47447,113 +46788,80 @@
    ],
    "versioniMotoit": [
     {
-     "id": "VUkkZ4",
+     "id": "LqZvIy",
      "modelloSlug": "derapage-50",
-     "nome": "Derapage 50 (2019 - 20)",
+     "nome": "Derapage 50 (2007 - 08) ",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2019,
-      "a": 2020
+      "da": 2007,
+      "a": 2008
      }
     },
     {
-     "id": "wAXaSF",
+     "id": "YUpeEB",
      "modelloSlug": "derapage-50",
-     "nome": "Derapage 50 (2021 - 25)",
+     "nome": "Derapage 50 (2009 - 11) ",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2021,
-      "a": 2025
+      "da": 2009,
+      "a": 2011
      }
     },
     {
-     "id": "1t0Hdf",
+     "id": "gnh0Xx",
      "modelloSlug": "derapage-50",
-     "nome": "Derapage 50 RR (2019 - 20)",
-     "variante": "RR",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "i25SKY",
-     "modelloSlug": "derapage-50",
-     "nome": "Derapage 50 RR (2021 - 25)",
-     "variante": "RR",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2025
-     }
-    },
-    {
-     "id": "Jfpt18",
-     "modelloSlug": "derapage-50",
-     "nome": "Derapage 50 (2026)",
+     "nome": "Derapage 50 (1998 - 01)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2026,
-      "a": 2026
+      "da": 1998,
+      "a": 2001
      }
     },
     {
-     "id": "coh8pe",
+     "id": "QW1UDc",
      "modelloSlug": "derapage-50",
-     "nome": "Derapage 50 Low (2026)",
-     "variante": "Low",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "9aVLGx",
-     "modelloSlug": "derapage-50",
-     "nome": "Derapage 50 RR (2026)",
-     "variante": "RR",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "UXdd3H",
-     "modelloSlug": "derapage-50",
-     "nome": "Derapage 50 (2013 - 18)",
+     "nome": "Derapage 50 (2002 - 06)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2013,
-      "a": 2018
+      "da": 2002,
+      "a": 2006
      }
     },
     {
-     "id": "6vVqzr",
+     "id": "6WK2Aq",
      "modelloSlug": "derapage-50",
-     "nome": "Derapage 50 Low (2022 - 25)",
-     "variante": "Low",
+     "nome": "Derapage 50 Comp. (2007 - 08)",
+     "variante": "Comp.",
      "base": false,
      "anni": {
-      "da": 2022,
-      "a": 2025
+      "da": 2007,
+      "a": 2008
      }
     },
     {
-     "id": "23M7gW",
+     "id": "NI308u",
      "modelloSlug": "derapage-50",
-     "nome": "Derapage 50 RR (2013 - 18)",
-     "variante": "RR",
+     "nome": "Derapage 50 Comp. (2009 - 11)",
+     "variante": "Comp.",
      "base": false,
      "anni": {
-      "da": 2013,
-      "a": 2018
+      "da": 2009,
+      "a": 2011
+     }
+    },
+    {
+     "id": "w1BF26",
+     "modelloSlug": "derapage-50",
+     "nome": "Derapage 50 Six Comp. (2003 - 06)",
+     "variante": "Six Comp.",
+     "base": false,
+     "anni": {
+      "da": 2003,
+      "a": 2006
      }
     }
    ]
@@ -47569,13 +46877,21 @@
       "id": "002535",
       "nome": "10/10 Junior",
       "variante": "10/10 Junior",
-      "base": false
+      "base": false,
+      "motoit": [
+       "zobRlw"
+      ],
+      "come": "stessa variante"
      },
      {
       "id": "002536",
       "nome": "10/10 Senior",
       "variante": "10/10 Senior",
-      "base": false
+      "base": false,
+      "motoit": [
+       "5FYiBc"
+      ],
+      "come": "stessa variante"
      },
      {
       "id": "002537",
@@ -47589,10 +46905,8 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "MY8wAz",
-       "Kt648c",
-       "AZ4sYA",
-       "q4Dp2E"
+       "Rdqt1A",
+       "HpkI4o"
       ],
       "come": "versione base"
      }
@@ -47603,102 +46917,58 @@
    ],
    "versioniMotoit": [
     {
-     "id": "MY8wAz",
+     "id": "Rdqt1A",
      "modelloSlug": "baja-50",
-     "nome": "Baja 50 (2019 - 20)",
+     "nome": "Baja 50 (2009 - 11) ",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2019,
-      "a": 2020
+      "da": 2009,
+      "a": 2011
      }
     },
     {
-     "id": "Kt648c",
+     "id": "HpkI4o",
      "modelloSlug": "baja-50",
-     "nome": "Baja 50 (2021 - 25)",
+     "nome": "Baja 50 (2007 - 08)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2021,
-      "a": 2025
+      "da": 2007,
+      "a": 2008
      }
     },
     {
-     "id": "g9QfnG",
+     "id": "zobRlw",
      "modelloSlug": "baja-50",
-     "nome": "Baja 50 RR (2013 - 18)",
-     "variante": "RR",
+     "nome": "Baja 50 10/10 Junior  (2000 - 05)",
+     "variante": "10/10 Junior",
      "base": false,
      "anni": {
-      "da": 2013,
-      "a": 2018
+      "da": 2000,
+      "a": 2005
      }
     },
     {
-     "id": "zrLKsQ",
+     "id": "5FYiBc",
      "modelloSlug": "baja-50",
-     "nome": "Baja 50 RR (2019 - 20)",
-     "variante": "RR",
+     "nome": "Baja 50 10/10 Senior  (2000 - 05)",
+     "variante": "10/10 Senior",
      "base": false,
      "anni": {
-      "da": 2019,
-      "a": 2020
+      "da": 2000,
+      "a": 2005
      }
     },
     {
-     "id": "qrROnh",
+     "id": "xAmzNd",
      "modelloSlug": "baja-50",
-     "nome": "Baja 50 RR (2021 - 25)",
-     "variante": "RR",
+     "nome": "Baja 50 12/15 (2000 - 05)",
+     "variante": "12/15",
      "base": false,
      "anni": {
-      "da": 2021,
-      "a": 2025
-     }
-    },
-    {
-     "id": "AZ4sYA",
-     "modelloSlug": "baja-50",
-     "nome": "Baja 50 (2026)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "as0oZu",
-     "modelloSlug": "baja-50",
-     "nome": "Baja 50 RR (2026)",
-     "variante": "RR",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "q4Dp2E",
-     "modelloSlug": "baja-50",
-     "nome": "Baja 50 (2013 - 18)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2013,
-      "a": 2018
-     }
-    },
-    {
-     "id": "0BXjF8",
-     "modelloSlug": "baja-50",
-     "nome": "Baja 50 2T Kids (2021 - 23)",
-     "variante": "2T Kids",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2023
+      "da": 2000,
+      "a": 2005
      }
     }
    ]
@@ -94293,426 +93563,6 @@
    ]
   },
   {
-   "marca": "Honda Dall'Ara",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "000032",
-    "nome": "XR 125",
-    "versioni": [
-     {
-      "id": "000065",
-      "nome": "R",
-      "variante": "R",
-      "base": false
-     },
-     {
-      "id": "000066",
-      "nome": "SM",
-      "variante": "SM",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "8U8Y75"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "-125"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "8U8Y75",
-     "modelloSlug": "-125",
-     "nome": "@ 125 (2000 - 06)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2000,
-      "a": 2006
-     }
-    },
-    {
-     "id": "uBz5Dh",
-     "modelloSlug": "-125",
-     "nome": "@ 125 ES (2000 - 04)",
-     "variante": "ES",
-     "base": false,
-     "anni": {
-      "da": 2000,
-      "a": 2004
-     }
-    },
-    {
-     "id": "EY42ze",
-     "modelloSlug": "-125",
-     "nome": "@ 125 Two Tone (2003 - 04)",
-     "variante": "Two Tone",
-     "base": false,
-     "anni": {
-      "da": 2003,
-      "a": 2004
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Honda Dall'Ara",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "000033",
-    "nome": "XR 250",
-    "versioni": [
-     {
-      "id": "014072",
-      "nome": "R",
-      "variante": "R",
-      "base": false
-     },
-     {
-      "id": "000067",
-      "nome": "R AE",
-      "variante": "R AE",
-      "base": false
-     },
-     {
-      "id": "000068",
-      "nome": "R Avv Pedale",
-      "variante": "R Avv Pedale",
-      "base": false
-     },
-     {
-      "id": "000069",
-      "nome": "SM AE",
-      "variante": "SM AE",
-      "base": false
-     },
-     {
-      "id": "000070",
-      "nome": "SM Avv Pedale",
-      "variante": "SM Avv Pedale",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "FSjPeM",
-       "G5nHYQ"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "xr-250-r"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "FSjPeM",
-     "modelloSlug": "xr-250-r",
-     "nome": "XR 250 R (1992 - 02)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1992,
-      "a": 2002
-     }
-    },
-    {
-     "id": "G5nHYQ",
-     "modelloSlug": "xr-250-r",
-     "nome": "XR 250 R (2003)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2003,
-      "a": 2003
-     }
-    },
-    {
-     "id": "lZAiLz",
-     "modelloSlug": "xr-250-r",
-     "nome": "XR 250 R Supermotard (2002 - 03)",
-     "variante": "Supermotard",
-     "base": false,
-     "anni": {
-      "da": 2002,
-      "a": 2003
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Honda Dall'Ara",
-   "gradoModello": "fine",
-   "subito": {
-    "id": "000034",
-    "nome": "XR 400",
-    "versioni": [
-     {
-      "id": "000071",
-      "nome": "R",
-      "variante": "R",
-      "base": false
-     },
-     {
-      "id": "001806",
-      "nome": "R AE",
-      "variante": "R AE",
-      "base": false
-     },
-     {
-      "id": "000072",
-      "nome": "SM",
-      "variante": "SM",
-      "base": false
-     },
-     {
-      "id": "001808",
-      "nome": "SM AE",
-      "variante": "SM AE",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "42u3OS",
-       "h9MDEb"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "xr-400-r",
-    "xr-400-r-a-e-dall-ara"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "42u3OS",
-     "modelloSlug": "xr-400-r",
-     "nome": "XR 400 R (1996 - 02)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1996,
-      "a": 2002
-     }
-    },
-    {
-     "id": "qGtQf9",
-     "modelloSlug": "xr-400-r",
-     "nome": "XR 400 R Supermotard (1997 - 03)",
-     "variante": "Supermotard",
-     "base": false,
-     "anni": {
-      "da": 1997,
-      "a": 2003
-     }
-    },
-    {
-     "id": "lXJ5IG",
-     "modelloSlug": "xr-400-r",
-     "nome": "XR 400 R Supermotard (2000 - 02)",
-     "variante": "Supermotard",
-     "base": false,
-     "anni": {
-      "da": 2000,
-      "a": 2002
-     }
-    },
-    {
-     "id": "h9MDEb",
-     "modelloSlug": "xr-400-r-a-e-dall-ara",
-     "nome": "XR 400 R A.E. Dall'Ara",
-     "variante": "",
-     "base": true,
-     "anni": null
-    }
-   ]
-  },
-  {
-   "marca": "Honda Dall'Ara",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "004752",
-    "nome": "XR 600",
-    "versioni": [
-     {
-      "id": "013621",
-      "nome": "R",
-      "variante": "R",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "8VKmdM",
-       "pbL7cS"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "xr-600-r"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "8VKmdM",
-     "modelloSlug": "xr-600-r",
-     "nome": "XR 600 R (1988 -89)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1988,
-      "a": 1989
-     }
-    },
-    {
-     "id": "pbL7cS",
-     "modelloSlug": "xr-600-r",
-     "nome": "XR 600 R (1990 - 94)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1990,
-      "a": 1994
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Honda Dall'Ara",
-   "gradoModello": "fine",
-   "subito": {
-    "id": "000036",
-    "nome": "XR 650",
-    "versioni": [
-     {
-      "id": "000074",
-      "nome": "R",
-      "variante": "R",
-      "base": false
-     },
-     {
-      "id": "000075",
-      "nome": "R 25kW",
-      "variante": "R 25kW",
-      "base": false
-     },
-     {
-      "id": "001810",
-      "nome": "R AE",
-      "variante": "R AE",
-      "base": false
-     },
-     {
-      "id": "001812",
-      "nome": "R AE 25kW",
-      "variante": "R AE 25kW",
-      "base": false
-     },
-     {
-      "id": "000076",
-      "nome": "SM",
-      "variante": "SM",
-      "base": false
-     },
-     {
-      "id": "000077",
-      "nome": "SM 25kW",
-      "variante": "SM 25kW",
-      "base": false
-     },
-     {
-      "id": "001811",
-      "nome": "SM AE",
-      "variante": "SM AE",
-      "base": false
-     },
-     {
-      "id": "001813",
-      "nome": "SM AE 25kW",
-      "variante": "SM AE 25kW",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "JgkZR1",
-       "5szcmd",
-       "GqGrjL"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "xr-650-r",
-    "xr-650-r-a-e-dall-ara",
-    "xr-650-sm-k-s-dall-ara"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "WS9sMM",
-     "modelloSlug": "xr-650-r",
-     "nome": "XR 650 R Supermotard (2002 - 04)",
-     "variante": "Supermotard",
-     "base": false,
-     "anni": {
-      "da": 2002,
-      "a": 2004
-     }
-    },
-    {
-     "id": "JgkZR1",
-     "modelloSlug": "xr-650-r",
-     "nome": "XR 650 R (2000 - 02)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2000,
-      "a": 2002
-     }
-    },
-    {
-     "id": "5szcmd",
-     "modelloSlug": "xr-650-r-a-e-dall-ara",
-     "nome": "XR 650 R A.E. Dall'Ara",
-     "variante": "",
-     "base": true,
-     "anni": null
-    },
-    {
-     "id": "GqGrjL",
-     "modelloSlug": "xr-650-sm-k-s-dall-ara",
-     "nome": "XR 650 SM K.S. Dall'Ara",
-     "variante": "",
-     "base": true,
-     "anni": null
-    }
-   ]
-  },
-  {
    "marca": "Husaberg",
    "gradoModello": "identico",
    "subito": {
@@ -94725,20 +93575,8 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "qY1AZT",
-       "PYWeXv",
-       "2MXypd",
-       "UOCrkH",
-       "wqblwE",
-       "Fp9G6U",
-       "LhrXvo",
-       "jtRD3e",
-       "JWlegd",
-       "PZjDs6",
-       "kDnva4",
-       "rRHbXw",
-       "tHYPvE",
-       "zcefud"
+       "Xvk8fn",
+       "mT1y8a"
       ],
       "come": "versione base"
      }
@@ -94749,7 +93587,7 @@
    ],
    "versioniMotoit": [
     {
-     "id": "qY1AZT",
+     "id": "Xvk8fn",
      "modelloSlug": "fe-250",
      "nome": "FE 250 (2014)",
      "variante": "",
@@ -94760,168 +93598,14 @@
      }
     },
     {
-     "id": "PYWeXv",
+     "id": "mT1y8a",
      "modelloSlug": "fe-250",
-     "nome": "FE 250 (2015)",
+     "nome": "FE 250 (2013)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "2MXypd",
-     "modelloSlug": "fe-250",
-     "nome": "FE 250 (2016)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "UOCrkH",
-     "modelloSlug": "fe-250",
-     "nome": "FE 250 (2017)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "wqblwE",
-     "modelloSlug": "fe-250",
-     "nome": "FE 250 (2018)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "Fp9G6U",
-     "modelloSlug": "fe-250",
-     "nome": "FE 250 (2019)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "LhrXvo",
-     "modelloSlug": "fe-250",
-     "nome": "FE 250 (2020)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "jtRD3e",
-     "modelloSlug": "fe-250",
-     "nome": "FE 250 (2021)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "JWlegd",
-     "modelloSlug": "fe-250",
-     "nome": "FE 250 (2022)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "PZjDs6",
-     "modelloSlug": "fe-250",
-     "nome": "FE 250 (2023)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "kDnva4",
-     "modelloSlug": "fe-250",
-     "nome": "FE 250 (2024)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "rRHbXw",
-     "modelloSlug": "fe-250",
-     "nome": "FE 250 (2025)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "tHYPvE",
-     "modelloSlug": "fe-250",
-     "nome": "FE 250 (2026)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "zcefud",
-     "modelloSlug": "fe-250",
-     "nome": "FE 250 (2027)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2027,
-      "a": 2027
-     }
-    },
-    {
-     "id": "nhm4Jz",
-     "modelloSlug": "fe-250",
-     "nome": "FE 250 Heritage (2025)",
-     "variante": "Heritage",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "0pvtKS",
-     "modelloSlug": "fe-250",
-     "nome": "FE 250 Heritage (2023)",
-     "variante": "Heritage",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
+      "da": 2013,
+      "a": 2013
      }
     }
    ]
@@ -94939,20 +93623,8 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "l62xzB",
-       "sLxUgu",
-       "8zHCWB",
-       "kFSrR5",
-       "iGC4xd",
-       "S9uJtB",
-       "x0BahN",
-       "5xPMkk",
-       "4FgTLm",
-       "Eh5Ke2",
-       "ldTj7S",
-       "OD9Lyd",
-       "tuNRA8",
-       "IuMJII"
+       "NUVowp",
+       "NkNNQ3"
       ],
       "come": "versione base"
      }
@@ -94963,194 +93635,18 @@
    ],
    "versioniMotoit": [
     {
-     "id": "l62xzB",
+     "id": "NUVowp",
      "modelloSlug": "fe-350",
-     "nome": "FE 350 (2017)",
+     "nome": "FE 350 (2013)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2017,
-      "a": 2017
+      "da": 2013,
+      "a": 2013
      }
     },
     {
-     "id": "sLxUgu",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 (2018)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "8zHCWB",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 (2019)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "kFSrR5",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 (2020)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "iGC4xd",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 (2021)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "S9uJtB",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 (2022)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "x0BahN",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 (2023)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "5xPMkk",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 (2024)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "4FgTLm",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 (2025)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "Eh5Ke2",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 (2026)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "ldTj7S",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 (2027)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2027,
-      "a": 2027
-     }
-    },
-    {
-     "id": "JTc3Kv",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 Pro (2024)",
-     "variante": "Pro",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "CO40Pd",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 Pro (2025)",
-     "variante": "Pro",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "kDuoGt",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 Pro (2026)",
-     "variante": "Pro",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "M9gCPR",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 Rockstar Edition (2021)",
-     "variante": "Rockstar Edition",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "RfAuqe",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 Rockstar Edition (2022)",
-     "variante": "Rockstar Edition",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "ryGhlu",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 Heritage (2025)",
-     "variante": "Heritage",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "OD9Lyd",
+     "id": "NkNNQ3",
      "modelloSlug": "fe-350",
      "nome": "FE 350 (2014)",
      "variante": "",
@@ -95161,37 +93657,12 @@
      }
     },
     {
-     "id": "tuNRA8",
+     "id": "EPqV4p",
      "modelloSlug": "fe-350",
-     "nome": "FE 350 (2015)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "IuMJII",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 (2016)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "RDPKsZ",
-     "modelloSlug": "fe-350",
-     "nome": "FE 350 Heritage (2023)",
-     "variante": "Heritage",
+     "nome": "FE 350/E",
+     "variante": "FE 350/E",
      "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
+     "anni": null
     }
    ]
   },
@@ -95801,13 +94272,9 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "uhM1Jl",
-       "UP1RoC",
-       "plLh1C",
-       "FIZeJi",
-       "bE8oW5",
-       "QeMI1U",
-       "KWsE6O"
+       "9Dtejn",
+       "CQo3W1",
+       "OBE4mh"
       ],
       "come": "versione base"
      }
@@ -95818,62 +94285,29 @@
    ],
    "versioniMotoit": [
     {
-     "id": "uhM1Jl",
+     "id": "9Dtejn",
      "modelloSlug": "te-125",
-     "nome": "TE 125 (2010 - 13)",
+     "nome": "TE 125 (2012)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2010,
+      "da": 2012,
+      "a": 2012
+     }
+    },
+    {
+     "id": "CQo3W1",
+     "modelloSlug": "te-125",
+     "nome": "TE 125 (2013)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2013,
       "a": 2013
      }
     },
     {
-     "id": "UP1RoC",
-     "modelloSlug": "te-125",
-     "nome": "TE 125 (2015)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "plLh1C",
-     "modelloSlug": "te-125",
-     "nome": "TE 125 (2016)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "FIZeJi",
-     "modelloSlug": "te-125",
-     "nome": "TE 125 (2025)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "bE8oW5",
-     "modelloSlug": "te-125",
-     "nome": "TE 125 (2027)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2027,
-      "a": 2027
-     }
-    },
-    {
-     "id": "QeMI1U",
+     "id": "OBE4mh",
      "modelloSlug": "te-125",
      "nome": "TE 125 (2014)",
      "variante": "",
@@ -95881,17 +94315,6 @@
      "anni": {
       "da": 2014,
       "a": 2014
-     }
-    },
-    {
-     "id": "KWsE6O",
-     "modelloSlug": "te-125",
-     "nome": "TE 125 (2026)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2026,
-      "a": 2026
      }
     }
    ]
@@ -95909,23 +94332,9 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "CWnXbu",
-       "zTWlQa",
-       "xK7NXU",
-       "qzGJWL",
-       "8FYiY2",
-       "ThJR8o",
-       "rg8vYe",
-       "VOROVM",
-       "G1bql2",
-       "yUuOYK",
-       "McWXjv",
-       "kQVjQd",
-       "OuFI7J",
-       "NHIZtc",
-       "U2IDic",
-       "0sFlMb",
-       "Vn7Ooq"
+       "9DaNgI",
+       "C8jLip",
+       "nNy3pb"
       ],
       "come": "versione base"
      }
@@ -95936,40 +94345,7 @@
    ],
    "versioniMotoit": [
     {
-     "id": "CWnXbu",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 (2002 - 04)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2002,
-      "a": 2004
-     }
-    },
-    {
-     "id": "zTWlQa",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 (2005)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2005
-     }
-    },
-    {
-     "id": "xK7NXU",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 (2006)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2006,
-      "a": 2006
-     }
-    },
-    {
-     "id": "qzGJWL",
+     "id": "9DaNgI",
      "modelloSlug": "te-250",
      "nome": "TE 250 (2012)",
      "variante": "",
@@ -95980,7 +94356,7 @@
      }
     },
     {
-     "id": "8FYiY2",
+     "id": "C8jLip",
      "modelloSlug": "te-250",
      "nome": "TE 250 (2013)",
      "variante": "",
@@ -95991,7 +94367,7 @@
      }
     },
     {
-     "id": "ThJR8o",
+     "id": "nNy3pb",
      "modelloSlug": "te-250",
      "nome": "TE 250 (2014)",
      "variante": "",
@@ -96002,223 +94378,14 @@
      }
     },
     {
-     "id": "rg8vYe",
+     "id": "3xRnru",
      "modelloSlug": "te-250",
-     "nome": "TE 250 (2016)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "VOROVM",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 (2017)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "G1bql2",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 (2024)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "yUuOYK",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 (2025)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "lPT7E8",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 Heritage (2023)",
-     "variante": "Heritage",
+     "nome": "TE 250 2T (2010 - 11)",
+     "variante": "2T",
      "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "03PZLM",
-     "modelloSlug": "te-250",
-     "nome": "TE 250i (2018)",
-     "variante": "TE 250i",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "yxl5ZN",
-     "modelloSlug": "te-250",
-     "nome": "TE 250i (2021)",
-     "variante": "TE 250i",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "l6mTd2",
-     "modelloSlug": "te-250",
-     "nome": "TE 250i (2022)",
-     "variante": "TE 250i",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "OdcRNl",
-     "modelloSlug": "te-250",
-     "nome": "TE 250i (2023)",
-     "variante": "TE 250i",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "McWXjv",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 (2027)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2027,
-      "a": 2027
-     }
-    },
-    {
-     "id": "2NGwBc",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 Heritage (2025)",
-     "variante": "Heritage",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "kQVjQd",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 (2007)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2007,
-      "a": 2007
-     }
-    },
-    {
-     "id": "OuFI7J",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 (2009)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2009,
-      "a": 2009
-     }
-    },
-    {
-     "id": "NHIZtc",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 (2010 - 11)",
-     "variante": "",
-     "base": true,
      "anni": {
       "da": 2010,
       "a": 2011
-     }
-    },
-    {
-     "id": "U2IDic",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 (2011)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2011,
-      "a": 2011
-     }
-    },
-    {
-     "id": "0sFlMb",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 (2015)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "Vn7Ooq",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 (2026)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "wQkLIh",
-     "modelloSlug": "te-250",
-     "nome": "TE 250 i.e. (2008)",
-     "variante": "i.e.",
-     "base": false,
-     "anni": {
-      "da": 2008,
-      "a": 2008
-     }
-    },
-    {
-     "id": "1Bd4Of",
-     "modelloSlug": "te-250",
-     "nome": "TE 250i (2019)",
-     "variante": "TE 250i",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "1Bavlm",
-     "modelloSlug": "te-250",
-     "nome": "TE 250i (2020)",
-     "variante": "TE 250i",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
      }
     }
    ]
@@ -96236,14 +94403,9 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "yZLo0H",
-       "s7DWcD",
-       "w0w9kr",
-       "NkEi12",
-       "dR1PKM",
-       "VTnnPB",
-       "1e6J0d",
-       "z5qUJb"
+       "VCdS6V",
+       "XGPvSs",
+       "HB5EzW"
       ],
       "come": "versione base"
      }
@@ -96254,139 +94416,29 @@
    ],
    "versioniMotoit": [
     {
-     "id": "yZLo0H",
+     "id": "VCdS6V",
      "modelloSlug": "te-300",
-     "nome": "TE 300 (2024)",
+     "nome": "TE 300 (2013)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2024,
-      "a": 2024
+      "da": 2013,
+      "a": 2013
      }
     },
     {
-     "id": "s7DWcD",
+     "id": "XGPvSs",
      "modelloSlug": "te-300",
-     "nome": "TE 300 (2026)",
+     "nome": "TE 300 (2012)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2026,
-      "a": 2026
+      "da": 2012,
+      "a": 2012
      }
     },
     {
-     "id": "w0w9kr",
-     "modelloSlug": "te-300",
-     "nome": "TE 300 (2027)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2027,
-      "a": 2027
-     }
-    },
-    {
-     "id": "VvxeiK",
-     "modelloSlug": "te-300",
-     "nome": "TE 300 Heritage (2023)",
-     "variante": "Heritage",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "AlOgs3",
-     "modelloSlug": "te-300",
-     "nome": "TE 300 Heritage (2025)",
-     "variante": "Heritage",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "K3QRAR",
-     "modelloSlug": "te-300",
-     "nome": "TE 300i (2019)",
-     "variante": "TE 300i",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "qE9ZML",
-     "modelloSlug": "te-300",
-     "nome": "TE 300i (2020)",
-     "variante": "TE 300i",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "Y3rZPE",
-     "modelloSlug": "te-300",
-     "nome": "TE 300i (2022)",
-     "variante": "TE 300i",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "N9VpQJ",
-     "modelloSlug": "te-300",
-     "nome": "TE 300i (2023)",
-     "variante": "TE 300i",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "apTNX8",
-     "modelloSlug": "te-300",
-     "nome": "TE 300i Jarvis Edition (2020)",
-     "variante": "TE 300i Jarvis Edition",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "qlZlPU",
-     "modelloSlug": "te-300",
-     "nome": "TE 300i Rockstar Edition (2021)",
-     "variante": "TE 300i Rockstar Edition",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "kT6dJN",
-     "modelloSlug": "te-300",
-     "nome": "TE 300 Pro (2026)",
-     "variante": "Pro",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "NkEi12",
+     "id": "HB5EzW",
      "modelloSlug": "te-300",
      "nome": "TE 300 (2014)",
      "variante": "",
@@ -96397,102 +94449,14 @@
      }
     },
     {
-     "id": "dR1PKM",
+     "id": "UGiZhG",
      "modelloSlug": "te-300",
-     "nome": "TE 300 (2015)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "VTnnPB",
-     "modelloSlug": "te-300",
-     "nome": "TE 300 (2016)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "1e6J0d",
-     "modelloSlug": "te-300",
-     "nome": "TE 300 (2017)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "z5qUJb",
-     "modelloSlug": "te-300",
-     "nome": "TE 300 (2025)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "4DJ8hE",
-     "modelloSlug": "te-300",
-     "nome": "TE 300 Pro (2024)",
-     "variante": "Pro",
+     "nome": "TE 300 2T (2010 - 11)",
+     "variante": "2T",
      "base": false,
      "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "Vlc5DP",
-     "modelloSlug": "te-300",
-     "nome": "TE 300 Pro (2025)",
-     "variante": "Pro",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "tNllk6",
-     "modelloSlug": "te-300",
-     "nome": "TE 300i (2018)",
-     "variante": "TE 300i",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "6tY474",
-     "modelloSlug": "te-300",
-     "nome": "TE 300i (2021)",
-     "variante": "TE 300i",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "0YdC78",
-     "modelloSlug": "te-300",
-     "nome": "TE 300i Rockstar Edition (2022)",
-     "variante": "TE 300i Rockstar Edition",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2022
+      "da": 2010,
+      "a": 2011
      }
     }
    ]
@@ -99046,8 +97010,11 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "yXI3dh",
-       "P9lteY"
+       "pxZSaW",
+       "8evvMr",
+       "3vXNcF",
+       "PMYXlx",
+       "Fp0QVP"
       ],
       "come": "versione base"
      }
@@ -99058,25 +97025,55 @@
    ],
    "versioniMotoit": [
     {
-     "id": "yXI3dh",
+     "id": "pxZSaW",
      "modelloSlug": "sm-125",
-     "nome": "SM 125 (2021 - 23)",
+     "nome": "SM 125",
+     "variante": "",
+     "base": true,
+     "anni": null
+    },
+    {
+     "id": "8evvMr",
+     "modelloSlug": "sm-125",
+     "nome": "SM 125 (2007)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2021,
-      "a": 2023
+      "da": 2007,
+      "a": 2007
      }
     },
     {
-     "id": "P9lteY",
+     "id": "3vXNcF",
      "modelloSlug": "sm-125",
-     "nome": "SM 125 (2024 - 26)",
+     "nome": "SM 125 (2008)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2024,
-      "a": 2026
+      "da": 2008,
+      "a": 2008
+     }
+    },
+    {
+     "id": "PMYXlx",
+     "modelloSlug": "sm-125",
+     "nome": "SM 125 (2009)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2009,
+      "a": 2009
+     }
+    },
+    {
+     "id": "Fp0QVP",
+     "modelloSlug": "sm-125",
+     "nome": "SM 125 (2010 - 12)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2010,
+      "a": 2012
      }
     }
    ]
@@ -99238,8 +97235,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "1veKwK",
-       "909PfO"
+       "lVcr2Q"
       ],
       "come": "versione base"
      }
@@ -99250,25 +97246,14 @@
    ],
    "versioniMotoit": [
     {
-     "id": "1veKwK",
+     "id": "lVcr2Q",
      "modelloSlug": "sm-50",
-     "nome": "SM 50 (2015 - 22)",
+     "nome": "SM 50 (2012 - 13)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2015,
-      "a": 2022
-     }
-    },
-    {
-     "id": "909PfO",
-     "modelloSlug": "sm-50",
-     "nome": "SM 50 (2023 - 24)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2023,
-      "a": 2024
+      "da": 2012,
+      "a": 2013
      }
     }
    ]
@@ -99507,18 +97492,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "1GMmgI",
-       "qEF0zo",
-       "OUag1H",
-       "IMRukA",
-       "3zJSKL",
-       "gDrDiU",
-       "DuSRlb",
-       "6XqSfu",
-       "kfl6Ll",
-       "CYA3oX",
-       "w89Crn",
-       "F8pcAg"
+       "mfKfg1"
       ],
       "come": "versione base"
      }
@@ -99529,245 +97503,14 @@
    ],
    "versioniMotoit": [
     {
-     "id": "1GMmgI",
+     "id": "mfKfg1",
      "modelloSlug": "smr-125",
-     "nome": "SMR 125 (2008 - 09)",
+     "nome": "SMR 125 (2011 - 13)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2008,
-      "a": 2009
-     }
-    },
-    {
-     "id": "qEF0zo",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 (2012)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2012,
-      "a": 2012
-     }
-    },
-    {
-     "id": "OUag1H",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 (2016)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "IMRukA",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 (2017)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "zN2gmQ",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 ES Fi 2T (2025)",
-     "variante": "ES Fi 2T",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "XTJjcw",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 ES Fi 2T (2026)",
-     "variante": "ES Fi 2T",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "mOaw22",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 Fi 2t (2020)",
-     "variante": "Fi 2t",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "bhuRv2",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 Fi 2t (2021 - 22)",
-     "variante": "Fi 2t",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "yVnmBg",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 Fi 2t (2022)",
-     "variante": "Fi 2t",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "ChE9xi",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 Fi 2T (2023)",
-     "variante": "Fi 2T",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "Araish",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 Fi 2T (2024)",
-     "variante": "Fi 2T",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "3zJSKL",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 (2003 - 04)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2003,
-      "a": 2004
-     }
-    },
-    {
-     "id": "gDrDiU",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 (2005)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2005
-     }
-    },
-    {
-     "id": "DuSRlb",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 (2006)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2006,
-      "a": 2006
-     }
-    },
-    {
-     "id": "6XqSfu",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 (2013)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2013,
+      "da": 2011,
       "a": 2013
-     }
-    },
-    {
-     "id": "kfl6Ll",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 (2014)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "CYA3oX",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 (2015)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "w89Crn",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 (2018)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "F8pcAg",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 (2019)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "P1gvfN",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 Fi 2T Replica Chareyre (2023 - 24)",
-     "variante": "Fi 2T Replica Chareyre",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "iUgHrq",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 Fi 2T Replica Schmidt (2023 - 24)",
-     "variante": "Fi 2T Replica Schmidt",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "74mZcz",
-     "modelloSlug": "smr-125",
-     "nome": "SMR 125 Fi 2T Replica Vandi (2023 - 24)",
-     "variante": "Fi 2T Replica Vandi",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
      }
     }
    ]
@@ -103162,9 +100905,18 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "RVKpQj",
-       "udxVub",
-       "Z2dQEl"
+       "auamiS",
+       "0cqFim",
+       "FBwPXo",
+       "kqXaxI",
+       "pTRFoi",
+       "i8SdtK",
+       "0r4Lsi",
+       "09BLPm",
+       "yBfFDM",
+       "dyz6AD",
+       "aVyv3t",
+       "sLFx3m"
       ],
       "come": "versione base"
      }
@@ -103175,80 +100927,135 @@
    ],
    "versioniMotoit": [
     {
-     "id": "RVKpQj",
+     "id": "auamiS",
      "modelloSlug": "wr-125",
-     "nome": "WR 125 (2016 - 17)",
+     "nome": "WR 125 (1995 - 01)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2016,
-      "a": 2017
+      "da": 1995,
+      "a": 2001
      }
     },
     {
-     "id": "InuVtL",
+     "id": "0cqFim",
      "modelloSlug": "wr-125",
-     "nome": "WR 125 R (2009 - 12)",
-     "variante": "R",
-     "base": false,
+     "nome": "WR 125 (2002 - 04)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2002,
+      "a": 2004
+     }
+    },
+    {
+     "id": "FBwPXo",
+     "modelloSlug": "wr-125",
+     "nome": "WR 125 (2006)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2006,
+      "a": 2006
+     }
+    },
+    {
+     "id": "kqXaxI",
+     "modelloSlug": "wr-125",
+     "nome": "WR 125 (2008)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2008,
+      "a": 2008
+     }
+    },
+    {
+     "id": "pTRFoi",
+     "modelloSlug": "wr-125",
+     "nome": "WR 125 (2009)",
+     "variante": "",
+     "base": true,
      "anni": {
       "da": 2009,
+      "a": 2009
+     }
+    },
+    {
+     "id": "i8SdtK",
+     "modelloSlug": "wr-125",
+     "nome": "WR 125 (2010 - 11)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2010,
+      "a": 2011
+     }
+    },
+    {
+     "id": "0r4Lsi",
+     "modelloSlug": "wr-125",
+     "nome": "WR 125 (2011)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2011,
+      "a": 2011
+     }
+    },
+    {
+     "id": "09BLPm",
+     "modelloSlug": "wr-125",
+     "nome": "WR 125 (2012)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2012,
       "a": 2012
      }
     },
     {
-     "id": "17CrBa",
+     "id": "yBfFDM",
      "modelloSlug": "wr-125",
-     "nome": "WR 125 R (2026)",
-     "variante": "R",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "IAK0oK",
-     "modelloSlug": "wr-125",
-     "nome": "WR 125 X (2009 - 16)",
-     "variante": "X",
-     "base": false,
-     "anni": {
-      "da": 2009,
-      "a": 2016
-     }
-    },
-    {
-     "id": "udxVub",
-     "modelloSlug": "wr-125",
-     "nome": "WR 125 (1993 - 95)",
+     "nome": "WR 125 (2013)",
      "variante": "",
      "base": true,
-     "anni": {
-      "da": 1993,
-      "a": 1995
-     }
-    },
-    {
-     "id": "Z2dQEl",
-     "modelloSlug": "wr-125",
-     "nome": "WR 125 (1997 - 02)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1997,
-      "a": 2002
-     }
-    },
-    {
-     "id": "YypVns",
-     "modelloSlug": "wr-125",
-     "nome": "WR 125 by Motorbyke (2013)",
-     "variante": "by Motorbyke",
-     "base": false,
      "anni": {
       "da": 2013,
       "a": 2013
+     }
+    },
+    {
+     "id": "dyz6AD",
+     "modelloSlug": "wr-125",
+     "nome": "WR 125 (1990 - 94)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 1990,
+      "a": 1994
+     }
+    },
+    {
+     "id": "aVyv3t",
+     "modelloSlug": "wr-125",
+     "nome": "WR 125 (2005)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2005,
+      "a": 2005
+     }
+    },
+    {
+     "id": "sLFx3m",
+     "modelloSlug": "wr-125",
+     "nome": "WR 125 (2007)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2007,
+      "a": 2007
      }
     }
    ]
@@ -103266,8 +101073,16 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "56GcKC",
-       "ZO21dQ"
+       "OY6qCP",
+       "9j8mz3",
+       "dnMh3U",
+       "qYaitc",
+       "h2Ecpq",
+       "FSnGq6",
+       "u3FKZz",
+       "j0NSj7",
+       "EYWzXL",
+       "MdnT0p"
       ],
       "come": "versione base"
      }
@@ -103278,34 +101093,114 @@
    ],
    "versioniMotoit": [
     {
-     "id": "56GcKC",
+     "id": "OY6qCP",
      "modelloSlug": "wr-250",
-     "nome": "WR 250 (2016)",
+     "nome": "WR 250 (1989 - 01)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2016,
-      "a": 2016
+      "da": 1989,
+      "a": 2001
      }
     },
     {
-     "id": "ZO21dQ",
+     "id": "9j8mz3",
      "modelloSlug": "wr-250",
-     "nome": "WR 250 (1994 - 00)",
+     "nome": "WR 250 (2007)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 1994,
-      "a": 2000
+      "da": 2007,
+      "a": 2007
      }
     },
     {
-     "id": "cg7Nx3",
+     "id": "dnMh3U",
      "modelloSlug": "wr-250",
-     "nome": "WR 250 Enduro",
-     "variante": "Enduro",
-     "base": false,
-     "anni": null
+     "nome": "WR 250 (2002 - 04)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2002,
+      "a": 2004
+     }
+    },
+    {
+     "id": "qYaitc",
+     "modelloSlug": "wr-250",
+     "nome": "WR 250 (2005)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2005,
+      "a": 2005
+     }
+    },
+    {
+     "id": "h2Ecpq",
+     "modelloSlug": "wr-250",
+     "nome": "WR 250 (2006)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2006,
+      "a": 2006
+     }
+    },
+    {
+     "id": "FSnGq6",
+     "modelloSlug": "wr-250",
+     "nome": "WR 250 (2008)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2008,
+      "a": 2008
+     }
+    },
+    {
+     "id": "u3FKZz",
+     "modelloSlug": "wr-250",
+     "nome": "WR 250 (2009)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2009,
+      "a": 2009
+     }
+    },
+    {
+     "id": "j0NSj7",
+     "modelloSlug": "wr-250",
+     "nome": "WR 250 (2010 - 11)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2010,
+      "a": 2011
+     }
+    },
+    {
+     "id": "EYWzXL",
+     "modelloSlug": "wr-250",
+     "nome": "WR 250 (2012)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2012,
+      "a": 2012
+     }
+    },
+    {
+     "id": "MdnT0p",
+     "modelloSlug": "wr-250",
+     "nome": "WR 250 (2013)",
+     "variante": "",
+     "base": true,
+     "anni": {
+      "da": 2013,
+      "a": 2013
+     }
     }
    ]
   },
@@ -109424,7 +107319,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "Wd0iQN"
+       "fJ5aDk"
       ],
       "come": "versione base"
      }
@@ -109435,14 +107330,14 @@
    ],
    "versioniMotoit": [
     {
-     "id": "Wd0iQN",
+     "id": "fJ5aDk",
      "modelloSlug": "classic-125",
-     "nome": "Classic 125 (2017 - 19)",
+     "nome": "Classic 125 (2018 - 20)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2017,
-      "a": 2019
+      "da": 2018,
+      "a": 2020
      }
     }
    ]
@@ -134418,7 +132313,11 @@
       "id": "021899",
       "nome": "EX",
       "variante": "EX",
-      "base": false
+      "base": false,
+      "motoit": [
+       "msFyoD"
+      ],
+      "come": "stessa variante"
      },
      {
       "id": "017970",
@@ -134430,7 +132329,12 @@
       "id": "017974",
       "nome": "Low",
       "variante": "Low",
-      "base": false
+      "base": false,
+      "motoit": [
+       "0H2wSZ",
+       "5Ql5q9"
+      ],
+      "come": "stessa variante"
      },
      {
       "id": "020318",
@@ -134442,16 +132346,7 @@
       "id": "000000",
       "nome": "Altro allestimento",
       "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "ObCpY4",
-       "eTlc2w",
-       "BLRkd8",
-       "vScSac",
-       "5K3dGO",
-       "5mnP9T"
-      ],
-      "come": "versione base"
+      "base": true
      }
     ]
    },
@@ -134460,112 +132355,68 @@
    ],
    "versioniMotoit": [
     {
-     "id": "ObCpY4",
+     "id": "YgYwOa",
      "modelloSlug": "450-rally",
-     "nome": "450 Rally (2022)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "uQ8do5",
-     "modelloSlug": "450-rally",
-     "nome": "450 Rally Replica (2027)",
-     "variante": "Replica",
+     "nome": "450 Rally High (2023 - 24)",
+     "variante": "High",
      "base": false,
-     "anni": {
-      "da": 2027,
-      "a": 2027
-     }
-    },
-    {
-     "id": "qk0TUe",
-     "modelloSlug": "450-rally",
-     "nome": "450 Rally Replica Benavides Factory Edition (2027)",
-     "variante": "Replica Benavides Factory Edition",
-     "base": false,
-     "anni": {
-      "da": 2027,
-      "a": 2027
-     }
-    },
-    {
-     "id": "eTlc2w",
-     "modelloSlug": "450-rally",
-     "nome": "450 Rally (2011 - 15)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2011,
-      "a": 2015
-     }
-    },
-    {
-     "id": "BLRkd8",
-     "modelloSlug": "450-rally",
-     "nome": "450 Rally (2020)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "vScSac",
-     "modelloSlug": "450-rally",
-     "nome": "450 Rally (2021)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "5K3dGO",
-     "modelloSlug": "450-rally",
-     "nome": "450 Rally (2023)",
-     "variante": "",
-     "base": true,
      "anni": {
       "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "5mnP9T",
-     "modelloSlug": "450-rally",
-     "nome": "450 Rally (2024)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2024,
       "a": 2024
      }
     },
     {
-     "id": "R9OAwe",
+     "id": "iIa7gW",
      "modelloSlug": "450-rally",
-     "nome": "450 Rally Replica (2025)",
-     "variante": "Replica",
+     "nome": "450 Rally High (2025 - 26)",
+     "variante": "High",
      "base": false,
      "anni": {
       "da": 2025,
-      "a": 2025
+      "a": 2026
      }
     },
     {
-     "id": "kxtMLg",
+     "id": "0H2wSZ",
      "modelloSlug": "450-rally",
-     "nome": "450 Rally Replica (2026)",
-     "variante": "Replica",
+     "nome": "450 Rally Low (2023 - 24)",
+     "variante": "Low",
      "base": false,
      "anni": {
-      "da": 2026,
+      "da": 2023,
+      "a": 2024
+     }
+    },
+    {
+     "id": "5Ql5q9",
+     "modelloSlug": "450-rally",
+     "nome": "450 Rally Low (2025 - 26)",
+     "variante": "Low",
+     "base": false,
+     "anni": {
+      "da": 2025,
+      "a": 2026
+     }
+    },
+    {
+     "id": "msFyoD",
+     "modelloSlug": "450-rally",
+     "nome": "450 Rally EX (2025 - 26)",
+     "variante": "EX",
+     "base": false,
+     "anni": {
+      "da": 2025,
+      "a": 2026
+     }
+    },
+    {
+     "id": "8xAtax",
+     "modelloSlug": "450-rally",
+     "nome": "450 Rally Lucky Explorer Replica (2025 - 26)",
+     "variante": "Lucky Explorer Replica",
+     "base": false,
+     "anni": {
+      "da": 2025,
       "a": 2026
      }
     }
@@ -141143,7 +138994,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "TCAORi"
+       "OaS8Rv"
       ],
       "come": "versione base"
      }
@@ -141154,14 +139005,14 @@
    ],
    "versioniMotoit": [
     {
-     "id": "TCAORi",
+     "id": "OaS8Rv",
      "modelloSlug": "c1002v",
-     "nome": "C1002V (2024 - 26)",
+     "nome": "C1002V (2023 - 24)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2024,
-      "a": 2026
+      "da": 2023,
+      "a": 2024
      }
     }
    ]
@@ -141179,7 +139030,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "voI0Um"
+       "eN6rFo"
       ],
       "come": "versione base"
      }
@@ -141190,14 +139041,14 @@
    ],
    "versioniMotoit": [
     {
-     "id": "voI0Um",
+     "id": "eN6rFo",
      "modelloSlug": "m502n",
-     "nome": "M502N (2024 - 26)",
+     "nome": "M502N (2022 - 24)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2024,
-      "a": 2026
+      "da": 2022,
+      "a": 2024
      }
     }
    ]
@@ -141323,7 +139174,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "VrB0Pz"
+       "aMDbny"
       ],
       "come": "versione base"
      }
@@ -141334,14 +139185,14 @@
    ],
    "versioniMotoit": [
     {
-     "id": "VrB0Pz",
+     "id": "aMDbny",
      "modelloSlug": "sc300",
-     "nome": "SC300 (2024 - 26)",
+     "nome": "SC300 (2024)",
      "variante": "",
      "base": true,
      "anni": {
       "da": 2024,
-      "a": 2026
+      "a": 2024
      }
     }
    ]
@@ -141359,7 +139210,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "tqiVn6"
+       "oVvL8E"
       ],
       "come": "versione base"
      }
@@ -141370,14 +139221,14 @@
    ],
    "versioniMotoit": [
     {
-     "id": "tqiVn6",
+     "id": "oVvL8E",
      "modelloSlug": "t1002vx",
-     "nome": "T1002VX (2024 - 26)",
+     "nome": "T1002VX (2024)",
      "variante": "",
      "base": true,
      "anni": {
       "da": 2024,
-      "a": 2026
+      "a": 2024
      }
     }
    ]
@@ -148410,11 +146261,7 @@
       "id": "000000",
       "nome": "Altro allestimento",
       "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "92TYHb"
-      ],
-      "come": "versione base"
+      "base": true
      }
     ]
    },
@@ -148423,14 +146270,14 @@
    ],
    "versioniMotoit": [
     {
-     "id": "92TYHb",
+     "id": "NqlzHY",
      "modelloSlug": "scrambler",
-     "nome": "Scrambler (2006 - 17)",
-     "variante": "",
-     "base": true,
+     "nome": "Scrambler 125 (2014 - 16)",
+     "variante": "125",
+     "base": false,
      "anni": {
-      "da": 2006,
-      "a": 2017
+      "da": 2014,
+      "a": 2016
      }
     }
    ]
@@ -155976,7 +153823,12 @@
       "id": "000000",
       "nome": "Altro allestimento",
       "variante": "Altro allestimento",
-      "base": true
+      "base": true,
+      "motoit": [
+       "zP1prQ",
+       "ixo4zs"
+      ],
+      "come": "versione base"
      }
     ]
    },
@@ -155985,157 +153837,25 @@
    ],
    "versioniMotoit": [
     {
-     "id": "IZb8j1",
+     "id": "zP1prQ",
      "modelloSlug": "scrambler-1200",
-     "nome": "Scrambler 1200 Steve McQueen Edition (2021 - 22)",
-     "variante": "Steve McQueen Edition",
-     "base": false,
+     "nome": "Scrambler 1200 (2009 - 17)",
+     "variante": "",
+     "base": true,
      "anni": {
-      "da": 2021,
-      "a": 2022
+      "da": 2009,
+      "a": 2017
      }
     },
     {
-     "id": "1S6oQa",
+     "id": "ixo4zs",
      "modelloSlug": "scrambler-1200",
-     "nome": "Scrambler 1200 X (2024 - 26)",
-     "variante": "X",
-     "base": false,
+     "nome": "Scrambler 1200 (2018 - 20)",
+     "variante": "",
+     "base": true,
      "anni": {
-      "da": 2024,
-      "a": 2026
-     }
-    },
-    {
-     "id": "mYq41u",
-     "modelloSlug": "scrambler-1200",
-     "nome": "Scrambler 1200 X Icon Edition (2025 - 26)",
-     "variante": "X Icon Edition",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "PjQOwI",
-     "modelloSlug": "scrambler-1200",
-     "nome": "Scrambler 1200 XC (2019 - 20)",
-     "variante": "XC",
-     "base": false,
-     "anni": {
-      "da": 2019,
+      "da": 2018,
       "a": 2020
-     }
-    },
-    {
-     "id": "NOTYrI",
-     "modelloSlug": "scrambler-1200",
-     "nome": "Scrambler 1200 XC (2021 - 23)",
-     "variante": "XC",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2023
-     }
-    },
-    {
-     "id": "Y9FEFt",
-     "modelloSlug": "scrambler-1200",
-     "nome": "Scrambler 1200 XC Gold Line Edition (2021 - 23)",
-     "variante": "XC Gold Line Edition",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2023
-     }
-    },
-    {
-     "id": "X0efRV",
-     "modelloSlug": "scrambler-1200",
-     "nome": "Scrambler 1200 XE (2019 - 20)",
-     "variante": "XE",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "zQHado",
-     "modelloSlug": "scrambler-1200",
-     "nome": "Scrambler 1200 XE (2021 - 23)",
-     "variante": "XE",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2023
-     }
-    },
-    {
-     "id": "U0qEYN",
-     "modelloSlug": "scrambler-1200",
-     "nome": "Scrambler 1200 XE (2024 - 25)",
-     "variante": "XE",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2025
-     }
-    },
-    {
-     "id": "bNixIb",
-     "modelloSlug": "scrambler-1200",
-     "nome": "Scrambler 1200 XE (2026)",
-     "variante": "XE",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "4a78hu",
-     "modelloSlug": "scrambler-1200",
-     "nome": "Scrambler 1200 XE Bond Edition (2020)",
-     "variante": "XE Bond Edition",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "rUsyRI",
-     "modelloSlug": "scrambler-1200",
-     "nome": "Scrambler 1200 XE Chrome Edition (2023)",
-     "variante": "XE Chrome Edition",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "UbuZL1",
-     "modelloSlug": "scrambler-1200",
-     "nome": "Scrambler 1200 XE Gold Line Edition (2021 - 22)",
-     "variante": "XE Gold Line Edition",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "taoMzi",
-     "modelloSlug": "scrambler-1200",
-     "nome": "Scrambler 1200 XE Icon Edition (2025 - 26)",
-     "variante": "XE Icon Edition",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2026
      }
     }
    ]
@@ -177530,25 +175250,25 @@
    ],
    "versioniMotoit": [
     {
-     "id": "Ewjqo5",
+     "id": "Q3xZMv",
      "modelloSlug": "oxygen",
-     "nome": "Oxygen L3e (2019)",
+     "nome": "Oxygen L3e (2020 - 22)",
      "variante": "L3e",
      "base": false,
      "anni": {
-      "da": 2019,
-      "a": 2019
+      "da": 2020,
+      "a": 2022
      }
     },
     {
-     "id": "UDegpI",
+     "id": "LdGb4D",
      "modelloSlug": "oxygen",
-     "nome": "Oxygen L1e (2019)",
+     "nome": "Oxygen L1e (2020 - 22)",
      "variante": "L1e",
      "base": false,
      "anni": {
-      "da": 2019,
-      "a": 2019
+      "da": 2020,
+      "a": 2022
      }
     }
    ]
@@ -177566,7 +175286,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "36FpfZ"
+       "bjX8BN"
       ],
       "come": "versione base"
      }
@@ -177577,25 +175297,36 @@
    ],
    "versioniMotoit": [
     {
-     "id": "36FpfZ",
+     "id": "bjX8BN",
      "modelloSlug": "qooder-400",
-     "nome": "Qooder 400 (2018 - 19)",
+     "nome": "Qooder 400 (2020 - 24)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 2018,
-      "a": 2019
+      "da": 2020,
+      "a": 2024
      }
     },
     {
-     "id": "Hq6VKK",
+     "id": "MpsRTg",
      "modelloSlug": "qooder-400",
-     "nome": "Qooder 400 Steinbock (2019)",
+     "nome": "Qooder 400 Steinbock (2020)",
      "variante": "Steinbock",
      "base": false,
      "anni": {
-      "da": 2019,
-      "a": 2019
+      "da": 2020,
+      "a": 2020
+     }
+    },
+    {
+     "id": "4k7dHL",
+     "modelloSlug": "qooder-400",
+     "nome": "Qooder (2025 - 26)",
+     "variante": "Qooder",
+     "base": false,
+     "anni": {
+      "da": 2025,
+      "a": 2026
      }
     }
    ]
@@ -177902,2017 +175633,6 @@
      "anni": {
       "da": 2019,
       "a": 2019
-     }
-    }
-   ]
-  },
-  {
-   "marca": "RedMoto Honda",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "002662",
-    "nome": "CRF 150",
-    "versioni": [
-     {
-      "id": "005786",
-      "nome": "R",
-      "variante": "R",
-      "base": false
-     },
-     {
-      "id": "006885",
-      "nome": "RB",
-      "variante": "RB",
-      "base": false
-     },
-     {
-      "id": "019624",
-      "nome": "RBS",
-      "variante": "RBS",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "PFyqJu",
-       "sOVddG",
-       "9vj2d7",
-       "0UZxi8",
-       "w6fF9l",
-       "CpdSil",
-       "j028ud",
-       "hQPY6J"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "crf-150r"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "PFyqJu",
-     "modelloSlug": "crf-150r",
-     "nome": "CRF 150R (2009)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2009,
-      "a": 2009
-     }
-    },
-    {
-     "id": "sOVddG",
-     "modelloSlug": "crf-150r",
-     "nome": "CRF 150R (2015 - 16)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2015,
-      "a": 2016
-     }
-    },
-    {
-     "id": "JV4yLC",
-     "modelloSlug": "crf-150r",
-     "nome": "CRF 150RB (2025)",
-     "variante": "CRF 150RB",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "z55chw",
-     "modelloSlug": "crf-150r",
-     "nome": "CRF 150RB (2026)",
-     "variante": "CRF 150RB",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "9vj2d7",
-     "modelloSlug": "crf-150r",
-     "nome": "CRF 150R (2006)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2006,
-      "a": 2006
-     }
-    },
-    {
-     "id": "0UZxi8",
-     "modelloSlug": "crf-150r",
-     "nome": "CRF 150R (2010 - 11)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2010,
-      "a": 2011
-     }
-    },
-    {
-     "id": "w6fF9l",
-     "modelloSlug": "crf-150r",
-     "nome": "CRF 150R (2012 - 13)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2012,
-      "a": 2013
-     }
-    },
-    {
-     "id": "CpdSil",
-     "modelloSlug": "crf-150r",
-     "nome": "CRF 150R (2017)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "j028ud",
-     "modelloSlug": "crf-150r",
-     "nome": "CRF 150R (2018 - 20)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2020
-     }
-    },
-    {
-     "id": "hQPY6J",
-     "modelloSlug": "crf-150r",
-     "nome": "CRF 150R (2022)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "YrZBDA",
-     "modelloSlug": "crf-150r",
-     "nome": "CRF 150RB (2011 - 12)",
-     "variante": "CRF 150RB",
-     "base": false,
-     "anni": {
-      "da": 2011,
-      "a": 2012
-     }
-    },
-    {
-     "id": "o6qAPP",
-     "modelloSlug": "crf-150r",
-     "nome": "CRF 150RB (2023 - 24)",
-     "variante": "CRF 150RB",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    }
-   ]
-  },
-  {
-   "marca": "RedMoto Honda",
-   "gradoModello": "fine",
-   "subito": {
-    "id": "002410",
-    "nome": "CRF 250",
-    "versioni": [
-     {
-      "id": "005067",
-      "nome": "R",
-      "variante": "R",
-      "base": false
-     },
-     {
-      "id": "006554",
-      "nome": "R Special",
-      "variante": "R Special",
-      "base": false
-     },
-     {
-      "id": "019625",
-      "nome": "R Works Edition",
-      "variante": "R Works Edition",
-      "base": false
-     },
-     {
-      "id": "005787",
-      "nome": "RG",
-      "variante": "RG",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "t4vtpL",
-       "E7D3JX",
-       "3A4U39",
-       "88ULjX",
-       "Syd0KC",
-       "m0tNYa",
-       "Bp9HLS",
-       "x6VwUm",
-       "8mmwno",
-       "bA0pnu",
-       "elYpYO",
-       "jjNGt3",
-       "y0Rc89",
-       "QeHr2v",
-       "u2rQpg",
-       "Bk7tXS",
-       "gP5Qom",
-       "0SGJeX",
-       "LmkGbl",
-       "9YelZ9",
-       "RnVLA7",
-       "gjmBa5",
-       "eqqA9U",
-       "KUfC5F",
-       "5GIlXZ",
-       "ue4bUn",
-       "PD9w7b",
-       "85odk3"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "crf-250-rally",
-    "crf-250l",
-    "crf-250m",
-    "crf-250r",
-    "crf-250rx",
-    "crf-250x"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "t4vtpL",
-     "modelloSlug": "crf-250-rally",
-     "nome": "CRF 250 Rally (2017 - 20)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2020
-     }
-    },
-    {
-     "id": "E7D3JX",
-     "modelloSlug": "crf-250l",
-     "nome": "CRF 250L (2012 - 13)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2012,
-      "a": 2013
-     }
-    },
-    {
-     "id": "3A4U39",
-     "modelloSlug": "crf-250l",
-     "nome": "CRF 250L (2017 - 20)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2020
-     }
-    },
-    {
-     "id": "88ULjX",
-     "modelloSlug": "crf-250l",
-     "nome": "CRF 250L (2021 - 22)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "Syd0KC",
-     "modelloSlug": "crf-250m",
-     "nome": "CRF 250M (2013 - 17)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2013,
-      "a": 2017
-     }
-    },
-    {
-     "id": "m0tNYa",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2005)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2005
-     }
-    },
-    {
-     "id": "Bp9HLS",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2006)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2006,
-      "a": 2006
-     }
-    },
-    {
-     "id": "x6VwUm",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2007)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2007,
-      "a": 2007
-     }
-    },
-    {
-     "id": "8mmwno",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2008)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2008,
-      "a": 2008
-     }
-    },
-    {
-     "id": "bA0pnu",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2009)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2009,
-      "a": 2009
-     }
-    },
-    {
-     "id": "elYpYO",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2010 - 11)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2010,
-      "a": 2011
-     }
-    },
-    {
-     "id": "jjNGt3",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2011 - 12)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2011,
-      "a": 2012
-     }
-    },
-    {
-     "id": "y0Rc89",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2014)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "QeHr2v",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2017)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "u2rQpg",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2018)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "Bk7tXS",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2019)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "gP5Qom",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2020)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "0SGJeX",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2021)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "LmkGbl",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2022)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "9YelZ9",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2023)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "RnVLA7",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2024)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "gjmBa5",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2025)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "eqqA9U",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2026)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "dHgt0u",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R Enduro (2018)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "eKh3Eo",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R WE (2025)",
-     "variante": "WE",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "KUfC5F",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2027)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2027,
-      "a": 2027
-     }
-    },
-    {
-     "id": "UHrvAp",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R HRC-WE (2027)",
-     "variante": "HRC-WE",
-     "base": false,
-     "anni": {
-      "da": 2027,
-      "a": 2027
-     }
-    },
-    {
-     "id": "HH8s9P",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R WE (2026)",
-     "variante": "WE",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "5GIlXZ",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2003 - 04)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2003,
-      "a": 2004
-     }
-    },
-    {
-     "id": "ue4bUn",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R (2013)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2013,
-      "a": 2013
-     }
-    },
-    {
-     "id": "LKl4Gv",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R Carbon Edition (2020)",
-     "variante": "Carbon Edition",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "mT06xR",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R Carbon Edition Pro (2020)",
-     "variante": "Carbon Edition Pro",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "GYbGYM",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R Enduro (2014)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "GQhAFT",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R Enduro (2017)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "K9ingm",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R Enduro (2019)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "XaZmz1",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R Enduro Six Days (2018)",
-     "variante": "Enduro Six Days",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "qAuTKw",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R Enduro Special (2018)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "D2nFod",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250R Special (2018)",
-     "variante": "Special",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "v4RwJp",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250RF (2015)",
-     "variante": "CRF 250RF",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "qbIaVM",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250RF (2016)",
-     "variante": "CRF 250RF",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "Ol64rF",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250RF Enduro (2015)",
-     "variante": "CRF 250RF Enduro",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "gaSJMh",
-     "modelloSlug": "crf-250r",
-     "nome": "CRF 250RG Enduro (2016)",
-     "variante": "CRF 250RG Enduro",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "FGrbtG",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro (2019)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "q1mbbf",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro (2022)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "minzxg",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro (2023)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "saK9X6",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro (2024)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "eKHxm6",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro (2025)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "8sSHUj",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro (2026)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "2biWp7",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro Special (2022)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "WrAAhz",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro Special (2026)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "PD9w7b",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX (2019)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "PDReQi",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX 50&amp;deg; Anniversario (2023)",
-     "variante": "50&amp;deg; Anniversario",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "XSYYbK",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro (2020)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "YEDuFb",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro (2021)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "xWOc5C",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro Special (2020)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "N1z0Y1",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro Special (2021)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "17VI4P",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro Special (2023)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "AI5L9c",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro Special (2024)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "xfMzb2",
-     "modelloSlug": "crf-250rx",
-     "nome": "CRF 250RX Enduro Special (2025)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "85odk3",
-     "modelloSlug": "crf-250x",
-     "nome": "CRF 250X (2013 - 14 )",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2013,
-      "a": 2014
-     }
-    },
-    {
-     "id": "8gQD2i",
-     "modelloSlug": "crf-250x",
-     "nome": "CRF 250X Enduro (2014)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "QNUBm8",
-     "modelloSlug": "crf-250x",
-     "nome": "CRF 250X Enduro (2017)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "5K8Ff3",
-     "modelloSlug": "crf-250x",
-     "nome": "CRF 250XF Enduro (2015)",
-     "variante": "CRF 250XF Enduro",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "z3jswi",
-     "modelloSlug": "crf-250x",
-     "nome": "CRF 250XG Enduro (2016)",
-     "variante": "CRF 250XG Enduro",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    }
-   ]
-  },
-  {
-   "marca": "RedMoto Honda",
-   "gradoModello": "fine",
-   "subito": {
-    "id": "002411",
-    "nome": "CRF 450",
-    "versioni": [
-     {
-      "id": "005068",
-      "nome": "R",
-      "variante": "R",
-      "base": false,
-      "motoit": [
-       "t4osxO"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "006555",
-      "nome": "R Special",
-      "variante": "R Special",
-      "base": false
-     },
-     {
-      "id": "019626",
-      "nome": "R Works Edition",
-      "variante": "R Works Edition",
-      "base": false
-     },
-     {
-      "id": "005788",
-      "nome": "RG",
-      "variante": "RG",
-      "base": false,
-      "motoit": [
-       "VNOxq9"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "9IugDO",
-       "X5nHw0",
-       "uV0hw7",
-       "sy6LjG",
-       "kzLRW8",
-       "WUYqE3",
-       "hL1qvU",
-       "h19Qdy",
-       "95Is8M",
-       "onIo8L",
-       "lLA5Ar",
-       "0cMG9g",
-       "XUhBw4",
-       "foTg61",
-       "qdXzCp",
-       "DR03B9",
-       "ToUEJQ",
-       "Ek4HDN",
-       "j82gad",
-       "6A3UO4",
-       "wzWWxN",
-       "Z6v1lW",
-       "6yQSul",
-       "n7lwo3",
-       "SSFxHC",
-       "eExzwp",
-       "fWFXLG",
-       "eb5AUY",
-       "gtmlwr",
-       "QP0URz",
-       "zY8b0Y",
-       "ZL0e1H",
-       "bxBPwA"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "crf-450-supermoto",
-    "crf-450r",
-    "crf-450r-smt",
-    "crf-450rx",
-    "crf-450rx-rally",
-    "crf-450rx-supermoto",
-    "crf-450x"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "Dzu9VF",
-     "modelloSlug": "crf-450-supermoto",
-     "nome": "CRF 450 Supermoto RF (2015)",
-     "variante": "RF",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "t4osxO",
-     "modelloSlug": "crf-450-supermoto",
-     "nome": "CRF 450 Supermoto R (2014)",
-     "variante": "R",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "VNOxq9",
-     "modelloSlug": "crf-450-supermoto",
-     "nome": "CRF 450 Supermoto RG (2016)",
-     "variante": "RG",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "kYnjt2",
-     "modelloSlug": "crf-450-supermoto",
-     "nome": "CRF 450 Supermoto X (2014)",
-     "variante": "X",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "q94i1Y",
-     "modelloSlug": "crf-450-supermoto",
-     "nome": "CRF 450 Supermoto XF (2015)",
-     "variante": "XF",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "IBbOYs",
-     "modelloSlug": "crf-450-supermoto",
-     "nome": "CRF 450 Supermoto XG (2016)",
-     "variante": "XG",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "9IugDO",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2001 - 02)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2001,
-      "a": 2002
-     }
-    },
-    {
-     "id": "X5nHw0",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2003 - 04)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2003,
-      "a": 2004
-     }
-    },
-    {
-     "id": "uV0hw7",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2005)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2005
-     }
-    },
-    {
-     "id": "sy6LjG",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2006)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2006,
-      "a": 2006
-     }
-    },
-    {
-     "id": "kzLRW8",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2007)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2007,
-      "a": 2007
-     }
-    },
-    {
-     "id": "WUYqE3",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2008)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2008,
-      "a": 2008
-     }
-    },
-    {
-     "id": "hL1qvU",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2009)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2009,
-      "a": 2009
-     }
-    },
-    {
-     "id": "h19Qdy",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2010 - 11)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2010,
-      "a": 2011
-     }
-    },
-    {
-     "id": "95Is8M",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2011 - 12)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2011,
-      "a": 2012
-     }
-    },
-    {
-     "id": "onIo8L",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2013)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2013,
-      "a": 2013
-     }
-    },
-    {
-     "id": "lLA5Ar",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2014)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "0cMG9g",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2017)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "XUhBw4",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2018)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "foTg61",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2019)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "qdXzCp",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2020)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "DR03B9",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2021)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "ToUEJQ",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2022)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "Ek4HDN",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2023)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "j82gad",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2024)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "6A3UO4",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2025)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "wzWWxN",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2026)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "W2Owum",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450RF (2015)",
-     "variante": "CRF 450RF",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "Z6v1lW",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R (2027)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2027,
-      "a": 2027
-     }
-    },
-    {
-     "id": "zX3nDq",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R HRC-WE (2027)",
-     "variante": "HRC-WE",
-     "base": false,
-     "anni": {
-      "da": 2027,
-      "a": 2027
-     }
-    },
-    {
-     "id": "td9jDA",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R WE (2026)",
-     "variante": "WE",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "8UQHqZ",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R Enduro (2014)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "NrLubi",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R Special (2018)",
-     "variante": "Special",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "Dj4q3u",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450R WE (2025)",
-     "variante": "WE",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "fi3OLd",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450RF (2016)",
-     "variante": "CRF 450RF",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "fNndq9",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450RF Enduro (2015)",
-     "variante": "CRF 450RF Enduro",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "w1RLZj",
-     "modelloSlug": "crf-450r",
-     "nome": "CRF 450RG Enduro (2016)",
-     "variante": "CRF 450RG Enduro",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "6yQSul",
-     "modelloSlug": "crf-450r-smt",
-     "nome": "CRF 450R SMT (2025 - 26)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "5kH4uw",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro (2017)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "gAE4Ns",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro (2019)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2019,
-      "a": 2019
-     }
-    },
-    {
-     "id": "7xtTP9",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro (2020)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "yiBLsQ",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro (2021)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "b54KED",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro (2022)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "RkqgmC",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro (2023)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "ucjBhn",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro (2024)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "VRyQ81",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro (2026)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "kkz6g7",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro Special (2023)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "CQuLTE",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro Special (2026)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "50hMvw",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX 50&amp;deg; Anniversario (2023)",
-     "variante": "50&amp;deg; Anniversario",
-     "base": false,
-     "anni": {
-      "da": 2023,
-      "a": 2023
-     }
-    },
-    {
-     "id": "I70yuM",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro (2018)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "8nu4A0",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro (2025)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "iDiINI",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro Country (2017)",
-     "variante": "Enduro Country",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "nfI8cr",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro Six Days (2018)",
-     "variante": "Enduro Six Days",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "EFlafz",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro Special (2018)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "JqXHTq",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro Special (2020)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "vtP5Eb",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro Special (2021)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2021,
-      "a": 2021
-     }
-    },
-    {
-     "id": "bX1420",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro Special (2022)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2022,
-      "a": 2022
-     }
-    },
-    {
-     "id": "INldpF",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro Special (2024)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2024,
-      "a": 2024
-     }
-    },
-    {
-     "id": "bQNA3T",
-     "modelloSlug": "crf-450rx",
-     "nome": "CRF 450RX Enduro Special (2025)",
-     "variante": "Enduro Special",
-     "base": false,
-     "anni": {
-      "da": 2025,
-      "a": 2025
-     }
-    },
-    {
-     "id": "n7lwo3",
-     "modelloSlug": "crf-450rx-rally",
-     "nome": "CRF 450RX Rally (2024 - 25)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2024,
-      "a": 2025
-     }
-    },
-    {
-     "id": "SSFxHC",
-     "modelloSlug": "crf-450rx-rally",
-     "nome": "CRF 450RX Rally (2027)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2027,
-      "a": 2027
-     }
-    },
-    {
-     "id": "eExzwp",
-     "modelloSlug": "crf-450rx-rally",
-     "nome": "CRF 450RX Rally (2026)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2026,
-      "a": 2026
-     }
-    },
-    {
-     "id": "fWFXLG",
-     "modelloSlug": "crf-450rx-supermoto",
-     "nome": "CRF 450RX Supermoto (2018)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "eb5AUY",
-     "modelloSlug": "crf-450rx-supermoto",
-     "nome": "CRF 450RX Supermoto (2021 - 22)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2021,
-      "a": 2022
-     }
-    },
-    {
-     "id": "gtmlwr",
-     "modelloSlug": "crf-450rx-supermoto",
-     "nome": "CRF 450RX Supermoto (2023 - 24)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    },
-    {
-     "id": "QP0URz",
-     "modelloSlug": "crf-450rx-supermoto",
-     "nome": "CRF 450RX Supermoto (2025 - 26)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "zY8b0Y",
-     "modelloSlug": "crf-450rx-supermoto",
-     "nome": "CRF 450RX Supermoto (2017)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "ZL0e1H",
-     "modelloSlug": "crf-450rx-supermoto",
-     "nome": "CRF 450RX Supermoto (2020)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2020,
-      "a": 2020
-     }
-    },
-    {
-     "id": "bxBPwA",
-     "modelloSlug": "crf-450x",
-     "nome": "CRF 450X (2007 - 08)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2007,
-      "a": 2008
-     }
-    },
-    {
-     "id": "PshJZe",
-     "modelloSlug": "crf-450x",
-     "nome": "CRF 450X Enduro (2012 - 14)",
-     "variante": "Enduro",
-     "base": false,
-     "anni": {
-      "da": 2012,
-      "a": 2014
-     }
-    },
-    {
-     "id": "ywU09U",
-     "modelloSlug": "crf-450x",
-     "nome": "CRF 450XF Enduro (2015)",
-     "variante": "CRF 450XF Enduro",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "5UToH8",
-     "modelloSlug": "crf-450x",
-     "nome": "CRF 450XG Enduro (2016)",
-     "variante": "CRF 450XG Enduro",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    }
-   ]
-  },
-  {
-   "marca": "RedMoto Honda",
-   "gradoModello": "identico",
-   "subito": {
-    "id": "002444",
-    "nome": "CRF 450 Supermoto",
-    "versioni": [
-     {
-      "id": "005153",
-      "nome": "R",
-      "variante": "R",
-      "base": false,
-      "motoit": [
-       "t4osxO"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "005797",
-      "nome": "RG",
-      "variante": "RG",
-      "base": false,
-      "motoit": [
-       "VNOxq9"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "006550",
-      "nome": "RS",
-      "variante": "RS",
-      "base": false
-     },
-     {
-      "id": "006278",
-      "nome": "RS Sport",
-      "variante": "RS Sport",
-      "base": false
-     },
-     {
-      "id": "006276",
-      "nome": "RX",
-      "variante": "RX",
-      "base": false
-     },
-     {
-      "id": "006277",
-      "nome": "RXC",
-      "variante": "RXC",
-      "base": false
-     },
-     {
-      "id": "005145",
-      "nome": "X",
-      "variante": "X",
-      "base": false,
-      "motoit": [
-       "kYnjt2"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "005798",
-      "nome": "XG",
-      "variante": "XG",
-      "base": false,
-      "motoit": [
-       "IBbOYs"
-      ],
-      "come": "stessa variante"
-     },
-     {
-      "id": "006891",
-      "nome": "XR",
-      "variante": "XR",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true
-     }
-    ]
-   },
-   "motoit": [
-    "crf-450-supermoto"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "Dzu9VF",
-     "modelloSlug": "crf-450-supermoto",
-     "nome": "CRF 450 Supermoto RF (2015)",
-     "variante": "RF",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "t4osxO",
-     "modelloSlug": "crf-450-supermoto",
-     "nome": "CRF 450 Supermoto R (2014)",
-     "variante": "R",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "VNOxq9",
-     "modelloSlug": "crf-450-supermoto",
-     "nome": "CRF 450 Supermoto RG (2016)",
-     "variante": "RG",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "kYnjt2",
-     "modelloSlug": "crf-450-supermoto",
-     "nome": "CRF 450 Supermoto X (2014)",
-     "variante": "X",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "q94i1Y",
-     "modelloSlug": "crf-450-supermoto",
-     "nome": "CRF 450 Supermoto XF (2015)",
-     "variante": "XF",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "IBbOYs",
-     "modelloSlug": "crf-450-supermoto",
-     "nome": "CRF 450 Supermoto XG (2016)",
-     "variante": "XG",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
      }
     }
    ]
@@ -196016,1550 +191736,6 @@
    ]
   },
   {
-   "marca": "Suzuki Valenti",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "001251",
-    "nome": "DR-Z 400 E",
-    "versioni": [
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "rTwRkV"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "dr-z-400"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "gsxDd7",
-     "modelloSlug": "dr-z-400",
-     "nome": "DR-Z 400 E (2000- 06)",
-     "variante": "E",
-     "base": false,
-     "anni": {
-      "da": 2000,
-      "a": 2006
-     }
-    },
-    {
-     "id": "3xUEHa",
-     "modelloSlug": "dr-z-400",
-     "nome": "DR-Z 400 E Valenti Racing (2006 - 07)",
-     "variante": "E Valenti Racing",
-     "base": false,
-     "anni": {
-      "da": 2006,
-      "a": 2007
-     }
-    },
-    {
-     "id": "gaNDs3",
-     "modelloSlug": "dr-z-400",
-     "nome": "DR-Z 400 S (2000 - 06)",
-     "variante": "S",
-     "base": false,
-     "anni": {
-      "da": 2000,
-      "a": 2006
-     }
-    },
-    {
-     "id": "rTwRkV",
-     "modelloSlug": "dr-z-400",
-     "nome": "DR-Z 400 (2000 - 02)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2000,
-      "a": 2002
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Suzuki Valenti",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "001244",
-    "nome": "RM 125",
-    "versioni": [
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "U8QfB3",
-       "x8PlXB",
-       "SsJlCI",
-       "wEuULC",
-       "Cj4p7G"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "rm-125"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "U8QfB3",
-     "modelloSlug": "rm-125",
-     "nome": "RM 125 (1995 - 01)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1995,
-      "a": 2001
-     }
-    },
-    {
-     "id": "x8PlXB",
-     "modelloSlug": "rm-125",
-     "nome": "RM 125 (2002 - 03)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2002,
-      "a": 2003
-     }
-    },
-    {
-     "id": "SsJlCI",
-     "modelloSlug": "rm-125",
-     "nome": "RM 125 (2004)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2004,
-      "a": 2004
-     }
-    },
-    {
-     "id": "wEuULC",
-     "modelloSlug": "rm-125",
-     "nome": "RM 125 (2005 - 06)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2006
-     }
-    },
-    {
-     "id": "Cj4p7G",
-     "modelloSlug": "rm-125",
-     "nome": "RM 125 (2008 - 12)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2008,
-      "a": 2012
-     }
-    },
-    {
-     "id": "lor2oW",
-     "modelloSlug": "rm-125",
-     "nome": "RM 125 Valenti Racing (2006 - 07)",
-     "variante": "Valenti Racing",
-     "base": false,
-     "anni": {
-      "da": 2006,
-      "a": 2007
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Suzuki Valenti",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "001248",
-    "nome": "RM 125 E",
-    "versioni": [
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "U8QfB3",
-       "x8PlXB",
-       "SsJlCI",
-       "wEuULC",
-       "Cj4p7G"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "rm-125"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "U8QfB3",
-     "modelloSlug": "rm-125",
-     "nome": "RM 125 (1995 - 01)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1995,
-      "a": 2001
-     }
-    },
-    {
-     "id": "x8PlXB",
-     "modelloSlug": "rm-125",
-     "nome": "RM 125 (2002 - 03)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2002,
-      "a": 2003
-     }
-    },
-    {
-     "id": "SsJlCI",
-     "modelloSlug": "rm-125",
-     "nome": "RM 125 (2004)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2004,
-      "a": 2004
-     }
-    },
-    {
-     "id": "wEuULC",
-     "modelloSlug": "rm-125",
-     "nome": "RM 125 (2005 - 06)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2006
-     }
-    },
-    {
-     "id": "Cj4p7G",
-     "modelloSlug": "rm-125",
-     "nome": "RM 125 (2008 - 12)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2008,
-      "a": 2012
-     }
-    },
-    {
-     "id": "lor2oW",
-     "modelloSlug": "rm-125",
-     "nome": "RM 125 Valenti Racing (2006 - 07)",
-     "variante": "Valenti Racing",
-     "base": false,
-     "anni": {
-      "da": 2006,
-      "a": 2007
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Suzuki Valenti",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "001245",
-    "nome": "RM 250",
-    "versioni": [
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "DfKbc2",
-       "YGy3v3",
-       "8OcQzs",
-       "QKjPMi",
-       "Kg2k9w"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "rm-250"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "DfKbc2",
-     "modelloSlug": "rm-250",
-     "nome": "RM 250 (1995 - 01)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1995,
-      "a": 2001
-     }
-    },
-    {
-     "id": "YGy3v3",
-     "modelloSlug": "rm-250",
-     "nome": "RM 250 (2005 - 06)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2006
-     }
-    },
-    {
-     "id": "8OcQzs",
-     "modelloSlug": "rm-250",
-     "nome": "RM 250 (2002 - 03)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2002,
-      "a": 2003
-     }
-    },
-    {
-     "id": "QKjPMi",
-     "modelloSlug": "rm-250",
-     "nome": "RM 250 (2004)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2004,
-      "a": 2004
-     }
-    },
-    {
-     "id": "Kg2k9w",
-     "modelloSlug": "rm-250",
-     "nome": "RM 250 (2008 - 11)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2008,
-      "a": 2011
-     }
-    },
-    {
-     "id": "62a0r2",
-     "modelloSlug": "rm-250",
-     "nome": "RM 250 E (2008 - 11)",
-     "variante": "E",
-     "base": false,
-     "anni": {
-      "da": 2008,
-      "a": 2011
-     }
-    },
-    {
-     "id": "1oiIS1",
-     "modelloSlug": "rm-250",
-     "nome": "RM 250 Valenti Racing (2006 - 07)",
-     "variante": "Valenti Racing",
-     "base": false,
-     "anni": {
-      "da": 2006,
-      "a": 2007
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Suzuki Valenti",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "001249",
-    "nome": "RM 250 E",
-    "versioni": [
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "DfKbc2",
-       "YGy3v3",
-       "8OcQzs",
-       "QKjPMi",
-       "Kg2k9w"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "rm-250"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "DfKbc2",
-     "modelloSlug": "rm-250",
-     "nome": "RM 250 (1995 - 01)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 1995,
-      "a": 2001
-     }
-    },
-    {
-     "id": "YGy3v3",
-     "modelloSlug": "rm-250",
-     "nome": "RM 250 (2005 - 06)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2006
-     }
-    },
-    {
-     "id": "8OcQzs",
-     "modelloSlug": "rm-250",
-     "nome": "RM 250 (2002 - 03)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2002,
-      "a": 2003
-     }
-    },
-    {
-     "id": "QKjPMi",
-     "modelloSlug": "rm-250",
-     "nome": "RM 250 (2004)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2004,
-      "a": 2004
-     }
-    },
-    {
-     "id": "Kg2k9w",
-     "modelloSlug": "rm-250",
-     "nome": "RM 250 (2008 - 11)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2008,
-      "a": 2011
-     }
-    },
-    {
-     "id": "62a0r2",
-     "modelloSlug": "rm-250",
-     "nome": "RM 250 E (2008 - 11)",
-     "variante": "E",
-     "base": false,
-     "anni": {
-      "da": 2008,
-      "a": 2011
-     }
-    },
-    {
-     "id": "1oiIS1",
-     "modelloSlug": "rm-250",
-     "nome": "RM 250 Valenti Racing (2006 - 07)",
-     "variante": "Valenti Racing",
-     "base": false,
-     "anni": {
-      "da": 2006,
-      "a": 2007
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Suzuki Valenti",
-   "gradoModello": "identico",
-   "subito": {
-    "id": "001811",
-    "nome": "RM-X 450 E",
-    "versioni": [
-     {
-      "id": "004439",
-      "nome": "L0",
-      "variante": "L0",
-      "base": false
-     },
-     {
-      "id": "005111",
-      "nome": "L1",
-      "variante": "L1",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "CUnIX5"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "rm-x-450-e"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "CUnIX5",
-     "modelloSlug": "rm-x-450-e",
-     "nome": "RM-X 450 E (2010 - 17)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2010,
-      "a": 2017
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Suzuki Valenti",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "005384",
-    "nome": "RM-X 450 Z",
-    "versioni": [
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "P10ueu",
-       "fbThnJ",
-       "gfKIPN"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "rm-z450"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "jpPd0T",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2005 - 06)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2005,
-      "a": 2006
-     }
-    },
-    {
-     "id": "WE5ykM",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2008 - 11)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2008,
-      "a": 2011
-     }
-    },
-    {
-     "id": "wVA2vB",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2018)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "P10ueu",
-     "modelloSlug": "rm-z450",
-     "nome": "RM-Z450 (2025 - 26)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "V3M049",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2011 - 12)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2011,
-      "a": 2012
-     }
-    },
-    {
-     "id": "d8VfRt",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2013)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2013,
-      "a": 2013
-     }
-    },
-    {
-     "id": "UBh4AQ",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2014)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "jCRySf",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2015)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "ptPxUq",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2016)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "K1g9Ll",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2017)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "PRvCXP",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z E (2011 - 13)",
-     "variante": "RM 450 Z E",
-     "base": false,
-     "anni": {
-      "da": 2011,
-      "a": 2013
-     }
-    },
-    {
-     "id": "XgNB3h",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z E (2015)",
-     "variante": "RM 450 Z E",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "TNO1AO",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z Valenti Racing (2006 - 07)",
-     "variante": "RM 450 Z Valenti Racing",
-     "base": false,
-     "anni": {
-      "da": 2006,
-      "a": 2007
-     }
-    },
-    {
-     "id": "fbThnJ",
-     "modelloSlug": "rm-z450",
-     "nome": "RM-Z450 (2019 - 20)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "gfKIPN",
-     "modelloSlug": "rm-z450",
-     "nome": "RM-Z450 (2023 - 24)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Suzuki Valenti",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "001246",
-    "nome": "RM-Z 250",
-    "versioni": [
-     {
-      "id": "006072",
-      "nome": "I.S.",
-      "variante": "I.S.",
-      "base": false
-     },
-     {
-      "id": "005832",
-      "nome": "L.E.",
-      "variante": "L.E.",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "QSixja",
-       "Byq9hi",
-       "MOQeR2",
-       "F4AS54",
-       "yQyZ9b",
-       "MBQekW",
-       "rvlzdI",
-       "T4t0v7",
-       "ZswNZq",
-       "Q5rREi",
-       "BbIUWc"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "rm-z250"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "QSixja",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2008 - 11)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2008,
-      "a": 2011
-     }
-    },
-    {
-     "id": "Byq9hi",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2011 - 2012)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2011,
-      "a": 2012
-     }
-    },
-    {
-     "id": "MOQeR2",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2014)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "F4AS54",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2015)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "yQyZ9b",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2004)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2004,
-      "a": 2004
-     }
-    },
-    {
-     "id": "MBQekW",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2005 - 06)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2006
-     }
-    },
-    {
-     "id": "rvlzdI",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2013)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2013,
-      "a": 2013
-     }
-    },
-    {
-     "id": "T4t0v7",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2016)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "ZswNZq",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2017- 18)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "gEcoeT",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 E (2011 - 13)",
-     "variante": "E",
-     "base": false,
-     "anni": {
-      "da": 2011,
-      "a": 2013
-     }
-    },
-    {
-     "id": "AaBriS",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 E (2015)",
-     "variante": "E",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "x0t2Lb",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 Valenti Racing (2006 - 07)",
-     "variante": "Valenti Racing",
-     "base": false,
-     "anni": {
-      "da": 2006,
-      "a": 2007
-     }
-    },
-    {
-     "id": "Q5rREi",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z250 (2019 - 20)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "BbIUWc",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z250 (2023 - 24)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Suzuki Valenti",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "001250",
-    "nome": "RM-Z 250 E",
-    "versioni": [
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "QSixja",
-       "Byq9hi",
-       "MOQeR2",
-       "F4AS54",
-       "yQyZ9b",
-       "MBQekW",
-       "rvlzdI",
-       "T4t0v7",
-       "ZswNZq",
-       "Q5rREi",
-       "BbIUWc"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "rm-z250"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "QSixja",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2008 - 11)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2008,
-      "a": 2011
-     }
-    },
-    {
-     "id": "Byq9hi",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2011 - 2012)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2011,
-      "a": 2012
-     }
-    },
-    {
-     "id": "MOQeR2",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2014)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "F4AS54",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2015)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "yQyZ9b",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2004)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2004,
-      "a": 2004
-     }
-    },
-    {
-     "id": "MBQekW",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2005 - 06)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2006
-     }
-    },
-    {
-     "id": "rvlzdI",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2013)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2013,
-      "a": 2013
-     }
-    },
-    {
-     "id": "T4t0v7",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2016)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "ZswNZq",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 (2017- 18)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2017,
-      "a": 2018
-     }
-    },
-    {
-     "id": "gEcoeT",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 E (2011 - 13)",
-     "variante": "E",
-     "base": false,
-     "anni": {
-      "da": 2011,
-      "a": 2013
-     }
-    },
-    {
-     "id": "AaBriS",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 E (2015)",
-     "variante": "E",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "x0t2Lb",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z 250 Valenti Racing (2006 - 07)",
-     "variante": "Valenti Racing",
-     "base": false,
-     "anni": {
-      "da": 2006,
-      "a": 2007
-     }
-    },
-    {
-     "id": "Q5rREi",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z250 (2019 - 20)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "BbIUWc",
-     "modelloSlug": "rm-z250",
-     "nome": "RM-Z250 (2023 - 24)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Suzuki Valenti",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "001247",
-    "nome": "RM-Z 450",
-    "versioni": [
-     {
-      "id": "006073",
-      "nome": "I.S.",
-      "variante": "I.S.",
-      "base": false
-     },
-     {
-      "id": "005833",
-      "nome": "L.E.",
-      "variante": "L.E.",
-      "base": false
-     },
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "P10ueu",
-       "fbThnJ",
-       "gfKIPN"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "rm-z450"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "jpPd0T",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2005 - 06)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2005,
-      "a": 2006
-     }
-    },
-    {
-     "id": "WE5ykM",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2008 - 11)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2008,
-      "a": 2011
-     }
-    },
-    {
-     "id": "wVA2vB",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2018)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "P10ueu",
-     "modelloSlug": "rm-z450",
-     "nome": "RM-Z450 (2025 - 26)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "V3M049",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2011 - 12)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2011,
-      "a": 2012
-     }
-    },
-    {
-     "id": "d8VfRt",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2013)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2013,
-      "a": 2013
-     }
-    },
-    {
-     "id": "UBh4AQ",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2014)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "jCRySf",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2015)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "ptPxUq",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2016)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "K1g9Ll",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2017)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "PRvCXP",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z E (2011 - 13)",
-     "variante": "RM 450 Z E",
-     "base": false,
-     "anni": {
-      "da": 2011,
-      "a": 2013
-     }
-    },
-    {
-     "id": "XgNB3h",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z E (2015)",
-     "variante": "RM 450 Z E",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "TNO1AO",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z Valenti Racing (2006 - 07)",
-     "variante": "RM 450 Z Valenti Racing",
-     "base": false,
-     "anni": {
-      "da": 2006,
-      "a": 2007
-     }
-    },
-    {
-     "id": "fbThnJ",
-     "modelloSlug": "rm-z450",
-     "nome": "RM-Z450 (2019 - 20)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "gfKIPN",
-     "modelloSlug": "rm-z450",
-     "nome": "RM-Z450 (2023 - 24)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Suzuki Valenti",
-   "gradoModello": "grossolano",
-   "subito": {
-    "id": "001252",
-    "nome": "RM-Z 450 E",
-    "versioni": [
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "P10ueu",
-       "fbThnJ",
-       "gfKIPN"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "rm-z450"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "jpPd0T",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2005 - 06)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2005,
-      "a": 2006
-     }
-    },
-    {
-     "id": "WE5ykM",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2008 - 11)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2008,
-      "a": 2011
-     }
-    },
-    {
-     "id": "wVA2vB",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2018)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2018,
-      "a": 2018
-     }
-    },
-    {
-     "id": "P10ueu",
-     "modelloSlug": "rm-z450",
-     "nome": "RM-Z450 (2025 - 26)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2025,
-      "a": 2026
-     }
-    },
-    {
-     "id": "V3M049",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2011 - 12)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2011,
-      "a": 2012
-     }
-    },
-    {
-     "id": "d8VfRt",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2013)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2013,
-      "a": 2013
-     }
-    },
-    {
-     "id": "UBh4AQ",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2014)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2014,
-      "a": 2014
-     }
-    },
-    {
-     "id": "jCRySf",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2015)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "ptPxUq",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2016)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2016,
-      "a": 2016
-     }
-    },
-    {
-     "id": "K1g9Ll",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z (2017)",
-     "variante": "RM 450 Z",
-     "base": false,
-     "anni": {
-      "da": 2017,
-      "a": 2017
-     }
-    },
-    {
-     "id": "PRvCXP",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z E (2011 - 13)",
-     "variante": "RM 450 Z E",
-     "base": false,
-     "anni": {
-      "da": 2011,
-      "a": 2013
-     }
-    },
-    {
-     "id": "XgNB3h",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z E (2015)",
-     "variante": "RM 450 Z E",
-     "base": false,
-     "anni": {
-      "da": 2015,
-      "a": 2015
-     }
-    },
-    {
-     "id": "TNO1AO",
-     "modelloSlug": "rm-z450",
-     "nome": "RM 450 Z Valenti Racing (2006 - 07)",
-     "variante": "RM 450 Z Valenti Racing",
-     "base": false,
-     "anni": {
-      "da": 2006,
-      "a": 2007
-     }
-    },
-    {
-     "id": "fbThnJ",
-     "modelloSlug": "rm-z450",
-     "nome": "RM-Z450 (2019 - 20)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2019,
-      "a": 2020
-     }
-    },
-    {
-     "id": "gfKIPN",
-     "modelloSlug": "rm-z450",
-     "nome": "RM-Z450 (2023 - 24)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2023,
-      "a": 2024
-     }
-    }
-   ]
-  },
-  {
-   "marca": "Suzuki Valenti",
-   "gradoModello": "probabile",
-   "subito": {
-    "id": "001255",
-    "nome": "SM 400 Z",
-    "versioni": [
-     {
-      "id": "000000",
-      "nome": "Altro allestimento",
-      "variante": "Altro allestimento",
-      "base": true,
-      "motoit": [
-       "NDJReP"
-      ],
-      "come": "versione base"
-     }
-    ]
-   },
-   "motoit": [
-    "dr-z-400-sm"
-   ],
-   "versioniMotoit": [
-    {
-     "id": "it4Vah",
-     "modelloSlug": "dr-z-400-sm",
-     "nome": "DR-Z 400 SM Valenti Racing (2006 - 07)",
-     "variante": "Valenti Racing",
-     "base": false,
-     "anni": {
-      "da": 2006,
-      "a": 2007
-     }
-    },
-    {
-     "id": "NDJReP",
-     "modelloSlug": "dr-z-400-sm",
-     "nome": "DR-Z 400 SM (2005 - 06)",
-     "variante": "",
-     "base": true,
-     "anni": {
-      "da": 2005,
-      "a": 2006
-     }
-    }
-   ]
-  },
-  {
    "marca": "Sym",
    "gradoModello": "identico",
    "subito": {
@@ -211928,8 +206104,8 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "0y0ePD",
-       "8tJYAc"
+       "2BqG2p",
+       "ufrD3C"
       ],
       "come": "versione base"
      }
@@ -211940,47 +206116,25 @@
    ],
    "versioniMotoit": [
     {
-     "id": "0y0ePD",
+     "id": "2BqG2p",
      "modelloSlug": "tt-600",
-     "nome": "TT 600 (1985 - 93)",
+     "nome": "TT 600 (2000 - 01)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 1985,
-      "a": 1993
+      "da": 2000,
+      "a": 2001
      }
     },
     {
-     "id": "8tJYAc",
+     "id": "ufrD3C",
      "modelloSlug": "tt-600",
-     "nome": "TT 600 (1993 - 97)",
+     "nome": "TT 600 (2002 - 03)",
      "variante": "",
      "base": true,
      "anni": {
-      "da": 1993,
-      "a": 1997
-     }
-    },
-    {
-     "id": "qmV3ZV",
-     "modelloSlug": "tt-600",
-     "nome": "TT 600 E (1994 - 03)",
-     "variante": "E",
-     "base": false,
-     "anni": {
-      "da": 1994,
+      "da": 2002,
       "a": 2003
-     }
-    },
-    {
-     "id": "faeMWK",
-     "modelloSlug": "tt-600",
-     "nome": "TT 600 S (1989 -99)",
-     "variante": "S",
-     "base": false,
-     "anni": {
-      "da": 1989,
-      "a": 1999
      }
     }
    ]
@@ -213311,7 +207465,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "Wd0iQN"
+       "7n0ZQU"
       ],
       "come": "versione base"
      }
@@ -213322,14 +207476,47 @@
    ],
    "versioniMotoit": [
     {
-     "id": "Wd0iQN",
+     "id": "7n0ZQU",
      "modelloSlug": "classic-125",
-     "nome": "Classic 125 (2017 - 19)",
+     "nome": "Classic 125 (2015 - 17)",
      "variante": "",
      "base": true,
      "anni": {
+      "da": 2015,
+      "a": 2017
+     }
+    },
+    {
+     "id": "nGveIE",
+     "modelloSlug": "classic-125",
+     "nome": "Classic 125 S (2015 - 17)",
+     "variante": "S",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2017
+     }
+    },
+    {
+     "id": "05jfej",
+     "modelloSlug": "classic-125",
+     "nome": "Classic 125 S (2017 - 18)",
+     "variante": "S",
+     "base": false,
+     "anni": {
       "da": 2017,
-      "a": 2019
+      "a": 2018
+     }
+    },
+    {
+     "id": "CjRpmi",
+     "modelloSlug": "classic-125",
+     "nome": "Classic S 125i (2019 - 24)",
+     "variante": "Classic S 125i",
+     "base": false,
+     "anni": {
+      "da": 2019,
+      "a": 2024
      }
     }
    ]
@@ -213347,7 +207534,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "Wd0iQN"
+       "7n0ZQU"
       ],
       "come": "versione base"
      }
@@ -213358,14 +207545,47 @@
    ],
    "versioniMotoit": [
     {
-     "id": "Wd0iQN",
+     "id": "7n0ZQU",
      "modelloSlug": "classic-125",
-     "nome": "Classic 125 (2017 - 19)",
+     "nome": "Classic 125 (2015 - 17)",
      "variante": "",
      "base": true,
      "anni": {
+      "da": 2015,
+      "a": 2017
+     }
+    },
+    {
+     "id": "nGveIE",
+     "modelloSlug": "classic-125",
+     "nome": "Classic 125 S (2015 - 17)",
+     "variante": "S",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2017
+     }
+    },
+    {
+     "id": "05jfej",
+     "modelloSlug": "classic-125",
+     "nome": "Classic 125 S (2017 - 18)",
+     "variante": "S",
+     "base": false,
+     "anni": {
       "da": 2017,
-      "a": 2019
+      "a": 2018
+     }
+    },
+    {
+     "id": "CjRpmi",
+     "modelloSlug": "classic-125",
+     "nome": "Classic S 125i (2019 - 24)",
+     "variante": "Classic S 125i",
+     "base": false,
+     "anni": {
+      "da": 2019,
+      "a": 2024
      }
     }
    ]
@@ -213383,7 +207603,7 @@
       "variante": "Altro allestimento",
       "base": true,
       "motoit": [
-       "Wd0iQN"
+       "7n0ZQU"
       ],
       "come": "versione base"
      }
@@ -213394,14 +207614,47 @@
    ],
    "versioniMotoit": [
     {
-     "id": "Wd0iQN",
+     "id": "7n0ZQU",
      "modelloSlug": "classic-125",
-     "nome": "Classic 125 (2017 - 19)",
+     "nome": "Classic 125 (2015 - 17)",
      "variante": "",
      "base": true,
      "anni": {
+      "da": 2015,
+      "a": 2017
+     }
+    },
+    {
+     "id": "nGveIE",
+     "modelloSlug": "classic-125",
+     "nome": "Classic 125 S (2015 - 17)",
+     "variante": "S",
+     "base": false,
+     "anni": {
+      "da": 2015,
+      "a": 2017
+     }
+    },
+    {
+     "id": "05jfej",
+     "modelloSlug": "classic-125",
+     "nome": "Classic 125 S (2017 - 18)",
+     "variante": "S",
+     "base": false,
+     "anni": {
       "da": 2017,
-      "a": 2019
+      "a": 2018
+     }
+    },
+    {
+     "id": "CjRpmi",
+     "modelloSlug": "classic-125",
+     "nome": "Classic S 125i (2019 - 24)",
+     "variante": "Classic S 125i",
+     "base": false,
+     "anni": {
+      "da": 2019,
+      "a": 2024
      }
     }
    ]

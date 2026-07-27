@@ -11,6 +11,9 @@ const assert = require('node:assert');
 const { risolviVersione } = require('../backend/scrapers/risolvi-versione.js');
 
 const mt07 = {
+  // `marca` e `subito.nome` servono: senza, ogni parola del titolo risulta estranea e la
+  // risposta scivola su 'ripiego'. E' il comportamento prudente giusto, ma va alimentato.
+  marca: 'Yamaha', subito: { nome: 'MT-07' },
   versioniMotoit: [
     { id: 'R9Lybg', nome: 'MT-07 (2014 - 16)', variante: '', anni: { da: 2014, a: 2016 } },
     { id: 'DfEo2y', nome: 'MT-07 ABS (2014 - 16)', variante: 'ABS', anni: { da: 2014, a: 2016 } },
@@ -104,4 +107,66 @@ test('due candidate che niente separa: ambigua, mai una scelta a caso', () => {
   const r = risolviVersione(pari, { anno: 2021, versione: 'X 500' });
   assert.strictEqual(r.esito, 'ambigua');
   assert.strictEqual(r.versioni.length, 2);
+});
+
+/**
+ * REGRESSIONI trovate da una caccia avversariale sui ponti, tutte riprodotte prima di
+ * correggerle. Tre su quattro erano la stessa forma d'errore gia' vista sui modelli:
+ * confronto per SOTTOSTRINGA invece che per insieme di parole, e certezza dichiarata
+ * su un ripiego.
+ */
+const misto = {
+  marca: 'BMW', subito: { nome: 'K 1100 LT' },
+  versioniMotoit: [
+    { id: 'base', nome: 'K 1100 LT (1992 - 96)', variante: '', anni: { da: 1992, a: 1996 } },
+    { id: 'se', nome: 'K 1100 LT SE', variante: 'SE', anni: null },
+  ],
+};
+
+test('le versioni SENZA periodo non vengono cancellate dal filtro anno', () => {
+  const r = risolviVersione(misto, { anno: 1993, versione: 'BMW K 1100 LT SE' });
+  assert.strictEqual(r.esito, 'una');
+  assert.strictEqual(r.versioni[0].id, 'se');
+});
+
+test('anno PRIMA del primo periodo: restano le versioni senza periodo, non "nessuna"', () => {
+  const r = risolviVersione(misto, { anno: 1988, versione: 'BMW K 1100 LT SE' });
+  assert.notStrictEqual(r.esito, 'nessuna');
+  assert.strictEqual(r.versioni[0].id, 'se');
+});
+
+test('le parole della variante contano come INSIEME, non in fila', () => {
+  const cab = {
+    marca: 'Fantic', subito: { nome: 'Caballero 500' },
+    versioniMotoit: [
+      { id: 'x', nome: 'Caballero 500 Scrambler (2021 - 23)', variante: 'Scrambler', anni: { da: 2021, a: 2023 } },
+      { id: 'y', nome: 'Caballero 500 Scrambler Anniversary (2021 - 23)', variante: 'Scrambler Anniversary', anni: { da: 2021, a: 2023 } },
+    ],
+  };
+  const r = risolviVersione(cab, { anno: 2022, versione: 'Scrambler 50th Anniversary' });
+  assert.strictEqual(r.esito, 'una');
+  assert.strictEqual(r.versioni[0].id, 'y');
+});
+
+test('allestimento sconosciuto: la base e un RIPIEGO, non una certezza', () => {
+  const ind = {
+    marca: 'Indian', subito: { nome: 'Scout' },
+    versioniMotoit: [
+      { id: 'a', nome: 'Scout (2015 - 24)', variante: '', anni: { da: 2015, a: 2024 } },
+      { id: 'b', nome: 'Scout Bobber (2018 - 24)', variante: 'Bobber', anni: { da: 2018, a: 2024 } },
+    ],
+  };
+  const r = risolviVersione(ind, { anno: 2020, versione: 'Indian Scout Rogue' });
+  assert.strictEqual(r.esito, 'ripiego');
+  // ma senza parole estranee la base resta una risposta piena
+  const b = risolviVersione(ind, { anno: 2020, versione: 'Indian Scout' });
+  assert.strictEqual(b.esito, 'una');
+});
+
+test('marca e modello nel titolo non fanno scattare il ripiego', () => {
+  const y = {
+    marca: 'Yamaha', subito: { nome: 'MT-07' },
+    versioniMotoit: [{ id: 'a', nome: 'MT-07 (2021 - 24)', variante: '', anni: { da: 2021, a: 2024 } }],
+  };
+  assert.strictEqual(risolviVersione(y, { anno: 2022, versione: 'Yamaha MT-07' }).esito, 'una');
 });
