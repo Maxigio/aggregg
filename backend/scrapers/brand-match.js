@@ -12,7 +12,22 @@
  */
 const path = require('path');
 
-const norm = s => String(s).toLowerCase()
+/**
+ * LA normalizzazione dei nomi di veicolo: minuscolo, senza accenti, solo lettere e cifre.
+ * "Citro\u00ebn" e "Citroen", "Regolarit\u00e0" e "Regolarita" diventano la stessa cosa.
+ *
+ * E' UNA SOLA apposta, e chi confronta marche o modelli importa questa. Erano tre copie che
+ * facevano cose diverse \u2014 quella di server.js e quella di watchlist-overlaps.js NON toglievano
+ * gli accenti \u2014 e due funzioni che normalizzano diverso sono la sorgente classica del mismatch
+ * silenzioso: l'annuncio sparisce dai risultati e nessuno vede un errore. Misurato sui dati veri:
+ * 69 nomi trattati diversamente dalle due forme, fra cui il marchio Citroen ("citron" contro
+ * "citroen") e 32 modelli moto accentati, proprio dove il filtro sui titoli e' attivo.
+ *
+ * NON e' la stessa cosa di model-key.norm, che comprime i separatori in trattino ("serie 3" \u2192
+ * "serie-3") invece di toglierli: quella produce una chiave SCRITTA in colonna sul database, e
+ * cambiarla vorrebbe dire ricalcolare le listings. Sono due mestieri diversi e restano separate.
+ */
+const norm = s => String(s == null ? '' : s).toLowerCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   .replace(/[^a-z0-9]/g, '');
 

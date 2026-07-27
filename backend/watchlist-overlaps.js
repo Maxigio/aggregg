@@ -8,7 +8,9 @@
 let modelGroups = { auto: {}, moto: {} };
 try { modelGroups = require('../data/model-groups.json'); } catch (_) { /* opzionale */ }
 
-const norm = s => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]/g, '');
+// La stessa normalizzazione del resto: qui la copia locale non toglieva gli accenti, quindi due
+// watchlist sullo stesso modello scritto con e senza accento non risultavano sovrapposte.
+const { norm } = require('./scrapers/brand-match');
 
 // Membri di una serie commerciale (es. BMW "Serie 3" → ["316","320",…]) o null.
 function lookupModelGroup(tipo, brandName, modelText) {

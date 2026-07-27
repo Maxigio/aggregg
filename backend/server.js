@@ -36,7 +36,7 @@ const provSigla      = require('./province-sigla'); // localita' dell'annuncio -
 const motornet       = require('./scrapers/motornet');  // kW ufficiali di listino (SPENTO se AMR_MOTORNET!=1)
 const carburanti     = require('./carburanti');   // prezzi carburante MIMIT per provincia
 const saved = require('./saved');
-const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings } = require('./scrapers/brand-match');
+const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings, norm } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
 const regionCentroids = require('../data/region-centroids.json');  // capoluoghi regione {lat,lng} → raggio AS24 nativo
 const modelsData      = require('../data/models.json');
@@ -63,8 +63,11 @@ function startKeepAlive() {
   keepAliveTimer.unref?.();
 }
 
-/** Normalizza stringa: solo lettere e cifre minuscole (per matching fuzzy) */
-const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+// `norm` arriva da scrapers/brand-match: e' LA normalizzazione dei nomi di veicolo, una sola per
+// tutti. Qui ce n'era una copia che non toglieva gli accenti, e bastava che l'annuncio scrivesse
+// "Regolarita" e la ricerca "Regolarità" (o viceversa) perche' la moto sparisse dai risultati
+// senza nessun errore. Misurati 32 modelli moto accentati, ed e' sulle moto che il filtro-titolo
+// e' attivo. Vedi il commento della funzione per il perche' non e' quella di model-key.
 
 // Lookup marca FUZZY (matcher condiviso): "BMW"/"bmw", "Beta"→"Betamotor",
 // "Fantic"→"Fantic Motor" agganciano la stessa entry. Evita lo skip a cascata di
