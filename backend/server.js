@@ -1041,6 +1041,10 @@ require('./catalogo-route').mount(app, { clientIp });
 // ─── Richiami di sicurezza (Safety Gate UE) — vedi richiami-route.js ───────────
 require('./richiami-route').mount(app, { clientIp });
 
+// ─── Verifica per targa: il CAPTCHA lo risolve una persona — vedi targa.js ─────
+// Una targa per gesto umano, niente archivio, niente targhe nei log.
+require('./targa').mount(app, { json: express.json({ limit: '2kb' }) });
+
 // ─── Corrispondenze fra i cataloghi delle tre fonti — vedi ponte-route.js ──────
 // Area a se': non sostituisce ne' la ricerca ne' la scheda tecnica. I due file del ponte
 // (una decina di MB) si leggono alla PRIMA richiesta, non qui: chi non apre l'area non li paga.
