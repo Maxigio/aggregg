@@ -61,7 +61,6 @@
           <button type="button" class="mode-btn" data-mode="moto" role="tab">Moto</button>
           <button type="button" class="mode-btn" data-mode="ricambi" role="tab">Ricambi</button>
           <button type="button" class="mode-btn" data-mode="competitor" role="tab">Competitor</button>
-          <button type="button" class="mode-btn" data-mode="targa" role="tab">Targa</button>
           <!-- Catalogo, Richiami, Fonti e Corrispondenze: nascosti dalla barra. Il codice e
                i pannelli restano (app.js li disegna ancora), ma non hanno piu' una porta
                d'ingresso. Cerchi/gomme e i codici OE ora vivono dove servono — dentro
@@ -140,6 +139,10 @@
           <label class="adv-field"><span>Km max</span><input type="number" id="kmMax" placeholder="100000" min="0" /></label>
           <label class="adv-field"><span>Regione</span><select id="regione"><option value="">Tutta Italia</option></select></label>
           <label class="adv-field"><span>Raggio km (Autoscout)</span><input type="number" id="raggio" placeholder="100" min="1" /></label>
+          <!-- La targa NON filtra gli annunci: e' del veicolo che stai valutando, e apre
+               la verifica al Portale dell'Automobilista dentro ADD ON, nella scheda
+               tecnica. Sta qui perche' e' li' che si scrivono i dati del veicolo. -->
+          <label class="adv-field"><span>Targa <em>(non filtra)</em></span><input type="text" id="targaFiltro" placeholder="es. AB123CD" maxlength="8" autocomplete="off" spellcheck="false" /></label>
         </div>
 
         <!-- Campi modalità RICAMBI: veicolo (auto|moto) + 3 tab con input DEDICATI (valori persistenti) -->
@@ -180,10 +183,6 @@
     <!-- Area Competitor: il parco di un concessionario, il tuo e quello degli altri.
          Disegnata da app.js. Il parco NON si scarica da solo: si chiede. -->
     <div id="competitorPanel" class="d-none"></div>
-
-    <!-- Verifica per targa: l'immagine del CAPTCHA arriva dal portale e la legge una
-         persona. Nessuna targa viene salvata. Disegnata da app.js. -->
-    <div id="targaPanel" class="d-none"></div>
 
     <!-- Area Corrispondenze: lo stesso veicolo sulle tre fonti. Disegnata da app.js. -->
     <div id="pontePanel" class="d-none"></div>

@@ -1590,17 +1590,17 @@ section.search.cat-attivo #searchForm { min-height: 0; }
   font-size: 0.7rem; color: var(--text-muted); overflow-wrap: anywhere; }
 .veh-rich-r { flex-wrap: wrap; }
 
-/* ── Verifica per targa ───────────────────────────────────────────────────────
+/* ── Verifica per targa (dentro ADD ON) ───────────────────────────────────────
    L'immagine e' quella del portale e la legge una persona. Il modulo sta su una riga
    sola dove c'e' spazio e va a capo sul telefono, senza mai stringere l'immagine: se
    diventa piccola non si legge, ed e' l'unica cosa che deve restare leggibile. */
-.tg-wrap { max-width: 760px; margin: 0 auto; padding: 4px 0 24px; }
-.tg-nota { font-size: 0.82rem; line-height: 1.5; color: var(--text-muted); margin-bottom: 14px; }
+.tg-corpo { padding-bottom: 4px; }
+.tg-nota { font-size: 0.78rem; line-height: 1.45; color: var(--text-muted); margin: 0 0 10px; }
 .tg-nota b { color: var(--text); font-weight: 600; }
 .tg-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .tg-form #tgTipo { flex: 0 1 150px; }
-.tg-form #tgTarga { flex: 0 1 140px; text-transform: uppercase; }
-.tg-form .tg-cin { flex: 0 1 120px; letter-spacing: .12em; }
+.tg-form .tg-cin { flex: 0 1 110px; letter-spacing: .12em; }
+.tg-btn { flex: none; }
 .tg-captcha { display: flex; align-items: center; gap: 4px; flex: none; }
 .tg-captcha img { display: block; border: 1px solid var(--line); border-radius: var(--r); background: #fff; }
 .tg-cambia { flex: none; font-size: 1rem; line-height: 1; color: var(--text-muted); background: none;
@@ -1609,7 +1609,10 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .tg-att { padding: 18px 2px; font-size: 0.9rem; color: var(--text-muted); }
 .tg-avviso { font-size: 0.85rem; color: var(--text); background: var(--accent-weak);
   border-radius: var(--r); padding: 9px 12px; margin: 12px 0 0; }
-.tg-esito { margin-top: 16px; }
+.tg-esito { margin-top: 14px; }
+/* Piu' gruppi (piu' revisioni) restano staccati: senza il filo si leggerebbero come
+   un elenco unico e non si saprebbe piu' quale valore appartiene a quale riga. */
+.tg-esito .det-specs + .det-specs { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .tg-esito .det-specs { margin-top: 10px; }
 /* Le righe che il portale aggiunge e che non stanno in coppie: testo suo, mostrato com'e'. */
 .tg-riga { font-size: 0.85rem; line-height: 1.5; padding: 3px 0; border-bottom: 1px dotted var(--line); overflow-wrap: anywhere; }

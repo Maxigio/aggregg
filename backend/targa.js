@@ -188,9 +188,40 @@ function leggiRisultato(html, htmlVuoto) {
     k = testo(k).replace(/[:：]\s*$/, ''); v = testo(v);
     if (k && v && k.length < 60 && v.length < 120 && k !== v) coppie.push([k, v]);
   };
-  for (const tr of cont.match(/<tr[\s\S]*?<\/tr>/gi) || []) {
-    const celle = tr.match(/<(?:td|th)[\s\S]*?<\/(?:td|th)>/gi) || [];
-    if (celle.length === 2) aggiungi(celle[0], celle[1]);
+
+  /**
+   * LE TABELLE DEL PORTALE NON SONO A DUE COLONNE.
+   *
+   * La risposta vera e' fatta di una riga di INTESTAZIONI e una di VALORI, su quattro
+   * colonne ("Tipo Veicolo · Targa · Compatibilita' Ambientale · Emissione CO2" e sotto
+   * "AUTOVEICOLO · … · EURO6 · 110"). Leggendo solo le righe da due celle non si
+   * accoppiava niente e i dati finivano nella rete di sicurezza, che li stampa in fila:
+   * prima tutte le etichette, poi tutti i valori. Corretti ma illeggibili.
+   *
+   * Qui una tabella diventa: intestazioni + una o piu' righe di valori. Piu' righe
+   * capitano quando il portale elenca piu' revisioni, e allora restano righe distinte
+   * invece di appiattirsi in un elenco unico dove non si sa piu' quale valore va con quale.
+   */
+  const tabelle = [];
+  for (const tab of cont.match(/<table[\s\S]*?<\/table>/gi) || []) {
+    const grezze = (tab.match(/<tr[\s\S]*?<\/tr>/gi) || []).map(tr => tr.match(/<(?:td|th)[\s\S]*?<\/(?:td|th)>/gi) || []);
+    const piene = grezze.filter(r => r.length && r.some(c => testo(c)));
+    if (!piene.length) continue;
+    const val = r => r.map(c => testo(c).replace(/[:：]\s*$/, ''));
+    const n = piene[0].length;
+    const allineate = piene.every(r => r.length === n);
+    // La prima riga e' di intestazioni? Il segnale certo sono i <th>. Senza, lo si deduce
+    // solo da TRE o piu' colonne: a due colonne una tabella e' quasi sempre fatta di
+    // coppie etichetta/valore, e leggerla come intestazioni+valori le rovinerebbe.
+    const primaTh = piene[0].every(c => /^<th/i.test(c));
+    const aIntestazione = piene.length >= 2 && allineate && (primaTh ? n >= 2 : n >= 3);
+    if (aIntestazione) {
+      const [cap, ...resto] = piene.map(val);
+      const dati = resto.filter(r => r.some(x => x && x !== '-'));
+      if (dati.length) tabelle.push({ intestazioni: cap, righe: dati });
+      continue;
+    }
+    for (const r of piene) if (r.length === 2) { const v = val(r); aggiungi(v[0], v[1]); }
   }
   for (const d of cont.match(/<dt[\s\S]*?<\/dt>\s*<dd[\s\S]*?<\/dd>/gi) || []) {
     const k = (d.match(/<dt[\s\S]*?<\/dt>/i) || [])[0];
@@ -202,11 +233,13 @@ function leggiRisultato(html, htmlVuoto) {
   let nuove = [];
   if (htmlVuoto) {
     const prima = new Set(righe(htmlVuoto));
-    const noti = new Set(avvisi.concat(coppie.flat()));
+    // Quello che e' gia' finito in una tabella o in una coppia non si ripete sotto.
+    const noti = new Set(avvisi.concat(coppie.flat(),
+      tabelle.flatMap(t => t.intestazioni.concat(t.righe.flat()))));
     nuove = righe(html).filter(x => !prima.has(x) && !noti.has(x)).slice(0, 20);
   }
 
-  return { coppie, avvisi, nuove };
+  return { coppie, tabelle, avvisi, nuove };
 }
 
 /** Manda targa e caratteri del CAPTCHA nella sessione della sfida. */
@@ -230,8 +263,9 @@ async function verifica(id, { tipo, targa, captcha }) {
   sfide.delete(id);
   if (r.status !== 200 && r.status !== 302) throw new Error(`il portale risponde ${r.status}`);
   const html = r.buf.toString('utf8');
-  const { coppie, avvisi, nuove } = leggiRisultato(html, s.vuoto);
-  return { coppie, avvisi, nuove, vuoto: !coppie.length && !avvisi.length && !nuove.length };
+  const { coppie, tabelle, avvisi, nuove } = leggiRisultato(html, s.vuoto);
+  return { coppie, tabelle, avvisi, nuove,
+           vuoto: !coppie.length && !tabelle.length && !avvisi.length && !nuove.length };
 }
 
 function mount(app, deps = {}) {

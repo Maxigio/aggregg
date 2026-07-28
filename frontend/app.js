@@ -916,7 +916,6 @@ const AREE = {
   fonti: { pannello: 'fontiPanel', apri: () => fnApri(), chiudi: () => fnChiudi() },
   ponte: { pannello: 'pontePanel', apri: () => pnApri(), chiudi: () => pnChiudi() },
   competitor: { pannello: 'competitorPanel', apri: () => cpApri(), chiudi: () => cpChiudi() },
-  targa: { pannello: 'targaPanel', apri: () => tgApri(), chiudi: () => tgChiudi() },
 };
 
 /**
@@ -3328,6 +3327,11 @@ async function loadVehScheda() {
   vehSchedaCollapsed = true;   // scheda chiusa di default
   vehXf.compare = null; vehXf.q = ''; vehXf.highlight = new Set(); vehGenChosen = false; vehShowAll = false;   // reset per ricerca (traduci/unità restano preferenze)
   vehRichiami = null; vehAddonAperto = false;   // i richiami sono di QUEL veicolo: cambiando ricerca ripartono
+  // La targa NON e' un parametro di ricerca: non filtra gli annunci e non va alle fonti.
+  // Si legge qui e resta nel browser, cosi' non finisce nemmeno nella chiave di cache.
+  targaCercata = String((document.getElementById('targaFiltro') || {}).value || '')
+    .toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  tgReset();
   el.innerHTML = '<div class="rc-group"><div class="rc-group-body"><div class="rc-loading">Carico la scheda tecnica…</div></div></div>';
   try {
     const r = await fetch(`/api/scheda-veicolo?tipo=${encodeURIComponent(tipo)}&marca=${encodeURIComponent(marca)}&modello=${encodeURIComponent(modello)}&anno=${encodeURIComponent(anno)}`);
@@ -3480,7 +3484,7 @@ function vehRichiamiHTML() {
 }
 
 function vehAddonHTML(spec) {
-  const pezzi = [vehCostoHTML(spec), vehLiqHTML(), vehRichiamiHTML()].filter(Boolean);
+  const pezzi = [vehCostoHTML(spec), vehLiqHTML(), vehRichiamiHTML(), vehTargaHTML()].filter(Boolean);
   if (!pezzi.length) return '';
   return vehGrpHTML('ADD ON', pezzi.length, 1, `<div class="veh-addon">${pezzi.join('')}</div>`, '',
     { chiuso: !vehAddonAperto, attr: ' data-addon="1"' });
@@ -5341,6 +5345,7 @@ function fnRender() {
 // non li guarda non paga la richiesta.
 document.getElementById('vehicleScheda')?.addEventListener('toggle', e => miniToggle(e, cosa => {
   if (cosa === 'richiami') vehRichiamiCarica();
+  if (cosa === 'targa' && !tgSfida && !tgOccupato) tgNuovaSfida();
 }), true);
 
 document.getElementById('fontiPanel')?.addEventListener('click', e => {
@@ -5698,127 +5703,126 @@ document.getElementById('competitorPanel')?.addEventListener('keydown', e => {
 
 // ─── VERIFICA PER TARGA ───────────────────────────────────────────────────────
 /**
- * Classe ambientale e ultima revisione dal Portale dell'Automobilista.
+ * Classe ambientale, CO2 e ultima revisione dal Portale dell'Automobilista.
+ *
+ * DOVE STA, e non e' un caso. La targa si scrive nei FILTRI AVANZATI insieme agli altri
+ * dati del veicolo, ma NON filtra gli annunci: e' del mezzo che stai valutando, non di
+ * quelli in vendita. Il risultato compare in ADD ON, dentro la scheda tecnica, accanto
+ * alle altre integrazioni esterne — perche' e' esattamente quello: un dato che viene da
+ * fuori e costa una richiesta.
  *
  * IL CAPTCHA LO RISOLVI TU. L'immagine e' quella del portale, arriva qui dentro e la
- * leggi tu: non c'e' nessun tentativo di indovinarla, ed e' lo stesso patto che l'app ha
- * gia' con Subito. Il server tiene la sessione del portale e rimanda i tuoi caratteri.
+ * leggi tu: nessun tentativo di indovinarla. Il server tiene la sessione e rimanda i
+ * tuoi caratteri.
  *
- * LA TARGA NON SI SALVA. Non finisce in cache, non nei log, non su disco: serve per il
- * veicolo che stai valutando adesso, e poi non serve piu'. Per questo qui non c'e' uno
- * storico, e non e' una dimenticanza.
- *
- * Una sfida vale una volta sola: il portale rigenera l'immagine a ogni invio.
+ * LA TARGA NON SI SALVA: non in cache, non su disco, non nei log. Serve per il veicolo
+ * che hai davanti adesso, e poi non serve piu'. Per questo qui non c'e' uno storico.
  */
-const tgEl = () => document.getElementById('targaPanel');
+let targaCercata = '';   // quella scritta nei filtri, per QUESTA ricerca
 let tgSfida = null;      // { id, immagine, tipi } oppure { errore }
-let tgEsito = null;      // { coppie, avvisi } oppure { errore }
+let tgEsito = null;      // { coppie, tabelle, avvisi, nuove } oppure { errore }
 let tgOccupato = false;
-// Targa e tipo si ricordano fra un tentativo e l'altro: dopo un invio il modulo si
-// ridisegna (serve un'immagine nuova) e senza questo la targa andava riscritta ogni
-// volta che si sbagliavano i cinque caratteri. I caratteri no: quelli cambiano sempre.
-let tgUltima = { targa: '', tipo: 'A' };
+// Il tipo si ricorda fra un tentativo e l'altro: dopo un invio il blocco si ridisegna
+// (serve un'immagine nuova) e senza questo andava riscelto. I caratteri no: cambiano sempre.
+let tgTipoScelto = 'A';
 
-async function tgApri() {
-  const el = tgEl(); if (!el) return;
-  el.classList.remove('d-none');
-  document.body.classList.add('has-results');
-  if (!tgSfida) await tgNuovaSfida(); else tgRender();
-}
-function tgChiudi() { const el = tgEl(); if (el) { el.classList.add('d-none'); el.innerHTML = ''; } tgSfida = null; tgEsito = null; }
+function tgReset() { tgSfida = null; tgEsito = null; tgOccupato = false; }
 
-/**
- * Chiede una sfida nuova. `tieniEsito` NON e' un dettaglio: dopo una verifica serve
- * subito un'immagine nuova (il portale la rigenera comunque), ma l'esito appena
- * ricevuto deve restare a schermo. Azzerandolo qui, la risposta spariva nell'istante
- * in cui arrivava e dopo l'invio non si vedeva NIENTE — il backend rispondeva, il
- * frontend buttava via.
- */
 async function tgNuovaSfida(tieniEsito) {
   tgOccupato = true;
   if (!tieniEsito) tgEsito = null;
-  tgRender();
+  renderVehBody();
   try {
     const d = await fetch('/api/targa/sfida').then(r => r.json());
     tgSfida = d.ok ? d : { errore: d.error || 'il portale non risponde' };
   } catch (_) { tgSfida = { errore: 'server non raggiungibile' }; }
-  tgOccupato = false; tgRender();
+  tgOccupato = false; renderVehBody();
 }
 
 async function tgVerifica() {
   if (tgOccupato || !tgSfida || !tgSfida.id) return;
-  const v = id => (document.getElementById(id) || {}).value || '';
-  const targa = v('tgTarga').trim(), captcha = v('tgCaptcha').trim(), tipo = v('tgTipo') || 'A';
-  tgUltima = { targa, tipo };
-  if (!targa) { toast('Scrivi la targa'); return; }
+  const el = id => document.getElementById(id);
+  const captcha = ((el('tgCaptcha') || {}).value || '').trim();
+  tgTipoScelto = (el('tgTipo') || {}).value || 'A';
+  if (!targaCercata) { toast('Scrivi la targa nei filtri avanzati'); return; }
   if (!captcha) { toast('Scrivi i caratteri dell\'immagine'); return; }
-  tgOccupato = true; tgEsito = null; tgRender();   // l'esito vecchio sparisce solo ORA
+  tgOccupato = true; tgEsito = null; renderVehBody();
   try {
     const r = await fetch('/api/targa/verifica', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: tgSfida.id, tipo, targa, captcha }),
+      body: JSON.stringify({ id: tgSfida.id, tipo: tgTipoScelto, targa: targaCercata, captcha }),
     });
     const d = await r.json();
     tgEsito = d.ok ? d : { errore: d.error || 'non riuscito' };
   } catch (_) { tgEsito = { errore: 'server non raggiungibile' }; }
   tgOccupato = false;
-  // La sfida e' bruciata: il portale ne vuole una nuova per la prossima targa. L'esito
-  // appena letto resta a schermo.
-  tgSfida = null; tgRender();
+  // La sfida e' bruciata: il portale ne rigenera una a ogni invio. L'esito appena letto
+  // resta a schermo — azzerarlo qui lo faceva sparire nell'istante in cui arrivava.
+  tgSfida = null; renderVehBody();
   await tgNuovaSfida(true);
 }
 
+/**
+ * Il risultato, nella forma in cui il portale lo manda davvero: una riga di intestazioni
+ * e una di valori. Si mostra come coppie etichetta/valore, che e' come si legge — non
+ * come due elenchi in fila, dove non si sa piu' quale numero appartiene a quale voce.
+ * Se le righe di valori sono piu' d'una (piu' revisioni) restano gruppi distinti.
+ */
 function tgEsitoHTML() {
   if (!tgEsito) return '';
   if (tgEsito.errore) return `<div class="tg-avviso">${escapeHtml(tgEsito.errore)}</div>`;
   const avvisi = (tgEsito.avvisi || []).map(a => `<div class="tg-avviso">${escapeHtml(a)}</div>`).join('');
-  const righe = (tgEsito.coppie || []).map(([k, val]) =>
-    `<div class="det-spec"><span class="det-k">${escapeHtml(k)}</span><span class="det-v">${escapeHtml(val)}</span></div>`).join('');
-  // Quello che il portlet ha aggiunto e che non e' finito in coppie: si mostra com'e'.
-  // Meglio il testo del portale che una schermata vuota su una risposta che c'e' stata.
+  const coppia = (k, v) => `<div class="det-spec"><span class="det-k">${escapeHtml(k)}</span><span class="det-v">${escapeHtml(v)}</span></div>`;
+  const blocchi = (tgEsito.tabelle || []).map(t => t.righe.map(r =>
+    `<div class="det-specs">${t.intestazioni.map((h, i) => (r[i] ? coppia(h, r[i]) : '')).join('')}</div>`).join('')).join('');
+  const sciolte = (tgEsito.coppie || []).map(([k, v]) => coppia(k, v)).join('');
+  // Cio' che il portale ha aggiunto e che non e' finito in tabella: si mostra com'e'.
   const extra = (tgEsito.nuove || []).map(x => `<div class="tg-riga">${escapeHtml(x)}</div>`).join('');
-  if (!avvisi && !righe && !extra) {
+  if (!avvisi && !blocchi && !sciolte && !extra) {
     return '<div class="tg-avviso">Il portale ha risposto, ma non c\'era niente da leggere. Riprova con l\'immagine nuova.</div>';
   }
-  return `<div class="tg-esito">${avvisi}${righe ? `<div class="det-specs">${righe}</div>` : ''}${extra}</div>`;
+  return `<div class="tg-esito">${avvisi}${blocchi}${sciolte ? `<div class="det-specs">${sciolte}</div>` : ''}${extra}</div>`;
 }
 
-function tgRender() {
-  const el = tgEl(); if (!el) return;
+function tgCorpoHTML() {
   const s = tgSfida;
-  let sfidaHTML;
-  if (tgOccupato && !s) sfidaHTML = '<div class="tg-att">Chiedo l\'immagine al portale…</div>';
-  else if (!s) sfidaHTML = '<div class="tg-att">…</div>';
+  let form;
+  if (!s && tgOccupato) form = '<div class="tg-att">Chiedo l\'immagine al portale…</div>';
+  else if (!s) form = '<div class="tg-att">Apri per chiedere l\'immagine al portale.</div>';
   else if (s.errore) {
-    sfidaHTML = `<div class="tg-avviso">${escapeHtml(s.errore)}</div>`
-      + '<button type="button" class="btn-ghost" id="tgRiprova">Riprova</button>';
+    form = `<div class="tg-avviso">${escapeHtml(s.errore)}</div>`
+      + '<button type="button" class="btn-ghost tg-btn" id="tgRiprova">Riprova</button>';
   } else {
     const tipi = (s.tipi || []).map(t =>
-      `<option value="${escapeHtml(t.v)}"${t.v === tgUltima.tipo ? ' selected' : ''}>${escapeHtml(t.t)}</option>`).join('');
-    sfidaHTML = `<div class="tg-form">
+      `<option value="${escapeHtml(t.v)}"${t.v === tgTipoScelto ? ' selected' : ''}>${escapeHtml(t.t)}</option>`).join('');
+    form = `<div class="tg-form">
       <select id="tgTipo" class="field-input" aria-label="tipo di veicolo">${tipi}</select>
-      <input type="text" id="tgTarga" class="field-input" placeholder="Targa" maxlength="8" autocomplete="off" spellcheck="false" value="${escapeHtml(tgUltima.targa)}">
       <div class="tg-captcha">
         <img src="${escapeHtml(s.immagine)}" alt="caratteri da leggere" width="150" height="50">
-        <button type="button" class="tg-cambia" id="tgCambia" title="Cambia immagine">↻</button>
+        <button type="button" class="tg-cambia" id="tgCambia" title="Cambia immagine">&#8635;</button>
       </div>
       <input type="text" id="tgCaptcha" class="field-input tg-cin" placeholder="Caratteri" maxlength="5" autocomplete="off" spellcheck="false">
-      <button type="button" class="btn-cerca" id="tgVai"${tgOccupato ? ' disabled' : ''}>${tgOccupato ? 'Cerco…' : 'Verifica'}</button>
+      <button type="button" class="btn-cerca tg-btn" id="tgVai"${tgOccupato ? ' disabled' : ''}>${tgOccupato ? 'Cerco…' : 'Verifica'}</button>
     </div>`;
   }
-  el.innerHTML = `<div class="tg-wrap">
-    <p class="tg-nota">Classe ambientale e ultima revisione dal <b>Portale dell'Automobilista</b>.
-      I caratteri dell'immagine li leggi tu: il portale li chiede per distinguere una persona da un programma, e va bene cosi'.
-      <b>La targa non viene salvata</b> da nessuna parte.</p>
-    ${sfidaHTML}
-    ${tgEsitoHTML()}
-  </div>`;
+  return `<div class="tg-corpo">
+    <p class="tg-nota">Targa <b>${escapeHtml(targaCercata)}</b>. I caratteri dell'immagine li leggi tu:
+      il portale li chiede per distinguere una persona da un programma. <b>La targa non viene salvata.</b></p>
+    ${form}${tgEsitoHTML()}</div>`;
 }
 
-document.getElementById('targaPanel')?.addEventListener('click', e => {
+// Il blocco compare SOLO se una targa e' stata scritta nei filtri: senza, non c'e'
+// niente da chiedere e un riquadro vuoto sarebbe solo ingombro.
+function vehTargaHTML() {
+  if (!targaCercata) return '';
+  const meta = tgEsito && tgEsito.tabelle && tgEsito.tabelle.length ? 'letta' : '';
+  return miniHTML('veh-targa', 'Targa', escapeHtml(meta), tgCorpoHTML(), { carica: 'targa' });
+}
+
+document.getElementById('vehicleScheda')?.addEventListener('click', e => {
   if (e.target.closest('#tgVai')) return tgVerifica();
   if (e.target.closest('#tgCambia') || e.target.closest('#tgRiprova')) return tgNuovaSfida();
 });
-document.getElementById('targaPanel')?.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && (e.target.id === 'tgTarga' || e.target.id === 'tgCaptcha')) { e.preventDefault(); tgVerifica(); }
+document.getElementById('vehicleScheda')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.id === 'tgCaptcha') { e.preventDefault(); tgVerifica(); }
 });

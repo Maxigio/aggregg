@@ -54,3 +54,30 @@ test('le entita\' HTML tornano lettere', () => {
   const { coppie } = _leggiRisultato('<table><tr><td>Propriet&agrave;</td><td>S&igrave;</td></tr></table>');
   assert.deepStrictEqual(coppie, [['Proprietà', 'Sì']]);
 });
+
+test('la tabella del portale diventa etichetta→valore, non due elenchi in fila', () => {
+  // FORMA VERA della risposta: una riga di intestazioni e una di valori, quattro colonne.
+  // Leggendo solo le righe da due celle non si accoppiava niente e i dati uscivano come
+  // "Tipo Veicolo / Targa / … / AUTOVEICOLO / … / EURO6 / 110": corretti e illeggibili.
+  const html = '<table>'
+    + '<tr><th>Tipo Veicolo</th><th>Targa</th><th>Compatibilit&agrave; Ambientale</th><th>Emissione CO2 (g/Km)</th></tr>'
+    + '<tr><td>AUTOVEICOLO</td><td>XX000XX</td><td>EURO6</td><td>110</td></tr></table>';
+  const { tabelle } = _leggiRisultato(html);
+  assert.strictEqual(tabelle.length, 1);
+  assert.deepStrictEqual(tabelle[0].intestazioni, ['Tipo Veicolo', 'Targa', 'Compatibilità Ambientale', 'Emissione CO2 (g/Km)']);
+  assert.deepStrictEqual(tabelle[0].righe, [['AUTOVEICOLO', 'XX000XX', 'EURO6', '110']]);
+});
+
+test('piu\' righe di valori restano righe distinte', () => {
+  const html = '<table><tr><th>Data</th><th>Esito</th></tr>'
+    + '<tr><td>12/2024</td><td>Regolare</td></tr><tr><td>12/2022</td><td>Regolare</td></tr></table>';
+  const { tabelle } = _leggiRisultato(html);
+  assert.strictEqual(tabelle[0].righe.length, 2, 'due revisioni non si appiattiscono in una');
+});
+
+test('una tabella di sola impaginazione non diventa dati', () => {
+  // colonne disallineate: si ripiega sulle righe a due celle, senza inventare accoppiamenti
+  const { tabelle, coppie } = _leggiRisultato('<table><tr><td>a</td><td>b</td><td>c</td></tr><tr><td>x</td><td>y</td></tr></table>');
+  assert.strictEqual(tabelle.length, 0);
+  assert.deepStrictEqual(coppie, [['x', 'y']]);
+});
