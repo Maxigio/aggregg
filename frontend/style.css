@@ -1432,3 +1432,28 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .rc-pz-c:hover { border-color: var(--accent); color: var(--accent); }
 .rc-pz-c.suo { cursor: default; border-style: dashed; color: var(--text-muted); background: transparent; }
 @media (max-width: 560px) { .rc-pz-riga { grid-template-columns: 1fr; } }
+
+
+/* ── Cerchi, gomme e pneumatici dentro il pannello annuncio ───────────────────
+   Una riga per MISURA distinta, non per allestimento: la stessa gomma torna su piu'
+   allestimenti e in piano erano decine di righe uguali. La misura e' un bottone perche'
+   da li' parte l'etichetta europea, e solo se la premi. */
+.det-gomme:not(:empty) { margin-top: 10px; }
+.gom { border-top: 1px solid var(--line); padding-top: 10px; }
+.gom-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 0.8rem; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.gom-src { font-weight: 400; font-size: 0.74rem; color: var(--text-muted); }
+.gom-hint { font-weight: 400; font-size: 0.74rem; font-style: italic; color: var(--text-muted); }
+.gom-att { font-size: 0.78rem; color: var(--text-muted); font-style: italic; padding: 4px 0; }
+.gom-riga { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 3px 0; }
+.gom-mis { padding: 2px 8px; font-size: 0.8rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; white-space: nowrap; }
+.gom-mis:hover { border-color: var(--accent); color: var(--accent); }
+.gom-det { font-size: 0.76rem; color: var(--text-muted); min-width: 0; overflow-wrap: anywhere; }
+
+.gom-pneu { margin: 2px 0 8px 10px; padding-left: 10px; border-left: 2px solid var(--line); }
+.gom-pneu-h { font-size: 0.74rem; color: var(--text-muted); margin-bottom: 4px; }
+.gom-pneu-r { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; padding: 2px 0; font-size: 0.78rem; }
+/* il nome non si allarga a spingere i valori all'altro capo della riga: consumo,
+   bagnato e rumore vanno letti ACCANTO al pneumatico a cui appartengono */
+.gom-pneu-m { flex: 0 1 300px; min-width: 0; overflow-wrap: anywhere; }
+.gom-pneu-v { font-weight: 600; white-space: nowrap; }
+.gom-pneu-v em { font-weight: 400; font-style: normal; font-size: 0.7rem; color: var(--text-muted); margin-left: 3px; }

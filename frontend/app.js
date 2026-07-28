@@ -467,6 +467,12 @@ async function init() {
         if (r) { r._passProvAnnuncio = alt.dataset.alt === 'annuncio'; calcolaPassaggio(r, row); }
         return;
       }
+      // Cerchi e gomme: marca, modello e anno li ha gia' l'annuncio, ma la richiesta
+      // parte solo se la chiedi — e' rete, come il passaggio di proprieta'.
+      if (e.target.closest('.btn-gomme')) { const r = trovaResult(url); if (r) caricaGomme(r, row); return; }   // `row` qui E' il pannello (ramo dataset.detail)
+      // Una misura cliccata apre (o chiude) l'etichetta europea di quella gomma.
+      const mis = e.target.closest('.gom-mis');
+      if (mis) { const r = trovaResult(url); if (r) caricaPneumatico(r, mis.dataset.misura, row); return; }
       return;   // altri click nel pannello: ignora
     }
     if (e.target.closest('.row-thumb')) {
@@ -2383,6 +2389,102 @@ function passStoricoHTML(r) {
     + ` veicolo storico${eta != null ? ` (${eta} anni)` : ' (oltre 30 anni)'}, non usato nell'attivita'</label>`;
 }
 
+// ─── Cerchi, gomme e pneumatici, dentro l'annuncio ───────────────────────────
+// Wheel-Size vuole marca, modello e anno di UN'AUTO: sono esattamente i dati che un
+// annuncio ha per forza. Chiederli di nuovo in un'altra sezione era far ridigitare
+// all'utente cio' che l'app gia' sa.
+//
+// NON PARTE DA SOLA, come il passaggio di proprieta': e' una richiesta in rete, e la fa
+// solo chi la vuole. Stessa cosa per l'etichetta europea del pneumatico: la misura
+// diventa un bottone, e la ricerca parte se la si preme.
+//
+// La misura non ha bisogno di essere ripulita: Wheel-Size la scrive "175/65R15" ed EPREL
+// accetta quella stringa cosi' com'e' — verificato, 100 pneumatici in risposta.
+//
+// Il risultato resta sull'oggetto annuncio (r._gomme, r._pneu): riaprire la riga non
+// ricarica niente.
+
+/** marca e modello vengono dalla RICERCA (l'annuncio non li porta), l'anno dall'annuncio. */
+function gommeChiave(r) {
+  const p = lastSearchParams || {};
+  if ((p.tipo || currentTipo()) !== 'auto') return null;      // Wheel-Size qui e' solo auto
+  if (!p.marca || !p.modello || !r.anno) return null;
+  return { marca: p.marca, modello: p.modello, anno: r.anno };
+}
+
+function gommePneuHTML(r, misura) {
+  const st = (r._pneu || {})[misura];
+  if (!st) return '';
+  if (st.stato === 'carico') return '<div class="gom-pneu"><span class="gom-att">cerco le etichette…</span></div>';
+  if (st.stato === 'ko') return '<div class="gom-pneu"><span class="gom-att">etichette non disponibili ora</span></div>';
+  const p = st.d || [];
+  if (!p.length) return '<div class="gom-pneu"><span class="gom-att">nessun pneumatico registrato con questa misura</span></div>';
+  return '<div class="gom-pneu"><div class="gom-pneu-h">' + p.length + ' pneumatici registrati · etichetta europea EPREL</div>'
+    + p.slice(0, 8).map(x => `<div class="gom-pneu-r"><span class="gom-pneu-m">${escapeHtml([x.marca, x.modello].filter(Boolean).join(' ')).slice(0, 46)}</span>`
+        + `<span class="gom-pneu-v">${escapeHtml(x.classeEfficienza || '—')}<em>consumo</em></span>`
+        + `<span class="gom-pneu-v">${escapeHtml(x.classeBagnato || '—')}<em>bagnato</em></span>`
+        + `<span class="gom-pneu-v">${x.rumoreDb ? escapeHtml(String(x.rumoreDb)) + ' dB' : '—'}<em>rumore</em></span>`
+        + (x.neve ? '<span class="gom-pneu-s" title="marcatura 3PMSF">❄︎</span>' : '')
+        + '</div>').join('')
+    + (p.length > 8 ? `<div class="gom-att">e altri ${p.length - 8}</div>` : '') + '</div>';
+}
+
+function gommeHTML(r) {
+  const k = gommeChiave(r);
+  if (!k) return '';
+  const st = r._gomme;
+  if (!st) return `<button type="button" class="det-act btn-gomme">${icon('info')}<span class="ra-txt">Cerchi e gomme di questo modello</span></button>`;
+  if (st.stato === 'carico') return '<div class="gom-att">Cerco cerchi e gomme…</div>';
+  if (st.stato === 'ko') return '<div class="gom-att">Fonte non raggiungibile.</div>'
+    + '<button type="button" class="det-act btn-gomme"><span class="ra-txt">Riprova</span></button>';
+  const d = st.d || {};
+  const calz = (d.calzate || []).filter(c => c.misura);
+  if (!calz.length) {
+    // Wheel-Size mette la misura in chiaro solo sul primo allestimento di ogni generazione:
+    // se qui non ce n'e' nessuna, dirlo e' l'unica cosa onesta — un riquadro vuoto no.
+    return `<div class="gom-att">Nessuna misura in chiaro per ${escapeHtml(k.marca)} ${escapeHtml(k.modello)} ${k.anno}`
+      + ((d.calzate || []).length ? ` (la fonte elenca ${d.calzate.length} allestimenti ma senza misura)` : '') + '.</div>';
+  }
+  // una riga per MISURA distinta: la stessa gomma torna su piu' allestimenti
+  const per = new Map();
+  for (const c of calz) {
+    if (!per.has(c.misura)) per.set(c.misura, { cerchi: new Set(), press: new Set() });
+    if (c.cerchio) per.get(c.misura).cerchi.add(c.cerchio);
+    if (c.pressioneAntBar) per.get(c.misura).press.add(c.pressioneAntBar + (c.pressionePostBar ? ' / ' + c.pressionePostBar : '') + ' bar');
+  }
+  return '<div class="gom"><div class="gom-h">Cerchi e gomme <span class="gom-src">Wheel-Size</span>'
+    + '<span class="gom-hint">clicca una misura per l\'etichetta europea</span></div>'
+    + [...per.entries()].map(([mis, v]) => `<div class="gom-riga">
+        <button type="button" class="gom-mis" data-misura="${escapeHtml(mis)}">${escapeHtml(mis)}</button>
+        <span class="gom-det">${escapeHtml([...v.cerchi].slice(0, 3).join(' · '))}${v.press.size ? ' — ' + escapeHtml([...v.press].slice(0, 2).join(' · ')) : ''}</span>
+      </div>${gommePneuHTML(r, mis)}`).join('')
+    + (d.nota ? `<div class="gom-att">${escapeHtml(d.nota)}</div>` : '') + '</div>';
+}
+
+async function caricaGomme(r, pannello) {
+  const k = gommeChiave(r); if (!k) return;
+  r._gomme = { stato: 'carico' };
+  pannello?._render?.();
+  try {
+    const d = await fetch(`/api/fonti/cerchi/calzate?marca=${encodeURIComponent(k.marca)}`
+      + `&modello=${encodeURIComponent(k.modello)}&anno=${encodeURIComponent(k.anno)}`).then(x => x.json());
+    r._gomme = d && d.ok !== false ? { stato: 'ok', d } : { stato: 'ko' };
+  } catch (_) { r._gomme = { stato: 'ko' }; }
+  pannello?._render?.();
+}
+
+async function caricaPneumatico(r, misura, pannello) {
+  r._pneu = r._pneu || {};
+  if (r._pneu[misura]) { delete r._pneu[misura]; pannello?._render?.(); return; }   // secondo click: chiudi
+  r._pneu[misura] = { stato: 'carico' };
+  pannello?._render?.();
+  try {
+    const d = await fetch('/api/fonti/pneumatici/cerca?misura=' + encodeURIComponent(misura)).then(x => x.json());
+    r._pneu[misura] = (d && d.ok !== false) ? { stato: 'ok', d: d.pneumatici || [] } : { stato: 'ko' };
+  } catch (_) { r._pneu[misura] = { stato: 'ko' }; }
+  pannello?._render?.();
+}
+
 function renderDetailInto(panel, r) {
   panel.dataset.loaded = '1';
   const renderBody = () => {
@@ -2396,6 +2498,7 @@ function renderDetailInto(panel, r) {
     const confBtn = `<button type="button" class="det-act btn-confronta${inConf ? ' attivo' : ''}">${icon(inConf ? 'square-check' : 'square')}<span class="ra-txt">${inConf ? 'Nel confronto' : 'Confronta'}</span></button>`;
     panel.innerHTML = `<div class="det-inner">${gallery}<div class="det-specs">${detailSpecsHTML(r)}</div>`
       + `<div class="det-pass">${passHTML(r)}</div>`
+      + `<div class="det-gomme">${gommeHTML(r)}</div>`
       + `<div class="det-foot">${openBtn}${salBtn}${confBtn}</div></div>`;
   };
   panel._render = renderBody;   // il calcolo del passaggio ridisegna solo questo pannello

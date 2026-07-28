@@ -87,6 +87,7 @@ async function conPrezzi(oggetti) {
 
 const FONTI = {
   territorio: {
+    nascosta: true,   // fuori dall'elenco; endpoint intatti
     nome: 'Territorio', dettaglio: 'concorrenti, officine, distributori e colonnine — OpenStreetMap',
     scraper: osm,
     sa: 'Dove sono i concessionari che vendono usato nella tua zona, le officine, i gommisti, i distributori e le colonnine. Sui distributori aggiunge il PREZZO di oggi incrociando il codice ministeriale con i dati MIMIT.',
@@ -99,6 +100,10 @@ const FONTI = {
     nonSa: 'Non contiene dati di veicolo: nessuna marca auto, nessun modello. Si cerca per misura o per marca del pneumatico.',
   },
   ricambiOe: {
+    // NASCOSTA DALL'ELENCO, non spenta: la sezione Ricambi la usa a ogni ricerca per
+    // codice (`/cerca`), dove i dati del pezzo e i codici equivalenti stanno accanto
+    // alle offerte. Come voce a se' stante non serve piu' a nessuno.
+    nascosta: true,
     nome: 'Ricambi OE', dettaglio: 'da un codice originale a tutti i suoi equivalenti — bilstein group',
     scraper: bilstein,
     sa: 'Dato un codice originale, quali altri codici sono lo stesso pezzo, su quali marche monta e che misure ha.',
@@ -111,6 +116,7 @@ const FONTI = {
     nonSa: 'Distanza fori, diametro di centraggio e coppie di serraggio non sono nella pagina, e la misura del pneumatico e\' in chiaro solo su una riga su sette.',
   },
   costi: {
+    nascosta: true,   // fuori dall'elenco; endpoint intatti
     nome: 'Costi di possesso', dettaglio: 'premio r.c. e imposta provinciale — IVASS e MEF',
     // Nessuno scraper: e' l'unica fonte gia' tutta su disco. Da qui in giu' `scraper` va trattato
     // come facoltativo, e non come "c'e' sempre".
@@ -150,7 +156,9 @@ function mount(app, deps = {}) {
     res.set('Cache-Control', 'no-store');
     res.json({
       ok: true, adesso: Date.now(),
-      fonti: Object.entries(FONTI).map(([id, f]) => {
+      // `nascosta` toglie la voce dall'elenco e basta: le rotte restano in piedi, perche'
+      // una fonte puo' servire da dentro un'altra parte dell'app (ricambiOe lo fa).
+      fonti: Object.entries(FONTI).filter(([, f]) => !f.nascosta).map(([id, f]) => {
         const fino = pausaDi(f);
         return { id, nome: f.nome, dettaglio: f.dettaglio, sa: f.sa, nonSa: f.nonSa, ...(fino ? { bloccataFino: fino } : {}) };
       }),

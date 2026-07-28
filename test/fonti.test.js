@@ -11,6 +11,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const fonti = require('../backend/fonti-route');
+const { FONTI } = fonti;
 const osm = require('../backend/scrapers/osm-territorio');
 const eprel = require('../backend/scrapers/eprel-pneumatici');
 const bilstein = require('../backend/scrapers/bilstein-oe');
@@ -44,12 +45,19 @@ test('ogni fonte dichiara cosa sa E cosa non sa', async () => {
   const { corpo, headers } = await chiama('/api/fonti');
   assert.strictEqual(corpo.ok, true);
   assert.strictEqual(headers['Cache-Control'], 'no-store', 'porta lo stato di pausa: non si caccia');
-  assert.strictEqual(corpo.fonti.length, 5);
-  assert.deepStrictEqual(corpo.fonti.map(f => f.id), ['territorio', 'pneumatici', 'ricambiOe', 'cerchi', 'costi']);
-  for (const f of corpo.fonti) {
-    assert.ok(f.sa && f.sa.length > 30, f.id + ': manca cosa sa');
-    assert.ok(f.nonSa && f.nonSa.length > 30, f.id + ': manca cosa NON sa');
-    assert.ok(f.dettaglio && /—/.test(f.dettaglio), f.id + ': il dettaglio deve citare la fonte');
+  // L'elenco mostra le fonti NON nascoste. `nascosta` toglie la voce dal pannello e basta:
+  // le rotte restano, perche' una fonte puo' servire da dentro un'altra parte dell'app —
+  // ricambiOe lo fa, e alimenta la scheda del pezzo nella ricerca ricambi.
+  const visibili = Object.entries(FONTI).filter(([, f]) => !f.nascosta).map(([id]) => id);
+  assert.deepStrictEqual(corpo.fonti.map(f => f.id), visibili);
+
+  // Il controllo vale su TUTTE, nascoste comprese: una fonte che torna nell'elenco non
+  // deve arrivare muta, e se lo si verificasse solo sulle visibili non se ne accorgerebbe
+  // nessuno fino al giorno in cui riappare.
+  for (const [id, f] of Object.entries(FONTI)) {
+    assert.ok(f.sa && f.sa.length > 30, id + ': manca cosa sa');
+    assert.ok(f.nonSa && f.nonSa.length > 30, id + ': manca cosa NON sa');
+    assert.ok(f.dettaglio && /—/.test(f.dettaglio), id + ': il dettaglio deve citare la fonte');
   }
 });
 
