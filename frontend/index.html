@@ -61,6 +61,7 @@
           <button type="button" class="mode-btn" data-mode="moto" role="tab">Moto</button>
           <button type="button" class="mode-btn" data-mode="ricambi" role="tab">Ricambi</button>
           <button type="button" class="mode-btn" data-mode="competitor" role="tab">Competitor</button>
+          <button type="button" class="mode-btn" data-mode="registri" role="tab">Registri</button>
           <!-- Catalogo, Richiami, Fonti e Corrispondenze: nascosti dalla barra. Il codice e
                i pannelli restano (app.js li disegna ancora), ma non hanno piu' una porta
                d'ingresso. Cerchi/gomme e i codici OE ora vivono dove servono — dentro
@@ -179,6 +180,10 @@
     <!-- Area Competitor: il parco di un concessionario, il tuo e quello degli altri.
          Disegnata da app.js. Il parco NON si scarica da solo: si chiede. -->
     <div id="competitorPanel" class="d-none"></div>
+
+    <!-- Area Registri: gli archivi pubblici ufficiali. Oggi i richiami, da due fonti
+         affiancate e mai sommate. Disegnata da app.js. -->
+    <div id="registriPanel" class="d-none"></div>
 
     <!-- Area Corrispondenze: lo stesso veicolo sulle tre fonti. Disegnata da app.js. -->
     <div id="pontePanel" class="d-none"></div>

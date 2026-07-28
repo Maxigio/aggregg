@@ -1474,6 +1474,23 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .mini-meta em { font-style: normal; font-weight: 400; font-size: 0.74rem; color: var(--text-muted); margin-left: 4px; }
 .mini-b { padding: 0 0 10px; }
 
+/* ── Quello che la fonte dichiarava e non leggevamo ───────────────────────────
+   I campi singoli stanno con gli altri dati dell'annuncio, nella griglia `.det-specs`:
+   sono dati dell'annuncio come la potenza, non integrazioni da andare a cercare. Qui
+   restano solo le due cose che nella griglia non ci stanno — la lista degli optional e
+   il testo scritto dal venditore — a tutta larghezza e in chiaro. */
+.det-fonte { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.det-blocco { width: 100%; }
+.det-blocco-t { font-size: 0.82rem; font-weight: 600; color: var(--text); margin-bottom: 5px; }
+.det-blocco-n { font-weight: 600; color: var(--accent); margin-left: 3px; }
+.opt-cat { padding: 5px 0; border-bottom: 1px dotted var(--line); }
+.opt-cat-t { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 3px; }
+.opt-voci { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.opt-v { font-size: 0.78rem; padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--text); }
+/* Il testo dell'annuncio e' scritto a mano: puo' contenere righe lunghissime o URL
+   senza spazi, che senza questo sfondano la scheda in larghezza. */
+.det-testo { font-size: 0.82rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); max-height: 22em; overflow-y: auto; }
+
 
 /* ── Competitor: il parco di un concessionario ────────────────────────────────
    Una scheda per vetrina. Il tuo parco e' una voce come le altre ma segnata, altrimenti
@@ -1511,3 +1528,46 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .cp-barra-v { height: 8px; background: var(--accent); border-radius: 999px; min-width: 2px; }
 .cp-barra-n { color: var(--text-muted); font-family: var(--num); }
 @media (max-width: 640px) { .cp-h { grid-template-columns: 1fr; } .cp-azioni { grid-column: 1; grid-row: auto; justify-content: flex-start; } }
+
+/* ── Registri: gli archivi pubblici ufficiali ─────────────────────────────────
+   Due fonti affiancate e mai sommate: hanno criteri diversi e un totale unico non
+   vorrebbe dire niente. Ognuna si porta addosso la sua avvertenza, non in fondo alla
+   pagina dove nessuno la legge. */
+.reg-wrap { max-width: 1200px; margin: 0 auto; padding: 4px 0 24px; }
+.reg-cerca { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.reg-cerca .field-input { flex: 1 1 220px; min-width: 0; }
+.reg-att { padding: 26px 4px; color: var(--text-muted); font-size: 0.9rem; }
+
+/* Due colonne su schermo largo, una sotto l'altra sul telefono. */
+.reg-due { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; align-items: start; }
+.reg-blocco { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; min-width: 0; }
+.reg-blocco-h { display: flex; align-items: baseline; gap: 8px; }
+.reg-blocco-h h3 { font-size: 0.95rem; font-weight: 700; margin: 0; }
+.reg-n { font-size: 0.95rem; font-weight: 700; color: var(--accent); }
+.reg-nota { font-size: 0.78rem; line-height: 1.45; color: var(--text-muted); margin: 6px 0 8px; }
+.reg-nota b { color: var(--text); font-weight: 600; }
+.reg-fonte { display: block; margin-top: 3px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .04em; }
+.reg-avviso { font-size: 0.78rem; color: var(--text); background: var(--accent-weak); border-radius: var(--r); padding: 6px 9px; margin: 0 0 8px; }
+.reg-lista { display: flex; flex-direction: column; gap: 8px; max-height: 70vh; overflow-y: auto; }
+.reg-vuoto { font-size: 0.85rem; color: var(--text-muted); padding: 12px 2px; }
+
+.reg-card { border-top: 1px solid var(--line); padding: 9px 0 4px; }
+.reg-card:first-child { border-top: 0; }
+.reg-card-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.reg-cat { font-size: 0.84rem; font-weight: 600; }
+.reg-meta { font-size: 0.76rem; color: var(--text-muted); }
+.reg-modelli { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; overflow-wrap: anywhere; }
+.reg-modelli em { font-style: normal; opacity: .7; }
+/* Il testo della fonte puo' essere lunghissimo e senza spazi: senza questo sfonda la
+   colonna in larghezza. Chiuso a quattro righe, il resto si legge sulla scheda originale. */
+.reg-testo { font-size: 0.8rem; line-height: 1.45; margin: 5px 0 0; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.reg-testo-min { color: var(--text-muted); -webkit-line-clamp: 2; line-clamp: 2; }
+/* La targhetta della lingua: il testo lungo dell'RDW e' in olandese e va detto, non
+   fatto passare per italiano tradotto male. */
+.reg-lang { display: inline-block; font-size: 0.64rem; text-transform: uppercase; letter-spacing: .06em;
+  border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; margin-right: 5px; color: var(--text-muted); vertical-align: 1px; }
+.reg-omo { font-size: 0.74rem; margin: 5px 0 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.reg-omo span { font-family: inherit; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-right: 6px; }
+.reg-card-f { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 5px; font-size: 0.74rem; color: var(--text-muted); }
+.reg-rif { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; opacity: .8; }

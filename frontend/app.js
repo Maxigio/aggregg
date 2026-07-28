@@ -906,6 +906,7 @@ const AREE = {
   fonti: { pannello: 'fontiPanel', apri: () => fnApri(), chiudi: () => fnChiudi() },
   ponte: { pannello: 'pontePanel', apri: () => pnApri(), chiudi: () => pnChiudi() },
   competitor: { pannello: 'competitorPanel', apri: () => cpApri(), chiudi: () => cpChiudi() },
+  registri: { pannello: 'registriPanel', apri: () => regApri(), chiudi: () => regChiudi() },
 };
 
 /**
@@ -2200,8 +2201,15 @@ function rowHTML(item, bestSet) {
   // dichiara — e finora restava nel JSON. Un annuncio di un altro modello, o senza la
   // versione, deve dirlo sulla riga: il totale in cima non basta a fidarsi di una riga.
   // `esatto` non si marca: e' la normalita', e un pallino su ogni riga non e' un segnale.
+  //
+  // SULLA RIGA restano solo i casi in cui il VEICOLO potrebbe non essere quello cercato
+  // ("altro modello", "da verificare"): sono rari e cambiano cosa stai guardando.
+  // La versione mancante invece capita di continuo, e una chip su una riga su due e' un
+  // ingombro che non segnala piu' niente: quella si legge aprendo l'annuncio, insieme a
+  // tutti gli altri dati (`detailSpecsHTML` → riga "Corrispondenza").
   const dich = DICHIARAZIONE[item.dichiarazione];
-  const dichBadge = dich ? `<span class="dich-badge dich-${dich.cl}" title="${escapeHtml(dich.tit)}">${escapeHtml(dich.et)}</span>` : '';
+  const dichInRiga = dich && !/versione/.test(item.dichiarazione || '');   // 'senza-versione' e 'versione-non-verificata'
+  const dichBadge = dichInRiga ? `<span class="dich-badge dich-${dich.cl}" title="${escapeHtml(dich.tit)}">${escapeHtml(dich.et)}</span>` : '';
   const sub = [item.provincia ? escapeHtml(item.provincia) : '', vendBadge].filter(Boolean).join(' ');
   const subM = [item.anno || null, item.km != null ? `${item.km.toLocaleString('it-IT')} km` : null, item.carburante || null, item.potenzaCv != null ? `${item.potenzaCv} CV` : null, fonteLabel].filter(Boolean).join(' · ');
 
@@ -2249,13 +2257,143 @@ function toggleDetail(rowEl) {
 function detailSpecsHTML(r) {
   const base = [];
   if (r.prezzo != null) { const _pr = vPricing(r.prezzo, passDi(r)); base.push(['Prezzo', _pr ? eurRound(_pr.finale) : `€ ${r.prezzo.toLocaleString('it-IT')}`]); }
-  if (r.anno != null)   base.push(['Anno', r.anno]);
+  // Il MESE quando la fonte lo dice (Subito lo dice sempre): fra gennaio e dicembre
+  // dello stesso anno ballano dodici mesi di eta'.
+  if (r.anno != null)   base.push(['Immatricolazione', r.mese ? `${String(r.mese).padStart(2, '0')}/${r.anno}` : String(r.anno)]);
   if (r.km != null)     base.push(['Km', `${r.km.toLocaleString('it-IT')} km`]);
   if (r.provincia)      base.push(['Provincia', r.provincia]);
   const extra = Object.keys(SPEC_LABELS).map(k => { const v = specVal(k, r[k]); return v ? [SPEC_LABELS[k], v] : null; }).filter(Boolean);
-  const all = base.concat(extra);
+  // Quanto la fonte dichiara su QUESTO annuncio: se la versione manca, o se il modello
+  // e' stato riconosciuto dal titolo invece che dal catalogo, si legge qui — non piu' con
+  // una chip in mezzo alla riga dei risultati.
+  const dich = DICHIARAZIONE[r.dichiarazione];
+  const dett = dich ? [['Corrispondenza', dich.et]] : [];
+  const all = base.concat(extra, dett, campiNativi(r));
   if (!all.length) return '<span class="spec-empty">Nessun dettaglio aggiuntivo</span>';
-  return all.map(([k, v]) => `<div class="det-spec"><span class="det-k">${escapeHtml(String(k))}</span><span class="det-v">${escapeHtml(String(v))}</span></div>`).join('');
+  return coppieHTML(all);
+}
+
+// ─── Quello che le fonti dicevano e non leggevamo ────────────────────────────
+/**
+ * Le tre fonti mandano molto piu' di quanto la scheda mostrasse. Niente di tutto
+ * questo costa una richiesta in piu': Subito e Autoscout lo dicono nella risposta di
+ * ricerca, Moto.it nella pagina-annuncio che il pannello scarica gia'.
+ *
+ * DOVE VANNO, e non e' un dettaglio estetico: questi sono DATI DELL'ANNUNCIO, come la
+ * potenza o il venditore, quindi stanno in chiaro nella scheda insieme agli altri. I
+ * blocchi da aprire restano solo per le INTEGRAZIONI ESTERNE — il passaggio di proprieta'
+ * (tariffe ACI) e cerchi e gomme (Wheel-Size, EPREL) — che costano una richiesta e
+ * riguardano dati che l'annuncio non contiene.
+ *
+ * REGOLA che vale per tutti: un campo assente NON diventa una riga. "Non dichiarato" e
+ * "No" sono due cose diverse — un annuncio che non parla di incidenti non e' un annuncio
+ * senza incidenti.
+ */
+const coppieHTML = coppie => coppie
+  .map(([k, v]) => `<div class="det-spec"><span class="det-k">${escapeHtml(String(k))}</span><span class="det-v">${escapeHtml(String(v))}</span></div>`)
+  .join('');
+
+const siNo = v => (v == null ? null : (v ? 'Sì' : 'No'));
+// Raccoglie [etichetta, valore] scartando i valori assenti. `null` sparisce, `false` no.
+function righe(...coppie) {
+  return coppie.filter(([, v]) => v != null && v !== '').map(([k, v]) => [k, String(v)]);
+}
+
+// Le fasce dei contatti sono quattro, non tre: "VeryMany" e' comparso solo misurando
+// 200 annunci (2 volte). Una fascia non tradotta si stamperebbe in inglese.
+const CONTATTI_IT = { Zero: 'nessuna', Some: 'qualcuna', Many: 'molte', VeryMany: 'moltissime' };
+
+/**
+ * Tutti i campi nativi in una lista sola, nell'ordine in cui servono: prima i soldi,
+ * poi lo stato del mezzo, poi il mercato, poi chi vende.
+ *
+ * DUE regole che non sono cosmetiche:
+ *  - l'IVA si mostra solo quando dice qualcosa. Misurato su Subito: il campo compare
+ *    anche su 13 annunci PRIVATI su 37, sempre a "No", e su un privato "IVA esposta: No"
+ *    non e' un'informazione (un privato non puo' esporla). Su un concessionario invece
+ *    il "No" e' informazione vera: vuol dire regime del margine.
+ *  - il "non fumatore" si mostra solo se sì: misurati 87 "false" su 100, e quel "No" non
+ *    vuol dire fumatore — vuol dire che il venditore non ha spuntato la casella.
+ */
+function campiNativi(r) {
+  const ivaParla = r.ivaEsposta === true || (r.ivaEsposta === false && r.venditore === 'concessionario');
+  const val = r.valutazione;
+  const scost = (val && r.prezzo != null) ? r.prezzo - val.mediana : null;
+  return righe(
+    // Fisco e garanzia — per un operatore e' il prezzo VERO, non il cartellino.
+    ['IVA esposta', ivaParla ? siNo(r.ivaEsposta) : null],
+    ['Imponibile', r.prezzoNetto != null ? `€ ${r.prezzoNetto.toLocaleString('it-IT')}` : null],
+    ['Aliquota IVA', r.ivaAliquota != null ? `${r.ivaAliquota}%` : null],
+    ['Garanzia', r.garanziaMesi != null ? (r.garanziaMesi > 0 ? `${r.garanziaMesi} mesi` : 'sì, durata non dichiarata') : (r.garanzia || null)],
+    ['Trattabile', siNo(r.trattabile)],
+    ['Passaggio', r.tipoOfferta || null],          // Moto.it: dice CHI lo paga
+    ['Spedizione', siNo(r.spedizione)],
+    // Stato e storia
+    ['Senza incidenti', siNo(r.senzaIncidenti)],
+    ['Incidentata', siNo(r.incidentata)],
+    ['Marciante', siNo(r.marciante)],
+    ['Revisione fino a', r.revisioneScadenza],
+    ['Tagliandi', r.tagliandi],
+    ['Ultimo tagliando', r.ultimoTagliando],
+    ['Cinghia distribuzione', r.cinghiaData],
+    ['Non fumatore', r.nonFumatore === true ? 'Sì' : null],
+    ['Depotenziata', siNo(r.depotenziata)],
+    ['Solo uso pista', siNo(r.usoPista)],
+    ['ABS', siNo(r.abs)],
+    ['Mercato d\'origine', r.mercatoOrigine],
+    ['Prodotta', r.dataProduzione],
+    // Mercato — sono numeri di AUTOSCOUT e l'etichetta lo dice. Il voto 1-6 che allegano
+    // NON si mostra: e' una scala di cui non conosciamo la definizione, e riportarla come
+    // se la capissimo sarebbe spacciare un'opinione per dato. Lo scostamento invece e' una
+    // sottrazione nostra, non un giudizio.
+    ['Mediana Autoscout', val ? `€ ${Number(val.mediana).toLocaleString('it-IT')}` : null],
+    ['Scostamento', scost != null ? `${scost > 0 ? '+' : ''}${scost.toLocaleString('it-IT')} €` : null],
+    ['Richieste di contatto', r.contatti ? (CONTATTI_IT[r.contatti] || String(r.contatti)) : null],
+    // Chi vende. L'etichetta e' "Nome venditore" e non "Venditore" perche' quella e'
+    // gia' presa dal TIPO (privato / concessionario): due righe con lo stesso nome e
+    // due contenuti diversi si leggono come un errore.
+    ['Nome venditore', r.venditoreNome],
+    ['Rif. magazzino', r.refVenditore],
+    ['Annunci online', r.venditoreAnnunciOnline],
+    ['Annunci pubblicati', r.venditoreAnnunciPubblicati],
+    ['Su Moto.it dal', r.venditoreDal],
+  );
+}
+
+/**
+ * Optional: la lista che il venditore ha spuntato, raggruppata come la manda Autoscout.
+ * Dato dell'annuncio, quindi visibile senza aprire niente — ma a tutta larghezza,
+ * perche' incolonnarlo nella griglia delle coppie lo spezzerebbe.
+ */
+function optionalHTML(r) {
+  const list = Array.isArray(r.optional) ? r.optional.filter(o => o && o.nome) : [];
+  if (!list.length) return '';
+  const perCat = new Map();
+  for (const o of list) {
+    const c = o.categoria || 'Altro';
+    if (!perCat.has(c)) perCat.set(c, []);
+    perCat.get(c).push(o.nome);
+  }
+  const corpo = [...perCat.entries()].map(([cat, voci]) =>
+    `<div class="opt-cat"><span class="opt-cat-t">${escapeHtml(cat)}</span>`
+    + `<div class="opt-voci">${voci.map(v => `<span class="opt-v">${escapeHtml(v)}</span>`).join('')}</div></div>`).join('');
+  return `<div class="det-blocco"><div class="det-blocco-t">Optional <span class="det-blocco-n">${list.length}</span></div>${corpo}</div>`;
+}
+
+// Il testo dell'annuncio: quello che il venditore ha voluto scrivere. Alto al massimo
+// una ventina di righe, poi scorre da solo — non spinge in basso il resto della scheda.
+function testoHTML(r) {
+  const d = (r.descrizione || '').trim();
+  if (!d) return '';
+  return `<div class="det-blocco"><div class="det-blocco-t">Testo dell'annuncio</div>`
+    + `<div class="det-testo">${escapeHtml(d)}</div></div>`;
+}
+
+// Il link alla vetrina del venditore, quando la fonte lo dice (oggi Moto.it).
+function vetrinaHTML(r) {
+  return r.vetrinaUrl
+    ? `<a class="det-open" href="${escapeHtml(r.vetrinaUrl)}" target="_blank" rel="noopener noreferrer">Vetrina venditore ↗</a>`
+    : '';
 }
 // ── Passaggio di proprieta' del singolo annuncio ─────────────────────────────
 // Potenza e localita' sono gia' scritte nell'annuncio: il costo per metterlo a nome proprio
@@ -2560,6 +2698,11 @@ function renderDetailInto(panel, r) {
     const salBtn  = `<button type="button" class="det-act btn-salva${isSal ? ' attivo' : ''}">${icon(isSal ? 'bookmark-filled' : 'bookmark')}<span class="ra-txt">${isSal ? 'Salvato' : 'Salva'}</span></button>`;
     const confBtn = `<button type="button" class="det-act btn-confronta${inConf ? ' attivo' : ''}">${icon(inConf ? 'square-check' : 'square')}<span class="ra-txt">${inConf ? 'Nel confronto' : 'Confronta'}</span></button>`;
     panel.innerHTML = `<div class="det-inner">${gallery}<div class="det-specs">${detailSpecsHTML(r)}</div>`
+      // Liste e testo dell'annuncio: dati nativi anche questi, quindi in chiaro. A tutta
+      // larghezza perche' non stanno nella griglia delle coppie.
+      + `<div class="det-fonte">${optionalHTML(r)}${testoHTML(r)}${vetrinaHTML(r)}</div>`
+      // Da qui in giu' le INTEGRAZIONI ESTERNE: costano una richiesta e non stanno
+      // nell'annuncio, quindi restano richiudibili e non partono da sole.
       + `<div class="det-pass">${passHTML(r)}</div>`
       + `<div class="det-gomme">${gommeHTML(r)}</div>`
       + `<div class="det-foot">${openBtn}${salBtn}${confBtn}</div></div>`;
@@ -2624,10 +2767,17 @@ const SPEC_LABELS = {
   potenzaCv: 'Potenza', carrozzeria: 'Carrozzeria', colore: 'Colore', porte: 'Porte', posti: 'Posti',
   classeEmissioni: 'Classe emissioni', neopatentati: 'Neopatentati', nuovo: 'Condizione', danni: 'Danni',
   venditore: 'Venditore', proprietari: 'Proprietari', allestimento: 'Allestimento', revisione: 'Revisione',
+  // Nativi delle fonti, letti da poco: i kW li dichiara Subito (l'IPT ci gira sopra e
+  // prima erano stimati dai CV), il resto lo dichiara Autoscout.
+  potenzaKw: 'Potenza kW', generazione: 'Generazione', motore: 'Motore',
+  tappezzeria: 'Interni', pesoVuoto: 'Peso a vuoto', cerchiPollici: 'Cerchi',
 };
 function specVal(k, v) {
   if (v == null || v === '') return '';
   if (k === 'potenzaCv') return `${v} CV`;
+  if (k === 'potenzaKw') return `${v} kW`;
+  if (k === 'pesoVuoto') return `${Number(v).toLocaleString('it-IT')} kg`;
+  if (k === 'cerchiPollici') return `${v}"`;
   if (k === 'cilindrata') return `${v} cc`;
   if (k === 'nuovo') return v ? 'Nuovo' : 'Usato';
   if (k === 'danni') return v ? 'Incidentato' : 'Integro';
@@ -5320,4 +5470,187 @@ document.getElementById('competitorPanel')?.addEventListener('click', e => {
 });
 document.getElementById('competitorPanel')?.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.id === 'cpUrl') { e.preventDefault(); cpAggiungi(); }
+});
+
+// ─── REGISTRI ─────────────────────────────────────────────────────────────────
+/**
+ * Gli archivi pubblici ufficiali, in un'area a se'.
+ *
+ * Oggi ci sono i RICHIAMI, da DUE fonti che restano affiancate e non si sommano mai:
+ *
+ *   Safety Gate  — l'allerta di sicurezza europea. Individua i veicoli colpiti col numero
+ *                  di omologazione o un intervallo di telaio, che un annuncio non porta:
+ *                  li' il semaforo si ferma alla famiglia.
+ *   RDW          — le campagne di richiamo olandesi, legate a MARCA e TIPO in chiaro.
+ *                  4.571 campagne, 232 marche: qui il modello si confronta davvero.
+ *
+ * Un totale unico dei due non vorrebbe dire niente — sono archivi con criteri diversi — e
+ * chi legge deve sapere quale fonte gli sta rispondendo. Per questo due blocchi separati,
+ * ognuno con la sua avvertenza addosso e non in una nota a fondo pagina.
+ */
+const regEl = () => document.getElementById('registriPanel');
+let regMarche = null;          // elenco marche RDW per la tendina (caricato una volta)
+let regRis = null;             // { rdw, sg } dell'ultima ricerca
+let regStato = 'vuoto';        // vuoto | carico | fatto | ko
+let regErrore = '';
+
+async function regApri() {
+  const el = regEl(); if (!el) return;
+  el.classList.remove('d-none');
+  document.body.classList.add('has-results');   // via lo sfondo dello stato-vuoto
+  if (!regMarche) {
+    try {
+      const d = await fetch('/api/richiami/rdw/marche').then(r => r.json());
+      regMarche = (d.marche || []);
+    } catch (_) { regMarche = []; }
+  }
+  regRender();
+}
+function regChiudi() { const el = regEl(); if (el) { el.classList.add('d-none'); el.innerHTML = ''; } }
+
+async function regCerca() {
+  const ma = (document.getElementById('regMarca') || {}).value || '';
+  const mo = (document.getElementById('regModello') || {}).value || '';
+  if (!ma.trim() && !mo.trim()) { toast('Scrivi almeno la marca'); return; }
+  regStato = 'carico'; regErrore = ''; regRender();
+  const q = new URLSearchParams();
+  if (ma.trim()) q.set('marca', ma.trim());
+  if (mo.trim()) q.set('modello', mo.trim());
+  try {
+    // Le due fonti si chiedono insieme ma restano due risposte: nessuna delle due
+    // aspetta l'altra per essere mostrata giusta.
+    const [rdw, sg] = await Promise.all([
+      fetch('/api/richiami/rdw/cerca?' + q.toString()).then(r => r.json()).catch(() => null),
+      fetch('/api/richiami/cerca?' + q.toString()).then(r => r.json()).catch(() => null),
+    ]);
+    regRis = { rdw, sg, marca: ma.trim(), modello: mo.trim() };
+    regStato = 'fatto';
+  } catch (e) {
+    regStato = 'ko'; regErrore = e.message || 'richiesta non riuscita';
+  }
+  regRender();
+}
+
+// Una campagna RDW. Il testo lungo e' in OLANDESE e lo si dice: e' la lingua della fonte,
+// e tradurlo a macchina vorrebbe dire firmare parole che non sono ne' nostre ne' sue.
+function regCampagnaHTML(c) {
+  const meta = [
+    c.data ? new Date(c.data).toLocaleDateString('it-IT') : null,
+    c.rischio,
+    c.veicoliPaesiBassi != null ? `${Number(c.veicoliPaesiBassi).toLocaleString('it-IT')} veicoli nei Paesi Bassi` : null,
+  ].filter(Boolean).join(' · ');
+  const mod = (c.modelli || []).slice(0, 12).join(' · ');
+  const altri = (c.modelli || []).length > 12 ? ` <em>+${c.modelli.length - 12}</em>` : '';
+  return `<article class="reg-card">
+    <div class="reg-card-h">
+      <span class="reg-cat">${escapeHtml(c.categoriaIt || c.categoria || 'Categoria non indicata')}</span>
+      <span class="reg-meta">${escapeHtml(meta)}</span>
+    </div>
+    ${mod ? `<div class="reg-modelli">${escapeHtml(mod)}${altri}</div>` : ''}
+    ${c.difetto ? `<p class="reg-testo"><span class="reg-lang">nl</span>${escapeHtml(c.difetto)}</p>` : ''}
+    ${c.riparazione ? `<p class="reg-testo reg-testo-min"><span class="reg-lang">nl</span>${escapeHtml(c.riparazione)}</p>` : ''}
+    <div class="reg-card-f">
+      ${c.produttore ? `<span>${escapeHtml(c.produttore)}</span>` : ''}
+      ${c.informazioni && /^https?:\/\//i.test(c.informazioni)
+        ? `<a href="${escapeHtml(c.informazioni)}" target="_blank" rel="noopener noreferrer">informazioni ↗</a>` : ''}
+      <span class="reg-rif">${escapeHtml(c.rif || '')}</span>
+    </div>
+  </article>`;
+}
+
+// Un'allerta Safety Gate, coi campi che quell'archivio ha davvero (letti dal file, non
+// indovinati): caso, prodotto, nome, anni, rischio, livello, difetto, omologazioni, scheda.
+function regAllertaHTML(a) {
+  const anni = a.anni ? `${a.anni.da}–${a.anni.a}` : (a.anno || null);
+  const meta = [anni, a.livello, a.rischio, a.paeseNotifica].filter(Boolean).join(' · ');
+  // L'omologazione e' l'unico campo che permetterebbe di dire se IL SINGOLO esemplare e'
+  // coinvolto. Si mostra proprio per questo: e' il numero da confrontare col libretto.
+  const omo = (a.omologazioni || []).slice(0, 3).join(' · ');
+  return `<article class="reg-card">
+    <div class="reg-card-h">
+      <span class="reg-cat">${escapeHtml(a.prodotto || a.categoria || 'Veicolo')}</span>
+      <span class="reg-meta">${escapeHtml(String(meta))}</span>
+    </div>
+    ${a.nome ? `<div class="reg-modelli">${escapeHtml(a.nome)}</div>` : ''}
+    ${a.difetto ? `<p class="reg-testo">${escapeHtml(a.difetto)}</p>` : ''}
+    ${omo ? `<p class="reg-omo"><span>omologazione</span>${escapeHtml(omo)}</p>` : ''}
+    <div class="reg-card-f">
+      ${a.scheda && /^https?:\/\//i.test(a.scheda) ? `<a href="${escapeHtml(a.scheda)}" target="_blank" rel="noopener noreferrer">scheda ↗</a>` : ''}
+      <span class="reg-rif">${escapeHtml(a.caso || '')}</span>
+    </div>
+  </article>`;
+}
+
+function regBloccoHTML(titolo, nota, n, cards, avvisi) {
+  return `<section class="reg-blocco">
+    <header class="reg-blocco-h">
+      <h3>${escapeHtml(titolo)}</h3>
+      <span class="reg-n">${n == null ? '—' : n}</span>
+    </header>
+    <p class="reg-nota">${nota}</p>
+    ${(avvisi || []).map(a => `<p class="reg-avviso">${a}</p>`).join('')}
+    <div class="reg-lista">${cards || '<div class="reg-vuoto">Nessun richiamo per questa ricerca.</div>'}</div>
+  </section>`;
+}
+
+const REG_TETTO = 40;   // quante schede si disegnano: il resto sta nel conto, non nel DOM
+
+function regRender() {
+  const el = regEl(); if (!el) return;
+  const opz = (regMarche || []).slice(0, 400)
+    .map(m => `<option value="${escapeHtml(m.nome)}">${m.campagne} campagne</option>`).join('');
+
+  let corpo = '';
+  if (regStato === 'carico') corpo = '<div class="reg-att">Cerco nei due archivi…</div>';
+  else if (regStato === 'ko') corpo = `<div class="reg-att">Non riuscito: ${escapeHtml(regErrore)}</div>`;
+  else if (regStato === 'fatto' && regRis) {
+    const r = regRis.rdw, s = regRis.sg;
+
+    const avvisiRdw = [];
+    if (r && r.ok && r.annoIgnorato) avvisiRdw.push('L\'anno non e\' stato usato: questo archivio non porta la finestra di produzione.');
+    if (r && r.ok && r.totale > REG_TETTO) avvisiRdw.push(`Mostrate le prime ${REG_TETTO} di ${r.totale}, dalla piu' recente.`);
+    const cardsRdw = r && r.ok
+      ? (r.campagne || []).slice(0, REG_TETTO).map(regCampagnaHTML).join('')
+      : '';
+    const notaRdw = 'Campagne di richiamo dell\'RDW, l\'ente motorizzazione olandese. Legano il richiamo a '
+      + '<b>marca e modello</b>, quindi il confronto col modello cercato si puo\' fare. Riguardano pero\' i '
+      + 'numeri di telaio decisi dal costruttore, non tutti gli esemplari: resta un semaforo di modello. '
+      + '<span class="reg-fonte">RDW Open Data · dominio pubblico</span>';
+
+    const cardsSg = s && s.ok ? (s.allerte || []).slice(0, REG_TETTO).map(regAllertaHTML).join('') : '';
+    const avvisiSg = [];
+    if (s && s.ok && s.totale > REG_TETTO) avvisiSg.push(`Mostrate le prime ${REG_TETTO} di ${s.totale}.`);
+    const notaSg = 'Allerte di sicurezza della Commissione europea. Individuano i veicoli colpiti col '
+      + '<b>numero di omologazione</b> o un intervallo di telaio, che un annuncio non porta: qui il '
+      + 'semaforo si ferma alla famiglia del modello. '
+      + '<span class="reg-fonte">Safety Gate (ex RAPEX)</span>';
+
+    const guasto = x => x && x.ok === false ? `<p class="reg-avviso">${escapeHtml(x.motivo || 'archivio non disponibile')}</p>` : '';
+    corpo = '<div class="reg-due">'
+      + regBloccoHTML('Richiami RDW', notaRdw, r && r.ok ? r.totale : null, cardsRdw, avvisiRdw) 
+      + regBloccoHTML('Allerte Safety Gate', notaSg, s && s.ok ? s.totale : null, cardsSg, avvisiSg)
+      + '</div>'
+      + guasto(r) + guasto(s);
+  } else {
+    corpo = '<div class="reg-att">Scrivi marca e modello: cerco negli archivi pubblici dei richiami.</div>';
+  }
+
+  el.innerHTML = `<div class="reg-wrap">
+    <div class="reg-cerca">
+      <input type="text" id="regMarca" class="field-input" list="regMarcheList" autocomplete="off"
+             placeholder="Marca — es. BMW" value="${escapeHtml((regRis && regRis.marca) || '')}">
+      <datalist id="regMarcheList">${opz}</datalist>
+      <input type="text" id="regModello" class="field-input" autocomplete="off"
+             placeholder="Modello — es. Serie 3" value="${escapeHtml((regRis && regRis.modello) || '')}">
+      <button type="button" class="btn-cerca" id="regVai">Cerca</button>
+    </div>
+    ${corpo}
+  </div>`;
+}
+
+document.getElementById('registriPanel')?.addEventListener('click', e => {
+  if (e.target.closest('#regVai')) regCerca();
+});
+document.getElementById('registriPanel')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.target.id === 'regMarca' || e.target.id === 'regModello')) { e.preventDefault(); regCerca(); }
 });

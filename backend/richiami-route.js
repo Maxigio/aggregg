@@ -16,6 +16,7 @@
  * dire scaricare l'archivio a ogni ricerca.
  */
 const path = require('path');
+const rdw = require('./scrapers/rdw-richiami');   // seconda fonte: campagne RDW per marca+modello
 
 let D = null;
 try { D = require(path.join(__dirname, '..', 'data', 'safety-gate.json')); } catch (_) { D = null; }
@@ -190,6 +191,33 @@ function mount(app, deps = {}) {
     if (!D) return { allerte: [], motivo: 'archivio non costruito' };
     const n = Math.min(200, Math.max(1, Number(q.quante) || 50));
     return { allerte: D.allerte.slice(0, n), totale: D.allerte.length };
+  });
+
+  /**
+   * LE CAMPAGNE DI RICHIAMO DELL'RDW — seconda fonte, rotte SEPARATE.
+   *
+   * Non entrano dentro /api/richiami/cerca e non si sommano ad allerte: sono due archivi
+   * con due criteri diversi. Safety Gate individua i veicoli per omologazione o telaio e
+   * quindi si ferma alla famiglia; l'RDW lega la campagna a marca e tipo in chiaro e il
+   * modello lo confronta davvero. Un totale unico dei due non vorrebbe dire niente, e chi
+   * legge deve sapere quale fonte gli sta rispondendo.
+   */
+  via('/api/richiami/rdw/stato', () => rdw.stato());
+
+  via('/api/richiami/rdw/marche', q => {
+    const f = norm(q.filtro || '');
+    const tutte = rdw.marche();
+    const m = f ? tutte.filter(x => norm(x.nome).includes(f)) : tutte;
+    return { marche: m, totale: m.length };
+  });
+
+  // Stesso tetto delle altre rotte: senza, una richiesta senza filtri risponderebbe
+  // l'archivio intero (4.571 campagne, 3,6 MB) sessanta volte al minuto per IP.
+  via('/api/richiami/rdw/cerca', q => {
+    const r = rdw.cerca({ marca: q.marca, modello: q.modello, anno: q.anno });
+    if (!r.ok) return r;
+    const n = Math.min(200, Math.max(1, Number(q.quante) || 200));
+    return { ...r, campagne: r.campagne.slice(0, n), mostrate: Math.min(r.totale, n) };
   });
 }
 
