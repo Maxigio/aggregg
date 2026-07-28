@@ -25,15 +25,36 @@ const orig = { log: console.log.bind(console), warn: console.warn.bind(console),
 const REDACT = [/sk-ant-[\w-]{10,}/g, /EAA[A-Za-z0-9]{20,}/g, /Bearer\s+[\w.\-]{10,}/gi];
 const redact = s => REDACT.reduce((x, re) => x.replace(re, '***'), s);
 
+/**
+ * Byte scritti da quando il file e' aperto. Serve perche' il tetto va controllato
+ * DURANTE la scrittura, non solo all'apertura: `if (stream) return stream` faceva
+ * saltare il controllo per tutta la vita del processo, e un processo che resta su per
+ * ore scriveva senza limite. Un singolo amr.log e' arrivato a 52 GB e ha riempito il
+ * disco — il tetto di 5 MB c'era, ma valeva solo al boot.
+ */
+let scritti = 0;
+
 function ensureStream() {
+  // Oltre il tetto si ruota SEMPRE, senza chiedere al disco quanto e' grande il file:
+  // le scritture sono bufferizzate, `statSync` vede molto meno di quanto e' gia' stato
+  // scritto, e la rotazione non scattava mai. Su POSIX il rename segue il descrittore
+  // aperto, quindi cio' che resta nel buffer finisce nel file ruotato.
+  if (stream && scritti > MAX_BYTES) {
+    try { stream.end(); } catch {}
+    stream = null;
+    try { fs.renameSync(LOG_FILE, LOG_FILE + '.1'); } catch {}
+    scritti = 0;
+  }
   if (stream) return stream;
   try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch {}
   try {
+    // all'avvio il file c'e' gia' da prima: qui la dimensione su disco e' quella vera
     if (fs.existsSync(LOG_FILE) && fs.statSync(LOG_FILE).size > MAX_BYTES) {
       try { fs.renameSync(LOG_FILE, LOG_FILE + '.1'); } catch {}
     }
     stream = fs.createWriteStream(LOG_FILE, { flags: 'a' });
     stream.on('error', () => { stream = null; });   // disco pieno/RO → degrada a solo console
+    scritti = 0;
   } catch { stream = null; }
   return stream;
 }
@@ -44,13 +65,41 @@ const fmtArg = a => {
   try { return JSON.stringify(a); } catch { return String(a); }
 };
 
+/**
+ * Scrivere su una PIPE CHIUSA non deve poter generare un altro log.
+ *
+ * Successo davvero, ed e' costato 52 GB in una notte: un processo orfano (lanciato in
+ * background e poi rimasto senza chi lo ascoltava) scrive su stdout → EPIPE →
+ * `uncaughtException` → emit → scrive di nuovo su stdout → EPIPE → all'infinito.
+ * 68 MB al secondo, finche' il disco non finisce e non si scrive piu' niente, nemmeno
+ * il resto dell'applicazione.
+ *
+ * La scrittura sul FILE era gia' protetta; questa no. Un errore mentre si registra un
+ * errore va ingoiato: se la console non riceve piu' niente non c'e' nessuno a cui
+ * dirlo, e insistere e' l'unico modo di fare danno.
+ */
+function suConsole(level, args) {
+  try {
+    (level === 'error' ? orig.error : level === 'warn' ? orig.warn : orig.log)(...args);
+  } catch (_) { /* pipe chiusa, terminale sparito: non c'e' nessuno da avvisare */ }
+}
+
 // viaTee=true → lo stdout è già stato stampato dal wrapper console.* (non ristampare)
 function emit(level, args, viaTee) {
   const line = redact(`${new Date().toISOString()} ${level.toUpperCase().padEnd(5)} ${args.map(fmtArg).join(' ')}`);
   ring.push(line); if (ring.length > RING_MAX) ring.shift();
-  const s = ensureStream(); if (s) { try { s.write(line + '\n'); } catch {} }
-  if (!viaTee) (level === 'error' ? orig.error : level === 'warn' ? orig.warn : orig.log)(...args);
+  const s = ensureStream();
+  if (s) { try { s.write(line + '\n'); scritti += line.length + 1; } catch {} }
+  if (!viaTee) suConsole(level, args);
 }
+
+/**
+ * EPIPE/EBADF su stdout non e' un errore dell'applicazione: e' "non ti ascolta piu'
+ * nessuno". Registrarlo riempirebbe il file di una riga per ogni tentativo, e sono
+ * milioni. Si ignora del tutto.
+ */
+const soloPipeRotta = e => !!e && (e.code === 'EPIPE' || e.code === 'EBADF')
+  && /write|epipe/i.test(String(e.syscall || e.message || ''));
 
 function log(level, ...args) { if (LEVELS[level] >= threshold()) emit(level, args, false); }
 
@@ -58,12 +107,12 @@ function log(level, ...args) { if (LEVELS[level] >= threshold()) emit(level, arg
 function install() {
   if (installed) return logger;
   installed = true;
-  process.on('uncaughtException', e => emit('error', ['[uncaught]', e], false));
-  process.on('unhandledRejection', e => emit('error', ['[unhandledRejection]', e], false));
-  console.log = (...a) => { orig.log(...a); emit('info', a, true); };
-  console.info = (...a) => { orig.log(...a); emit('info', a, true); };
-  console.warn = (...a) => { orig.warn(...a); emit('warn', a, true); };
-  console.error = (...a) => { orig.error(...a); emit('error', a, true); };
+  process.on('uncaughtException', e => { if (!soloPipeRotta(e)) emit('error', ['[uncaught]', e], false); });
+  process.on('unhandledRejection', e => { if (!soloPipeRotta(e)) emit('error', ['[unhandledRejection]', e], false); });
+  console.log = (...a) => { suConsole('info', a); emit('info', a, true); };
+  console.info = (...a) => { suConsole('info', a); emit('info', a, true); };
+  console.warn = (...a) => { suConsole('warn', a); emit('warn', a, true); };
+  console.error = (...a) => { suConsole('error', a); emit('error', a, true); };
   emit('info', ['[logger] attivo → ' + LOG_FILE + ' (livello ' + Object.keys(LEVELS).find(k => LEVELS[k] === threshold()) + ')'], false);
   return logger;
 }
