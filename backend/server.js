@@ -323,7 +323,41 @@ app.post('/api/report', express.json({ limit: '32kb' }), (req, res) => {
 let minFE = { js: null, css: null, ver: '' };
 try { minFE = buildFrontendSync(); console.log(`[frontend] minify OK v${minFE.ver}`); }
 catch (e) { console.warn('[frontend] minify fallita → servo i sorgenti:', e.message); }
+
+/**
+ * IL BUNDLE SI RIFA' DA SOLO QUANDO IL SORGENTE CAMBIA.
+ *
+ * Senza, `index.html` veniva riletto dal disco a ogni richiesta mentre `app.js` restava
+ * quello congelato all'avvio: modificando il frontend si otteneva una pagina con l'HTML
+ * NUOVO e il JavaScript VECCHIO. E' successo davvero, e il sintomo non dice niente — il
+ * bottone della sezione nuova compare e non fa niente, perche' il gestore non e' nel
+ * bundle. Un errore che non fa rumore e manda a cercare il bug nel posto sbagliato.
+ *
+ * Costa due statSync per richiesta di /app.js e /style.css: nulla, e solo su due file.
+ * Se la ricostruzione fallisce si tiene il bundle buono di prima invece di servire un
+ * frontend a meta'.
+ */
+let mtimeFE = 0;
+const FILE_FE = ['app.js', 'style.css'].map(f => path.join(__dirname, '../frontend', f));
+const timbroFE = () => {
+  try { return FILE_FE.reduce((m, f) => Math.max(m, fs.statSync(f).mtimeMs), 0); } catch (_) { return mtimeFE; }
+};
+mtimeFE = timbroFE();
+function aggiornaFE() {
+  const t = timbroFE();
+  if (t === mtimeFE || !minFE.js) return;
+  try {
+    minFE = buildFrontendSync();
+    mtimeFE = t;
+    console.log(`[frontend] sorgente cambiato → minify rifatta v${minFE.ver}`);
+  } catch (e) {
+    mtimeFE = t;   // non ritentare a ogni richiesta su un sorgente rotto
+    console.warn('[frontend] minify fallita, tengo il bundle precedente:', e.message);
+  }
+}
+
 const serveMin = (kind, type) => (req, res, next) => {
+  aggiornaFE();
   if (!minFE[kind]) return next();                         // build fallita → sorgente via static
   res.type(type).set('Cache-Control', 'no-cache').set('ETag', `"${minFE.ver}"`);
   if (req.headers['if-none-match'] === `"${minFE.ver}"`) return res.status(304).end();
@@ -336,6 +370,10 @@ app.get('/style.css', serveMin('css', 'text/css'));
 // il bundle nuovo da solo su un reload normale (niente hard refresh). ver = hash del build minify.
 app.get(['/', '/index.html'], (req, res, next) => {
   try {
+    // Prima di scrivere il ?v= nell'HTML: se il sorgente e' cambiato la versione dev'essere
+    // gia' quella nuova, se no la pagina chiede il bundle vecchio col numero vecchio e il
+    // giro riparte identico.
+    aggiornaFE();
     const v = minFE.ver || String(Date.now());
     const html = fs.readFileSync(path.join(__dirname, '../frontend/index.html'), 'utf8')
       .replace(/(src|href)="(app\.js|style\.css|pricing\.js)"/g, `$1="$2?v=${v}"`);
