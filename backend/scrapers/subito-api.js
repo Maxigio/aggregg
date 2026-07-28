@@ -159,7 +159,10 @@ function kmToKey(km) {
  * da' zero risultati, che si legge come "questa fonte non ha niente".
  *   auto  cb = marca   cm = famiglia      moto  bb = marca   bm = modello
  */
-const PARAM = { auto: { marca: 'cb', modello: 'cm' }, moto: { marca: 'bb', modello: 'bm' } };
+const PARAM = {
+  auto: { marca: 'cb', modello: 'cm', versione: 'cv' },
+  moto: { marca: 'bb', modello: 'bm', versione: 'bv' },
+};
 /** Il segnaposto "Altro modello"/"Altro allestimento": il venditore non l'ha dichiarato. */
 const NON_DICHIARATO = '000000';
 
@@ -177,9 +180,15 @@ function valoreModello(tipo, ids) {
 function buildPath(params, start) {
   const c = CAT[params.tipo] || CAT.auto;
   const qs = new URLSearchParams({ c, t: 's', lim: String(PAGE_SIZE), start: String(start) });
-  // Ricerca per ID quando il nodo e' risolto; testo libero quando non lo e'. Mai i due
-  // insieme: `q` restringerebbe ancora sul titolo, e un venditore che scrive "Sv650" nel
-  // titolo verrebbe escluso da una ricerca che per id lo trova.
+  // Ricerca per ID quando il nodo e' risolto; testo libero quando non lo e'. Di regola mai
+  // i due insieme: `q` restringerebbe ancora sul titolo, e un venditore che scrive "Sv650"
+  // nel titolo verrebbe escluso da una ricerca che per id lo trova.
+  //
+  // L'ECCEZIONE, e vale solo dove il nodo la porta scritta (backend/scrapers/ponte-buchi.js):
+  // i modelli che stanno DENTRO una famiglia Subito invece di esserle pari. Chiedendo la
+  // sola famiglia, le Golf sono 11.646 e le GTI nei primi cento erano UNA; con `q=gti`
+  // l'insieme scende a 1.631 e la finestra si riempie di candidate. Verificato che i due
+  // parametri lavorano insieme, e che il costo resta di una richiesta.
   const nodo = params.subitoNodo;
   const p = PARAM[params.tipo === 'moto' ? 'moto' : 'auto'];
   if (nodo && nodo.marcaId) {
@@ -188,6 +197,17 @@ function buildPath(params, start) {
       ? NON_DICHIARATO                       // la passata di RECUPERO, vedi scrapeSubitoApi
       : valoreModello(params.tipo, nodo.famigliaIds);
     if (v) qs.set(p.modello, v);
+    if (nodo.testo) qs.set('q', String(nodo.testo));
+    // LA VERSIONE, chiesta alla fonte col SUO parametro. Subito ha `cv` nel proprio
+    // menu e il catalogo ci da' l'id: mandarlo vuol dire farsi filtrare da chi ha il
+    // dato, invece di scaricare la famiglia intera e indovinare qui.
+    // IL VINCOLO DA NON ROMPERE: chi la versione non l'ha dichiarata resta comunque
+    // visibile nel gruppo a parte — `cv` lo escluderebbe, e per questo la passata di
+    // RECUPERO (piu' sotto) non deve mai portarsi dietro questo parametro.
+    // Il parametro cambia col tipo, e sbagliarlo NON da' errore: verificato su Yamaha
+    // MT-07 "ABS" — `bv` porta 1296 annunci a 397, `cv` sulla stessa moto ne da' zero.
+    // Un tipo col parametro dell'altro svuoterebbe la ricerca in silenzio.
+    if (params.versioneSubito && !params.subitoSoloNonDichiarati) qs.set(p.versione, String(params.versioneSubito));
   } else {
     const q = [params.marca, params.modello].filter(Boolean).join(' ').trim();
     if (q) qs.set('q', q);
@@ -259,9 +279,24 @@ function riconosci(ad, nodo, opts = {}) {
    *                          cioe' dove sta l'affare
    */
   const versione = liv => {
-    if (!opts.versione) return liv.versione && liv.versione.id !== NON_DICHIARATO ? 'esatto' : 'senza-versione';
-    if (!liv.versione || liv.versione.id === NON_DICHIARATO) return 'senza-versione';
-    return liv.versione.id === String(opts.versione) ? 'esatto' : null;
+    const dichiarata = liv.versione && liv.versione.id !== NON_DICHIARATO;
+    // Il modello che vive DENTRO la famiglia (Golf GTI dentro Golf): l'utente ha chiesto
+    // le GTI, non le Golf. Qui la versione dichiarata E' il modello, quindi si guarda
+    // quella. Chi non l'ha dichiarata resta marcato: `q` alla fonte gli ha gia' letto
+    // il titolo. Vedi backend/scrapers/ponte-buchi.js.
+    // LA VERSIONE SCELTA VIENE PRIMA DI TUTTO. Il testo del ponte isola il modello
+    // dentro la famiglia (Golf GTI dentro Golf), ma non e' una versione e non deve
+    // sostituirla: prima lo faceva, e un annuncio con esattamente la versione chiesta
+    // veniva scartato perche' il suo nome non conteneva il token.
+    if (opts.versione) {
+      if (!dichiarata) return 'senza-versione';
+      return liv.versione.id === String(opts.versione) ? 'esatto' : null;
+    }
+    if (nodo.testo) {
+      if (!dichiarata) return 'senza-versione';
+      return diceIlTesto(nodo.testo, liv.versione.nome) ? 'esatto' : null;
+    }
+    return dichiarata ? 'esatto' : 'senza-versione';
   };
 
   const ammessi = opts.generazioni;
@@ -273,6 +308,22 @@ function riconosci(ad, nodo, opts = {}) {
     return opts.titoloCombacia && opts.titoloCombacia(ad) ? 'senza-modello' : null;
   }
   return null;                                                          // altro modello dichiarato
+}
+
+/**
+ * La versione dichiarata dice il testo cercato? Parola intera e nell'ordine scritto —
+ * "Cooper S" deve stare attaccato, altrimenti ogni "Cooper" con una S da qualche parte
+ * passerebbe. Il confine serve perche' "One" non deve pescare "One-derful" ne' "Stone".
+ */
+const cacheTesto = new Map();
+function diceIlTesto(testo, nome) {
+  let re = cacheTesto.get(testo);
+  if (!re) {
+    const t = String(testo).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    re = new RegExp('(^|[^a-z0-9])' + t.replace(/[^a-z0-9]+/g, '[^a-z0-9]+') + '([^a-z0-9]|$)', 'i');
+    cacheTesto.set(testo, re);
+  }
+  return re.test(String(nome || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''));
 }
 
 /** Il titolo nomina il modello cercato? Parole intere, tutte presenti. */

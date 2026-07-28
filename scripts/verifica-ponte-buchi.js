@@ -33,7 +33,12 @@ const A = JSON.parse(fs.readFileSync(path.join(R, 'data', 'models.json'), 'utf8'
 const AS = JSON.parse(fs.readFileSync(path.join(R, 'data', 'as24-modelli.json'), 'utf8'));
 
 const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
-const GRADI = new Set(['fine', 'grossolano', 'grossolano+token', 'versioni']);
+// come si cerca su Subito, non quanto e' bello l'aggancio:
+//   famiglia+testo  il modello Autoscout sta DENTRO la famiglia Subito ("Golf GTI" in
+//                   "Golf"): serve il testo alla fonte + il filtro sulla versione.
+//   famiglia        la famiglia Subito E' gia' il veicolo ("Scarabeo"): solo gli id,
+//                   perche' li' la versione e' l'allestimento e filtrarci ammazza tutto.
+const GRADI = new Set(['famiglia', 'famiglia+testo']);
 const errori = [];
 
 // gia' coperti dal ponte: una voce qui sarebbe un doppione, non un buco

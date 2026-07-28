@@ -1656,6 +1656,9 @@ async function doSearch() {
     // sanno cos'e' una versione, e saltarne una sbilanciava il confronto.
     if (selectedVersion && acn(selectedVersion.nome) === acn(versioneSelect?.value || '')) {
       if (selectedVersion.subito) params.versioneSubito = selectedVersion.subito;
+      // Il NOME serve ad Autoscout, che un catalogo di versioni non ce l'ha: li' la
+      // versione e' testo, e il suo campo nativo cerca dentro quel testo.
+      if (selectedVersion.nome) params.versioneNome = selectedVersion.nome;
       if (selectedVersion.motoit && selectedVersion.motoit.length) params.motoitBikeCode = selectedVersion.motoit[0];
       if (selectedVersion.anni) {
         if (selectedVersion.anni.da && !params.annoMin) params.annoMin = String(selectedVersion.anni.da);

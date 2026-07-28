@@ -1,6 +1,6 @@
 {
  "generatoIl": "2026-07-27T23:52:25.190Z",
- "nota": "Agganci Autoscout→Subito per i modelli che il ponte non copriva. Ognuno PROVATO uno per uno con il test sui titoli scritti dai venditori, nelle due direzioni; i controlli negativi sono stati respinti (Cooper→Countryman, Passat Variant→Golf). Gli agganci `fine` (un modello Autoscout che su Subito e piu di uno) portano TUTTE le famiglie, non la prima: Scarabeo sono nove cilindrate, agganciarne una sola ne perderebbe otto.",
+ "nota": "Agganci Autoscout→Subito per i modelli che il ponte non copriva. Ognuno PROVATO contro i titoli scritti dai venditori. LA RICETTA: id famiglia + testo alla fonte + filtro sulla versione dichiarata. Il testo serve quando il modello Autoscout e piu stretto della famiglia Subito (Golf GTI dentro Golf); dove la famiglia E gia il veicolo (Scarabeo 125) il testo si omette, perche la versione li e l allestimento e filtrarci ammazzerebbe tutto. Esclusi SH 150i, SH 125i e Street Triple 675: il testo che li distinguerebbe e \"i\" o \"675\", che nella versione non compare — restano senza aggancio, dichiarati.",
  "metodo": "la sigla del modello AS24 nei titoli Subito, e il nome della famiglia Subito nei titoli AS24: basta una direzione sopra il 70%. Dove il token rendeva l aggancio piu preciso (Golf GTI da 13% a 94%) e stato aggiunto; dove lo sporcava o restavano pochi annunci, l aggancio resta largo e DICHIARATO tale.",
  "voci": [
   {
@@ -14,12 +14,14 @@
     "famiglia": "Golf",
     "versioniCheDicono": "gti"
    },
-   "grado": "grossolano+token",
+   "grado": "famiglia+testo",
    "annunciAs24": 1407,
    "prova": {
     "titoliSubito": "6%",
     "titoliAs24Inverso": "100%",
-    "annunciProvati": 150
+    "annunciProvati": 150,
+    "ricetta": "id famiglia + testo \"gti\" alla fonte + filtro sulla versione dichiarata",
+    "titoliCheConfermano": "88%"
    }
   },
   {
@@ -33,12 +35,14 @@
     "famiglia": "Mini",
     "versioniCheDicono": "Cooper"
    },
-   "grado": "versioni",
+   "grado": "famiglia+testo",
    "annunciAs24": 1041,
    "prova": {
     "titoliSubito": "94%",
     "titoliAs24Inverso": "34%",
-    "annunciProvati": 89
+    "annunciProvati": 89,
+    "ricetta": "id famiglia + testo \"Cooper\" alla fonte + filtro sulla versione dichiarata",
+    "titoliCheConfermano": "97%"
    }
   },
   {
@@ -52,12 +56,14 @@
     "famiglia": "Passat",
     "versioniCheDicono": "variant"
    },
-   "grado": "grossolano+token",
+   "grado": "famiglia+testo",
    "annunciAs24": 735,
    "prova": {
     "titoliSubito": "41%",
     "titoliAs24Inverso": "100%",
-    "annunciProvati": 150
+    "annunciProvati": 150,
+    "ricetta": "id famiglia + testo \"variant\" alla fonte + filtro sulla versione dichiarata",
+    "titoliCheConfermano": "78%"
    }
   },
   {
@@ -71,12 +77,14 @@
     "famiglia": "Mini",
     "versioniCheDicono": "One"
    },
-   "grado": "versioni",
+   "grado": "famiglia+testo",
    "annunciAs24": 649,
    "prova": {
     "titoliSubito": "72%",
     "titoliAs24Inverso": "36%",
-    "annunciProvati": 43
+    "annunciProvati": 43,
+    "ricetta": "id famiglia + testo \"One\" alla fonte + filtro sulla versione dichiarata",
+    "titoliCheConfermano": "95%"
    }
   },
   {
@@ -90,12 +98,14 @@
     "famiglia": "Mini",
     "versioniCheDicono": "Cooper S"
    },
-   "grado": "versioni",
+   "grado": "famiglia+testo",
    "annunciAs24": 580,
    "prova": {
     "titoliSubito": "95%",
     "titoliAs24Inverso": "31%",
-    "annunciProvati": 20
+    "annunciProvati": 20,
+    "ricetta": "id famiglia + testo \"Cooper S\" alla fonte + filtro sulla versione dichiarata",
+    "titoliCheConfermano": "89%"
    }
   },
   {
@@ -109,12 +119,14 @@
     "famiglia": "Mini",
     "versioniCheDicono": "Cooper D"
    },
-   "grado": "versioni",
+   "grado": "famiglia+testo",
    "annunciAs24": 500,
    "prova": {
     "titoliSubito": "89%",
     "titoliAs24Inverso": "38%",
-    "annunciProvati": 18
+    "annunciProvati": 18,
+    "ricetta": "id famiglia + testo \"Cooper D\" alla fonte + filtro sulla versione dichiarata",
+    "titoliCheConfermano": "91%"
    }
   },
   {
@@ -126,14 +138,16 @@
     "marcaId": "000101",
     "famigliaId": "000455",
     "famiglia": "Golf",
-    "versioniCheDicono": null
+    "versioniCheDicono": "gtd"
    },
-   "grado": "grossolano",
+   "grado": "famiglia+testo",
    "annunciAs24": 414,
    "prova": {
     "titoliSubito": "0%",
     "titoliAs24Inverso": "100%",
-    "annunciProvati": 150
+    "annunciProvati": 150,
+    "ricetta": "id famiglia + testo \"gtd\" alla fonte + filtro sulla versione dichiarata",
+    "titoliCheConfermano": "94%"
    }
   },
   {
@@ -173,31 +187,14 @@
      }
     ]
    },
-   "grado": "fine",
+   "grado": "famiglia",
    "annunciAs24": 245,
    "prova": {
     "titoliSubito": "93%",
     "titoliAs24Inverso": "20%",
-    "annunciProvati": 150
-   }
-  },
-  {
-   "tipo": "moto",
-   "marca": "Honda",
-   "modelloAs24": "SH 150i",
-   "mmmv": "31|75952||",
-   "subito": {
-    "marcaId": "000051",
-    "famigliaId": "000799",
-    "famiglia": "SH 150",
-    "versioniCheDicono": null
-   },
-   "grado": "grossolano",
-   "annunciAs24": 155,
-   "prova": {
-    "titoliSubito": "8%",
-    "titoliAs24Inverso": "100%",
-    "annunciProvati": 150
+    "annunciProvati": 150,
+    "ricetta": "id famiglia (la famiglia E il modello)",
+    "titoliCheConfermano": "90%"
    }
   },
   {
@@ -249,12 +246,14 @@
      }
     ]
    },
-   "grado": "fine",
+   "grado": "famiglia",
    "annunciAs24": 134,
    "prova": {
     "titoliSubito": "97%",
     "titoliAs24Inverso": "4%",
-    "annunciProvati": 150
+    "annunciProvati": 150,
+    "ricetta": "id famiglia (la famiglia E il modello)",
+    "titoliCheConfermano": "93%"
    }
   },
   {
@@ -266,14 +265,16 @@
     "marcaId": "000101",
     "famigliaId": "000455",
     "famiglia": "Golf",
-    "versioniCheDicono": null
+    "versioniCheDicono": "cabriolet"
    },
-   "grado": "grossolano",
+   "grado": "famiglia+testo",
    "annunciAs24": 129,
    "prova": {
     "titoliSubito": "1%",
     "titoliAs24Inverso": "100%",
-    "annunciProvati": 150
+    "annunciProvati": 150,
+    "ricetta": "id famiglia + testo \"cabriolet\" alla fonte + filtro sulla versione dichiarata",
+    "titoliCheConfermano": "88%"
    }
   },
   {
@@ -287,31 +288,14 @@
     "famiglia": "Zafira",
     "versioniCheDicono": "tourer"
    },
-   "grado": "grossolano+token",
+   "grado": "famiglia+testo",
    "annunciAs24": 128,
    "prova": {
     "titoliSubito": "24%",
     "titoliAs24Inverso": "100%",
-    "annunciProvati": 150
-   }
-  },
-  {
-   "tipo": "moto",
-   "marca": "Honda",
-   "modelloAs24": "SH 125i",
-   "mmmv": "31|75953||",
-   "subito": {
-    "marcaId": "000051",
-    "famigliaId": "000798",
-    "famiglia": "SH 125",
-    "versioniCheDicono": null
-   },
-   "grado": "grossolano",
-   "annunciAs24": 95,
-   "prova": {
-    "titoliSubito": "7%",
-    "titoliAs24Inverso": "100%",
-    "annunciProvati": 150
+    "annunciProvati": 150,
+    "ricetta": "id famiglia + testo \"tourer\" alla fonte + filtro sulla versione dichiarata",
+    "titoliCheConfermano": "88%"
    }
   },
   {
@@ -323,14 +307,16 @@
     "marcaId": "000101",
     "famigliaId": "000455",
     "famiglia": "Golf",
-    "versioniCheDicono": null
+    "versioniCheDicono": "plus"
    },
-   "grado": "grossolano",
+   "grado": "famiglia+testo",
    "annunciAs24": 94,
    "prova": {
     "titoliSubito": "3%",
     "titoliAs24Inverso": "100%",
-    "annunciProvati": 150
+    "annunciProvati": 150,
+    "ricetta": "id famiglia + testo \"plus\" alla fonte + filtro sulla versione dichiarata",
+    "titoliCheConfermano": "92%"
    }
   },
   {
@@ -362,38 +348,21 @@
      }
     ]
    },
-   "grado": "fine",
+   "grado": "famiglia",
    "annunciAs24": 91,
    "prova": {
     "titoliSubito": "97%",
     "titoliAs24Inverso": "12%",
-    "annunciProvati": 104
-   }
-  },
-  {
-   "tipo": "moto",
-   "marca": "Triumph",
-   "modelloAs24": "Street Triple 675",
-   "mmmv": "2120|60422||",
-   "subito": {
-    "marcaId": "000014",
-    "famigliaId": "001213",
-    "famiglia": "Street Triple",
-    "versioniCheDicono": null
-   },
-   "grado": "grossolano",
-   "annunciAs24": 69,
-   "prova": {
-    "titoliSubito": "19%",
-    "titoliAs24Inverso": "100%",
-    "annunciProvati": 150
+    "annunciProvati": 104,
+    "ricetta": "id famiglia (la famiglia E il modello)",
+    "titoliCheConfermano": "96%"
    }
   }
  ],
  "conta": {
-  "voci": 16,
+  "voci": 13,
   "auto": 10,
-  "moto": 6,
-  "annunci": 6466
+  "moto": 3,
+  "annunci": 6147
  }
 }

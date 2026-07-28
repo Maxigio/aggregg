@@ -120,7 +120,13 @@ function buildVariables(params, page, opts = {}) {
     .map(m => { const p = String(m).split('|'); return { make: parseInt(p[0], 10), model: parseInt(p[1], 10) }; })
     .filter(x => x.make && x.model);
   if (multi.length > 1) {
-    const v0 = { classification: multi, vehicleType: [params.tipo === 'moto' ? 'Bike' : 'Car'] };
+    // Il testo-versione vale anche qui. Prima non ci arrivava: questo ramo usciva prima
+    // della riga che lo imposta, quindi su "Serie 3" (undici modelli in una query) la
+    // versione scelta spariva senza dirlo.
+    const conTesto = params.autoscoutVersionText
+      ? multi.map(c => ({ ...c, modelVersionInput: String(params.autoscoutVersionText) }))
+      : multi;
+    const v0 = { classification: conTesto, vehicleType: [params.tipo === 'moto' ? 'Bike' : 'Car'] };
     return finisci(v0, params, page, opts);
   }
 

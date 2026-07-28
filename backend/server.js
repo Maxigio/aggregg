@@ -39,6 +39,7 @@ const carburanti     = require('./carburanti');   // prezzi carburante MIMIT per
 const saved = require('./saved');
 const budget = require('./budget-richieste');     // quante richieste costa una ricerca: contate, non stimate
 const { risolviNodo } = require('./scrapers/subito-nodo');   // testo digitato → id del catalogo Subito
+const { agganciaSubito } = require('./scrapers/ponte-buchi'); // i modelli che il ponte non copriva
 const { codiciAs24, unisciCodici } = require('./scrapers/as24-modelli');   // traduzione di livello verso AS24
 const { versioniDi, versioniMotoit } = require('./scrapers/versioni-unificate');           // una lista versioni per tutte e tre le fonti
 const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings, norm } = require('./scrapers/brand-match');
@@ -736,7 +737,7 @@ function parseSearchParams(query) {
   const {
     tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione, raggio,
     mmmvAutoscout, motoitBrandSlug, motoitModelSlug, motoitBikeCode, motoitNeedsVersion,
-    versioneSubito,
+    versioneSubito, versioneNome,
   } = query;
 
   const errors = [];
@@ -769,10 +770,14 @@ function parseSearchParams(query) {
       motoitBrandSlug:  motoitBrandSlug  || null,
       motoitModelSlug:  motoitModelSlug  || null,
       motoitBikeCode:   motoitBikeCode   || null,   // versione/allestimento Moto.it (param `bike=`)
-      // Id-versione del catalogo Subito. NON si manda alla fonte come filtro (`cv`
-      // perderebbe il 23% di annunci che la versione non la dichiarano): si usa per
-      // filtrare in locale su quello che l'annuncio dichiara di se'.
+      // LA VERSIONE, e ogni fonte la riceve nella lingua che parla:
+      //   Subito     l'id del catalogo → parametro nativo `cv` (auto) / `bv` (moto)
+      //   Moto.it    il codice → parametro nativo `bike=`
+      //   Autoscout  il NOME, perche' li' un catalogo di versioni non esiste: la
+      //              versione e' testo scritto dal venditore, e `modelVersionInput`
+      //              cerca dentro quel testo.
       versioneSubito:   versioneSubito   || null,
+      versioneNome:     versioneNome     || null,
       motoitNeedsVersion: motoitNeedsVersion === '1',   // F47.2: versione obbligatoria SOLO Moto.it → skip se non scelta
     }
   };
@@ -930,6 +935,18 @@ async function runSearchCore(params) {
   if (params.subitoNodo && !params.subitoNodo.famigliaIds && params.modello) {
     params.subitoNodo = null;   // marca sola con un modello chiesto: il testo fa meglio
   }
+  // I BUCHI DEL PONTE. Tredici modelli Autoscout che su Subito non sono una famiglia ma
+  // una versione dentro una famiglia ("Golf GTI" dentro "Golf"): il nodo risolto da solo
+  // li porta alla famiglia intera, cioe' a tutte le Golf. L'aggancio scritto a mano
+  // aggiunge il testo che li isola. Misurato sui titoli dei venditori: 44% → 91% sui
+  // dieci col testo. AMR_PONTE_BUCHI=0 lo spegne per confrontare vecchio e nuovo.
+  if (process.env.AMR_PONTE_BUCHI !== '0') {
+    const buco = agganciaSubito(params.tipo, params.marca, params.modello);
+    if (buco) {
+      params.subitoNodo = buco;
+      console.log(`[ponte] Subito "${params.marca} ${params.modello}": buco chiuso — famiglia ${buco.famigliaNome}${buco.testo ? ` + testo "${buco.testo}"` : ''}`);
+    }
+  }
 
   const brandHit   = lookupBrand(params.tipo, params.marca);
   const brandEntry = brandHit?.entry || null;
@@ -1034,6 +1051,32 @@ async function runSearchCore(params) {
       params.autoscoutSpellings = as24Spellings(params.modello);   // grafie alternative (unione)
       params.as24Padre = nar.padre;   // solo per diagnostica/UI
       console.log(`[server] AS24 fase1 "${params.marca} ${params.modello}": mmmv=${nar.mmmv}${nar.padre ? ` (padre "${nar.padre}")` : ' (brand-only)'} + grafie ${JSON.stringify(params.autoscoutSpellings)}`);
+    }
+    // LA VERSIONE SU AUTOSCOUT. Non ha un catalogo di versioni: `modelVersionInput` e'
+    // testo libero scritto dal venditore, e il campo omonimo della ricerca cerca dentro
+    // quel testo — parole intere, piu' parole in AND. Finora glielo mandavamo solo per
+    // i modelli senza codice; la versione scelta dall'utente non ci arrivava mai.
+    //
+    // Si toglie il nome del modello perche' su AS24 quello sta gia' in `classification`:
+    // ripeterlo nel testo aggiungerebbe una parola in AND che il venditore spesso non
+    // riscrive ("Comfortline", non "Golf Comfortline").
+    //
+    // IL VINCOLO DA NON ROMPERE: se il testo restringe troppo la ricerca torna vuota, e
+    // il ritentativo senza testo (piu' sotto, `asRes.status === 'empty'`) deve restare —
+    // e' la rete che impedisce a una versione scritta in modo strano di azzerare la fonte.
+    if (params.versioneNome) {
+      const fuori = new Set(String(params.modello || '').toLowerCase().split(/[^a-z0-9]+/i).filter(Boolean));
+      // La notazione che scrive SOLO Subito. Verificato su "Golf 1.6 16V cat 3 porte
+      // Comfortline": Autoscout la stessa auto la scrive "5p 1.6 Comfortline", quindi
+      // `cat`, `porte` e il numero di porte sciolto mandavano la ricerca a zero e la
+      // rete la riapriva senza filtro — 100 annunci di 85 versioni diverse.
+      const RUMORE = /^(cat|porte|porta|\d?p|\d?m|\d)$/i;
+      const resto = String(params.versioneNome).split(/[^A-Za-z0-9.]+/)
+        .filter(w => w && !fuori.has(w.toLowerCase()) && !RUMORE.test(w)).join(' ').trim();
+      if (resto) {
+        params.autoscoutVersionText = [params.autoscoutVersionText, resto].filter(Boolean).join(' ');
+        console.log(`[server] AS24 versione "${params.versioneNome}" → testo "${params.autoscoutVersionText}"`);
+      }
     }
   }
   // Regione AS24 NATIVA (verificato live): centroide capoluogo + raggio (default 100km,
