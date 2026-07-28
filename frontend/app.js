@@ -325,23 +325,9 @@ async function init() {
     if (genCard) { switchVehGen(genCard.dataset.slug); return; }
     const motoCard = e.target.closest('.veh-moto-card');   // griglia motorizzazioni → scegli
     if (motoCard) { vehSelUrl = motoCard.dataset.url; renderVehScheda(); fetchVehSpecs(vehSelUrl); return; }
-    // "Calcola" del costo carburante: rifa' il conto con provincia e km scritti ORA.
-    // Il conto si aggiorna gia' da solo mentre si cambia, ma senza un bottone non si
-    // capisce che e' successo — e chi ha appena scritto i km si aspetta di premere.
-    if (e.target.closest('.veh-carb-calc')) {
-      const sel = vehSchedaEl.querySelector('.veh-carb-prov');
-      if (sel) { try { localStorage.setItem('amrCarbProvincia', sel.value); } catch (_) {} }
-      const km = vehSchedaEl.querySelector('.veh-carb-km');
-      if (km) {
-        const n = carbKmValido(km.value);
-        try {
-          if (n >= KM_MIN && n <= KM_MAX) localStorage.setItem('amrCarbKm', String(n));
-          else localStorage.removeItem('amrCarbKm');
-        } catch (_) {}
-      }
-      vehCostoAggiorna();
-      return;
-    }
+    // Nessun bottone "Calcola": provincia e km/anno ricalcolano da soli mentre li cambi.
+    // Il bottone era nato perche' la cifra grande restava indietro, ma quello era un
+    // difetto (aggiornava un elemento che non esisteva piu'), non una mancanza.
     const grpHead = e.target.closest('.veh-grp-head');   // sezione accordion interna
     if (grpHead) {
       const grp = grpHead.parentElement;
@@ -2777,7 +2763,22 @@ function renderSourceStatus() {
     const s = lastSources[f]; if (!s) return '';
     const meta = SOURCE_STATUS[s.status] || { cls: 'src-muted' };
     let txt;
-    if (s.status === 'ok') txt = `${s.count}`;
+    /**
+     * DUE NUMERI, NON UNO: quanti ne mostriamo e quanti ne ha la fonte.
+     *
+     * Il secondo arriva dentro le risposte che gia' leggiamo — `count_all` di Subito,
+     * `metadata.totalItems` di Autoscout, il conteggio in pagina di Moto.it — quindi non
+     * costa una richiesta. Dice una cosa che prima non si poteva sapere: se la ricerca ha
+     * visto tutto o solo la punta. Su "Golf" sono 100 mostrati e 11.610 esistenti.
+     *
+     * Non e' "quanti ne abbiamo scartati": sono due popolazioni diverse, il totale e'
+     * quello del filtro della FONTE, il conteggio e' dopo i NOSTRI filtri. Per questo
+     * restano affiancati e non si sottraggono.
+     */
+    if (s.status === 'ok') {
+      txt = `${s.count}`;
+      if (s.totale != null && s.totale > s.count) txt += ` <em>di ${Number(s.totale).toLocaleString('it-IT')}</em>`;
+    }
     else if (s.status === 'skipped') txt = SKIP_REASON_TXT[s.reason] || s.reason || 'saltato';
     else txt = meta.txt || s.status;
     const dim = s.status === 'ok' ? '' : ' src-dim';
@@ -3540,7 +3541,6 @@ function vehCostoHTML(spec) {
     <div class="veh-costo-ctrl">
       <select class="veh-carb-prov" aria-label="provincia per il prezzo del carburante">${provOpts}</select>
       <label class="veh-carb-kmw"><input type="number" class="veh-carb-km" value="${kmSt.difetto ? '' : km}" min="${KM_MIN}" max="${KM_MAX}" step="any" inputmode="numeric" aria-label="chilometri all'anno"><span>km/anno</span></label>
-      <button type="button" class="veh-carb-calc">Calcola</button>
     </div>
     <div class="veh-costo-fonte">Prezzi self ${carbIdx.aggiornato ? 'del ' + carbIdx.aggiornato : ''} — ${escapeHtml(carbIdx.fonte)}. Stima: consumo dichiarato, non reale.</div>
   </div>`);

@@ -40,6 +40,7 @@ const TIMEOUT_MS = 15000;
  */
 const QUERY = `query Search($v:Vehicle_,$loc:Location_,$pr:Price_,$m:Metadata_,$cu:Customer_){
   search{ listings(vehicle:$v, location:$loc, price:$pr, metadata:$m, customer:$cu, locale:it_IT){
+    metadata{ totalItems }
     listings{ details(withFallbackAttributes:true){
       webPage
       description
@@ -440,7 +441,11 @@ async function fetchPage(params, page, opts = {}) {
   const list = (arr && arr.listings) || [];
   // `raw` = annunci grezzi della pagina (per decidere se c'è una pagina dopo);
   // `items` è filtrato (onRequestOnly/prezzo-null) → non usarlo per la paginazione.
-  return { items: list.map(n => mapListing(n, opts)).filter(Boolean), raw: list.length };
+  // `totale` = quanti ne ha AS24 per QUESTA ricerca, non quanti ne mostriamo noi.
+  // Arriva dentro la stessa risposta: nessuna richiesta in piu'.
+  const tot = arr && arr.metadata && arr.metadata.totalItems;
+  return { items: list.map(n => mapListing(n, opts)).filter(Boolean), raw: list.length,
+           total: Number.isFinite(tot) ? tot : null };
 }
 
 /**
@@ -459,20 +464,25 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
   const pageDelay = opts.pageDelayMs || 0;   // pausa tra le pagine (anti-ban su crawl profondi)
   const out = [];
   let truncated = false;
+  let total = null;                 // quanti ne ha AS24 per questa ricerca (dalla 1a pagina)
   for (let p = 1; p <= maxPages; p++) {
     if (p > 1 && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
-    const { items, raw } = await fetchPage(params, p, opts);
+    const { items, raw, total: tot } = await fetchPage(params, p, opts);
+    if (p === 1) total = tot;       // uguale su tutte le pagine: si prende la prima
     out.push(...items);
     if (raw < PAGE_SIZE) break;       // lista esaurita (conteggio GREZZO) = vista completa
     if (p === maxPages) truncated = true;   // ultima pagina piena al cap → forse altro
   }
-  return opts.withMeta ? { items: out, truncated } : out;
+  return opts.withMeta ? { items: out, truncated, total } : out;
 }
 
 // ─── F50 copertura: conteggio totale per-query (count-query LEGGERA, separata) ───
-// La query di RICERCA (sopra) NON espone metadata.totalItems (validation-fail
-// verificato). Questa usa `listingsByQueryString` (curl utente provato) con l'auth
-// del client `home-feed-js`. La chiama il CRAWLER (NON la ricerca) → +1 richiesta cheap.
+// NB: la query di RICERCA ADESSO espone `metadata.totalItems` — provato live il
+// 2026-07-28 sulla query di produzione, variabili comprese: 6.485 Golf in Italia, e
+// funziona anche col filtro venditore. Il commento di prima diceva il contrario. Per la
+// RICERCA il totale arriva quindi gratis, dentro la risposta che gia' leggiamo.
+// Questa resta per il CRAWLER, che conta per range di anno/prezzo senza scaricare gli
+// annunci: li' serve un conteggio SENZA la pagina, e questa query e' piu' leggera.
 const COUNT_AUTH = 'Basic aG9tZS1mZWVkLWpzOnAzNVBLeUZCNG5VREtFTllKNG9HUTVJYjFTM0NieQ==';
 const COUNT_QUERY = `query GET_TOTAL_LISTING_COUNT_BY_QUERY_STRING($queryString:String!,$locale:Locale_){ search{ listingsByQueryString(queryString:$queryString, locale:$locale){ metadata{ totalItems } } } }`;
 

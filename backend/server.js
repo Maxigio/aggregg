@@ -119,15 +119,15 @@ const TIMEOUT_MS = 45000;
 // Playwright. Spegnibile con USE_AS24_GRAPHQL=0. Il post-filter titolo (§12) e i
 // filtri numerici lato server restano validi anche sui risultati GraphQL.
 const USE_AS24_GRAPHQL = process.env.USE_AS24_GRAPHQL !== '0';
-async function scrapeAutoscoutSmart(params) {
+async function scrapeAutoscoutSmart(params, opts = {}) {
   if (USE_AS24_GRAPHQL) {
     // Anno/km ora NATIVI (buildVariables: firstRegistration + mileageInKm) → pagina 1
     // già in-range, niente più hack sort-by-date/maxPages (prima serviva perché il
     // post-filter su una pesca cheapest-first azzerava `annoMin`).
-    try { return await scrapeAutoscoutGraphql(params); }
+    try { return await scrapeAutoscoutGraphql(params, opts); }
     catch (e) { console.warn(`[AS24] GraphQL fallito (${e.message}) → fallback Playwright`); }
   }
-  return scrapeAutoscout(params);
+  return scrapeAutoscout(params);   // il ripiego Playwright non conta: totale null
 }
 
 // F50 fase 1b — UNIONE MULTI-GRAFIA. AS24 filtra per parola intera e non ha OR: una
@@ -136,18 +136,21 @@ async function scrapeAutoscoutSmart(params) {
 // Costo: 1 richiesta per grafia (le query strette esauriscono la lista a pagina 1),
 // e solo sul ramo dei modelli senza codice-modello. Va diretto al GraphQL: passando
 // da scrapeAutoscoutSmart un GraphQL rotto aprirebbe un browser Playwright PER GRAFIA.
-async function scrapeAutoscoutUnion(params) {
+async function scrapeAutoscoutUnion(params, opts = {}) {
   const grafie = params.autoscoutSpellings;
-  if (!grafie || grafie.length < 2) return scrapeAutoscoutSmart(params);
+  if (!grafie || grafie.length < 2) return scrapeAutoscoutSmart(params, opts);
   let unaOk = false;
   const liste = await Promise.all(grafie.map(async g => {
     try { const r = await scrapeAutoscoutGraphql({ ...params, autoscoutVersionText: g }); unaOk = true; return r; }
     catch (_) { return []; }
   }));
-  if (!unaOk) return scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null });   // GraphQL giù → un solo tentativo classico
+  if (!unaOk) return scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null }, opts);   // GraphQL giù → un solo tentativo classico
   const byUrl = new Map();
   for (const lista of liste) for (const r of lista) if (r && r.url && !byUrl.has(r.url)) byUrl.set(r.url, r);
-  return [...byUrl.values()];
+  // Piu' grafie = piu' ricerche che si sovrappongono: sommare i totali conterebbe due
+  // volte gli stessi annunci, e prendere il piu' grande sarebbe arbitrario. Qui il totale
+  // della fonte NON e' definito, e si dice null invece di inventarlo.
+  return opts.withMeta ? { items: [...byUrl.values()], total: null } : [...byUrl.values()];
 }
 
 // Subito: API di prima parte hades.subito.it come PRIMARIO (JSON diretto, niente
@@ -158,7 +161,7 @@ const USE_SUBITO_API = process.env.USE_SUBITO_API !== '0';
 async function scrapeSubitoSmart(params) {
   if (USE_SUBITO_API) {
     // on-search: economici in cima (sort nativo). Regione/prezzo/anno nativi via buildPath.
-    try { return await scrapeSubitoApi(params, { sort: 'priceasc' }); }
+    try { return await scrapeSubitoApi(params, { sort: 'priceasc', withMeta: true }); }
     catch (e) { console.warn(`[Subito] API hades fallita (${e.message}) → fallback Playwright`); }
   }
   return scrapeSubito(params);
@@ -935,13 +938,29 @@ function parseSearchParams(query) {
 // Wrapper per-fonte: ritorna { items, status, reason } — mai [] muto.
 // status: 'ok' | 'empty' | 'timeout' | 'error'. Così la UI distingue
 // "rotto/saltato" da "nessun risultato".
+/**
+ * QUANTI NE HA LA FONTE, non quanti ne mostriamo noi.
+ *
+ * Tutte e tre le fonti dicono gia' il totale della ricerca dentro la risposta che
+ * leggiamo: Subito con `count_all`, Moto.it dal conteggio in pagina, Autoscout con
+ * `metadata.totalItems` (provato live sulla query di produzione — il commento nello
+ * scraper diceva il contrario, e non e' piu' vero). Costo: zero richieste in piu'.
+ *
+ * Gli scraper rispondono un array oppure `{items, total}` a seconda di `withMeta`:
+ * qui le due forme diventano una sola, cosi' chi chiama non deve saperlo.
+ */
+function sciogli(r) {
+  if (Array.isArray(r)) return { items: r, total: null };
+  return { items: (r && r.items) || [], total: (r && Number.isFinite(r.total)) ? r.total : null };
+}
+
 async function runSource(promise, ms, nomeSito) {
   const timeout = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('__timeout__')), ms)
   );
   try {
-    const items = await Promise.race([promise, timeout]);
-    return { items, status: items.length ? 'ok' : 'empty', reason: null };
+    const { items, total } = sciogli(await Promise.race([promise, timeout]));
+    return { items, total, status: items.length ? 'ok' : 'empty', reason: null };
   } catch (err) {
     const isTimeout = err.message === '__timeout__';
     console.warn(`[WARN] ${nomeSito}: ${isTimeout ? 'timeout' : err.message}`);
@@ -956,8 +975,8 @@ async function runSubito(params, ms) {
     setTimeout(() => reject(new Error('Timeout su Subito.it')), ms)
   );
   try {
-    const items = await Promise.race([scrapeSubitoSmart(params), timeout]);
-    return { items, status: items.length ? 'ok' : 'empty', reason: null };
+    const { items, total } = sciogli(await Promise.race([scrapeSubitoSmart(params), timeout]));
+    return { items, total, status: items.length ? 'ok' : 'empty', reason: null };
   } catch (err) {
     if (err instanceof SubitoBlockedError) {
       // Senza fallback browser (es. M2) il bootstrap non è proponibile → degrada a
@@ -1336,10 +1355,10 @@ async function runSearchCore(params) {
     runSubito(params, TIMEOUT_MS),
     skipAutoscout
       ? Promise.resolve({ items: [], status: 'skipped', reason: asSkipReason })
-      : runSource(scrapeAutoscoutUnion(params), TIMEOUT_MS, 'Autoscout24'),
+      : runSource(scrapeAutoscoutUnion(params, { withMeta: true }), TIMEOUT_MS, 'Autoscout24'),
     skipMotoIt
       ? Promise.resolve({ items: [], status: 'skipped', reason: motoSkipReason })
-      : runSource(scrapeMotoIt(params), TIMEOUT_MS, 'Moto.it'),
+      : runSource(scrapeMotoIt(params, { withMeta: true }), TIMEOUT_MS, 'Moto.it'),
   ]);
 
   // F50 fase 1 — riallargamento SOLO a zero risultati (scelta di prodotto: mai allargare
@@ -1348,7 +1367,7 @@ async function runSearchCore(params) {
   let asRes = asRes0, as24Allargato = false;
   if (params.autoscoutVersionText && asRes.status === 'empty') {
     const retry = await runSource(
-      scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null, autoscoutSpellings: null }), TIMEOUT_MS, 'Autoscout24');
+      scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null, autoscoutSpellings: null }, { withMeta: true }), TIMEOUT_MS, 'Autoscout24');
     if (retry.items.length) { asRes = retry; as24Allargato = true; }
   }
 
@@ -1551,10 +1570,15 @@ async function runSearchCore(params) {
       // `come` dice SU COSA si e' cercato: gli id del catalogo Subito, oppure il testo.
       // Il testo e' il ripiego (71% di precisione misurata) e deve risultare, non passare
       // per una ricerca precisa che non e'.
+      // `count` = quanti ne mostriamo dopo i nostri filtri. `totale` = quanti ne ha la
+      // FONTE per questa ricerca. Sono due popolazioni diverse e restano due numeri.
       subito:    { status: subitoRes.status, reason: subitoRes.reason || null, count: countBy('subito'),
+                   totale: subitoRes.total ?? null,
                    come: params.subitoNodo ? (params.subitoNodo.come || 'id') : 'testo libero' },
-      autoscout: { status: asRes.status,     reason: asReason,                 count: asCount },
-      moto:      { status: motoRes.status,   reason: motoRes.reason || null,   count: countBy('moto') },
+      autoscout: { status: asRes.status,     reason: asReason,                 count: asCount,
+                   totale: asRes.total ?? null },
+      moto:      { status: motoRes.status,   reason: motoRes.reason || null,   count: countBy('moto'),
+                   totale: motoRes.total ?? null },
     },
   };
 }
