@@ -153,13 +153,26 @@ const iso = v => {
       modelli: [...v.modelli],
       categoria: cat,
       categoriaIt: cat ? (CATEGORIE[cat] || null) : null,
-      difetto: a.omschrijving_defect || null,
-      conseguenze: a.materi_le_gevolgen || null,
-      riparazione: a.beschrijving_van_het_herstel || null,
+      /**
+       * LA PROSA OLANDESE NON SI TIENE.
+       *
+       * `omschrijving_defect`, `materi_le_gevolgen` e `beschrijving_van_het_herstel` sono
+       * testo libero in olandese: 1,8 MB dei 3,6 del file, e a schermo sarebbero parole
+       * che l'operatore non legge. Tradurle con un dizionario non si puo' (sono 4.066
+       * frasi diverse con le subordinate, non etichette), tradurle a macchina e' una
+       * spesa che il proprietario ha deciso di non fare adesso.
+       *
+       * Al loro posto il LINK alla campagna vera: la scheda ufficiale RDW, che c'e' per
+       * tutte e mostra il difetto per esteso. Meglio un click che una lingua che non serve.
+       */
+      url: `https://opendata.rdw.nl/Voertuigen/Open-Data-RDW-Terugroep_actie/j9yg-7rg9/explore/query/`
+        + encodeURIComponent(`SELECT * WHERE \`referentiecode_rdw\`='${rif}'`) + `/page/filter`,
       rischio: perRischio.get(rif) || null,
       veicoliTotale: num(a.totaal_aantal_voertuigen_terugroepactie),
       veicoliPaesiBassi: num(a.nationaal_opgegeven_aantal_voertuigen_terugroepactie),
-      informazioni: a.meer_informatie_op_internet || null,
+      // La pagina del costruttore, quando la dichiara: e' li' che si prenota la riparazione.
+      // C'e' solo sul 7% delle campagne, quindi affianca il link alla scheda RDW, non lo sostituisce.
+      costruttoreUrl: /^https?:\/\//i.test(a.meer_informatie_op_internet || '') ? a.meer_informatie_op_internet : null,
     });
   }
   out.sort((x, y) => String(y.data || '').localeCompare(String(x.data || '')));
