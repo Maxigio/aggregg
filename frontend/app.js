@@ -916,7 +916,6 @@ const AREE = {
   fonti: { pannello: 'fontiPanel', apri: () => fnApri(), chiudi: () => fnChiudi() },
   ponte: { pannello: 'pontePanel', apri: () => pnApri(), chiudi: () => pnChiudi() },
   competitor: { pannello: 'competitorPanel', apri: () => cpApri(), chiudi: () => cpChiudi() },
-  registri: { pannello: 'registriPanel', apri: () => regApri(), chiudi: () => regChiudi() },
 };
 
 /**
@@ -3439,17 +3438,33 @@ function vehRichiamiHTML() {
      * e' l'unico modo di leggere cosa c'e' che non va. Su Safety Gate il link e'
      * l'allerta ufficiale della Commissione, in italiano.
      */
-    const rigaHTML = (url, cat, meta) => {
+    const rigaHTML = (url, cat, meta, sotto) => {
       const dentro = `<span class="veh-rich-cat">${escapeHtml(cat)}</span>`
-        + `<span class="veh-rich-meta">${escapeHtml(meta)}</span>`;
+        + `<span class="veh-rich-meta">${escapeHtml(meta)}</span>`
+        + (sotto ? `<span class="veh-rich-omo">${escapeHtml(sotto)}</span>` : '');
       return url && /^https?:\/\//i.test(url)
         ? `<a class="veh-rich-r veh-rich-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${dentro}</a>`
         : `<div class="veh-rich-r">${dentro}</div>`;
     };
     const riga = c => rigaHTML(c.url, c.categoriaIt || c.categoria || '—',
       [c.data ? new Date(c.data).toLocaleDateString('it-IT') : null, c.rischio].filter(Boolean).join(' · '));
+    /**
+     * L'OMOLOGAZIONE e' l'unico campo che permette di dire se IL SINGOLO esemplare e'
+     * coinvolto invece di quel modello: e' il numero da confrontare col libretto.
+     *
+     * Ma un'allerta puo' elencarne DICIOTTO in un campo solo, separate da trattini, e
+     * scritte per intero riempiono la riga di testo che nessuno legge. Se ne mostrano
+     * due e si dice quante restano; per l'elenco completo c'e' la scheda ufficiale, che
+     * e' dove porta la riga.
+     */
+    const omoBreve = a => {
+      const tutte = (a.omologazioni || []).flatMap(x => String(x).split(/\s+-\s+/)).map(x => x.trim()).filter(Boolean);
+      if (!tutte.length) return null;
+      return tutte.slice(0, 2).join(' · ') + (tutte.length > 2 ? `  +${tutte.length - 2}` : '');
+    };
     const rigaSg = a => rigaHTML(a.scheda, a.prodotto || a.categoria || 'Veicolo',
-      [a.anni ? `${a.anni.da}–${a.anni.a}` : a.anno, a.livello].filter(Boolean).join(' · '));
+      [a.anni ? `${a.anni.da}–${a.anni.a}` : a.anno, a.livello].filter(Boolean).join(' · '),
+      omoBreve(a));
     const bloccoR = nR
       ? `<div class="veh-rich-b"><div class="veh-rich-h">Campagne RDW <b>${nR}</b></div>${(st.rdw.campagne || []).slice(0, 5).map(riga).join('')}</div>`
       : '<div class="veh-rich-b"><div class="veh-rich-h">Campagne RDW <b>0</b></div><div class="veh-rich-att">Nessuna campagna per questo modello.</div></div>';
@@ -5678,207 +5693,4 @@ document.getElementById('competitorPanel')?.addEventListener('click', e => {
 });
 document.getElementById('competitorPanel')?.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.id === 'cpUrl') { e.preventDefault(); cpAggiungi(); }
-});
-
-// ─── REGISTRI ─────────────────────────────────────────────────────────────────
-/**
- * Gli archivi pubblici ufficiali, in un'area a se'.
- *
- * Oggi ci sono i RICHIAMI, da DUE fonti che restano affiancate e non si sommano mai:
- *
- *   Safety Gate  — l'allerta di sicurezza europea. Individua i veicoli colpiti col numero
- *                  di omologazione o un intervallo di telaio, che un annuncio non porta:
- *                  li' il semaforo si ferma alla famiglia.
- *   RDW          — le campagne di richiamo olandesi, legate a MARCA e TIPO in chiaro.
- *                  4.571 campagne, 232 marche: qui il modello si confronta davvero.
- *
- * Un totale unico dei due non vorrebbe dire niente — sono archivi con criteri diversi — e
- * chi legge deve sapere quale fonte gli sta rispondendo. Per questo due blocchi separati,
- * ognuno con la sua avvertenza addosso e non in una nota a fondo pagina.
- */
-const regEl = () => document.getElementById('registriPanel');
-let regMarche = null;          // elenco marche RDW per la tendina (caricato una volta)
-let regRis = null;             // { rdw, sg } dell'ultima ricerca
-let regStato = 'vuoto';        // vuoto | carico | fatto | ko
-let regErrore = '';
-
-async function regApri() {
-  const el = regEl(); if (!el) return;
-  el.classList.remove('d-none');
-  document.body.classList.add('has-results');   // via lo sfondo dello stato-vuoto
-  if (!regMarche) {
-    try {
-      const d = await fetch('/api/richiami/rdw/marche').then(r => r.json());
-      regMarche = (d.marche || []);
-    } catch (_) { regMarche = []; }
-  }
-  regRender();
-}
-function regChiudi() { const el = regEl(); if (el) { el.classList.add('d-none'); el.innerHTML = ''; } }
-
-async function regCerca() {
-  const ma = (document.getElementById('regMarca') || {}).value || '';
-  const mo = (document.getElementById('regModello') || {}).value || '';
-  if (!ma.trim() && !mo.trim()) { toast('Scrivi almeno la marca'); return; }
-  regStato = 'carico'; regErrore = ''; regRender();
-  const q = new URLSearchParams();
-  if (ma.trim()) q.set('marca', ma.trim());
-  if (mo.trim()) q.set('modello', mo.trim());
-  try {
-    // Le due fonti si chiedono insieme ma restano due risposte: nessuna delle due
-    // aspetta l'altra per essere mostrata giusta.
-    const [rdw, sg] = await Promise.all([
-      fetch('/api/richiami/rdw/cerca?' + q.toString()).then(r => r.json()).catch(() => null),
-      fetch('/api/richiami/cerca?' + q.toString()).then(r => r.json()).catch(() => null),
-    ]);
-    regRis = { rdw, sg, marca: ma.trim(), modello: mo.trim() };
-    regStato = 'fatto';
-  } catch (e) {
-    regStato = 'ko'; regErrore = e.message || 'richiesta non riuscita';
-  }
-  regRender();
-}
-
-/**
- * Una campagna RDW.
- *
- * La descrizione del guasto NON c'e': era testo libero in olandese, e a schermo sarebbero
- * state parole che nessuno legge. Al suo posto la scheda ufficiale della campagna, che
- * c'e' per TUTTE e il difetto lo scrive per esteso — un click invece di una lingua che
- * non serve. Quando il costruttore dichiara la sua pagina (una campagna su quattordici)
- * c'e' anche quella: e' li' che si prenota la riparazione.
- *
- * Il titolo della scheda e' il link: cliccare la categoria porta al richiamo vero.
- */
-function regCampagnaHTML(c) {
-  const meta = [
-    c.data ? new Date(c.data).toLocaleDateString('it-IT') : null,
-    c.rischio,
-    c.veicoliPaesiBassi != null ? `${Number(c.veicoliPaesiBassi).toLocaleString('it-IT')} veicoli nei Paesi Bassi` : null,
-  ].filter(Boolean).join(' · ');
-  const mod = (c.modelli || []).slice(0, 12).join(' · ');
-  const altri = (c.modelli || []).length > 12 ? ` <em>+${c.modelli.length - 12}</em>` : '';
-  const cat = escapeHtml(c.categoriaIt || c.categoria || 'Categoria non indicata');
-  const titolo = c.url
-    ? `<a class="reg-cat reg-cat-link" href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer">${cat} ↗</a>`
-    : `<span class="reg-cat">${cat}</span>`;
-  return `<article class="reg-card">
-    <div class="reg-card-h">
-      ${titolo}
-      <span class="reg-meta">${escapeHtml(meta)}</span>
-    </div>
-    ${mod ? `<div class="reg-modelli">${escapeHtml(mod)}${altri}</div>` : ''}
-    <div class="reg-card-f">
-      ${c.produttore ? `<span>${escapeHtml(c.produttore)}</span>` : ''}
-      ${c.costruttoreUrl ? `<a href="${escapeHtml(c.costruttoreUrl)}" target="_blank" rel="noopener noreferrer">pagina del costruttore ↗</a>` : ''}
-      <span class="reg-rif">${escapeHtml(c.rif || '')}</span>
-    </div>
-  </article>`;
-}
-
-// Un'allerta Safety Gate, coi campi che quell'archivio ha davvero (letti dal file, non
-// indovinati): caso, prodotto, nome, anni, rischio, livello, difetto, omologazioni, scheda.
-function regAllertaHTML(a) {
-  const anni = a.anni ? `${a.anni.da}–${a.anni.a}` : (a.anno || null);
-  const meta = [anni, a.livello, a.rischio, a.paeseNotifica].filter(Boolean).join(' · ');
-  // L'omologazione e' l'unico campo che permetterebbe di dire se IL SINGOLO esemplare e'
-  // coinvolto. Si mostra proprio per questo: e' il numero da confrontare col libretto.
-  const omo = (a.omologazioni || []).slice(0, 3).join(' · ');
-  // Come per l'RDW: il titolo E' il link all'allerta ufficiale. Qui c'e' su tutte e 1.034,
-  // e il testo resta a schermo perche' Safety Gate scrive gia' in italiano.
-  const cat = escapeHtml(a.prodotto || a.categoria || 'Veicolo');
-  const titolo = a.scheda && /^https?:\/\//i.test(a.scheda)
-    ? `<a class="reg-cat reg-cat-link" href="${escapeHtml(a.scheda)}" target="_blank" rel="noopener noreferrer">${cat} ↗</a>`
-    : `<span class="reg-cat">${cat}</span>`;
-  return `<article class="reg-card">
-    <div class="reg-card-h">
-      ${titolo}
-      <span class="reg-meta">${escapeHtml(String(meta))}</span>
-    </div>
-    ${a.nome ? `<div class="reg-modelli">${escapeHtml(a.nome)}</div>` : ''}
-    ${a.difetto ? `<p class="reg-testo">${escapeHtml(a.difetto)}</p>` : ''}
-    ${omo ? `<p class="reg-omo"><span>omologazione</span>${escapeHtml(omo)}</p>` : ''}
-    <div class="reg-card-f">
-      ${a.urlCampagna && /^https?:\/\//i.test(a.urlCampagna) ? `<a href="${escapeHtml(a.urlCampagna)}" target="_blank" rel="noopener noreferrer">campagna del costruttore ↗</a>` : ''}
-      <span class="reg-rif">${escapeHtml(a.caso || '')}</span>
-    </div>
-  </article>`;
-}
-
-function regBloccoHTML(titolo, nota, n, cards, avvisi) {
-  return `<section class="reg-blocco">
-    <header class="reg-blocco-h">
-      <h3>${escapeHtml(titolo)}</h3>
-      <span class="reg-n">${n == null ? '—' : n}</span>
-    </header>
-    <p class="reg-nota">${nota}</p>
-    ${(avvisi || []).map(a => `<p class="reg-avviso">${a}</p>`).join('')}
-    <div class="reg-lista">${cards || '<div class="reg-vuoto">Nessun richiamo per questa ricerca.</div>'}</div>
-  </section>`;
-}
-
-const REG_TETTO = 40;   // quante schede si disegnano: il resto sta nel conto, non nel DOM
-
-function regRender() {
-  const el = regEl(); if (!el) return;
-  const opz = (regMarche || []).slice(0, 400)
-    .map(m => `<option value="${escapeHtml(m.nome)}">${m.campagne} campagne</option>`).join('');
-
-  let corpo = '';
-  if (regStato === 'carico') corpo = '<div class="reg-att">Cerco nei due archivi…</div>';
-  else if (regStato === 'ko') corpo = `<div class="reg-att">Non riuscito: ${escapeHtml(regErrore)}</div>`;
-  else if (regStato === 'fatto' && regRis) {
-    const r = regRis.rdw, s = regRis.sg;
-
-    const avvisiRdw = [];
-    if (r && r.ok && r.annoIgnorato) avvisiRdw.push('L\'anno non e\' stato usato: questo archivio non porta la finestra di produzione.');
-    if (r && r.ok && r.totale > REG_TETTO) avvisiRdw.push(`Mostrate le prime ${REG_TETTO} di ${r.totale}, dalla piu' recente.`);
-    const cardsRdw = r && r.ok
-      ? (r.campagne || []).slice(0, REG_TETTO).map(regCampagnaHTML).join('')
-      : '';
-    const notaRdw = 'Campagne di richiamo dell\'RDW, l\'ente motorizzazione olandese. Legano il richiamo a '
-      + '<b>marca e modello</b>, quindi il confronto col modello cercato si puo\' fare. Riguardano pero\' i '
-      + 'numeri di telaio decisi dal costruttore, non tutti gli esemplari: resta un semaforo di modello. '
-      + '<span class="reg-fonte">RDW Open Data · dominio pubblico</span>';
-
-    const cardsSg = s && s.ok ? (s.allerte || []).slice(0, REG_TETTO).map(regAllertaHTML).join('') : '';
-    const avvisiSg = [];
-    if (s && s.ok && s.totale > REG_TETTO) avvisiSg.push(`Mostrate le prime ${REG_TETTO} di ${s.totale}.`);
-    const notaSg = 'Allerte di sicurezza della Commissione europea. Individuano i veicoli colpiti col '
-      + '<b>numero di omologazione</b> o un intervallo di telaio, che un annuncio non porta: qui il '
-      + 'semaforo si ferma alla famiglia del modello. '
-      + '<span class="reg-fonte">Safety Gate (ex RAPEX)</span>';
-
-    const guasto = x => x && x.ok === false ? `<p class="reg-avviso">${escapeHtml(x.motivo || 'archivio non disponibile')}</p>` : '';
-    corpo = '<div class="reg-due">'
-      + regBloccoHTML('Richiami RDW', notaRdw, r && r.ok ? r.totale : null, cardsRdw, avvisiRdw) 
-      + regBloccoHTML('Allerte Safety Gate', notaSg, s && s.ok ? s.totale : null, cardsSg, avvisiSg)
-      + '</div>'
-      + guasto(r) + guasto(s);
-  } else {
-    corpo = '<div class="reg-att">Scrivi marca e modello: cerco negli archivi pubblici dei richiami.</div>';
-  }
-
-  el.innerHTML = `<div class="reg-wrap">
-    <div class="reg-cerca">
-      <input type="text" id="regMarca" class="field-input" list="regMarcheList" autocomplete="off"
-             placeholder="Marca — es. BMW" value="${escapeHtml((regRis && regRis.marca) || '')}">
-      <datalist id="regMarcheList">${opz}</datalist>
-      <input type="text" id="regModello" class="field-input" autocomplete="off"
-             placeholder="Modello — es. Serie 3" value="${escapeHtml((regRis && regRis.modello) || '')}">
-      <button type="button" class="btn-cerca" id="regVai">Cerca</button>
-    </div>
-    ${corpo}
-  </div>`;
-}
-
-document.getElementById('caricaAltri')?.addEventListener('click', e => {
-  if (e.target.closest('button')) caricaAltri();
-});
-
-document.getElementById('registriPanel')?.addEventListener('click', e => {
-  if (e.target.closest('#regVai')) regCerca();
-});
-document.getElementById('registriPanel')?.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && (e.target.id === 'regMarca' || e.target.id === 'regModello')) { e.preventDefault(); regCerca(); }
 });

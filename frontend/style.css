@@ -1529,44 +1529,6 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .cp-barra-n { color: var(--text-muted); font-family: var(--num); }
 @media (max-width: 640px) { .cp-h { grid-template-columns: 1fr; } .cp-azioni { grid-column: 1; grid-row: auto; justify-content: flex-start; } }
 
-/* ── Registri: gli archivi pubblici ufficiali ─────────────────────────────────
-   Due fonti affiancate e mai sommate: hanno criteri diversi e un totale unico non
-   vorrebbe dire niente. Ognuna si porta addosso la sua avvertenza, non in fondo alla
-   pagina dove nessuno la legge. */
-.reg-wrap { max-width: 1200px; margin: 0 auto; padding: 4px 0 24px; }
-.reg-cerca { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-.reg-cerca .field-input { flex: 1 1 220px; min-width: 0; }
-.reg-att { padding: 26px 4px; color: var(--text-muted); font-size: 0.9rem; }
-
-/* Due colonne su schermo largo, una sotto l'altra sul telefono. */
-.reg-due { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; align-items: start; }
-.reg-blocco { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; min-width: 0; }
-.reg-blocco-h { display: flex; align-items: baseline; gap: 8px; }
-.reg-blocco-h h3 { font-size: 0.95rem; font-weight: 700; margin: 0; }
-.reg-n { font-size: 0.95rem; font-weight: 700; color: var(--accent); }
-.reg-nota { font-size: 0.78rem; line-height: 1.45; color: var(--text-muted); margin: 6px 0 8px; }
-.reg-nota b { color: var(--text); font-weight: 600; }
-.reg-fonte { display: block; margin-top: 3px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .04em; }
-.reg-avviso { font-size: 0.78rem; color: var(--text); background: var(--accent-weak); border-radius: var(--r); padding: 6px 9px; margin: 0 0 8px; }
-.reg-lista { display: flex; flex-direction: column; gap: 8px; max-height: 70vh; overflow-y: auto; }
-.reg-vuoto { font-size: 0.85rem; color: var(--text-muted); padding: 12px 2px; }
-
-.reg-card { border-top: 1px solid var(--line); padding: 9px 0 4px; }
-.reg-card:first-child { border-top: 0; }
-.reg-card-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
-.reg-cat { font-size: 0.84rem; font-weight: 600; }
-.reg-meta { font-size: 0.76rem; color: var(--text-muted); }
-.reg-modelli { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; overflow-wrap: anywhere; }
-.reg-modelli em { font-style: normal; opacity: .7; }
-/* Il testo della fonte puo' essere lunghissimo e senza spazi: senza questo sfonda la
-   colonna in larghezza. Chiuso a quattro righe, il resto si legge sulla scheda originale. */
-.reg-testo { font-size: 0.8rem; line-height: 1.45; margin: 5px 0 0; overflow-wrap: anywhere;
-  display: -webkit-box; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-.reg-omo { font-size: 0.74rem; margin: 5px 0 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
-.reg-omo span { font-family: inherit; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-right: 6px; }
-.reg-card-f { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 5px; font-size: 0.74rem; color: var(--text-muted); }
-.reg-rif { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; opacity: .8; }
-
 /* ── ADD ON: le integrazioni esterne, ultimo gruppo della scheda tecnica ──────
    Stessa intestazione di MOTORE e PRESTAZIONI (.veh-grp), dentro i tre blocchi
    richiudibili con la loro fonte scritta. Le specifiche descrivono il veicolo, questi
@@ -1608,8 +1570,6 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 /* Il titolo della scheda e la riga dell'ADD ON sono LINK al richiamo originale: senza il
    testo del guasto a schermo, quello e' l'unico modo di leggerlo. Restano righe, non
    diventano bottoni: cambia solo che si possono aprire. */
-.reg-cat-link, .reg-cat-link:hover { color: var(--accent); text-decoration: none; }
-.reg-cat-link:hover { text-decoration: underline; }
 .veh-rich-link { color: inherit; text-decoration: none; }
 .veh-rich-link:hover { color: var(--accent); text-decoration: none; }
 .veh-rich-link:hover .veh-rich-cat { text-decoration: underline; }
@@ -1623,3 +1583,9 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .carica-altri { display: flex; justify-content: center; padding: 14px 0 2px; }
 .carica-altri button { min-width: 220px; }
 .carica-altri button[disabled] { opacity: .6; cursor: default; }
+/* L'omologazione sotto la riga dell'allerta: e' il numero da confrontare col libretto,
+   quindi monospazio e a capo suo. Puo' essere lungo ("e4*168/2013*00131*01-*04"): va a
+   capo invece di allargare la colonna. */
+.veh-rich-omo { flex-basis: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.veh-rich-r { flex-wrap: wrap; }
