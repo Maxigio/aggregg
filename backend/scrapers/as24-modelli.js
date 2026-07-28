@@ -71,4 +71,48 @@ function unisciCodici(mmmvApp, dalPonte) {
   return out;
 }
 
-module.exports = { codiciAs24, unisciCodici, _indice: indice, norm };
+/**
+ * IL PONTE LETTO AL CONTRARIO: dal codice Autoscout alla famiglia Subito.
+ *
+ * Serve al menu VERSIONE. Le versioni stanno sotto la famiglia Subito, ma il modello che
+ * l'utente sceglie porta il nome di Autoscout — dove il motore E' il modello. "320" e
+ * "Cooper S" non sono famiglie Subito, quindi il menu restava vuoto e diceva che per quel
+ * modello versioni non ce n'erano: falso, stanno sotto "Serie 3" e sotto "Mini".
+ *
+ * Si costruisce una volta sola dall'indice che gia' c'e', al primo uso.
+ *
+ * Il codice si taglia a `make|model`: le due parti dopo (variante/allestimento) non
+ * cambiano la famiglia e terrebbero fuori i codici scritti in forma piu' lunga.
+ */
+let INVERSO = null;
+function inverso(iniettato) {
+  if (INVERSO && !iniettato) return INVERSO;
+  const ix = indice(iniettato);
+  const out = { auto: new Map(), moto: new Map() };
+  for (const t of ['auto', 'moto']) {
+    for (const famiglie of Object.values(ix[t] || {})) {
+      for (const [famiglia, codici] of Object.entries(famiglie || {})) {
+        for (const c of (codici || [])) {
+          const k = String(c).split('|').slice(0, 2).join('|');
+          if (!out[t].has(k)) out[t].set(k, famiglia);   // il primo vince: ordine stabile
+        }
+      }
+    }
+  }
+  if (!iniettato) INVERSO = out;
+  return out;
+}
+
+/**
+ * La famiglia Subito per un codice Autoscout `make|model|...`, o null.
+ * Il nome torna nella forma normalizzata del ponte ("serie3"): il risolutore Subito la
+ * accetta, ed e' l'unica forma che il ponte conserva.
+ */
+function famigliaSubito(tipo, mmmv, opts = {}) {
+  const t = tipo === 'moto' ? 'moto' : 'auto';
+  const k = String(mmmv || '').split('|').slice(0, 2).join('|');
+  if (!k.split('|')[1]) return null;              // brand-only: non dice quale famiglia
+  return inverso(opts.indice)[t].get(k) || null;
+}
+
+module.exports = { codiciAs24, unisciCodici, famigliaSubito, _indice: indice, _inverso: inverso, norm };

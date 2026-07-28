@@ -665,6 +665,9 @@ async function loadVersioniFor(model) {
     const qs = new URLSearchParams({ tipo: currentTipo(), marca: brand.nome, modello: model.nome });
     // lo slug Moto.it che il menu si porta dietro: copre i modelli che Subito non risolve
     if (model.slugMotoIt) qs.set('motoitSlug', model.slugMotoIt);
+    // il codice Autoscout: serve a leggere il ponte al contrario quando il nome del
+    // modello e' quello di AS24 e non una famiglia Subito ("320" sta sotto "Serie 3")
+    if (model.mmmvAutoscout) qs.set('mmmvAutoscout', model.mmmvAutoscout);
     const data = await fetch(`/api/versioni?${qs}`).then(r => r.json());
     const piu = (data.generazioni || []).length > 1;
     for (const g of (data.generazioni || [])) {
@@ -1659,6 +1662,9 @@ async function doSearch() {
       // Il NOME serve ad Autoscout, che un catalogo di versioni non ce l'ha: li' la
       // versione e' testo, e il suo campo nativo cerca dentro quel testo.
       if (selectedVersion.nome) params.versioneNome = selectedVersion.nome;
+      // Il nome che Autoscout da' a questa versione nel suo catalogo. Non lo traduciamo
+      // noi: e' la voce che l'utente ha scelto, e nel campo di Autoscout vale esatta.
+      if (selectedVersion.as24) params.versioneAs24 = selectedVersion.as24;
       if (selectedVersion.motoit && selectedVersion.motoit.length) params.motoitBikeCode = selectedVersion.motoit[0];
       if (selectedVersion.anni) {
         if (selectedVersion.anni.da && !params.annoMin) params.annoMin = String(selectedVersion.anni.da);
@@ -1973,6 +1979,11 @@ const DICHIARAZIONE = {
   'senza-versione': { et: 'versione n.d.', cl: 'med', tit: 'Il venditore non ha indicato la versione: il modello e\' quello giusto, l\'allestimento non e\' dichiarato.' },
   'senza-modello':  { et: 'da verificare', cl: 'med', tit: 'Il venditore non ha indicato il modello: riconosciuto dal titolo, non dal catalogo.' },
   'altro-modello':  { et: 'altro modello', cl: 'ko',  tit: 'Questa fonte non ha il modello cercato: la ricerca si e\' allargata alla marca e questo e\' un modello diverso.' },
+  // Diverso da "versione n.d.": li' e' il venditore a non averla scritta, qui siamo noi
+  // a non aver potuto controllare. Su Autoscout la versione e' testo libero, e certe
+  // versioni ("320 2 porte") non lasciano un testo da confrontare — la carrozzeria li'
+  // sta in un campo numerico. Dirlo "esatto" sarebbe una corrispondenza mai guardata.
+  'versione-non-verificata': { et: 'versione non verificata', cl: 'med', tit: 'Il modello e\' quello giusto, ma su questa fonte la versione che hai scelto non si e\' potuta confrontare: potrebbe essere un altro allestimento.' },
 };
 
 function rowHTML(item, bestSet) {
