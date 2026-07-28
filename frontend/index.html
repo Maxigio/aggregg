@@ -60,8 +60,9 @@
           <button type="button" class="mode-btn active" data-mode="auto" role="tab">Auto</button>
           <button type="button" class="mode-btn" data-mode="moto" role="tab">Moto</button>
           <button type="button" class="mode-btn" data-mode="ricambi" role="tab">Ricambi</button>
-          <button type="button" class="mode-btn" data-mode="catalogo" role="tab">Catalogo</button>
-          <button type="button" class="mode-btn" data-mode="richiami" role="tab">Richiami</button>
+          <!-- Catalogo e Richiami: nascosti dalla barra. Il codice e i pannelli restano
+               (app.js li disegna ancora), ma non hanno piu' una porta d'ingresso. Per
+               rimetterli basta questa riga. -->
           <button type="button" class="mode-btn" data-mode="fonti" role="tab">Fonti</button>
           <button type="button" class="mode-btn" data-mode="ponte" role="tab">Corrispondenze</button>
         </div>
@@ -87,14 +88,43 @@
           <button type="submit" class="btn-cerca" id="btnCerca">Cerca</button>
         </div>
         <div class="field-note" id="marcaNote"></div>
-        <div class="ac-wrap d-none" id="versioneRow" style="max-width:420px;margin-top:8px">
-          <input type="text" id="versione" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"
-                 class="field-input" placeholder="Versione (facoltativa) — es. Comfortline, GTI, ABS, Trail" />
-          <ul id="versioneAC" class="ac-list d-none" role="listbox"></ul>
-        </div>
-        <div class="versione-note d-none" id="versioneNote" role="status">
-          <span>Per questo modello i cataloghi non danno versioni: la ricerca resta al livello del modello.</span>
-          <button type="button" class="vn-close" id="versioneNoteClose" aria-label="Chiudi avviso">✕</button>
+        <!--
+          UN CAMPO PER CATALOGO, non una lista sola. Le tre fonti non chiamano "versione"
+          la stessa cosa: Subito ha un id ("320d Touring Business"), Autoscout un testo
+          ("320d"), Moto.it un codice legato agli anni. Mescolarle nascondeva l'unica
+          informazione che conta davvero, cioe' QUALE fonte filtrera' se scegli quella
+          voce. Ogni campo compare solo se quel catalogo ha qualcosa per questo modello.
+        -->
+        <div class="d-none" id="versioniRow" style="margin-top:8px">
+          <div class="ver-grid">
+            <div class="ver-campo d-none" data-fonte="subito">
+              <label class="ver-lab" for="versioneSubito">Versione <span class="ver-fonte">Subito</span></label>
+              <div class="ac-wrap">
+                <input type="text" id="versioneSubito" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"
+                       class="field-input" placeholder="facoltativa" />
+                <ul id="versioneSubitoAC" class="ac-list d-none" role="listbox"></ul>
+              </div>
+              <div class="ver-vuoto d-none"></div>
+            </div>
+            <div class="ver-campo d-none" data-fonte="autoscout">
+              <label class="ver-lab" for="versioneAutoscout">Versione <span class="ver-fonte">Autoscout</span></label>
+              <div class="ac-wrap">
+                <input type="text" id="versioneAutoscout" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"
+                       class="field-input" placeholder="facoltativa" />
+                <ul id="versioneAutoscoutAC" class="ac-list d-none" role="listbox"></ul>
+              </div>
+              <div class="ver-vuoto d-none"></div>
+            </div>
+            <div class="ver-campo d-none" data-fonte="motoit">
+              <label class="ver-lab" for="versioneMotoit">Versione <span class="ver-fonte">Moto.it</span></label>
+              <div class="ac-wrap">
+                <input type="text" id="versioneMotoit" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"
+                       class="field-input" placeholder="facoltativa" />
+                <ul id="versioneMotoitAC" class="ac-list d-none" role="listbox"></ul>
+              </div>
+              <div class="ver-vuoto d-none"></div>
+            </div>
+          </div>
         </div>
 
         <button type="button" class="adv-toggle" id="advancedToggle" aria-expanded="false">Filtri avanzati</button>

@@ -1375,3 +1375,14 @@ section.search.cat-attivo #searchForm { min-height: 0; }
   .pn-riga { grid-template-columns:1fr; gap:6px; }
   .pn-marche-lista { max-height:120px; }
 }
+
+/* ── Versione: un campo per catalogo ──────────────────────────────────────────
+   Tre fonti, tre nozioni di "versione". Affiancarle invece di mescolarle rende
+   visibile quale filtrera' davvero: e' l'informazione che la lista unica nascondeva. */
+.ver-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; max-width: 900px; }
+.ver-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ver-lab { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; }
+.ver-fonte { font-weight: 600; color: var(--text); }
+.ver-campo .ac-wrap { display: flex; }
+.ver-vuoto { font-size: 0.76rem; color: var(--text-muted); font-style: italic; padding: 2px 2px 0; }
+@media (max-width: 640px) { .ver-grid { grid-template-columns: 1fr; } }

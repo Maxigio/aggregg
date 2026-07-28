@@ -292,6 +292,13 @@ function riconosci(ad, nodo, opts = {}) {
       if (!dichiarata) return 'senza-versione';
       return liv.versione.id === String(opts.versione) ? 'esatto' : null;
     }
+    // L'INSIEME DI ID, quando la versione scelta viene da un altro catalogo. Il testo
+    // serve alla FONTE per concentrare l'insieme; qui si guarda l'id, che non ha le
+    // ambiguita' del testo — "R" nel titolo pesca qualsiasi cosa, come id no.
+    if (opts.versioniAmmesse && opts.versioniAmmesse.size) {
+      if (!dichiarata) return 'senza-versione';
+      return opts.versioniAmmesse.has(liv.versione.id) ? 'esatto' : null;
+    }
     if (nodo.testo) {
       if (!dichiarata) return 'senza-versione';
       return diceIlTesto(nodo.testo, liv.versione.nome) ? 'esatto' : null;
@@ -361,7 +368,8 @@ async function scrapeSubitoApi(params, opts = {}) {
   const nodo = params.subitoNodo || null;
   const gen = new Set((nodo && nodo.generazioni || []).map(g => String(g.id)));
   const titoloCombacia = faTitolo(params.modello);
-  const rico = { generazioni: gen, titoloCombacia, versione: params.versioneSubito || null };
+  const rico = { generazioni: gen, titoloCombacia, versione: params.versioneSubito || null,
+                 versioniAmmesse: params.subitoVersioniAmmesse || null };
   const out = [];
   let truncated = false;
   let total = null;                          // F50 count_all (tetto), additivo

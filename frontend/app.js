@@ -15,9 +15,15 @@ const marcaNote       = document.getElementById('marcaNote');
 const btnCerca        = document.getElementById('btnCerca');
 const regioneSelect   = document.getElementById('regione');
 const modelloSelect   = document.getElementById('modello');
-const versioneRow     = document.getElementById('versioneRow');
-const versioneSelect  = document.getElementById('versione');
-const versioneNote    = document.getElementById('versioneNote');
+const versioniRow     = document.getElementById('versioniRow');
+// UN CAMPO PER CATALOGO. Le tre fonti non chiamano "versione" la stessa cosa: Subito ha
+// un id, Autoscout un testo, Moto.it un codice. La lista unica le mescolava e nascondeva
+// l'unica cosa che conta — quale fonte filtrera' davvero se scegli quella voce.
+const VER_FONTI = [
+  { k: 'subito',    input: 'versioneSubito',    lista: 'versioneSubitoAC' },
+  { k: 'autoscout', input: 'versioneAutoscout', lista: 'versioneAutoscoutAC' },
+  { k: 'motoit',    input: 'versioneMotoit',    lista: 'versioneMotoitAC' },
+];
 const tipoInputs      = document.querySelectorAll('input[name="tipo"]');
 const backToSearch    = document.getElementById('backToSearch');
 const resultsToolbar  = document.getElementById('resultsToolbar');
@@ -53,8 +59,10 @@ let salvati        = [];
 let groupDim       = '';                        // dimensione di raggruppamento attiva ('' = nessuna)
 let modelCache     = {};                        // `${tipo}|${marca}` → [{nome, sites, mmmvAutoscout, slugMotoIt}]
 let selectedModel  = null;                       // modello scelto dalla force-select (con _marca) o null (testo libero)
-let selectedVersion = null;                      // versione Moto.it scelta {nome, code} o null
-let versioniCorrenti = [];                       // versioni del modello attuale (per l'autocomplete)
+// Per ogni fonte: la lista servita da /api/versioni, la voce scelta e il perche' se vuota.
+let versioni = { subito: { lista: [], scelta: null, motivo: null },
+                 autoscout: { lista: [], scelta: null, motivo: null },
+                 motoit: { lista: [], scelta: null, motivo: null } };
 let sortState      = { key: 'prezzo', dir: 'asc' };
 let visibleCols    = ['anno', 'km'];            // colonne opzionali mostrate (default dai filtri usati)
 let lastSources    = null;
@@ -242,8 +250,7 @@ async function init() {
   await populateMarca('auto');
   setupMarcaAutocomplete();
   setupModelloAutocomplete();
-  setupVersioneAutocomplete();
-  document.getElementById('versioneNoteClose')?.addEventListener('click', () => versioneNote?.classList.add('d-none'));
+  for (const f of VER_FONTI) setupVersioneAutocomplete(f);
   validateMarca();
   const daUrl = await applyUrlParams();
   if (!daUrl) ripristinaModo();
@@ -642,7 +649,15 @@ async function loadModels(tipo, marca) {
   return modelCache[key];
 }
 
-function resetVersioneOnly() { selectedVersion = null; versioniCorrenti = []; if (versioneSelect) versioneSelect.value = ''; versioneRow?.classList.add('d-none'); versioneNote?.classList.add('d-none'); }
+function resetVersioneOnly() {
+  for (const f of VER_FONTI) {
+    versioni[f.k] = { lista: [], scelta: null, motivo: null };
+    const el = document.getElementById(f.input);
+    if (el) el.value = '';
+    el?.closest('.ver-campo')?.classList.add('d-none');
+  }
+  versioniRow?.classList.add('d-none');
+}
 function resetModelloVersione() { selectedModel = null; resetVersioneOnly(); }
 
 /**
@@ -658,9 +673,10 @@ function resetModelloVersione() { selectedModel = null; resetVersioneOnly(); }
  */
 async function loadVersioniFor(model) {
   const brand = matchedBrand();
-  versioniCorrenti = [];
+  resetVersioneOnly();
   if (selectedModel) selectedModel._familySlug = model.slugMotoIt || null;
-  if (!brand) { resetVersioneOnly(); return; }
+  if (!brand) return;
+  let data = null;
   try {
     const qs = new URLSearchParams({ tipo: currentTipo(), marca: brand.nome, modello: model.nome });
     // lo slug Moto.it che il menu si porta dietro: copre i modelli che Subito non risolve
@@ -668,21 +684,31 @@ async function loadVersioniFor(model) {
     // il codice Autoscout: serve a leggere il ponte al contrario quando il nome del
     // modello e' quello di AS24 e non una famiglia Subito ("320" sta sotto "Serie 3")
     if (model.mmmvAutoscout) qs.set('mmmvAutoscout', model.mmmvAutoscout);
-    const data = await fetch(`/api/versioni?${qs}`).then(r => r.json());
-    const piu = (data.generazioni || []).length > 1;
-    for (const g of (data.generazioni || [])) {
-      for (const v of g.versioni) {
-        versioniCorrenti.push({
-          ...v,
-          gen: { id: g.id, nome: g.nome },
-          // la nota distingue voci con lo stesso nome in serie diverse
-          nota: [piu ? g.nome : null, v.anni ? `${v.anni.da}–${v.anni.a}` : null].filter(Boolean).join(' · '),
-        });
-      }
+    data = await fetch(`/api/versioni?${qs}`).then(r => r.json());
+  } catch { return; }
+  if (!data || !data.fonti) return;
+
+  let almeno = false;
+  for (const f of VER_FONTI) {
+    const src = data.fonti[f.k] || { versioni: [], motivo: null };
+    versioni[f.k] = { lista: src.versioni || [], scelta: null, motivo: src.motivo || null };
+    const campo = document.getElementById(f.input)?.closest('.ver-campo');
+    if (!campo) continue;
+    const vuoto = campo.querySelector('.ver-vuoto');
+    // Un campo si mostra quando quella fonte ha qualcosa. Quando non ha niente ma la
+    // fonte c'entra col tipo di veicolo, si mostra lo stesso col perche': una casella
+    // sparita muta e' indistinguibile da una che non e' mai esistita.
+    const pertinente = !/solo moto|per le moto/.test(src.motivo || '');
+    if ((src.versioni || []).length) {
+      campo.classList.remove('d-none'); vuoto?.classList.add('d-none'); almeno = true;
+    } else if (pertinente && src.motivo) {
+      campo.classList.remove('d-none'); almeno = true;
+      if (vuoto) { vuoto.textContent = src.motivo; vuoto.classList.remove('d-none'); }
+    } else {
+      campo.classList.add('d-none');
     }
-  } catch { versioniCorrenti = []; }
-  if (versioniCorrenti.length) { versioneRow?.classList.remove('d-none'); versioneNote?.classList.add('d-none'); if (versioneSelect) versioneSelect.value = ''; }
-  else { resetVersioneOnly(); versioneNote?.classList.remove('d-none'); }   // niente versioni → avviso dismissibile (no sparizione muta)
+  }
+  if (almeno) versioniRow?.classList.remove('d-none');
 }
 
 function setupModelloAutocomplete() {
@@ -697,9 +723,8 @@ function setupModelloAutocomplete() {
   };
   const pickModel = async (m) => {
     selectedModel = { ...m, _marca: matchedBrand()?.nome || '' };
-    selectedVersion = null;
     modelloSelect.value = m.nome; close();
-    await loadVersioniFor(m);   // auto E moto: la lista e' unica e vale per entrambi
+    await loadVersioniFor(m);   // riempie i tre campi versione (loro si azzerano da soli)
   };
   const compute = async () => {
     const brand = matchedBrand();
@@ -730,36 +755,54 @@ function setupModelloAutocomplete() {
   modelloSelect.addEventListener('blur', () => setTimeout(close, 150));
 }
 
-function setupVersioneAutocomplete() {
-  const list = document.getElementById('versioneAC');
-  if (!versioneSelect || !list) return;
+/**
+ * Il motore della tendina, uno solo per tutti e tre i campi versione.
+ *
+ * Erano tre copie della stessa funzione in attesa di divergere: la prossima correzione
+ * ne avrebbe toccata una e lasciate indietro le altre. Qui cambia solo DA QUALE lista
+ * pesca e DOVE mette la scelta.
+ */
+function setupVersioneAutocomplete(fonte) {
+  const input = document.getElementById(fonte.input);
+  const list = document.getElementById(fonte.lista);
+  if (!input || !list) return;
   let matches = [], active = -1;
-  const close = () => { list.classList.add('d-none'); list.innerHTML = ''; active = -1; versioneSelect.setAttribute('aria-expanded', 'false'); };
+  const stato = () => versioni[fonte.k];
+  const close = () => { list.classList.add('d-none'); list.innerHTML = ''; active = -1; input.setAttribute('aria-expanded', 'false'); };
+  const etichetta = v => {
+    // La nota non e' decorazione: due voci con lo stesso nome in serie diverse sarebbero
+    // indistinguibili, e sceglieresti a caso. Su Autoscout al suo posto sta il numero di
+    // annunci, che e' l'unica cosa che li distingue davvero.
+    if (v.nota) return v.nota;
+    if (v.annunci != null) return v.annunci + ' annunci';
+    if (v.anni && v.anni.da) return v.anni.da + (v.anni.a ? '–' + v.anni.a : '');
+    return null;
+  };
   const render = () => {
     if (!matches.length) return close();
-    // La nota (serie · anni) non e' decorazione: senza, due voci con lo stesso nome in
-    // serie diverse sono indistinguibili e la scelta e' a caso.
-    list.innerHTML = matches.map((v, i) => `<li class="ac-item${i === active ? ' active' : ''}" role="option" data-i="${i}">`
-      + escapeHtml(v.nome)
-      + (v.nota ? `<span class="ac-nota">${escapeHtml(v.nota)}</span>` : '')
-      + '</li>').join('');
-    list.classList.remove('d-none'); versioneSelect.setAttribute('aria-expanded', 'true');
+    list.innerHTML = matches.map((v, i) => {
+      const n = etichetta(v);
+      return `<li class="ac-item${i === active ? ' active' : ''}" role="option" data-i="${i}">`
+        + escapeHtml(v.nome) + (n ? `<span class="ac-nota">${escapeHtml(n)}</span>` : '') + '</li>';
+    }).join('');
+    list.classList.remove('d-none'); input.setAttribute('aria-expanded', 'true');
   };
-  const pick = v => { selectedVersion = v; versioneSelect.value = v.nome; close(); };
+  const pick = v => { stato().scelta = v; input.value = v.nome; close(); };
   const compute = () => {
-    if (!selectedVersion || acn(selectedVersion.nome) !== acn(versioneSelect.value)) selectedVersion = null;
-    const q = acn(versioneSelect.value);
+    const st = stato();
+    if (!st.scelta || acn(st.scelta.nome) !== acn(input.value)) st.scelta = null;
+    const q = acn(input.value);
     if (q) {
       const scored = [];
-      for (const v of versioniCorrenti) { const n = acn(v.nome); const i = n.indexOf(q); if (i >= 0) scored.push({ v, rank: n.startsWith(q) ? 0 : 1, i, n }); }
+      for (const v of st.lista) { const n = acn(v.nome); const i = n.indexOf(q); if (i >= 0) scored.push({ v, rank: n.startsWith(q) ? 0 : 1, i, n }); }
       scored.sort((a, c) => a.rank - c.rank || a.i - c.i || a.n.localeCompare(c.n));
-      matches = scored.slice(0, 12).map(s => s.v);
-    } else matches = versioniCorrenti.slice(0, 12);
+      matches = scored.slice(0, 12).map(x => x.v);
+    } else matches = st.lista.slice(0, 12);
     active = matches.length ? 0 : -1; render();
   };
-  versioneSelect.addEventListener('input', compute);
-  versioneSelect.addEventListener('focus', compute);
-  versioneSelect.addEventListener('keydown', e => {
+  input.addEventListener('input', compute);
+  input.addEventListener('focus', compute);
+  input.addEventListener('keydown', e => {
     if (list.classList.contains('d-none') || !matches.length) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); active = (active + 1) % matches.length; render(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); active = (active - 1 + matches.length) % matches.length; render(); }
@@ -768,7 +811,7 @@ function setupVersioneAutocomplete() {
     else if (e.key === 'Escape') { close(); }
   });
   list.addEventListener('mousedown', e => { const li = e.target.closest('.ac-item'); if (li) { e.preventDefault(); pick(matches[+li.dataset.i]); } });
-  versioneSelect.addEventListener('blur', () => setTimeout(close, 150));
+  input.addEventListener('blur', () => setTimeout(close, 150));
 }
 
 // ─── Raggruppamento ──────────────────────────────────────────────────────────
@@ -902,7 +945,7 @@ function setSearchMode(mode) {
   btnCerca.textContent = 'Cerca';
   document.getElementById('modello').placeholder =
     currentTipo() === 'moto' ? 'Modello — es. MT-07 (opzionale)' : 'Modello — es. 318d (opzionale)';
-  if (ricambi) document.getElementById('versioneRow').classList.add('d-none');   // niente riga Versione Moto.it nei ricambi
+  if (ricambi) versioniRow?.classList.add('d-none');   // nei ricambi la versione non c'entra
 }
 
 // ═══ Modo Ricambi — pipeline parti SEPARATA (multi-fonte, full-width) ═══════════
@@ -1651,25 +1694,29 @@ async function doSearch() {
     if (selectedModel.mmmvAutoscout) params.mmmvAutoscout = selectedModel.mmmvAutoscout;
     const motoSlug = selectedModel._familySlug || selectedModel.slugMotoIt;   // famiglia risolta (Lazy-T2) o slug diretto
     if (motoSlug) params.motoitModelSlug = motoSlug;
-    // VERSIONE — vale per auto e moto, e ogni fonte riceve quello che sa usare:
-    //   Subito    l'id della versione, che l'annuncio dichiara → filtro esatto
-    //   Moto.it   il codice `bike=`, che filtra alla fonte
-    //   Autoscout gli anni, quando la versione li ha (la versione li' e' solo testo)
-    // Niente piu' salto di Moto.it quando la versione non e' scelta: adesso tutte e tre
-    // sanno cos'e' una versione, e saltarne una sbilanciava il confronto.
-    if (selectedVersion && acn(selectedVersion.nome) === acn(versioneSelect?.value || '')) {
-      if (selectedVersion.subito) params.versioneSubito = selectedVersion.subito;
-      // Il NOME serve ad Autoscout, che un catalogo di versioni non ce l'ha: li' la
-      // versione e' testo, e il suo campo nativo cerca dentro quel testo.
-      if (selectedVersion.nome) params.versioneNome = selectedVersion.nome;
-      // Il nome che Autoscout da' a questa versione nel suo catalogo. Non lo traduciamo
-      // noi: e' la voce che l'utente ha scelto, e nel campo di Autoscout vale esatta.
-      if (selectedVersion.as24) params.versioneAs24 = selectedVersion.as24;
-      if (selectedVersion.motoit && selectedVersion.motoit.length) params.motoitBikeCode = selectedVersion.motoit[0];
-      if (selectedVersion.anni) {
-        if (selectedVersion.anni.da && !params.annoMin) params.annoMin = String(selectedVersion.anni.da);
-        if (selectedVersion.anni.a && !params.annoMax) params.annoMax = String(selectedVersion.anni.a);
-      }
+    // VERSIONE — ogni campo manda la sua, nella lingua che quella fonte parla:
+    //   Subito     l'id del catalogo → filtro nativo `cv`/`bv`
+    //   Autoscout  il testo          → il suo campo `modelVersionInput`
+    //   Moto.it    il codice         → parametro `bike=`
+    // Sono indipendenti: puoi riempirne uno, due o tutti e tre. Quello che lasci vuoto
+    // NON viene indovinato da un altro qui — se il server puo' aiutare lo fa lui, e la
+    // riga lo dichiara ("versione non verificata").
+    const scelta = f => {
+      const st = versioni[f.k];
+      const el = document.getElementById(f.input);
+      if (!st || !st.scelta || !el) return null;
+      return acn(st.scelta.nome) === acn(el.value) ? st.scelta : null;   // testo cambiato a mano = scelta decaduta
+    };
+    const vSub = scelta(VER_FONTI[0]), vAs = scelta(VER_FONTI[1]), vMot = scelta(VER_FONTI[2]);
+    if (vSub) { params.versioneSubito = vSub.id; params.versioneNome = vSub.nome; }
+    if (vAs)  { params.versioneAs24 = vAs.testo; if (!params.versioneNome) params.versioneNome = vAs.nome; }
+    if (vMot) params.motoitBikeCode = vMot.code;
+    // Gli anni della versione restringono anche le altre fonti, ma non calpestano
+    // quelli che hai messo a mano nei filtri.
+    const anni = (vMot && vMot.anni) || (vSub && vSub.anni) || null;
+    if (anni) {
+      if (anni.da && !params.annoMin) params.annoMin = String(anni.da);
+      if (anni.a  && !params.annoMax) params.annoMax = String(anni.a);
     }
   }
   Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });
@@ -3548,9 +3595,15 @@ async function applyUrlParams() {
 
 // Ripristino dell'area di lavoro. Si applica solo a un modo valido e diverso dal predefinito:
 // un valore sporco in localStorage non deve poter bloccare l'app fuori dalla ricerca.
+/** Una modalita' esiste per l'utente solo se ha il suo bottone nella barra. */
+const modoRaggiungibile = m => !!m && !!document.querySelector(`#modeToggle .mode-btn[data-mode="${CSS.escape(m)}"]`);
+
 function ripristinaModo() {
   let m = null, t = null;
   try { m = localStorage.getItem('amrModo'); t = localStorage.getItem('amrModoTipo'); } catch (_) {}
+  // Una modalita' tolta dalla barra non deve tornare da localStorage: chi l'aveva salvata
+  // ci resterebbe dentro senza avere il bottone per uscirne.
+  if (!modoRaggiungibile(m)) return;
   if (m === 'ricambi' || area(m)) return selectPrimary(m);
   if (m === 'cerca' && t === 'moto') return selectPrimary('moto');
 }
