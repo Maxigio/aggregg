@@ -22,23 +22,52 @@ const PAGE_SIZE = 50;
 const MAX_PAGES = 2;          // 2×50 = 100 (più del path Playwright: 3×~17)
 const TIMEOUT_MS = 15000;
 
-// Query ridotta ai soli campi mappati (+ media.images webp per lo slider; no leasing/360).
+/**
+ * Query ridotta ai soli campi mappati (+ media.images webp per lo slider; no leasing/360).
+ *
+ * LA SECONDA META' DEI CAMPI NON COSTA UNA RICHIESTA IN PIU'. E' la stessa POST di prima:
+ * chiedere venti campi o quaranta cambia il peso della risposta, non il conto delle chiamate.
+ * L'introspezione dello schema e' aperta, quindi non si tira a indovinare — e ogni campo qui
+ * sotto e' stato MISURATO su 100 annunci italiani veri prima di essere aggiunto:
+ *
+ *   equipment.as24 58%   description 86%   evaluation 34%   leadsRange 100%
+ *   interior 86%   emptyWeight 60%   taxDeductible 100%   accidentFree 100%
+ *   manutenzione (revisione/cinghia/tagliandi) 2-8% — c'e', ma quasi nessuno la compila
+ *
+ * NON chiesti, perche' misurati VUOTI su tutti e 100: germanHsnTsn, modelYear,
+ * suggestedRetail, superDeal, carpassMileageUrl, costModel, dpvStatistics (favorites e
+ * interaction rispondono 0 sempre). Meglio non chiederli che mostrarli sempre vuoti.
+ */
 const QUERY = `query Search($v:Vehicle_,$loc:Location_,$pr:Price_,$m:Metadata_,$cu:Customer_){
   search{ listings(vehicle:$v, location:$loc, price:$pr, metadata:$m, customer:$cu, locale:it_IT){
     listings{ details(withFallbackAttributes:true){
       webPage
+      description
       publication{ createdTimestampWithOffset }
-      prices{ public{ amountInEUR{ raw } onRequestOnly } }
+      prices{ public{ amountInEUR{ raw } netAmountInEUR{ raw } vatRate negotiable taxDeductible onRequestOnly
+                      evaluation{ category median equipmentCount } } }
+      warranty{ warrantyExists generic{ durationInMonth{ raw } } }
+      statistics{ leadsRange }
       location{ city zip }
       seller{ type id companyName }
       media{ images(with360Images:false, first:5){ __typename ... on StandardImage{ formats{ webp{ size420x315 size800x600 } } } } }
       vehicle{
-        classification{ make{ formatted } model{ formatted } modelVersionInput }
-        condition{ mileageInKm{ raw } firstRegistrationDate{ formatted } numberOfPreviousOwnersExtended{ raw } damage{ isCurrentlyDamaged } }
+        classification{ make{ formatted } model{ formatted } modelVersionInput
+                        modelGeneration{ formatted } modelVariant{ formatted } motorType{ formatted } trimLine{ formatted } }
+        condition{ mileageInKm{ raw } firstRegistrationDate{ formatted } numberOfPreviousOwnersExtended{ raw }
+                   nonSmoking damage{ isCurrentlyDamaged accidentFree isRoadworthy } }
+        maintenance{ nextVehicleSafetyInspection{ formatted } lastBeltServiceDate{ formatted }
+                     hasFullServiceHistory{ formatted } lastTechnicalServiceDate{ formatted } }
+        equipment{ as24{ id{ formatted } equipmentCategory{ formatted } } }
+        interior{ numberOfSeats upholstery{ formatted } }
         engine{ transmissionType{ formatted } engineDisplacementInCCM{ raw } power{ hp{ raw } } numberOfCylinders }
         fuels{ primary{ type{ raw formatted } } fuelCategory{ formatted } }
         bodyColor{ formatted }
         bodyType{ formatted }
+        emptyWeight{ raw }
+        alloyWheelInches{ raw }
+        originalMarket{ formatted }
+        productionDate{ formatted }
         usageState
       }
     } }
@@ -200,6 +229,42 @@ function finisci(v, params, page, opts) {
 
 const yearOf = s => { const y = parseInt(String(s || '').split('/').pop(), 10); return Number.isFinite(y) ? y : null; };
 
+// Mezzo schema AS24 e' fatto di { formatted } — questa e' la scorciatoia per leggerli
+// senza scrivere venti volte lo stesso `x && x.formatted || null`.
+const fmt = x => (x && typeof x.formatted === 'string' && x.formatted.trim()) || null;
+
+/**
+ * Il peso a vuoto arriva IN DUE UNITA' DIVERSE, nello stesso campo e nella stessa
+ * risposta. Misurato su 65 Golf: 34 valori sono tonnellate (1.441, 1.2, 1.081) e 31
+ * sono chilogrammi (1322, 1413, 1760). Senza normalizzare, la scheda scriveva
+ * "1,441 kg" accanto a "1.760 kg" e sembravano due auto di peso simile.
+ *
+ * Regola: si converte solo se c'e' una parte decimale E il numero sta sotto 10. Il
+ * secondo pezzo serve per le moto — uno scooter da 90,5 kg ha la virgola ma non e'
+ * mezza tonnellata, e moltiplicarlo darebbe 90 quintali.
+ */
+function pesoKg(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return (n < 10 && !Number.isInteger(n)) ? Math.round(n * 1000) : Math.round(n);
+}
+
+// Il testo dell'annuncio: <br> diventa una riga vera, il resto dei tag sparisce, le
+// entita' tornano lettere. Poi chi lo mostra lo escapa: qui si toglie il markup, non
+// si autorizza a stamparlo.
+function testoPulito(s) {
+  if (typeof s !== 'string' || !s.trim()) return null;
+  const t = s
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'")
+    .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return t || null;
+}
+
 const DAMAGED = new Set(['HadAccident', 'Wreck']);
 
 function mapListing(node, opts = {}) {
@@ -290,6 +355,71 @@ function mapListing(node, opts = {}) {
     nuovo: usage ? usage === 'New' : null,
     danni,   // nativo damage.isCurrentlyDamaged, fallback usageState
     posted_at: (dt.publication && dt.publication.createdTimestampWithOffset) || null,
+
+    /**
+     * QUELLO CHE ERA GIA' NELLA RISPOSTA E NON LEGGEVAMO. Stessa richiesta, campi in piu'.
+     */
+    // Il testo arriva con dentro l'HTML del venditore: misurato, 52 descrizioni su 83
+    // contengono <br />. A schermo va escapato, quindi senza questo si leggerebbe
+    // "<br />" scritto per esteso in mezzo alle frasi.
+    descrizione: testoPulito(dt.description),
+    // IVA: `taxDeductible` dice se chi la detrae paga davvero meno. `netAmountInEUR` e
+    // `vatRate` ci sono solo quando il venditore li espone (12% degli annunci).
+    ivaEsposta: pub && typeof pub.taxDeductible === 'boolean' ? pub.taxDeductible : null,
+    prezzoNetto: pub && pub.netAmountInEUR ? pub.netAmountInEUR.raw : null,
+    ivaAliquota: pub && pub.vatRate != null ? Number(pub.vatRate) : null,
+    trattabile: pub && typeof pub.negotiable === 'boolean' ? pub.negotiable : null,
+    /**
+     * LA VALUTAZIONE DI AUTOSCOUT, che e' un giudizio LORO e va detto che e' loro.
+     * `median` e' la mediana di mercato che calcolano per veicoli confrontabili;
+     * `category` e' il voto 1-6 che ne esce; `equipmentCount` quanti optional hanno
+     * contato. C'e' su un annuncio su tre — sugli altri e' assente, non e' "nella media".
+     */
+    valutazione: (() => {
+      const e = pub && pub.evaluation;
+      if (!e || e.median == null) return null;
+      return { mediana: e.median, categoria: e.category ?? null, optionalContati: e.equipmentCount ?? null };
+    })(),
+    /**
+     * DOMANDA. `leadsRange` e' quanti contatti sta ricevendo l'annuncio, a fasce
+     * (Zero / Some / Many). Non e' un numero e non va spacciato per tale; misurato su
+     * 100 annunci: Zero 59, Some 39, Many 2.
+     */
+    contatti: (dt.statistics && dt.statistics.leadsRange) || null,
+    garanziaMesi: (() => {
+      const w = dt.warranty;
+      if (!w) return null;
+      const g = w.generic && w.generic.durationInMonth;
+      if (g && g.raw != null) return g.raw;
+      return w.warrantyExists ? 0 : null;   // 0 = c'e' garanzia ma senza durata dichiarata
+    })(),
+    // Stato dichiarato: `accidentFree` sta su tutti gli annunci, gli altri due quasi mai.
+    // `hasRepairedDamages` non si chiede: misurato vuoto su 200 annunci su 200, e un
+    // campo che non risponde mai e' peso nella richiesta e una riga vuota a schermo.
+    senzaIncidenti: cond.damage && typeof cond.damage.accidentFree === 'boolean' ? cond.damage.accidentFree : null,
+    marciante: cond.damage && typeof cond.damage.isRoadworthy === 'boolean' ? cond.damage.isRoadworthy : null,
+    nonFumatore: typeof cond.nonSmoking === 'boolean' ? cond.nonSmoking : null,
+    // Manutenzione: pochi la compilano (2-8%), ma quando c'e' vale soldi — la cinghia
+    // e la revisione in scadenza sono due voci di costo che si vedono solo qui.
+    revisioneScadenza: fmt(v.maintenance && v.maintenance.nextVehicleSafetyInspection),
+    cinghiaData: fmt(v.maintenance && v.maintenance.lastBeltServiceDate),
+    tagliandi: fmt(v.maintenance && v.maintenance.hasFullServiceHistory),
+    ultimoTagliando: fmt(v.maintenance && v.maintenance.lastTechnicalServiceDate),
+    // Gli optional, in italiano e con la categoria. E' la lista che il venditore ha
+    // spuntato inserendo l'annuncio: 42 voci su un'auto ben compilata.
+    optional: ((v.equipment && v.equipment.as24) || [])
+      .map(e => ({ nome: fmt(e && e.id), categoria: fmt(e && e.equipmentCategory) }))
+      .filter(e => e.nome),
+    posti: (v.interior && v.interior.numberOfSeats) ?? null,
+    tappezzeria: fmt(v.interior && v.interior.upholstery),
+    pesoVuoto: pesoKg(v.emptyWeight && v.emptyWeight.raw),
+    cerchiPollici: v.alloyWheelInches && v.alloyWheelInches.raw != null ? v.alloyWheelInches.raw : null,
+    mercatoOrigine: fmt(v.originalMarket),          // dice se e' un import
+    dataProduzione: fmt(v.productionDate),
+    generazione: fmt(c.modelGeneration),
+    variante2: fmt(c.modelVariant),
+    motore: fmt(c.motorType),
+    allestimento: fmt(c.trimLine),
   };
   // raw_json (keep-last) senza `media`: gli URL immagine non vanno persistiti
   // (servono solo al display on-search) → evita di gonfiare raw_json sui crawl profondi.
@@ -450,3 +580,5 @@ module.exports.SPLIT_OVER = SPLIT_OVER;
 module.exports._countQueryString = countQueryString;    // PURO, testabile senza rete
 module.exports._parseTotalCount = parseTotalCount;      // PURO, testabile senza rete
 module.exports.combaciaModello = combaciaModello;       // PURO: modello dichiarato vs cercato
+module.exports._testoPulito = testoPulito;              // PURO: testo annuncio senza markup
+module.exports._mapListing = mapListing;                // PURO: nodo GraphQL → risultato

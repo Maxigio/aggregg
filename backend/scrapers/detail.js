@@ -104,18 +104,96 @@ function motoitImages(html) {
   return out;
 }
 
+// Le entita' HTML che compaiono davvero in queste pagine. Senza, "dell&#039;acquirente"
+// finisce a schermo com'e' scritto. Le accentate ci sono perche' un "Sì" scritto
+// `S&igrave;` non verrebbe riconosciuto come un sì, e la bandierina risulterebbe assente
+// invece che vera — cioe' il tipo di errore che non fa rumore.
+const ENTITA = [[/&#0?39;|&apos;/g, "'"], [/&quot;/g, '"'], [/&nbsp;/g, ' '],
+  [/&lt;/g, '<'], [/&gt;/g, '>'], [/&agrave;/g, 'à'], [/&egrave;/g, 'è'], [/&eacute;/g, 'é'],
+  [/&igrave;/g, 'ì'], [/&ograve;/g, 'ò'], [/&ugrave;/g, 'ù'], [/&amp;/g, '&']];
+const deEntStr = s => ENTITA.reduce((acc, [re, ch]) => acc.replace(re, ch), String(s == null ? '' : s));
+const deEnt = s => (s == null ? null : (deEntStr(s).trim() || null));
+
+const MESI_IT = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
+  'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+
 // ─── Moto.it: scheda testuale (tag-strip + label→valore) + foto ───────────────
+/**
+ * QUELLO CHE LA PAGINA DICE E NON LEGGEVAMO. Stessa richiesta di prima: e' la
+ * pagina-annuncio che l'app scarica gia' quando si apre il pannello di un annuncio
+ * Moto.it. Prendevamo quattro campi su una dozzina.
+ *
+ * DUE COSE VALGONO PIU' DELLE ALTRE:
+ *  - la DATA DI INSERIMENTO. Su Moto.it `posted_at` era null, quindi per un annuncio
+ *    Moto.it non si poteva dire da quanto e' in vendita. La pagina la scrive per esteso
+ *    ("inserito il 15 luglio 2026 ore 00:10").
+ *  - il "tipo offerta": dice CHI PAGA il passaggio di proprieta'. E' una voce da
+ *    centinaia di euro che cambia il prezzo vero e non sta in nessun altro campo.
+ *
+ * Le bandierine (incidentata, depotenziata, uso pista, ABS…) si cercano SOLO dentro il
+ * blocco della scheda: "Abs" da solo compare anche nella scheda tecnica del modello piu'
+ * in basso, e la' vorrebbe dire un'altra cosa.
+ *
+ * NON si prende il "Referente: <nome>": e' il nome di una persona, non serve a niente qui.
+ */
 function parseMotoit(html) {
   const t = stripTags(html);
   const grab = re => { const x = t.match(re); return x ? x[1] : null; };
+
+  const i = t.indexOf('Tipo offerta');
+  const blocco = i >= 0 ? deEntStr(t.slice(i, i + 600)) : '';
+  // `\b` dopo "Sì" NON funziona: `ì` non e' un carattere-parola per le regex, quindi fra
+  // "ì" e lo spazio non c'e' confine di parola e il match fallisce. Su una pagina con
+  // "Sì" la bandierina risultava assente invece che vera. Qui si chiede invece che dopo
+  // non ci sia un'altra lettera, che e' quello che si voleva dire.
+  const flag = et => { const m = blocco.match(new RegExp(et + '\\s+(S[iì]|No)(?![\\p{L}\\d])', 'iu')); return m ? /^s/i.test(m[1]) : null; };
+  const campo = (et, fine) => deEnt((blocco.match(new RegExp(et + '\\s+(.{3,80}?)\\s+(?:' + fine + ')', 'i')) || [])[1]);
+
+  // "15 luglio 2026 ore 00:10" → ISO. Il mese e' una parola italiana, non un numero.
+  const ins = t.match(/Annuncio nr\.\s*(\d+)\s+inserito il\s+(\d{1,2})\s+(\p{L}+)\s+(\d{4})(?:\s+ore\s+(\d{1,2})[:.](\d{2}))?/iu);
+  let inserito = null;
+  if (ins) {
+    const mIdx = MESI_IT.indexOf(String(ins[3]).toLowerCase());
+    if (mIdx >= 0) {
+      const p2 = n => String(n).padStart(2, '0');
+      inserito = `${ins[4]}-${p2(mIdx + 1)}-${p2(ins[2])}T${p2(ins[5] || 0)}:${p2(ins[6] || 0)}:00`;
+    }
+  }
+
+  const sel = html.match(/class="mseller-name"[\s\S]{0,300}?href="(https:\/\/dealer\.moto\.it\/[^"]+)"[^>]*>\s*([^<]{2,60}?)\s*</i);
+
   return {
-    cambio:       grab(/Cambio\s+([A-Za-zàèéìòù ]{3,20})/i),
+    // UNA parola, non "fino a venti caratteri con spazi": quella regex leggeva
+    // "automatico Y" perche' dopo il valore comincia il nome della marca.
+    cambio:       grab(/Cambio\s+([A-Za-zàèéìòù]{3,20})/i),
     potenzaCv:    toInt(grab(/Potenza\s+([\d.,]+)\s*(?:cv|hp)/i)),
     cilindrata:   toInt(grab(/Cilindrata\s+([\d.]+)\s*c\.?\s*c/i)),
     proprietari:  toInt(grab(/Proprietari precedenti\s+(\d+)/i)),
     allestimento: null,
     revisione:    null,
     immagini:     motoitImages(html),
+
+    tipoOfferta:  campo('Tipo offerta', 'Garanzia|Incidentata|Depotenziata|Solo uso'),
+    garanzia:     campo('Garanzia', 'Incidentata|Depotenziata|Solo uso'),
+    incidentata:  flag('Incidentata'),
+    depotenziata: flag('Depotenziata'),
+    usoPista:     flag('Solo uso pista'),
+    abs:          flag('Abs'),
+    special:      flag('Special'),
+    elettrica:    flag('Elettrica'),
+
+    posted_at:    inserito,
+    numeroAnnuncio: ins ? ins[1] : null,
+    comune:       deEnt(grab(/Luogo\s+([A-Za-zÀ-ÿ' ]{2,40}\([A-Z]{2}\))/)),
+
+    // Il venditore con il link alla sua VETRINA: e' l'aggancio che mancava per mettere
+    // Moto.it fra le fonti della sezione Competitor (l'API di ricerca non filtra per
+    // venditore, la pagina-annuncio invece dice qual e').
+    venditoreNome: sel ? deEnt(sel[2]) : null,
+    vetrinaUrl:    sel ? sel[1] : null,
+    venditoreAnnunciPubblicati: toInt(grab(/Annunci pubblicati\s+([\d.]+)/i)),
+    venditoreAnnunciOnline:     toInt(grab(/Annunci online\s+([\d.]+)/i)),
+    venditoreDal:               toInt(grab(/Utente di Moto\.it dal\s+(\d{4})/i)),
   };
 }
 
@@ -183,4 +261,4 @@ async function getDetail(url) {
   return p;
 }
 
-module.exports = { getDetail, _hostOk: hostOk, _motoitImages: motoitImages };
+module.exports = { getDetail, _hostOk: hostOk, _motoitImages: motoitImages, _parseMotoit: parseMotoit };

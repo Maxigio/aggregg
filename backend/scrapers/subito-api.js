@@ -62,6 +62,24 @@ function subFeat(ad, parentLabel, subLabel) {
 
 // CV dal valore nativo Potenza ("60 kW / 82 Cv" → 82). null se assente/solo-kW.
 const cvFrom = s => { const m = String(s == null ? '' : s).match(/(\d+)\s*Cv/i); return m ? parseInt(m[1], 10) : null; };
+// kW dallo stesso valore. Non e' un di piu': l'IPT del passaggio di proprieta' gira sui kW,
+// che oggi vengono STIMATI dai CV, e sulla soglia dei 53 kW cambia la categoria di tariffa.
+// Subito i kW ce li dice (chiave nativa "51/69" = kW/CV), quindi smettiamo di stimarli.
+const kwFrom = s => { const m = String(s == null ? '' : s).match(/(\d+)\s*kW/i); return m ? parseInt(m[1], 10) : null; };
+
+// La chiave grezza di una feature, quando vale piu' del testo: 'Garanzia' ha
+// key="12" e value="12 mesi", e il numero e' quello che serve per fare i conti.
+function featKey(ad, label) {
+  const f = (ad.features || []).find(x => x.label === label);
+  const v = f && f.values && f.values[0];
+  return v && v.key != null ? String(v.key) : null;
+}
+// Le feature booleane native rispondono "Sì"/"No" (key "1"/"0"). Assente → null, che
+// e' diverso da "No": un annuncio che non dichiara l'IVA non e' un annuncio senza IVA.
+function featBool(ad, label) {
+  const k = featKey(ad, label);
+  return k == null ? null : k === '1';
+}
 
 const digits = s => { const m = String(s == null ? '' : s).replace(/\./g, '').match(/\d+/); return m ? parseInt(m[0], 10) : null; };
 const yearOf = s => { const y = parseInt(String(s || '').split('/').pop(), 10); return Number.isFinite(y) && y > 1900 ? y : null; };
@@ -103,6 +121,7 @@ function mapAd(ad, opts = {}) {
     venditoreId: (ad.advertiser && ad.advertiser.user_id) ? String(ad.advertiser.user_id) : null,
     venditoreNome: (ad.advertiser && (ad.advertiser.shop_name || ad.advertiser.name)) || null,
     potenzaCv: cvFrom(feat(ad, 'Potenza')),
+    potenzaKw: kwFrom(feat(ad, 'Potenza')),
     // Specs ricche NATIVE (già nel payload, zero richieste extra); null se assenti.
     colore: feat(ad, 'Colore'),
     carrozzeria: feat(ad, 'Carrozzeria') || feat(ad, 'Tipologia'),   // auto / moto
@@ -110,6 +129,28 @@ function mapAd(ad, opts = {}) {
     posti: digits(feat(ad, 'Posti')),
     classeEmissioni: feat(ad, 'Classe emissioni'),
     neopatentati: neo == null ? null : neo === 'Sì',
+    /**
+     * ROBA CHE ERA GIA' NELLA RISPOSTA E BUTTAVAMO. Nessuna richiesta in piu': stesso
+     * payload di prima, mappato fino in fondo. Misurato su 100 annunci auto veri:
+     *   Garanzia 38%, Iva esposta 24%, Mese di immatricolazione 100%, spedizione 71%,
+     *   Ref. ~50% (solo concessionari), testo 86%, comune 100%.
+     */
+    // Per un operatore l'IVA esposta e' il prezzo vero: a parita' di cartellino, con l'IVA
+    // esposta il costo per chi la detrae e' un altro numero. Assente = non dichiarato.
+    ivaEsposta: featBool(ad, 'Iva esposta'),
+    garanziaMesi: (() => { const k = featKey(ad, 'Garanzia'); const n = k == null ? NaN : parseInt(k, 10); return Number.isFinite(n) ? n : null; })(),
+    // Il MESE di immatricolazione, non solo l'anno: fra gennaio e dicembre dello stesso
+    // anno ballano dodici mesi di eta' e di garanzia residua.
+    mese: (() => { const k = featKey(ad, 'Mese di immatricolazione'); const n = k == null ? NaN : parseInt(k, 10); return n >= 1 && n <= 12 ? n : null; })(),
+    spedizione: featBool(ad, 'Disponibile alla spedizione'),
+    // Il codice di magazzino del venditore: e' come lui chiama quel veicolo nel suo
+    // gestionale, e permette di riconoscere lo stesso mezzo riesposto.
+    refVenditore: feat(ad, 'Ref.'),
+    descrizione: typeof ad.body === 'string' && ad.body.trim() ? ad.body.trim() : null,
+    // Il COMUNE, non la provincia — con il codice ISTAT, che e' la chiave con cui si
+    // aggancia qualunque dato pubblico territoriale.
+    comune: (ad.geo && ad.geo.town && ad.geo.town.value) || null,
+    istat: (ad.geo && ad.geo.town && ad.geo.town.istat) || null,
     // Immagini NATIVE (già nel payload, zero richieste extra): URL webp dalla CDN
     // costruiti dal cdn_base_url + rule (thumb mobile per la lista, fullscreen per lo slider).
     immagini: (Array.isArray(ad.images) ? ad.images : [])
