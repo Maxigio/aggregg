@@ -1562,12 +1562,59 @@ section.search.cat-attivo #searchForm { min-height: 0; }
    colonna in larghezza. Chiuso a quattro righe, il resto si legge sulla scheda originale. */
 .reg-testo { font-size: 0.8rem; line-height: 1.45; margin: 5px 0 0; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-.reg-testo-min { color: var(--text-muted); -webkit-line-clamp: 2; line-clamp: 2; }
-/* La targhetta della lingua: il testo lungo dell'RDW e' in olandese e va detto, non
-   fatto passare per italiano tradotto male. */
-.reg-lang { display: inline-block; font-size: 0.64rem; text-transform: uppercase; letter-spacing: .06em;
-  border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; margin-right: 5px; color: var(--text-muted); vertical-align: 1px; }
 .reg-omo { font-size: 0.74rem; margin: 5px 0 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .reg-omo span { font-family: inherit; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-right: 6px; }
 .reg-card-f { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 5px; font-size: 0.74rem; color: var(--text-muted); }
 .reg-rif { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; opacity: .8; }
+
+/* ── ADD ON: le integrazioni esterne, ultimo gruppo della scheda tecnica ──────
+   Stessa intestazione di MOTORE e PRESTAZIONI (.veh-grp), dentro i tre blocchi
+   richiudibili con la loro fonte scritta. Le specifiche descrivono il veicolo, questi
+   dicono cosa gli succede intorno: stanno insieme ma non si mescolano. */
+/* Tre blocchi impilati lasciavano mezza scheda vuota su schermo largo. In griglia si
+   affiancano e occupano la larghezza che c'e'; sotto i 700px tornano in colonna da soli.
+   `align-items:start` perche' aprendone uno non devono allungarsi anche gli altri, e la
+   riga in piu' della descrizione non deve spostare i vicini. */
+/* `.veh-grp-body` e' GIA' una griglia a colonne (le righe delle specifiche si incolonnano
+   da sole): senza questa riga il blocco finiva dentro UNA colonna da 273px e i tre
+   riquadri, che ne chiedono 290, sfondavano il loro stesso contenitore. Prende la riga
+   intera, e la griglia qui sotto lavora sulla larghezza vera. */
+.veh-addon { grid-column: 1 / -1; padding: 6px 0 6px; display: grid; gap: 4px 20px; align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+/* Nella griglia ogni blocco e' una colonna a se': il filo sopra separava dal blocco
+   precedente, che ora sta di fianco e non sopra. */
+.veh-addon .mini { border-top: 0; margin-top: 0; min-width: 0; }
+.veh-addon .mini-b { padding-bottom: 4px; }
+/* Il blocco richiami e' il piu' largo: quando c'e' spazio si prende due colonne, cosi'
+   le due fonti stanno affiancate invece di incolonnarsi in una striscia stretta. */
+@media (min-width: 900px) { .veh-addon .mini[data-mini="veh-rich"] { grid-column: span 2; } }
+/* I comandi del carburante su una riga sola, e il bottone che non si schiaccia. */
+.veh-costo-ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.veh-costo-ctrl .veh-carb-prov { min-width: 0; flex: 1 1 120px; }
+.veh-carb-calc { flex: none; font-size: 0.78rem; font-weight: 600; color: var(--accent);
+  background: var(--accent-weak); border: 1px solid var(--accent); border-radius: var(--r);
+  padding: 5px 12px; cursor: pointer; }
+.veh-carb-calc:hover { background: var(--accent); color: #fff; }
+@media (max-width: 860px) { .veh-carb-calc { min-height: 38px; } }
+
+.veh-rich { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px 18px; }
+.veh-rich-b { min-width: 0; }
+.veh-rich-h { font-size: 0.74rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px; }
+.veh-rich-h b { color: var(--accent); font-weight: 700; }
+.veh-rich-r { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px dotted var(--line); font-size: 0.8rem; }
+/* La categoria puo' essere lunga ("Sicurezza passeggeri (airbag, cinture)"): si accorcia
+   invece di spingere fuori la data, che e' la parte che si legge a colpo d'occhio. */
+.veh-rich-cat { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.veh-rich-meta { flex: none; color: var(--text-muted); font-size: 0.76rem; }
+.veh-rich-att { font-size: 0.8rem; color: var(--text-muted); padding: 4px 0; }
+.veh-rich-fonte { grid-column: 1 / -1; font-size: 0.72rem; line-height: 1.45; color: var(--text-muted); border-top: 1px solid var(--line); padding-top: 6px; }
+.veh-rich-fonte b { color: var(--text); font-weight: 600; }
+
+/* Il titolo della scheda e la riga dell'ADD ON sono LINK al richiamo originale: senza il
+   testo del guasto a schermo, quello e' l'unico modo di leggerlo. Restano righe, non
+   diventano bottoni: cambia solo che si possono aprire. */
+.reg-cat-link, .reg-cat-link:hover { color: var(--accent); text-decoration: none; }
+.reg-cat-link:hover { text-decoration: underline; }
+.veh-rich-link { color: inherit; text-decoration: none; }
+.veh-rich-link:hover { color: var(--accent); text-decoration: none; }
+.veh-rich-link:hover .veh-rich-cat { text-decoration: underline; }

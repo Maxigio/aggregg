@@ -325,8 +325,32 @@ async function init() {
     if (genCard) { switchVehGen(genCard.dataset.slug); return; }
     const motoCard = e.target.closest('.veh-moto-card');   // griglia motorizzazioni → scegli
     if (motoCard) { vehSelUrl = motoCard.dataset.url; renderVehScheda(); fetchVehSpecs(vehSelUrl); return; }
+    // "Calcola" del costo carburante: rifa' il conto con provincia e km scritti ORA.
+    // Il conto si aggiorna gia' da solo mentre si cambia, ma senza un bottone non si
+    // capisce che e' successo — e chi ha appena scritto i km si aspetta di premere.
+    if (e.target.closest('.veh-carb-calc')) {
+      const sel = vehSchedaEl.querySelector('.veh-carb-prov');
+      if (sel) { try { localStorage.setItem('amrCarbProvincia', sel.value); } catch (_) {} }
+      const km = vehSchedaEl.querySelector('.veh-carb-km');
+      if (km) {
+        const n = carbKmValido(km.value);
+        try {
+          if (n >= KM_MIN && n <= KM_MAX) localStorage.setItem('amrCarbKm', String(n));
+          else localStorage.removeItem('amrCarbKm');
+        } catch (_) {}
+      }
+      vehCostoAggiorna();
+      return;
+    }
     const grpHead = e.target.closest('.veh-grp-head');   // sezione accordion interna
-    if (grpHead) { grpHead.parentElement.classList.toggle('veh-collapsed'); return; }
+    if (grpHead) {
+      const grp = grpHead.parentElement;
+      grp.classList.toggle('veh-collapsed');
+      // ADD ON ricorda se e' aperto: il ricalcolo del costo ridisegna il corpo della
+      // scheda, e senza memoria il gruppo si richiudeva sotto le mani.
+      if (grp.dataset.addon) vehAddonAperto = !grp.classList.contains('veh-collapsed');
+      return;
+    }
     const head = e.target.closest('.rc-sched-head'); if (!head) return;
     const g = head.closest('.rc-group'); g.classList.toggle('collapsed'); vehSchedaCollapsed = g.classList.contains('collapsed');
     const s = vehSpecs[vehSelUrl];
@@ -3212,7 +3236,7 @@ function hideResults() {
 
 // ─── Scheda tecnica veicolo (auto-data.net) — highlighted, collassabile, sopra gli annunci ──
 let vehData = null, vehSpecs = {}, vehSchedaCollapsed = false, vehSelUrl = null, vehGen = 0;   // vehGen: token anti-race — scarta risposte di ricerche/generazioni superate
-function clearVehScheda() { vehGen++; vehData = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; const el = document.getElementById('vehicleScheda'); if (el) el.innerHTML = ''; }   // vehGen++ invalida le fetch in volo
+function clearVehScheda() { vehGen++; vehData = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; vehRichiami = null; vehAddonAperto = false; const el = document.getElementById('vehicleScheda'); if (el) el.innerHTML = ''; }   // vehGen++ invalida le fetch in volo; i richiami sono del veicolo cercato, non si tengono
 
 async function loadVehScheda() {
   const el = document.getElementById('vehicleScheda'); if (!el) return;
@@ -3227,6 +3251,7 @@ async function loadVehScheda() {
   const anno = p.annoMin || p.annoMax || '';
   vehSchedaCollapsed = true;   // scheda chiusa di default
   vehXf.compare = null; vehXf.q = ''; vehXf.highlight = new Set(); vehGenChosen = false; vehShowAll = false;   // reset per ricerca (traduci/unità restano preferenze)
+  vehRichiami = null; vehAddonAperto = false;   // i richiami sono di QUEL veicolo: cambiando ricerca ripartono
   el.innerHTML = '<div class="rc-group"><div class="rc-group-body"><div class="rc-loading">Carico la scheda tecnica…</div></div></div>';
   try {
     const r = await fetch(`/api/scheda-veicolo?tipo=${encodeURIComponent(tipo)}&marca=${encodeURIComponent(marca)}&modello=${encodeURIComponent(modello)}&anno=${encodeURIComponent(anno)}`);
@@ -3273,9 +3298,100 @@ function vehBodyHTML() {
   const spec = vehSpecs[vehSelUrl];
   if (!spec || spec.loading) return '<div class="rc-loading">Carico le specifiche…</div>';
   if (!spec.ok || !spec.groups || !spec.groups.length) return '<div class="rc-empty">Specifiche non disponibili per questa motorizzazione.</div>';
-  // Costo carburante e liquidita' stanno QUI, non in un pannello separato: dipendono
-  // entrambi dalla versione scelta sopra, e leggerli altrove costringeva a rimbalzare.
-  return (vehXf.compare ? '' : vehCostoHTML(spec) + vehLiqHTML() + vehHlBandHTML(spec)) + vehSectionsHTML(spec);
+  /**
+   * Le integrazioni ESTERNE stanno in fondo, in un gruppo come gli altri.
+   *
+   * Prima erano fasce sopra le sezioni: arrivavano prima delle specifiche vere, e la
+   * scheda si apriva su roba che non e' la scheda. Ora "ADD ON" e' l'ultimo gruppo, con
+   * la stessa intestazione di MOTORE e PRESTAZIONI, chiuso di default come loro.
+   *
+   * Dentro restano tre blocchi richiudibili, ognuno con la sua fonte scritta: il costo
+   * carburante (MIMIT), i passaggi di proprieta' del modello (ACI) e i richiami (RDW e
+   * Safety Gate). Non si mescolano fra loro e non si mescolano con le specifiche: quelle
+   * descrivono il veicolo, queste dicono cosa gli succede intorno.
+   */
+  return (vehXf.compare ? '' : vehHlBandHTML(spec)) + vehSectionsHTML(spec)
+    + (vehXf.compare ? '' : vehAddonHTML(spec));
+}
+
+// ── ADD ON: le integrazioni esterne, in un gruppo come gli altri ─────────────
+// I richiami NON partono da soli: si scaricano alla prima apertura del loro blocco.
+// La marca e il modello sono quelli della RICERCA ESEGUITA, gli stessi con cui e' stata
+// costruita la scheda — non lo stato del form, che l'utente puo' aver gia' cambiato.
+let vehRichiami = null;        // null = mai chiesti · {loading} · {rdw, sg} · {ko}
+let vehAddonAperto = false;    // il gruppo resta aperto quando il corpo si ridisegna
+
+async function vehRichiamiCarica() {
+  const p = lastSearchParams || {};
+  if (!p.marca || vehRichiami) return;
+  vehRichiami = { loading: true };
+  const my = vehGen;
+  renderVehBody();
+  const q = new URLSearchParams({ marca: p.marca });
+  if (p.modello) q.set('modello', p.modello);
+  try {
+    const [rdw, sg] = await Promise.all([
+      fetch('/api/richiami/rdw/cerca?' + q.toString() + '&quante=8').then(r => r.json()).catch(() => null),
+      fetch('/api/richiami/cerca?' + q.toString() + '&quante=8').then(r => r.json()).catch(() => null),
+    ]);
+    if (my !== vehGen) return;                 // una ricerca piu' recente ha preso il posto
+    vehRichiami = { rdw, sg };
+  } catch (_) {
+    if (my !== vehGen) return;
+    vehRichiami = { ko: true };
+  }
+  renderVehBody();
+}
+
+function vehRichiamiHTML() {
+  const p = lastSearchParams || {};
+  if (!p.marca) return '';
+  const st = vehRichiami;
+  let corpo, meta = '';
+  if (!st) corpo = '<div class="veh-rich-att">Apri per cercare negli archivi dei richiami.</div>';
+  else if (st.loading) corpo = '<div class="veh-rich-att">Cerco nei due archivi…</div>';
+  else if (st.ko) corpo = '<div class="veh-rich-att">Archivi non raggiungibili.</div>';
+  else {
+    const nR = st.rdw && st.rdw.ok ? st.rdw.totale : null;
+    const nS = st.sg && st.sg.ok ? st.sg.totale : null;
+    // Nell'intestazione i due numeri restano DUE, separati: sommarli darebbe un totale
+    // che non vuol dire niente, perche' i due archivi contano cose diverse.
+    meta = [nR != null ? `${nR} RDW` : null, nS != null ? `${nS} Safety Gate` : null].filter(Boolean).join(' · ');
+    /**
+     * Ogni riga porta al richiamo VERO. Qui il testo del guasto non c'e' — l'RDW lo
+     * scrive in olandese e non lo mettiamo a schermo — quindi il link non e' un di piu':
+     * e' l'unico modo di leggere cosa c'e' che non va. Su Safety Gate il link e'
+     * l'allerta ufficiale della Commissione, in italiano.
+     */
+    const rigaHTML = (url, cat, meta) => {
+      const dentro = `<span class="veh-rich-cat">${escapeHtml(cat)}</span>`
+        + `<span class="veh-rich-meta">${escapeHtml(meta)}</span>`;
+      return url && /^https?:\/\//i.test(url)
+        ? `<a class="veh-rich-r veh-rich-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${dentro}</a>`
+        : `<div class="veh-rich-r">${dentro}</div>`;
+    };
+    const riga = c => rigaHTML(c.url, c.categoriaIt || c.categoria || '—',
+      [c.data ? new Date(c.data).toLocaleDateString('it-IT') : null, c.rischio].filter(Boolean).join(' · '));
+    const rigaSg = a => rigaHTML(a.scheda, a.prodotto || a.categoria || 'Veicolo',
+      [a.anni ? `${a.anni.da}–${a.anni.a}` : a.anno, a.livello].filter(Boolean).join(' · '));
+    const bloccoR = nR
+      ? `<div class="veh-rich-b"><div class="veh-rich-h">Campagne RDW <b>${nR}</b></div>${(st.rdw.campagne || []).slice(0, 5).map(riga).join('')}</div>`
+      : '<div class="veh-rich-b"><div class="veh-rich-h">Campagne RDW <b>0</b></div><div class="veh-rich-att">Nessuna campagna per questo modello.</div></div>';
+    const bloccoS = nS
+      ? `<div class="veh-rich-b"><div class="veh-rich-h">Allerte Safety Gate <b>${nS}</b></div>${(st.sg.allerte || []).slice(0, 5).map(rigaSg).join('')}</div>`
+      : '<div class="veh-rich-b"><div class="veh-rich-h">Allerte Safety Gate <b>0</b></div><div class="veh-rich-att">Nessuna allerta per questo modello.</div></div>';
+    corpo = `<div class="veh-rich">${bloccoR}${bloccoS}
+      <div class="veh-rich-fonte">Semaforo di MODELLO: la campagna riguarda i telai decisi dal costruttore, non tutti gli esemplari.
+      L'anno non filtra, l'archivio RDW non porta la finestra di produzione. <b>Ogni riga apre il richiamo originale</b>, dove il guasto e' scritto per esteso.</div></div>`;
+  }
+  return miniHTML('veh-rich', 'Richiami', escapeHtml(meta), corpo, { carica: 'richiami' });
+}
+
+function vehAddonHTML(spec) {
+  const pezzi = [vehCostoHTML(spec), vehLiqHTML(), vehRichiamiHTML()].filter(Boolean);
+  if (!pezzi.length) return '';
+  return vehGrpHTML('ADD ON', pezzi.length, 1, `<div class="veh-addon">${pezzi.join('')}</div>`, '',
+    { chiuso: !vehAddonAperto, attr: ' data-addon="1"' });
 }
 // Versione Moto.it scelta nella ricerca → la stessa voce nella scheda, già selezionata.
 // L'aggancio è per CODICE, non per nome: l'URL della scheda Moto.it finisce col codice-versione
@@ -3387,10 +3503,20 @@ function vehCostoAggiorna() {
   const kmSt = carbKmStato();
   const { per100, anno } = carbCalcola(consumo, voce.p, kmSt.km);
   const eur = n => n.toLocaleString('it-IT', { maximumFractionDigits: 0 });
-  const cifra = box.querySelector('.veh-costo-cifra b');
   const det = box.querySelector('.veh-costo-det');
-  if (cifra) cifra.textContent = `${eur(anno)} €`;
   if (det) det.innerHTML = carbDetHTML(per100, consumo, voce, kmSt);
+  /**
+   * LA CIFRA GROSSA STA NELL'INTESTAZIONE DEL BLOCCO, non piu' dentro il corpo.
+   *
+   * Quando il costo carburante e' diventato un blocco richiudibile, la cifra si e'
+   * spostata in `.mini-meta` e questa funzione ha continuato ad aggiornare un elemento
+   * che non esisteva piu': cambiando provincia il dettaglio sotto si aggiornava e il
+   * numero grande restava quello di prima. Due cifre in disaccordo nella stessa scheda,
+   * e quella che si legge per prima era la sbagliata.
+   */
+  const mini = box.closest('.mini');
+  const meta = mini && mini.querySelector('.mini-meta');
+  if (meta) meta.innerHTML = `${eur(anno)} €<em>all'anno</em>`;
 }
 
 function vehCostoHTML(spec) {
@@ -3414,6 +3540,7 @@ function vehCostoHTML(spec) {
     <div class="veh-costo-ctrl">
       <select class="veh-carb-prov" aria-label="provincia per il prezzo del carburante">${provOpts}</select>
       <label class="veh-carb-kmw"><input type="number" class="veh-carb-km" value="${kmSt.difetto ? '' : km}" min="${KM_MIN}" max="${KM_MAX}" step="any" inputmode="numeric" aria-label="chilometri all'anno"><span>km/anno</span></label>
+      <button type="button" class="veh-carb-calc">Calcola</button>
     </div>
     <div class="veh-costo-fonte">Prezzi self ${carbIdx.aggiornato ? 'del ' + carbIdx.aggiornato : ''} — ${escapeHtml(carbIdx.fonte)}. Stima: consumo dichiarato, non reale.</div>
   </div>`);
@@ -3606,8 +3733,9 @@ function vehToolbarHTML() {
     + cmpCombo
     + `</div>`;
 }
-function vehGrpHTML(title, count, i, bodyInner, extraCls) {
-  return `<div class="veh-grp${i === 0 ? '' : ' veh-collapsed'}"><button type="button" class="veh-grp-head"><span class="veh-grp-caret">${icon('chevron')}</span><span class="veh-grp-tit">${escapeHtml(title)}</span><span class="veh-grp-count">${count}</span></button><div class="veh-grp-body${extraCls || ''}">${bodyInner}</div></div>`;
+function vehGrpHTML(title, count, i, bodyInner, extraCls, opts = {}) {
+  const chiuso = opts.chiuso != null ? opts.chiuso : i !== 0;
+  return `<div class="veh-grp${chiuso ? ' veh-collapsed' : ''}"${opts.attr || ''}><button type="button" class="veh-grp-head"><span class="veh-grp-caret">${icon('chevron')}</span><span class="veh-grp-tit">${escapeHtml(title)}</span><span class="veh-grp-count">${count}</span></button><div class="veh-grp-body${extraCls || ''}">${bodyInner}</div></div>`;
 }
 function vehSectionsHTML(spec) {
   if (vehXf.compare) {
@@ -5117,7 +5245,12 @@ function fnRender() {
 
 // Sezioni richiudibili della scheda tecnica: qui non c'e' niente da caricare, i dati
 // sono gia' in pagina — serve solo ricordare cosa hai lasciato aperto.
-document.getElementById('vehicleScheda')?.addEventListener('toggle', e => miniToggle(e, () => {}), true);
+// I blocchi richiudibili dentro ADD ON. `toggle` non risale il DOM: cattura.
+// I richiami partono alla PRIMA apertura del blocco, non all'apertura della scheda: chi
+// non li guarda non paga la richiesta.
+document.getElementById('vehicleScheda')?.addEventListener('toggle', e => miniToggle(e, cosa => {
+  if (cosa === 'richiami') vehRichiamiCarica();
+}), true);
 
 document.getElementById('fontiPanel')?.addEventListener('click', e => {
   const fo = e.target.closest('.cat-fonte');
@@ -5531,8 +5664,17 @@ async function regCerca() {
   regRender();
 }
 
-// Una campagna RDW. Il testo lungo e' in OLANDESE e lo si dice: e' la lingua della fonte,
-// e tradurlo a macchina vorrebbe dire firmare parole che non sono ne' nostre ne' sue.
+/**
+ * Una campagna RDW.
+ *
+ * La descrizione del guasto NON c'e': era testo libero in olandese, e a schermo sarebbero
+ * state parole che nessuno legge. Al suo posto la scheda ufficiale della campagna, che
+ * c'e' per TUTTE e il difetto lo scrive per esteso — un click invece di una lingua che
+ * non serve. Quando il costruttore dichiara la sua pagina (una campagna su quattordici)
+ * c'e' anche quella: e' li' che si prenota la riparazione.
+ *
+ * Il titolo della scheda e' il link: cliccare la categoria porta al richiamo vero.
+ */
 function regCampagnaHTML(c) {
   const meta = [
     c.data ? new Date(c.data).toLocaleDateString('it-IT') : null,
@@ -5541,18 +5683,19 @@ function regCampagnaHTML(c) {
   ].filter(Boolean).join(' · ');
   const mod = (c.modelli || []).slice(0, 12).join(' · ');
   const altri = (c.modelli || []).length > 12 ? ` <em>+${c.modelli.length - 12}</em>` : '';
+  const cat = escapeHtml(c.categoriaIt || c.categoria || 'Categoria non indicata');
+  const titolo = c.url
+    ? `<a class="reg-cat reg-cat-link" href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer">${cat} ↗</a>`
+    : `<span class="reg-cat">${cat}</span>`;
   return `<article class="reg-card">
     <div class="reg-card-h">
-      <span class="reg-cat">${escapeHtml(c.categoriaIt || c.categoria || 'Categoria non indicata')}</span>
+      ${titolo}
       <span class="reg-meta">${escapeHtml(meta)}</span>
     </div>
     ${mod ? `<div class="reg-modelli">${escapeHtml(mod)}${altri}</div>` : ''}
-    ${c.difetto ? `<p class="reg-testo"><span class="reg-lang">nl</span>${escapeHtml(c.difetto)}</p>` : ''}
-    ${c.riparazione ? `<p class="reg-testo reg-testo-min"><span class="reg-lang">nl</span>${escapeHtml(c.riparazione)}</p>` : ''}
     <div class="reg-card-f">
       ${c.produttore ? `<span>${escapeHtml(c.produttore)}</span>` : ''}
-      ${c.informazioni && /^https?:\/\//i.test(c.informazioni)
-        ? `<a href="${escapeHtml(c.informazioni)}" target="_blank" rel="noopener noreferrer">informazioni ↗</a>` : ''}
+      ${c.costruttoreUrl ? `<a href="${escapeHtml(c.costruttoreUrl)}" target="_blank" rel="noopener noreferrer">pagina del costruttore ↗</a>` : ''}
       <span class="reg-rif">${escapeHtml(c.rif || '')}</span>
     </div>
   </article>`;
@@ -5566,16 +5709,22 @@ function regAllertaHTML(a) {
   // L'omologazione e' l'unico campo che permetterebbe di dire se IL SINGOLO esemplare e'
   // coinvolto. Si mostra proprio per questo: e' il numero da confrontare col libretto.
   const omo = (a.omologazioni || []).slice(0, 3).join(' · ');
+  // Come per l'RDW: il titolo E' il link all'allerta ufficiale. Qui c'e' su tutte e 1.034,
+  // e il testo resta a schermo perche' Safety Gate scrive gia' in italiano.
+  const cat = escapeHtml(a.prodotto || a.categoria || 'Veicolo');
+  const titolo = a.scheda && /^https?:\/\//i.test(a.scheda)
+    ? `<a class="reg-cat reg-cat-link" href="${escapeHtml(a.scheda)}" target="_blank" rel="noopener noreferrer">${cat} ↗</a>`
+    : `<span class="reg-cat">${cat}</span>`;
   return `<article class="reg-card">
     <div class="reg-card-h">
-      <span class="reg-cat">${escapeHtml(a.prodotto || a.categoria || 'Veicolo')}</span>
+      ${titolo}
       <span class="reg-meta">${escapeHtml(String(meta))}</span>
     </div>
     ${a.nome ? `<div class="reg-modelli">${escapeHtml(a.nome)}</div>` : ''}
     ${a.difetto ? `<p class="reg-testo">${escapeHtml(a.difetto)}</p>` : ''}
     ${omo ? `<p class="reg-omo"><span>omologazione</span>${escapeHtml(omo)}</p>` : ''}
     <div class="reg-card-f">
-      ${a.scheda && /^https?:\/\//i.test(a.scheda) ? `<a href="${escapeHtml(a.scheda)}" target="_blank" rel="noopener noreferrer">scheda ↗</a>` : ''}
+      ${a.urlCampagna && /^https?:\/\//i.test(a.urlCampagna) ? `<a href="${escapeHtml(a.urlCampagna)}" target="_blank" rel="noopener noreferrer">campagna del costruttore ↗</a>` : ''}
       <span class="reg-rif">${escapeHtml(a.caso || '')}</span>
     </div>
   </article>`;
