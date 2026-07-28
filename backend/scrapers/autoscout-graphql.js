@@ -465,13 +465,21 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
   const out = [];
   let truncated = false;
   let total = null;                 // quanti ne ha AS24 per questa ricerca (dalla 1a pagina)
-  for (let p = 1; p <= maxPages; p++) {
-    if (p > 1 && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
+  // "Carica altri": la fetta successiva parte da dove si era arrivati. Le pagine profonde
+  // portano annunci DIVERSI — provato sulle pagine 1, 2, 33, 34 e 60 di una ricerca vera:
+  // 250 annunci, 250 url distinti, nessuna sovrapposizione. Il tetto di ~1.629 scritto
+  // piu' sotto vale per altro: qui la pagina 60 risponde ancora roba nuova.
+  // `fetta` e' UN concetto per tutte e tre le fonti: la 0 e' la prima schermata, la 1 la
+  // successiva. Ogni fonte la traduce nella SUA paginazione, perche' le pagine hanno
+  // dimensioni diverse — qui 50 per pagina, due pagine per fetta.
+  const salta = Math.max(0, opts.fetta || 0) * maxPages;
+  for (let p = 1 + salta; p <= salta + maxPages; p++) {
+    if (p > 1 + salta && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
     const { items, raw, total: tot } = await fetchPage(params, p, opts);
-    if (p === 1) total = tot;       // uguale su tutte le pagine: si prende la prima
+    if (p === 1 + salta) total = tot;   // uguale su tutte le pagine: si prende la prima
     out.push(...items);
     if (raw < PAGE_SIZE) break;       // lista esaurita (conteggio GREZZO) = vista completa
-    if (p === maxPages) truncated = true;   // ultima pagina piena al cap → forse altro
+    if (p === salta + maxPages) truncated = true;   // ultima pagina piena al cap → forse altro
   }
   return opts.withMeta ? { items: out, truncated, total } : out;
 }

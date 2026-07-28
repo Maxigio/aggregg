@@ -248,7 +248,10 @@ async function scrapeMotoIt(params, opts = {}) {
   // deep = chiamata dal crawler (opts) → HTTP paziente, throw alla salute su blocco.
   const deep = !!(opts.pageDelayMs || opts.withMeta || opts.maxPages);
   const maxPages = deep ? (opts.maxPages || MAX_PAGES) : MAX_PAGES;
-  const urls = Array.from({ length: maxPages }, (_, i) => buildUrl(params, i + 1));
+  // "Carica altri": la fetta successiva. Provato pagina 1 contro pagina 50 — nessun
+  // link in comune, quindi le pagine profonde portano moto diverse e non le stesse.
+  const salta = Math.max(0, opts.fetta || 0) * maxPages;
+  const urls = Array.from({ length: maxPages }, (_, i) => buildUrl(params, salta + i + 1));
 
   if (deep) {
     const { pages, blocked, truncated, total } = await scrapeMotoViaHttp(urls, { ...opts, httpTimeoutMs: HTTP_TIMEOUT_DEFAULT });

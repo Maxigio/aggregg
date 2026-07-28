@@ -1821,6 +1821,79 @@ function setRcVeicolo(v) {
 
 // ─── Ricerca ──────────────────────────────────────────────────────────────────
 let searchGen = 0;   // review: token di generazione — solo la ricerca PIÙ RECENTE applica i risultati
+/**
+ * "CARICA ALTRI 100" — la fetta successiva, chiesta quando la chiedi tu.
+ *
+ * NON e' una pagina 2 che sostituisce la 1, ed e' una scelta, non una scorciatoia:
+ * l'app ordina per prezzo e FONDE tre fonti, quindi la fetta successiva di Subito puo'
+ * contenere un'auto piu' economica dell'ultima di Autoscout. Con le pagine vedresti un
+ * prezzo piu' basso DOPO uno piu' alto; aggiungendo e riordinando l'ordine resta vero.
+ *
+ * Il bottone compare solo se una fonte ha ancora roba: il totale ce l'abbiamo dalle
+ * risposte, quindi non si tira a indovinare.
+ */
+let fettaPresa = 0;            // ultima fetta caricata (0 = la prima ricerca)
+let caricandoAltri = false;
+
+function altriDisponibili() {
+  const s = lastSources || {};
+  return ['subito', 'autoscout', 'moto'].some(f => {
+    const x = s[f];
+    return x && x.status === 'ok' && x.totale != null && x.totale > presiDa(f);
+  });
+}
+// Quanti ne abbiamo gia' presi da quella fonte, contando tutte le fette caricate.
+function presiDa(fonte) {
+  return currentResults.filter(r => r.fonte === fonte).length;
+}
+
+async function caricaAltri() {
+  if (caricandoAltri || !lastSearchParams) return;
+  caricandoAltri = true; renderAltriBtn();
+  const myGen = searchGen;
+  try {
+    const q = new URLSearchParams({ ...lastSearchParams, fetta: String(fettaPresa + 1) });
+    const res = await fetch(`/api/search?${q}`);
+    const data = await res.json();
+    if (myGen !== searchGen) return;         // una ricerca nuova ha preso il posto
+    if (!res.ok) { toast(data.error || 'Non riuscito'); return; }
+    const visti = new Set(currentResults.map(r => r.url));
+    const nuovi = (data.risultati || []).filter(r => r && r.url && !visti.has(r.url));
+    fettaPresa++;
+    if (!nuovi.length) { lastSources = fondiTotali(data.sources); toast('Non ci sono altri annunci'); return; }
+    currentResults = currentResults.concat(nuovi);
+    lastSources = fondiTotali(data.sources);
+    renderSourceStatus();
+    renderResults(currentResults);          // riordina TUTTO: l'ordine per prezzo resta vero
+    toast(`Aggiunti ${nuovi.length} annunci`);
+  } catch (_) {
+    toast('Impossibile contattare il server');
+  } finally { caricandoAltri = false; renderAltriBtn(); }
+}
+
+// I conteggi per fonte devono contare TUTTE le fette, non l'ultima: il totale della
+// fonte invece resta quello che dichiara lei.
+function fondiTotali(nuove) {
+  const out = {};
+  for (const f of ['subito', 'autoscout', 'moto']) {
+    const vecchia = (lastSources || {})[f] || null;
+    const n = (nuove || {})[f] || null;
+    if (!vecchia && !n) continue;
+    out[f] = { ...(vecchia || {}), ...(n || {}), count: presiDa(f),
+               totale: (n && n.totale != null) ? n.totale : (vecchia && vecchia.totale) };
+  }
+  return out;
+}
+
+function renderAltriBtn() {
+  const el = document.getElementById('caricaAltri');
+  if (!el) return;
+  const mostra = searchActive && currentResults.length > 0 && altriDisponibili();
+  el.classList.toggle('d-none', !mostra);
+  const b = el.querySelector('button');
+  if (b) { b.disabled = caricandoAltri; b.textContent = caricandoAltri ? 'Carico…' : 'Carica altri annunci'; }
+}
+
 async function doSearch() {
   const tipo = currentTipo();
   const brand = matchedBrand();
@@ -1895,6 +1968,7 @@ async function doSearch() {
 
     currentResults = data.risultati || [];
     searchActive = true;
+    fettaPresa = 0;                      // ricerca nuova: si riparte dalla prima fetta
     lastSources = data.sources || null;
     renderSourceStatus();
 
@@ -2046,6 +2120,7 @@ function renderResults(results) {
     resultsGrid.innerHTML = gridHeadHTML() + `<div class="result-list">${sorted.map(r => rowHTML(r, best)).join('')}</div>`;
   }
   observeEnrich();   // Moto.it: foto+spec reali quando la riga entra in viewport
+  renderAltriBtn();
 }
 
 // ─── Arricchimento Moto.it on-scroll (foto + spec reali dalla pagina-dettaglio) ─
@@ -5796,6 +5871,10 @@ function regRender() {
     ${corpo}
   </div>`;
 }
+
+document.getElementById('caricaAltri')?.addEventListener('click', e => {
+  if (e.target.closest('button')) caricaAltri();
+});
 
 document.getElementById('registriPanel')?.addEventListener('click', e => {
   if (e.target.closest('#regVai')) regCerca();

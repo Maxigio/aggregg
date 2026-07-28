@@ -141,7 +141,7 @@ async function scrapeAutoscoutUnion(params, opts = {}) {
   if (!grafie || grafie.length < 2) return scrapeAutoscoutSmart(params, opts);
   let unaOk = false;
   const liste = await Promise.all(grafie.map(async g => {
-    try { const r = await scrapeAutoscoutGraphql({ ...params, autoscoutVersionText: g }); unaOk = true; return r; }
+    try { const r = await scrapeAutoscoutGraphql({ ...params, autoscoutVersionText: g }, { fetta: opts.fetta || 0 }); unaOk = true; return r; }
     catch (_) { return []; }
   }));
   if (!unaOk) return scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null }, opts);   // GraphQL giù → un solo tentativo classico
@@ -161,7 +161,7 @@ const USE_SUBITO_API = process.env.USE_SUBITO_API !== '0';
 async function scrapeSubitoSmart(params) {
   if (USE_SUBITO_API) {
     // on-search: economici in cima (sort nativo). Regione/prezzo/anno nativi via buildPath.
-    try { return await scrapeSubitoApi(params, { sort: 'priceasc', withMeta: true }); }
+    try { return await scrapeSubitoApi(params, { sort: 'priceasc', withMeta: true, fetta: params.fetta || 0 }); }
     catch (e) { console.warn(`[Subito] API hades fallita (${e.message}) → fallback Playwright`); }
   }
   return scrapeSubito(params);
@@ -885,7 +885,7 @@ function parseSearchParams(query) {
   const {
     tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione, raggio,
     mmmvAutoscout, motoitBrandSlug, motoitModelSlug, motoitBikeCode, motoitNeedsVersion,
-    versioneSubito, versioneNome, versioneAs24,
+    versioneSubito, versioneNome, versioneAs24, fetta,
   } = query;
 
   const errors = [];
@@ -914,6 +914,10 @@ function parseSearchParams(query) {
       kmMin:            toInt(kmMin),
       kmMax:            toInt(kmMax),
       raggio:           toInt(raggio),   // km raggio AS24 attorno al capoluogo regione (default 100 in runSearchCore)
+      // "Carica altri": quale fetta di risultati chiedere alle fonti. 0 = la prima.
+      // Il tetto tiene lontano da richieste assurde e dai limiti veri delle fonti
+      // (hades si ferma fra start 9.850 e 10.000, cioe' fetta 98).
+      fetta:            Math.min(50, Math.max(0, toInt(fetta) || 0)),
       mmmvAutoscout:    mmmvAutoscout    || null,
       motoitBrandSlug:  motoitBrandSlug  || null,
       motoitModelSlug:  motoitModelSlug  || null,
@@ -1062,7 +1066,7 @@ function searchCacheKey(p) {
   // Chi aggiunge un parametro che cambia i RISULTATI deve aggiungerlo anche qui.
   return ['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax',
           'regione', 'raggio', 'mmmvAutoscout', 'motoitBrandSlug', 'motoitModelSlug', 'motoitBikeCode', 'motoitNeedsVersion',
-          'versioneSubito', 'versioneNome', 'versioneAs24']
+          'versioneSubito', 'versioneNome', 'versioneAs24', 'fetta']
     .map(f => `${f}=${p[f] ?? ''}`).join('&').toLowerCase();
 }
 function cacheable(data) {
@@ -1355,10 +1359,10 @@ async function runSearchCore(params) {
     runSubito(params, TIMEOUT_MS),
     skipAutoscout
       ? Promise.resolve({ items: [], status: 'skipped', reason: asSkipReason })
-      : runSource(scrapeAutoscoutUnion(params, { withMeta: true }), TIMEOUT_MS, 'Autoscout24'),
+      : runSource(scrapeAutoscoutUnion(params, { withMeta: true, fetta: params.fetta || 0 }), TIMEOUT_MS, 'Autoscout24'),
     skipMotoIt
       ? Promise.resolve({ items: [], status: 'skipped', reason: motoSkipReason })
-      : runSource(scrapeMotoIt(params, { withMeta: true }), TIMEOUT_MS, 'Moto.it'),
+      : runSource(scrapeMotoIt(params, { withMeta: true, fetta: params.fetta || 0 }), TIMEOUT_MS, 'Moto.it'),
   ]);
 
   // F50 fase 1 — riallargamento SOLO a zero risultati (scelta di prodotto: mai allargare

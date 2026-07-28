@@ -1617,3 +1617,9 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 /* "109 di 11.610": il primo numero e' quello che vedi, il secondo quanti ne ha la fonte.
    Il secondo si tiene in secondo piano — e' contesto, non il risultato. */
 .src b em { font-style: normal; font-weight: 400; color: var(--text-muted); margin-left: 3px; }
+
+/* "Carica altri": la fetta successiva. Sta sotto la lista, non nella toolbar, perche'
+   si preme quando si e' finito di guardare — non prima. */
+.carica-altri { display: flex; justify-content: center; padding: 14px 0 2px; }
+.carica-altri button { min-width: 220px; }
+.carica-altri button[disabled] { opacity: .6; cursor: default; }

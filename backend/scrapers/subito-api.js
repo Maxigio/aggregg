@@ -435,9 +435,12 @@ async function scrapeSubitoApi(params, opts = {}) {
   let truncated = false;
   let total = null;                          // F50 count_all (tetto), additivo
   let scartati = 0;
+  // "Carica altri": si riparte da dove si era arrivati. Il tetto di hades sta fra
+  // start 9.850 e 10.000 (misurato per bisezione), quindi c'e' spazio per ~200 fette.
+  const salta = Math.max(0, opts.fetta || 0) * maxPages * PAGE_SIZE;
   for (let p = 0; p < maxPages; p++) {
     if (p > 0 && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
-    const page = await fetchPage(reqParams, p * PAGE_SIZE);
+    const page = await fetchPage(reqParams, salta + p * PAGE_SIZE);
     if (p === 0) total = page.total;         // count_all dalla 1ª pagina (uguale su tutte)
     for (const ad of page.ads) {
       // Doppia rete regione: `buildPath` filtra già nativo via `r=<key>` quando la
@@ -459,7 +462,9 @@ async function scrapeSubitoApi(params, opts = {}) {
   // modello" diventano irraggiungibili: misurati sul 3,7% del totale, e sono spesso
   // quelli compilati male — cioe' dove sta l'affare. Una richiesta in piu', per MARCA
   // e in cache: la stessa lista serve ogni modello di quella marca.
-  if (nodo && nodo.marcaId && gen.size && titoloCombacia && !opts.senzaRecupero) {
+  // Il recupero gira SOLO sulla prima fetta: non e' paginato, e sulle fette successive
+  // rimandava indietro gli stessi annunci. Misurato: 9 doppioni su 109 a ogni "carica altri".
+  if (nodo && nodo.marcaId && gen.size && titoloCombacia && !opts.senzaRecupero && !salta) {
     try {
       const visti = new Set(out.map(x => x.url));
       for (const ad of await paginaRecupero(reqParams)) {
