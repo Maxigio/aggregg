@@ -23,14 +23,14 @@ const MAX_PAGES = 2;          // 2×50 = 100 (più del path Playwright: 3×~17)
 const TIMEOUT_MS = 15000;
 
 // Query ridotta ai soli campi mappati (+ media.images webp per lo slider; no leasing/360).
-const QUERY = `query Search($v:Vehicle_,$loc:Location_,$pr:Price_,$m:Metadata_){
-  search{ listings(vehicle:$v, location:$loc, price:$pr, metadata:$m, locale:it_IT){
+const QUERY = `query Search($v:Vehicle_,$loc:Location_,$pr:Price_,$m:Metadata_,$cu:Customer_){
+  search{ listings(vehicle:$v, location:$loc, price:$pr, metadata:$m, customer:$cu, locale:it_IT){
     listings{ details(withFallbackAttributes:true){
       webPage
       publication{ createdTimestampWithOffset }
       prices{ public{ amountInEUR{ raw } onRequestOnly } }
       location{ city zip }
-      seller{ type }
+      seller{ type id companyName }
       media{ images(with360Images:false, first:5){ __typename ... on StandardImage{ formats{ webp{ size420x315 size800x600 } } } } }
       vehicle{
         classification{ make{ formatted } model{ formatted } modelVersionInput }
@@ -100,6 +100,18 @@ function httpPost(body, auth = AUTH) {
 // Variabili dalla nostra params. classification: make/model = ID numerici del
 // catalogo (mmmvAutoscout = "makeId|modelId|...", brand-only = "makeId|||").
 function buildVariables(params, page, opts = {}) {
+  /**
+   * IL PARCO DI UN CONCESSIONARIO. Qui non si cerca un modello: si chiede tutto quello
+   * che un venditore ha in vetrina, e il filtro e' `customer.id` — verificato su quattro
+   * concessionari veri, torna solo roba loro.
+   *
+   * Esce prima perche' senza marca `buildVariables` si fermerebbe: e' proprio il caso in
+   * cui una marca non c'e' e non deve esserci.
+   */
+  if (params.as24Customer) {
+    return finisci({ vehicleType: [params.tipo === 'moto' ? 'Bike' : 'Car'] }, params, page, opts);
+  }
+
   const mmmv = String(params.autoscoutMmmv || params.mmmvAutoscout || '');
   const [makeStr, modelStr] = mmmv.split('|');
   const make = parseInt(makeStr, 10);
@@ -179,6 +191,7 @@ function finisci(v, params, page, opts) {
   }
 
   const vars = { v, loc, m };
+  if (params.as24Customer) vars.cu = { id: parseInt(params.as24Customer, 10) };
   if (params.prezzoMin != null || params.prezzoMax != null) {
     vars.pr = { price: { from: params.prezzoMin || 1, to: params.prezzoMax || 100000000 } };
   }
@@ -221,6 +234,10 @@ function mapListing(node, opts = {}) {
   const hp = eng.power && eng.power.hp ? eng.power.hp.raw : null;
   const dmg = cond.damage;                                  // { isCurrentlyDamaged } | null
   const sellerType = (dt.seller && dt.seller.type) || '';   // 'PrivateSeller' | 'Dealer'
+  // Chi vende, non solo che tipo e': serve alla sezione Competitor per sapere di chi e'
+  // il parco che si sta guardando, e per accorgersi se la fonte ci mescola qualcun altro.
+  const venditoreId = (dt.seller && dt.seller.id) || null;
+  const venditoreNome = (dt.seller && dt.seller.companyName) || null;
   const venditore = /dealer/i.test(sellerType) ? 'concessionario'
                   : /private/i.test(sellerType) ? 'privato' : null;
   // danni: nativo `damage.isCurrentlyDamaged` (più affidabile), fallback al vecchio usageState.
@@ -263,6 +280,8 @@ function mapListing(node, opts = {}) {
     proprietari: cond.numberOfPreviousOwnersExtended ? cond.numberOfPreviousOwnersExtended.raw : null,
     colore: (v.bodyColor && v.bodyColor.formatted) || null,
     carrozzeria: (v.bodyType && v.bodyType.formatted) || null,
+    venditoreId, venditoreNome,
+    marca: make || null,          // dichiarata dalla fonte: "Alfa Romeo", non "Alfa"
     venditore,
     immagini,
     zip: (dt.location && dt.location.zip) || null,   // per il post-filtro regione (fallback CAP→regione)

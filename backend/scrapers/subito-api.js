@@ -95,6 +95,13 @@ function mapAd(ad, opts = {}) {
     // Venditore dal boolean nativo advertiser.company (true=conce, false=privato).
     venditore: (ad.advertiser && typeof ad.advertiser.company === 'boolean')
       ? (ad.advertiser.company ? 'concessionario' : 'privato') : null,
+    // CHI vende, non solo che tipo e': serve alla sezione Competitor per sapere di chi e'
+    // il parco, e per accorgersi se la fonte ci mescola dentro qualcun altro.
+    // La marca che l'ANNUNCIO dichiara, non la prima parola del titolo: li' "Alfa Romeo"
+    // diventava "Alfa" e "Land Rover" diventava "Land".
+    marca: (livelliAnnuncio(ad).marca || {}).nome || null,
+    venditoreId: (ad.advertiser && ad.advertiser.user_id) ? String(ad.advertiser.user_id) : null,
+    venditoreNome: (ad.advertiser && (ad.advertiser.shop_name || ad.advertiser.name)) || null,
     potenzaCv: cvFrom(feat(ad, 'Potenza')),
     // Specs ricche NATIVE (già nel payload, zero richieste extra); null se assenti.
     colore: feat(ad, 'Colore'),
@@ -191,6 +198,19 @@ function buildPath(params, start) {
   // parametri lavorano insieme, e che il costo resta di una richiesta.
   const nodo = params.subitoNodo;
   const p = PARAM[params.tipo === 'moto' ? 'moto' : 'auto'];
+  /**
+   * IL PARCO DI UN VENDITORE. `uid` e' l'id UTENTE (advertiser.user_id), non l'id del
+   * negozio che sta nell'URL della vetrina: su un negozio provato erano 1398723 e 7798,
+   * due numeri diversi, e usare quello sbagliato non da' errore — da' il catalogo intero.
+   * Verificato: uid=1398723 → 27 auto + 1 moto, tutte sue.
+   *
+   * Esce prima di tutto il resto: qui non si cerca un modello, si chiede una vetrina.
+   */
+  if (params.subitoUid) {
+    qs.set('uid', String(params.subitoUid));
+    if (params._sort && SORT_VALIDI.has(params._sort)) qs.set('sort', params._sort);
+    return `/v1/search/items?${qs.toString()}`;
+  }
   if (nodo && nodo.marcaId) {
     qs.set(p.marca, String(nodo.marcaId));
     const v = params.subitoSoloNonDichiarati

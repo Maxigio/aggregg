@@ -248,11 +248,11 @@ body:not(.has-results) .search {
 /* Scheda tecnica veicolo (riusa .rc-group/.rc-sch-*): selettori generazione/motorizzazione */
 #vehicleScheda { margin: 0 0 10px; }
 #vehicleScheda:empty { display: none; }
-/* segno di liquidita accanto all'annuncio: ricambio annuo del modello (ACI) */
-.liq-badge { margin-left: 6px; font-family: var(--num); font-size: 0.7rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; white-space: nowrap; cursor: help; }
-.liq-alta { background: var(--accent-weak); color: var(--accent); }
-.liq-media { background: var(--tag-moto-bg); color: var(--tag-moto-fg); }
-.liq-bassa, .liq-ferma { background: var(--neg-bg); color: var(--neg); }
+/* Segno accanto all'annuncio: il ricambio annuo del modello (ACI Autoritratto).
+   NEUTRO di proposito. Prima il colore cambiava con la percentuale — verde in alto,
+   rosso in basso — e quello e' un giudizio quanto la frase che l'accompagnava: dice
+   "questa e' buona, questa e' cattiva" su un dato che e' solo un conteggio. */
+.liq-badge { margin-left: 6px; font-family: var(--num); font-size: 0.7rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; white-space: nowrap; cursor: help; background: var(--surface-2); color: var(--text-muted); }
 .row-extra { display: block; }   /* contenitore delle sotto-note: si riscrive da solo quando cambia il costo pratica della riga */
 .row-marg { display: block; color: var(--pos); font-family: var(--num); font-size: 0.76rem; line-height: 1.25; }
 /* dentro la scheda tecnica: liquidita del modello (ACI Autoritratto) */
@@ -1457,3 +1457,57 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .gom-pneu-m { flex: 0 1 300px; min-width: 0; overflow-wrap: anywhere; }
 .gom-pneu-v { font-weight: 600; white-space: nowrap; }
 .gom-pneu-v em { font-weight: 400; font-style: normal; font-size: 0.7rem; color: var(--text-muted); margin-left: 3px; }
+
+
+/* ── Sezioni richiudibili dentro le schede ────────────────────────────────────
+   Quattro blocchi (passaggio, cerchi e gomme, carburante, passaggi del modello) che
+   stavano sempre aperti e riempivano la scheda anche quando non li guardavi. Chiusi si
+   legge comunque la cifra che conta: e' nell'intestazione, accanto al titolo. */
+.mini { border-top: 1px solid var(--line); margin-top: 8px; }
+.mini:first-child { border-top: 0; margin-top: 0; }
+.mini-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 7px 0; cursor: pointer; list-style: none; }
+.mini-h::-webkit-details-marker { display: none; }
+.mini-h::before { content: '▸'; color: var(--text-muted); font-size: 0.8rem; transition: transform .12s; }
+.mini[open] > .mini-h::before { transform: rotate(90deg); }
+.mini-t { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.mini-meta { font-size: 0.82rem; font-weight: 600; color: var(--accent); }
+.mini-meta em { font-style: normal; font-weight: 400; font-size: 0.74rem; color: var(--text-muted); margin-left: 4px; }
+.mini-b { padding: 0 0 10px; }
+
+
+/* ── Competitor: il parco di un concessionario ────────────────────────────────
+   Una scheda per vetrina. Il tuo parco e' una voce come le altre ma segnata, altrimenti
+   nel confronto ci si perde. Nessun numero compare finche' non lo chiedi: scaricare il
+   parco di un concessionario grande costa una richiesta ogni cinquanta veicoli. */
+.cp-wrap { max-width: 1100px; margin: 0 auto; padding: 4px 0 24px; }
+.cp-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+.cp-add .field-input { flex: 1 1 340px; min-width: 0; }
+.cp-mio-chk { display: flex; align-items: center; gap: 5px; font-size: 0.82rem; color: var(--text-muted); white-space: nowrap; }
+.cp-att { font-size: 0.84rem; color: var(--text-muted); font-style: italic; padding: 8px 0; }
+.cp-avviso { margin-top: 8px; padding: 7px 10px; font-size: 0.78rem; color: var(--text); background: var(--surface-2); border-left: 3px solid var(--accent); border-radius: 6px; }
+
+.cp-scheda { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: var(--surface); }
+.cp-mio { border-color: var(--accent); }
+.cp-h { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: baseline; }
+.cp-nome { font-size: 1rem; font-weight: 700; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.cp-tag { margin-left: 8px; padding: 1px 7px; font-size: 0.7rem; font-weight: 600; color: #fff; background: var(--accent); border-radius: 999px; }
+.cp-dove { grid-column: 1; font-size: 0.8rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.cp-azioni { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; justify-content: flex-end; }
+.cp-quando { font-size: 0.74rem; color: var(--text-muted); }
+.cp-btn { padding: 4px 10px; font-size: 0.8rem; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; text-decoration: none; }
+.cp-btn:hover { border-color: var(--accent); color: var(--accent); }
+.cp-corpo { margin-top: 10px; }
+
+.cp-numeri { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 16px; }
+.cp-n { min-width: 0; }
+.cp-n span { display: block; font-size: 0.74rem; color: var(--text-muted); }
+.cp-n b { font-size: 0.95rem; color: var(--text); overflow-wrap: anywhere; }
+.cp-n em { font-style: normal; font-weight: 400; font-size: 0.74rem; color: var(--text-muted); display: block; }
+
+.cp-gruppo { margin-top: 12px; }
+.cp-gruppo-h { font-size: 0.76rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+.cp-barra { display: grid; grid-template-columns: minmax(90px, 150px) 1fr auto; gap: 8px; align-items: center; padding: 2px 0; font-size: 0.78rem; }
+.cp-barra-k { color: var(--text); overflow-wrap: anywhere; }
+.cp-barra-v { height: 8px; background: var(--accent); border-radius: 999px; min-width: 2px; }
+.cp-barra-n { color: var(--text-muted); font-family: var(--num); }
+@media (max-width: 640px) { .cp-h { grid-template-columns: 1fr; } .cp-azioni { grid-column: 1; grid-row: auto; justify-content: flex-start; } }

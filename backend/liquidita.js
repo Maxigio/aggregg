@@ -29,15 +29,11 @@ const PARCO_MIN = 300;
 const ricambioUtile = m =>
   (m && m.ricambio != null && m.parco >= PARCO_MIN && m.ricambio <= 100) ? m.ricambio : null;
 
-// "come si rivende" da un tasso di ricambio annuo. Soglie ricavate dalla distribuzione
-// reale del dato (mediana ~8%): non sono un giudizio, sono un posizionamento.
-function giudizio(ricambio) {
-  if (ricambio == null) return null;
-  if (ricambio >= 12) return { classe: 'alta', testo: 'si rivende in fretta' };
-  if (ricambio >= 7) return { classe: 'media', testo: 'mercato regolare' };
-  if (ricambio >= 3) return { classe: 'bassa', testo: 'mercato lento' };
-  return { classe: 'ferma', testo: 'quasi nessun passaggio: veicolo da collezione o fuori mercato' };
-}
+// NESSUN GIUDIZIO. Qui c'era una funzione che dal tasso di ricambio tirava fuori frasi
+// come "si rivende in fretta" o "veicolo da collezione o fuori mercato": erano opinioni
+// sulla vendibilita' di un'auto, scritte da noi e presentate accanto a un dato ACI come
+// se avessero la stessa autorita'. Chi legge decide da se': il numero dei passaggi e il
+// parco circolante sono fatti, "si rivende in fretta" no.
 
 /**
  * @param {string} marca
@@ -66,15 +62,15 @@ function cerca(marca, modello, tipo) {
   }
   if (!hit) return null;
   // I due numeri assoluti restano: presi da soli sono corretti, e' il loro rapporto a non
-  // esserlo. Sparisce solo la percentuale, e con lei il giudizio che ne discende.
+  // esserlo. Sparisce solo la percentuale.
   const r = ricambioUtile(hit);
   return {
     ok: true, marca: hit.marca, modello: hit.modello, viaPadre,
     parco: hit.parco, trasferimenti: hit.trasferimenti, trasferimentiTotali: hit.trasferimentiTotali,
-    ricambio: r, giudizio: giudizio(r),
+    ricambio: r,
     anno: L.anno, fonte: L.fonte, aggiornato: L.generatedAt,
     nota: 'Dato aggregato di modello sul parco italiano: non riguarda il singolo veicolo in vendita.',
   };
 }
 
-module.exports = { cerca, giudizio, ricambioUtile, dati: L };
+module.exports = { cerca, ricambioUtile, dati: L };

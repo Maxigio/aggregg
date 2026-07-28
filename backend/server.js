@@ -678,7 +678,7 @@ app.get('/api/liquidita', (req, res) => {
   for (const [k, m] of Object.entries(liquidita.dati.modelli)) {
     if (!k.startsWith(pref)) continue;
     const r = liquidita.ricambioUtile(m);   // niente percentuale dove il rapporto non e' misurabile
-    modelli.push({ modello: m.modello, parco: m.parco, trasferimenti: m.trasferimenti, ricambio: r, giudizio: liquidita.giudizio(r) });
+    modelli.push({ modello: m.modello, parco: m.parco, trasferimenti: m.trasferimenti, ricambio: r });
   }
   res.set('Cache-Control', 'public, max-age=86400');
   // voce del modello cercato: la sola che sa dire "questo e' il dato del modello base, non
@@ -968,6 +968,9 @@ require('./ricambi-route').mount(app, { clientIp });
 
 // ─── Scheda tecnica veicolo (auto-data.net) — vedi scheda-veicolo-route.js ──────────
 require('./scheda-veicolo-route').mount(app, { clientIp });
+
+// ─── Competitor: il parco di un concessionario, il tuo e quello degli altri ───
+require('./competitor-route').mount(app, { json: express.json({ limit: '8kb' }) });
 
 // ─── Catalogo del nuovo (Motornet) — vedi catalogo-route.js ────────────────────
 // Sezione indipendente dalla ricerca usato: marche → modelli → allestimenti → scheda.

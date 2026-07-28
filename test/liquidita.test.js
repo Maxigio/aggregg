@@ -40,12 +40,15 @@ test('modello sconosciuto → null, nessun numero inventato', () => {
   assert.strictEqual(liq.cerca('', '', 'auto'), null);
 });
 
-test('giudizio: posizionamento coerente con la distribuzione reale', () => {
-  assert.strictEqual(liq.giudizio(18).classe, 'alta');
-  assert.strictEqual(liq.giudizio(8).classe, 'media');
-  assert.strictEqual(liq.giudizio(4).classe, 'bassa');
-  assert.strictEqual(liq.giudizio(0.1).classe, 'ferma');
-  assert.strictEqual(liq.giudizio(null), null);
+test('nessun giudizio sulla vendibilita: si servono i numeri, non i pareri', () => {
+  // C'era una funzione che dal tasso di ricambio tirava fuori "si rivende in fretta" o
+  // "veicolo da collezione o fuori mercato". Erano opinioni nostre servite accanto a un
+  // dato ACI, con la sua stessa aria di autorita'. Questo test impedisce che tornino.
+  assert.strictEqual(typeof liq.giudizio, 'undefined');
+  const r = liq.cerca('Fiat', 'Panda', 'auto');
+  assert.ok(r && r.ok, 'la Panda deve esserci');
+  assert.strictEqual(r.giudizio, undefined, 'il dato non deve portare un giudizio');
+  assert.ok(typeof r.ricambio === 'number', 'il numero invece resta: e un fatto');
 });
 
 test('la fonte e l\'anno viaggiano col dato (CC-BY: attribuzione obbligatoria)', () => {

@@ -31,6 +31,8 @@ worker/node.config.json
 worker/dist/
 # Ricerche salvate utente (runtime)
 data/saved-searches.json
+# Concorrenti monitorati (runtime, e' l'elenco di chi guarda il proprietario)
+data/competitor.json
 # Segnalazioni bug-report utenti (runtime, può contenere testo libero) — MAI versionare
 data/reports.jsonl
 

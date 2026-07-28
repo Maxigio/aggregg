@@ -488,6 +488,15 @@ async function init() {
     if (e.target.closest('.btn-info'))       { toggleDetail(row); return; }
   });
 
+  // Sezioni richiudibili dentro il pannello annuncio. `toggle` non risale il DOM: cattura.
+  resultsGrid.addEventListener('toggle', e => miniToggle(e, (cosa, d) => {
+    const pan = d.closest('[data-detail]');
+    const r = pan && trovaResult(pan.dataset.url);
+    if (!r || !pan) return;
+    if (cosa === 'pass' && !r._pass) calcolaPassaggio(r, pan);
+    if (cosa === 'gomme' && !r._gomme) caricaGomme(r, pan);
+  }), true);
+
   // Spunta "veicolo storico" dentro il pannello di un annuncio: cambia la tariffa, si rifa' il conto.
   resultsGrid.addEventListener('change', e => {
     const storico = e.target.classList.contains('pass-storico-chk');
@@ -896,6 +905,7 @@ const AREE = {
   richiami: { pannello: 'richiamiPanel', apri: () => rcaApri(), chiudi: () => rcaChiudi() },
   fonti: { pannello: 'fontiPanel', apri: () => fnApri(), chiudi: () => fnChiudi() },
   ponte: { pannello: 'pontePanel', apri: () => pnApri(), chiudi: () => pnChiudi() },
+  competitor: { pannello: 'competitorPanel', apri: () => cpApri(), chiudi: () => cpChiudi() },
 };
 
 /**
@@ -2306,20 +2316,65 @@ function aggiornaNoteRiga(r) {
   });
 }
 
+// ─── Sezioni richiudibili dentro le schede ───────────────────────────────────
+// Passaggio di proprieta', cerchi e gomme, costo carburante, passaggi del modello: quattro
+// blocchi che stavano sempre aperti e riempivano la scheda anche quando non li guardavi.
+//
+// Sono la stessa cosa, quindi e' una funzione sola: intestazione cliccabile, il DATO che
+// conta scritto li' accanto (cosi' non serve aprire per vederlo) e il dettaglio sotto.
+//
+// Chiuse di default. Quelle che costano rete non partono all'apertura della scheda: e'
+// l'apertura della sezione a farle partire — un click invece di due, e nessuna richiesta
+// per chi non la apre.
+//
+// `toggle` NON risale il DOM: i due ascoltatori sono in cattura, altrimenti non arrivano.
+const miniAperte = new Set();
+
+function miniHTML(chiave, titolo, meta, corpo, opts = {}) {
+  if (!corpo && !opts.carica) return '';
+  const aperta = miniAperte.has(chiave);
+  return `<details class="mini"${aperta ? ' open' : ''} data-mini="${escapeHtml(chiave)}"${opts.carica ? ` data-carica="${escapeHtml(opts.carica)}"` : ''}>`
+    + `<summary class="mini-h"><span class="mini-t">${escapeHtml(titolo)}</span>`
+    + (meta ? `<span class="mini-meta">${meta}</span>` : '')
+    + '</summary>'
+    + `<div class="mini-b">${corpo || ''}</div></details>`;
+}
+
+/** tiene memoria di cosa e' aperto, e fa partire il carico alla prima apertura */
+function miniToggle(e, ctx) {
+  const d = e.target;
+  if (!d || !d.classList || !d.classList.contains('mini')) return;
+  const k = d.dataset.mini;
+  if (d.open) miniAperte.add(k); else miniAperte.delete(k);
+  if (!d.open || !d.dataset.carica) return;
+  ctx(d.dataset.carica, d);
+}
+
 // Il bottone compare solo se i dati per calcolare ci sono davvero: senza potenza o senza
 // localita' il conto non si fa, e lo si dice invece di mostrare un pulsante che fallisce.
 // Le due spunte (storico, IVA) restano raggiungibili SEMPRE, anche quando il calcolo non
 // riesce: sono proprio loro a poterlo far riuscire (una moto non storica non e' calcolabile).
 function passHTML(r) {
+  const dentro = passCorpoHTML(r);
+  if (!dentro) return '';
+  const st = r._pass;
+  // Il numero nell'intestazione: chiuso si legge lo stesso, ed e' l'unica cifra che
+  // conta. Aperto ci sono provincia, opzioni e come si e' arrivati a quella cifra.
+  const meta = (st && st.stato === 'ok' && st.d && st.d.ok && st.d.totaleNoto != null)
+    ? escapeHtml(eurRound(st.d.totaleNoto)) : '';
+  return miniHTML('pass:' + r.url, 'Passaggio di proprieta', meta, dentro, { carica: 'pass' });
+}
+
+function passCorpoHTML(r) {
   const haPot = r.potenzaCv > 0;
   const st = r._pass;
   const opz = passOpzioniHTML(r);
   if (!st) {
     if (!r.provincia && !carbProvincia()) return '';
     if (!haPot && !r._passStorico) {
-      return `<div class="det-pass-no">Passaggio di proprieta: manca la potenza in questo annuncio.</div>${opz}`;
+      return `<div class="det-pass-no">Manca la potenza in questo annuncio: il conto non si fa.</div>${opz}`;
     }
-    return `<button type="button" class="det-act btn-passaggio">${icon('info')}<span class="ra-txt">Calcola passaggio di proprieta</span></button>${opz}`;
+    return `<div class="det-pass-no">Calcolo…</div>${opz}`;
   }
   if (st.stato === 'carico') return '<div class="det-pass-no">Calcolo…</div>';
   if (st.stato === 'ko') {
@@ -2433,7 +2488,15 @@ function gommeHTML(r) {
   const k = gommeChiave(r);
   if (!k) return '';
   const st = r._gomme;
-  if (!st) return `<button type="button" class="det-act btn-gomme">${icon('info')}<span class="ra-txt">Cerchi e gomme di questo modello</span></button>`;
+  const calz = (st && st.stato === 'ok') ? ((st.d && st.d.calzate) || []).filter(c => c.misura) : [];
+  const misure = new Set(calz.map(c => c.misura));
+  const meta = misure.size ? `${misure.size} misure` : '';
+  return miniHTML('gom:' + r.url, 'Cerchi e gomme', meta, gommeCorpoHTML(r, k), { carica: 'gomme' });
+}
+
+function gommeCorpoHTML(r, k) {
+  const st = r._gomme;
+  if (!st) return '<div class="gom-att">Cerco cerchi e gomme…</div>';
   if (st.stato === 'carico') return '<div class="gom-att">Cerco cerchi e gomme…</div>';
   if (st.stato === 'ko') return '<div class="gom-att">Fonte non raggiungibile.</div>'
     + '<button type="button" class="det-act btn-gomme"><span class="ra-txt">Riprova</span></button>';
@@ -2452,7 +2515,7 @@ function gommeHTML(r) {
     if (c.cerchio) per.get(c.misura).cerchi.add(c.cerchio);
     if (c.pressioneAntBar) per.get(c.misura).press.add(c.pressioneAntBar + (c.pressionePostBar ? ' / ' + c.pressionePostBar : '') + ' bar');
   }
-  return '<div class="gom"><div class="gom-h">Cerchi e gomme <span class="gom-src">Wheel-Size</span>'
+  return '<div class="gom"><div class="gom-h"><span class="gom-src">Wheel-Size</span>'
     + '<span class="gom-hint">clicca una misura per l\'etichetta europea</span></div>'
     + [...per.entries()].map(([mis, v]) => `<div class="gom-riga">
         <button type="button" class="gom-mis" data-misura="${escapeHtml(mis)}">${escapeHtml(mis)}</button>
@@ -3196,15 +3259,14 @@ function vehCostoHTML(spec) {
   const eur = n => n.toLocaleString('it-IT', { maximumFractionDigits: 0 });
   const provOpts = ['<option value="">Media Italia</option>']
     .concat(Object.keys(carbIdx.province).sort().map(x => `<option value="${x}"${x === pv ? ' selected' : ''}>${x}</option>`)).join('');
-  return `<div class="veh-costo">
-    <div class="veh-costo-cifra"><b>${eur(anno)} €</b><span>all'anno di ${CARB_ETICHETTA[famiglia]}</span></div>
+  return miniHTML('carb', 'Costo carburante', `${eur(anno)} €<em>all'anno</em>`, `<div class="veh-costo">
     <div class="veh-costo-det">${carbDetHTML(per100, consumo, voce, kmSt)}</div>
     <div class="veh-costo-ctrl">
       <select class="veh-carb-prov" aria-label="provincia per il prezzo del carburante">${provOpts}</select>
       <label class="veh-carb-kmw"><input type="number" class="veh-carb-km" value="${kmSt.difetto ? '' : km}" min="${KM_MIN}" max="${KM_MAX}" step="any" inputmode="numeric" aria-label="chilometri all'anno"><span>km/anno</span></label>
     </div>
     <div class="veh-costo-fonte">Prezzi self ${carbIdx.aggiornato ? 'del ' + carbIdx.aggiornato : ''} — ${escapeHtml(carbIdx.fonte)}. Stima: consumo dichiarato, non reale.</div>
-  </div>`;
+  </div>`);
 }
 
 // ── Liquidita accanto a ogni annuncio ────────────────────────────────────────
@@ -3253,11 +3315,11 @@ function liqBadgeHTML(item) {
   if (item._liq === undefined) item._liq = liqPerTitolo(item.titolo);   // memo: una volta per riga
   const m = item._liq;
   if (!m || m.ricambio == null) return '';
-  const g = m.giudizio || {};
+  // Il numero e basta. Niente frase e niente colore: anche il verde e' un giudizio, e
+  // qui la fonte da' passaggi e parco circolante, non un parere sulla vendibilita'.
   const tip = `${m.modello}: ${Number(m.trasferimenti).toLocaleString('it-IT')} passaggi di proprieta nel ${liqAnno}` +
-    (m.parco ? ` su ${Number(m.parco).toLocaleString('it-IT')} in circolazione` : '') +
-    (g.testo ? ` — ${g.testo}` : '') + '. Fonte ACI Autoritratto.';
-  return `<span class="liq-badge liq-${g.classe || 'media'}" title="${escapeHtml(tip)}">&#8635; ${String(m.ricambio).replace('.', ',')}%</span>`;
+    (m.parco ? ` su ${Number(m.parco).toLocaleString('it-IT')} in circolazione` : '') + '. Fonte ACI Autoritratto.';
+  return `<span class="liq-badge" title="${escapeHtml(tip)}">&#8635; ${String(m.ricambio).replace('.', ',')}%</span>`;
 }
 let liqAnno = 2025;
 
@@ -3275,15 +3337,14 @@ function vehLiqHTML() {
   // in mancanza, l'attribuzione per titolo usata anche dai segni accanto agli annunci.
   const m = (liqVoce && liqVoce.ok) ? liqVoce : liqPerTitolo(`${p.marca} ${p.modello || ''}`);
   if (!m || m.ricambio == null) return '';
-  const g = m.giudizio || {};
   const n = x => Number(x).toLocaleString('it-IT');
-  return `<div class="veh-liq">
-    <div class="veh-liq-cifra"><b>${n(m.trasferimenti)}</b> <span>passaggi di proprieta nel ${m.anno || liqAnno}</span>
-      ${g.testo ? `<span class="liq-badge liq-${g.classe || 'media'}">${escapeHtml(g.testo)}</span>` : ''}</div>
+  return miniHTML('liq', 'Passaggi di proprieta',
+    `${n(m.trasferimenti)}<em>nel ${m.anno || liqAnno}</em>`,
+    `<div class="veh-liq">
     <div class="veh-liq-det">${escapeHtml(m.modello)} · ${m.parco ? n(m.parco) + ' in circolazione' : 'parco non disponibile'} · ricambio ${String(m.ricambio).replace('.', ',')}%/anno</div>
     ${m.viaPadre ? `<div class="veh-liq-avviso">Dato del modello base &laquo;${escapeHtml(m.viaPadre)}&raquo;, non della variante cercata.</div>` : ''}
     <div class="veh-liq-fonte">${escapeHtml(m.fonte || ('ACI Autoritratto ' + liqAnno))}. ${escapeHtml(m.nota || 'Dato aggregato sul modello, non sulla singola versione.')}</div>
-  </div>`;
+  </div>`);
 }
 
 // ── Filtro/suggerimento per anno (dai filtri ricerca "anno da/anno a"): suggerisce ma NON sceglie ──
@@ -4904,6 +4965,10 @@ function fnRender() {
   catAvviaTicker();      // lo stesso conto alla rovescia del catalogo
 }
 
+// Sezioni richiudibili della scheda tecnica: qui non c'e' niente da caricare, i dati
+// sono gia' in pagina — serve solo ricordare cosa hai lasciato aperto.
+document.getElementById('vehicleScheda')?.addEventListener('toggle', e => miniToggle(e, () => {}), true);
+
 document.getElementById('fontiPanel')?.addEventListener('click', e => {
   const fo = e.target.closest('.cat-fonte');
   if (fo && !fo.disabled) return void fnVaiFonte(fo.dataset.fonte);
@@ -5113,4 +5178,146 @@ document.getElementById('pontePanel')?.addEventListener('click', e => {
 document.getElementById('pontePanel')?.addEventListener('input', e => {
   if (e.target.id === 'pnCerca') { pnFiltro = e.target.value; pnRender(); const c = document.getElementById('pnCerca'); if (c) { c.focus(); c.setSelectionRange(c.value.length, c.value.length); } }
   if (e.target.id === 'pnAnno') pnAnno = e.target.value;
+});
+
+
+// ─── COMPETITOR ───────────────────────────────────────────────────────────────
+// Il parco di un concessionario: il tuo e quello di chi ti sta intorno.
+//
+// Un concessionario e' una VETRINA, e le fonti la servono per intero — Autoscout con
+// `customer:{id}`, Subito con `uid=`. Si incolla il link e l'app ricava l'id da sola.
+//
+// IL PARCO NON SI SCARICA DA SOLO. Aprire questa sezione non costa niente: si vede
+// l'elenco salvato e basta. Il parco arriva quando lo chiedi, perche' un concessionario
+// grosso costa una richiesta ogni cinquanta veicoli.
+let cpVoci = null;                 // l'elenco salvato (null = mai caricato)
+let cpParchi = {};                 // id → { stato, dati }
+let cpErrore = null;
+
+const cpEl = () => document.getElementById('competitorPanel');
+const cpNum = n => (n == null ? '—' : Number(n).toLocaleString('it-IT'));
+const cpEur = n => (n == null ? '—' : '€ ' + Number(n).toLocaleString('it-IT', { maximumFractionDigits: 0 }));
+
+async function cpApri() {
+  const el = cpEl(); if (!el) return;
+  el.classList.remove('d-none');
+  document.body.classList.add('has-results');   // via lo sfondo dello stato-vuoto
+  if (!cpVoci) {
+    el.innerHTML = '<div class="cp-wrap"><div class="cp-att">Carico l\'elenco…</div></div>';
+    try {
+      const d = await fetch('/api/competitor').then(r => r.json());
+      cpVoci = d.voci || [];
+    } catch (_) { cpVoci = []; cpErrore = 'elenco non raggiungibile'; }
+  }
+  cpRender();
+}
+function cpChiudi() { const el = cpEl(); if (el) { el.classList.add('d-none'); el.innerHTML = ''; } }
+
+function cpNumeriHTML(n, troncato) {
+  if (!n) return '';
+  const riga = (k, v) => `<div class="cp-n"><span>${escapeHtml(k)}</span><b>${v}</b></div>`;
+  const barre = (voci, tot) => voci.slice(0, 6).map(m =>
+    `<div class="cp-barra"><span class="cp-barra-k">${escapeHtml(m.nome)}</span>`
+    + `<span class="cp-barra-v" style="width:${Math.round(100 * m.n / (tot || 1))}%"></span>`
+    + `<span class="cp-barra-n">${m.n}</span></div>`).join('');
+  return '<div class="cp-numeri">'
+    + riga('veicoli', cpNum(n.veicoli) + (n.moto ? ` <em>${n.auto} auto · ${n.moto} moto</em>` : ''))
+    + (n.prezzo ? riga('prezzo mediano', cpEur(n.prezzo.mediana) + ` <em>${cpEur(n.prezzo.min)} – ${cpEur(n.prezzo.max)}</em>`) : '')
+    + (n.anno ? riga('anno mediano', n.anno.mediana + ` <em>${n.anno.min}–${n.anno.max}</em>`) : '')
+    + (n.km ? riga('km mediani', cpNum(n.km.mediana)) : '')
+    // La giacenza viene solo da Autoscout: su Subito quella data si azzera a ogni
+    // rilancio. Dirlo qui, non in una nota a fondo pagina che nessuno legge.
+    + (n.giacenza ? riga('in vendita da', n.giacenza.mediana + ' gg'
+        + ` <em>max ${n.giacenza.max} · su ${n.giacenza.su} di ${n.giacenza.suTotale}, dato Autoscout</em>`) : '')
+    + '</div>'
+    + (n.marche && n.marche.length ? `<div class="cp-gruppo"><div class="cp-gruppo-h">Marche</div>${barre(n.marche, n.veicoli)}</div>` : '')
+    + (n.alimentazione && n.alimentazione.length ? `<div class="cp-gruppo"><div class="cp-gruppo-h">Alimentazione</div>${barre(n.alimentazione, n.veicoli)}</div>` : '')
+    + (troncato ? '<div class="cp-avviso">Elenco troncato al tetto di sicurezza: questo parco e\' piu\' grande di quello mostrato.</div>' : '')
+    + (n.venditori && n.venditori.length > 1
+        ? `<div class="cp-avviso">Attenzione: nella risposta compaiono ${n.venditori.length} venditori diversi (${escapeHtml(n.venditori.map(v => v.nome).join(', ')).slice(0, 90)}). Il filtro della fonte non ha tenuto.</div>` : '');
+}
+
+function cpSchedaHTML(v) {
+  const st = cpParchi[v.id];
+  const corpo = !st ? '<div class="cp-att">Il parco non e\' ancora stato scaricato.</div>'
+    : st.stato === 'carico' ? '<div class="cp-att">Scarico il parco… su un concessionario grande ci vuole un minuto.</div>'
+    : st.stato === 'ko' ? `<div class="cp-att">Non riuscito: ${escapeHtml(st.errore || 'la fonte non risponde')}</div>`
+    : cpNumeriHTML(st.dati.numeri, st.dati.troncato);
+  const quando = st && st.stato === 'ok' && st.dati.quando
+    ? `<span class="cp-quando">dati del ${new Date(st.dati.quando).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${st.dati.daCache ? ' · dalla cache' : ''}</span>` : '';
+  return `<article class="cp-scheda${v.mio ? ' cp-mio' : ''}" data-cid="${escapeHtml(String(v.id))}">
+    <header class="cp-h">
+      <div class="cp-nome">${escapeHtml(v.nome)}${v.mio ? '<span class="cp-tag">il tuo</span>' : ''}</div>
+      <div class="cp-dove">${escapeHtml([v.via, v.dove].filter(Boolean).join(' · ')) || '&nbsp;'}</div>
+      <div class="cp-azioni">
+        ${quando}
+        <button type="button" class="cp-btn cp-aggiorna">${st && st.stato === 'ok' ? 'Aggiorna' : 'Scarica il parco'}</button>
+        <a class="cp-btn cp-link" href="${escapeHtml(v.url)}" target="_blank" rel="noopener noreferrer">vetrina ↗</a>
+        <button type="button" class="cp-btn cp-togli" title="Togli dall'elenco">✕</button>
+      </div>
+    </header>
+    <div class="cp-corpo">${corpo}</div>
+  </article>`;
+}
+
+function cpRender() {
+  const el = cpEl(); if (!el) return;
+  const voci = cpVoci || [];
+  const miei = voci.filter(v => v.mio), altri = voci.filter(v => !v.mio);
+  el.innerHTML = `<div class="cp-wrap">
+    <div class="cp-add">
+      <input type="text" id="cpUrl" class="field-input" placeholder="Incolla il link della vetrina — autoscout24.it/concessionari/… oppure subito.it/shops/…" />
+      <label class="cp-mio-chk"><input type="checkbox" id="cpMio"> e' il mio</label>
+      <button type="button" class="btn-cerca" id="cpAdd">Aggiungi</button>
+    </div>
+    ${cpErrore ? `<div class="cp-avviso">${escapeHtml(cpErrore)}</div>` : ''}
+    ${!voci.length ? '<div class="cp-att">Nessun concessionario ancora. Incolla il link di una vetrina — anche la tua.</div>' : ''}
+    ${miei.map(cpSchedaHTML).join('')}
+    ${altri.map(cpSchedaHTML).join('')}
+  </div>`;
+}
+
+async function cpAggiungi() {
+  const inp = document.getElementById('cpUrl');
+  const url = (inp && inp.value || '').trim();
+  if (!url) return;
+  const mio = !!(document.getElementById('cpMio') || {}).checked;
+  cpErrore = null;
+  const btn = document.getElementById('cpAdd'); if (btn) { btn.disabled = true; btn.textContent = 'Cerco…'; }
+  try {
+    const d = await fetch('/api/competitor', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url, mio }) }).then(r => r.json());
+    if (!d.ok) cpErrore = d.error || 'non riesco ad aggiungerlo';
+    else { cpVoci = (cpVoci || []).concat([d.voce]); }
+  } catch (_) { cpErrore = 'il server non risponde'; }
+  cpRender();
+}
+
+async function cpScarica(id, forza) {
+  cpParchi[id] = { stato: 'carico' };
+  cpRender();
+  try {
+    const d = await fetch(`/api/competitor/${encodeURIComponent(id)}/parco${forza ? '?forza=1' : ''}`).then(r => r.json());
+    cpParchi[id] = d.ok ? { stato: 'ok', dati: d } : { stato: 'ko', errore: d.error };
+  } catch (_) { cpParchi[id] = { stato: 'ko', errore: 'il server non risponde' }; }
+  cpRender();
+}
+
+async function cpTogli(id) {
+  try { await fetch(`/api/competitor/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch (_) {}
+  cpVoci = (cpVoci || []).filter(v => String(v.id) !== String(id));
+  delete cpParchi[id];
+  cpRender();
+}
+
+document.getElementById('competitorPanel')?.addEventListener('click', e => {
+  const t = e.target;
+  if (t.closest('#cpAdd')) { cpAggiungi(); return; }
+  const sch = t.closest('.cp-scheda'); if (!sch) return;
+  const id = sch.dataset.cid;
+  if (t.closest('.cp-aggiorna')) { cpScarica(id, !!cpParchi[id]); return; }
+  if (t.closest('.cp-togli')) { cpTogli(id); return; }
+});
+document.getElementById('competitorPanel')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.id === 'cpUrl') { e.preventDefault(); cpAggiungi(); }
 });
