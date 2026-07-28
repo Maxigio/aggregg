@@ -189,7 +189,9 @@ body:not(.has-results) .search {
 .seg-toggle input:checked + label { background: var(--text); color: var(--bg); }
 
 /* ─── Modo Cerca / Valuta (#6) ──────────────────────────────────────────────── */
-.mode-toggle { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 12px; }
+/* Va a capo invece di spingere la pagina: su 390px i bottoni misuravano 467px e
+   tutto il documento scorreva in orizzontale, non solo questa riga. */
+.mode-toggle { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 12px; }
 .mode-btn {
   border: 1px solid var(--line); background: var(--surface); color: var(--text-muted);
   border-radius: var(--r); padding: 6px 18px; font-weight: 700; font-size: 0.85rem;
@@ -411,7 +413,10 @@ body:not(.has-results) .search {
 .rc-var-row:hover { border-color: var(--accent); background: var(--surface-2, #f7f8fa); }
 .rc-var-row.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; background: var(--accent-weak); }
 .rc-var-marca { font-weight: 700; color: var(--text); }
-.rc-var-nota { flex: 1; color: var(--text-muted); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-var-nota { flex: 1; min-width: 0; color: var(--text-muted); font-size: 0.8rem;
+  /* Due righe, non i puntini: questa descrizione E' cio' che distingue una variante
+     dall'altra, e troncata a meta' le rende indistinguibili. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .rc-var-prezzo { font-family: var(--num); font-weight: 800; color: var(--pos); }
 .rc-tipo-match { display: inline-block; font-size: 0.62rem; font-weight: 700; color: var(--pos); border: 1px solid var(--pos); border-radius: 3px; padding: 0 4px; margin-right: 6px; vertical-align: middle; }
 .rc-sch-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 12px; }
@@ -1386,3 +1391,44 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .ver-campo .ac-wrap { display: flex; }
 .ver-vuoto { font-size: 0.76rem; color: var(--text-muted); font-style: italic; padding: 2px 2px 0; }
 @media (max-width: 640px) { .ver-grid { grid-template-columns: 1fr; } }
+
+/* ── Scheda del ricambio dalla fonte OE, dentro la ricerca ricambi ────────────
+   I codici stanno RAGGRUPPATI per costruttore: in piano erano trentuno pastiglie in
+   fila con "Volkswagen (VW)" ripetuto undici volte, e il nome del costruttore occupava
+   piu' spazio del codice, che e' l'unica cosa che si legge davvero.
+   Tutto si adatta in larghezza: niente scorrimento orizzontale, niente testo tagliato. */
+/* Dentro la scheda tecnica: nessuna cornice propria, solo una riga di separazione —
+   due riquadri affiancati facevano sembrare due schede quello che e' una sola. */
+.rc-pz { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.rc-pz-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 0.82rem; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.rc-pz-src { font-weight: 400; font-size: 0.75rem; color: var(--text-muted); }
+.rc-pz-att { font-size: 0.8rem; color: var(--text-muted); font-style: italic; }
+.rc-pz-a + .rc-pz-a { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.rc-pz-a-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 0.86rem; }
+.rc-pz-desc { color: var(--text-muted); font-size: 0.8rem; }
+.rc-pz-link { margin-left: auto; font-size: 0.78rem; white-space: nowrap; }
+
+/* misure: griglia che si adatta, valore sotto il nome — le etichette sono lunghe
+   ("diametro cerchio fori") e su una riga sola verrebbero tagliate */
+.rc-pz-mis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 12px; margin: 8px 0 0; }
+.rc-pz-mis > div { min-width: 0; }
+.rc-pz-mis dt { font-size: 0.72rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.rc-pz-mis dd { margin: 0; font-size: 0.82rem; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+
+/* codici sotto un dropdown chiuso: quattordici righe su un disco freno, e possono
+   essere molte di piu' — aperte spingevano giu' le offerte */
+.rc-pz-dd { margin-top: 10px; }
+.rc-pz-sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); list-style: none; }
+.rc-pz-sum::-webkit-details-marker { display: none; }
+.rc-pz-sum::before { content: '▸'; display: inline-block; transition: transform .12s; }
+.rc-pz-dd[open] > .rc-pz-sum::before { transform: rotate(90deg); }
+.rc-pz-n { padding: 0 6px; font-size: 0.72rem; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; }
+.rc-pz-hint { font-weight: 400; font-style: italic; }
+.rc-pz-lista { margin-top: 6px; max-height: 260px; overflow-y: auto; }
+/* codice a sinistra (la colonna che si legge), chi lo usa a destra in chiaro */
+.rc-pz-riga { display: grid; grid-template-columns: minmax(120px, max-content) 1fr; gap: 4px 12px; align-items: baseline; padding: 2px 0; }
+.rc-pz-mk { font-size: 0.76rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.rc-pz-c { padding: 2px 7px; font-size: 0.78rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; overflow-wrap: anywhere; }
+.rc-pz-c:hover { border-color: var(--accent); color: var(--accent); }
+.rc-pz-c.suo { cursor: default; border-style: dashed; color: var(--text-muted); background: transparent; }
+@media (max-width: 560px) { .rc-pz-riga { grid-template-columns: 1fr; } }

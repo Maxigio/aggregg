@@ -1094,6 +1094,109 @@ function rcJumpToStat(which) {
   el.classList.add('rc-flash'); setTimeout(() => el && el.classList.remove('rc-flash'), 1500);
 }
 
+/**
+ * LA SCHEDA DEL PEZZO, accanto alla ricerca per codice originale.
+ *
+ * Lo stesso pezzo fisico e' in vendita sotto codici diversi: l'originale di un
+ * costruttore, quello del gruppo, i numeri sostituiti. Cercando un codice si trovano
+ * SOLO gli annunci che hanno scritto quel codice, e la lista sembra completa mentre non
+ * lo e'. Prima questa informazione stava in un'altra scheda (Fonti → Ricambi OE): per
+ * usarla bisognava espandere a mano, copiare e ricercare uno per uno.
+ *
+ * Non si cercano tutti in automatico — sarebbe un ventaglio di richieste per una domanda
+ * che l'utente non ha fatto. Si mostrano, e ognuno e' cliccabile.
+ *
+ * I CODICI SONO RAGGRUPPATI PER COSTRUTTORE. In piano erano 31 pastiglie in fila con
+ * "Volkswagen (VW)" ripetuto undici volte: il nome del costruttore occupava piu' spazio
+ * del codice, che e' l'unica cosa che si legge davvero.
+ *
+ * E si mostrano anche le MISURE, che sono la ragione per cui uno guarda un ricambio:
+ * due dischi con codici diversi possono essere lo stesso pezzo o differire di 3 mm.
+ *
+ * Arriva DOPO i risultati e non li fa aspettare: la fonte (bilstein) e' una navigazione
+ * col browser stealth, la piu' lenta di tutte. Se non risponde, la ricerca vale lo stesso.
+ */
+let rcOe = { codice: null, stato: 'idle', articoli: [], motivo: null };
+
+function rcOeMisureHTML(misure) {
+  if (!misure || !misure.length) return '';
+  return '<dl class="rc-pz-mis">' + misure.map(m =>
+    `<div><dt>${escapeHtml(m.nome)}</dt><dd>${escapeHtml(m.valore)}${m.unita ? ' ' + escapeHtml(m.unita) : ''}</dd></div>`
+  ).join('') + '</dl>';
+}
+
+function rcOeCodiciHTML(originali, cercato) {
+  // UNA RIGA PER CODICE, non per costruttore. La fonte elenca lo stesso numero VAG sotto
+  // ogni marchio del gruppo: "5Q0 615 301 F" compariva cinque volte, sotto Audi, CUPRA,
+  // Seat, Skoda e Volkswagen. Raggruppando per costruttore erano 31 voci per 14 codici
+  // veri, e il codice — l'unica cosa che si legge — annegava nella ripetizione.
+  const per = new Map();
+  for (const g of (originali || [])) {
+    for (const c of (g.codici || [])) {
+      const k = normOenLite(c);
+      if (!k) continue;
+      if (!per.has(k)) per.set(k, { codice: c, chi: new Set() });
+      if (g.costruttore) per.get(k).chi.add(g.costruttore);
+    }
+  }
+  if (!per.size) return '';
+  const voci = [...per.values()];
+  // CHIUSA DI DEFAULT. Sono quattordici righe su un disco freno e possono essere molte di
+  // piu': aperte spingevano giu' le offerte, che sono la ragione per cui si e' qui.
+  return `<details class="rc-pz-dd"><summary class="rc-pz-sum">Codici originali equivalenti`
+    + `<span class="rc-pz-n">${voci.length}</span>`
+    + '<span class="rc-pz-hint">clicca un codice per cercarlo</span></summary>'
+    + '<div class="rc-pz-lista">'
+    + voci.map(v => {
+        const suo = normOenLite(v.codice) === normOenLite(cercato);
+        const chi = [...v.chi].join(', ');
+        return '<div class="rc-pz-riga">'
+          + `<button type="button" class="rc-pz-c${suo ? ' suo' : ''}" data-codice="${escapeHtml(v.codice)}"`
+          + (suo ? ' title="e\' il codice che stai cercando"' : '') + `>${escapeHtml(v.codice)}</button>`
+          + `<span class="rc-pz-mk">${escapeHtml(chi)}</span></div>`;
+      }).join('')
+    + '</div></details>';
+}
+
+/** confronto codici alla buona: solo per evidenziare quello cercato, non per decidere niente. */
+const normOenLite = c => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+function rcOeHTML() {
+  if (ricambiMode !== 'oem' || !rcOe.codice) return '';
+  // Vive DENTRO la scheda tecnica, non in un riquadro suo: sono dati dello stesso pezzo,
+  // e due cornici affiancate facevano sembrare due schede quello che e' una sola.
+  const cap = t => `<div class="rc-pz"><div class="rc-pz-h">Dati del pezzo <span class="rc-pz-src">bilstein group — febi / SWAG / Blue Print</span></div>${t}</div>`;
+  if (rcOe.stato === 'carico') return cap('<div class="rc-pz-att">cerco i dati del pezzo…</div>');
+  if (rcOe.stato === 'ko') return cap(`<div class="rc-pz-att">${escapeHtml(rcOe.motivo || 'fonte non disponibile ora')}</div>`);
+  if (!rcOe.articoli.length) return cap('<div class="rc-pz-att">questo codice non e\' nel catalogo febi / SWAG / Blue Print</div>');
+  return cap(rcOe.articoli.map(a => `<article class="rc-pz-a">
+    <header class="rc-pz-a-h">
+      <b>${escapeHtml(a.marchio || '')} ${escapeHtml(a.articolo || '')}</b>
+      <span class="rc-pz-desc">${escapeHtml(a.descrizione || '')}${a.lato ? ' · ' + escapeHtml(a.lato) : ''}</span>
+      ${a.scheda ? `<a class="rc-pz-link" href="${escapeHtml(a.scheda)}" target="_blank" rel="noopener noreferrer">scheda ↗</a>` : ''}
+    </header>
+    ${rcOeMisureHTML(a.misure)}
+    ${rcOeCodiciHTML(a.originali, rcOe.codice)}
+  </article>`).join(''));
+}
+
+async function rcCaricaOe(codice, gen) {
+  rcOe = { codice, stato: 'carico', articoli: [], motivo: null };
+  renderRicambiPanel();
+  try {
+    const r = await fetch('/api/fonti/ricambi-oe/cerca?codice=' + encodeURIComponent(codice)
+      + '&tipo=' + encodeURIComponent(rcVeicolo));
+    const d = await r.json();
+    if (gen !== rcGen) return;                       // ricerca superata: non toccare piu' niente
+    if (!r.ok || d.error) rcOe = { codice, stato: 'ko', articoli: [], motivo: d.motivo || d.error || null };
+    else rcOe = { codice, stato: 'ok', articoli: d.articoli || [], motivo: d.motivo || null };
+  } catch (_) {
+    if (gen !== rcGen) return;
+    rcOe = { codice, stato: 'ko', articoli: [], motivo: null };
+  }
+  renderRicambiPanel();
+}
+
 async function doRicambi() {
   const q = rcActiveInput().value.trim();
   if (!q) { showError(ricambiMode === 'oem' ? 'Inserisci un codice OEM (es. 1K0905851B).' : ricambiMode === 'prodotto' ? 'Inserisci il codice articolo del produttore.' : 'Inserisci il nome del ricambio.'); return; }
@@ -1104,6 +1207,7 @@ async function doRicambi() {
   panel.innerHTML = '<div class="rc-wrap">' + loadingBlockHTML('Cerco il ricambio su più fonti…') + '</div>';
   startLoadingTips(panel);
   const myGen = ++rcGen;   // due ricerche in volo → vince l'ultima lanciata, la vecchia si scarta
+  rcOe = { codice: null, stato: 'idle', articoli: [], motivo: null };   // nuova ricerca, nuova scheda
   try {
     const res = await fetch(`/api/ricambi?q=${encodeURIComponent(q)}&mode=${ricambiMode}&veicolo=${rcVeicolo}`);
     const d = await res.json();
@@ -1118,6 +1222,8 @@ async function doRicambi() {
     rcVariantSel = cat ? { tipo: cat.tipoDominante, articleId: cat.defaultArticleId } : { tipo: null, articleId: null };
     renderRicambiPanel();
     if (cat && cat.defaultArticleId) rcFetchVariantSpecs(rcSelectedVariant());
+    // Gli equivalenti dopo, e senza await: i risultati non devono aspettare la fonte piu' lenta.
+    if (ricambiMode === 'oem') rcCaricaOe(d.oen || q, myGen);
   } catch (_) {
     if (myGen !== rcGen) return;
     panel.innerHTML = '<div class="rc-wrap"><div class="rc-empty">Servizio ricambi non raggiungibile.</div></div>';
@@ -1342,7 +1448,13 @@ function rcSchedaHTML(d) {
     const catName = d.veicolo === 'auto' ? 'Autodoc' : 'CMSNL';
     const cat = d.veicolo === 'auto' ? d.sources?.autodoc : d.sources?.cmsnl;
     const msg = (cat && ['blocked', 'error', 'timeout'].includes(cat.status)) ? `Catalogo ${catName} non disponibile ora — riprova tra poco.` : `Ricambio non presente nel catalogo ${catName}.`;
-    return `<div class="rc-scheda rc-scheda-empty"><div class="rc-sch-body"><div class="rc-sch-tit">${idLine}</div><div class="rc-sch-emptymsg">${msg}</div></div></div>`;
+    // I dati OE non dipendono da Autodoc: se quello non ha il pezzo, questi restano.
+    const oe = rcOeHTML();
+    const vuota = `<div class="rc-scheda rc-scheda-empty"><div class="rc-sch-body"><div class="rc-sch-tit">${idLine}</div><div class="rc-sch-emptymsg">${msg}</div></div>${oe}</div>`;
+    if (!oe) return vuota;
+    return `<div class="rc-group${rcSchedaCollapsed ? ' collapsed' : ''}">`
+      + `<button type="button" class="rc-group-head rc-sched-head"><span class="rc-gcaret">${icon('chevron')}</span><span class="rc-group-title">Scheda tecnica</span><span class="rc-group-meta">${idParts.join(' · ').slice(0, 90)}</span></button>`
+      + `<div class="rc-group-body">${vuota}</div></div>`;
   }
   const cat = s.catalogo;
   const code = escapeHtml(s.codice || d.oen || '');
@@ -1360,7 +1472,7 @@ function rcSchedaHTML(d) {
     : '';
   const body = sel ? rcVariantDetailHTML(sel, s) : '';   // nessuna scelta → il dropdown basta (niente prompt testuale)
   // Scheda avvolta in un gruppo collassabile (riuso pattern "Raggruppa": .rc-group + caret).
-  const inner = `<div class="rc-scheda">${tipiChips}${varDropdown}${body}</div>`;
+  const inner = `<div class="rc-scheda">${tipiChips}${varDropdown}${body}${rcOeHTML()}</div>`;
   return `<div class="rc-group${rcSchedaCollapsed ? ' collapsed' : ''}">`
     + `<button type="button" class="rc-group-head rc-sched-head"><span class="rc-gcaret">${icon('chevron')}</span><span class="rc-group-title">Scheda tecnica</span><span class="rc-group-meta">${escapeHtml(s.tipoPezzo || 'Ricambio')}${code ? ' · ' + code : ''}</span></button>`
     + `<div class="rc-group-body">${inner}</div></div>`;
@@ -1387,10 +1499,12 @@ function renderRicambiPanel() {
   const ddOpen = !!panel.querySelector('.rc-var-dd[open]');
   const colsOpen = !!panel.querySelector('.tb-cols:not(.price-menu)[open]');
   const priceOpen = !!panel.querySelector('.price-menu[open]');
+  const oeOpen = !!panel.querySelector('.rc-pz-dd[open]');   // altrimenti si richiude sotto il dito
   const restoreOpen = () => {
     if (ddOpen) panel.querySelector('.rc-var-dd')?.setAttribute('open', '');
     if (colsOpen) panel.querySelector('.tb-cols:not(.price-menu)')?.setAttribute('open', '');
     if (priceOpen) panel.querySelector('.price-menu')?.setAttribute('open', '');
+    if (oeOpen) panel.querySelector('.rc-pz-dd')?.setAttribute('open', '');
   };
   const rawArts = d.articoli || [];
   // SOLO fonti in errore (diagnostica) — le pill "ok" ridondano col group-by Fonte, via.
@@ -1599,6 +1713,16 @@ function setRcVeicolo(v) {
     if (imgWrap) { const im = imgWrap.querySelector('img'); if (im && im.src) openLightbox([{ full: im.src }]); return; }
     const detGal = t.closest('.det-gallery'); if (detGal && t.tagName === 'IMG') { openLightbox([...detGal.querySelectorAll('img')].map(i => ({ full: i.src }))); return; }
     const cp = t.closest('.rc-copy'); if (cp) { e.preventDefault(); rcCopy(cp.dataset.copy, cp); return; }   // preventDefault: non togglare il <details> quando il copy-button è nel summary
+    // Un codice equivalente cliccato diventa la ricerca, e il campo si aggiorna con lui:
+    // altrimenti staresti guardando i risultati di un codice mentre l'input ne mostra
+    // un altro, e non avresti modo di accorgertene.
+    const eq = t.closest('.rc-pz-c:not(.suo)');
+    if (eq) {
+      e.preventDefault();
+      const inp = rcActiveInput();
+      if (inp) { inp.value = eq.dataset.codice; doRicambi(); }
+      return;
+    }
     // selettore varianti v7: scegli tipo → scegli variante → specs lazy.
     // La selezione chiude il dropdown: tolgo open dal DOM vivo PRIMA del re-render, così
     // il capture in renderRicambiPanel non lo ripristina (persiste solo per i re-render passivi).
