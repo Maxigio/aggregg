@@ -3311,7 +3311,7 @@ function hideResults() {
 
 // ─── Scheda tecnica veicolo (auto-data.net) — highlighted, collassabile, sopra gli annunci ──
 let vehData = null, vehSpecs = {}, vehSchedaCollapsed = false, vehSelUrl = null, vehGen = 0;   // vehGen: token anti-race — scarta risposte di ricerche/generazioni superate
-function clearVehScheda() { vehGen++; vehData = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; vehRichiami = null; vehAddonAperto = false; const el = document.getElementById('vehicleScheda'); if (el) el.innerHTML = ''; }   // vehGen++ invalida le fetch in volo; i richiami sono del veicolo cercato, non si tengono
+function clearVehScheda() { vehGen++; vehData = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; vehRichiami = null; vehOmoStato = {}; vehAddonAperto = false; const el = document.getElementById('vehicleScheda'); if (el) el.innerHTML = ''; }   // vehGen++ invalida le fetch in volo; i richiami sono del veicolo cercato, non si tengono
 
 async function loadVehScheda() {
   const el = document.getElementById('vehicleScheda'); if (!el) return;
@@ -3326,7 +3326,7 @@ async function loadVehScheda() {
   const anno = p.annoMin || p.annoMax || '';
   vehSchedaCollapsed = true;   // scheda chiusa di default
   vehXf.compare = null; vehXf.q = ''; vehXf.highlight = new Set(); vehGenChosen = false; vehShowAll = false;   // reset per ricerca (traduci/unità restano preferenze)
-  vehRichiami = null; vehAddonAperto = false;   // i richiami sono di QUEL veicolo: cambiando ricerca ripartono
+  vehRichiami = null; vehOmoStato = {}; vehAddonAperto = false;   // i richiami sono di QUEL veicolo: cambiando ricerca ripartono
   // La targa NON e' un parametro di ricerca: non filtra gli annunci e non va alle fonti.
   // Si legge qui e resta nel browser, cosi' non finisce nemmeno nella chiave di cache.
   targaCercata = String((document.getElementById('targaFiltro') || {}).value || '')
@@ -3399,6 +3399,25 @@ function vehBodyHTML() {
 // La marca e il modello sono quelli della RICERCA ESEGUITA, gli stessi con cui e' stata
 // costruita la scheda — non lo stato del form, che l'utente puo' aver gia' cambiato.
 let vehRichiami = null;        // null = mai chiesti · {loading} · {rdw, sg} · {ko}
+// Le versioni di un'omologazione, chieste una alla volta: chiave = numero grezzo.
+let vehOmoStato = {};
+
+async function vehOmoCarica(numero) {
+  if (!numero || vehOmoStato[numero]) return;
+  vehOmoStato[numero] = 'carico';
+  const my = vehGen;
+  renderVehBody();
+  try {
+    const d = await fetch('/api/richiami/omologazione?n=' + encodeURIComponent(numero)).then(r => r.json());
+    if (my !== vehGen) return;
+    vehOmoStato[numero] = d && d.ok && (d.nomi || []).length
+      ? d : { ko: (d && d.motivo) || 'nessuna versione trovata per questa omologazione' };
+  } catch (_) {
+    if (my !== vehGen) return;
+    vehOmoStato[numero] = { ko: 'catalogo non raggiungibile' };
+  }
+  renderVehBody();
+}
 let vehAddonAperto = false;    // il gruppo resta aperto quando il corpo si ridisegna
 
 async function vehRichiamiCarica() {
@@ -3445,11 +3464,13 @@ function vehRichiamiHTML() {
      */
     const rigaHTML = (url, cat, meta, sotto) => {
       const dentro = `<span class="veh-rich-cat">${escapeHtml(cat)}</span>`
-        + `<span class="veh-rich-meta">${escapeHtml(meta)}</span>`
-        + (sotto ? `<span class="veh-rich-omo">${escapeHtml(sotto)}</span>` : '');
-      return url && /^https?:\/\//i.test(url)
+        + `<span class="veh-rich-meta">${escapeHtml(meta)}</span>`;
+      const riga = url && /^https?:\/\//i.test(url)
         ? `<a class="veh-rich-r veh-rich-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${dentro}</a>`
         : `<div class="veh-rich-r">${dentro}</div>`;
+      // L'omologazione sta FUORI dal link: dentro non potrebbe portare un bottone, e il
+      // bottone e' il punto — da li' si passa dal modello alle versioni.
+      return riga + (sotto || '');
     };
     const riga = c => rigaHTML(c.url, c.categoriaIt || c.categoria || '—',
       [c.data ? new Date(c.data).toLocaleDateString('it-IT') : null, c.rischio].filter(Boolean).join(' · '));
@@ -3467,9 +3488,35 @@ function vehRichiamiHTML() {
       if (!tutte.length) return null;
       return tutte.slice(0, 2).join(' · ') + (tutte.length > 2 ? `  +${tutte.length - 2}` : '');
     };
+    /**
+     * DAL MODELLO ALLE VERSIONI. Il numero di omologazione da solo e' una stringa da
+     * guardare; il catalogo RDW lo apre e dice QUALI versioni copre. Non parte da solo:
+     * due richieste all'RDW per ogni allerta di una lista sarebbero un peso inutile.
+     */
+    const omoHTML = a => {
+      const breve = omoBreve(a);
+      if (!breve) return '';
+      const primo = (a.omologazioni || []).flatMap(x => String(x).split(/\s+-\s+/))[0] || '';
+      const st = vehOmoStato[primo];
+      let sotto = '';
+      if (st === 'carico') sotto = '<div class="veh-omo-att">Cerco le versioni…</div>';
+      else if (st && st.ko) sotto = `<div class="veh-omo-att">${escapeHtml(st.ko)}</div>`;
+      else if (st && st.nomi) {
+        const alim = (st.alimentazioni || []).map(x =>
+          escapeHtml(x.nome) + (x.cvMin ? ` <em>${x.cvMin}–${x.cvMax} CV</em>` : '')).join(' · ');
+        const nomi = st.nomi.slice(0, 12).map(x => `<span class="veh-omo-v">${escapeHtml(x.nome)}</span>`).join('');
+        const altri = st.nomi.length > 12 ? `<span class="veh-omo-v veh-omo-piu">+${st.nomi.length - 12}</span>` : '';
+        sotto = `<div class="veh-omo-esito">${alim ? `<div class="veh-omo-alim">${alim}</div>` : ''}`
+          + `<div class="veh-omo-nomi">${nomi}${altri}</div>`
+          + `<div class="veh-omo-fonte">Versioni secondo il catalogo omologazioni RDW. I nomi sono quelli del mercato olandese; la potenza copre le versioni a combustione.</div></div>`;
+      }
+      return `<div class="veh-rich-omo"><span class="veh-omo-n">${escapeHtml(breve)}</span>`
+        + (st && st.nomi ? '' : `<button type="button" class="veh-omo-btn" data-omo="${escapeHtml(primo)}"${st === 'carico' ? ' disabled' : ''}>versioni</button>`)
+        + `</div>${sotto}`;
+    };
     const rigaSg = a => rigaHTML(a.scheda, a.prodotto || a.categoria || 'Veicolo',
       [a.anni ? `${a.anni.da}–${a.anni.a}` : a.anno, a.livello].filter(Boolean).join(' · '),
-      omoBreve(a));
+      omoHTML(a));
     const bloccoR = nR
       ? `<div class="veh-rich-b"><div class="veh-rich-h">Campagne RDW <b>${nR}</b></div>${(st.rdw.campagne || []).slice(0, 5).map(riga).join('')}</div>`
       : '<div class="veh-rich-b"><div class="veh-rich-h">Campagne RDW <b>0</b></div><div class="veh-rich-att">Nessuna campagna per questo modello.</div></div>';
@@ -5820,6 +5867,8 @@ function vehTargaHTML() {
 }
 
 document.getElementById('vehicleScheda')?.addEventListener('click', e => {
+  const omoBtn = e.target.closest('.veh-omo-btn');
+  if (omoBtn) return vehOmoCarica(omoBtn.dataset.omo);
   if (e.target.closest('#tgVai')) return tgVerifica();
   if (e.target.closest('#tgCambia') || e.target.closest('#tgRiprova')) return tgNuovaSfida();
 });

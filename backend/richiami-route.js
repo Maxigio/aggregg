@@ -17,6 +17,7 @@
  */
 const path = require('path');
 const rdw = require('./scrapers/rdw-richiami');   // seconda fonte: campagne RDW per marca+modello
+const omo = require('./scrapers/rdw-omologazioni'); // da un'omologazione alle sue versioni
 
 let D = null;
 try { D = require(path.join(__dirname, '..', 'data', 'safety-gate.json')); } catch (_) { D = null; }
@@ -133,10 +134,14 @@ function mount(app, deps = {}) {
     v.push(now); hits.set(ip, v); return v.length <= 60;
   };
 
-  const via = (percorso, lavoro) => app.get(percorso, (req, res) => {
+  // `await` anche sui lavori sincroni: quasi tutte queste rotte leggono un file gia' in
+  // memoria e rispondono subito, ma quella delle omologazioni interroga l'RDW. Senza
+  // attendere, `{ ...promise }` non spande niente e la risposta usciva vuota con ok:true
+  // — il caso peggiore, perche' sembra funzionare.
+  const via = (percorso, lavoro) => app.get(percorso, async (req, res) => {
     if (!rateOk(clientIp(req))) return res.status(429).json({ ok: false, motivo: 'Troppe richieste.' });
     try {
-      const out = lavoro(req.query || {});
+      const out = await lavoro(req.query || {});
       res.set('Cache-Control', 'public, max-age=3600');
       res.json({ ok: true, ...out });
     } catch (e) {
@@ -213,6 +218,19 @@ function mount(app, deps = {}) {
 
   // Stesso tetto delle altre rotte: senza, una richiesta senza filtri risponderebbe
   // l'archivio intero (4.571 campagne, 3,6 MB) sessanta volte al minuto per IP.
+  /**
+   * DALL'OMOLOGAZIONE ALLE VERSIONI. E' l'unica strada per passare da "questo MODELLO ha
+   * un richiamo" a "queste VERSIONI ce l'hanno": l'allerta europea cita il numero di
+   * omologazione, e il catalogo RDW quel numero lo apre.
+   *
+   * Non parte da sola. La chiama chi apre una singola allerta, non chi cerca: due
+   * richieste all'RDW per allerta sarebbero un peso inutile su una lista.
+   */
+  via('/api/richiami/omologazione', async q => {
+    if (!q.n) return { ok: false, motivo: 'manca il numero di omologazione' };
+    return omo.versioni(String(q.n));
+  });
+
   via('/api/richiami/rdw/cerca', q => {
     const r = rdw.cerca({ marca: q.marca, modello: q.modello, anno: q.anno });
     if (!r.ok) return r;

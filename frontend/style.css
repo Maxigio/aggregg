@@ -1616,3 +1616,23 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .tg-esito .det-specs { margin-top: 10px; }
 /* Le righe che il portale aggiunge e che non stanno in coppie: testo suo, mostrato com'e'. */
 .tg-riga { font-size: 0.85rem; line-height: 1.5; padding: 3px 0; border-bottom: 1px dotted var(--line); overflow-wrap: anywhere; }
+
+/* ── Dall'omologazione alle versioni ──────────────────────────────────────────
+   Il numero da solo e' una stringa da guardare; il bottone lo apre e dice QUALI
+   versioni copre. Sta fuori dal link della riga perche' dentro un <a> un bottone non
+   ci puo' stare. */
+.veh-rich-omo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 2px 0 4px; }
+.veh-omo-n { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem;
+  color: var(--text-muted); overflow-wrap: anywhere; min-width: 0; }
+.veh-omo-btn { flex: none; font-size: 0.7rem; color: var(--accent); background: var(--accent-weak);
+  border: 1px solid var(--accent); border-radius: 999px; padding: 1px 9px; cursor: pointer; }
+.veh-omo-btn:hover { background: var(--accent); color: #fff; }
+.veh-omo-btn[disabled] { opacity: .55; cursor: default; }
+.veh-omo-att { font-size: 0.76rem; color: var(--text-muted); padding: 2px 0 6px; }
+.veh-omo-esito { padding: 2px 0 8px; }
+.veh-omo-alim { font-size: 0.78rem; margin-bottom: 4px; }
+.veh-omo-alim em { font-style: normal; color: var(--text-muted); }
+.veh-omo-nomi { display: flex; flex-wrap: wrap; gap: 4px; }
+.veh-omo-v { font-size: 0.74rem; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; }
+.veh-omo-piu { color: var(--text-muted); }
+.veh-omo-fonte { font-size: 0.7rem; line-height: 1.4; color: var(--text-muted); margin-top: 5px; }
