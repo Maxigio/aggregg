@@ -884,7 +884,7 @@ const canonRegione = s => REGIONE_BY_NORM.get(normReg(s)) || null;
 function parseSearchParams(query) {
   const {
     tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione, raggio,
-    mmmvAutoscout, motoitBrandSlug, motoitModelSlug, motoitBikeCode, motoitNeedsVersion,
+    mmmvAutoscout, motoitBrandSlug, motoitModelSlug, motoitBikeCode,
     versioneSubito, versioneNome, versioneAs24, fetta,
   } = query;
 
@@ -934,7 +934,6 @@ function parseSearchParams(query) {
       // menu. Va nel suo campo `modelVersionInput` cosi' com'e': non e' una traduzione
       // nostra del nome di Subito, ed e' la ragione per cui li' la precisione e' piena.
       versioneAs24:     versioneAs24     || null,
-      motoitNeedsVersion: motoitNeedsVersion === '1',   // F47.2: versione obbligatoria SOLO Moto.it → skip se non scelta
     }
   };
 }
@@ -1069,7 +1068,7 @@ function searchCacheKey(p) {
   // Visto succedere: "Golf GTD" tornava sessanta GTI, con le etichette tutte "esatto".
   // Chi aggiunge un parametro che cambia i RISULTATI deve aggiungerlo anche qui.
   return ['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax',
-          'regione', 'raggio', 'mmmvAutoscout', 'motoitBrandSlug', 'motoitModelSlug', 'motoitBikeCode', 'motoitNeedsVersion',
+          'regione', 'raggio', 'mmmvAutoscout', 'motoitBrandSlug', 'motoitModelSlug', 'motoitBikeCode',
           'versioneSubito', 'versioneNome', 'versioneAs24', 'fetta']
     .map(f => `${f}=${p[f] ?? ''}`).join('&').toLowerCase();
 }
@@ -1341,12 +1340,10 @@ async function runSearchCore(params) {
   // non cambia nulla.
   // Moto: 90% dei modelli aveva sites monco → ora coperti automaticamente.
   const skipAutoscout = !brandOnAutoscout;
-  const skipMotoIt    = params.tipo !== 'moto' || !brandOnMotoIt || params.motoitNeedsVersion;
+  const skipMotoIt    = params.tipo !== 'moto' || !brandOnMotoIt;
   // Motivi di skip (per lo stato per-fonte in UI)
   const asSkipReason   = 'marca non su Autoscout';
-  const motoSkipReason = params.tipo !== 'moto' ? 'solo moto'
-                       : params.motoitNeedsVersion ? 'scegli versione'   // F47.2: versioni presenti, nessuna scelta
-                       : 'marca non su Moto.it';
+  const motoSkipReason = params.tipo !== 'moto' ? 'solo moto' : 'marca non su Moto.it';
 
   // Log informativo quando interroghiamo AS24/MotoIt a livello brand-only
   // (fallback che si appoggia al post-filter sul titolo).

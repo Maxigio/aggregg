@@ -2851,7 +2851,7 @@ const SOURCE_STATUS = {
   skipped: { cls: 'src-muted' }, timeout: { cls: 'src-bad', txt: 'timeout' },
   error: { cls: 'src-bad', txt: 'errore' }, needs_bootstrap: { cls: 'src-warn', txt: 'verifica richiesta' },
 };
-const SKIP_REASON_TXT = { 'solo moto': 'solo moto', 'marca non su Moto.it': 'non disponibile', 'marca non su Autoscout': 'non disponibile', 'scegli versione': 'scegli versione' };
+const SKIP_REASON_TXT = { 'solo moto': 'solo moto', 'marca non su Moto.it': 'non disponibile', 'marca non su Autoscout': 'non disponibile' };
 function renderSourceStatus() {
   if (!fonteBreakdown) return;
   if (!lastSources) { fonteBreakdown.innerHTML = ''; return; }
