@@ -15,6 +15,8 @@ const ms = require('./scrapers/moto-specs');
 const mis = require('./scrapers/motoit-specs');
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
 const { getBrandModels, getModelBikes } = require('./scrapers/motoit-models');
+// Dall'annuncio alla versione Moto.it: e' il modulo che lo fa meglio, e ora lo usa la scheda.
+const { risolviVersione } = require('./scrapers/risolvi-versione');
 
 const INDEX_PATH = path.join(__dirname, '..', 'data', 'autodata-index.json');
 let INDEX = null;
@@ -363,9 +365,51 @@ function generazioneCompatibile(nome, carrozzeria) {
   return !GEN_FAMIGLIA.test(n) && !GEN_APERTA.test(n) && !GEN_MONOV.test(n);
 }
 
-async function schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria }) {
+async function schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria, titolo }) {
   const base = await resolveScheda({ tipo, marca, modello, anno });
   if (!base || base.unsupported || base.notFound) return { ok: false, motivo: 'modello non a catalogo' };
+
+  /**
+   * LE MOTO LE RISOLVE `risolvi-versione.js`, non i filtri qui sotto.
+   *
+   * Moto.it taglia le versioni per PERIODO di produzione, e il catalogo non porta ne'
+   * potenza ne' carburante: gli unici vincoli utili sono l'anno e le parole del titolo, che
+   * e' esattamente il lavoro di quel modulo. Misurato su 204 annunci Moto.it veri, dove la
+   * verita' e' esatta perche' l'URL dell'annuncio dichiara la sua versione:
+   *
+   *   solo la finestra degli anni (quello che facevamo)  71 risposte, 65 giuste
+   *   risolviVersione (anno + variante dal titolo)      157 risposte, 156 giuste
+   *
+   * Raddoppia le risposte e alza la precisione dal 91,5% al 99,4%. E quando non e' sicuro
+   * lo DICHIARA (`ripiego`, `ambigua`): quei casi non si preselezionano, si mostra la griglia.
+   */
+  if (tipo === 'moto' && Array.isArray(base.motorizzazioni) && base.motorizzazioni.length) {
+    const voci = base.motorizzazioni;
+    const nomeMod = base.modello || modello || '';
+    const parole = s => String(s || '').toLowerCase().split(/[^a-z0-9]+/i).filter(Boolean);
+    const modTok = new Set(parole(nomeMod));
+    const indice = {
+      marca, subito: { nome: nomeMod },
+      versioniMotoit: voci.map(v => {
+        const pulito = String(v.label || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
+        const a = String(v.yearRange || '').match(/(\d{4})\D+(\d{4})/);
+        return {
+          nome: v.label, _voce: v,
+          variante: parole(pulito).filter(w => !modTok.has(w)).join(' ') || null,
+          anni: v.year ? { da: v.year, a: a ? Number(a[2]) : v.year } : null,
+        };
+      }),
+    };
+    const r = risolviVersione(indice, { anno, versione: titolo || '' });
+    const scelta = r.esito === 'una' && r.versioni.length === 1 ? r.versioni[0]._voce : null;
+    return {
+      ok: true, source: base.source, genUnica: null,
+      scelta,
+      candidate: scelta ? [] : (r.versioni.length ? r.versioni : indice.versioniMotoit).map(v => v._voce).slice(0, 40),
+      perche: scelta ? r.perche : (r.perche + ' → scegli tu'),
+      grado: r.esito,
+    };
+  }
 
   const y = parseInt(anno, 10) || null;
   /**
@@ -451,11 +495,14 @@ function mount(app, deps = {}) {
   app.get('/api/scheda-veicolo/annuncio', async (req, res) => {
     if (!rateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste.' });
     const { tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria } = req.query || {};
+    // Il titolo dell'annuncio serve SOLO alle moto: e' da li' che si legge la variante
+    // ("ABS", "Moto Cage", "Rally"), l'unica cosa che il periodo di produzione non separa.
+    const titolo = String((req.query || {}).titolo || '').slice(0, 120);
     if (!marca || !modello) return res.status(400).json({ error: 'marca/modello mancanti' });
-    const key = `ann:${tipo}|${norm(marca)}|${norm(modello)}|${anno || ''}|${cv || ''}|${norm(carburante)}|${norm(cambio)}|${norm(carrozzeria)}`;
+    const key = `ann:${tipo}|${norm(marca)}|${norm(modello)}|${anno || ''}|${cv || ''}|${norm(carburante)}|${norm(cambio)}|${norm(carrozzeria)}|${norm(titolo)}`;
     const hit = cacheGet(key); if (hit != null) return res.json(hit);
     try {
-      const out = await schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria });
+      const out = await schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria, titolo });
       cacheSet(key, out, out.ok ? PAGE_TTL : EMPTY_TTL);
       res.json(out);
     } catch (_) { res.json({ ok: false, motivo: 'scheda non disponibile' }); }

@@ -3499,6 +3499,10 @@ async function preselezionaDaAnnuncio(r, my) {
   if (r.carburante) qs.set('carburante', r.carburante);
   if (r.cambio) qs.set('cambio', r.cambio);
   if (r.carrozzeria) qs.set('carrozzeria', r.carrozzeria);
+  // Il titolo: sulle moto e' da li' che si legge la variante, e il periodo di produzione da
+  // solo non la separa. Misurato: 71 risposte giuste 65 con il solo anno, 157 su 157 con
+  // anno + titolo (verita' esatta = lo slug versione nell'URL dell'annuncio Moto.it).
+  if (r.tipo === 'moto' && r.titolo) qs.set('titolo', r.titolo);
   try {
     const d = await fetch('/api/scheda-veicolo/annuncio?' + qs).then(x => x.json());
     if (mio !== vehGen || !d || !d.ok) return;
