@@ -394,7 +394,7 @@ async function schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, c
   for (const g of gens.slice(0, 6)) {
     try {
       const d = await resolveScheda({ tipo, marca, modello, genSlug: g.slug });
-      for (const m of (d && d.motorizzazioni) || []) voci.push({ ...m, gen: g.name });
+      for (const m of (d && d.motorizzazioni) || []) voci.push({ ...m, gen: g.name, genSlug: g.slug });
     } catch (_) { /* una generazione che non si apre non deve far cadere le altre */ }
   }
   if (!voci.length) return { ok: false, motivo: 'nessuna motorizzazione a catalogo' };
@@ -420,9 +420,16 @@ async function schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, c
   vive = vive.filter(m => { const k = m.url; if (visti.has(k)) return false; visti.add(k); return true; });
   if (!vive.length) return { ok: false, motivo: 'nessuna motorizzazione del catalogo combacia con ' + (usati.join(' e ') || 'questo annuncio') };
 
+  /**
+   * LA GENERAZIONE, quando le candidate sono tutte la stessa. Scegliere fra due
+   * motorizzazioni sarebbe tirare a indovinare; aprire la generazione che TUTTE
+   * condividono non lo e' — e salta una griglia da decine di voci.
+   */
+  const gs = [...new Set(vive.map(m => m.genSlug).filter(Boolean))];
   return {
     ok: true,
     source: base.source,
+    genUnica: gs.length === 1 ? gs[0] : null,
     scelta: vive.length === 1 ? vive[0] : null,
     candidate: vive.length === 1 ? [] : vive.slice(0, 40),
     perche: vive.length === 1

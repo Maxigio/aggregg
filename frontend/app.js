@@ -300,8 +300,10 @@ async function init() {
     if (!sum) return;
     requestAnimationFrame(() => { const det = sum.parentElement; if (det && det.open) positionPriceMenu(det); });
   });
-  // scheda veicolo: collapse + cambio generazione/motorizzazione (delegato, sopravvive ai re-render)
-  const vehSchedaEl = document.getElementById('vehicleScheda');
+  // Scheda veicolo: collapse + cambio generazione/motorizzazione. I gestori stanno sulla
+  // GRIGLIA e non sul contenitore della scheda, perche' quel contenitore ora si sposta —
+  // vive nel pannello dell'annuncio che ha chiesto la scheda. La delega sopravvive.
+  const vehSchedaEl = resultsGrid;
   vehSchedaEl?.addEventListener('click', e => {
     const exp = e.target.closest('.veh-exp');   // Esporta ▾: Copia / CSV / PDF
     if (exp) {
@@ -486,6 +488,10 @@ async function init() {
       // Una misura cliccata apre (o chiude) l'etichetta europea di quella gomma.
       const mis = e.target.closest('.gom-mis');
       if (mis) { const r = trovaResult(url); if (r) caricaPneumatico(r, mis.dataset.misura, row); return; }
+      // "Scheda tecnica": la carica dentro QUESTO annuncio. Deve stare QUI DENTRO, prima
+      // del `return` che ignora il resto: fuori non ci arriva mai un click del pannello.
+      const apri = e.target.closest('.det-scheda-apri');
+      if (apri) { const r = trovaResult(url); if (r) loadVehScheda(r, apri.parentElement); return; }
       return;   // altri click nel pannello: ignora
     }
     if (e.target.closest('.row-thumb')) {
@@ -499,15 +505,6 @@ async function init() {
     if (e.target.closest('.btn-salva'))     { toggleSalva(url); return; }
     if (e.target.closest('.btn-confronta'))  { toggleConfronto(url); return; }
     if (e.target.closest('.btn-info'))       { toggleDetail(row); return; }
-    // Una motorizzazione scelta a mano fra le candidate della scheda tecnica.
-    const sch = e.target.closest('.sch-voce');
-    if (sch) {
-      const pan = sch.closest('[data-detail]');
-      const r = pan && trovaResult(pan.dataset.url);
-      const m = r && r._scheda && (r._scheda.candidate || [])[+sch.dataset.sch];
-      if (r && m) caricaSchedaSpecs(r, m, 'motorizzazione scelta da te', pan);
-      return;
-    }
   });
 
   // Sezioni richiudibili dentro il pannello annuncio. `toggle` non risale il DOM: cattura.
@@ -517,7 +514,6 @@ async function init() {
     if (!r || !pan) return;
     if (cosa === 'pass' && !r._pass) calcolaPassaggio(r, pan);
     if (cosa === 'gomme' && !r._gomme) caricaGomme(r, pan);
-    if (cosa === 'scheda') caricaScheda(r, pan);
   }), true);
 
   // Spunta "veicolo storico" dentro il pannello di un annuncio: cambia la tariffa, si rifa' il conto.
@@ -1867,7 +1863,10 @@ async function doSearch() {
 
     initPrezzoSlider(currentResults);
     if (!prezzoSliderInstance) renderResults(currentResults);
-    loadVehScheda();   // scheda tecnica veicolo (sopra la griglia, non tocca gli annunci)
+    // La scheda tecnica non parte piu' con la ricerca: vive dentro l'annuncio e la chiedi
+    // tu da li'. Qui si azzera soltanto, altrimenti richiami e targa della ricerca
+    // precedente resterebbero attaccati a un veicolo che non c'entra.
+    clearVehScheda();
     if (currentResults.length > 0) resultsToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch {
     if (myGen === searchGen) showError('Impossibile contattare il server. Assicurati che sia avviato con "npm start".');
@@ -2689,83 +2688,6 @@ async function caricaPneumatico(r, misura, pannello) {
   pannello?._render?.();
 }
 
-/**
- * LA SCHEDA TECNICA DI QUESTO ANNUNCIO.
- *
- * Prima nasceva dalla RICERCA — marca, modello, anno — e chiedeva a te di scegliere a mano
- * generazione e motorizzazione fra decine di voci. Due difetti, e il secondo e' il peggiore:
- * ti faceva ri-specificare quello che l'annuncio gia' dichiara, e con la versione diventata
- * un campo libero mostrava le specifiche di "quello che hai cercato" su un annuncio che
- * quella cosa non e'.
- *
- * Qui i vincoli li porta l'annuncio: anno, potenza, carburante, cambio, carrozzeria. Sono
- * campi nativi, dichiarati dal venditore, ed e' con quelli che il catalogo distingue una
- * motorizzazione dall'altra.
- *
- * QUANDO NE RESTA UNA SOLA si apre da se'; quando ne restano piu' d'una si mostrano e
- * scegli tu. Non si sceglie mai al posto tuo: una scheda tecnica sbagliata ha l'aria di
- * una giusta, e chi legge non ha modo di accorgersene.
- *
- * PIGRA: niente parte finche' non apri il blocco.
- */
-function schedaHTML(r) {
-  const st = r._scheda;
-  let corpo = '';
-  let meta = '';
-  if (!st) corpo = '<div class="det-pass-no">Apri per cercarla nel catalogo tecnico.</div>';
-  else if (st.stato === 'carico') corpo = '<div class="rc-loading">Cerco nel catalogo…</div>';
-  else if (st.stato === 'ko') corpo = `<div class="det-pass-no">${escapeHtml(st.motivo || 'non disponibile')}</div>`;
-  else if (st.stato === 'scegli') {
-    meta = st.candidate.length + ' compatibili';
-    corpo = `<div class="sch-perche">${escapeHtml(st.perche)}</div><div class="sch-lista">`
-      + st.candidate.map((m, i) => `<button type="button" class="sch-voce" data-sch="${i}">`
-        + `<span class="sch-lab">${escapeHtml(m.label)}</span>`
-        + (m.gen ? `<span class="sch-gen">${escapeHtml(m.gen)}</span>` : '') + '</button>').join('')
-      + '</div>';
-  } else if (st.stato === 'ok') {
-    meta = escapeHtml(st.label || '');
-    corpo = `<div class="sch-perche">${escapeHtml(st.perche || '')}</div>`
-      + (st.specs && st.specs.groups || []).map(g =>
-          `<div class="sch-grp"><div class="sch-grp-t">${escapeHtml(g.title)}</div>`
-          + coppieHTML((g.rows || []).map(x => [x.k, x.v])) + '</div>').join('')
-      + (st.specs && st.specs.source
-          ? `<div class="det-blocco-f">Fonte: ${escapeHtml(st.specs.source)}</div>` : '');
-  }
-  return miniHTML('scheda:' + r.url, 'Scheda tecnica', meta, corpo, { carica: 'scheda' });
-}
-
-/** Il catalogo interrogato coi soli campi che l'annuncio dichiara. Una richiesta, cachata. */
-async function caricaScheda(r, panel) {
-  if (r._scheda && r._scheda.stato !== 'ko') return;
-  const p = lastSearchParams || {};
-  const marca = r.marca || p.marca, modello = p.modello;
-  if (!marca || !modello) { r._scheda = { stato: 'ko', motivo: 'serve un modello specifico' }; panel?._render?.(); return; }
-  r._scheda = { stato: 'carico' }; panel?._render?.();
-  const qs = new URLSearchParams({ tipo: p.tipo || 'auto', marca, modello });
-  if (r.anno) qs.set('anno', r.anno);
-  if (r.potenzaCv) qs.set('cv', r.potenzaCv);
-  if (r.carburante) qs.set('carburante', r.carburante);
-  if (r.cambio) qs.set('cambio', r.cambio);
-  if (r.carrozzeria) qs.set('carrozzeria', r.carrozzeria);
-  try {
-    const d = await fetch('/api/scheda-veicolo/annuncio?' + qs).then(x => x.json());
-    if (!d || !d.ok) { r._scheda = { stato: 'ko', motivo: (d && d.motivo) || 'non trovata' }; panel?._render?.(); return; }
-    if (d.scelta) await caricaSchedaSpecs(r, d.scelta, d.perche, panel);
-    else { r._scheda = { stato: 'scegli', candidate: d.candidate || [], perche: d.perche }; panel?._render?.(); }
-  } catch (_) { r._scheda = { stato: 'ko', motivo: 'non disponibile' }; panel?._render?.(); }
-}
-
-async function caricaSchedaSpecs(r, m, perche, panel) {
-  r._scheda = { stato: 'carico' }; panel?._render?.();
-  try {
-    const s = await fetch('/api/scheda-veicolo/specs?url=' + encodeURIComponent(m.url)).then(x => x.json());
-    r._scheda = (s && s.ok)
-      ? { stato: 'ok', label: m.label, perche: perche || 'scelta da te', specs: s }
-      : { stato: 'ko', motivo: 'specifiche non disponibili' };
-  } catch (_) { r._scheda = { stato: 'ko', motivo: 'specifiche non disponibili' }; }
-  panel?._render?.();
-}
-
 function renderDetailInto(panel, r) {
   panel.dataset.loaded = '1';
   const renderBody = () => {
@@ -2786,11 +2708,22 @@ function renderDetailInto(panel, r) {
       + `<div class="det-pass">${passHTML(r)}</div>`
       // La scheda tecnica DI QUESTO ANNUNCIO: sta qui e non nella ricerca, perche' i
       // vincoli con cui si trova la motorizzazione giusta li dichiara l'annuncio.
-      + `<div class="det-scheda">${schedaHTML(r)}</div>`
+      // LA SCHEDA TECNICA vive qui dentro. E' la stessa di prima, intera: si sposta nel
+      // pannello dell'annuncio che la chiede. Pigra: niente parte finche' non premi.
+      + `<div class="det-scheda">${vehHostUrl === r.url ? '' : '<button type="button" class="det-scheda-apri">Scheda tecnica</button>'}</div>`
       + `<div class="det-gomme">${gommeHTML(r)}</div>`
       + `<div class="det-foot">${openBtn}${salBtn}${confBtn}</div></div>`;
   };
-  panel._render = renderBody;   // il calcolo del passaggio ridisegna solo questo pannello
+  panel._render = () => {
+    renderBody();
+    // Se questo pannello ospitava la scheda, il re-render ha appena buttato via il suo
+    // contenitore: si riaggancia e si ridisegna, altrimenti la scheda sparisce al primo
+    // ricalcolo del passaggio di proprieta'.
+    if (vehHostUrl === r.url) {
+      const h = panel.querySelector('.det-scheda');
+      if (h) { vehHost = h; renderVehScheda(); }
+    }
+  };
   renderBody();   // apertura immediata (cover + dati on-search) → niente freeze del click
   // Moto.it: galleria piena + spec dalla pagina-dettaglio. Riusa enrichMotoRow (merge
   // immagini+spec, cache 12h server, aggiorna anche il thumb della riga); poi ri-rende.
@@ -3309,21 +3242,51 @@ function hideResults() {
 }
 
 // ─── Scheda tecnica veicolo (auto-data.net) — highlighted, collassabile, sopra gli annunci ──
+/**
+ * DOVE VIVE LA SCHEDA TECNICA. Era un contenitore fisso sopra la griglia dei risultati:
+ * una scheda per RICERCA, che valeva per "il modello cercato" e per nessuno degli annunci
+ * sotto — e con la versione diventata un campo libero non valeva piu' nemmeno per quello.
+ *
+ * Ora vive dentro il pannello dell'annuncio che l'ha chiesta. La scheda e' la stessa,
+ * intera: generazioni, motorizzazioni, unita', confronto, export, ADD ON. Cambia solo
+ * l'elemento su cui si disegna, e da dove prende i vincoli — vedi loadVehScheda.
+ *
+ * UNA SOLA ALLA VOLTA, perche' lo stato (vehData/vehSelUrl/vehSpecs/vehXf) e' unico:
+ * aprirla su un altro annuncio la sposta li'. E' il comportamento di prima, con un
+ * padrone diverso.
+ */
+let vehHost = null;                    // il .det-scheda del pannello che ospita la scheda
+let vehHostUrl = null;                 // di quale annuncio e'
+const vehEl = () => (vehHost && vehHost.isConnected) ? vehHost : null;
 let vehData = null, vehSpecs = {}, vehSchedaCollapsed = false, vehSelUrl = null, vehGen = 0;   // vehGen: token anti-race — scarta risposte di ricerche/generazioni superate
-function clearVehScheda() { vehGen++; vehData = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; vehRichiami = null; vehOmoStato = {}; vehAddonAperto = false; const el = document.getElementById('vehicleScheda'); if (el) el.innerHTML = ''; }   // vehGen++ invalida le fetch in volo; i richiami sono del veicolo cercato, non si tengono
+function clearVehScheda() { vehGen++; vehData = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; vehRichiami = null; vehOmoStato = {}; vehAddonAperto = false; const el = vehEl(); if (el) el.innerHTML = ''; vehHost = null; vehHostUrl = null; }   // vehGen++ invalida le fetch in volo; i richiami sono del veicolo cercato, non si tengono
 
-async function loadVehScheda() {
-  const el = document.getElementById('vehicleScheda'); if (!el) return;
-  const my = ++vehGen;   // invalida ogni scheda ancora in volo di una ricerca precedente
-  // agganciati alla ricerca ESEGUITA (lastSearchParams), non allo stato UI live (che l'utente può aver già cambiato)
+/**
+ * LA SCHEDA DI UN ANNUNCIO. Stessa scheda di prima, intera; cambiano due cose:
+ *   DOVE si disegna  → nel pannello di quell'annuncio (`host`), non sopra la griglia;
+ *   DA DOVE prende i vincoli → dall'annuncio, non dai filtri di ricerca. L'anno e' quello
+ *     dell'auto che stai guardando, non "annoMin dei filtri", e potenza/carburante/cambio/
+ *     carrozzeria servono a PRESELEZIONARE la motorizzazione invece di fartela cercare.
+ *
+ * La preselezione non sceglie mai fra pari: il server risponde con UNA motorizzazione solo
+ * quando ne resta una sola compatibile (backend/scheda-veicolo-route.js → schedaPerAnnuncio).
+ * Altrimenti si apre la griglia come sempre e scegli tu.
+ */
+async function loadVehScheda(r, host) {
+  if (!host) return;
+  vehHost = host; vehHostUrl = r ? r.url : null;
+  const el = vehEl(); if (!el) return;
+  const my = ++vehGen;   // invalida ogni scheda ancora in volo
   const p = lastSearchParams || {};
   const tipo = p.tipo || currentTipo();
   if (tipo !== 'auto' && tipo !== 'moto') { clearVehScheda(); return; }   // scheda solo auto/moto
-  const marca = p.marca || (matchedBrand() && matchedBrand().nome) || '';
+  const marca = (r && r.marca) || p.marca || (matchedBrand() && matchedBrand().nome) || '';
   const modello = p.modello || (selectedModel && selectedModel.nome) || '';
   if (!marca || !modello) { clearVehScheda(); return; }   // scheda solo con un modello specifico
-  const anno = p.annoMin || p.annoMax || '';
-  vehSchedaCollapsed = true;   // scheda chiusa di default
+  // L'anno dell'ANNUNCIO. Prima era `annoMin || annoMax` dei filtri: un numero che parla
+  // della ricerca, non del veicolo, e su una ricerca senza filtri era vuoto.
+  const anno = (r && r.anno) || p.annoMin || p.annoMax || '';
+  vehSchedaCollapsed = false;  // l'hai aperta tu dall'annuncio: si apre
   vehXf.compare = null; vehXf.q = ''; vehXf.highlight = new Set(); vehGenChosen = false; vehShowAll = false;   // reset per ricerca (traduci/unità restano preferenze)
   vehRichiami = null; vehOmoStato = {}; vehAddonAperto = false;   // i richiami sono di QUEL veicolo: cambiando ricerca ripartono
   // La targa NON e' un parametro di ricerca: non filtra gli annunci e non va alle fonti.
@@ -3344,11 +3307,58 @@ async function loadVehScheda() {
     // Moto.it usa lo STESSO codice-versione della ricerca (nessun rischio di sbagliare moto).
     vehData = d; vehSpecs = {}; vehSelUrl = vehVersionePreScelta(d) || null;
     renderVehScheda();
+    // La motorizzazione dedotta dai campi dell'annuncio. Arriva DOPO il primo disegno:
+    // la scheda e' gia' a schermo e non si aspetta una seconda richiesta per vederla.
+    if (!vehSelUrl && r) preselezionaDaAnnuncio(r, my);
   } catch (_) { if (my === vehGen) clearVehScheda(); }
 }
 
+/**
+ * Dai campi che l'annuncio dichiara alla motorizzazione giusta, quando ce n'e' UNA sola.
+ * Il conto lo fa il server (schedaPerAnnuncio): anno, potenza, carburante, cambio e
+ * carrozzeria sono esattamente i campi con cui il catalogo distingue una motorizzazione
+ * dall'altra. Se ne restano piu' d'una non si sceglie: resta la griglia, e scegli tu.
+ */
+async function preselezionaDaAnnuncio(r, my) {
+  let mio = my;   // `switchVehGen` incrementa vehGen: senza risincronizzare, ogni controllo dopo scarterebbe
+  const p = lastSearchParams || {};
+  const qs = new URLSearchParams({ tipo: p.tipo || 'auto', marca: (r.marca || p.marca || ''), modello: p.modello || '' });
+  if (r.anno) qs.set('anno', r.anno);
+  if (r.potenzaCv) qs.set('cv', r.potenzaCv);
+  if (r.carburante) qs.set('carburante', r.carburante);
+  if (r.cambio) qs.set('cambio', r.cambio);
+  if (r.carrozzeria) qs.set('carrozzeria', r.carrozzeria);
+  try {
+    const d = await fetch('/api/scheda-veicolo/annuncio?' + qs).then(x => x.json());
+    if (mio !== vehGen || !d || !d.ok) return;
+    // La generazione si apre anche senza una motorizzazione scelta, purche' le candidate
+    // stiano tutte li': non e' una scelta al posto tuo, e' una griglia in meno da leggere.
+    const gen = (d.scelta && d.scelta.genSlug) || d.genUnica;
+    if (!gen && !d.scelta) return;
+    /**
+     * PRIMA LA GENERAZIONE, POI LA MOTORIZZAZIONE. Sulle auto `vehData.motorizzazioni` e'
+     * VUOTO finche' una generazione non e' scelta — cercarci dentro l'URL non avrebbe mai
+     * agganciato niente. `switchVehGen` e' la stessa funzione che usa il menu: si apre la
+     * generazione giusta e poi si sceglie la voce, esattamente come faresti a mano.
+     */
+    if (gen && (!vehData.gen || vehData.gen.slug !== gen)) {
+      const prima = vehGen;
+      await switchVehGen(gen);
+      if (vehGen !== prima + 1) return;   // qualcun altro ha cambiato scheda nel frattempo
+      mio = vehGen;
+      if (!vehData || !vehData.gen || vehData.gen.slug !== gen) return;
+    }
+    if (!d.scelta) return;   // generazione aperta, la motorizzazione la scegli tu
+    // L'aggancio e' per URL: e' lo stesso indirizzo della stessa pagina, niente da indovinare.
+    const hit = (vehData.motorizzazioni || []).find(m => m.url === d.scelta.url);
+    if (!hit) return;
+    vehGenChosen = true; vehSelUrl = hit.url;
+    renderVehScheda(); fetchVehSpecs(vehSelUrl);
+  } catch (_) { /* la scheda resta usabile a mano */ }
+}
+
 function renderVehScheda() {
-  const el = document.getElementById('vehicleScheda'); if (!el || !vehData) return;
+  const el = vehEl(); if (!el || !vehData) return;
   const d = vehData;
   const tipo = vehTipo();
   // combobox (search + dropdown): input vuoto di default; value = etichetta solo dopo la scelta. Caret = dropdown.
@@ -3845,7 +3855,7 @@ function vehHlBandHTML(spec) {
 }
 // aggiorna SOLO il corpo dati (toolbar/combos restano): usato all'arrivo async delle specs
 function renderVehBody() {
-  const el = document.getElementById('vehicleScheda'); const secs = el && el.querySelector('.rc-sch-secs');
+  const el = vehEl(); const secs = el && el.querySelector('.rc-sch-secs');
   if (!secs || !vehData) return renderVehScheda();
   secs.innerHTML = vehBodyHTML();
   applyVehViewState();
@@ -3917,7 +3927,7 @@ function vehSectionsHTML(spec) {
 }
 // ricerca-campo + espandi/comprimi: manipola il DOM (niente re-render → non perde il focus)
 function applyVehViewState() {
-  const el = document.getElementById('vehicleScheda'); if (!el) return;
+  const el = vehEl(); if (!el) return;
   const q = acn(vehXf.q || '');
   el.querySelectorAll('.veh-grp').forEach(grp => {
     let vis = 0;
@@ -3951,7 +3961,7 @@ async function switchVehGen(genSlug) {
   if (!vehData) return;
   const my = ++vehGen;   // cambio generazione rapido → vince l'ultimo, gli altri si scartano
   const tipo = vehTipo();   // tipo della scheda, non della UI
-  const el = document.getElementById('vehicleScheda');
+  const el = vehEl();
   const secs = el && el.querySelector('.rc-sch-secs'); if (secs) secs.innerHTML = '<div class="rc-loading">Carico…</div>';
   try {
     const r = await fetch(`/api/scheda-veicolo?tipo=${encodeURIComponent(tipo)}&marca=${encodeURIComponent(vehData.marca)}&modello=${encodeURIComponent(vehData.modello)}&gen=${encodeURIComponent(genSlug)}`);
@@ -5391,7 +5401,7 @@ function fnRender() {
 // I blocchi richiudibili dentro ADD ON. `toggle` non risale il DOM: cattura.
 // I richiami partono alla PRIMA apertura del blocco, non all'apertura della scheda: chi
 // non li guarda non paga la richiesta.
-document.getElementById('vehicleScheda')?.addEventListener('toggle', e => miniToggle(e, cosa => {
+resultsGrid?.addEventListener('toggle', e => miniToggle(e, cosa => {
   if (cosa === 'richiami') vehRichiamiCarica();
   if (cosa === 'targa' && !tgSfida && !tgOccupato) tgNuovaSfida();
 }), true);
@@ -5867,12 +5877,12 @@ function vehTargaHTML() {
   return miniHTML('veh-targa', 'Targa', escapeHtml(meta), tgCorpoHTML(), { carica: 'targa' });
 }
 
-document.getElementById('vehicleScheda')?.addEventListener('click', e => {
+resultsGrid?.addEventListener('click', e => {
   const omoBtn = e.target.closest('.veh-omo-btn');
   if (omoBtn) return vehOmoCarica(omoBtn.dataset.omo);
   if (e.target.closest('#tgVai')) return tgVerifica();
   if (e.target.closest('#tgCambia') || e.target.closest('#tgRiprova')) return tgNuovaSfida();
 });
-document.getElementById('vehicleScheda')?.addEventListener('keydown', e => {
+resultsGrid?.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.id === 'tgCaptcha') { e.preventDefault(); tgVerifica(); }
 });

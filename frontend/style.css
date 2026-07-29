@@ -1632,19 +1632,15 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .veh-omo-piu { color: var(--text-muted); }
 .veh-omo-fonte { font-size: 0.7rem; line-height: 1.4; color: var(--text-muted); margin-top: 5px; }
 
-/* ── Scheda tecnica dentro l'annuncio ─────────────────────────────────────────
-   Sta nel pannello dell'annuncio e non nella ricerca: i vincoli con cui si trova la
-   motorizzazione giusta (anno, potenza, carburante, cambio, carrozzeria) li dichiara
-   l'annuncio, non la ricerca. */
+
+/* Il bottone che chiede la scheda tecnica dentro un annuncio. La scheda poi si disegna
+   QUI DENTRO, con tutto quello che ha sempre avuto: generazioni, motorizzazioni, unità,
+   confronto, export, ADD ON. Il bottone sparisce quando la scheda prende il suo posto. */
 .det-scheda { margin-top: 8px; }
 .det-scheda:empty { display: none; margin: 0; }
-.sch-perche { font-size: 0.76rem; color: var(--text-muted); font-style: italic; margin-bottom: 6px; }
-.sch-lista { display: flex; flex-direction: column; gap: 4px; }
-.sch-voce { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
-  text-align: left; border: 1px solid var(--line); border-radius: var(--r2);
-  background: var(--surface-2); padding: 6px 10px; cursor: pointer; font: inherit; }
-.sch-voce:hover { border-color: var(--accent); }
-.sch-lab { font-size: 0.82rem; font-weight: 600; }
-.sch-gen { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; }
-.sch-grp { margin-top: 8px; }
-.sch-grp-t { font-size: 0.78rem; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+.det-scheda-apri {
+  border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface-2);
+  color: var(--text); font: inherit; font-size: 0.82rem; font-weight: 600;
+  padding: 7px 12px; cursor: pointer; width: 100%; text-align: left;
+}
+.det-scheda-apri:hover { border-color: var(--accent); color: var(--accent); }
