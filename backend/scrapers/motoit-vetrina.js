@@ -151,6 +151,9 @@ function mapCards(html, ctx = {}) {
       km: numero(km),
       anno: anno ? parseInt(anno, 10) : null,
       marca,
+      // Senza il periodo fra parentesi: "Tricity 125 (2017 - 20)" e' la versione, il modello
+      // e' "Tricity 125" — ed e' quello che chiede il catalogo della scheda tecnica.
+      modello: modello ? modello.replace(/\s*\(.*$/, '').trim() || null : null,
       carburante: null,
       provincia: ctx.provincia || null,
       // La vetrina e' di un concessionario per definizione: qui non c'e' il dubbio

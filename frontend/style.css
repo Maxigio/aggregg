@@ -216,6 +216,8 @@ body:not(.has-results) .search {
 .rc-wrap { margin-inline: calc(-1 * clamp(14px, 2.4vw, 40px)); padding-inline: 12px; }
 .rc-head { padding: 4px 4px 10px; }
 .rc-loading, .rc-empty { color: var(--text-faint); font-style: italic; padding: 14px 4px; }
+/* La scheda che non si puo' fare lo scrive: hai premuto tu, una risposta la meriti. */
+.veh-ko { font-size: 0.82rem; color: var(--text-muted); padding: 8px 4px; }
 /* ── Attesa: barra stato + consiglio rotante + skeleton (veicoli + ricambi) ── */
 .amr-loading { display: flex; flex-direction: column; gap: 12px; padding: 8px 4px 4px; }
 .amr-loading-bar { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--text-muted); font-size: 0.9rem; }
@@ -1524,31 +1526,57 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 .cp-att { font-size: 0.84rem; color: var(--text-muted); font-style: italic; padding: 8px 0; }
 .cp-avviso { margin-top: 8px; padding: 7px 10px; font-size: 0.78rem; color: var(--text); background: var(--surface-2); border-left: 3px solid var(--accent); border-radius: 6px; }
 
-.cp-scheda { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: var(--surface); }
+.cp-scheda { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; background: var(--surface); }
 .cp-mio { border-color: var(--accent); }
-.cp-h { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: baseline; }
+/* Chiusa di default: la riga dice chi e' e dov'e'. Il resto sta dentro, e ogni pezzo ha
+   il suo richiudibile — niente si butta, si smette solo di ingombrare. */
+.cp-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; list-style: none; }
+.cp-sum::-webkit-details-marker { display: none; }
+.cp-sum::before { content: '▸'; color: var(--text-muted); font-size: 0.8rem; }
+.cp-det[open] > .cp-sum::before { content: '▾'; }
+.cp-det[open] > .cp-sum { border-bottom: 1px solid var(--line); }
+.cp-sum:hover { background: var(--surface-2); border-radius: 10px 10px 0 0; }
+.cp-corpo { padding: 10px 14px 12px; }
+.cp-anagrafica { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+.cp-ana-testo { min-width: 0; flex: 1 1 auto; }
+.cp-slogan { font-size: 0.86rem; color: var(--text); margin-bottom: 2px; }
+.cp-ref { font-size: 0.8rem; color: var(--text); margin-top: 3px; }
+.cp-ref em { font-style: normal; color: var(--text-muted); }
+.cp-desc { font-size: 0.8rem; line-height: 1.5; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 16em; overflow-y: auto; }
 .cp-nome { font-size: 1rem; font-weight: 700; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
 .cp-tag { margin-left: 8px; padding: 1px 7px; font-size: 0.7rem; font-weight: 600; color: #fff; background: var(--accent); border-radius: 999px; }
-.cp-dove { grid-column: 1; font-size: 0.8rem; color: var(--text-muted); overflow-wrap: anywhere; }
-.cp-azioni { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; justify-content: flex-end; }
+.cp-dove { font-size: 0.8rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.cp-azioni { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
 .cp-quando { font-size: 0.74rem; color: var(--text-muted); }
 /* CHI E', non solo come si chiama. Autoscout pubblica logo, telefoni, valutazione, orari
    e servizi nella stessa pagina da cui prendiamo l'id: erano li' e non li mostravamo. */
 .cp-logo { height: 26px; width: auto; max-width: 120px; object-fit: contain; vertical-align: middle; margin-right: 8px; border-radius: 3px; background: #fff; }
 .cp-nome .tag { margin-left: 8px; vertical-align: middle; }
-.cp-fatti { grid-column: 1; display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; }
+.cp-fatti { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; }
 .cp-fatto { font-size: 0.78rem; color: var(--text); text-decoration: none; }
 a.cp-fatto:hover { color: var(--accent); text-decoration: underline; }
 .cp-voto { font-weight: 700; color: var(--accent); }
 .cp-voto em { font-style: normal; font-weight: 400; font-size: 0.74rem; color: var(--text-muted); margin-left: 5px; }
-.cp-orari { grid-column: 1; display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; font-size: 0.74rem; color: var(--text-muted); }
+.cp-orari { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; font-size: 0.74rem; color: var(--text-muted); }
 .cp-ora b { color: var(--text); font-weight: 600; margin-right: 3px; }
-.cp-servizi { grid-column: 1; display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; }
+.cp-servizi { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; }
 .cp-btn.attivo { border-color: var(--accent); color: var(--accent); }
+select.cp-unisci { max-width: 190px; }
+/* Il profilo unico: piu' vetrine, un concessionario. Le sue schede stanno dentro. */
+.cp-grp { border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px 4px; margin-bottom: 12px; background: var(--surface-2); }
+.cp-grp-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.cp-grp-nome { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+.cp-grp-meta { font-size: 0.8rem; color: var(--text-muted); }
+.cp-grp-fonti { display: flex; gap: 4px; flex-wrap: wrap; }
+.cp-grp .cp-scheda { background: var(--surface); }
+.cp-grp .cp-numeri { margin-bottom: 10px; }
+/* "anche su Subito · € 1.900 / € 2.300": lo stesso mezzo altrove, e a che prezzo. */
+.anche-badge { display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 0.7rem; border-radius: 999px;
+  color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--line); white-space: nowrap; }
+.anche-badge.anche-diff { color: var(--accent); border-color: var(--accent); }
 .cp-aperto { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .cp-btn { padding: 4px 10px; font-size: 0.8rem; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; text-decoration: none; }
 .cp-btn:hover { border-color: var(--accent); color: var(--accent); }
-.cp-corpo { margin-top: 10px; }
 
 .cp-numeri { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 16px; }
 .cp-n { min-width: 0; }
@@ -1562,7 +1590,6 @@ a.cp-fatto:hover { color: var(--accent); text-decoration: underline; }
 .cp-barra-k { color: var(--text); overflow-wrap: anywhere; }
 .cp-barra-v { height: 8px; background: var(--accent); border-radius: 999px; min-width: 2px; }
 .cp-barra-n { color: var(--text-muted); font-family: var(--num); }
-@media (max-width: 640px) { .cp-h { grid-template-columns: 1fr; } .cp-azioni { grid-column: 1; grid-row: auto; justify-content: flex-start; } }
 
 /* ── ADD ON: le integrazioni esterne, ultimo gruppo della scheda tecnica ──────
    Stessa intestazione di MOTORE e PRESTAZIONI (.veh-grp), dentro i tre blocchi

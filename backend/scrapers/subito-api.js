@@ -131,6 +131,10 @@ function mapAd(ad, opts = {}) {
     // La marca che l'ANNUNCIO dichiara, non la prima parola del titolo: li' "Alfa Romeo"
     // diventava "Alfa" e "Land Rover" diventava "Land".
     marca: (liv.marca || {}).nome || null,
+    // Il MODELLO che l'annuncio dichiara. Lo leggevamo gia' insieme a marca e versione e lo
+    // buttavamo: senza, la scheda tecnica di un annuncio doveva pescare il modello dai
+    // filtri di ricerca, e in Competitor una ricerca non c'e' mai stata.
+    modello: dichiarato(liv.modello) ? liv.modello.nome : null,
     venditoreId: (ad.advertiser && ad.advertiser.user_id) ? String(ad.advertiser.user_id) : null,
     venditoreNome: (ad.advertiser && (ad.advertiser.shop_name || ad.advertiser.name)) || null,
     potenzaCv: cvFrom(feat(ad, 'Potenza')),

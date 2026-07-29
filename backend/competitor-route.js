@@ -58,10 +58,10 @@ function mount(app, deps = {}) {
     res.json({ ok: true, tolti: voci.length - restanti.length });
   });
 
-  app.get('/api/competitor/:id/parco', async (req, res) => {
-    const id = String(req.params.id);
-    let voce = C.leggi().find(v => String(v.id) === id);
-    if (!voce) return res.status(404).json({ ok: false, error: 'non e\' nell\'elenco' });
+  /** Il parco di UNA vetrina: cache, rilettura della scheda, annuncio intero. */
+  async function scaricaParco(id, forza) {
+    let voce = C.leggi().find(v => String(v.id) === String(id));
+    if (!voce) { const e = new Error('non e\' nell\'elenco'); e.stato = 404; throw e; }
     // Le vetrine salvate prima avevano tre campi: nome, dove, via. Ora la pagina ne da'
     // molti di piu' (telefoni, orari, valutazione, servizi, logo) e chi ce l'ha gia' in
     // elenco non deve toglierla e rimetterla per vederli: si rilegge una volta sola,
@@ -69,23 +69,23 @@ function mount(app, deps = {}) {
     if (!voce.schedaLetta) {
       try {
         const fresca = await C.risolviVetrina(voce.url);
-        voce = { ...voce, ...fresca, id: voce.id, mio: voce.mio, aggiunto: voce.aggiunto, schedaLetta: true };
-        C.scrivi(C.leggi().map(v => (String(v.id) === id ? voce : v)));
+        voce = { ...voce, ...fresca, id: voce.id, mio: voce.mio, aggiunto: voce.aggiunto, gruppo: voce.gruppo, schedaLetta: true };
+        C.scrivi(C.leggi().map(v => (String(v.id) === String(id) ? voce : v)));
       } catch (_) { /* la vetrina non risponde: si va avanti con quello che c'e' */ }
     }
     const k = voce.fonte + ':' + voce.id;
     const hit = cache.get(k);
-    const forza = String(req.query.forza || '') === '1';
     if (!forza && hit && Date.now() - hit.ts < TTL) {
-      return res.json({ ok: true, ...hit.dati, daCache: true, quando: new Date(hit.ts).toISOString() });
+      return { ...hit.dati, daCache: true, quando: new Date(hit.ts).toISOString() };
     }
     let p;
     try { p = await C.parco(voce); }
-    catch (e) { return res.status(502).json({ ok: false, error: e.message }); }
+    catch (e) { e.stato = 502; throw e; }
     const dati = {
       voce,
       numeri: C.aggrega(p.veicoli),
       troncato: p.troncato,
+      storico: p.storico || null,      // Moto.it: quanti ne ha pubblicati in tutto, e da quando
       /**
        * L'ANNUNCIO INTERO. Qui c'era una rimappatura a otto campi che buttava via tutto il
        * resto — foto, descrizione, versione, potenza, colore, garanzia, IVA esposta,
@@ -100,7 +100,64 @@ function mount(app, deps = {}) {
     // delle foto). Un parco al tetto sono 6 MB: sessanta in cache erano 370 MB di roba che
     // nessuno riguarda. Otto vetrine sono piu' di quante se ne aprano in dieci minuti.
     if (cache.size > 8) cache.delete(cache.keys().next().value);
-    res.json({ ok: true, ...dati, daCache: false, quando: new Date().toISOString() });
+    return { ...dati, daCache: false, quando: new Date().toISOString() };
+  }
+
+  app.get('/api/competitor/:id/parco', async (req, res) => {
+    try { res.json({ ok: true, ...await scaricaParco(req.params.id, String(req.query.forza || '') === '1') }); }
+    catch (e) { res.status(e.stato || 500).json({ ok: false, error: e.message }); }
+  });
+
+  /**
+   * UNIRE DUE VETRINE nello stesso concessionario. Lo decide chi guarda, non l'app: due
+   * nomi simili non sono una prova, e un accostamento sbagliato racconterebbe il parco di
+   * qualcun altro. `con: null` separa.
+   */
+  app.post('/api/competitor/:id/gruppo', json, (req, res) => {
+    const id = String(req.params.id);
+    const con = req.body && req.body.con != null ? String(req.body.con) : null;
+    const voci = C.leggi();
+    const a = voci.find(v => String(v.id) === id);
+    if (!a) return res.status(404).json({ ok: false, error: 'non e\' nell\'elenco' });
+    if (con == null) {
+      a.gruppo = null;
+      C.scrivi(voci);
+      return res.json({ ok: true, voci });
+    }
+    const b = voci.find(v => String(v.id) === con);
+    if (!b) return res.status(404).json({ ok: false, error: 'l\'altra vetrina non e\' nell\'elenco' });
+    const g = a.gruppo || b.gruppo || ('g' + Date.now().toString(36));
+    // Chi era gia' in uno dei due gruppi ci resta: unendo A a B si uniscono anche i loro.
+    const vecchi = new Set([a.gruppo, b.gruppo].filter(Boolean));
+    for (const v of voci) if (v === a || v === b || (v.gruppo && vecchi.has(v.gruppo))) v.gruppo = g;
+    C.scrivi(voci);
+    res.json({ ok: true, gruppo: g, voci });
+  });
+
+  /**
+   * Il parco di un GRUPPO di vetrine: i tre elenchi insieme, piu' l'unica cosa che nessuna
+   * fonte da' da sola — quanti mezzi ha davvero contro quanti annunci mostra.
+   */
+  app.get('/api/competitor/gruppo/:g/parco', async (req, res) => {
+    const g = String(req.params.g);
+    const voci = C.leggi().filter(v => v.gruppo === g);
+    if (!voci.length) return res.status(404).json({ ok: false, error: 'gruppo vuoto' });
+    const forza = String(req.query.forza || '') === '1';
+    const parti = [], errori = [];
+    for (const v of voci) {
+      try { parti.push(await scaricaParco(v.id, forza)); }
+      catch (e) { errori.push({ id: v.id, nome: v.nome, error: e.message }); }
+    }
+    const veicoli = parti.flatMap(p => p.veicoli);
+    const acc = C.accoppia(veicoli);
+    res.json({
+      ok: true, gruppo: g, errori,
+      parti: parti.map(p => ({ voce: p.voce, numeri: p.numeri, storico: p.storico, troncato: p.troncato, quando: p.quando, daCache: p.daCache })),
+      numeri: C.aggrega(veicoli),
+      mezzi: acc.mezzi,
+      doppioni: acc.gruppi,
+      veicoli,
+    });
   });
 }
 

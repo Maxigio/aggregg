@@ -2175,6 +2175,20 @@ const DICHIARAZIONE = {
   'versione-non-verificata': { et: 'versione non verificata', cl: 'med', tit: 'Il modello e\' quello giusto, ma su questa fonte la versione che hai scelto non si e\' potuta confrontare: potrebbe essere un altro allestimento.' },
 };
 
+/**
+ * LO STESSO MEZZO, ALTRA VETRINA. Compare solo guardando un profilo unico: l'annuncio dice
+ * su quali altri siti quel concessionario espone lo stesso veicolo — e a che prezzo, che
+ * sui parchi veri non e' sempre lo stesso.
+ */
+function ancheHTML(item) {
+  const a = item && item._anche;
+  if (!a || !a.fonti || !a.fonti.length) return '';
+  const dove = a.fonti.map(f => FONTE_LABEL[f] || f).join(', ');
+  const prezzi = [...new Set((a.prezzi || []).filter(Boolean))];
+  const diverso = prezzi.length > 1 ? ` · ${prezzi.map(p => eurRound(p)).join(' / ')}` : '';
+  return `<span class="anche-badge${diverso ? ' anche-diff' : ''}" title="${escapeHtml('Lo stesso mezzo e\' esposto anche su: ' + dove + (diverso ? ' — a prezzi diversi' : ''))}">anche su ${escapeHtml(dove)}${diverso}</span>`;
+}
+
 function rowHTML(item, bestSet) {
   const pr = vPricing(item.prezzo, passDi(item));
   const prezzoStr = pr ? eurRound(pr.finale) : 'n/d';
@@ -2212,13 +2226,14 @@ function rowHTML(item, bestSet) {
   const dichInRiga = dich && !/versione/.test(item.dichiarazione || '');   // 'senza-versione' e 'versione-non-verificata'
   const dichBadge = dichInRiga ? `<span class="dich-badge dich-${dich.cl}" title="${escapeHtml(dich.tit)}">${escapeHtml(dich.et)}</span>` : '';
   const sub = [item.provincia ? escapeHtml(item.provincia) : '', vendBadge].filter(Boolean).join(' ');
-  const subM = [item.anno || null, item.km != null ? `${item.km.toLocaleString('it-IT')} km` : null, item.carburante || null, item.potenzaCv != null ? `${item.potenzaCv} CV` : null, fonteLabel].filter(Boolean).join(' · ');
+  const ggV = giorniInVendita(item);
+  const subM = [item.anno || null, item.km != null ? `${item.km.toLocaleString('it-IT')} km` : null, item.carburante || null, item.potenzaCv != null ? `${item.potenzaCv} CV` : null, ggV != null ? `in vendita da ${ggV} gg` : null, fonteLabel].filter(Boolean).join(' · ');
 
   const cell = key => {
     switch (key) {
       case 'foto':    return thumbHTML;
       case 'veicolo': return `<div class="row-main">
-          <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}${dichBadge}</div>
+          <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}${dichBadge}${ancheHTML(item)}</div>
           ${item.variante ? `<div class="row-variante">${escapeHtml(item.variante)}</div>` : ''}
           ${sub ? `<div class="row-sub">${sub}</div>` : ''}
           <div class="row-sub-m">${escapeHtml(subM)}${liqBadgeHTML(item)}</div>
@@ -2264,8 +2279,10 @@ function cardHTML(item, bestSet) {
     ? `<button type="button" class="row-thumb"${enrichAttr} title="Vedi foto"><img src="${escapeHtml(imgs[0].thumb)}" loading="lazy" referrerpolicy="no-referrer" alt=""></button>`
     : `<div class="row-thumb noimg${needEnrich ? ' enrich' : ''}"${enrichAttr} aria-hidden="true"></div>`;
   const conc = item.venditore && /conc/i.test(item.venditore);
+  const ggV = giorniInVendita(item);
   const meta = [item.anno || null, item.km != null ? `${item.km.toLocaleString('it-IT')} km` : null,
-    item.carburante || null, item.potenzaCv != null ? `${item.potenzaCv} CV` : null].filter(Boolean).join(' · ');
+    item.carburante || null, item.potenzaCv != null ? `${item.potenzaCv} CV` : null,
+    ggV != null ? `in vendita da ${ggV} gg` : null].filter(Boolean).join(' · ');
   const isSalvato = salvati.some(r => r.url === item.url);
   const inConfronto = confronto.some(r => r.url === item.url);
   return `<article class="ann-card${bestSet && bestSet.has(item.url) ? ' best' : ''}${inConfronto ? ' selected' : ''}" data-url="${urlSafe}">
@@ -2278,6 +2295,7 @@ function cardHTML(item, bestSet) {
           <span class="tag ${{ subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[item.fonte] || ''}">${escapeHtml(FONTE_LABEL[item.fonte] || item.fonte)}</span>
           ${item.provincia ? `<span class="ann-dove">${escapeHtml(item.provincia)}</span>` : ''}
           ${item.venditore ? `<span class="vend-badge vend-${conc ? 'conc' : 'priv'}">${conc ? 'Conc.' : 'Privato'}</span>` : ''}
+          ${ancheHTML(item)}
         </div>
         <div class="ann-piede">
           <span class="ann-prezzo">${pr ? eurRound(pr.finale) : 'n/d'}</span>
@@ -2422,6 +2440,12 @@ function campiNativi(r) {
     ['Mediana Autoscout', val ? `€ ${Number(val.mediana).toLocaleString('it-IT')}` : null],
     ['Scostamento', scost != null ? `${scost > 0 ? '+' : ''}${scost.toLocaleString('it-IT')} €` : null],
     ['Richieste di contatto', r.contatti ? (CONTATTI_IT[r.contatti] || String(r.contatti)) : null],
+    // DA QUANTO E' FERMO QUESTO MEZZO. E' il numero con cui si tratta, e finora finiva solo
+    // dentro una mediana del piazzale. Sta qui, con gli altri dati di mercato.
+    ['In vendita da', (() => {
+      const g = giorniInVendita(r);
+      return g == null ? null : `${g} giorni · dal ${new Date(r.posted_at).toLocaleDateString('it-IT')}`;
+    })()],
     // Chi vende. L'etichetta e' "Nome venditore" e non "Venditore" perche' quella e'
     // gia' presa dal TIPO (privato / concessionario): due righe con lo stesso nome e
     // due contenuti diversi si leggono come un errore.
@@ -2762,6 +2786,18 @@ async function caricaPneumatico(r, misura, pannello) {
     r._pneu[misura] = (d && d.ok !== false) ? { stato: 'ok', d: d.pneumatici || [] } : { stato: 'ko' };
   } catch (_) { r._pneu[misura] = { stato: 'ko' }; }
   pannello?._render?.();
+}
+
+/**
+ * DA QUANDO E' IN VENDITA QUESTO MEZZO — il singolo, non la mediana del piazzale.
+ * Autoscout dichiara la prima pubblicazione; Moto.it la dice nella pagina dell'annuncio e
+ * arriva con l'arricchimento della riga. Su Subito no: li' quella data si azzera a ogni
+ * rilancio (misurato: 27 auto tutte "pubblicate oggi"), e mostrarla sarebbe un numero falso.
+ */
+function giorniInVendita(r) {
+  if (!r || !r.posted_at || r.fonte === 'subito') return null;
+  const g = Math.round((Date.now() - new Date(r.posted_at).getTime()) / 86400000);
+  return Number.isFinite(g) && g >= 0 && g < 4000 ? g : null;
 }
 
 function renderDetailInto(panel, r) {
@@ -3335,7 +3371,22 @@ let vehHost = null;                    // il .det-scheda del pannello che ospita
 let vehHostUrl = null;                 // di quale annuncio e'
 const vehEl = () => (vehHost && vehHost.isConnected) ? vehHost : null;
 let vehData = null, vehSpecs = {}, vehSchedaCollapsed = false, vehSelUrl = null, vehGen = 0;   // vehGen: token anti-race — scarta risposte di ricerche/generazioni superate
-function clearVehScheda() { vehGen++; vehData = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; vehRichiami = null; vehOmoStato = {}; vehAddonAperto = false; const el = vehEl(); if (el) el.innerHTML = ''; vehHost = null; vehHostUrl = null; }   // vehGen++ invalida le fetch in volo; i richiami sono del veicolo cercato, non si tengono
+let vehErrore = null;   // perche' la scheda non si e' potuta fare: si scrive, non si tace
+function clearVehScheda() { vehGen++; vehData = null; vehErrore = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; vehRichiami = null; vehOmoStato = {}; vehAddonAperto = false; const el = vehEl(); if (el) el.innerHTML = ''; vehHost = null; vehHostUrl = null; }   // vehGen++ invalida le fetch in volo; i richiami sono del veicolo cercato, non si tengono
+
+/**
+ * LA SCHEDA CHE NON SI PUO' FARE LO DEVE DIRE.
+ *
+ * Prima ogni strada senza uscita finiva in `clearVehScheda()`: il bottone spariva, non
+ * compariva niente al suo posto, e il pannello sembrava rotto. Peggio, al primo ridisegno
+ * (bastava aprire il passaggio di proprieta') il bottone tornava, si ricliccava, e si
+ * ripartiva da capo. Hai premuto tu: la risposta arriva, anche quando e' un no.
+ */
+function vehFallita(motivo) {
+  vehData = null; vehSpecs = {}; vehSelUrl = null;
+  vehErrore = motivo || 'Scheda tecnica non disponibile per questo annuncio.';
+  renderVehScheda();
+}
 
 /**
  * LA SCHEDA DI UN ANNUNCIO. Stessa scheda di prima, intera; cambiano due cose:
@@ -3354,11 +3405,16 @@ async function loadVehScheda(r, host) {
   const el = vehEl(); if (!el) return;
   const my = ++vehGen;   // invalida ogni scheda ancora in volo
   const p = lastSearchParams || {};
-  const tipo = p.tipo || currentTipo();
-  if (tipo !== 'auto' && tipo !== 'moto') { clearVehScheda(); return; }   // scheda solo auto/moto
+  // MARCA E MODELLO LI DICE L'ANNUNCIO, non la ricerca. Prima il modello veniva solo dai
+  // filtri: aprendo un annuncio del parco di un concessionario — dove una ricerca non c'e'
+  // mai stata — restava vuoto e la scheda si spegneva senza dire niente. Ora l'annuncio
+  // porta il proprio modello (`modello` su Subito e Moto.it, `modelloDichiarato` su
+  // Autoscout) e i filtri restano solo come rete.
+  const tipo = (r && r.tipo) || p.tipo || currentTipo();
+  if (tipo !== 'auto' && tipo !== 'moto') { vehFallita('La scheda tecnica esiste solo per auto e moto.'); return; }
   const marca = (r && r.marca) || p.marca || (matchedBrand() && matchedBrand().nome) || '';
-  const modello = p.modello || (selectedModel && selectedModel.nome) || '';
-  if (!marca || !modello) { clearVehScheda(); return; }   // scheda solo con un modello specifico
+  const modello = (r && (r.modello || r.modelloDichiarato)) || p.modello || (selectedModel && selectedModel.nome) || '';
+  if (!marca || !modello) { vehFallita('Questo annuncio non dichiara marca e modello: senza quelli la scheda non si compone.'); return; }
   // L'anno dell'ANNUNCIO. Prima era `annoMin || annoMax` dei filtri: un numero che parla
   // della ricerca, non del veicolo, e su una ricerca senza filtri era vuoto.
   const anno = (r && r.anno) || p.annoMin || p.annoMax || '';
@@ -3372,11 +3428,14 @@ async function loadVehScheda(r, host) {
   tgReset();
   el.innerHTML = '<div class="rc-group"><div class="rc-group-body"><div class="rc-loading">Carico la scheda tecnica…</div></div></div>';
   try {
-    const r = await fetch(`/api/scheda-veicolo?tipo=${encodeURIComponent(tipo)}&marca=${encodeURIComponent(marca)}&modello=${encodeURIComponent(modello)}&anno=${encodeURIComponent(anno)}`);
-    const d = await r.json();
+    // `res`, non `r`: dentro il `try` un `const r` avrebbe fatto ombra all'ANNUNCIO, e piu'
+    // sotto la preselezione riceveva la risposta HTTP al posto del veicolo — quindi non
+    // preselezionava mai niente.
+    const res = await fetch(`/api/scheda-veicolo?tipo=${encodeURIComponent(tipo)}&marca=${encodeURIComponent(marca)}&modello=${encodeURIComponent(modello)}&anno=${encodeURIComponent(anno)}`);
+    const d = await res.json();
     if (my !== vehGen) return;   // una ricerca più recente ha già preso il posto → non toccare la scheda
     const hasData = d.ok && (((d.generations || []).length) || ((d.motorizzazioni || []).length));
-    if (!hasData) { clearVehScheda(); return; }
+    if (!hasData) { vehFallita(`Il catalogo non ha ${marca} ${modello}.`); return; }
     // NIENTE auto-selezione per DEDUZIONE: l'utente sceglie generazione → motorizzazione.
     // UNICA eccezione: la versione Moto.it che l'utente ha scelto LUI nella ricerca. Non è
     // un'ipotesi nostra, è la sua scelta esplicita — e l'aggancio è esatto perché la scheda
@@ -3386,7 +3445,7 @@ async function loadVehScheda(r, host) {
     // La motorizzazione dedotta dai campi dell'annuncio. Arriva DOPO il primo disegno:
     // la scheda e' gia' a schermo e non si aspetta una seconda richiesta per vederla.
     if (!vehSelUrl && r) preselezionaDaAnnuncio(r, my);
-  } catch (_) { if (my === vehGen) clearVehScheda(); }
+  } catch (_) { if (my === vehGen) vehFallita('Il catalogo non risponde.'); }
 }
 
 /**
@@ -3398,7 +3457,14 @@ async function loadVehScheda(r, host) {
 async function preselezionaDaAnnuncio(r, my) {
   let mio = my;   // `switchVehGen` incrementa vehGen: senza risincronizzare, ogni controllo dopo scarterebbe
   const p = lastSearchParams || {};
-  const qs = new URLSearchParams({ tipo: p.tipo || 'auto', marca: (r.marca || p.marca || ''), modello: p.modello || '' });
+  // Stessi tipo/marca/modello con cui la scheda e' stata chiesta: li dice l'ANNUNCIO. Con
+  // `p.modello` e basta, sugli annunci di un concessionario partiva una richiesta senza
+  // modello e la fonte rispondeva 400 — la preselezione non poteva mai riuscire.
+  const qs = new URLSearchParams({
+    tipo: r.tipo || p.tipo || 'auto',
+    marca: (r.marca || p.marca || ''),
+    modello: (r.modello || r.modelloDichiarato || p.modello || ''),
+  });
   if (r.anno) qs.set('anno', r.anno);
   if (r.potenzaCv) qs.set('cv', r.potenzaCv);
   if (r.carburante) qs.set('carburante', r.carburante);
@@ -3434,7 +3500,15 @@ async function preselezionaDaAnnuncio(r, my) {
 }
 
 function renderVehScheda() {
-  const el = vehEl(); if (!el || !vehData) return;
+  const el = vehEl(); if (!el) return;
+  if (!vehData) {
+    // Il motivo resta a schermo anche dopo un ridisegno del pannello, altrimenti sparirebbe
+    // al primo click su qualunque altra cosa.
+    el.innerHTML = vehErrore
+      ? `<div class="rc-group"><div class="rc-group-body"><div class="veh-ko">${escapeHtml(vehErrore)}</div></div></div>`
+      : '';
+    return;
+  }
   const d = vehData;
   const tipo = vehTipo();
   // combobox (search + dropdown): input vuoto di default; value = etichetta solo dopo la scelta. Caret = dropdown.
@@ -5709,6 +5783,8 @@ let cpVoci = null;                 // l'elenco salvato (null = mai caricato)
 let cpParchi = {};                 // id → { stato, dati }
 let cpErrore = null;
 let cpApertoId = null;             // di chi sono gli annunci che stanno nella griglia
+let cpGruppi = {};                 // gruppo → { stato, dati }: le vetrine unite, scaricate insieme
+const cpAperte = new Set();        // quali schede sono aperte: il re-render non deve richiuderle
 
 // Gli orari arrivano come li scrive Autoscout ("Mo 09:00-12:30, 14:30-19:30").
 const CP_GIORNI = { Mo: 'Lun', Tu: 'Mar', We: 'Mer', Th: 'Gio', Fr: 'Ven', Sa: 'Sab', Su: 'Dom' };
@@ -5746,41 +5822,51 @@ function cpChiudi() {
   const el = cpEl(); if (el) { el.classList.add('d-none'); el.innerHTML = ''; }
 }
 
-function cpNumeriHTML(n, troncato) {
+const cpRiga = (k, v) => `<div class="cp-n"><span>${escapeHtml(k)}</span><b>${v}</b></div>`;
+
+/**
+ * QUELLO CHE NON SI VEDE SCORRENDO GLI ANNUNCI.
+ *
+ * Le mediane dicevano poco: il prezzo mediano di un piazzale non e' il prezzo di nessun
+ * veicolo, e marche e alimentazione le raggruppa gia' la toolbar sugli annunci veri, dove
+ * si possono anche filtrare. Qui restano solo i conteggi che scorrendo la griglia non si
+ * ricavano — chi e' fermo da troppo, chi e' appena arrivato, quanto ha venduto in dieci
+ * anni.
+ */
+function cpNumeriChiave(n, storico, v, troncato) {
   if (!n) return '';
-  const riga = (k, v) => `<div class="cp-n"><span>${escapeHtml(k)}</span><b>${v}</b></div>`;
-  const barre = (voci, tot) => voci.slice(0, 6).map(m =>
-    `<div class="cp-barra"><span class="cp-barra-k">${escapeHtml(m.nome)}</span>`
-    + `<span class="cp-barra-v" style="width:${Math.round(100 * m.n / (tot || 1))}%"></span>`
-    + `<span class="cp-barra-n">${m.n}</span></div>`).join('');
-  const perc = q => q && q.su ? `${q.si} su ${q.su}` : null;
-  return '<div class="cp-numeri">'
-    // Il nuovo si conta ma non entra nelle mediane, e chi legge deve saperlo qui — non
-    // scoprirlo dopo aver confrontato il prezzo mediano di due parchi fatti diversi.
-    + riga('veicoli', cpNum(n.veicoli)
-        + ((n.auto || n.moto) ? ` <em>${n.auto} auto · ${n.moto} moto</em>` : '')
-        + (n.nuovo ? ` <em>${cpNum(n.usato)} usati · ${cpNum(n.nuovo)} nuovi, fuori dalle medie</em>` : ''))
-    + (n.prezzo ? riga('prezzo mediano', cpEur(n.prezzo.mediana)
-        + ` <em>${cpEur(n.prezzo.min)} – ${cpEur(n.prezzo.max)}</em>`
-        // "1 euro" non e' un prezzo, e' un richiamo: fuori dal minimo, ma detto.
-        + (n.prezzo.civetta ? ` <em>${n.prezzo.civetta} sotto € 300, esclusi dal minimo</em>` : '')) : '')
-    + (n.anno ? riga('anno mediano', n.anno.mediana + ` <em>${n.anno.min}–${n.anno.max}</em>`) : '')
-    + (n.km ? riga('km mediani', cpNum(n.km.mediana)) : '')
-    // La giacenza viene solo da Autoscout: su Subito quella data si azzera a ogni
-    // rilancio. Dirlo qui, non in una nota a fondo pagina che nessuno legge.
-    + (n.giacenza ? riga('in vendita da', n.giacenza.mediana + ' gg'
-        + ` <em>max ${n.giacenza.max} · su ${n.giacenza.su} di ${n.giacenza.suTotale}, dato Autoscout</em>`) : '')
-    // A CHI VENDE, non solo cosa tiene in piazzale. L'IVA esposta e' una scelta
-    // commerciale: a parita' di cartellino, per chi la detrae il costo e' un altro numero.
-    + (perc(n.garanzia) ? riga('con garanzia', perc(n.garanzia)) : '')
-    + (perc(n.ivaEsposta) ? riga('IVA esposta', perc(n.ivaEsposta)) : '')
-    + '</div>'
-    + (n.marche && n.marche.length ? `<div class="cp-gruppo"><div class="cp-gruppo-h">Marche</div>${barre(n.marche, n.usato || n.veicoli)}</div>` : '')
-    + (n.carrozzeria && n.carrozzeria.length ? `<div class="cp-gruppo"><div class="cp-gruppo-h">Carrozzeria</div>${barre(n.carrozzeria, n.usato || n.veicoli)}</div>` : '')
-    + (n.alimentazione && n.alimentazione.length ? `<div class="cp-gruppo"><div class="cp-gruppo-h">Alimentazione</div>${barre(n.alimentazione, n.usato || n.veicoli)}</div>` : '')
-    + (troncato ? '<div class="cp-avviso">Elenco troncato al tetto di sicurezza: questo parco e\' piu\' grande di quello mostrato.</div>' : '')
+  const dich = v && v.annunciDichiarati;
+  // Due avvisi, non due statistiche: dicono che quello che stai guardando potrebbe non
+  // essere tutto, o non essere solo suo.
+  const avvisi = (troncato ? '<div class="cp-avviso">Elenco troncato al tetto di sicurezza: questo parco e\' piu\' grande di quello mostrato.</div>' : '')
     + (n.venditori && n.venditori.length > 1
-        ? `<div class="cp-avviso">Attenzione: nella risposta compaiono ${n.venditori.length} venditori diversi (${escapeHtml(n.venditori.map(v => v.nome).join(', ')).slice(0, 90)}). Il filtro della fonte non ha tenuto.</div>` : '');
+        ? `<div class="cp-avviso">Attenzione: nella risposta compaiono ${n.venditori.length} venditori diversi (${escapeHtml(n.venditori.map(x => x.nome).join(', ')).slice(0, 90)}). Il filtro della fonte non ha tenuto.</div>` : '');
+  return '<div class="cp-numeri">'
+    + cpRiga('veicoli presi', cpNum(n.veicoli)
+        + ((n.auto || n.moto) ? ` <em>${n.auto} auto · ${n.moto} moto</em>` : '')
+        + (n.nuovo ? ` <em>${cpNum(n.usato)} usati · ${cpNum(n.nuovo)} nuovi</em>` : '')
+        // Non e' una statistica, e' un controllo: se la vetrina ne dichiara piu' di quanti
+        // ne abbiamo presi, manca qualcosa e deve vedersi.
+        + (dich ? ` <em>la vetrina ne dichiara ${cpNum(dich)}${dich !== n.veicoli ? ' — ne manca qualcuno' : ''}</em>` : ''))
+    + (n.fermi ? cpRiga('fermi da oltre 6 mesi', `${n.fermi.oltre180} <em>il piu' vecchio da ${n.fermi.max} gg · su ${n.fermi.su} con la data, dato Autoscout</em>`) : '')
+    + (n.nuoviArrivi ? cpRiga('arrivati di recente', `${n.nuoviArrivi.g30} <em>nell'ultimo mese · ${n.nuoviArrivi.g90} negli ultimi tre</em>`) : '')
+    + (storico ? cpRiga('storico su Moto.it', `${cpNum(storico.online)} online`
+        + ` <em>${cpNum(storico.pubblicati)} pubblicati in tutto${storico.dal ? ` · sulla piattaforma dal ${storico.dal}` : ''}</em>`) : '')
+    + '</div>' + avvisi;
+}
+
+/**
+ * UNIRE DUE VETRINE. Lo stesso concessionario sta su piu' siti — Raineri Massimo su
+ * Autoscout e su Moto.it, Lucasmotorrad su Subito — ma nessuna fonte lo dice, e due nomi
+ * simili non sono una prova. Quindi lo dici tu, scegliendo dall'elenco.
+ */
+function cpUnisciHTML(v) {
+  if (v.gruppo) return '<button type="button" class="cp-btn cp-separa" title="Togli dal profilo unico">Separa</button>';
+  const altre = (cpVoci || []).filter(x => String(x.id) !== String(v.id));
+  if (!altre.length) return '';
+  return `<select class="cp-btn cp-unisci"><option value="">Unisci a…</option>`
+    + altre.map(x => `<option value="${escapeHtml(String(x.id))}">${escapeHtml(x.nome)} · ${escapeHtml(FONTE_LABEL[x.fonte] || x.fonte)}</option>`).join('')
+    + '</select>';
 }
 
 function cpSchedaHTML(v) {
@@ -5788,7 +5874,7 @@ function cpSchedaHTML(v) {
   const corpo = !st ? '<div class="cp-att">Il parco non e\' ancora stato scaricato.</div>'
     : st.stato === 'carico' ? '<div class="cp-att">Scarico il parco… su un concessionario grande ci vuole un minuto.</div>'
     : st.stato === 'ko' ? `<div class="cp-att">Non riuscito: ${escapeHtml(st.errore || 'la fonte non risponde')}</div>`
-    : cpNumeriHTML(st.dati.numeri, st.dati.troncato);
+    : cpNumeriChiave(st.dati.numeri, st.dati.storico, v, st.dati.troncato);
   const quando = st && st.stato === 'ok' && st.dati.quando
     ? `<span class="cp-quando">dati del ${new Date(st.dati.quando).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${st.dati.daCache ? ' · dalla cache' : ''}</span>` : '';
   const aperto = cpApertoId === v.id;
@@ -5799,37 +5885,143 @@ function cpSchedaHTML(v) {
     v.email ? `<a class="cp-fatto" href="mailto:${escapeHtml(v.email)}">${escapeHtml(v.email)}</a>` : '',
     v.sito ? `<a class="cp-fatto" href="${escapeHtml(v.sito)}" target="_blank" rel="noopener noreferrer">sito ↗</a>` : '',
   ].filter(Boolean).join('');
+  // La riga chiusa dice chi e' e dov'e', e basta. Tutto il resto — contatti, orari,
+  // servizi, descrizione, numeri — sta dentro, e ogni pezzo si richiude per conto suo.
   return `<article class="cp-scheda${v.mio ? ' cp-mio' : ''}${aperto ? ' cp-aperto' : ''}" data-cid="${escapeHtml(String(v.id))}">
-    <header class="cp-h">
-      <div class="cp-nome">${v.logo ? `<img class="cp-logo" src="${escapeHtml(v.logo)}" referrerpolicy="no-referrer" alt="" loading="lazy">` : ''}${escapeHtml(v.nome)}
+    <details class="cp-det"${cpAperte.has(String(v.id)) ? ' open' : ''} data-cpdet="${escapeHtml(String(v.id))}">
+      <summary class="cp-sum">
+        <span class="cp-nome">${escapeHtml(v.nome)}</span>
         <span class="tag ${{ subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[v.fonte] || ''}">${escapeHtml(FONTE_LABEL[v.fonte] || v.fonte)}</span>
-        ${v.mio ? '<span class="cp-tag">il tuo</span>' : ''}</div>
-      <div class="cp-dove">${escapeHtml([v.via, v.cap, v.dove].filter(Boolean).join(' · ')) || '&nbsp;'}</div>
-      ${fatti ? `<div class="cp-fatti">${fatti}</div>` : ''}
-      ${cpOrariHTML(v.orari)}
-      ${v.servizi && v.servizi.length ? `<div class="cp-servizi">${v.servizi.map(s => `<span class="opt-v">${escapeHtml(s)}</span>`).join('')}</div>` : ''}
-      <div class="cp-azioni">
-        ${quando}
-        ${st && st.stato === 'ok' ? `<button type="button" class="cp-btn cp-mostra${aperto ? ' attivo' : ''}">${aperto ? 'Annunci a schermo' : 'Vedi gli annunci'}</button>` : ''}
-        <button type="button" class="cp-btn cp-aggiorna">${st && st.stato === 'ok' ? 'Aggiorna' : 'Scarica il parco'}</button>
-        <a class="cp-btn cp-link" href="${escapeHtml(v.url)}" target="_blank" rel="noopener noreferrer">vetrina ↗</a>
-        <button type="button" class="cp-btn cp-togli" title="Togli dall'elenco">✕</button>
+        <span class="cp-dove">${escapeHtml(v.dove || v.via || '')}</span>
+        ${v.mio ? '<span class="cp-tag">il tuo</span>' : ''}
+      </summary>
+      <div class="cp-corpo">
+        <div class="cp-azioni">
+          ${quando}
+          ${st && st.stato === 'ok' ? `<button type="button" class="cp-btn cp-mostra${aperto ? ' attivo' : ''}">${aperto ? 'Annunci a schermo' : 'Vedi gli annunci'}</button>` : ''}
+          <button type="button" class="cp-btn cp-aggiorna">${st && st.stato === 'ok' ? 'Aggiorna' : 'Scarica il parco'}</button>
+          <a class="cp-btn cp-link" href="${escapeHtml(v.url)}" target="_blank" rel="noopener noreferrer">vetrina ↗</a>
+          ${cpUnisciHTML(v)}
+          <button type="button" class="cp-btn cp-togli" title="Togli dall'elenco">✕</button>
+        </div>
+        <div class="cp-anagrafica">
+          ${v.logo ? `<img class="cp-logo" src="${escapeHtml(v.logo)}" referrerpolicy="no-referrer" alt="" loading="lazy">` : ''}
+          <div class="cp-ana-testo">
+            ${v.slogan ? `<div class="cp-slogan">${escapeHtml(v.slogan)}</div>` : ''}
+            <div class="cp-dove">${escapeHtml([v.via, v.cap, v.dove].filter(Boolean).join(' · ')) || '&nbsp;'}</div>
+            ${v.referente ? `<div class="cp-ref">${escapeHtml(v.referente.nome)}${v.referente.ruolo ? ` <em>${escapeHtml(v.referente.ruolo)}</em>` : ''}</div>` : ''}
+            ${fatti ? `<div class="cp-fatti">${fatti}</div>` : ''}
+          </div>
+        </div>
+        ${miniHTML('cp-orari:' + v.id, 'Orari', (v.orari || []).length ? `${v.orari.length} giorni` : '', cpOrariHTML(v.orari))}
+        ${miniHTML('cp-serv:' + v.id, 'Servizi', (v.servizi || []).length ? String(v.servizi.length) : '',
+          (v.servizi || []).length ? `<div class="cp-servizi">${v.servizi.map(s => `<span class="opt-v">${escapeHtml(s)}</span>`).join('')}</div>` : '')}
+        ${miniHTML('cp-desc:' + v.id, 'Come si descrive', '', v.descrizione ? `<div class="cp-desc">${escapeHtml(v.descrizione)}</div>` : '')}
+        ${corpo}
       </div>
-    </header>
-    <div class="cp-corpo">${corpo}</div>
+    </details>
   </article>`;
+}
+
+/**
+ * IL PROFILO UNICO: piu' vetrine, un concessionario.
+ *
+ * Sopra le sue vetrine sta l'unica cosa che nessuna fonte da' da sola — quanti mezzi ha
+ * DAVVERO contro quanti annunci mostra. Misurato su un concessionario vero: 41 annunci
+ * fra Autoscout, Subito e Moto.it, 16 veicoli.
+ */
+function cpGruppoHTML(g, voci) {
+  const st = cpGruppi[g];
+  const nome = (voci.find(v => v.nome) || {}).nome || 'Concessionario';
+  const dove = (voci.find(v => v.dove) || {}).dove || '';
+  const corpo = !st ? ''
+    : st.stato === 'carico' ? '<div class="cp-att">Scarico le vetrine…</div>'
+    : st.stato === 'ko' ? `<div class="cp-att">Non riuscito: ${escapeHtml(st.errore || 'la fonte non risponde')}</div>`
+    : '<div class="cp-numeri">'
+      + cpRiga('mezzi veri', `${cpNum(st.dati.mezzi)} <em>${cpNum((st.dati.veicoli || []).length)} annunci sulle ${voci.length} vetrine</em>`)
+      + cpRiga('esposti su piu\' vetrine', `${(st.dati.doppioni || []).length}`
+        + (() => {
+          // Quando lo stesso mezzo ha due prezzi, il fatto e' quello: lo stesso veicolo
+          // costa diverso a seconda del sito. Si conta, e si vede sulla riga dell'annuncio.
+          const diversi = (st.dati.doppioni || []).filter(d => new Set(d.prezzi.filter(Boolean)).size > 1).length;
+          return diversi ? ` <em>${diversi} con prezzi diversi fra una vetrina e l'altra</em>` : '';
+        })())
+      + '</div>'
+      + (st.dati.errori && st.dati.errori.length
+          ? `<div class="cp-avviso">${st.dati.errori.map(e => escapeHtml(`${e.nome}: ${e.error}`)).join(' · ')}</div>` : '');
+  return `<section class="cp-grp" data-gid="${escapeHtml(g)}">
+    <header class="cp-grp-h">
+      <span class="cp-grp-nome">${escapeHtml(nome)}</span>
+      <span class="cp-grp-meta">${voci.length} vetrine${dove ? ' · ' + escapeHtml(dove) : ''}</span>
+      <span class="cp-grp-fonti">${voci.map(v => `<span class="tag ${{ subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[v.fonte] || ''}">${escapeHtml(FONTE_LABEL[v.fonte] || v.fonte)}</span>`).join('')}</span>
+      <button type="button" class="cp-btn cp-grp-scarica">${st && st.stato === 'ok' ? 'Aggiorna tutte' : 'Scarica tutte le vetrine'}</button>
+      ${st && st.stato === 'ok' ? `<button type="button" class="cp-btn cp-grp-mostra${cpApertoId === 'g:' + g ? ' attivo' : ''}">Vedi tutti gli annunci</button>` : ''}
+    </header>
+    ${corpo}
+    ${voci.map(cpSchedaHTML).join('')}
+  </section>`;
 }
 
 function cpRender() {
   const el = cpEl(); if (!el) return;
   const voci = cpVoci || [];
-  const miei = voci.filter(v => v.mio), altri = voci.filter(v => !v.mio);
+  // Un gruppo si disegna una volta sola, dove compare la sua prima vetrina: l'ordine
+  // dell'elenco resta quello che c'era, e le voci unite non saltano in fondo.
+  const fatti = new Set();
+  const pezzi = [];
+  for (const v of [...voci.filter(x => x.mio), ...voci.filter(x => !x.mio)]) {
+    if (!v.gruppo) { pezzi.push(cpSchedaHTML(v)); continue; }
+    if (fatti.has(v.gruppo)) continue;
+    fatti.add(v.gruppo);
+    pezzi.push(cpGruppoHTML(v.gruppo, voci.filter(x => x.gruppo === v.gruppo)));
+  }
   el.innerHTML = `<div class="cp-wrap">
     ${cpErrore ? `<div class="cp-avviso">${escapeHtml(cpErrore)}</div>` : ''}
     ${!voci.length ? '<div class="cp-att">Nessun concessionario ancora. Incolla il link di una vetrina — anche la tua.</div>' : ''}
-    ${miei.map(cpSchedaHTML).join('')}
-    ${altri.map(cpSchedaHTML).join('')}
+    ${pezzi.join('')}
   </div>`;
+}
+
+async function cpUnisci(id, con) {
+  cpErrore = null;
+  try {
+    const d = await fetch(`/api/competitor/${encodeURIComponent(id)}/gruppo`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ con }),
+    }).then(r => r.json());
+    if (!d.ok) cpErrore = d.error || 'non riesco a unirle';
+    else cpVoci = d.voci;
+  } catch (_) { cpErrore = 'il server non risponde'; }
+  cpRender();
+}
+
+async function cpScaricaGruppo(g, forza) {
+  cpGruppi[g] = { stato: 'carico' };
+  cpRender();
+  try {
+    const d = await fetch(`/api/competitor/gruppo/${encodeURIComponent(g)}/parco${forza ? '?forza=1' : ''}`).then(r => r.json());
+    cpGruppi[g] = d.ok ? { stato: 'ok', dati: d } : { stato: 'ko', errore: d.error };
+  } catch (_) { cpGruppi[g] = { stato: 'ko', errore: 'il server non risponde' }; }
+  cpRender();
+  if (cpGruppi[g].stato === 'ok') cpMostraGruppo(g);
+}
+
+function cpMostraGruppo(g) {
+  const st = cpGruppi[g];
+  if (!st || st.stato !== 'ok') return;
+  // "Anche su Subito": l'annuncio porta con se' su quali altre vetrine sta lo stesso mezzo,
+  // e con che prezzo. E' il pezzo che nessuna fonte da' da sola.
+  const per = new Map();
+  for (const d of st.dati.doppioni || []) {
+    d.urls.forEach((u, i) => per.set(u, { fonti: d.fonti.filter((_, k) => k !== i), prezzi: d.prezzi }));
+  }
+  for (const v of st.dati.veicoli) v._anche = per.get(v.url) || null;
+  cpApertoId = 'g:' + g;
+  currentResults = st.dati.veicoli;
+  searchActive = true; fettaPresa = 0; lastSources = null;
+  document.body.classList.add('has-results');
+  initPrezzoSlider(currentResults);
+  if (!prezzoSliderInstance) renderResults(currentResults);
+  cpRender();
 }
 
 async function cpAggiungi() {
@@ -5905,9 +6097,35 @@ async function cpTogli(id) {
   cpRender();
 }
 
+// `toggle` non risale il DOM: cattura. Serve a ricordare cosa e' aperto, perche' ogni
+// scarico ridisegna il pannello e senza memoria richiuderebbe tutto sotto le mani.
+document.getElementById('competitorPanel')?.addEventListener('toggle', e => {
+  const d = e.target;
+  if (d && d.classList && d.classList.contains('cp-det')) {
+    if (d.open) cpAperte.add(d.dataset.cpdet); else cpAperte.delete(d.dataset.cpdet);
+    return;
+  }
+  miniToggle(e, () => {});
+}, true);
+
+// Unire due vetrine: e' una tendina, quindi un `change`, non un click.
+document.getElementById('competitorPanel')?.addEventListener('change', e => {
+  const sel = e.target.closest('.cp-unisci'); if (!sel || !sel.value) return;
+  const sch = sel.closest('.cp-scheda'); if (!sch) return;
+  cpUnisci(sch.dataset.cid, sel.value);
+});
+
 document.getElementById('competitorPanel')?.addEventListener('click', e => {
   const t = e.target;
+  const grp = t.closest('.cp-grp');
+  if (grp && (t.closest('.cp-grp-scarica') || t.closest('.cp-grp-mostra'))) {
+    const g = grp.dataset.gid;
+    if (t.closest('.cp-grp-mostra')) cpMostraGruppo(g);
+    else cpScaricaGruppo(g, !!cpGruppi[g]);
+    return;
+  }
   const sch = t.closest('.cp-scheda'); if (!sch) return;
+  if (t.closest('.cp-separa')) { cpUnisci(sch.dataset.cid, null); return; }
   const id = sch.dataset.cid;
   if (t.closest('.cp-mostra')) { cpMostraParco(id); return; }
   if (t.closest('.cp-aggiorna')) { cpScarica(id, !!cpParchi[id]); return; }

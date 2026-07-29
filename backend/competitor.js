@@ -28,12 +28,14 @@
  */
 const https = require('https');
 const zlib = require('zlib');
+const cheerio = require('cheerio');
 const fs = require('fs');
 const path = require('path');
 
 const scrapeAs24 = require('./scrapers/autoscout-graphql');
 const scrapeSubito = require('./scrapers/subito-api');
 const vetrinaMoto = require('./scrapers/motoit-vetrina');
+const { getDetail } = require('./scrapers/detail');
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const TIMEOUT_MS = 15000;
@@ -92,12 +94,27 @@ const pulisci = s => String(s || '').replace(/\s+/g, ' ').trim();
  * Best-effort per costruzione: se un giorno quel blocco cambia forma, si torna a nome e
  * indirizzo — non si rompe l'aggiunta di una vetrina per un orario mancante.
  */
-function schedaAs24(html) {
+/**
+ * Gli orari arrivano una riga per fascia: Subito scrive "Mo 08:30-12:00" e "Mo 14:00-19:00"
+ * su due righe, e stampandole com'e' un negozio con la pausa pranzo occupa undici righe.
+ * Si uniscono per giorno, tenendo l'ordine in cui la fonte li ha dati.
+ */
+function orariUniti(arr) {
+  const per = new Map();
+  for (const riga of arr) {
+    const m = String(riga).match(/^\s*([A-Za-z]{2})\s+(.+?)\s*$/);
+    if (!m) continue;
+    per.set(m[1], (per.has(m[1]) ? per.get(m[1]) + ', ' : '') + m[2]);
+  }
+  return [...per.entries()].map(([g, o]) => `${g} ${o}`);
+}
+
+function schedaLd(html, tipoAtteso = /Dealer/i) {
   const blocchi = String(html).match(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi) || [];
   for (const b of blocchi) {
     let j; try { j = JSON.parse(b.replace(/^[\s\S]*?>/, '').replace(/<\/script>$/i, '')); } catch (_) { continue; }
     const tipi = [].concat(j['@type'] || []);
-    if (!tipi.some(t => /Dealer/i.test(t))) continue;
+    if (!tipi.some(t => tipoAtteso.test(t))) continue;
     const tel = [].concat(j.telephone || [], ...[].concat(j.contactPoint || []).map(c => c.telephone || []))
       .map(pulisci).filter(Boolean);
     const rating = j.aggregateRating || {};
@@ -109,7 +126,12 @@ function schedaAs24(html) {
       logo: typeof j.logo === 'string' ? j.logo : null,
       foto: typeof j.image === 'string' ? j.image : null,
       valutazione: rating.ratingValue ? { media: Number(rating.ratingValue), n: Number(rating.ratingCount || rating.reviewCount || 0) } : null,
-      orari: Array.isArray(j.openingHours) ? j.openingHours.map(pulisci).filter(Boolean) : [],
+      orari: Array.isArray(j.openingHours) ? orariUniti(j.openingHours.map(pulisci).filter(Boolean)) : [],
+      // Lo slogan e' quello che il concessionario ha scelto di dire di se' in una riga.
+      slogan: pulisci(j.slogan || '') || null,
+      // `url` qui e' il sito del negozio, non la pagina della vetrina (quella la sappiamo).
+      sito: (typeof j.url === 'string' && !/autoscout24\.it|subito\.it/i.test(j.url)) ? j.url : null,
+      indirizzo: typeof j.address === 'string' ? pulisci(j.address) : null,
       // Cosa fa oltre a vendere: officina, gommista, perizie. E' il pezzo che dice se e' un
       // concorrente sullo stesso mestiere o un rivenditore e basta.
       servizi: [].concat((j.hasOfferCatalog && j.hasOfferCatalog.itemListElement) || [])
@@ -147,7 +169,7 @@ async function risolviVetrina(urlRaw) {
     const dove = pulisci((html.match(/"addressLocality"\s*:\s*"([^"]{2,60})"/) || [])[1]
       || (tit.match(/\bin\s+([^|]+?)\s*\|/i) || [])[1] || '');
     const via = pulisci((html.match(/"streetAddress"\s*:\s*"([^"]{3,80})"/) || [])[1] || '');
-    return { fonte: 'autoscout', id, nome, dove: dove || null, via: via || null, url, ...schedaAs24(html) };
+    return { fonte: 'autoscout', id, nome, dove: dove || null, via: via || null, url, ...schedaLd(html) };
   }
 
   if (/subito\.it\/shops\//i.test(url) || /subito\.it\/.*\/shops\//i.test(url)) {
@@ -155,11 +177,43 @@ async function risolviVetrina(urlRaw) {
     const shop = (url.match(/\/shops\/(\d+)/) || [])[1];
     if (!shop) throw new Error('non riesco a leggere l\'id del negozio da questo link');
     const html = await getTesto(url);
-    const uid = (html.match(/"user_id"\s*:\s*"?(\d{3,})"?/) || [])[1]
+    /**
+     * L'id UTENTE c'e', ma non si chiama `user_id`. Sta nel data layer che la pagina
+     * riempie per le statistiche, dentro ogni annuncio:
+     *
+     *     advertiser: { type: '1', subscription: 'pro', id: '955583', shop_id: '24697' }
+     *
+     * Cercando `user_id` non lo si trovava e la vetrina rispondeva "apri un suo annuncio":
+     * l'id era nella pagina da sempre, in un'altra forma.
+     */
+    const uid = (html.match(/advertiser\s*:\s*\{[^}]*?\bid\s*:\s*'(\d{3,})'/) || [])[1]
+             || (html.match(/"user_id"\s*:\s*"?(\d{3,})"?/) || [])[1]
              || (html.match(/[?&]uid=(\d{3,})/) || [])[1];
     if (!uid) throw new Error('la vetrina non espone l\'id utente: apri un suo annuncio e incolla quello');
-    const nome = pulisci((html.match(/<title>([^<|]{3,90})/i) || [])[1] || '') || ('Negozio ' + shop);
-    return { fonte: 'subito', id: uid, shopId: shop, nome, dove: null, url };
+    const ld = schedaLd(html, /LocalBusiness|Dealer/i);
+    const $ = cheerio.load(html);
+    const nome = pulisci($('.shop_main_info_wrapper_name h1').first().text())
+      || pulisci((html.match(/<title>([^<|]{3,90})/i) || [])[1] || '')
+      || ('Negozio ' + shop);
+    // Roba che sta nella pagina e che Autoscout non ha: chi risponde al telefono e con che
+    // ruolo, e quanti annunci il negozio dichiara di avere.
+    const referente = pulisci($('.referent .ref_name').first().text()) || null;
+    return {
+      fonte: 'subito', id: uid, shopId: shop, url,
+      nome,
+      dove: pulisci((String(ld.indirizzo || '').match(/,\s*\d{5}\s+([^,]+)/) || [])[1] || '') || null,
+      via: ld.indirizzo || null,
+      ...ld,
+      // Il telefono sta nel riquadro "Mostra Numeri", che e' gia' nell'HTML: non e' un dato
+      // protetto, e' solo nascosto alla vista.
+      telefoni: [...new Set($('#dialog_shop_phones .phone_row .cell span').map((_, e) => pulisci($(e).text())).get().filter(Boolean))].slice(0, 3),
+      referente: referente ? { nome: referente, ruolo: pulisci($('.referent .ref_jobdesc').first().text()) || null } : null,
+      // Nel JSON-LD di Subito `image` E' il logo: la copertina sta solo nell'HTML.
+      logo: ld.logo || $('#shop_logo img').attr('src') || ld.foto || null,
+      foto: $('#shop_cover img').attr('src') || null,
+      descrizione: pulisci($('.shop_description').first().text()) || ld.descrizione || null,
+      annunciDichiarati: (() => { const n = parseInt(pulisci($('#result_numb').first().text()).replace(/[^\d]/g, ''), 10); return Number.isFinite(n) ? n : null; })(),
+    };
   }
 
   throw new Error('per ora riconosco le vetrine di Autoscout (/concessionari/...), di Subito (/shops/...) e di Moto.it (dealer.moto.it/...)');
@@ -179,7 +233,22 @@ async function parco(voce) {
   // in una sezione a parte, e mescolarlo qui falserebbe ogni mediana.
   if (voce.fonte === 'moto') {
     const r = await vetrinaMoto.parco(voce.id, { ctx: { venditoreNome: voce.nome, provincia: voce.provincia || null } });
-    return { veicoli: r.items.map(v => ({ ...v, tipo: 'moto' })), troncato: r.troncato };
+    /**
+     * QUANTO HA VENDUTO IN DIECI ANNI, non solo cosa ha in piazzale adesso. Moto.it e' la
+     * sola fonte che pubblica lo storico di un venditore — "Annunci pubblicati 1.018,
+     * online 164, utente dal 2015" — ma lo scrive sulla pagina di un ANNUNCIO, non sulla
+     * vetrina. Costa una richiesta, e si spende una volta per parco, sul primo annuncio.
+     */
+    let storico = null;
+    if (r.items.length) {
+      try {
+        const d = await getDetail(r.items[0].url);
+        if (d && (d.venditoreAnnunciPubblicati || d.venditoreAnnunciOnline || d.venditoreDal)) {
+          storico = { pubblicati: d.venditoreAnnunciPubblicati || null, online: d.venditoreAnnunciOnline || null, dal: d.venditoreDal || null };
+        }
+      } catch (_) { /* lo storico e' un di piu': se non arriva, il parco resta */ }
+    }
+    return { veicoli: r.items.map(v => ({ ...v, tipo: 'moto' })), troncato: r.troncato, storico };
   }
 
   for (const tipo of ['auto', 'moto']) {
@@ -253,6 +322,14 @@ function aggrega(veicoli) {
   const gg = usati.filter(v => v.fonte === 'autoscout' && v.posted_at)
     .map(v => Math.round((oggi - new Date(v.posted_at)) / 86400000))
     .filter(n => Number.isFinite(n) && n >= 0);
+  /**
+   * I FERMI E I NUOVI ARRIVI, dallo stesso campo della giacenza ma senza mediane.
+   * Un mezzo in vendita da oltre sei mesi e' quello su cui, prima o poi, taglia il prezzo;
+   * quanti ne ha pubblicati nell'ultimo mese dice se sta comprando o se e' fermo. Sono
+   * conteggi, non medie: descrivono i casi, non un veicolo medio che non esiste.
+   */
+  const fermi = gg.length ? { oltre180: gg.filter(n => n > 180).length, max: Math.max(...gg), su: gg.length } : null;
+  const arrivi = gg.length ? { g30: gg.filter(n => n <= 30).length, g90: gg.filter(n => n <= 90).length, su: gg.length } : null;
   return {
     veicoli: veicoli.length,
     usato: usati.length,
@@ -263,6 +340,7 @@ function aggrega(veicoli) {
     anno: anni.length ? { mediana: mediana(anni), min: Math.min(...anni), max: Math.max(...anni) } : null,
     km: km.length ? { mediana: mediana(km) } : null,
     giacenza: gg.length ? { mediana: mediana(gg), max: Math.max(...gg), su: gg.length, suTotale: usati.length } : null,
+    fermi, nuoviArrivi: arrivi,
     marche: conta(usati, marcaDi).slice(0, 12).map(([k, n]) => ({ nome: k, n })),
     alimentazione: conta(usati, v => v.carburante).slice(0, 8).map(([k, n]) => ({ nome: k, n })),
     // COME LAVORA, non solo cosa tiene in piazzale: la carrozzeria dice se fa SUV o
@@ -276,4 +354,85 @@ function aggrega(veicoli) {
   };
 }
 
-module.exports = { leggi, scrivi, risolviVetrina, parco, aggrega, _filePath: filePath };
+/* ─── lo stesso mezzo su piu' vetrine ─────────────────────────────────────── */
+/**
+ * QUANTI MEZZI HA DAVVERO, contro quanti annunci mostra.
+ *
+ * Un concessionario espone lo stesso veicolo su tre siti, e sommando i parchi sembra averne
+ * il triplo. Non c'e' nessun id in comune fra le fonti: l'accostamento si fa sui dati del
+ * veicolo, e va fatto TOLLERANTE, perche' misurando i tre parchi di uno stesso
+ * concessionario lo stesso mezzo NON e' descritto allo stesso modo:
+ *
+ *   Kawasaki Ninja 650 2025 → 8.000 km su Moto.it, 5.000 su Subito, stesso prezzo
+ *   Triumph Rocket 3 GT     → 5.800 km su Moto.it, 0 (non dichiarati) su Subito
+ *   Suzuki SV 650 2002      → stessi km, ma 2.300 euro su Moto.it e 1.900 su Autoscout
+ *
+ * Quindi: marca e anno devono combaciare, il titolo deve condividere almeno una parola che
+ * non sia la marca, e poi basta che REGGA UNO fra chilometri e prezzo. Chiedere che
+ * combacino tutti e due non accoppierebbe nemmeno i casi qui sopra, che sono veri.
+ *
+ * Un mezzo si accoppia con UNO solo per vetrina, e la coppia migliore vince: senza, la
+ * stessa moto usata veniva contata due volte contro due annunci diversi della stessa fonte.
+ */
+const STOP_TIT = new Set(['abs', 'the', 'con', 'del', 'pat', 'a2', 'km', 'cv', 'e', 'i', 'ii', 'iii']);
+function paroleTitolo(v) {
+  const marca = new Set(String(v.marca || '').toLowerCase().split(/[^a-z0-9]+/i).filter(Boolean));
+  return new Set(String(v.titolo || '').toLowerCase().split(/[^a-z0-9]+/i)
+    .filter(w => w.length >= 2 && !marca.has(w) && !STOP_TIT.has(w) && !/^(19|20)\d{2}$/.test(w)));
+}
+const vicino = (a, b, tolleranza) => {
+  if (a == null || b == null || a <= 0 || b <= 0) return null;   // non dichiarato: non e' ne' un si' ne' un no
+  return Math.abs(a - b) / Math.max(a, b) <= tolleranza;
+};
+
+/** Distanza fra due annunci che potrebbero essere lo stesso mezzo, o null se non lo sono. */
+function distanza(a, b) {
+  if (a.fonte === b.fonte) return null;
+  if (!a.marca || !b.marca || pulisci(a.marca).toLowerCase() !== pulisci(b.marca).toLowerCase()) return null;
+  if (!a.anno || !b.anno || a.anno !== b.anno) return null;
+  const pa = paroleTitolo(a), pb = paroleTitolo(b);
+  if (![...pa].some(w => pb.has(w))) return null;               // due modelli diversi della stessa marca
+  const kmOk = vicino(a.km, b.km, 0.25);
+  const przOk = vicino(a.prezzo, b.prezzo, 0.20);
+  if (kmOk === false && przOk === false) return null;           // discordano su tutti e due: non e' lui
+  if (kmOk === null && przOk === null) return null;             // non dichiarano ne' l'uno ne' l'altro
+  const d = (kmOk === true && a.km && b.km ? Math.abs(a.km - b.km) / Math.max(a.km, b.km) : 0.3)
+          + (przOk === true && a.prezzo && b.prezzo ? Math.abs(a.prezzo - b.prezzo) / Math.max(a.prezzo, b.prezzo) : 0.3);
+  return d;
+}
+
+/**
+ * @returns {{gruppi: Array<{urls:string[], fonti:string[], titolo:string, prezzi:number[]}>, mezzi:number}}
+ */
+function accoppia(veicoli) {
+  const coppie = [];
+  for (let i = 0; i < veicoli.length; i++) {
+    for (let j = i + 1; j < veicoli.length; j++) {
+      const d = distanza(veicoli[i], veicoli[j]);
+      if (d != null) coppie.push({ i, j, d });
+    }
+  }
+  coppie.sort((x, y) => x.d - y.d);
+  const preso = new Map();          // indice → chiave gruppo
+  const gruppi = new Map();
+  const fontiDi = k => new Set(gruppi.get(k).map(x => veicoli[x].fonte));
+  for (const { i, j } of coppie) {
+    const ki = preso.get(i), kj = preso.get(j);
+    if (ki != null && kj != null) continue;                                  // gia' sistemati tutti e due
+    if (ki == null && kj == null) { const k = 'g' + i; gruppi.set(k, [i, j]); preso.set(i, k); preso.set(j, k); continue; }
+    const k = ki != null ? ki : kj, nuovo = ki != null ? j : i;
+    if (fontiDi(k).has(veicoli[nuovo].fonte)) continue;                      // una vetrina, un annuncio
+    gruppi.get(k).push(nuovo); preso.set(nuovo, k);
+  }
+  const out = [...gruppi.values()].map(idx => ({
+    urls: idx.map(x => veicoli[x].url),
+    fonti: idx.map(x => veicoli[x].fonte),
+    titolo: veicoli[idx[0]].titolo,
+    anno: veicoli[idx[0]].anno,
+    prezzi: idx.map(x => veicoli[x].prezzo),
+    km: idx.map(x => veicoli[x].km),
+  }));
+  return { gruppi: out, mezzi: veicoli.length - out.reduce((n, g) => n + g.urls.length - 1, 0) };
+}
+
+module.exports = { leggi, scrivi, risolviVetrina, parco, aggrega, accoppia, _filePath: filePath, _distanza: distanza };
