@@ -300,109 +300,6 @@ async function init() {
     if (!sum) return;
     requestAnimationFrame(() => { const det = sum.parentElement; if (det && det.open) positionPriceMenu(det); });
   });
-  // scheda veicolo: collapse + cambio generazione/motorizzazione (delegato, sopravvive ai re-render)
-  const vehSchedaEl = document.getElementById('vehicleScheda');
-  vehSchedaEl?.addEventListener('click', e => {
-    const exp = e.target.closest('.veh-exp');   // Esporta ▾: Copia / CSV / PDF
-    if (exp) {
-      const kind = exp.dataset.exp;
-      if (kind === 'copia') { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(vehSchedaText()).then(() => { exp.textContent = 'Copiato ✓'; setTimeout(() => exp.textContent = 'Copia negli appunti', 1200); }, () => {}); }
-      else if (kind === 'csv') vehDownload('scheda-tecnica.csv', vehSchedaCsv(), 'text/csv;charset=utf-8');
-      else if (kind === 'pdf') vehSchedaPdf();
-      return;
-    }
-    const tb = e.target.closest('.veh-tb-btn');   // toolbar / toggle IT
-    if (tb) {
-      if (tb.classList.contains('veh-it')) { vehXf.translate = !vehXf.translate; tb.classList.toggle('on', vehXf.translate); renderVehBody(); }
-      else if (tb.classList.contains('veh-tb-all')) { vehXf.allOpen = vehXf.allOpen === true ? false : true; renderVehScheda(); }
-      else if (tb.classList.contains('veh-tb-cmp')) {
-        if (vehXf.compare) vehXf.compare = null;
-        else { const alt = (vehData && vehData.motorizzazioni || []).find(m => m.url !== vehSelUrl); vehXf.compare = alt ? alt.url : null; if (vehXf.compare) fetchVehSpecs(vehXf.compare); }
-        renderVehScheda();
-      }
-      return;   // summary Unità/Esporta (anch'essi .veh-tb-btn) → nessun ramo, il <details> nativo fa il toggle
-    }
-    const showAllBtn = e.target.closest('.veh-showall');   // filtro anni: mostra tutte / filtra
-    if (showAllBtn) { vehShowAll = showAllBtn.dataset.showall === '1'; renderVehBody(); return; }
-    const genCard = e.target.closest('.veh-gen-card');   // griglia generazioni → scegli
-    if (genCard) { switchVehGen(genCard.dataset.slug); return; }
-    const motoCard = e.target.closest('.veh-moto-card');   // griglia motorizzazioni → scegli
-    if (motoCard) { vehSelUrl = motoCard.dataset.url; renderVehScheda(); fetchVehSpecs(vehSelUrl); return; }
-    // Nessun bottone "Calcola": provincia e km/anno ricalcolano da soli mentre li cambi.
-    // Il bottone era nato perche' la cifra grande restava indietro, ma quello era un
-    // difetto (aggiornava un elemento che non esisteva piu'), non una mancanza.
-    const grpHead = e.target.closest('.veh-grp-head');   // sezione accordion interna
-    if (grpHead) {
-      const grp = grpHead.parentElement;
-      grp.classList.toggle('veh-collapsed');
-      // ADD ON ricorda se e' aperto: il ricalcolo del costo ridisegna il corpo della
-      // scheda, e senza memoria il gruppo si richiudeva sotto le mani.
-      if (grp.dataset.addon) vehAddonAperto = !grp.classList.contains('veh-collapsed');
-      return;
-    }
-    const head = e.target.closest('.rc-sched-head'); if (!head) return;
-    const g = head.closest('.rc-group'); g.classList.toggle('collapsed'); vehSchedaCollapsed = g.classList.contains('collapsed');
-    const s = vehSpecs[vehSelUrl];
-    if (!vehSchedaCollapsed && vehSelUrl && (!s || (!s.loading && !s.ok))) fetchVehSpecs(vehSelUrl);   // riprova le specs fallite alla riapertura
-  });
-  // combobox scheda: lista visibile filtrata + click/keyboard (come marca/modello); + ricerca-campo toolbar
-  vehSchedaEl?.addEventListener('input', e => {
-    if (e.target.classList.contains('veh-combo')) vehComboOpen(e.target, true);
-    else if (e.target.classList.contains('veh-tb-q')) { vehXf.q = e.target.value; applyVehViewState(); }
-  });
-  vehSchedaEl?.addEventListener('change', e => {
-    if (e.target.classList.contains('veh-tb-unit')) {   // selettore unità → converti (solo corpo, il <details> resta aperto)
-      const fam = e.target.dataset.fam;
-      if (e.target.value) vehXf.units[fam] = e.target.value; else delete vehXf.units[fam];
-      const det = e.target.closest('.veh-units'); if (det) det.classList.toggle('has-adj', Object.values(vehXf.units).some(Boolean));
-      renderVehBody();
-    } else if (e.target.classList.contains('veh-hl-cb')) {   // checkbox "in evidenza" per-campo
-      const k = e.target.dataset.k;
-      if (e.target.checked) vehXf.highlight.add(k); else vehXf.highlight.delete(k);
-      renderVehBody();
-    } else if (e.target.classList.contains('veh-carb-prov')) {   // provincia: cambia il prezzo al litro
-      try { localStorage.setItem('amrCarbProvincia', e.target.value); } catch (_) {}
-      vehCostoAggiorna();          // l'indice ha già tutte le province: nessuna richiesta
-    }
-  });
-  // km/anno a mano: si aggiorna a ogni tasto SENZA ridisegnare, altrimenti il campo perde il
-  // fuoco a metà del numero. Si riscrivono solo le cifre già a schermo.
-  // Mentre si scrive, un valore incompleto (il "2" di 23456) NON deve far ballare la cifra:
-  // si aggiorna solo su valori utilizzabili, e il campo fuori scala lo segnala il browser da
-  // sé (min/max nativi). Al termine (blur) un valore inservibile viene buttato, così non
-  // resta spazzatura in localStorage da una sessione all'altra.
-  vehSchedaEl?.addEventListener('input', e => {
-    if (!e.target.classList.contains('veh-carb-km')) return;
-    const n = carbKmValido(e.target.value);
-    if (!(n >= KM_MIN && n <= KM_MAX)) return;
-    try { localStorage.setItem('amrCarbKm', String(n)); } catch (_) {}
-    vehCostoAggiorna();
-  });
-  vehSchedaEl?.addEventListener('change', e => {
-    if (!e.target.classList.contains('veh-carb-km')) return;
-    const n = carbKmValido(e.target.value);
-    if (n >= KM_MIN && n <= KM_MAX) return;
-    try { localStorage.removeItem('amrCarbKm'); } catch (_) {}
-    renderVehBody();                      // il campo torna al valore usato davvero
-  });
-
-  vehSchedaEl?.addEventListener('focusin', e => { if (e.target.classList.contains('veh-combo')) { e.target.select?.(); vehComboOpen(e.target, false); } });
-  vehSchedaEl?.addEventListener('focusout', e => { if (e.target.classList.contains('veh-combo')) { const inp = e.target; setTimeout(() => { vehComboClose(inp); vehComboRestore(inp); }, 150); } });
-  vehSchedaEl?.addEventListener('keydown', e => {
-    const inp = e.target; if (!inp.classList || !inp.classList.contains('veh-combo')) return;
-    const list = inp.parentElement.querySelector('.veh-ac'); if (!list || list.classList.contains('d-none')) return;
-    const matches = inp._vehMatches || []; if (!matches.length) return;
-    if (e.key === 'ArrowDown') { e.preventDefault(); vehAcActive = (vehAcActive + 1) % matches.length; renderVehAc(inp, matches); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); vehAcActive = (vehAcActive - 1 + matches.length) % matches.length; renderVehAc(inp, matches); }
-    else if (e.key === 'Enter') { if (vehAcActive >= 0) { e.preventDefault(); const it = matches[vehAcActive]; pickVehCombo(inp, it.key, it.label); } }
-    else if (e.key === 'Escape') { vehComboClose(inp); vehComboRestore(inp); }
-  });
-  vehSchedaEl?.addEventListener('mousedown', e => {
-    const li = e.target.closest('.veh-ac .ac-item'); if (!li) return;
-    e.preventDefault();   // evita il blur prima del pick
-    const inp = li.closest('.veh-combo-wrap').querySelector('.veh-combo');
-    pickVehCombo(inp, li.dataset.key, li.dataset.label);
-  });
   // Responsività colonne in JS (l'inline grid-template vince sulle media-query).
   let _resizeT;
   window.addEventListener('resize', () => { clearTimeout(_resizeT); _resizeT = setTimeout(() => {
@@ -499,6 +396,11 @@ async function init() {
     if (e.target.closest('.btn-salva'))     { toggleSalva(url); return; }
     if (e.target.closest('.btn-confronta'))  { toggleConfronto(url); return; }
     if (e.target.closest('.btn-info'))       { toggleDetail(row); return; }
+    // ADD ON: omologazione → versioni, e i tre bottoni della targa.
+    const omoBtn = e.target.closest('.veh-omo-btn');
+    if (omoBtn) { vehOmoCarica(omoBtn.dataset.omo); return; }
+    if (e.target.closest('#tgVai')) { tgVerifica(); return; }
+    if (e.target.closest('#tgCambia') || e.target.closest('#tgRiprova')) { tgNuovaSfida(); return; }
     // Una motorizzazione scelta a mano fra le candidate della scheda tecnica.
     const sch = e.target.closest('.sch-voce');
     if (sch) {
@@ -518,7 +420,27 @@ async function init() {
     if (cosa === 'pass' && !r._pass) calcolaPassaggio(r, pan);
     if (cosa === 'gomme' && !r._gomme) caricaGomme(r, pan);
     if (cosa === 'scheda') caricaScheda(r, pan);
+    if (cosa === 'richiami') vehRichiamiCarica();
+    if (cosa === 'targa' && !tgSfida && !tgOccupato) tgNuovaSfida();
   }), true);
+
+  // ADD ON: provincia del carburante (l'indice ha gia' tutte le province, nessuna richiesta).
+  resultsGrid.addEventListener('change', e => {
+    if (!e.target.classList.contains('veh-carb-prov')) return;
+    try { localStorage.setItem('amrCarbProvincia', e.target.value); } catch (_) {}
+    vehCostoAggiorna();
+  });
+  // km/anno a mano: si aggiorna SENZA ridisegnare, o il campo perde il fuoco a meta' numero.
+  resultsGrid.addEventListener('input', e => {
+    if (!e.target.classList.contains('veh-carb-km')) return;
+    const n = carbKmValido(e.target.value);
+    if (!(n >= KM_MIN && n <= KM_MAX)) return;
+    try { localStorage.setItem('amrCarbKm', String(n)); } catch (_) {}
+    vehCostoAggiorna();
+  });
+  resultsGrid.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.id === 'tgCaptcha') { e.preventDefault(); tgVerifica(); }
+  });
 
   // Spunta "veicolo storico" dentro il pannello di un annuncio: cambia la tariffa, si rifa' il conto.
   resultsGrid.addEventListener('change', e => {
@@ -2727,7 +2649,8 @@ function schedaHTML(r) {
     corpo = `<div class="sch-perche">${escapeHtml(st.perche || '')}</div>`
       + (st.specs && st.specs.groups || []).map(g =>
           `<div class="sch-grp"><div class="sch-grp-t">${escapeHtml(g.title)}</div>`
-          + coppieHTML((g.rows || []).map(x => [x.k, x.v])) + '</div>').join('')
+          // Tradotte: le schede moto arrivano in inglese dalla fonte di ripiego.
+          + coppieHTML((g.rows || []).map(x => [vehTrKey(x.k), vehTrVal(x.v)])) + '</div>').join('')
       + (st.specs && st.specs.source
           ? `<div class="det-blocco-f">Fonte: ${escapeHtml(st.specs.source)}</div>` : '');
   }
@@ -2766,6 +2689,39 @@ async function caricaSchedaSpecs(r, m, perche, panel) {
   panel?._render?.();
 }
 
+/**
+ * ADD ON DELL'ANNUNCIO: le integrazioni esterne, che costano una richiesta e non stanno
+ * nell'annuncio. Stavano sotto la scheda tecnica della RICERCA, cioe' agganciate al
+ * modello cercato; ora stanno qui, perche' e' qui che si guarda un veicolo preciso.
+ *
+ * Il costo carburante nasce dal consumo della scheda di QUESTO annuncio: prima veniva
+ * dalla motorizzazione che avevi scelto a mano nella ricerca, che poteva non essere la sua.
+ * Richiami e passaggi restano dati di MODELLO — lo dicono da se' — e la targa e' del
+ * veicolo che hai in mano.
+ *
+ * Le chiavi sono per-annuncio: ogni pannello ricorda cosa hai aperto senza trascinarsi
+ * dietro lo stato di un altro.
+ */
+function addonAnnuncioHTML(r) {
+  const spec = r._scheda && r._scheda.stato === 'ok' ? r._scheda.specs : null;
+  const k = ':' + r.url;
+  const pezzi = [
+    vehCostoHTML(spec, 'carb' + k),
+    vehLiqHTML('liq' + k),
+    vehRichiamiHTML('rich' + k),
+    vehTargaHTML('targa' + k),
+  ].filter(Boolean);
+  if (!pezzi.length) return '';
+  return miniHTML('addon' + k, 'ADD ON', pezzi.length, `<div class="veh-addon">${pezzi.join('')}</div>`);
+}
+
+/** Lo stato ADD ON e' condiviso (richiami del modello, targa del veicolo): quando cambia,
+ *  si ridisegnano i pannelli aperti — sono pochi, ed e' l'unico modo per non tenere
+ *  un registro di chi sta guardando cosa. */
+function rerenderPannelliAperti() {
+  document.querySelectorAll('[data-detail]').forEach(p => { try { p._render && p._render(); } catch (_) {} });
+}
+
 function renderDetailInto(panel, r) {
   panel.dataset.loaded = '1';
   const renderBody = () => {
@@ -2787,6 +2743,7 @@ function renderDetailInto(panel, r) {
       // La scheda tecnica DI QUESTO ANNUNCIO: sta qui e non nella ricerca, perche' i
       // vincoli con cui si trova la motorizzazione giusta li dichiara l'annuncio.
       + `<div class="det-scheda">${schedaHTML(r)}</div>`
+      + `<div class="det-addon">${addonAnnuncioHTML(r)}</div>`
       + `<div class="det-gomme">${gommeHTML(r)}</div>`
       + `<div class="det-foot">${openBtn}${salBtn}${confBtn}</div></div>`;
   };
@@ -3305,98 +3262,9 @@ function hideResults() {
   _enrichQueue.length = 0; if (enrichObserver) enrichObserver.disconnect();   // stop enrichment Moto.it pendente
   resultsSection.classList.add('d-none'); noResults.classList.add('d-none'); resultsToolbar.classList.add('d-none');
   fonteBreakdown.innerHTML = ''; resultsGrid.innerHTML = ''; compareBar.classList.add('d-none'); closeMatrix();
-  clearVehScheda();
 }
 
 // ─── Scheda tecnica veicolo (auto-data.net) — highlighted, collassabile, sopra gli annunci ──
-let vehData = null, vehSpecs = {}, vehSchedaCollapsed = false, vehSelUrl = null, vehGen = 0;   // vehGen: token anti-race — scarta risposte di ricerche/generazioni superate
-function clearVehScheda() { vehGen++; vehData = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; vehRichiami = null; vehOmoStato = {}; vehAddonAperto = false; const el = document.getElementById('vehicleScheda'); if (el) el.innerHTML = ''; }   // vehGen++ invalida le fetch in volo; i richiami sono del veicolo cercato, non si tengono
-
-async function loadVehScheda() {
-  const el = document.getElementById('vehicleScheda'); if (!el) return;
-  const my = ++vehGen;   // invalida ogni scheda ancora in volo di una ricerca precedente
-  // agganciati alla ricerca ESEGUITA (lastSearchParams), non allo stato UI live (che l'utente può aver già cambiato)
-  const p = lastSearchParams || {};
-  const tipo = p.tipo || currentTipo();
-  if (tipo !== 'auto' && tipo !== 'moto') { clearVehScheda(); return; }   // scheda solo auto/moto
-  const marca = p.marca || (matchedBrand() && matchedBrand().nome) || '';
-  const modello = p.modello || (selectedModel && selectedModel.nome) || '';
-  if (!marca || !modello) { clearVehScheda(); return; }   // scheda solo con un modello specifico
-  const anno = p.annoMin || p.annoMax || '';
-  vehSchedaCollapsed = true;   // scheda chiusa di default
-  vehXf.compare = null; vehXf.q = ''; vehXf.highlight = new Set(); vehGenChosen = false; vehShowAll = false;   // reset per ricerca (traduci/unità restano preferenze)
-  vehRichiami = null; vehOmoStato = {}; vehAddonAperto = false;   // i richiami sono di QUEL veicolo: cambiando ricerca ripartono
-  // La targa NON e' un parametro di ricerca: non filtra gli annunci e non va alle fonti.
-  // Si legge qui e resta nel browser, cosi' non finisce nemmeno nella chiave di cache.
-  targaCercata = String((document.getElementById('targaFiltro') || {}).value || '')
-    .toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
-  tgReset();
-  el.innerHTML = '<div class="rc-group"><div class="rc-group-body"><div class="rc-loading">Carico la scheda tecnica…</div></div></div>';
-  try {
-    const r = await fetch(`/api/scheda-veicolo?tipo=${encodeURIComponent(tipo)}&marca=${encodeURIComponent(marca)}&modello=${encodeURIComponent(modello)}&anno=${encodeURIComponent(anno)}`);
-    const d = await r.json();
-    if (my !== vehGen) return;   // una ricerca più recente ha già preso il posto → non toccare la scheda
-    const hasData = d.ok && (((d.generations || []).length) || ((d.motorizzazioni || []).length));
-    if (!hasData) { clearVehScheda(); return; }
-    // NIENTE auto-selezione per DEDUZIONE: l'utente sceglie generazione → motorizzazione.
-    // UNICA eccezione: la versione Moto.it che l'utente ha scelto LUI nella ricerca. Non è
-    // un'ipotesi nostra, è la sua scelta esplicita — e l'aggancio è esatto perché la scheda
-    // Moto.it usa lo STESSO codice-versione della ricerca (nessun rischio di sbagliare moto).
-    vehData = d; vehSpecs = {}; vehSelUrl = vehVersionePreScelta(d) || null;
-    renderVehScheda();
-  } catch (_) { if (my === vehGen) clearVehScheda(); }
-}
-
-function renderVehScheda() {
-  const el = document.getElementById('vehicleScheda'); if (!el || !vehData) return;
-  const d = vehData;
-  const tipo = vehTipo();
-  // combobox (search + dropdown): input vuoto di default; value = etichetta solo dopo la scelta. Caret = dropdown.
-  const genSel = tipo === 'auto' && d.generations.length
-    ? vehCombo('veh-combo-gen', vehGenChosen && d.gen ? d.gen.name : '', 'Generazione')
-    : '';
-  const curMoto = (d.motorizzazioni || []).find(m => m.url === vehSelUrl) || {};
-  const curLabel = vehSelUrl && curMoto.label ? curMoto.label + (curMoto.hp ? ` · ${curMoto.hp} CV` : '') : '';
-  const motoSel = vehCombo('veh-combo-moto', curLabel, tipo === 'moto' ? 'Anno / allestimento' : 'Motorizzazione');
-  // Toggle IT solo dove serve il dizionario: auto-data.net (/it/) e Moto.it sono già italiane.
-  const itBtn = vehNeedsTr() ? `<button type="button" class="veh-tb-btn veh-it${vehXf.translate ? ' on' : ''}" title="Traduci in italiano">IT</button>` : '';
-  // toolbar + combos vivono FUORI da .rc-sch-secs (persistenti): l'arrivo async delle specs
-  // aggiorna solo .rc-sch-secs (renderVehBody) senza distruggere ciò che l'utente sta digitando.
-  el.innerHTML = `<div class="rc-group${vehSchedaCollapsed ? ' collapsed' : ''}">`
-    + `<button type="button" class="rc-group-head rc-sched-head"><span class="rc-gcaret">${icon('chevron')}</span><span class="rc-group-title">Scheda tecnica</span><span class="rc-group-meta">${escapeHtml(d.title)}</span></button>`
-    + `<div class="rc-group-body"><div class="veh-sel-row">${genSel}${motoSel}${itBtn}</div>${vehSelUrl ? vehToolbarHTML() : ''}<div class="rc-sch-secs">${vehBodyHTML()}</div></div></div>`;
-  applyVehViewState();   // ri-applica ricerca-campo + espandi/comprimi dopo ogni render
-}
-function vehBodyHTML() {
-  const tipo = vehTipo();
-  if (!vehGenChosen && vehGenStep()) return vehGenGridHTML();   // griglia foto generazioni (auto con generazioni)
-  if (!vehSelUrl) {
-    if (!((vehData && vehData.motorizzazioni) || []).length) return '<div class="rc-empty">Nessuna motorizzazione per questa selezione.</div>';
-    return vehMotoGridHTML(tipo);   // griglia card motorizzazione/anno
-  }
-  const spec = vehSpecs[vehSelUrl];
-  if (!spec || spec.loading) return '<div class="rc-loading">Carico le specifiche…</div>';
-  if (!spec.ok || !spec.groups || !spec.groups.length) return '<div class="rc-empty">Specifiche non disponibili per questa motorizzazione.</div>';
-  /**
-   * Le integrazioni ESTERNE stanno in fondo, in un gruppo come gli altri.
-   *
-   * Prima erano fasce sopra le sezioni: arrivavano prima delle specifiche vere, e la
-   * scheda si apriva su roba che non e' la scheda. Ora "ADD ON" e' l'ultimo gruppo, con
-   * la stessa intestazione di MOTORE e PRESTAZIONI, chiuso di default come loro.
-   *
-   * Dentro restano tre blocchi richiudibili, ognuno con la sua fonte scritta: il costo
-   * carburante (MIMIT), i passaggi di proprieta' del modello (ACI) e i richiami (RDW e
-   * Safety Gate). Non si mescolano fra loro e non si mescolano con le specifiche: quelle
-   * descrivono il veicolo, queste dicono cosa gli succede intorno.
-   */
-  return (vehXf.compare ? '' : vehHlBandHTML(spec)) + vehSectionsHTML(spec)
-    + (vehXf.compare ? '' : vehAddonHTML(spec));
-}
-
-// ── ADD ON: le integrazioni esterne, in un gruppo come gli altri ─────────────
-// I richiami NON partono da soli: si scaricano alla prima apertura del loro blocco.
-// La marca e il modello sono quelli della RICERCA ESEGUITA, gli stessi con cui e' stata
-// costruita la scheda — non lo stato del form, che l'utente puo' aver gia' cambiato.
 let vehRichiami = null;        // null = mai chiesti · {loading} · {rdw, sg} · {ko}
 // Le versioni di un'omologazione, chieste una alla volta: chiave = numero grezzo.
 let vehOmoStato = {};
@@ -3404,27 +3272,26 @@ let vehOmoStato = {};
 async function vehOmoCarica(numero) {
   if (!numero || vehOmoStato[numero]) return;
   vehOmoStato[numero] = 'carico';
-  const my = vehGen;
-  renderVehBody();
+  const my = searchGen;   // se parte un'altra ricerca, questa risposta e' stantia
+  rerenderPannelliAperti();
   try {
     const d = await fetch('/api/richiami/omologazione?n=' + encodeURIComponent(numero)).then(r => r.json());
-    if (my !== vehGen) return;
+    if (my !== searchGen) return;
     vehOmoStato[numero] = d && d.ok && (d.nomi || []).length
       ? d : { ko: (d && d.motivo) || 'nessuna versione trovata per questa omologazione' };
   } catch (_) {
-    if (my !== vehGen) return;
+    if (my !== searchGen) return;
     vehOmoStato[numero] = { ko: 'catalogo non raggiungibile' };
   }
-  renderVehBody();
+  rerenderPannelliAperti();
 }
-let vehAddonAperto = false;    // il gruppo resta aperto quando il corpo si ridisegna
 
 async function vehRichiamiCarica() {
   const p = lastSearchParams || {};
   if (!p.marca || vehRichiami) return;
   vehRichiami = { loading: true };
-  const my = vehGen;
-  renderVehBody();
+  const my = searchGen;   // se parte un'altra ricerca, questa risposta e' stantia
+  rerenderPannelliAperti();
   const q = new URLSearchParams({ marca: p.marca });
   if (p.modello) q.set('modello', p.modello);
   try {
@@ -3432,16 +3299,16 @@ async function vehRichiamiCarica() {
       fetch('/api/richiami/rdw/cerca?' + q.toString() + '&quante=8').then(r => r.json()).catch(() => null),
       fetch('/api/richiami/cerca?' + q.toString() + '&quante=8').then(r => r.json()).catch(() => null),
     ]);
-    if (my !== vehGen) return;                 // una ricerca piu' recente ha preso il posto
+    if (my !== searchGen) return;              // una ricerca piu' recente ha preso il posto
     vehRichiami = { rdw, sg };
   } catch (_) {
-    if (my !== vehGen) return;
+    if (my !== searchGen) return;
     vehRichiami = { ko: true };
   }
-  renderVehBody();
+  rerenderPannelliAperti();
 }
 
-function vehRichiamiHTML() {
+function vehRichiamiHTML(chiave) {
   const p = lastSearchParams || {};
   if (!p.marca) return '';
   const st = vehRichiami;
@@ -3526,27 +3393,7 @@ function vehRichiamiHTML() {
       <div class="veh-rich-fonte">Semaforo di MODELLO: la campagna riguarda i telai decisi dal costruttore, non tutti gli esemplari.
       L'anno non filtra, l'archivio RDW non porta la finestra di produzione. <b>Ogni riga apre il richiamo originale</b>, dove il guasto e' scritto per esteso.</div></div>`;
   }
-  return miniHTML('veh-rich', 'Richiami', escapeHtml(meta), corpo, { carica: 'richiami' });
-}
-
-function vehAddonHTML(spec) {
-  const pezzi = [vehCostoHTML(spec), vehLiqHTML(), vehRichiamiHTML(), vehTargaHTML()].filter(Boolean);
-  if (!pezzi.length) return '';
-  return vehGrpHTML('ADD ON', pezzi.length, 1, `<div class="veh-addon">${pezzi.join('')}</div>`, '',
-    { chiuso: !vehAddonAperto, attr: ' data-addon="1"' });
-}
-// Versione Moto.it scelta nella ricerca → la stessa voce nella scheda, già selezionata.
-// L'aggancio è per CODICE: l'URL della scheda Moto.it finisce col codice-versione.
-//
-// INERTE da quando la versione è un campo libero: il codice non lo manda più il browser,
-// lo risolve il server, e qui non arriva. Resta perché la scheda tecnica sta per passare
-// dentro l'annuncio (dove il codice-versione è nell'URL dell'annuncio stesso, verificato),
-// e allora questa funzione sparisce insieme al resto. Fino a lì: null → scegli dalla griglia.
-function vehVersionePreScelta(d) {
-  const code = (lastSearchParams || {}).motoitBikeCode;
-  if (!code || !/moto\.it/i.test(d.source || '')) return null;
-  const hit = (d.motorizzazioni || []).find(m => String(m.url || '').endsWith('/' + code));
-  return hit ? hit.url : null;
+  return miniHTML(chiave || 'veh-rich', 'Richiami', escapeHtml(meta), corpo, { carica: 'richiami' });
 }
 
 // ── Costo carburante reale, coi prezzi ufficiali della TUA provincia ──────────
@@ -3582,7 +3429,7 @@ async function loadCarburanti() {
     const d = await fetch('/api/carburanti').then(r => r.json());
     if (d && d.ok) { carbIdx = d; carbStato = 'ok'; } else carbStato = 'ko';
   } catch (_) { carbStato = 'ko'; }
-  renderVehBody();
+  rerenderPannelliAperti();
 }
 
 // spec → { consumo, famiglia } leggendo le righe GREZZE (auto-data.net e Moto.it insieme)
@@ -3593,7 +3440,6 @@ function vehConsumo(spec) {
     if (consumo == null && /consumo/i.test(r.k)) { const v = carbConsumoDa(r.v); if (v) consumo = v; }
     if (!alim && /tipo carburante|alimentazione/i.test(r.k)) alim = r.v;
   }
-  if (!alim && vehData && vehData.head) alim = '';
   return { consumo, famiglia: carbFamigliaDa(alim) };
 }
 // stesse regole del backend (backend/carburanti.js): tenute uguali di proposito
@@ -3633,17 +3479,27 @@ function carbDetHTML(per100, consumo, voce, kmSt) {
 
 // Aggiorna le cifre gia' a schermo senza ricostruire il DOM: se ridisegnassimo, il campo dei
 // km perderebbe il fuoco a meta' del numero e l'operatore non riuscirebbe a scriverlo.
+/**
+ * Ricalcola il costo carburante nei pannelli aperti SENZA ridisegnarli: il campo km/anno
+ * perderebbe il fuoco a meta' del numero. Ogni pannello usa le specifiche del SUO annuncio.
+ */
 function vehCostoAggiorna() {
-  const box = document.querySelector('#vehicleScheda .veh-costo');
-  const spec = vehSpecs[vehSelUrl];
-  if (!box || !spec || carbStato !== 'ok' || !carbIdx) return;
+  if (carbStato !== 'ok' || !carbIdx) return;
+  document.querySelectorAll('[data-detail]').forEach(pan => {
+    const box = pan.querySelector('.veh-costo');
+    const r = trovaResult(pan.dataset.url);
+    const spec = r && r._scheda && r._scheda.stato === 'ok' ? r._scheda.specs : null;
+    if (box && spec) vehCostoAggiornaBox(box, spec);
+  });
+}
+function vehCostoAggiornaBox(box, spec) {
   const { consumo, famiglia } = vehConsumo(spec);
   if (!consumo || !famiglia) return;
   const pv = carbProvincia();
   const voce = ((pv && carbIdx.province[pv]) || carbIdx.italia)[famiglia];
   // Provincia che non quota quel carburante (il metano manca in 8 province): senza questo
   // ramo restavano a schermo le cifre della provincia PRECEDENTE, credibili e sbagliate.
-  if (!voce) { renderVehBody(); return; }
+  if (!voce) { rerenderPannelliAperti(); return; }
   const kmSt = carbKmStato();
   const { per100, anno } = carbCalcola(consumo, voce.p, kmSt.km);
   const eur = n => n.toLocaleString('it-IT', { maximumFractionDigits: 0 });
@@ -3663,7 +3519,7 @@ function vehCostoAggiorna() {
   if (meta) meta.innerHTML = `${eur(anno)} €<em>all'anno</em>`;
 }
 
-function vehCostoHTML(spec) {
+function vehCostoHTML(spec, chiave) {
   const { consumo, famiglia } = vehConsumo(spec);
   if (!consumo || !famiglia) return '';                      // niente dati → niente banda (mai stime inventate)
   if (carbStato === 'mai') { loadCarburanti(); return '<div class="veh-costo veh-costo-attesa">Calcolo il costo carburante…</div>'; }
@@ -3679,7 +3535,7 @@ function vehCostoHTML(spec) {
   const eur = n => n.toLocaleString('it-IT', { maximumFractionDigits: 0 });
   const provOpts = ['<option value="">Media Italia</option>']
     .concat(Object.keys(carbIdx.province).sort().map(x => `<option value="${x}"${x === pv ? ' selected' : ''}>${x}</option>`)).join('');
-  return miniHTML('carb', 'Costo carburante', `${eur(anno)} €<em>all'anno</em>`, `<div class="veh-costo">
+  return miniHTML(chiave || 'carb', 'Costo carburante', `${eur(anno)} €<em>all'anno</em>`, `<div class="veh-costo">
     <div class="veh-costo-det">${carbDetHTML(per100, consumo, voce, kmSt)}</div>
     <div class="veh-costo-ctrl">
       <select class="veh-carb-prov" aria-label="provincia per il prezzo del carburante">${provOpts}</select>
@@ -3719,7 +3575,7 @@ async function liqCarica(marca, modello, tipo) {
   } catch (_) { liqStato = 'ko'; }
   if (liqStato === 'ok') {
     renderResults(currentResults);   // le righe si ridisegnano col segno
-    renderVehBody();                 // e la scheda tecnica mostra il riquadro liquidita
+    rerenderPannelliAperti();        // e i pannelli aperti mostrano il riquadro liquidita
   }
 }
 
@@ -3748,7 +3604,7 @@ let liqAnno = 2025;
 // la scheda: il veicolo. Sta qui e non in un pannello a parte perche' l'operatore che guarda
 // le specifiche di una Panda vuole sapere nella stessa occhiata quanto quel modello gira.
 // Nessuna richiesta in piu': riusa i dati gia' scaricati per i segni accanto agli annunci.
-function vehLiqHTML() {
+function vehLiqHTML(chiave) {
   const p = lastSearchParams || {};
   if (!p.marca) return '';
   if (liqStato === 'carico') return '<div class="veh-liq veh-liq-attesa">Carico la liquidita del modello…</div>';
@@ -3758,7 +3614,7 @@ function vehLiqHTML() {
   const m = (liqVoce && liqVoce.ok) ? liqVoce : liqPerTitolo(`${p.marca} ${p.modello || ''}`);
   if (!m || m.ricambio == null) return '';
   const n = x => Number(x).toLocaleString('it-IT');
-  return miniHTML('liq', 'Passaggi di proprieta',
+  return miniHTML(chiave || 'liq', 'Passaggi di proprieta',
     `${n(m.trasferimenti)}<em>nel ${m.anno || liqAnno}</em>`,
     `<div class="veh-liq">
     <div class="veh-liq-det">${escapeHtml(m.modello)} · ${m.parco ? n(m.parco) + ' in circolazione' : 'parco non disponibile'} · ricambio ${String(m.ricambio).replace('.', ',')}%/anno</div>
@@ -3768,278 +3624,6 @@ function vehLiqHTML() {
 }
 
 // ── Filtro/suggerimento per anno (dai filtri ricerca "anno da/anno a"): suggerisce ma NON sceglie ──
-function vehYearFilter() {
-  const p = lastSearchParams || {};
-  const min = Number(p.annoMin) || null, max = Number(p.annoMax) || null;
-  return (min || max) ? { min, max } : null;
-}
-function vehInRange(s, e, f) {   // periodo [s,e] (e null = ancora in produzione) interseca [f.min,f.max]?
-  if (s == null) return false;
-  return s <= (f.max || Infinity) && (e == null ? Infinity : e) >= (f.min || -Infinity);
-}
-function vehItemYears(m) {   // start + end dai campi years/yearRange/year
-  if (Array.isArray(m.years)) return m.years.length ? [Math.min(...m.years), Math.max(...m.years)] : [null, null];
-  const s = m.year || null, em = /–\s*(\d{4})/.exec(m.yearRange || '');
-  const e = em ? Number(em[1]) : (/–\s*$/.test(m.yearRange || '') ? null : s);   // "2024–" = aperto; singolo = s
-  return [s, e];
-}
-function vehYearNoteHTML(f, hidden, showAll, noMatch) {
-  const label = f.min && f.max ? `${f.min}–${f.max}` : (f.min ? `dal ${f.min}` : `fino al ${f.max}`);
-  if (noMatch) return `<div class="veh-year-note">Nessuna corrisponde al periodo cercato (${label}) — le mostro tutte.</div>`;
-  return showAll
-    ? `<div class="veh-year-note">Anni cercati ${label} <span class="veh-sug-dot"></span>evidenziati. <button type="button" class="veh-showall" data-showall="0">Filtra per periodo</button></div>`
-    : `<div class="veh-year-note">Filtrate per anni ${label}${hidden ? ` · ${hidden} nascoste` : ''}. <button type="button" class="veh-showall" data-showall="1">Mostra tutte</button></div>`;
-}
-// grid generica con filtro/evidenza per anno (mai auto-seleziona)
-function vehCardGrid(items, cardFn, gridClass, hint) {
-  const f = vehYearFilter();
-  const ann = items.map(it => ({ it, match: f ? vehInRange(...vehItemYears(it), f) : false }));
-  const anyMatch = f && ann.some(x => x.match);
-  const showAll = !f || vehShowAll || !anyMatch;
-  const shown = showAll ? ann : ann.filter(x => x.match);
-  const note = f ? vehYearNoteHTML(f, ann.length - shown.length, showAll, !anyMatch) : '';
-  const cards = shown.map(x => cardFn(x.it, showAll && anyMatch && x.match)).join('');   // badge "suggerito" solo mostrando tutte
-  return `<div class="veh-gen-pick"><div class="veh-gen-pick-hint">${escapeHtml(hint)}</div>${note}<div class="${gridClass}">${cards}</div></div>`;
-}
-
-// Griglia visiva selezione generazione (auto): card foto + nome + anni.
-function vehGenCardHTML(g, sug) {
-  const prefix = new RegExp('^' + `${(vehData && vehData.marca) || ''} ${(vehData && vehData.modello) || ''} `.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-  const img = /^https:\/\/(www\.)?auto-data\.net\//i.test(g.img || '') ? g.img : '';
-  const name = String(g.name || '').replace(prefix, '') || g.name;
-  const yr = g.years && g.years.length ? `${Math.min(...g.years)}–${Math.max(...g.years)}` : '';
-  return `<button type="button" class="veh-gen-card${sug ? ' veh-card-sug' : ''}" data-slug="${escapeHtml(g.slug)}">`
-    + (img ? `<img class="veh-gen-card-img" src="${escapeHtml(img)}" alt="" loading="lazy">` : '<span class="veh-gen-card-noimg"></span>')
-    + `<span class="veh-gen-card-name">${escapeHtml(name)}</span>${yr ? `<span class="veh-gen-card-years">${escapeHtml(yr)}</span>` : ''}</button>`;
-}
-function vehGenGridHTML() {
-  const gens = (vehData && vehData.generations) || [];
-  if (!gens.length) return '<div class="rc-empty">Nessuna generazione disponibile.</div>';
-  return vehCardGrid(gens, vehGenCardHTML, 'veh-gen-grid', 'Scegli la generazione dalla foto:');
-}
-// Griglia card motorizzazione/versione: foto (se la fonte la dà) + anno in evidenza + label
-// + hp/carburante/prezzo. Stessa forma della griglia-generazioni auto → coerenza estetica.
-// La foto si disegna SOLO se presente: le motorizzazioni auto non ne hanno e resterebbero
-// riquadri vuoti (questa funzione è condivisa tra auto e moto).
-function vehMotoCardHTML(m, sug) {
-  const yr = m.yearRange || (m.year ? String(m.year) : '');
-  const meta = [m.hp ? `${m.hp} CV` : '', m.fuel || '', m.prezzo || ''].filter(Boolean).join(' · ');
-  const img = /^https:\/\/cdn-img\.moto\.it\//i.test(m.img || '') ? m.img : '';   // solo il CDN di Moto.it
-  return `<button type="button" class="veh-moto-card${img ? ' veh-card-foto' : ''}${sug ? ' veh-card-sug' : ''}" data-url="${escapeHtml(m.url)}">`
-    + (img ? `<img class="veh-gen-card-img" src="${escapeHtml(img)}" alt="" loading="lazy">` : '')
-    + `<span class="veh-moto-card-year">${escapeHtml(yr || '—')}</span>`
-    + `<span class="veh-moto-card-label">${escapeHtml(m.label)}</span>`
-    + (meta ? `<span class="veh-moto-card-meta">${escapeHtml(meta)}</span>` : '') + `</button>`;
-}
-function vehMotoGridHTML(tipo) {
-  const list = (vehData && vehData.motorizzazioni) || [];
-  return vehCardGrid(list, vehMotoCardHTML, 'veh-moto-grid', `Scegli ${tipo === 'moto' ? "l'annata / allestimento" : 'la motorizzazione'}:`);
-}
-// banda "In evidenza": SOLO i campi spuntati dall'utente (niente highlight automatico)
-function vehHlBandHTML(spec) {
-  if (!vehXf.highlight.size) return '';
-  const flat = {}; spec.groups.forEach(g => g.rows.forEach(r => { if (flat[r.k] == null) flat[r.k] = r; }));
-  const picks = [...vehXf.highlight].map(k => flat[k]).filter(Boolean).map(vehXfRow);
-  if (!picks.length) return '';
-  return `<div class="veh-hl-band">${picks.map(r => `<div class="veh-ks veh-hl"><span class="veh-ks-k">${escapeHtml(r.k)}</span><span class="veh-ks-v">${escapeHtml(r.v)}</span></div>`).join('')}</div>`;
-}
-// aggiorna SOLO il corpo dati (toolbar/combos restano): usato all'arrivo async delle specs
-function renderVehBody() {
-  const el = document.getElementById('vehicleScheda'); const secs = el && el.querySelector('.rc-sch-secs');
-  if (!secs || !vehData) return renderVehScheda();
-  secs.innerHTML = vehBodyHTML();
-  applyVehViewState();
-}
-
-const VEH_UNIT_ROWS = [
-  ['len', 'Lunghezze', [['', 'mm'], ['cm', 'cm'], ['m', 'm']]],
-  ['disp', 'Cilindrata', [['', 'cm³'], ['L', 'L']]],
-  ['mass', 'Peso', [['', 'kg'], ['t', 't']]],
-  ['pow', 'Potenza', [['', 'CV/Hp'], ['kW', 'kW']]],
-  ['trq', 'Coppia', [['', 'Nm'], ['kgm', 'kgm']]],
-];
-function vehToolbarHTML() {
-  const unitsActive = Object.values(vehXf.units).some(Boolean);
-  const unitsMenu = VEH_UNIT_ROWS.map(([fam, lab, opts]) => `<label class="veh-u-row"><span>${lab}</span><select class="veh-tb-unit" data-fam="${fam}" aria-label="${lab}">${opts.map(([v, l]) => `<option value="${v}"${(vehXf.units[fam] || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`).join('');
-  let cmpCombo = '';
-  if (vehXf.compare) {
-    const cm = vehData.motorizzazioni.find(m => m.url === vehXf.compare) || {};
-    const cl = cm.label ? cm.label + (cm.hp ? ` · ${cm.hp} CV` : '') : '';
-    cmpCombo = vehCombo('veh-combo-cmp', cl, 'Confronta con…');
-  }
-  return `<div class="veh-toolbar">`
-    + `<div class="veh-q-wrap">${icon('search', 'veh-q-ico')}<input type="search" class="veh-tb-q" placeholder="Cerca campo…" value="${escapeHtml(vehXf.q)}"></div>`
-    + (vehNumeriIT() ? '' : `<details class="tb-cols veh-units${unitsActive ? ' has-adj' : ''}"><summary class="veh-tb-btn">Unità</summary><div class="tb-cols-menu veh-units-menu">${unitsMenu}</div></details>`)
-    + `<button type="button" class="veh-tb-btn veh-tb-all">${vehXf.allOpen === true ? 'Comprimi tutto' : 'Espandi tutto'}</button>`
-    + `<button type="button" class="veh-tb-btn veh-tb-cmp${vehXf.compare ? ' on' : ''}">Confronta</button>`
-    + `<details class="tb-cols veh-export"><summary class="veh-tb-btn">Esporta</summary><div class="tb-cols-menu veh-export-menu"><button type="button" class="veh-exp" data-exp="copia">Copia negli appunti</button><button type="button" class="veh-exp" data-exp="csv">Scarica CSV</button><button type="button" class="veh-exp" data-exp="pdf">Scarica PDF</button></div></details>`
-    + cmpCombo
-    + `</div>`;
-}
-function vehGrpHTML(title, count, i, bodyInner, extraCls, opts = {}) {
-  const chiuso = opts.chiuso != null ? opts.chiuso : i !== 0;
-  return `<div class="veh-grp${chiuso ? ' veh-collapsed' : ''}"${opts.attr || ''}><button type="button" class="veh-grp-head"><span class="veh-grp-caret">${icon('chevron')}</span><span class="veh-grp-tit">${escapeHtml(title)}</span><span class="veh-grp-count">${count}</span></button><div class="veh-grp-body${extraCls || ''}">${bodyInner}</div></div>`;
-}
-function vehSectionsHTML(spec) {
-  if (vehXf.compare) {
-    const specB = vehSpecs[vehXf.compare];
-    const bOk = specB && specB.ok && specB.groups;
-    const la = (vehData.motorizzazioni.find(m => m.url === vehSelUrl) || {}).label || 'A';
-    const lb = (vehData.motorizzazioni.find(m => m.url === vehXf.compare) || {}).label || 'B';
-    const head = `<div class="veh-cmp-head"><span></span><span>${escapeHtml(la)}</span><span>${escapeHtml(lb)}</span></div>`;
-    let note = '';
-    if (!specB || specB.loading) note = '<div class="rc-loading">Carico il confronto…</div>';
-    else if (!bOk) note = '<div class="rc-empty">Confronto non disponibile per questa voce.</div>';
-    // unione gruppo→chiave→{a,b}: mostra anche i campi presenti SOLO nella voce B
-    const order = []; const groups = {};
-    const add = (gt, k, w, val) => { if (!groups[gt]) { groups[gt] = {}; order.push(gt); } if (!groups[gt][k]) groups[gt][k] = { k }; groups[gt][k][w] = val; };
-    spec.groups.forEach(g => g.rows.forEach(r => add(g.title, r.k, 'a', r.v)));
-    if (bOk) specB.groups.forEach(g => g.rows.forEach(r => add(g.title, r.k, 'b', r.v)));
-    const secs = order.map((gt, i) => {
-      const rows = Object.values(groups[gt]);
-      const inner = rows.map(row => {
-        const aD = row.a != null ? vehTrVal(vehConv(row.a)) : '';
-        const bD = row.b != null ? vehTrVal(vehConv(row.b)) : '';
-        const diff = row.a != null && row.b != null && aD !== bD;   // confronto sui valori MOSTRATI (post-trasformazione)
-        return `<div class="veh-row veh-crow${diff ? ' veh-diff' : ''}"><span class="veh-k">${escapeHtml(vehTrKey(row.k))}</span><span class="veh-v">${escapeHtml(aD || '—')}</span><span class="veh-v">${escapeHtml(bD || '—')}</span></div>`;
-      }).join('');
-      return vehGrpHTML(gt, rows.length, i, inner, ' veh-grp-cmp');
-    }).join('');
-    return head + note + secs;
-  }
-  return spec.groups.map((g, gi) => {
-    const inner = g.rows.map(r => {
-      const hl = vehXf.highlight.has(r.k);
-      return `<div class="veh-row${hl ? ' veh-hl' : ''}"><input type="checkbox" class="veh-hl-cb" data-k="${escapeHtml(r.k)}"${hl ? ' checked' : ''} title="Metti in evidenza"><span class="veh-k">${escapeHtml(vehTrKey(r.k))}</span><span class="veh-v">${escapeHtml(vehTrVal(vehConv(r.v)))}</span></div>`;
-    }).join('');
-    return vehGrpHTML(g.title, g.rows.length, gi, inner);
-  }).join('');
-}
-// ricerca-campo + espandi/comprimi: manipola il DOM (niente re-render → non perde il focus)
-function applyVehViewState() {
-  const el = document.getElementById('vehicleScheda'); if (!el) return;
-  const q = acn(vehXf.q || '');
-  el.querySelectorAll('.veh-grp').forEach(grp => {
-    let vis = 0;
-    grp.querySelectorAll('.veh-row').forEach(row => {
-      const k = acn((row.querySelector('.veh-k') || {}).textContent || '');
-      const show = !q || k.includes(q);
-      row.style.display = show ? '' : 'none'; if (show) vis++;
-    });
-    grp.style.display = (q && !vis) ? 'none' : '';
-    if (q) grp.classList.toggle('veh-collapsed', !vis);
-    else if (vehXf.allOpen === true) grp.classList.remove('veh-collapsed');
-    else if (vehXf.allOpen === false) grp.classList.add('veh-collapsed');
-  });
-}
-
-async function fetchVehSpecs(url) {
-  if (!url) return;
-  const my = vehGen;   // token: una nuova ricerca/gen invalida la scrittura tardiva
-  const shows = () => (vehSelUrl === url || vehXf.compare === url) && my === vehGen;
-  const hit = vehSpecs[url];
-  if (hit && hit.loading) return;                       // già in volo → niente doppioni
-  if (hit && hit.ok) { if (shows()) renderVehBody(); return; }   // già ok → mostra (ok:false ricade sotto → riprova)
-  vehSpecs[url] = { loading: true };
-  if (shows()) renderVehBody();
-  try { const r = await fetch(`/api/scheda-veicolo/specs?url=${encodeURIComponent(url)}`); const j = await r.json(); if (my !== vehGen) return; vehSpecs[url] = j; }
-  catch (_) { if (my !== vehGen) return; vehSpecs[url] = { ok: false }; }
-  if (shows()) renderVehBody();
-}
-
-async function switchVehGen(genSlug) {
-  if (!vehData) return;
-  const my = ++vehGen;   // cambio generazione rapido → vince l'ultimo, gli altri si scartano
-  const tipo = vehTipo();   // tipo della scheda, non della UI
-  const el = document.getElementById('vehicleScheda');
-  const secs = el && el.querySelector('.rc-sch-secs'); if (secs) secs.innerHTML = '<div class="rc-loading">Carico…</div>';
-  try {
-    const r = await fetch(`/api/scheda-veicolo?tipo=${encodeURIComponent(tipo)}&marca=${encodeURIComponent(vehData.marca)}&modello=${encodeURIComponent(vehData.modello)}&gen=${encodeURIComponent(genSlug)}`);
-    const d = await r.json();
-    if (my !== vehGen) return;   // una selezione/ricerca più recente ha già preso il posto
-    // gen scelta: aggiorna le voci ma NON auto-selezionare la motorizzazione (la sceglie l'utente)
-    if (d.ok && d.generations) { vehData = d; vehSpecs = {}; vehXf.compare = null; vehSelUrl = null; vehGenChosen = !!d.gen; vehShowAll = false; renderVehScheda(); }   // gen non trovata (d.gen null) → torna alla griglia generazioni
-    else if (secs) secs.innerHTML = '<div class="rc-empty">Nessuna specifica per questa generazione.</div>';
-  } catch (_) { if (my === vehGen && secs) secs.innerHTML = '<div class="rc-empty">Scheda non disponibile.</div>'; }
-}
-
-// ── Combobox scheda (lista visibile filtrata): sorgente/filtro/render/pick ──
-let vehAcActive = -1;   // indice evidenziato nella lista aperta (una sola alla volta)
-function vehComboSrc(input) {
-  if (input.classList.contains('veh-combo-gen')) return { kind: 'gen', src: ((vehData && vehData.generations) || []).map(g => ({ label: g.name, key: g.slug, img: g.img })) };
-  // auto con generazioni: le motorizzazioni compaiono solo DOPO aver scelto la generazione (search-landing: subito)
-  let src = (!vehGenChosen && vehGenStep()) ? [] : ((vehData && vehData.motorizzazioni) || []).map(m => ({ label: m.label + (m.hp ? ` · ${m.hp} CV` : ''), key: m.url }));
-  if (input.classList.contains('veh-combo-cmp')) src = src.filter(x => x.key !== vehSelUrl);   // niente auto-confronto
-  return { kind: 'moto', src };
-}
-// ripristina nel campo l'etichetta della selezione corrente (chiusura senza pick → non lasciare il testo-filtro)
-function vehComboRestore(input) {
-  if (!vehData) return;
-  if (input.classList.contains('veh-combo-gen')) { input.value = vehGenChosen && vehData.gen ? vehData.gen.name : ''; return; }
-  const url = input.classList.contains('veh-combo-cmp') ? vehXf.compare : vehSelUrl;
-  const m = (vehData.motorizzazioni || []).find(x => x.url === url) || {};
-  input.value = url && m.label ? m.label + (m.hp ? ` · ${m.hp} CV` : '') : '';
-}
-function vehComboMatches(input) {
-  const { src } = vehComboSrc(input);
-  const q = acn(input.value);
-  if (!q) return src;
-  const scored = [];
-  for (const it of src) { const n = acn(it.label); const i = n.indexOf(q); if (i >= 0) scored.push({ it, rank: n.startsWith(q) ? 0 : 1, i, n }); }
-  scored.sort((a, b) => a.rank - b.rank || a.i - b.i || a.n.localeCompare(b.n));
-  return scored.map(s => s.it);
-}
-function renderVehAc(input, matches) {
-  const list = input.parentElement.querySelector('.veh-ac'); if (!list) return;
-  if (!matches.length) { list.classList.add('d-none'); list.innerHTML = ''; input.setAttribute('aria-expanded', 'false'); return; }
-  list.innerHTML = matches.map((it, i) => {
-    const img = it.img && /^https:\/\/(www\.)?auto-data\.net\//i.test(it.img) ? it.img : '';   // solo thumb auto-data.net
-    return `<li class="ac-item${img ? ' veh-ac-photo' : ''}${i === vehAcActive ? ' active' : ''}" role="option" aria-selected="${i === vehAcActive}" data-key="${escapeHtml(it.key)}" data-label="${escapeHtml(it.label)}">${img ? `<img class="veh-ac-thumb" src="${escapeHtml(img)}" alt="" loading="lazy">` : ''}<span>${escapeHtml(it.label)}</span></li>`;
-  }).join('');
-  list.classList.remove('d-none'); input.setAttribute('aria-expanded', 'true');
-}
-function vehComboOpen(input, useFilter) {
-  const matches = useFilter ? vehComboMatches(input) : vehComboSrc(input).src;
-  vehAcActive = matches.length ? 0 : -1;
-  input._vehMatches = matches;   // per la navigazione da tastiera
-  renderVehAc(input, matches);
-}
-function vehComboClose(input) {
-  const list = input.parentElement && input.parentElement.querySelector('.veh-ac');
-  if (list) { list.classList.add('d-none'); list.innerHTML = ''; }
-  input.setAttribute('aria-expanded', 'false');
-  vehAcActive = -1;
-}
-function pickVehCombo(input, key, label) {
-  input.value = label;
-  vehComboClose(input);
-  if (input.classList.contains('veh-combo-gen')) switchVehGen(key);
-  else if (input.classList.contains('veh-combo-cmp')) { vehXf.compare = key; renderVehBody(); fetchVehSpecs(key); }
-  else { vehSelUrl = key; renderVehScheda(); fetchVehSpecs(vehSelUrl); }   // renderVehScheda: fa comparire la toolbar (visibile solo con una voce scelta)
-}
-
-// ─── Toolbar scheda: trasformazioni NON distruttive (dati grezzi intatti) ─────
-// Stato persistente tra i re-render e i cambi di voce. compare = 2a voce da confrontare.
-// translate ON di default; highlight = Set di chiavi-campo messe in evidenza dall'utente.
-// Fonti moto: Moto.it (primaria, italiano nativo) e ultimatespecs (ripiego, inglese).
-function vehTipo() { return /ultimatespecs|moto\.it/i.test((vehData && vehData.source) || '') ? 'moto' : 'auto'; }
-// Serve il dizionario EN→IT? Solo per ultimatespecs: auto-data.net /it/ e Moto.it sono già in italiano.
-function vehNeedsTr() { return /ultimatespecs/i.test((vehData && vehData.source) || ''); }
-// Moto.it scrive i numeri in formato ITALIANO (migliaia col punto, decimali con la virgola:
-// "91,2 CV", "1.531 mm"). Il convertitore di unità tratta la virgola da separatore di migliaia
-// → mostrerebbe 912 CV. auto-data.net, anche su /it/, usa il punto decimale. Quindi su Moto.it
-// la conversione si spegne e il menu Unità non viene offerto: meglio nessuna conversione che
-// un numero sbagliato di dieci volte.
-function vehNumeriIT() { return /moto\.it/i.test((vehData && vehData.source) || ''); }
-// auto con generazioni → si sceglie prima la generazione. Search-landing (kind:'search', nessuna gen) → dritto ai trim, come la moto.
-function vehGenStep() { return vehTipo() === 'auto' && ((vehData && vehData.generations) || []).length > 0; }
-// markup combobox scheda (input + caret + lista): condiviso tra sel-row e toolbar confronto
-const vehCombo = (cls, val, ph) => `<div class="ac-wrap veh-combo-wrap"><input type="text" class="veh-combo ${cls}" role="combobox" autocomplete="off" aria-autocomplete="list" aria-expanded="false" placeholder="${escapeHtml(ph)}" value="${escapeHtml(val)}"><span class="veh-combo-caret">${icon('chevron')}</span><ul class="ac-list veh-ac d-none" role="listbox"></ul></div>`;
-const vehXf = { translate: true, units: {}, q: '', allOpen: null, compare: null, highlight: new Set() };
-let vehGenChosen = false;   // auto: le motorizzazioni compaiono solo dopo aver scelto la generazione
-let vehShowAll = false;     // griglie: false = filtra per anni cercati, true = mostra tutte
-
-// Dizionario chiavi EN→IT (campi osservati su auto-data.net + ultimatespecs). Non mappato → invariato.
 const VEH_TR_KEY = {
   'Engine displacement': 'Cilindrata', 'Number of cylinders': 'Numero di cilindri', 'Cylinder Bore': 'Alesaggio',
   'Piston Stroke': 'Corsa', 'Number of valves per cylinder': 'Valvole per cilindro', 'Fuel injection system': "Sistema d'iniezione",
@@ -4078,82 +3662,13 @@ const VEH_TR_WORD = [['Petrol', 'Benzina'], ['Gasoline', 'Benzina'], ['Diesel', 
   ['Manual', 'Manuale'], ['Automatic', 'Automatico'], ['Chain', 'Catena'], ['Belt', 'Cinghia'], ['Shaft', 'Cardano'],
   ['Liquid', 'Liquido'], ['four-stroke', 'quattro tempi'], ['Wet sump', 'Coppa umida'], ['Injection', 'Iniezione']];
 const VEH_TR_RE = VEH_TR_WORD.map(([en, it]) => [new RegExp('\\b' + en + '\\b', 'gi'), it]);   // precompilate a module-scope
-function vehTrKey(k) { return vehXf.translate && VEH_TR_KEY[k] ? VEH_TR_KEY[k] : k; }
-function vehTrVal(v) { if (!vehXf.translate) return v; let out = v; for (const [re, it] of VEH_TR_RE) out = out.replace(re, it); return out; }
+// La traduzione EN→IT resta sempre accesa: le schede moto (ultimatespecs) arrivano
+// in inglese, e un interruttore per rimetterle in inglese non lo cercava nessuno.
+function vehTrKey(k) { return VEH_TR_KEY[k] || k; }
+function vehTrVal(v) { let out = v; for (const [re, it] of VEH_TR_RE) out = out.replace(re, it); return out; }
 
 // Conversione unità per famiglia (dal grezzo). Salta i rapporti (unità seguita da "/").
 // NB: la virgola è separatore delle MIGLIAIA sulle fonti ("1,460 mm") → va rimossa, non trattata come decimale.
-const vehFmt = n => (isFinite(n) ? String(Math.round(n * 100) / 100) : '');
-const VEH_UNITS = [
-  { fam: 'len', pat: 'mm', f: { cm: 0.1, m: 0.001 }, lab: { cm: 'cm', m: 'm' } },
-  { fam: 'disp', pat: 'cm3|ccm', f: { L: 0.001 }, lab: { L: 'L' } },
-  { fam: 'mass', pat: 'kg', f: { t: 0.001 }, lab: { t: 't' } },
-  { fam: 'pow', pat: 'Hp|HP|PS|CV', f: { kW: 0.7355 }, lab: { kW: 'kW' } },
-  { fam: 'trq', pat: 'Nm', f: { kgm: 0.101972 }, lab: { kgm: 'kgm' } },
-];
-VEH_UNITS.forEach(u => { u.re = new RegExp('([\\d][\\d.,]*(?:\\s*[-x×]\\s*[\\d][\\d.,]*)?)\\s*(?:' + u.pat + ')\\b(?!\\s*\\/)', 'g'); });   // precompilata
-function vehConv(v) {
-  if (vehNumeriIT()) return v;   // formato italiano: convertire darebbe numeri falsi (vedi vehNumeriIT)
-  let out = v;
-  for (const u of VEH_UNITS) {
-    const tgt = vehXf.units[u.fam]; if (!tgt || !u.f[tgt]) continue;
-    out = out.replace(u.re, (m, nums) => nums.replace(/[\d][\d.,]*/g, n => vehFmt(parseFloat(n.replace(/,/g, '')) * u.f[tgt])) + ' ' + u.lab[tgt]);
-  }
-  return out;
-}
-function vehXfRow(r) { return { k: vehTrKey(r.k), v: vehTrVal(vehConv(r.v)) }; }
-function vehXfGroups(spec) {
-  return spec.groups.map(g => ({ title: g.title, rows: g.rows.map(vehXfRow) })).filter(g => g.rows.length);
-}
-
-// Testo/CSV della scheda (post-trasformazioni) per Copia / Esporta.
-function vehSchedaText() {
-  const spec = vehSpecs[vehSelUrl]; if (!spec || !spec.groups) return '';
-  const cur = ((vehData.motorizzazioni || []).find(m => m.url === vehSelUrl) || {}).label || '';
-  const out = [`${vehData.title} — ${cur}`];
-  for (const g of vehXfGroups(spec)) { out.push('', `## ${g.title}`); for (const r of g.rows) out.push(`- ${r.k}: ${r.v}`); }
-  return out.join('\n');
-}
-function vehSchedaCsv() {
-  const spec = vehSpecs[vehSelUrl]; if (!spec || !spec.groups) return '';
-  const rows = [['Sezione', 'Campo', 'Valore']];
-  for (const g of vehXfGroups(spec)) for (const r of g.rows) rows.push([g.title, r.k, r.v]);
-  return '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');   // BOM + CRLF + anti formula-injection (Excel)
-}
-function vehDownload(name, text, mime) {
-  const blob = new Blob([text], { type: mime }); const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-// PDF scheda (riuso jsPDF + autoTable come exportPdf). Righe in evidenza sfondo azzurro.
-function vehSchedaPdf() {
-  if (!window.jspdf) return;
-  const spec = vehSpecs[vehSelUrl]; if (!spec || !spec.groups) return;
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const pageW = doc.internal.pageSize.getWidth();
-  const INK = [20, 24, 31], ACCENT = [31, 111, 235], WHITE = [255, 255, 255], HL = [230, 240, 253];
-  const cur = ((vehData.motorizzazioni || []).find(m => m.url === vehSelUrl) || {}).label || '';
-  doc.setFillColor(...INK); doc.rect(0, 0, pageW, 22, 'F');
-  doc.setFillColor(...ACCENT); doc.rect(14, 7, 7, 7, 'F');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...WHITE); doc.text('SCHEDA TECNICA', 25, 12);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(170, 185, 210);
-  doc.text(`${vehData.title}${cur ? ' · ' + cur : ''}`.slice(0, 95), 25, 17.5);
-  const body = [], rawKeys = [];   // rawKeys[i] = chiave grezza della riga i → evidenza per chiave grezza (come a schermo, niente collisioni di traduzione)
-  for (const g of spec.groups) for (const r of g.rows) { body.push([g.title, vehTrKey(r.k), vehTrVal(vehConv(r.v))]); rawKeys.push(r.k); }
-  doc.autoTable({
-    startY: 28, head: [['Sezione', 'Campo', 'Valore']], body, theme: 'plain',
-    styles: { font: 'helvetica', fontSize: 8, cellPadding: { top: 2, right: 3, bottom: 2, left: 3 }, valign: 'middle', overflow: 'linebreak' },
-    headStyles: { fillColor: INK, textColor: WHITE, fontStyle: 'bold' },
-    columnStyles: { 0: { cellWidth: 40, textColor: [91, 100, 114] }, 1: { cellWidth: 58, fontStyle: 'bold' }, 2: { cellWidth: 'auto' } },
-    didParseCell: c => { if (c.section === 'body' && vehXf.highlight.has(rawKeys[c.row.index])) c.cell.styles.fillColor = HL; },
-  });
-  const name = `scheda-${(vehData.marca || '')}-${(vehData.modello || '')}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'scheda';
-  doc.save(name + '.pdf');
-}
-
-// review: i titoli arrivano da siti esterni → anti formula-injection. Un valore che inizia
-// con = + - @ (o tab/CR) viene eseguito come formula da Excel/Sheets nonostante le virgolette
-// (che sono solo quoting CSV): lo neutralizziamo con un apostrofo iniziale (OWASP).
 function csvCell(v) { let s = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; }
 
 // ─── Export CSV ───────────────────────────────────────────────────────────────
@@ -4340,7 +3855,7 @@ let catDati = catDatiVuoti();
 let catStato = 'mai';           // mai | carico | ok | ko | spento
 let catMotivo = '';
 let catFiltro = '';
-// Token di generazione, come searchGen/rcGen/vehGen. Rilevamenti va sulla rete e puo' metterci
+// Token di generazione, come searchGen/rcGen. Rilevamenti va sulla rete e puo' metterci
 // secondi; le fonti locali rispondono in millisecondi. Senza token, la risposta della fonte che
 // hai gia' abbandonato arriva dopo e sovrascrive quella che stai guardando.
 let catGen = 0;
@@ -5387,15 +4902,6 @@ function fnRender() {
 }
 
 // Sezioni richiudibili della scheda tecnica: qui non c'e' niente da caricare, i dati
-// sono gia' in pagina — serve solo ricordare cosa hai lasciato aperto.
-// I blocchi richiudibili dentro ADD ON. `toggle` non risale il DOM: cattura.
-// I richiami partono alla PRIMA apertura del blocco, non all'apertura della scheda: chi
-// non li guarda non paga la richiesta.
-document.getElementById('vehicleScheda')?.addEventListener('toggle', e => miniToggle(e, cosa => {
-  if (cosa === 'richiami') vehRichiamiCarica();
-  if (cosa === 'targa' && !tgSfida && !tgOccupato) tgNuovaSfida();
-}), true);
-
 document.getElementById('fontiPanel')?.addEventListener('click', e => {
   const fo = e.target.closest('.cat-fonte');
   if (fo && !fo.disabled) return void fnVaiFonte(fo.dataset.fonte);
@@ -5779,12 +5285,12 @@ function tgReset() { tgSfida = null; tgEsito = null; tgOccupato = false; }
 async function tgNuovaSfida(tieniEsito) {
   tgOccupato = true;
   if (!tieniEsito) tgEsito = null;
-  renderVehBody();
+  rerenderPannelliAperti();
   try {
     const d = await fetch('/api/targa/sfida').then(r => r.json());
     tgSfida = d.ok ? d : { errore: d.error || 'il portale non risponde' };
   } catch (_) { tgSfida = { errore: 'server non raggiungibile' }; }
-  tgOccupato = false; renderVehBody();
+  tgOccupato = false; rerenderPannelliAperti();
 }
 
 async function tgVerifica() {
@@ -5794,7 +5300,7 @@ async function tgVerifica() {
   tgTipoScelto = (el('tgTipo') || {}).value || 'A';
   if (!targaCercata) { toast('Scrivi la targa nei filtri avanzati'); return; }
   if (!captcha) { toast('Scrivi i caratteri dell\'immagine'); return; }
-  tgOccupato = true; tgEsito = null; renderVehBody();
+  tgOccupato = true; tgEsito = null; rerenderPannelliAperti();
   try {
     const r = await fetch('/api/targa/verifica', {
       method: 'POST', headers: { 'content-type': 'application/json' },
@@ -5806,7 +5312,7 @@ async function tgVerifica() {
   tgOccupato = false;
   // La sfida e' bruciata: il portale ne rigenera una a ogni invio. L'esito appena letto
   // resta a schermo — azzerarlo qui lo faceva sparire nell'istante in cui arrivava.
-  tgSfida = null; renderVehBody();
+  tgSfida = null; rerenderPannelliAperti();
   await tgNuovaSfida(true);
 }
 
@@ -5861,18 +5367,9 @@ function tgCorpoHTML() {
 
 // Il blocco compare SOLO se una targa e' stata scritta nei filtri: senza, non c'e'
 // niente da chiedere e un riquadro vuoto sarebbe solo ingombro.
-function vehTargaHTML() {
+function vehTargaHTML(chiave) {
   if (!targaCercata) return '';
   const meta = tgEsito && tgEsito.tabelle && tgEsito.tabelle.length ? 'letta' : '';
-  return miniHTML('veh-targa', 'Targa', escapeHtml(meta), tgCorpoHTML(), { carica: 'targa' });
+  return miniHTML(chiave || 'veh-targa', 'Targa', escapeHtml(meta), tgCorpoHTML(), { carica: 'targa' });
 }
 
-document.getElementById('vehicleScheda')?.addEventListener('click', e => {
-  const omoBtn = e.target.closest('.veh-omo-btn');
-  if (omoBtn) return vehOmoCarica(omoBtn.dataset.omo);
-  if (e.target.closest('#tgVai')) return tgVerifica();
-  if (e.target.closest('#tgCambia') || e.target.closest('#tgRiprova')) return tgNuovaSfida();
-});
-document.getElementById('vehicleScheda')?.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && e.target.id === 'tgCaptcha') { e.preventDefault(); tgVerifica(); }
-});

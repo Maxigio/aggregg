@@ -286,81 +286,27 @@ body:not(.has-results) .search {
 .det-pass-fonte { font-size: 0.68rem; color: var(--text-faint); }
 .veh-sel-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 /* combobox scheda: input + lista visibile filtrata (riusa .ac-list/.ac-item di marca/modello) */
-#vehicleScheda .veh-combo-wrap { flex: 0 1 260px; min-width: 160px; }
-.veh-combo { width: 100%; height: 34px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); padding: 0 28px 0 10px; font: inherit; font-size: 0.86rem; }
-.veh-combo:focus { outline: none; border-color: var(--accent); }
-.veh-combo-caret { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; display: inline-flex; }
-.veh-combo-caret .ico { width: 15px; height: 15px; }
-.veh-it { margin-left: auto; min-width: 40px; }   /* toggle traduzione IT (al posto del nome-fonte) */
 /* thumbnail generazione nella lista (aiuta la scelta) */
-.ac-item.veh-ac-photo { display: flex; align-items: center; gap: 10px; }
-.veh-ac-thumb { width: 56px; height: 34px; flex: none; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 4px; }
 /* griglia visiva selezione generazione (auto) */
-.veh-gen-pick-hint { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px; }
 /* nota filtro-anni + badge "suggerito" (suggerisce senza scegliere) */
-.veh-year-note { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.veh-showall { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; font-size: 0.8rem; text-decoration: underline; padding: 0; }
 .veh-sug-dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; background: var(--accent); }
-.veh-card-sug { border-color: var(--accent) !important; box-shadow: inset 0 0 0 1px var(--accent); position: relative; }
-.veh-card-sug::after { content: 'suggerito'; position: absolute; top: 6px; right: 6px; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #fff; background: var(--accent); border-radius: 999px; padding: 1px 7px; }
-.veh-gen-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-height: 440px; overflow-y: auto; padding: 2px; }
-.veh-gen-card { display: flex; flex-direction: column; align-items: stretch; gap: 4px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r2); padding: 8px; cursor: pointer; font: inherit; color: var(--text); }
-.veh-gen-card:hover { border-color: var(--accent); box-shadow: var(--shadow); }
-.veh-gen-card-img, .veh-gen-card-noimg { width: 100%; height: 78px; border-radius: var(--r); }
-.veh-gen-card-img { object-fit: cover; background: #fff; }   /* cover → niente lettering/bordi bianchi laterali */
-.veh-gen-card-noimg { background: var(--surface-2); }
-.veh-gen-card-name { font-size: 0.8rem; font-weight: 600; line-height: 1.2; }
-.veh-gen-card-years { font-size: 0.72rem; color: var(--text-muted); }
 /* griglia card motorizzazione (anno in evidenza) */
-.veh-moto-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-height: 440px; overflow-y: auto; padding: 2px; }
-.veh-moto-card { display: flex; flex-direction: column; gap: 3px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r2); padding: 10px; cursor: pointer; font: inherit; color: var(--text); }
 /* card con foto (moto, fonte Moto.it): stessa geometria della griglia-generazioni auto */
-.veh-moto-card.veh-card-foto { gap: 4px; padding: 8px; }
-.veh-moto-card.veh-card-foto .veh-moto-card-year { font-size: 0.95rem; }
-.veh-moto-card:hover { border-color: var(--accent); box-shadow: var(--shadow); }
-.veh-moto-card-year { font-size: 1.05rem; font-weight: 700; color: var(--accent); }
-.veh-moto-card-label { font-size: 0.82rem; font-weight: 600; line-height: 1.2; }
-.veh-moto-card-meta { font-size: 0.72rem; color: var(--text-muted); }
 /* le tendine combobox (position:absolute) devono poter uscire dal gruppo → niente clip */
 #vehicleScheda .rc-group, #vehicleScheda .rc-group-body { overflow: visible; }
 #vehicleScheda .rc-sch-secs { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 /* sezioni dati come accordion (organizzazione) */
-.veh-grp { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
-.veh-grp-head { display: flex; align-items: center; gap: 8px; width: 100%; background: var(--surface-2); border: 0; padding: 8px 12px; cursor: pointer; font: inherit; text-align: left; color: var(--text); }
-.veh-grp-head:hover { background: var(--line); }
-.veh-grp-caret { display: inline-flex; color: var(--text-muted); }
-.veh-grp-caret .ico { transition: transform .12s; }
-.veh-grp.veh-collapsed .veh-grp-caret .ico { transform: rotate(-90deg); }
-.veh-grp-tit { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-.veh-grp-count { margin-left: auto; font-size: 0.72rem; color: var(--text-muted); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
-.veh-grp-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 2px 20px; padding: 10px 12px; }
-.veh-grp.veh-collapsed .veh-grp-body { display: none; }
 .veh-row { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; padding: 4px 6px 4px 4px; border-bottom: 1px dotted var(--line); border-radius: var(--r); }
 .veh-k { flex: 0 1 auto; min-width: 0; color: var(--text-muted); overflow-wrap: anywhere; }
 .veh-v { flex: 1 1 auto; min-width: 0; color: var(--text); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
-.veh-hl-cb { flex: none; width: 14px; height: 14px; margin: 0; cursor: pointer; accent-color: var(--accent); opacity: 0.45; }
-.veh-hl-cb:checked, .veh-row:hover .veh-hl-cb { opacity: 1; }
-.veh-row.veh-hl { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
 /* toolbar trasformazioni scheda */
-.veh-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px 2px 10px; border-bottom: 1px solid var(--line); }
-.veh-tb-btn { height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); font: inherit; font-size: 0.8rem; cursor: pointer; }
-.veh-tb-btn:hover { border-color: var(--accent); }
-.veh-tb-btn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 /* Cerca campo valorizzata: input primario con icona, cresce per riempire la riga */
 .veh-q-wrap { display: inline-flex; align-items: center; gap: 6px; flex: 1 1 220px; min-width: 160px; height: 32px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 0 10px; }
 .veh-q-wrap:focus-within { border-color: var(--accent); }
 .veh-q-ico { width: 16px; height: 16px; flex: none; color: var(--text-muted); }
-.veh-tb-q { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 0.85rem; padding: 0; }
-.veh-tb-q:focus { outline: none; }
 /* menu Unità / Esporta (riuso .tb-cols/.tb-cols-menu dei menu Colonne/Prezzo) */
-.veh-units.has-adj > summary, .veh-export > summary { position: relative; }
-.veh-units.has-adj > summary::after { content: ''; position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-.veh-units-menu { min-width: 210px; display: flex; flex-direction: column; gap: 8px; }
 .veh-u-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 0.82rem; color: var(--text); }
 .veh-u-row select { height: 28px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); font: inherit; font-size: 0.8rem; padding: 0 6px; cursor: pointer; }
-.veh-export-menu { min-width: 180px; display: flex; flex-direction: column; gap: 2px; }
-.veh-exp { text-align: left; background: none; border: 0; color: var(--text); font: inherit; font-size: 0.84rem; padding: 7px 8px; border-radius: var(--r); cursor: pointer; }
-.veh-exp:hover { background: var(--surface-2); color: var(--accent); }
 /* banda costo carburante (prezzi ufficiali MIMIT per provincia) */
 .veh-costo { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--r2); background: var(--surface-2); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
 .veh-costo-attesa { color: var(--text-faint); font-size: 0.85rem; }
@@ -373,14 +319,10 @@ body:not(.has-results) .search {
 .veh-costo-ctrl select { height: 28px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); font: inherit; font-size: 0.78rem; padding: 0 6px; cursor: pointer; }
 .veh-costo-fonte { font-size: 0.7rem; color: var(--text-faint); border-top: 1px solid var(--line); padding-top: 5px; margin-top: 2px; }
 /* banda "In evidenza" (solo campi spuntati) */
-.veh-hl-band { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .veh-ks { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
-.veh-ks.veh-hl { border-color: var(--accent); box-shadow: inset 2px 0 0 var(--accent); }
 .veh-ks-k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
 .veh-ks-v { font-size: 0.9rem; font-weight: 700; color: var(--text); }
 /* confronto due voci */
-.veh-cmp-head { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px; padding: 2px 12px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); }
-.veh-grp-cmp { display: block; }
 .veh-crow { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px; }
 .veh-crow .veh-v { text-align: left; }
 .veh-crow.veh-diff { box-shadow: inset 2px 0 0 var(--accent); border-radius: var(--r); }
@@ -1525,14 +1467,12 @@ section.search.cat-attivo #searchForm { min-height: 0; }
 @media (max-width: 640px) { .cp-h { grid-template-columns: 1fr; } .cp-azioni { grid-column: 1; grid-row: auto; justify-content: flex-start; } }
 
 /* ── ADD ON: le integrazioni esterne, ultimo gruppo della scheda tecnica ──────
-   Stessa intestazione di MOTORE e PRESTAZIONI (.veh-grp), dentro i tre blocchi
    richiudibili con la loro fonte scritta. Le specifiche descrivono il veicolo, questi
    dicono cosa gli succede intorno: stanno insieme ma non si mescolano. */
 /* Tre blocchi impilati lasciavano mezza scheda vuota su schermo largo. In griglia si
    affiancano e occupano la larghezza che c'e'; sotto i 700px tornano in colonna da soli.
    `align-items:start` perche' aprendone uno non devono allungarsi anche gli altri, e la
    riga in piu' della descrizione non deve spostare i vicini. */
-/* `.veh-grp-body` e' GIA' una griglia a colonne (le righe delle specifiche si incolonnano
    da sole): senza questa riga il blocco finiva dentro UNA colonna da 273px e i tre
    riquadri, che ne chiedono 290, sfondavano il loro stesso contenitore. Prende la riga
    intera, e la griglia qui sotto lavora sulla larghezza vera. */
