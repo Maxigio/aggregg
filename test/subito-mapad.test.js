@@ -16,10 +16,12 @@ const adAuto = {
   ],
   features: [
     { label: 'Prezzo', values: [{ key: '5500', value: '5500 €' }] },
-    { label: 'Auto', values: [
-      { label: 'Marca', value: 'ALFA ROMEO' },
-      { label: 'Modello', value: 'Giulietta' },
-      { label: 'Versione', value: '1.6 JTDm-2 105 CV Progression' },
+    // `uri` e `key` NON sono decorazioni: i tre livelli si leggono da li' (subito-nodo.js),
+    // e senza il pacchetto risulta un annuncio che non dichiara ne' marca ne' versione.
+    { type: 'pack', uri: '/car', label: 'Auto', values: [
+      { label: 'Marca', key: '000010', value: 'ALFA ROMEO' },
+      { label: 'Modello', key: '001234', value: 'Giulietta' },
+      { label: 'Versione', key: '098765', value: '1.6 JTDm-2 105 CV Progression' },
     ]},
     { label: 'Potenza', values: [{ label: 'Potenza', value: '77 kW / 105 Cv' }] },
     { label: 'Cambio', values: [{ value: 'Manuale' }] },
@@ -39,10 +41,12 @@ const adMoto = {
   advertiser: { company: false },
   features: [
     { label: 'Prezzo', values: [{ key: '7000', value: '7000 €' }] },
-    { label: 'Moto', values: [
-      { label: 'Marca', value: 'Honda' },
-      { label: 'Modello', value: 'CB 1000 R' },
-      { label: 'Versione', value: 'Altro allestimento' },
+    { type: 'pack', uri: '/bike', label: 'Moto', values: [
+      { label: 'Marca', key: '000050', value: 'Honda' },
+      { label: 'Modello', key: '002222', value: 'CB 1000 R' },
+      // key 000000 = "non dichiarato". Subito non lascia il campo vuoto: ci mette il
+      // proprio segnaposto, ed e' il caso di 874 annunci su 959 senza versione.
+      { label: 'Versione', key: '000000', value: 'Altro allestimento' },
     ]},
     { label: 'Tipologia', values: [{ value: 'Naked' }] },
     { label: 'Condizioni del veicolo', values: [{ value: 'Nuovo' }] },
@@ -76,7 +80,9 @@ test('auto: specs ricche native (colore/carrozzeria/porte/posti/emissioni/neopat
 
 test('moto: versione sotto feature Moto + venditore privato + carrozzeria da Tipologia + nuovo', () => {
   const m = mapAd(adMoto);
-  assert.strictEqual(m.variante, 'Altro allestimento');  // valore nativo as-is
+  // "Altro allestimento" e' il SEGNAPOSTO di Subito (key 000000), non una versione:
+  // stampato accanto alla potenza si leggeva come un dato dichiarato dal venditore.
+  assert.strictEqual(m.variante, null);
   assert.strictEqual(m.venditore, 'privato');            // company=false
   assert.strictEqual(m.potenzaCv, null);                 // niente Potenza → null
   assert.strictEqual(m.carrozzeria, 'Naked');            // moto: feat 'Tipologia'

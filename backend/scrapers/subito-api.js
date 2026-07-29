@@ -17,7 +17,9 @@ const https = require('https');
 
 const { kindForStatus, fail } = require('./utils');   // classificazione salute crawler (F1.5)
 const budget = require('../budget-richieste');        // conta le richieste, non le limita
-const { livelliAnnuncio } = require('./subito-nodo'); // cosa l'annuncio dichiara di se'
+const { livelliAnnuncio, dichiarato } = require('./subito-nodo'); // cosa l'annuncio dichiara di se'
+const dedotta = require('./versione-dedotta');        // la versione che il venditore non ha scelto dal menu
+const { _perMarca } = require('./versioni-unificate');// il catalogo versioni, gia' in cache per marca
 
 const HOST = 'hades.subito.it';
 // Categorie hades (macro Motori=1). accessoriAuto/Moto scoperti live 2026-07-07 per la sezione Ricambi.
@@ -97,6 +99,9 @@ function mapAd(ad, opts = {}) {
   const nuovo = cond == null ? null : (cond === 'Nuovo' || cond === 'Km 0');
   // Neopatentati: 'Sì'/'No' nativo → bool; assente → null.
   const neo = feat(ad, 'Per neopatentati');
+  // I tre livelli che l'annuncio dichiara di se'. Letti UNA volta: servono sia alla marca
+  // sia alla versione, e prima si leggevano due volte in due modi diversi.
+  const liv = livelliAnnuncio(ad);
   const out = {
     fonte: 'subito',
     titolo: ad.subject || 'Annuncio senza titolo',
@@ -108,8 +113,16 @@ function mapAd(ad, opts = {}) {
     regione: (ad.geo && ad.geo.region && ad.geo.region.friendly_name) || null,   // nativa (slug già giusto)
     cambio: feat(ad, 'Cambio'),
     cilindrata: digits(feat(ad, 'Cilindrata')),
-    // Versione/allestimento NATIVA (auto sotto 'Auto', moto sotto 'Moto'); null se assente.
-    variante: subFeat(ad, 'Auto', 'Versione') || subFeat(ad, 'Moto', 'Versione'),
+    /**
+     * Versione/allestimento NATIVA. `null` quando il venditore non l'ha dichiarata — e
+     * questo NON e' il caso in cui il campo manca.
+     *
+     * Subito non lascia il campo vuoto: ci mette il proprio segnaposto, "Altro
+     * allestimento", con id 000000. Leggendolo alla lettera finiva nella scheda come se
+     * fosse una versione, e sono 874 annunci su 959 senza versione (misurato su 7.431).
+     * Un segnaposto stampato accanto alla potenza e ai chilometri si legge come un dato.
+     */
+    variante: dichiarato(liv.versione) ? liv.versione.nome : null,
     // Venditore dal boolean nativo advertiser.company (true=conce, false=privato).
     venditore: (ad.advertiser && typeof ad.advertiser.company === 'boolean')
       ? (ad.advertiser.company ? 'concessionario' : 'privato') : null,
@@ -117,7 +130,7 @@ function mapAd(ad, opts = {}) {
     // il parco, e per accorgersi se la fonte ci mescola dentro qualcun altro.
     // La marca che l'ANNUNCIO dichiara, non la prima parola del titolo: li' "Alfa Romeo"
     // diventava "Alfa" e "Land Rover" diventava "Land".
-    marca: (livelliAnnuncio(ad).marca || {}).nome || null,
+    marca: (liv.marca || {}).nome || null,
     venditoreId: (ad.advertiser && ad.advertiser.user_id) ? String(ad.advertiser.user_id) : null,
     venditoreNome: (ad.advertiser && (ad.advertiser.shop_name || ad.advertiser.name)) || null,
     potenzaCv: cvFrom(feat(ad, 'Potenza')),
@@ -168,6 +181,44 @@ function mapAd(ad, opts = {}) {
   };
   if (opts.attachRaw) out._raw = ad;   // foto grezza per raw_json (keep-last)
   return out;
+}
+
+/**
+ * LA VERSIONE CHE MANCA, letta dal testo dell'annuncio. Vedi versione-dedotta.js per il
+ * come e per i numeri; qui c'e' solo l'aggancio.
+ *
+ * NESSUNA RICHIESTA IN PIU': il catalogo delle versioni e' gia' su disco e
+ * versioni-unificate lo tiene in cache per marca. Si paga un parsing per modello, tenuto
+ * qui: i nomi di un modello si parsano una volta e servono tutti i suoi annunci.
+ *
+ * SOLO AUTO. Sulle moto il buco non e' stato misurato e il vocabolario e' un altro
+ * (li' la cilindrata e' un campo nativo, e la versione la risolve gia' risolvi-versione.js
+ * contro Moto.it). Meglio niente che una deduzione mai provata.
+ */
+const memoVersioni = new Map();     // `tipo/marcaId/modelloId` → versioni preparate
+const MEMO_MAX = 40;
+function versioniPreparate(tipo, marcaId, modelloId, modelloNome) {
+  const k = tipo + '/' + marcaId + '/' + modelloId;
+  if (memoVersioni.has(k)) { const v = memoVersioni.get(k); memoVersioni.delete(k); memoVersioni.set(k, v); return v; }
+  const dati = _perMarca(tipo, marcaId);
+  const l = dati && dati[String(modelloId)];
+  const out = Array.isArray(l) ? dedotta.preparaVersioni(l.map(v => v.subito && v.subito.nome), modelloNome) : null;
+  memoVersioni.set(k, out);
+  while (memoVersioni.size > MEMO_MAX) memoVersioni.delete(memoVersioni.keys().next().value);
+  return out;
+}
+
+/** L'annuncio mappato + `versioneDedotta`, quando la versione manca e il testo la dice. */
+function conVersioneDedotta(m, ad, tipo) {
+  if (!m || m.variante || tipo !== 'auto') return m;
+  const liv = livelliAnnuncio(ad);
+  const marcaId = liv.marca && liv.marca.id;
+  const mod = liv.modello;
+  if (!marcaId || !mod || !mod.id || mod.id === NON_DICHIARATO) return m;
+  const versioni = versioniPreparate(tipo, marcaId, mod.id, mod.nome || '');
+  if (!versioni || !versioni.length) return m;
+  const r = dedotta.deduci(versioni, dedotta.datiAnnuncio(m));
+  return r ? { ...m, versioneDedotta: r } : m;
 }
 
 // Filtri NATIVI hades (verificati live): regione `r`, prezzo `ps`/`pe`, anno
@@ -427,6 +478,10 @@ async function scrapeSubitoApi(params, opts = {}) {
   // Il crawler NON passa opts.sort → ordine naturale, vista profonda invariata.
   const reqParams = opts.sort ? { ...params, _sort: opts.sort } : params;
   const nodo = params.subitoNodo || null;
+  // `tipo` qui serve solo alla versione dedotta, e le categorie accessori NON sono veicoli:
+  // vanno lasciate fuori esplicitamente, altrimenti il ramo di default le farebbe passare
+  // per auto e si cercherebbe un modello dentro un annuncio di pastiglie freno.
+  const tipo = params.tipo === 'moto' ? 'moto' : (!params.tipo || params.tipo === 'auto') ? 'auto' : null;
   const gen = new Set((nodo && nodo.generazioni || []).map(g => String(g.id)));
   const titoloCombacia = faTitolo(params.modello);
   const rico = { generazioni: gen, titoloCombacia, versione: params.versioneSubito || null,
@@ -451,7 +506,7 @@ async function scrapeSubitoApi(params, opts = {}) {
       }
       const come = riconosci(ad, nodo, rico);
       if (!come) { scartati++; continue; }
-      const m = mapAd(ad, opts);
+      const m = conVersioneDedotta(mapAd(ad, opts), ad, tipo);
       if (m && m.prezzo != null) out.push(come === 'testo-libero' ? m : { ...m, dichiarazione: come });
     }
     if (page.ads.length < PAGE_SIZE) break;  // lista esaurita = vista completa
@@ -473,7 +528,7 @@ async function scrapeSubitoApi(params, opts = {}) {
           if (r && r.toLowerCase() !== regione) continue;
         }
         if (riconosci(ad, nodo, rico) !== 'senza-modello') continue;
-        const m = mapAd(ad, opts);
+        const m = conVersioneDedotta(mapAd(ad, opts), ad, tipo);
         if (m && m.prezzo != null && !visti.has(m.url)) { visti.add(m.url); out.push({ ...m, dichiarazione: 'senza-modello' }); }
       }
     } catch (e) {

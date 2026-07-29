@@ -2352,9 +2352,30 @@ function detailSpecsHTML(r) {
   // una chip in mezzo alla riga dei risultati.
   const dich = DICHIARAZIONE[r.dichiarazione];
   const dett = dich ? [['Corrispondenza', dich.et]] : [];
-  const all = base.concat(extra, dett, campiNativi(r));
+  const all = base.concat(extra, versioneDedottaRiga(r), dett, campiNativi(r));
   if (!all.length) return '<span class="spec-empty">Nessun dettaglio aggiuntivo</span>';
   return coppieHTML(all);
+}
+
+/**
+ * LA VERSIONE DEDOTTA, e si vede che e' dedotta.
+ *
+ * Il venditore non ha scelto la versione dal menu, ma l'ha scritta nell'annuncio: il
+ * backend la riconosce contro il catalogo di Subito (backend/scrapers/versione-dedotta.js).
+ * Sta accanto agli altri dati dell'annuncio perche' e' un dato dell'annuncio, non
+ * un'integrazione esterna — ma con l'etichetta che dice da dove viene.
+ *
+ * Due forme, e non valgono uguale: il nome intero quando era scritto per intero, il solo
+ * allestimento quando restano piu' versioni compatibili. "e' una Lounge" e' meno di un
+ * nome, ma e' molto piu' di "versione n.d.".
+ */
+function versioneDedottaRiga(r) {
+  const d = r && r.versioneDedotta;
+  if (!d || r.variante) return [];
+  const nota = 'Non l\'ha dichiarata il venditore: e\' riconosciuta nel testo dell\'annuncio contro il catalogo Subito. ' + (d.perche || '');
+  return d.esito === 'esatta'
+    ? [['Versione (dedotta)', d.versione, nota]]
+    : [['Allestimento (dedotto)', d.allestimento, nota]];
 }
 
 // ─── Quello che le fonti dicevano e non leggevamo ────────────────────────────
@@ -2373,8 +2394,10 @@ function detailSpecsHTML(r) {
  * "No" sono due cose diverse — un annuncio che non parla di incidenti non e' un annuncio
  * senza incidenti.
  */
+// Il terzo elemento e' un titolo facoltativo: serve ai valori che vanno spiegati (una
+// versione dedotta non e' una versione dichiarata, e chi legge deve poterlo sapere).
 const coppieHTML = coppie => coppie
-  .map(([k, v]) => `<div class="det-spec"><span class="det-k">${escapeHtml(String(k))}</span><span class="det-v">${escapeHtml(String(v))}</span></div>`)
+  .map(([k, v, tit]) => `<div class="det-spec"${tit ? ` title="${escapeHtml(String(tit))}"` : ''}><span class="det-k">${escapeHtml(String(k))}</span><span class="det-v">${escapeHtml(String(v))}</span></div>`)
   .join('');
 
 const siNo = v => (v == null ? null : (v ? 'Sì' : 'No'));
