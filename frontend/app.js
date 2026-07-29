@@ -499,6 +499,15 @@ async function init() {
     if (e.target.closest('.btn-salva'))     { toggleSalva(url); return; }
     if (e.target.closest('.btn-confronta'))  { toggleConfronto(url); return; }
     if (e.target.closest('.btn-info'))       { toggleDetail(row); return; }
+    // Una motorizzazione scelta a mano fra le candidate della scheda tecnica.
+    const sch = e.target.closest('.sch-voce');
+    if (sch) {
+      const pan = sch.closest('[data-detail]');
+      const r = pan && trovaResult(pan.dataset.url);
+      const m = r && r._scheda && (r._scheda.candidate || [])[+sch.dataset.sch];
+      if (r && m) caricaSchedaSpecs(r, m, 'motorizzazione scelta da te', pan);
+      return;
+    }
   });
 
   // Sezioni richiudibili dentro il pannello annuncio. `toggle` non risale il DOM: cattura.
@@ -508,6 +517,7 @@ async function init() {
     if (!r || !pan) return;
     if (cosa === 'pass' && !r._pass) calcolaPassaggio(r, pan);
     if (cosa === 'gomme' && !r._gomme) caricaGomme(r, pan);
+    if (cosa === 'scheda') caricaScheda(r, pan);
   }), true);
 
   // Spunta "veicolo storico" dentro il pannello di un annuncio: cambia la tariffa, si rifa' il conto.
@@ -2370,11 +2380,16 @@ function optionalHTML(r) {
 
 // Il testo dell'annuncio: quello che il venditore ha voluto scrivere. Alto al massimo
 // una ventina di righe, poi scorre da solo — non spinge in basso il resto della scheda.
+/**
+ * Il testo dell'annuncio, richiudibile. E' un dato nativo, quindi sta qui e non fra le
+ * integrazioni — ma sono in media mille caratteri di prosa, e aperti spingono in fondo
+ * tutto il resto. Chiuso si vede che c'e'; aperto si legge.
+ */
 function testoHTML(r) {
   const d = (r.descrizione || '').trim();
   if (!d) return '';
-  return `<div class="det-blocco"><div class="det-blocco-t">Testo dell'annuncio</div>`
-    + `<div class="det-testo">${escapeHtml(d)}</div></div>`;
+  return miniHTML('testo:' + r.url, 'Testo dell\'annuncio', d.length + ' caratteri',
+    `<div class="det-testo">${escapeHtml(d)}</div>`);
 }
 
 // Il link alla vetrina del venditore, quando la fonte lo dice (oggi Moto.it).
@@ -2674,6 +2689,83 @@ async function caricaPneumatico(r, misura, pannello) {
   pannello?._render?.();
 }
 
+/**
+ * LA SCHEDA TECNICA DI QUESTO ANNUNCIO.
+ *
+ * Prima nasceva dalla RICERCA — marca, modello, anno — e chiedeva a te di scegliere a mano
+ * generazione e motorizzazione fra decine di voci. Due difetti, e il secondo e' il peggiore:
+ * ti faceva ri-specificare quello che l'annuncio gia' dichiara, e con la versione diventata
+ * un campo libero mostrava le specifiche di "quello che hai cercato" su un annuncio che
+ * quella cosa non e'.
+ *
+ * Qui i vincoli li porta l'annuncio: anno, potenza, carburante, cambio, carrozzeria. Sono
+ * campi nativi, dichiarati dal venditore, ed e' con quelli che il catalogo distingue una
+ * motorizzazione dall'altra.
+ *
+ * QUANDO NE RESTA UNA SOLA si apre da se'; quando ne restano piu' d'una si mostrano e
+ * scegli tu. Non si sceglie mai al posto tuo: una scheda tecnica sbagliata ha l'aria di
+ * una giusta, e chi legge non ha modo di accorgersene.
+ *
+ * PIGRA: niente parte finche' non apri il blocco.
+ */
+function schedaHTML(r) {
+  const st = r._scheda;
+  let corpo = '';
+  let meta = '';
+  if (!st) corpo = '<div class="det-pass-no">Apri per cercarla nel catalogo tecnico.</div>';
+  else if (st.stato === 'carico') corpo = '<div class="rc-loading">Cerco nel catalogo…</div>';
+  else if (st.stato === 'ko') corpo = `<div class="det-pass-no">${escapeHtml(st.motivo || 'non disponibile')}</div>`;
+  else if (st.stato === 'scegli') {
+    meta = st.candidate.length + ' compatibili';
+    corpo = `<div class="sch-perche">${escapeHtml(st.perche)}</div><div class="sch-lista">`
+      + st.candidate.map((m, i) => `<button type="button" class="sch-voce" data-sch="${i}">`
+        + `<span class="sch-lab">${escapeHtml(m.label)}</span>`
+        + (m.gen ? `<span class="sch-gen">${escapeHtml(m.gen)}</span>` : '') + '</button>').join('')
+      + '</div>';
+  } else if (st.stato === 'ok') {
+    meta = escapeHtml(st.label || '');
+    corpo = `<div class="sch-perche">${escapeHtml(st.perche || '')}</div>`
+      + (st.specs && st.specs.groups || []).map(g =>
+          `<div class="sch-grp"><div class="sch-grp-t">${escapeHtml(g.title)}</div>`
+          + coppieHTML((g.rows || []).map(x => [x.k, x.v])) + '</div>').join('')
+      + (st.specs && st.specs.source
+          ? `<div class="det-blocco-f">Fonte: ${escapeHtml(st.specs.source)}</div>` : '');
+  }
+  return miniHTML('scheda:' + r.url, 'Scheda tecnica', meta, corpo, { carica: 'scheda' });
+}
+
+/** Il catalogo interrogato coi soli campi che l'annuncio dichiara. Una richiesta, cachata. */
+async function caricaScheda(r, panel) {
+  if (r._scheda && r._scheda.stato !== 'ko') return;
+  const p = lastSearchParams || {};
+  const marca = r.marca || p.marca, modello = p.modello;
+  if (!marca || !modello) { r._scheda = { stato: 'ko', motivo: 'serve un modello specifico' }; panel?._render?.(); return; }
+  r._scheda = { stato: 'carico' }; panel?._render?.();
+  const qs = new URLSearchParams({ tipo: p.tipo || 'auto', marca, modello });
+  if (r.anno) qs.set('anno', r.anno);
+  if (r.potenzaCv) qs.set('cv', r.potenzaCv);
+  if (r.carburante) qs.set('carburante', r.carburante);
+  if (r.cambio) qs.set('cambio', r.cambio);
+  if (r.carrozzeria) qs.set('carrozzeria', r.carrozzeria);
+  try {
+    const d = await fetch('/api/scheda-veicolo/annuncio?' + qs).then(x => x.json());
+    if (!d || !d.ok) { r._scheda = { stato: 'ko', motivo: (d && d.motivo) || 'non trovata' }; panel?._render?.(); return; }
+    if (d.scelta) await caricaSchedaSpecs(r, d.scelta, d.perche, panel);
+    else { r._scheda = { stato: 'scegli', candidate: d.candidate || [], perche: d.perche }; panel?._render?.(); }
+  } catch (_) { r._scheda = { stato: 'ko', motivo: 'non disponibile' }; panel?._render?.(); }
+}
+
+async function caricaSchedaSpecs(r, m, perche, panel) {
+  r._scheda = { stato: 'carico' }; panel?._render?.();
+  try {
+    const s = await fetch('/api/scheda-veicolo/specs?url=' + encodeURIComponent(m.url)).then(x => x.json());
+    r._scheda = (s && s.ok)
+      ? { stato: 'ok', label: m.label, perche: perche || 'scelta da te', specs: s }
+      : { stato: 'ko', motivo: 'specifiche non disponibili' };
+  } catch (_) { r._scheda = { stato: 'ko', motivo: 'specifiche non disponibili' }; }
+  panel?._render?.();
+}
+
 function renderDetailInto(panel, r) {
   panel.dataset.loaded = '1';
   const renderBody = () => {
@@ -2692,6 +2784,9 @@ function renderDetailInto(panel, r) {
       // Da qui in giu' le INTEGRAZIONI ESTERNE: costano una richiesta e non stanno
       // nell'annuncio, quindi restano richiudibili e non partono da sole.
       + `<div class="det-pass">${passHTML(r)}</div>`
+      // La scheda tecnica DI QUESTO ANNUNCIO: sta qui e non nella ricerca, perche' i
+      // vincoli con cui si trova la motorizzazione giusta li dichiara l'annuncio.
+      + `<div class="det-scheda">${schedaHTML(r)}</div>`
       + `<div class="det-gomme">${gommeHTML(r)}</div>`
       + `<div class="det-foot">${openBtn}${salBtn}${confBtn}</div></div>`;
   };

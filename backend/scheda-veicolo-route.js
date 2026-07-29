@@ -294,8 +294,158 @@ async function searchScheda(brand, marca, modello, genSlug) {
   };
 }
 
+/**
+ * LA SCHEDA DI QUESTO ANNUNCIO, non del modello cercato.
+ *
+ * Prima la scheda nasceva dai parametri di RICERCA — marca, modello, anno — e poi
+ * chiedeva a te di scegliere a mano generazione e motorizzazione. Due difetti, e il
+ * secondo e' peggiore del primo:
+ *   - ti faceva ri-specificare a mano quello che il singolo annuncio gia' dichiara;
+ *   - con la versione diventata un campo libero e facoltativo, una scheda agganciata
+ *     alla ricerca mostra le specifiche di "quello che hai cercato" su un annuncio che
+ *     quella cosa non e'.
+ *
+ * Qui si parte dall'annuncio: anno, potenza e carburante li DICHIARA lui, e sono
+ * esattamente i campi con cui il catalogo distingue una motorizzazione dall'altra.
+ *
+ * NON SI SCEGLIE MAI FRA PARI. Se dopo il confronto ne restano due, si restituiscono
+ * tutte e due e decide chi guarda: mostrare la scheda sbagliata e' peggio che non
+ * mostrarne nessuna, perche' chi legge non ha modo di accorgersene.
+ *
+ * COSTO: due pagine di catalogo per annuncio, entrambe in cache 12 ore e condivise fra
+ * annunci dello stesso modello — che in una ricerca sono quasi tutti.
+ */
+const FAM_CARB = s => {
+  const t = norm(s);
+  if (!t) return null;
+  if (/elettric/.test(t)) return 'e';
+  if (/gpl|lpg/.test(t)) return 'g';
+  if (/metano|cng/.test(t)) return 'm';
+  if (/diesel|gasolio/.test(t)) return 'd';
+  if (/benzin|petrol/.test(t)) return 'b';
+  if (/ibrid|hybrid/.test(t)) return 'i';
+  return null;
+};
+/** Carburanti incompatibili? Solo quando lo sono davvero: un ibrido benzina sta su una benzina. */
+function carbDiverso(a, b) {
+  if (!a || !b) return false;
+  if (a === 'i' || b === 'i') return false;          // l'ibrido il catalogo lo scrive in mille modi
+  return a !== b;
+}
+
+/**
+ * Il catalogo scrive il cambio dentro l'etichetta ("2.0 TDI 150 Hp DSG"), l'annuncio lo
+ * dichiara in un campo. Vale un dimezzamento della lista: fra "150 Hp" e "150 Hp DSG"
+ * l'annuncio sa quale delle due e'.
+ */
+const AUTOM_ETI = /\b(dsg|s.?tronic|tiptronic|multitronic|steptronic|geartronic|dualogic|powershift|automatic|automatica|automatico|cvt|edc|dct|tct|pdk|amt|at\d?)\b/i;
+
+/**
+ * LA CARROZZERIA TAGLIA LE GENERAZIONI, ed e' il taglio piu' utile perche' arriva PRIMA
+ * delle richieste: su "Golf 2016" le generazioni che coprono l'anno sono sei, e sono
+ * quasi tutte varianti di carrozzeria (3 porte, 5 porte, Variant, Sportsvan, Alltrack,
+ * Cabriolet). L'annuncio la dichiara — campo nativo, presente nel 99% — quindi non c'e'
+ * ragione di aprirle tutte e poi far scegliere a mano.
+ */
+const GEN_FAMIGLIA = /\b(variant|alltrack|sportwagon|estate|touring|avant|wagon|sw)\b/i;
+const GEN_APERTA    = /\b(cabrio|cabriolet|roadster|convertible|spider|spyder)\b/i;
+const GEN_COUPE     = /\b(coupe|coup[eé])\b/i;
+const GEN_MONOV     = /\b(sportsvan|plus|van|monovolume|tourer)\b/i;
+function generazioneCompatibile(nome, carrozzeria) {
+  const c = norm(carrozzeria);
+  if (!c) return true;
+  const n = String(nome || '');
+  if (/stationwagon|familiare|sw/.test(c))          return GEN_FAMIGLIA.test(n);
+  if (/cabrio|spider|spyder|convertibile/.test(c))  return GEN_APERTA.test(n);
+  if (/coupe/.test(c))                              return GEN_COUPE.test(n) || (!GEN_FAMIGLIA.test(n) && !GEN_APERTA.test(n));
+  if (/monovolume|multispazio/.test(c))             return GEN_MONOV.test(n);
+  // Berlina, utilitaria, city car, SUV: tutto tranne le carrozzerie che si riconoscono
+  return !GEN_FAMIGLIA.test(n) && !GEN_APERTA.test(n) && !GEN_MONOV.test(n);
+}
+
+async function schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria }) {
+  const base = await resolveScheda({ tipo, marca, modello, anno });
+  if (!base || base.unsupported || base.notFound) return { ok: false, motivo: 'modello non a catalogo' };
+
+  const y = parseInt(anno, 10) || null;
+  /**
+   * LE GENERAZIONI CHE COPRONO L'ANNO, e prima quelle che lo coprono DAVVERO.
+   * Su "Golf 2016" dodici generazioni passano con un anno di tolleranza, e le prime della
+   * lista sono i facelift 2017: un'auto del 2016 non e' li'. Prendendo le prime quattro si
+   * finiva a proporre delle 1.4 TGI (metano) per un diesel. Quindi: prima chi contiene
+   * l'anno per davvero, e la tolleranza solo se non contiene nessuno.
+   */
+  let gens = base.generations || [];
+  if (y && gens.length) {
+    const dentro = gens.filter(g => { const [da, a] = g.years || []; return da && y >= da && (!a || y <= a); });
+    const quasi  = gens.filter(g => { const [da, a] = g.years || []; return da && y >= da - 1 && (!a || y <= a + 1); });
+    if (dentro.length) gens = dentro;
+    else if (quasi.length) gens = quasi;
+  }
+  // La carrozzeria dell'annuncio, quando c'e', toglie le generazioni che non possono
+  // essere quella. Non si applica se svuota: meglio qualche candidata in piu' che zero.
+  if (carrozzeria && gens.length > 1) {
+    const p = gens.filter(g => generazioneCompatibile(g.name, carrozzeria));
+    if (p.length) gens = p;
+  }
+  // Il tetto resta una richiesta per generazione: sei bastano; oltre, l'anno e la
+  // carrozzeria non stanno restringendo niente e la scelta e' tua.
+  let voci = (base.motorizzazioni || []).slice();
+  for (const g of gens.slice(0, 6)) {
+    try {
+      const d = await resolveScheda({ tipo, marca, modello, genSlug: g.slug });
+      for (const m of (d && d.motorizzazioni) || []) voci.push({ ...m, gen: g.name });
+    } catch (_) { /* una generazione che non si apre non deve far cadere le altre */ }
+  }
+  if (!voci.length) return { ok: false, motivo: 'nessuna motorizzazione a catalogo' };
+
+  /**
+   * POTENZA E CARBURANTE INSIEME, non uno dopo l'altro.
+   * A catena, quando il secondo vincolo non trovava niente si teneva il risultato del
+   * primo: per un Golf diesel 110 CV restavano quattro 1.4 TGI, che e' metano. Un
+   * insieme sbagliato mostrato con sicurezza e' peggio di un insieme vuoto.
+   */
+  const cvN = parseInt(cv, 10) || null;
+  const fam = FAM_CARB(carburante);
+  // Il cambio: 'Manuale' → fuori le automatiche, 'Automatico'/'Sequenziale' → solo quelle.
+  const cam = norm(cambio);
+  const auto = cam ? (/manuale/.test(cam) ? false : /autom|sequen/.test(cam) ? true : null) : null;
+  const usati = [cvN && 'potenza', fam && 'carburante', auto != null && 'cambio', carrozzeria && 'carrozzeria'].filter(Boolean);
+  // I CV dichiarati e quelli di catalogo ballano di un paio: arrotondamenti kW→CV.
+  let vive = voci.filter(m => (!cvN || (m.hp && Math.abs(m.hp - cvN) <= 3))
+                           && (!fam || !carbDiverso(fam, FAM_CARB(m.fuel)))
+                           && (auto == null || AUTOM_ETI.test(m.label || '') === auto));
+  // Doppioni: la stessa motorizzazione compare in generazioni gemelle (Variant, facelift).
+  const visti = new Set();
+  vive = vive.filter(m => { const k = m.url; if (visti.has(k)) return false; visti.add(k); return true; });
+  if (!vive.length) return { ok: false, motivo: 'nessuna motorizzazione del catalogo combacia con ' + (usati.join(' e ') || 'questo annuncio') };
+
+  return {
+    ok: true,
+    source: base.source,
+    scelta: vive.length === 1 ? vive[0] : null,
+    candidate: vive.length === 1 ? [] : vive.slice(0, 40),
+    perche: vive.length === 1
+      ? 'unica del catalogo compatibile con ' + (usati.join(' e ') || 'questo modello') + ' dichiarati nell\'annuncio'
+      : vive.length + ' motorizzazioni compatibili: scegli tu',
+  };
+}
+
 function mount(app, deps = {}) {
   const clientIp = deps.clientIp || (req => req.ip || '');
+  // La scheda tecnica DI QUESTO ANNUNCIO — vedi schedaPerAnnuncio.
+  app.get('/api/scheda-veicolo/annuncio', async (req, res) => {
+    if (!rateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste.' });
+    const { tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria } = req.query || {};
+    if (!marca || !modello) return res.status(400).json({ error: 'marca/modello mancanti' });
+    const key = `ann:${tipo}|${norm(marca)}|${norm(modello)}|${anno || ''}|${cv || ''}|${norm(carburante)}|${norm(cambio)}|${norm(carrozzeria)}`;
+    const hit = cacheGet(key); if (hit != null) return res.json(hit);
+    try {
+      const out = await schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria });
+      cacheSet(key, out, out.ok ? PAGE_TTL : EMPTY_TTL);
+      res.json(out);
+    } catch (_) { res.json({ ok: false, motivo: 'scheda non disponibile' }); }
+  });
   app.get('/api/scheda-veicolo', async (req, res) => {
     if (!rateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste.' });
     const { tipo, marca, modello, anno, gen } = req.query || {};
@@ -324,4 +474,4 @@ function mount(app, deps = {}) {
   });
 }
 
-module.exports = { mount, resolveScheda, matchModel, matchMotoModels, resolveMoto };
+module.exports = { mount, resolveScheda, schedaPerAnnuncio, matchModel, matchMotoModels, resolveMoto };
