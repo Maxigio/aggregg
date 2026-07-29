@@ -347,6 +347,8 @@ async function init() {
     // Nessun bottone "Calcola": provincia e km/anno ricalcolano da soli mentre li cambi.
     // Il bottone era nato perche' la cifra grande restava indietro, ma quello era un
     // difetto (aggiornava un elemento che non esisteva piu'), non una mancanza.
+    const prova = e.target.closest('.veh-mis-cand');   // una prova moto dell'elenco → aprila
+    if (prova) { vehProvaCarica(prova.dataset.prova); return; }
     const grpHead = e.target.closest('.veh-grp-head');   // sezione accordion interna
     if (grpHead) {
       const grp = grpHead.parentElement;
@@ -541,6 +543,12 @@ async function init() {
     if (!r || !pan) return;
     if (cosa === 'pass' && !r._pass) calcolaPassaggio(r, pan);
     if (cosa === 'gomme' && !r._gomme) caricaGomme(r, pan);
+    // I blocchi della SCHEDA TECNICA dichiaravano `carica:` da sempre, ma chi li ascoltava
+    // era il vecchio contenitore fisso: da quando la scheda vive dentro l'annuncio, aprire
+    // "Richiami" o "Targa" non faceva partire niente. Stessa famiglia del costo carburante.
+    if (cosa === 'richiami' && !vehRichiami) vehRichiamiCarica();
+    if (cosa === 'targa' && !tgSfida && !tgOccupato) tgNuovaSfida();
+    if (cosa === 'misure' && !vehMisure) vehMisureCarica();
   }), true);
 
   // Spunta "veicolo storico" dentro il pannello di un annuncio: cambia la tariffa, si rifa' il conto.
@@ -3384,7 +3392,11 @@ let vehHostUrl = null;                 // di quale annuncio e'
 const vehEl = () => (vehHost && vehHost.isConnected) ? vehHost : null;
 let vehData = null, vehSpecs = {}, vehSchedaCollapsed = false, vehSelUrl = null, vehGen = 0;   // vehGen: token anti-race — scarta risposte di ricerche/generazioni superate
 let vehErrore = null;   // perche' la scheda non si e' potuta fare: si scrive, non si tace
-function clearVehScheda() { vehGen++; vehData = null; vehErrore = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; vehRichiami = null; vehOmoStato = {}; vehAddonAperto = false; const el = vehEl(); if (el) el.innerHTML = ''; vehHost = null; vehHostUrl = null; }   // vehGen++ invalida le fetch in volo; i richiami sono del veicolo cercato, non si tengono
+// Il modello con cui la scheda e' stata CHIESTA. Dopo aver scelto una generazione,
+// `vehData.modello` diventa il nome di quella ("Golf Cabriolet"): cercare le prove con
+// quello non trovava niente, mentre il modello vero ("Golf") le trova tutte.
+let vehModelloBase = '';
+function clearVehScheda() { vehGen++; vehData = null; vehErrore = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; vehRichiami = null; vehOmoStato = {}; vehMisure = null; vehProva = null; vehAddonAperto = false; const el = vehEl(); if (el) el.innerHTML = ''; vehHost = null; vehHostUrl = null; }   // vehGen++ invalida le fetch in volo; i richiami sono del veicolo cercato, non si tengono
 
 /**
  * LA SCHEDA CHE NON SI PUO' FARE LO DEVE DIRE.
@@ -3447,9 +3459,10 @@ async function loadVehScheda(r, host) {
   // L'anno dell'ANNUNCIO. Prima era `annoMin || annoMax` dei filtri: un numero che parla
   // della ricerca, non del veicolo, e su una ricerca senza filtri era vuoto.
   const anno = (r && r.anno) || p.annoMin || p.annoMax || '';
+  vehModelloBase = modello;
   vehSchedaCollapsed = false;  // l'hai aperta tu dall'annuncio: si apre
   vehXf.compare = null; vehXf.q = ''; vehXf.highlight = new Set(); vehGenChosen = false; vehShowAll = false;   // reset per ricerca (traduci/unità restano preferenze)
-  vehRichiami = null; vehOmoStato = {}; vehAddonAperto = false;   // i richiami sono di QUEL veicolo: cambiando ricerca ripartono
+  vehRichiami = null; vehOmoStato = {}; vehMisure = null; vehProva = null; vehAddonAperto = false;   // richiami e misure sono di QUEL veicolo: cambiando annuncio ripartono
   // La targa NON e' un parametro di ricerca: non filtra gli annunci e non va alle fonti.
   // Si legge qui e resta nel browser, cosi' non finisce nemmeno nella chiave di cache.
   targaCercata = String((document.getElementById('targaFiltro') || {}).value || '')
@@ -3722,8 +3735,128 @@ function vehRichiamiHTML() {
   return miniHTML('veh-rich', 'Richiami', escapeHtml(meta), corpo, { carica: 'richiami' });
 }
 
+/**
+ * LE MISURE DELLA REDAZIONE, accanto a quello che dichiara il costruttore.
+ *
+ * Auto: i rilevamenti di auto.it — velocita' massima vera, 0-100, frenata da 100 in metri,
+ * e i consumi REALI, che sono la riga che vale soldi: il riquadro qui sopra calcola il costo
+ * del carburante sul consumo DICHIARATO.
+ * Moto: le prove di inSella — la potenza al banco ALLA RUOTA contro quella dichiarata.
+ *
+ * NON SI SCEGLIE FRA PARI: una prova e' di un allestimento preciso e i nomi non combaciano
+ * con quelli degli annunci ("Z 900" aggancia anche la Z900RS, che e' un'altra moto). Si
+ * elencano le candidate col loro titolo e il loro anno, e la prova si apre se la apri tu.
+ */
+let vehMisure = null;          // null = mai chieste · {loading} · {voci|candidate} · {ko}
+let vehProva = null;           // la prova moto aperta: {loading} · {dati} · {ko}
+
+async function vehMisureCarica() {
+  const d = vehData; if (!d) return;
+  const tipo = vehTipo();
+  vehMisure = { loading: true }; vehProva = null;
+  const my = vehGen;
+  renderVehBody();
+  const q = new URLSearchParams({ marca: d.marca || '', modello: vehModelloBase || d.modello || '' });
+  const anno = (vehSelUrl && (vehData.motorizzazioni || []).find(m => m.url === vehSelUrl) || {}).year;
+  if (anno) q.set('anno', anno);
+  try {
+    const r = await fetch(`/api/prove/${tipo === 'moto' ? 'moto' : 'auto'}?${q}`).then(x => x.json());
+    if (my !== vehGen) return;
+    vehMisure = r && r.ok ? r : { ko: (r && r.error) || 'fonte non raggiungibile' };
+  } catch (_) { if (my === vehGen) vehMisure = { ko: 'fonte non raggiungibile' }; }
+  renderVehBody();
+}
+
+async function vehProvaCarica(slug) {
+  vehProva = { loading: true };
+  const my = vehGen;
+  renderVehBody();
+  try {
+    const r = await fetch('/api/prove/moto/prova?slug=' + encodeURIComponent(slug)).then(x => x.json());
+    if (my !== vehGen) return;
+    vehProva = r && r.ok ? { dati: r.prova } : { ko: (r && r.error) || 'prova non disponibile' };
+  } catch (_) { if (my === vehGen) vehProva = { ko: 'prova non disponibile' }; }
+  renderVehBody();
+}
+
+const misNum = (v, u) => (v == null || v === '' ? null : String(v).replace('.', ',') + (u ? ' ' + u : ''));
+
+function vehMisureHTML() {
+  if (!vehData) return '';
+  const tipo = vehTipo();
+  const st = vehMisure;
+  let corpo, meta = '';
+  if (!st) corpo = '<div class="veh-mis-att">Apri per cercare le misure della redazione.</div>';
+  else if (st.loading) corpo = '<div class="veh-mis-att">Cerco…</div>';
+  else if (st.ko) corpo = `<div class="veh-mis-att">${escapeHtml(st.ko)}</div>`;
+  else if (tipo === 'moto') {
+    const cand = st.candidate || [];
+    meta = String(st.quante || cand.length);
+    if (!cand.length) corpo = '<div class="veh-mis-att">inSella non ha una prova di questo modello.</div>';
+    else {
+      const scelte = cand.map(c => `<button type="button" class="veh-mis-cand" data-prova="${escapeHtml(c.slug)}">`
+        + `<span class="veh-mis-cand-t">${escapeHtml(c.titolo)}</span>`
+        + `<span class="veh-mis-cand-m">${[c.anno, c.categoria].filter(Boolean).join(' · ')}</span></button>`).join('');
+      corpo = `<div class="veh-mis-lista">${scelte}</div>${vehProvaHTML()}`;
+    }
+  } else {
+    const voci = st.voci || [];
+    meta = String(st.quante || voci.length);
+    if (!voci.length) corpo = '<div class="veh-mis-att">auto.it non ha rilevamenti di questo modello.</div>';
+    else {
+      const righe = voci.map(v => {
+        const dati = [
+          ['velocità max', misNum(v.velocitaMax, 'km/h')],
+          ['0-100', v.acc0_100 || null],
+          ['ripresa 80-120', v.ripresa80_120 || null],
+          ['frenata 100-0', misNum(v.frenata100_0, 'm')],
+          ['consumo medio', misNum(v.l100Medio, 'l/100 km')],
+          ['città', misNum(v.l100Citta, 'l/100 km')],
+          ['autostrada', misNum(v.l100Autostrada, 'l/100 km')],
+        ].filter(([, x]) => x);
+        return `<div class="veh-mis-r"><div class="veh-mis-h">${escapeHtml(v.nome || '')}`
+          + `<span class="veh-mis-m">${[v.anno, v.prova].filter(Boolean).join(' · ')}</span></div>`
+          + `<div class="veh-mis-d">${dati.map(([k, x]) => `<span><em>${k}</em>${escapeHtml(String(x))}</span>`).join('')}</div></div>`;
+      }).join('');
+      corpo = `<div class="veh-mis">${righe}</div>`
+        + '<div class="veh-mis-fonte">Valori <b>misurati</b> dalla redazione di Auto (auto.it), non dichiarati dal costruttore: '
+        + 'il consumo reale e quello di targa non sono lo stesso numero, e il riquadro del carburante qui sopra calcola sul dichiarato.</div>';
+    }
+  }
+  return miniHTML('veh-mis', tipo === 'moto' ? 'Prove su strada (inSella)' : 'Rilevamenti (auto.it)', meta, corpo, { carica: 'misure' });
+}
+
+function vehProvaHTML() {
+  const p = vehProva;
+  if (!p) return '';
+  if (p.loading) return '<div class="veh-mis-att">Apro la prova…</div>';
+  if (p.ko) return `<div class="veh-mis-att">${escapeHtml(p.ko)}</div>`;
+  const d = p.dati || {};
+  const m = d.misure || {};
+  const pr = m.potenzaRuota || {};
+  const gruppi = [];
+  const coppie = o => Object.entries(o || {}).filter(([, v]) => v != null && v !== '')
+    .map(([k, v]) => `<span><em>${escapeHtml(k)}</em>${escapeHtml(String(v).replace('.', ','))}</span>`).join('');
+  const misurate = [
+    m.velocitaMax ? `<span><em>velocità max</em>${misNum(m.velocitaMax, 'km/h')}</span>` : '',
+    pr.cv ? `<span><em>potenza alla ruota</em>${misNum(pr.cv, 'CV')}${pr.giri ? ' a ' + pr.giri + ' giri' : ''}</span>` : '',
+    coppie(m.acc), coppie(m.ripresa), coppie(m.frenata), coppie(m.consumi),
+  ].filter(Boolean).join('');
+  if (misurate) gruppi.push(`<div class="veh-mis-b"><div class="veh-mis-bh">Misurato al banco e in pista</div><div class="veh-mis-d">${misurate}</div></div>`);
+  if (d.dichiarati && Object.keys(d.dichiarati).length) {
+    gruppi.push(`<div class="veh-mis-b"><div class="veh-mis-bh">Dichiarato dalla casa</div><div class="veh-mis-d">${coppie(d.dichiarati)}</div></div>`);
+  }
+  if (d.voti && Object.keys(d.voti).length) {
+    gruppi.push(`<div class="veh-mis-b"><div class="veh-mis-bh">Voti della redazione</div><div class="veh-mis-d">${coppie(d.voti)}</div></div>`);
+  }
+  const link = d.url ? `<a class="veh-mis-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener noreferrer">leggi la prova ↗</a>` : '';
+  return `<div class="veh-mis-prova"><div class="veh-mis-ph">${escapeHtml(d.titolo || '')}${link}</div>${gruppi.join('')}`
+    + (d.metodologia ? `<div class="veh-mis-fonte">${escapeHtml(String(d.metodologia).slice(0, 400))}</div>` : '')
+    + '</div>';
+}
+
 function vehAddonHTML(spec) {
-  const pezzi = [vehCostoHTML(spec), vehLiqHTML(), vehRichiamiHTML(), vehTargaHTML()].filter(Boolean);
+  const pezzi = [vehCostoHTML(spec), vehLiqHTML(), vehMisureHTML(), vehRichiamiHTML(), vehTargaHTML()].filter(Boolean);
   if (!pezzi.length) return '';
   return vehGrpHTML('ADD ON', pezzi.length, 1, `<div class="veh-addon">${pezzi.join('')}</div>`, '',
     { chiuso: !vehAddonAperto, attr: ' data-addon="1"' });

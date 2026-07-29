@@ -1470,3 +1470,29 @@ select.cp-unisci { max-width: 190px; }
   padding: 7px 12px; cursor: pointer; width: 100%; text-align: left;
 }
 .det-scheda-apri:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── ADD ON: le MISURE della redazione (auto.it, inSella) ─────────────────────
+   Il dato misurato sta accanto a quello dichiarato, non al posto suo: la differenza fra i
+   due e' l'unica ragione per cui questo blocco esiste. Le candidate sono bottoni perche'
+   una prova e' di un allestimento preciso e la scelta la fa chi guarda. */
+.veh-mis-att { font-size: 0.8rem; color: var(--text-muted); padding: 4px 0; }
+.veh-mis-r + .veh-mis-r { margin-top: 8px; padding-top: 8px; border-top: 1px dotted var(--line); }
+.veh-mis-h { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.veh-mis-m { font-weight: 400; font-size: 0.74rem; color: var(--text-muted); margin-left: 6px; }
+.veh-mis-d { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 3px; }
+.veh-mis-d span { font-size: 0.8rem; color: var(--text); font-family: var(--num); }
+.veh-mis-d em { font-style: normal; font-family: inherit; font-size: 0.72rem; color: var(--text-muted); margin-right: 4px; }
+.veh-mis-fonte { font-size: 0.72rem; line-height: 1.45; color: var(--text-muted); border-top: 1px solid var(--line); margin-top: 8px; padding-top: 6px; }
+.veh-mis-fonte b { color: var(--text); font-weight: 600; }
+.veh-mis-lista { display: flex; flex-wrap: wrap; gap: 6px; }
+.veh-mis-cand { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; max-width: 100%;
+  padding: 5px 9px; font-size: 0.8rem; text-align: left; color: var(--text); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.veh-mis-cand:hover { border-color: var(--accent); }
+.veh-mis-cand-t { font-weight: 600; overflow-wrap: anywhere; }
+.veh-mis-cand-m { font-size: 0.72rem; color: var(--text-muted); }
+.veh-mis-prova { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.veh-mis-ph { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 0.84rem; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.veh-mis-link { font-size: 0.76rem; font-weight: 400; color: var(--accent); text-decoration: none; }
+.veh-mis-b + .veh-mis-b { margin-top: 8px; }
+.veh-mis-bh { font-size: 0.74rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 2px; }

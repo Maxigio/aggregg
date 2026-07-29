@@ -894,6 +894,11 @@ require('./targa').mount(app, { json: express.json({ limit: '2kb' }) });
 // ─── Fonti dati aperte (OSM, EPREL, bilstein, Wheel-Size) — vedi fonti-route.js ──
 require('./fonti-route').mount(app, { clientIp });
 
+// ─── Le MISURE della redazione (auto.it, inSella) — vedi prove-route.js ────────
+// Dentro l'ADD ON della scheda tecnica: dicono quanto va davvero un mezzo contro quello che
+// il costruttore dichiara. Su richiesta, una fonte per tipo di veicolo.
+require('./prove-route').mount(app, { clientIp });
+
 // ─── Cache ricerche recenti (§17.4) ───────────────────────────────────────────
 // Stessa ricerca entro il TTL → risposta istantanea. NON cacha se una fonte è
 // error/needs_bootstrap (non congelare uno stato-bloccato) né i 0-risultati totali.
