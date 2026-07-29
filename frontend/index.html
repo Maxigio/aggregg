@@ -61,12 +61,10 @@
           <button type="button" class="mode-btn" data-mode="moto" role="tab">Moto</button>
           <button type="button" class="mode-btn" data-mode="ricambi" role="tab">Ricambi</button>
           <button type="button" class="mode-btn" data-mode="competitor" role="tab">Competitor</button>
-          <!-- Catalogo, Richiami, Fonti e Corrispondenze: nascosti dalla barra. Il codice e
-               i pannelli restano (app.js li disegna ancora), ma non hanno piu' una porta
-               d'ingresso. Cerchi/gomme e i codici OE ora vivono dove servono — dentro
-               l'annuncio e dentro la ricerca ricambi. Per rimetterli basta questa riga:
-               <button type="button" class="mode-btn" data-mode="fonti" role="tab">Fonti</button>
-               <button type="button" class="mode-btn" data-mode="ponte" role="tab">Corrispondenze</button> -->
+          <!-- Catalogo, Richiami, Fonti e Corrispondenze non ci sono piu': erano quattro
+               sezioni senza porta d'ingresso da quando i loro pezzi utili sono andati dove
+               servono — cerchi, gomme, richiami e codici OE dentro l'annuncio e dentro la
+               ricerca ricambi. Il codice e' stato cancellato, non nascosto. -->
         </div>
         <!-- Tipo veicolo: radio nascosti, source-of-truth per currentTipo(); pilotati dai bottoni Auto/Moto -->
         <div class="seg-toggle" role="radiogroup" aria-label="Tipo veicolo" style="display:none">
@@ -159,21 +157,9 @@
     <!-- PANNELLO RICAMBI (multi-fonte, full-width) -->
     <div id="ricambiPanel" class="d-none"></div>
 
-    <!-- CATALOGO del nuovo: sezione indipendente dalla ricerca (marche → modelli → allestimenti) -->
-    <div id="catalogoPanel" class="d-none"></div>
-
-    <!-- Area Richiami: allerte di sicurezza Safety Gate (Commissione UE). Disegnata da app.js. -->
-    <div id="richiamiPanel" class="d-none"></div>
-
-    <!-- Area Fonti: OSM, EPREL, bilstein, Wheel-Size. Disegnata da app.js. -->
-    <div id="fontiPanel" class="d-none"></div>
-
     <!-- Area Competitor: il parco di un concessionario, il tuo e quello degli altri.
          Disegnata da app.js. Il parco NON si scarica da solo: si chiede. -->
     <div id="competitorPanel" class="d-none"></div>
-
-    <!-- Area Corrispondenze: lo stesso veicolo sulle tre fonti. Disegnata da app.js. -->
-    <div id="pontePanel" class="d-none"></div>
 
     <!-- STATO RICERCA / ERRORE / BANNER -->
     <div id="statusBox" class="d-none">

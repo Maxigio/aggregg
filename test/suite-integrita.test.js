@@ -12,7 +12,7 @@
  *
  * PERCHE' IL FILE RESTA, per un motivo diverso da quello scritto prima: dodici moduli del
  * backend non sono richiesti da NESSUN test e sono coperti solo qui — fra cui auth.js,
- * catalogo-route.js, db/index.js, normalize.js, utils.js, web-parts.js. Se uno prende un errore
+ * db/index.js, normalize.js, utils.js, web-parts.js. Se uno prende un errore
  * di sintassi o un require morto, senza il primo test qui sotto la suite resta verde. E' uno
  * smoke test sul caricamento, e costa circa un secondo.
  *

@@ -884,22 +884,12 @@ require('./scheda-veicolo-route').mount(app, { clientIp });
 // ─── Competitor: il parco di un concessionario, il tuo e quello degli altri ───
 require('./competitor-route').mount(app, { json: express.json({ limit: '8kb' }) });
 
-// ─── Catalogo del nuovo (Motornet) — vedi catalogo-route.js ────────────────────
-// Sezione indipendente dalla ricerca usato: marche → modelli → allestimenti → scheda.
-// Spenta se AMR_MOTORNET != 1, e in quel caso lo dichiara invece di sembrare rotta.
-require('./catalogo-route').mount(app, { clientIp });
-
 // ─── Richiami di sicurezza (Safety Gate UE) — vedi richiami-route.js ───────────
 require('./richiami-route').mount(app, { clientIp });
 
 // ─── Verifica per targa: il CAPTCHA lo risolve una persona — vedi targa.js ─────
 // Una targa per gesto umano, niente archivio, niente targhe nei log.
 require('./targa').mount(app, { json: express.json({ limit: '2kb' }) });
-
-// ─── Corrispondenze fra i cataloghi delle tre fonti — vedi ponte-route.js ──────
-// Area a se': non sostituisce ne' la ricerca ne' la scheda tecnica. I due file del ponte
-// (una decina di MB) si leggono alla PRIMA richiesta, non qui: chi non apre l'area non li paga.
-require('./ponte-route').mount(app, { clientIp });
 
 // ─── Fonti dati aperte (OSM, EPREL, bilstein, Wheel-Size) — vedi fonti-route.js ──
 require('./fonti-route').mount(app, { clientIp });
