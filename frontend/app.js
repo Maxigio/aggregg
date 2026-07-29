@@ -65,6 +65,9 @@ let confronto      = [];                       // annunci selezionati per il con
 let matrixList     = [];                        // annunci attualmente mostrati nella matrice
 let salvati        = [];
 let groupDim       = '';                        // dimensione di raggruppamento attiva ('' = nessuna)
+// Lista (densa, confrontabile) o schede (foto grande). Si ricorda: e' una preferenza di
+// come si guarda, non un pezzo della ricerca.
+let vista          = (() => { try { return localStorage.getItem('amrVista') === 'schede' ? 'schede' : 'lista'; } catch (_) { return 'lista'; } })();
 let modelCache     = {};                        // `${tipo}|${marca}` → [{nome, sites, mmmvAutoscout, slugMotoIt}]
 let selectedModel  = null;                       // modello scelto dalla force-select (con _marca) o null (testo libero)
 let sortState      = { key: 'prezzo', dir: 'asc' };
@@ -286,6 +289,12 @@ async function init() {
   facetChipsEl?.addEventListener('click', e => {
     const chip = e.target.closest('.facet-chip'); if (!chip) return;
     groupDim = chip.dataset.dim || '';
+    renderResults(currentResults);
+  });
+  document.getElementById('vistaChips')?.addEventListener('click', e => {
+    const chip = e.target.closest('.facet-chip'); if (!chip) return;
+    vista = chip.dataset.vista === 'schede' ? 'schede' : 'lista';
+    try { localStorage.setItem('amrVista', vista); } catch (_) {}
     renderResults(currentResults);
   });
   // Menu "Colonne": toggle colonne opzionali (anno/km/carb/cv) live.
@@ -2003,6 +2012,13 @@ function renderResults(results) {
   noResults.classList.add('d-none'); resultsSection.classList.remove('d-none');
   resultsCount.textContent = `${sorted.length} risultati`;
 
+  // Lista o schede: cambia solo COME si disegna la stessa fetta di annunci. Il resto
+  // (raggruppamento, ordinamento, pannello dell'annuncio, salvati, confronto) e' identico
+  // — le schede sono righe con la foto grande, non un secondo elenco con regole sue.
+  vistaChipsRender();
+  const disegna = (items, best) => vista === 'schede'
+    ? `<div class="card-grid">${items.map(r => cardHTML(r, best)).join('')}</div>`
+    : gridHeadHTML() + `<div class="result-list">${items.map(r => rowHTML(r, best)).join('')}</div>`;
   if (groupDim) {
     const groups = groupResults(sorted, groupDim);
     resultsGrid.innerHTML = groups.map(g => {
@@ -2013,12 +2029,11 @@ function renderResults(results) {
           <span class="group-title">${escapeHtml(String(g.key))}</span>
           <span class="group-meta">${g.items.length} annunci${(() => { const gm = vPricing(g.minPrezzo); return gm ? ` · da ${eurRound(gm.finale)}` : ''; })()}</span>
         </button>
-        <div class="group-body">${gridHeadHTML()}<div class="result-list">${g.items.map(r => rowHTML(r, best)).join('')}</div></div>
+        <div class="group-body">${disegna(g.items, best)}</div>
       </div>`;
     }).join('');
   } else {
-    const best = bestUrlSet(sorted);
-    resultsGrid.innerHTML = gridHeadHTML() + `<div class="result-list">${sorted.map(r => rowHTML(r, best)).join('')}</div>`;
+    resultsGrid.innerHTML = disegna(sorted, bestUrlSet(sorted));
   }
   observeEnrich();   // Moto.it: foto+spec reali quando la riga entra in viewport
   renderAltriBtn();
@@ -2225,6 +2240,55 @@ function rowHTML(item, bestSet) {
   const cells = activeCols().map(c => cell(c.key)).join('');
   // Pannello dettaglio inline (fisarmonica), sibling full-width nella .result-list.
   return `<div class="result-row${isBest ? ' best' : ''}${inConfronto ? ' selected' : ''}" data-url="${urlSafe}" style="grid-template-columns:${gridTemplate()}">${cells}</div>` +
+    `<div class="row-detail d-none" data-url="${urlSafe}" data-detail="1"></div>`;
+}
+
+function vistaChipsRender() {
+  document.querySelectorAll('#vistaChips .facet-chip').forEach(b => b.classList.toggle('active', b.dataset.vista === vista));
+}
+
+/**
+ * LA STESSA RIGA, con la foto grande. Non e' un secondo modo di mostrare gli annunci: e'
+ * lo stesso, con altre proporzioni. Classi e attributi restano quelli della riga
+ * (`data-url`, `.row-thumb`, `.row-titolo`, `.row-actions`, il `.row-detail` fratello),
+ * cosi' lightbox, pannello annuncio, salvati e confronto funzionano senza sapere che
+ * vista e' attiva — e non ci sono due strade da tenere allineate.
+ */
+function cardHTML(item, bestSet) {
+  const pr = vPricing(item.prezzo, passDi(item));
+  const urlSafe = /^https?:\/\//i.test(item.url) ? escapeHtml(item.url) : '#';
+  const imgs = Array.isArray(item.immagini) ? item.immagini : [];
+  const needEnrich = item.fonte === 'moto' && !item._enriched;
+  const enrichAttr = needEnrich ? ' data-enrich="1"' : '';
+  const foto = imgs.length
+    ? `<button type="button" class="row-thumb"${enrichAttr} title="Vedi foto"><img src="${escapeHtml(imgs[0].thumb)}" loading="lazy" referrerpolicy="no-referrer" alt=""></button>`
+    : `<div class="row-thumb noimg${needEnrich ? ' enrich' : ''}"${enrichAttr} aria-hidden="true"></div>`;
+  const conc = item.venditore && /conc/i.test(item.venditore);
+  const meta = [item.anno || null, item.km != null ? `${item.km.toLocaleString('it-IT')} km` : null,
+    item.carburante || null, item.potenzaCv != null ? `${item.potenzaCv} CV` : null].filter(Boolean).join(' · ');
+  const isSalvato = salvati.some(r => r.url === item.url);
+  const inConfronto = confronto.some(r => r.url === item.url);
+  return `<article class="ann-card${bestSet && bestSet.has(item.url) ? ' best' : ''}${inConfronto ? ' selected' : ''}" data-url="${urlSafe}">
+      <div class="ann-foto">${foto}</div>
+      <div class="ann-corpo">
+        <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}</div>
+        ${item.variante ? `<div class="ann-variante">${escapeHtml(item.variante)}</div>` : ''}
+        <div class="ann-meta">${escapeHtml(meta) || '&nbsp;'}</div>
+        <div class="ann-riga">
+          <span class="tag ${{ subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[item.fonte] || ''}">${escapeHtml(FONTE_LABEL[item.fonte] || item.fonte)}</span>
+          ${item.provincia ? `<span class="ann-dove">${escapeHtml(item.provincia)}</span>` : ''}
+          ${item.venditore ? `<span class="vend-badge vend-${conc ? 'conc' : 'priv'}">${conc ? 'Conc.' : 'Privato'}</span>` : ''}
+        </div>
+        <div class="ann-piede">
+          <span class="ann-prezzo">${pr ? eurRound(pr.finale) : 'n/d'}</span>
+          <div class="row-actions">
+            <button class="row-act btn-info" title="Dettagli e foto">${icon('info')}</button>
+            <button class="row-act btn-confronta${inConfronto ? ' attivo' : ''}" title="Aggiungi al confronto">${icon(inConfronto ? 'square-check' : 'square')}</button>
+            <button class="row-act btn-salva${isSalvato ? ' attivo' : ''}" title="${isSalvato ? 'Rimuovi dai salvati' : 'Salva annuncio'}">${icon(isSalvato ? 'bookmark-filled' : 'bookmark')}</button>
+          </div>
+        </div>
+      </div>
+    </article>` +
     `<div class="row-detail d-none" data-url="${urlSafe}" data-detail="1"></div>`;
 }
 
@@ -5644,6 +5708,18 @@ document.getElementById('pontePanel')?.addEventListener('input', e => {
 let cpVoci = null;                 // l'elenco salvato (null = mai caricato)
 let cpParchi = {};                 // id → { stato, dati }
 let cpErrore = null;
+let cpApertoId = null;             // di chi sono gli annunci che stanno nella griglia
+
+// Gli orari arrivano come li scrive Autoscout ("Mo 09:00-12:30, 14:30-19:30").
+const CP_GIORNI = { Mo: 'Lun', Tu: 'Mar', We: 'Mer', Th: 'Gio', Fr: 'Ven', Sa: 'Sab', Su: 'Dom' };
+function cpOrariHTML(orari) {
+  if (!Array.isArray(orari) || !orari.length) return '';
+  return '<div class="cp-orari">' + orari.map(o => {
+    const m = String(o).match(/^([A-Za-z]{2})\s+(.+)$/);
+    if (!m) return `<span class="cp-ora">${escapeHtml(o)}</span>`;
+    return `<span class="cp-ora"><b>${escapeHtml(voceDi(CP_GIORNI, m[1]) || m[1])}</b> ${escapeHtml(m[2])}</span>`;
+  }).join('') + '</div>';
+}
 
 const cpEl = () => document.getElementById('competitorPanel');
 const cpNum = n => (n == null ? '—' : Number(n).toLocaleString('it-IT'));
@@ -5662,7 +5738,13 @@ async function cpApri() {
   }
   cpRender();
 }
-function cpChiudi() { const el = cpEl(); if (el) { el.classList.add('d-none'); el.innerHTML = ''; } }
+function cpChiudi() {
+  // Uscendo dalla sezione, gli annunci del parco non possono restare nella griglia: la
+  // ricerca che si apre dopo troverebbe a schermo i risultati di un'altra cosa.
+  if (cpApertoId) hideResults();
+  cpApertoId = null;
+  const el = cpEl(); if (el) { el.classList.add('d-none'); el.innerHTML = ''; }
+}
 
 function cpNumeriHTML(n, troncato) {
   if (!n) return '';
@@ -5671,18 +5753,31 @@ function cpNumeriHTML(n, troncato) {
     `<div class="cp-barra"><span class="cp-barra-k">${escapeHtml(m.nome)}</span>`
     + `<span class="cp-barra-v" style="width:${Math.round(100 * m.n / (tot || 1))}%"></span>`
     + `<span class="cp-barra-n">${m.n}</span></div>`).join('');
+  const perc = q => q && q.su ? `${q.si} su ${q.su}` : null;
   return '<div class="cp-numeri">'
-    + riga('veicoli', cpNum(n.veicoli) + (n.moto ? ` <em>${n.auto} auto · ${n.moto} moto</em>` : ''))
-    + (n.prezzo ? riga('prezzo mediano', cpEur(n.prezzo.mediana) + ` <em>${cpEur(n.prezzo.min)} – ${cpEur(n.prezzo.max)}</em>`) : '')
+    // Il nuovo si conta ma non entra nelle mediane, e chi legge deve saperlo qui — non
+    // scoprirlo dopo aver confrontato il prezzo mediano di due parchi fatti diversi.
+    + riga('veicoli', cpNum(n.veicoli)
+        + ((n.auto || n.moto) ? ` <em>${n.auto} auto · ${n.moto} moto</em>` : '')
+        + (n.nuovo ? ` <em>${cpNum(n.usato)} usati · ${cpNum(n.nuovo)} nuovi, fuori dalle medie</em>` : ''))
+    + (n.prezzo ? riga('prezzo mediano', cpEur(n.prezzo.mediana)
+        + ` <em>${cpEur(n.prezzo.min)} – ${cpEur(n.prezzo.max)}</em>`
+        // "1 euro" non e' un prezzo, e' un richiamo: fuori dal minimo, ma detto.
+        + (n.prezzo.civetta ? ` <em>${n.prezzo.civetta} sotto € 300, esclusi dal minimo</em>` : '')) : '')
     + (n.anno ? riga('anno mediano', n.anno.mediana + ` <em>${n.anno.min}–${n.anno.max}</em>`) : '')
     + (n.km ? riga('km mediani', cpNum(n.km.mediana)) : '')
     // La giacenza viene solo da Autoscout: su Subito quella data si azzera a ogni
     // rilancio. Dirlo qui, non in una nota a fondo pagina che nessuno legge.
     + (n.giacenza ? riga('in vendita da', n.giacenza.mediana + ' gg'
         + ` <em>max ${n.giacenza.max} · su ${n.giacenza.su} di ${n.giacenza.suTotale}, dato Autoscout</em>`) : '')
+    // A CHI VENDE, non solo cosa tiene in piazzale. L'IVA esposta e' una scelta
+    // commerciale: a parita' di cartellino, per chi la detrae il costo e' un altro numero.
+    + (perc(n.garanzia) ? riga('con garanzia', perc(n.garanzia)) : '')
+    + (perc(n.ivaEsposta) ? riga('IVA esposta', perc(n.ivaEsposta)) : '')
     + '</div>'
-    + (n.marche && n.marche.length ? `<div class="cp-gruppo"><div class="cp-gruppo-h">Marche</div>${barre(n.marche, n.veicoli)}</div>` : '')
-    + (n.alimentazione && n.alimentazione.length ? `<div class="cp-gruppo"><div class="cp-gruppo-h">Alimentazione</div>${barre(n.alimentazione, n.veicoli)}</div>` : '')
+    + (n.marche && n.marche.length ? `<div class="cp-gruppo"><div class="cp-gruppo-h">Marche</div>${barre(n.marche, n.usato || n.veicoli)}</div>` : '')
+    + (n.carrozzeria && n.carrozzeria.length ? `<div class="cp-gruppo"><div class="cp-gruppo-h">Carrozzeria</div>${barre(n.carrozzeria, n.usato || n.veicoli)}</div>` : '')
+    + (n.alimentazione && n.alimentazione.length ? `<div class="cp-gruppo"><div class="cp-gruppo-h">Alimentazione</div>${barre(n.alimentazione, n.usato || n.veicoli)}</div>` : '')
     + (troncato ? '<div class="cp-avviso">Elenco troncato al tetto di sicurezza: questo parco e\' piu\' grande di quello mostrato.</div>' : '')
     + (n.venditori && n.venditori.length > 1
         ? `<div class="cp-avviso">Attenzione: nella risposta compaiono ${n.venditori.length} venditori diversi (${escapeHtml(n.venditori.map(v => v.nome).join(', ')).slice(0, 90)}). Il filtro della fonte non ha tenuto.</div>` : '');
@@ -5696,12 +5791,26 @@ function cpSchedaHTML(v) {
     : cpNumeriHTML(st.dati.numeri, st.dati.troncato);
   const quando = st && st.stato === 'ok' && st.dati.quando
     ? `<span class="cp-quando">dati del ${new Date(st.dati.quando).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${st.dati.daCache ? ' · dalla cache' : ''}</span>` : '';
-  return `<article class="cp-scheda${v.mio ? ' cp-mio' : ''}" data-cid="${escapeHtml(String(v.id))}">
+  const aperto = cpApertoId === v.id;
+  const tel = (v.telefoni && v.telefoni.length ? v.telefoni : [v.telefono].filter(Boolean));
+  const fatti = [
+    v.valutazione ? `<span class="cp-fatto cp-voto">★ ${String(v.valutazione.media).replace('.', ',')}<em>${v.valutazione.n} recensioni</em></span>` : '',
+    ...tel.slice(0, 2).map(t => `<a class="cp-fatto" href="tel:${escapeHtml(String(t).replace(/[^\d+]/g, ''))}">${escapeHtml(t)}</a>`),
+    v.email ? `<a class="cp-fatto" href="mailto:${escapeHtml(v.email)}">${escapeHtml(v.email)}</a>` : '',
+    v.sito ? `<a class="cp-fatto" href="${escapeHtml(v.sito)}" target="_blank" rel="noopener noreferrer">sito ↗</a>` : '',
+  ].filter(Boolean).join('');
+  return `<article class="cp-scheda${v.mio ? ' cp-mio' : ''}${aperto ? ' cp-aperto' : ''}" data-cid="${escapeHtml(String(v.id))}">
     <header class="cp-h">
-      <div class="cp-nome">${escapeHtml(v.nome)}${v.mio ? '<span class="cp-tag">il tuo</span>' : ''}</div>
-      <div class="cp-dove">${escapeHtml([v.via, v.dove].filter(Boolean).join(' · ')) || '&nbsp;'}</div>
+      <div class="cp-nome">${v.logo ? `<img class="cp-logo" src="${escapeHtml(v.logo)}" referrerpolicy="no-referrer" alt="" loading="lazy">` : ''}${escapeHtml(v.nome)}
+        <span class="tag ${{ subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[v.fonte] || ''}">${escapeHtml(FONTE_LABEL[v.fonte] || v.fonte)}</span>
+        ${v.mio ? '<span class="cp-tag">il tuo</span>' : ''}</div>
+      <div class="cp-dove">${escapeHtml([v.via, v.cap, v.dove].filter(Boolean).join(' · ')) || '&nbsp;'}</div>
+      ${fatti ? `<div class="cp-fatti">${fatti}</div>` : ''}
+      ${cpOrariHTML(v.orari)}
+      ${v.servizi && v.servizi.length ? `<div class="cp-servizi">${v.servizi.map(s => `<span class="opt-v">${escapeHtml(s)}</span>`).join('')}</div>` : ''}
       <div class="cp-azioni">
         ${quando}
+        ${st && st.stato === 'ok' ? `<button type="button" class="cp-btn cp-mostra${aperto ? ' attivo' : ''}">${aperto ? 'Annunci a schermo' : 'Vedi gli annunci'}</button>` : ''}
         <button type="button" class="cp-btn cp-aggiorna">${st && st.stato === 'ok' ? 'Aggiorna' : 'Scarica il parco'}</button>
         <a class="cp-btn cp-link" href="${escapeHtml(v.url)}" target="_blank" rel="noopener noreferrer">vetrina ↗</a>
         <button type="button" class="cp-btn cp-togli" title="Togli dall'elenco">✕</button>
@@ -5755,7 +5864,34 @@ async function cpScarica(id, forza) {
   try {
     const d = await fetch(`/api/competitor/${encodeURIComponent(id)}/parco${forza ? '?forza=1' : ''}`).then(r => r.json());
     cpParchi[id] = d.ok ? { stato: 'ok', dati: d } : { stato: 'ko', errore: d.error };
+    // L'anagrafica puo' essere stata riletta dal server (le vetrine vecchie non avevano
+    // orari, telefoni, valutazione): si prende quella, altrimenti la scheda resta magra.
+    if (d.ok && d.voce) cpVoci = (cpVoci || []).map(v => (String(v.id) === String(id) ? d.voce : v));
   } catch (_) { cpParchi[id] = { stato: 'ko', errore: 'il server non risponde' }; }
+  cpRender();
+  if (cpParchi[id].stato === 'ok') cpMostraParco(id);
+}
+
+/**
+ * GLI ANNUNCI DEL PARCO NELLA GRIGLIA DELLA RICERCA, non in una lista tutta sua.
+ *
+ * Un parco e' un elenco di annunci, e questa app sa gia' mostrarli: foto, pannello con la
+ * scheda tecnica, salvati, confronto, raggruppamenti, ordinamenti, CSV. Rifarli qui
+ * dentro avrebbe voluto dire tenerne allineate due versioni per sempre.
+ */
+function cpMostraParco(id) {
+  const st = cpParchi[id];
+  if (!st || st.stato !== 'ok' || !Array.isArray(st.dati.veicoli)) return;
+  cpApertoId = id;
+  currentResults = st.dati.veicoli;
+  searchActive = true;
+  fettaPresa = 0;
+  // Un parco arriva intero: non c'e' una fetta successiva da chiedere, e il bottone
+  // "Carica altri" qui rimanderebbe alla ricerca di prima.
+  lastSources = null;
+  document.body.classList.add('has-results');
+  initPrezzoSlider(currentResults);
+  if (!prezzoSliderInstance) renderResults(currentResults);
   cpRender();
 }
 
@@ -5763,6 +5899,9 @@ async function cpTogli(id) {
   try { await fetch(`/api/competitor/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch (_) {}
   cpVoci = (cpVoci || []).filter(v => String(v.id) !== String(id));
   delete cpParchi[id];
+  // Se a schermo c'erano i SUOI annunci, vanno via con lui: restare li' vorrebbe dire
+  // guardare il parco di un concessionario che non e' piu' in elenco.
+  if (cpApertoId === id) { cpApertoId = null; hideResults(); }
   cpRender();
 }
 
@@ -5770,6 +5909,7 @@ document.getElementById('competitorPanel')?.addEventListener('click', e => {
   const t = e.target;
   const sch = t.closest('.cp-scheda'); if (!sch) return;
   const id = sch.dataset.cid;
+  if (t.closest('.cp-mostra')) { cpMostraParco(id); return; }
   if (t.closest('.cp-aggiorna')) { cpScarica(id, !!cpParchi[id]); return; }
   if (t.closest('.cp-togli')) { cpTogli(id); return; }
 });

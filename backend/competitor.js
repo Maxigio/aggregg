@@ -82,6 +82,45 @@ function getTesto(url, redirect = 0) {
 const pulisci = s => String(s || '').replace(/\s+/g, ' ').trim();
 
 /**
+ * CHI E' il concessionario, dalla stessa pagina che stiamo gia' leggendo per l'id.
+ *
+ * Autoscout pubblica la scheda in un blocco JSON-LD (`AutoDealer`): nome, indirizzo
+ * completo, telefoni, email, valutazione con quante recensioni, orari giorno per giorno,
+ * i servizi che dichiara (officina, gommista, finanziamenti…) e il logo. Prima di questo
+ * ne leggevamo tre campi a colpi di espressione regolare, e il resto stava li' inutilizzato.
+ *
+ * Best-effort per costruzione: se un giorno quel blocco cambia forma, si torna a nome e
+ * indirizzo — non si rompe l'aggiunta di una vetrina per un orario mancante.
+ */
+function schedaAs24(html) {
+  const blocchi = String(html).match(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi) || [];
+  for (const b of blocchi) {
+    let j; try { j = JSON.parse(b.replace(/^[\s\S]*?>/, '').replace(/<\/script>$/i, '')); } catch (_) { continue; }
+    const tipi = [].concat(j['@type'] || []);
+    if (!tipi.some(t => /Dealer/i.test(t))) continue;
+    const tel = [].concat(j.telephone || [], ...[].concat(j.contactPoint || []).map(c => c.telephone || []))
+      .map(pulisci).filter(Boolean);
+    const rating = j.aggregateRating || {};
+    return {
+      cap: (j.address && j.address.postalCode) || null,
+      // I telefoni sono due (fisso e cellulare) e non sono lo stesso numero scritto due volte.
+      telefoni: [...new Set(tel)].slice(0, 3),
+      email: ([].concat(j.contactPoint || []).map(c => c.email).filter(Boolean)[0]) || null,
+      logo: typeof j.logo === 'string' ? j.logo : null,
+      foto: typeof j.image === 'string' ? j.image : null,
+      valutazione: rating.ratingValue ? { media: Number(rating.ratingValue), n: Number(rating.ratingCount || rating.reviewCount || 0) } : null,
+      orari: Array.isArray(j.openingHours) ? j.openingHours.map(pulisci).filter(Boolean) : [],
+      // Cosa fa oltre a vendere: officina, gommista, perizie. E' il pezzo che dice se e' un
+      // concorrente sullo stesso mestiere o un rivenditore e basta.
+      servizi: [].concat((j.hasOfferCatalog && j.hasOfferCatalog.itemListElement) || [])
+        .map(o => o && o.itemOffered && o.itemOffered.name).filter(Boolean).slice(0, 12),
+      descrizione: pulisci(j.description || '') || null,
+    };
+  }
+  return {};
+}
+
+/**
  * Da un URL di vetrina a { fonte, id, nome, dove }.
  * I parametri di tracciamento (gclid, srsltid, utm_*) si ignorano: conta lo slug.
  */
@@ -108,7 +147,7 @@ async function risolviVetrina(urlRaw) {
     const dove = pulisci((html.match(/"addressLocality"\s*:\s*"([^"]{2,60})"/) || [])[1]
       || (tit.match(/\bin\s+([^|]+?)\s*\|/i) || [])[1] || '');
     const via = pulisci((html.match(/"streetAddress"\s*:\s*"([^"]{3,80})"/) || [])[1] || '');
-    return { fonte: 'autoscout', id, nome, dove: dove || null, via: via || null, url };
+    return { fonte: 'autoscout', id, nome, dove: dove || null, via: via || null, url, ...schedaAs24(html) };
   }
 
   if (/subito\.it\/shops\//i.test(url) || /subito\.it\/.*\/shops\//i.test(url)) {
@@ -174,10 +213,36 @@ const marcaDi = v => {
   return t ? t.split(/\s+/)[0] : null;
 };
 
+/**
+ * Sotto questa cifra non c'e' un veicolo: c'e' un cartello. Misurato su una vetrina vera,
+ * una Tricity 125 del 2020 esposta a "1 euro" per farla comparire in cima all'ordinamento
+ * per prezzo. Con quello dentro, il "prezzo minimo" del parco e' quello del cartello.
+ * Non si butta: si toglie dal minimo e si CONTA, perche' anche sapere quanti ne usa e'
+ * un'informazione su come lavora quel concessionario.
+ */
+const PREZZO_CIVETTA = 300;
+
+/** Quanti su quanti, come frazione — chi rende decide se scriverlo in percentuale. */
+const quanti = (arr, f) => {
+  const su = arr.filter(v => f(v) != null).length;
+  return su ? { si: arr.filter(v => f(v) === true).length, su } : null;
+};
+
+/**
+ * I numeri del parco. LE MEDIANE DESCRIVONO L'USATO: un parco con dentro il nuovo da
+ * concessionario ha un prezzo mediano che non e' di nessuno dei due mercati. Il nuovo
+ * resta contato a parte, non nascosto.
+ */
 function aggrega(veicoli) {
-  const prezzi = veicoli.map(v => v.prezzo).filter(n => n > 0);
-  const anni = veicoli.map(v => v.anno).filter(n => n > 1950);
-  const km = veicoli.map(v => v.km).filter(n => n > 0);
+  const nuovi = veicoli.filter(v => v.nuovo === true);
+  // `nuovo` e' `null` quando la fonte non lo dichiara: nel dubbio sta con l'usato, che e'
+  // quello che i parchi contengono quasi sempre — non si inventa un nuovo che nessuno ha detto.
+  const usati = veicoli.filter(v => v.nuovo !== true);
+  const prezziTutti = usati.map(v => v.prezzo).filter(n => n > 0);
+  const civetta = prezziTutti.filter(n => n < PREZZO_CIVETTA).length;
+  const prezzi = prezziTutti.filter(n => n >= PREZZO_CIVETTA);
+  const anni = usati.map(v => v.anno).filter(n => n > 1950);
+  const km = usati.map(v => v.km).filter(n => n > 0);
   const oggi = Date.now();
   /**
    * GIACENZA. Solo Autoscout: li' `posted_at` e' la prima pubblicazione (misurato su un
@@ -185,19 +250,28 @@ function aggrega(veicoli) {
    * rilancio — 27 auto tutte "pubblicate oggi" — quindi da li' non si calcola, e non si
    * mette insieme alle altre facendo finta di niente.
    */
-  const gg = veicoli.filter(v => v.fonte === 'autoscout' && v.posted_at)
+  const gg = usati.filter(v => v.fonte === 'autoscout' && v.posted_at)
     .map(v => Math.round((oggi - new Date(v.posted_at)) / 86400000))
     .filter(n => Number.isFinite(n) && n >= 0);
   return {
     veicoli: veicoli.length,
+    usato: usati.length,
+    nuovo: nuovi.length,
     auto: veicoli.filter(v => v.tipo === 'auto').length,
     moto: veicoli.filter(v => v.tipo === 'moto').length,
-    prezzo: prezzi.length ? { min: Math.min(...prezzi), mediana: mediana(prezzi), max: Math.max(...prezzi) } : null,
+    prezzo: prezzi.length ? { min: Math.min(...prezzi), mediana: mediana(prezzi), max: Math.max(...prezzi), civetta } : null,
     anno: anni.length ? { mediana: mediana(anni), min: Math.min(...anni), max: Math.max(...anni) } : null,
     km: km.length ? { mediana: mediana(km) } : null,
-    giacenza: gg.length ? { mediana: mediana(gg), max: Math.max(...gg), su: gg.length, suTotale: veicoli.length } : null,
-    marche: conta(veicoli, marcaDi).slice(0, 12).map(([k, n]) => ({ nome: k, n })),
-    alimentazione: conta(veicoli, v => v.carburante).slice(0, 8).map(([k, n]) => ({ nome: k, n })),
+    giacenza: gg.length ? { mediana: mediana(gg), max: Math.max(...gg), su: gg.length, suTotale: usati.length } : null,
+    marche: conta(usati, marcaDi).slice(0, 12).map(([k, n]) => ({ nome: k, n })),
+    alimentazione: conta(usati, v => v.carburante).slice(0, 8).map(([k, n]) => ({ nome: k, n })),
+    // COME LAVORA, non solo cosa tiene in piazzale: la carrozzeria dice se fa SUV o
+    // utilitarie, la garanzia e l'IVA esposta dicono a chi vende — l'IVA esposta e' il
+    // prezzo vero per chi la detrae, ed e' una scelta commerciale, non un dato tecnico.
+    carrozzeria: conta(usati, v => v.carrozzeria).slice(0, 8).map(([k, n]) => ({ nome: k, n })),
+    cambio: conta(usati, v => v.cambio).slice(0, 4).map(([k, n]) => ({ nome: k, n })),
+    garanzia: (() => { const su = usati.filter(v => v.garanziaMesi != null).length; return su ? { si: usati.filter(v => v.garanziaMesi > 0).length, su } : null; })(),
+    ivaEsposta: quanti(usati, v => v.ivaEsposta),
     venditori: conta(veicoli, v => v.venditoreNome).map(([k, n]) => ({ nome: k, n })),
   };
 }

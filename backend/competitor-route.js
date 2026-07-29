@@ -42,6 +42,7 @@ function mount(app, deps = {}) {
     // `mio` lo decide chi aggiunge: il proprio parco e' una voce come le altre, ma va
     // distinta, altrimenti nel confronto ci si perde fra i concorrenti.
     voce.mio = !!(req.body && req.body.mio);
+    voce.schedaLetta = true;                 // appena letta: non si rilegge al primo parco
     voce.aggiunto = new Date().toISOString();
     voci.push(voce);
     C.scrivi(voci);
@@ -59,8 +60,19 @@ function mount(app, deps = {}) {
 
   app.get('/api/competitor/:id/parco', async (req, res) => {
     const id = String(req.params.id);
-    const voce = C.leggi().find(v => String(v.id) === id);
+    let voce = C.leggi().find(v => String(v.id) === id);
     if (!voce) return res.status(404).json({ ok: false, error: 'non e\' nell\'elenco' });
+    // Le vetrine salvate prima avevano tre campi: nome, dove, via. Ora la pagina ne da'
+    // molti di piu' (telefoni, orari, valutazione, servizi, logo) e chi ce l'ha gia' in
+    // elenco non deve toglierla e rimetterla per vederli: si rilegge una volta sola,
+    // quando quel parco lo si scarica comunque.
+    if (!voce.schedaLetta) {
+      try {
+        const fresca = await C.risolviVetrina(voce.url);
+        voce = { ...voce, ...fresca, id: voce.id, mio: voce.mio, aggiunto: voce.aggiunto, schedaLetta: true };
+        C.scrivi(C.leggi().map(v => (String(v.id) === id ? voce : v)));
+      } catch (_) { /* la vetrina non risponde: si va avanti con quello che c'e' */ }
+    }
     const k = voce.fonte + ':' + voce.id;
     const hit = cache.get(k);
     const forza = String(req.query.forza || '') === '1';
@@ -74,13 +86,20 @@ function mount(app, deps = {}) {
       voce,
       numeri: C.aggrega(p.veicoli),
       troncato: p.troncato,
-      veicoli: p.veicoli.map(v => ({
-        titolo: v.titolo, prezzo: v.prezzo, anno: v.anno, km: v.km, tipo: v.tipo,
-        carburante: v.carburante, url: v.url, provincia: v.provincia, postedAt: v.posted_at || null,
-      })),
+      /**
+       * L'ANNUNCIO INTERO. Qui c'era una rimappatura a otto campi che buttava via tutto il
+       * resto — foto, descrizione, versione, potenza, colore, garanzia, IVA esposta,
+       * codice di magazzino — roba che le fonti mandano nella stessa risposta e che
+       * avevamo gia' in mano. Il parco di un concessionario si guarda annuncio per
+       * annuncio, e con otto campi non si guarda niente.
+       */
+      veicoli: p.veicoli.map(v => { const { _raw, ...pulito } = v; return pulito; }),
     };
     cache.set(k, { ts: Date.now(), dati });
-    if (cache.size > 60) cache.delete(cache.keys().next().value);
+    // Un annuncio pesa ~3 KB (misurato su Autoscout: 16 annunci, 50 KB, meta' sono gli URL
+    // delle foto). Un parco al tetto sono 6 MB: sessanta in cache erano 370 MB di roba che
+    // nessuno riguarda. Otto vetrine sono piu' di quante se ne aprano in dieci minuti.
+    if (cache.size > 8) cache.delete(cache.keys().next().value);
     res.json({ ok: true, ...dati, daCache: false, quando: new Date().toISOString() });
   });
 }
