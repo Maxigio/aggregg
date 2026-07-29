@@ -416,7 +416,12 @@ async function init() {
   btnStatPdf.addEventListener('click', () => exportPdf(currentResults));
   errorClose.addEventListener('click', hideError);
   backToSearch.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-  form.addEventListener('submit', async (e) => { e.preventDefault(); if (searchMode === 'ricambi') await doRicambi(); else await doSearch(); });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (searchMode === 'ricambi') return void await doRicambi();
+    if (searchMode === 'competitor') return void await cpAggiungi();
+    await doSearch();
+  });
 
   // Nav primaria Auto · Moto · Ricambi (data-mode). Auto/Moto = ricerca veicolo (pilota il
   // radio tipo nascosto); Ricambi = pipeline parti.
@@ -863,7 +868,14 @@ function setSearchMode(mode) {
   if (!ricambi) document.getElementById('ricambiPanel').classList.add('d-none');
   if (ricambi || prev === 'ricambi') { rcData = null; currentResults = []; hideResults(); }   // ingresso/uscita ricambi → pulizia piena
   if (area(prev) && prev !== searchMode) area(prev).chiudi();
-  if (attiva) { hideResults(); attiva.apri(); return; }
+  // Competitor e' l'unica area che tiene la barra: ha una riga di campi sua.
+  document.getElementById('competitorFields').classList.toggle('d-none', searchMode !== 'competitor');
+  if (attiva) {
+    // #marca resta nascosto ma `required`: il submit nativo si bloccherebbe su un campo
+    // che non si puo' mettere a fuoco, e il bottone "Analizza" non farebbe niente.
+    document.getElementById('marca').required = false;
+    hideResults(); attiva.apri(); return;
+  }
   // Ricambi ha i suoi campi (OEM) e nasconde i campi auto (marca/modello + tipo).
   document.getElementById('ricambiFields').classList.toggle('d-none', !ricambi);
   document.querySelector('.search-fields').classList.toggle('d-none', ricambi);
@@ -5622,7 +5634,9 @@ document.getElementById('pontePanel')?.addEventListener('input', e => {
 // Il parco di un concessionario: il tuo e quello di chi ti sta intorno.
 //
 // Un concessionario e' una VETRINA, e le fonti la servono per intero — Autoscout con
-// `customer:{id}`, Subito con `uid=`. Si incolla il link e l'app ricava l'id da sola.
+// `customer:{id}`, Subito con `uid=`, Moto.it con la vetrina `dealer.moto.it/<slug>` (li'
+// il motore di ricerca non filtra per venditore: la vetrina si', ed e' servita dal server).
+// Si incolla il link e l'app ricava l'id da sola.
 //
 // IL PARCO NON SI SCARICA DA SOLO. Aprire questa sezione non costa niente: si vede
 // l'elenco salvato e basta. Il parco arriva quando lo chiedi, perche' un concessionario
@@ -5702,11 +5716,6 @@ function cpRender() {
   const voci = cpVoci || [];
   const miei = voci.filter(v => v.mio), altri = voci.filter(v => !v.mio);
   el.innerHTML = `<div class="cp-wrap">
-    <div class="cp-add">
-      <input type="text" id="cpUrl" class="field-input" placeholder="Incolla il link della vetrina — autoscout24.it/concessionari/… oppure subito.it/shops/…" />
-      <label class="cp-mio-chk"><input type="checkbox" id="cpMio"> e' il mio</label>
-      <button type="button" class="btn-cerca" id="cpAdd">Aggiungi</button>
-    </div>
     ${cpErrore ? `<div class="cp-avviso">${escapeHtml(cpErrore)}</div>` : ''}
     ${!voci.length ? '<div class="cp-att">Nessun concessionario ancora. Incolla il link di una vetrina — anche la tua.</div>' : ''}
     ${miei.map(cpSchedaHTML).join('')}
@@ -5720,14 +5729,24 @@ async function cpAggiungi() {
   if (!url) return;
   const mio = !!(document.getElementById('cpMio') || {}).checked;
   cpErrore = null;
+  // Il bottone ora sta nella barra e non viene ridisegnato: se non lo si rimette a posto
+  // resta disabilitato per sempre (prima lo "riparava" il re-render del pannello).
   const btn = document.getElementById('cpAdd'); if (btn) { btn.disabled = true; btn.textContent = 'Cerco…'; }
+  let nuova = null;
   try {
     const d = await fetch('/api/competitor', { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ url, mio }) }).then(r => r.json());
-    if (!d.ok) cpErrore = d.error || 'non riesco ad aggiungerlo';
-    else { cpVoci = (cpVoci || []).concat([d.voce]); }
+    // Gia' in elenco (409): non e' un errore da mostrare, e' quel concessionario. Si apre.
+    if (!d.ok && d.voce) { nuova = d.voce; inp.value = ''; }
+    else if (!d.ok) cpErrore = d.error || 'non riesco ad aggiungerlo';
+    else { nuova = d.voce; cpVoci = (cpVoci || []).concat([d.voce]); inp.value = ''; }
   } catch (_) { cpErrore = 'il server non risponde'; }
+  if (btn) { btn.disabled = false; btn.textContent = 'Analizza'; }
   cpRender();
+  // Incollare il link E' la richiesta: il parco si scarica subito. La regola "non si
+  // scarica da solo" vale per l'apertura della sezione, non per chi ha appena chiesto
+  // questo concessionario.
+  if (nuova) cpScarica(nuova.id);
 }
 
 async function cpScarica(id, forza) {
@@ -5749,14 +5768,10 @@ async function cpTogli(id) {
 
 document.getElementById('competitorPanel')?.addEventListener('click', e => {
   const t = e.target;
-  if (t.closest('#cpAdd')) { cpAggiungi(); return; }
   const sch = t.closest('.cp-scheda'); if (!sch) return;
   const id = sch.dataset.cid;
   if (t.closest('.cp-aggiorna')) { cpScarica(id, !!cpParchi[id]); return; }
   if (t.closest('.cp-togli')) { cpTogli(id); return; }
-});
-document.getElementById('competitorPanel')?.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && e.target.id === 'cpUrl') { e.preventDefault(); cpAggiungi(); }
 });
 
 // ─── VERIFICA PER TARGA ───────────────────────────────────────────────────────

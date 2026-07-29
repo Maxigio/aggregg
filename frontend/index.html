@@ -141,6 +141,18 @@
             <button type="submit" class="btn-cerca" id="btnRicambi">Cerca ricambio</button>
           </div>
         </div>
+
+        <!-- Campi modalità COMPETITOR: il link della vetrina di un concessionario.
+             Stava dentro il pannello, con un suo input e un suo bottone; ora e' una riga
+             di ricerca come le altre, nella stessa barra e con gli stessi stili. -->
+        <div class="cp-fields d-none" id="competitorFields">
+          <div class="rc-input-row">
+            <input type="text" id="cpUrl" class="field-input rc-input" autocomplete="off" spellcheck="false"
+                   placeholder="Link della vetrina — autoscout24.it/concessionari/… · subito.it/shops/… · dealer.moto.it/…" />
+            <button type="submit" class="btn-cerca" id="cpAdd">Analizza</button>
+          </div>
+          <label class="cp-mio-chk"><input type="checkbox" id="cpMio"> è il mio parco</label>
+        </div>
       </form>
     </section>
 

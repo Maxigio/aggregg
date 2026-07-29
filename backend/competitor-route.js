@@ -34,9 +34,11 @@ function mount(app, deps = {}) {
     catch (e) { return res.status(400).json({ ok: false, error: e.message }); }
     const voci = C.leggi();
     const chiave = voce.fonte + ':' + voce.id;
-    if (voci.some(v => v.fonte + ':' + v.id === chiave)) {
-      return res.status(409).json({ ok: false, error: `${voce.nome} e' gia' nell'elenco` });
-    }
+    // Chi reincolla lo stesso link non sta sbagliando: sta chiedendo QUEL parco. Si dice
+    // che c'era gia' e si rimanda la voce salvata, cosi' chi chiama puo' aprirla invece di
+    // lasciare l'utente davanti a un errore che non gli fa fare niente.
+    const gia = voci.find(v => v.fonte + ':' + v.id === chiave);
+    if (gia) return res.status(409).json({ ok: false, error: `${voce.nome} e' gia' nell'elenco`, voce: gia });
     // `mio` lo decide chi aggiunge: il proprio parco e' una voce come le altre, ma va
     // distinta, altrimenti nel confronto ci si perde fra i concorrenti.
     voce.mio = !!(req.body && req.body.mio);

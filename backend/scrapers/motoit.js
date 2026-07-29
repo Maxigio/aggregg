@@ -295,3 +295,6 @@ async function scrapeMotoIt(params, opts = {}) {
 module.exports = scrapeMotoIt;
 module.exports._mapCards = mapCards;   // backfill F50: re-map della card grezza in raw_json
 module.exports._extractTotal = extractTotal;   // F50 copertura
+// La vetrina del concessionario (Competitor) parla con lo stesso host e deve contare le
+// richieste nello stesso budget: una sola porta HTTP verso Moto.it, non due.
+module.exports._get = httpGetText;

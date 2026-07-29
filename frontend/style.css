@@ -1142,7 +1142,9 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
    Sezione indipendente dalla ricerca. Nel catalogo il form non serve, ma i bottoni
    dei modi devono restare: vivono DENTRO #searchForm, e nascondere l'intera sezione
    chiudeva l'utente nel catalogo senza uscita. */
-section.search.cat-attivo #searchForm > *:not(#modeToggle) { display: none; }
+/* Le AREE non hanno un form di ricerca e nascondono la barra. Competitor invece la usa:
+   il link della vetrina E' la sua ricerca, e sta nella barra come gli altri campi. */
+section.search.cat-attivo #searchForm > *:not(#modeToggle):not(#competitorFields) { display: none; }
 section.search.cat-attivo #searchForm { min-height: 0; }
 #catalogoPanel:empty { display: none; }
 .cat-wrap { border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface); padding: 12px; margin: 0 0 12px; }
@@ -1492,8 +1494,8 @@ section.search.cat-attivo #searchForm { min-height: 0; }
    nel confronto ci si perde. Nessun numero compare finche' non lo chiedi: scaricare il
    parco di un concessionario grande costa una richiesta ogni cinquanta veicoli. */
 .cp-wrap { max-width: 1100px; margin: 0 auto; padding: 4px 0 24px; }
-.cp-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
-.cp-add .field-input { flex: 1 1 340px; min-width: 0; }
+/* I campi stanno nella barra di ricerca, non nel pannello: stessa riga di Ricambi. */
+.cp-fields { display: flex; flex-direction: column; gap: 6px; }
 .cp-mio-chk { display: flex; align-items: center; gap: 5px; font-size: 0.82rem; color: var(--text-muted); white-space: nowrap; }
 .cp-att { font-size: 0.84rem; color: var(--text-muted); font-style: italic; padding: 8px 0; }
 .cp-avviso { margin-top: 8px; padding: 7px 10px; font-size: 0.78rem; color: var(--text); background: var(--surface-2); border-left: 3px solid var(--accent); border-radius: 6px; }

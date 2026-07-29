@@ -33,6 +33,7 @@ const path = require('path');
 
 const scrapeAs24 = require('./scrapers/autoscout-graphql');
 const scrapeSubito = require('./scrapers/subito-api');
+const vetrinaMoto = require('./scrapers/motoit-vetrina');
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const TIMEOUT_MS = 15000;
@@ -88,6 +89,11 @@ async function risolviVetrina(urlRaw) {
   const url = String(urlRaw || '').trim();
   if (!/^https?:\/\//i.test(url)) throw new Error('serve il link della vetrina, che comincia con https://');
 
+  // Moto.it: la vetrina non e' su moto.it ma su dealer.moto.it, e l'id e' il suo slug
+  // (non un numero). Ha una porta HTTP sua, che parla solo con quell'host.
+  const slugMoto = vetrinaMoto.slugVetrina(url);
+  if (slugMoto) return await vetrinaMoto.scheda(slugMoto);
+
   if (/autoscout24\.it\/concessionari\//i.test(url)) {
     const html = await getTesto(url);
     const id = (html.match(/"customerId"\s*:\s*"?(\d{3,})"?/) || [])[1];
@@ -117,7 +123,7 @@ async function risolviVetrina(urlRaw) {
     return { fonte: 'subito', id: uid, shopId: shop, nome, dove: null, url };
   }
 
-  throw new Error('per ora riconosco le vetrine di Autoscout (/concessionari/...) e di Subito (/shops/...)');
+  throw new Error('per ora riconosco le vetrine di Autoscout (/concessionari/...), di Subito (/shops/...) e di Moto.it (dealer.moto.it/...)');
 }
 
 /* ─── il parco ────────────────────────────────────────────────────────────── */
@@ -128,6 +134,15 @@ async function risolviVetrina(urlRaw) {
 async function parco(voce) {
   const veicoli = [];
   let troncato = false;
+
+  // Moto.it non passa dagli scraper di ricerca: quel motore non filtra per venditore, e il
+  // parco si legge dalla vetrina. Solo moto, e solo l'usato — il nuovo la fonte lo tiene
+  // in una sezione a parte, e mescolarlo qui falserebbe ogni mediana.
+  if (voce.fonte === 'moto') {
+    const r = await vetrinaMoto.parco(voce.id, { ctx: { venditoreNome: voce.nome, provincia: voce.provincia || null } });
+    return { veicoli: r.items.map(v => ({ ...v, tipo: 'moto' })), troncato: r.troncato };
+  }
+
   for (const tipo of ['auto', 'moto']) {
     const params = voce.fonte === 'autoscout'
       ? { tipo, as24Customer: voce.id }
