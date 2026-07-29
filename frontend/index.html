@@ -91,42 +91,18 @@
         </div>
         <div class="field-note" id="marcaNote"></div>
         <!--
-          UN CAMPO PER CATALOGO, non una lista sola. Le tre fonti non chiamano "versione"
-          la stessa cosa: Subito ha un id ("320d Touring Business"), Autoscout un testo
-          ("320d"), Moto.it un codice legato agli anni. Mescolarle nascondeva l'unica
-          informazione che conta davvero, cioe' QUALE fonte filtrera' se scegli quella
-          voce. Ogni campo compare solo se quel catalogo ha qualcosa per questo modello.
+          UN CAMPO SOLO, a testo libero, facoltativo.
+          Prima erano tre — uno per catalogo — perche' le fonti non chiamano "versione" la
+          stessa cosa: Subito ha un id, Autoscout un testo, Moto.it un codice legato agli
+          anni. Ma scegliere una voce da un catalogo NON sceglie la stessa nell'altro, e
+          quelle tendine promettevano una corrispondenza che non esiste.
+          Ora quello che scrivi va alle fonti com'e': Subito e Autoscout hanno una ricerca
+          testuale loro, Moto.it e' l'unica dove il testo va tradotto in un codice.
         -->
         <div class="d-none" id="versioniRow" style="margin-top:8px">
-          <div class="ver-grid">
-            <div class="ver-campo d-none" data-fonte="subito">
-              <label class="ver-lab" for="versioneSubito">Versione <span class="ver-fonte">Subito</span></label>
-              <div class="ac-wrap">
-                <input type="text" id="versioneSubito" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"
-                       class="field-input" placeholder="facoltativa" />
-                <ul id="versioneSubitoAC" class="ac-list d-none" role="listbox"></ul>
-              </div>
-              <div class="ver-vuoto d-none"></div>
-            </div>
-            <div class="ver-campo d-none" data-fonte="autoscout">
-              <label class="ver-lab" for="versioneAutoscout">Versione <span class="ver-fonte">Autoscout</span></label>
-              <div class="ac-wrap">
-                <input type="text" id="versioneAutoscout" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"
-                       class="field-input" placeholder="facoltativa" />
-                <ul id="versioneAutoscoutAC" class="ac-list d-none" role="listbox"></ul>
-              </div>
-              <div class="ver-vuoto d-none"></div>
-            </div>
-            <div class="ver-campo d-none" data-fonte="motoit">
-              <label class="ver-lab" for="versioneMotoit">Versione <span class="ver-fonte">Moto.it</span></label>
-              <div class="ac-wrap">
-                <input type="text" id="versioneMotoit" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"
-                       class="field-input" placeholder="facoltativa" />
-                <ul id="versioneMotoitAC" class="ac-list d-none" role="listbox"></ul>
-              </div>
-              <div class="ver-vuoto d-none"></div>
-            </div>
-          </div>
+          <label class="ver-lab" for="versione">Versione</label>
+          <input type="text" id="versione" autocomplete="off"
+                 class="field-input" placeholder="facoltativa — es. Highline, GTI, S line, ABS" />
         </div>
 
         <button type="button" class="adv-toggle" id="advancedToggle" aria-expanded="false">Filtri avanzati</button>

@@ -30,6 +30,7 @@ const subitoSession   = require('./scrapers/subito-session');
 const { runBootstrap } = require('./scrapers/subito-bootstrap');
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
 const { resolveMotoitModelSlug, getBrandModels, getModelBikes, resolveMotoitVersionEntry } = require('./scrapers/motoit-models');
+const motoitVersione = require('./scrapers/motoit-versione');   // testo libero → codice/slug versione Moto.it
 const { getDetail } = require('./scrapers/detail');
 const liquidita      = require('./liquidita');    // liquidita modello (ACI Autoritratto)
 const iptCalc        = require('./ipt');          // costo passaggio di proprieta per provincia
@@ -42,8 +43,6 @@ const { risolviNodo } = require('./scrapers/subito-nodo');   // testo digitato �
 const { agganciaSubito } = require('./scrapers/ponte-buchi'); // i modelli che il ponte non copriva
 const { codiciAs24, unisciCodici, famigliaSubito } = require('./scrapers/as24-modelli');   // traduzione di livello, nei due versi
 const { versioniAs24 } = require('./scrapers/as24-tassonomia');   // il catalogo versioni di AS24 (la sua tendina)
-const { versioniCheDicono, versioniDelModello } = require('./scrapers/subito-versioni');   // le versioni Subito, per id
-const { versioniDi, versioniMotoit } = require('./scrapers/versioni-unificate');           // una lista versioni per tutte e tre le fonti
 const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings, norm } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
 const regionCentroids = require('../data/region-centroids.json');  // capoluoghi regione {lat,lng} → raggio AS24 nativo
@@ -558,152 +557,6 @@ app.get('/api/models', async (req, res) => {
 //  - `modelSlug` = famiglia Moto.it scelta direttamente → bikes della famiglia.
 //  - `modelNome` = voce-catalogo (es. "Dyna Fat Bob") senza slug → risolve famiglia+versioni.
 // Ritorna `{ familySlug, versioni:[{nome,code,annoMin,annoMax}] }`.
-// ─── Versioni: UNA lista per tutte e tre le fonti ─────────────────────────────
-// Il campo versione funziona come marca e modello: si scrive libero e la tendina
-// risolve. Qui si serve l'elenco da cui la tendina pesca — unito dal ponte, non uno
-// per fonte: chi cerca scrive "abs" e vede una voce, non due con due nomi diversi.
-//
-// Raggruppato per GENERAZIONE perche' e' cosi' che il dato sta: su Subito le versioni
-// vivono sotto una serie ("Serie 3 (E46)" → "316i cat 4 porte Attiva"). Appiattirlo
-// vorrebbe dire perdere l'informazione e poi doverla indovinare.
-app.get('/api/versioni', async (req, res) => {
-  const { tipo, marca, modello, motoitSlug, mmmvAutoscout } = req.query || {};
-  if (!tipo || !['auto', 'moto'].includes(tipo)) return res.status(400).json({ error: 'tipo deve essere "auto" o "moto"' });
-  if (!marca || !String(marca).trim()) return res.status(400).json({ error: 'marca obbligatoria' });
-  const nome = modello ? String(modello).trim() : '';
-  let nodo = risolviNodo(tipo, String(marca).trim(), nome);
-  let generazioni = (nodo && nodo.famigliaIds) ? versioniDi(tipo, nodo.marcaId, nodo.generazioni) : [];
-
-  // IL MENU DEVE RISOLVERE COME LA RICERCA, non per conto suo.
-  //
-  // Le versioni stanno sotto la famiglia Subito, ma il modello che l'utente sceglie porta
-  // il nome di Autoscout, dove il motore E' il modello: "320" e "Cooper S" famiglie Subito
-  // non sono. Il menu si fermava li' e diceva che versioni non ce n'erano — falso: stanno
-  // sotto "Serie 3" e sotto "Mini", e infatti la RICERCA le trovava, perche' lei il ponte
-  // lo consulta. Due risoluzioni diverse per lo stesso veicolo, e l'utente ne vedeva una.
-  //
-  // Le due strade in piu' sono le stesse della ricerca, nello stesso ordine:
-  //   1. gli agganci scritti a mano (data/ponte-buchi.json)
-  //   2. il ponte letto al contrario: codice Autoscout → famiglia Subito
-  // Misurate sul catalogo intero: 330 modelli auto e 54 moto che prima davano menu vuoto.
-  //
-  // Quello che NON si recupera resta vuoto, ed e' giusto: misurato su un campione, la
-  // maggioranza di quei modelli (Aprilia ETX 600, Alfa Montreal, Abarth 124 GT) nel
-  // catalogo Subito non esiste proprio. Inventare un aggancio per somiglianza di nome
-  // aggancerebbe "1750" a "75" — provato, e sono due auto diverse.
-  if (!generazioni.length && nome) {
-    const buco = agganciaSubito(tipo, String(marca).trim(), nome);
-    const famiglia = (buco && buco.famigliaNome) || famigliaSubito(tipo, mmmvAutoscout);
-    if (famiglia) {
-      const alt = risolviNodo(tipo, String(marca).trim(), famiglia);
-      let g = (alt && alt.famigliaIds) ? versioniDi(tipo, alt.marcaId, alt.generazioni) : [];
-      // RISTRETTE AL MODELLO. La famiglia e' "Serie 3" ma l'utente ha chiesto "320":
-      // mostrargli tutte le 1090 versioni della famiglia — comprese 316 e 330 — sarebbe
-      // un menu che risponde a un'altra domanda. Su Subito il livello "320" non esiste,
-      // sta dentro il nome della versione, quindi si ritaglia da li'.
-      const soloSue = versioniDelModello(tipo, alt && alt.marcaId, alt && alt.famigliaIds, nome);
-      if (soloSue.size) {
-        g = g.map(x => ({ ...x, versioni: x.versioni.filter(v => v.subito && soloSue.has(String(v.subito))) }))
-             .filter(x => x.versioni.length);
-      }
-      if (g.length) { nodo = alt; generazioni = g; }
-    }
-  }
-
-  // ─── TRE CATALOGHI, TRE LISTE ───────────────────────────────────────────────
-  // Prima era una lista sola, mescolata. Ma le tre fonti non chiamano "versione" la
-  // stessa cosa, e mescolarle nascondeva proprio l'informazione che serve: quale fonte
-  // filtrera' davvero se scegli quella voce.
-  //
-  //   Subito     un id di catalogo → filtro nativo `cv`/`bv`, esatto per costruzione
-  //   Autoscout  un testo          → il suo campo `modelVersionInput`, misurato 50/50
-  //   Moto.it    un codice         → parametro `bike=`, filtro alla fonte
-  //
-  // Ognuna torna con il proprio `motivo` quando e' vuota: una lista assente e una lista
-  // vuota non sono la stessa cosa, e chi legge deve poterle distinguere.
-  const fonti = {
-    subito:    { versioni: [], motivo: null },
-    autoscout: { versioni: [], motivo: null },
-    motoit:    { versioni: [], motivo: null },
-  };
-
-  // SUBITO. Le versioni vivono sotto la generazione, e la generazione resta attaccata:
-  // "316i cat 4 porte" senza serie e' ambiguo fra E36 ed E46, e sceglieresti alla cieca.
-  const piuSerie = generazioni.filter(g => g.versioni.some(v => v.subito)).length > 1;
-  for (const g of generazioni) {
-    for (const v of g.versioni) {
-      if (!v.subito) continue;
-      fonti.subito.versioni.push({
-        id: String(v.subito), nome: v.nome,
-        nota: piuSerie ? g.nome : null,
-        anni: v.anni || null,
-      });
-    }
-  }
-  if (!fonti.subito.versioni.length) {
-    fonti.subito.motivo = nodo && nodo.famigliaIds
-      ? 'il catalogo Subito non ha versioni per questo modello'
-      : 'questo modello non e\' una voce del catalogo Subito';
-  }
-
-  // MOTO.IT. Due strade che non si contengono: le voci che il ponte ha gia' unito a
-  // Subito, piu' quelle che si trovano solo per slug — passando da una sola si
-  // perdevano 353 voci (Aprilia Pegaso 3 650, SL 1000 Falco).
-  if (tipo === 'moto') {
-    const visti = new Set();
-    for (const g of generazioni) {
-      for (const v of g.versioni) {
-        for (const code of (v.motoit || [])) {
-          if (visti.has(String(code))) continue;
-          visti.add(String(code));
-          fonti.motoit.versioni.push({ code: String(code), nome: v.nome, anni: v.anni || null });
-        }
-      }
-    }
-    if (motoitSlug) {
-      const brandHit = lookupBrand('moto', String(marca).trim());
-      const bs = (brandHit && brandHit.entry && brandHit.entry.motoit && brandHit.entry.motoit.brandSlug)
-        || resolveMotoitSlug(String(marca).trim()) || null;
-      for (const v of versioniMotoit(bs, String(motoitSlug), visti)) {
-        for (const code of (v.motoit || [])) {
-          if (visti.has(String(code))) continue;
-          visti.add(String(code));
-          fonti.motoit.versioni.push({ code: String(code), nome: v.nome, anni: v.anni || null });
-        }
-      }
-    }
-    if (!fonti.motoit.versioni.length) fonti.motoit.motivo = 'Moto.it non ha versioni per questo modello';
-  } else {
-    fonti.motoit.motivo = 'Moto.it e\' solo moto';
-  }
-
-  // AUTOSCOUT. La tendina con cui il venditore inserisce l'annuncio, letta dalla stessa
-  // API della ricerca. Una richiesta per modello, in cache 12 ore.
-  // Solo auto: alle moto quella tassonomia risponde con automobili di altre marche
-  // (verificato, vedi as24-tassonomia.js), quindi li' non si chiede proprio.
-  if (tipo === 'auto') {
-    if (modello) {
-      try {
-        for (const v of await versioniAs24(tipo, String(marca).trim(), String(modello).trim())) {
-          fonti.autoscout.versioni.push({ testo: v.testo, nome: v.testo, annunci: v.annunci, nomeCompleto: v.nome });
-        }
-      } catch (e) { console.warn('[versioni] tassonomia AS24 KO: ' + e.message); }
-      if (!fonti.autoscout.versioni.length) fonti.autoscout.motivo = 'Autoscout non ha versioni per questo modello';
-    } else fonti.autoscout.motivo = 'scegli prima un modello';
-  } else {
-    fonti.autoscout.motivo = 'Autoscout non ha un catalogo versioni per le moto';
-  }
-
-  res.set('Cache-Control', 'private, max-age=300');
-  res.json({
-    ok: true, tipo,
-    marca: nodo ? { id: nodo.marcaId, nome: nodo.marcaNome } : null,
-    modello: nodo ? { nome: nodo.famigliaNome, ids: nodo.famigliaIds, come: nodo.come } : null,
-    fonti,
-    totale: fonti.subito.versioni.length + fonti.autoscout.versioni.length + fonti.motoit.versioni.length,
-  });
-});
-
 // ─── Liquidita per MARCA: alimenta il segno accanto a ogni annuncio ───────────
 // Si serve solo la marca cercata (poche decine di modelli, non i 1.997 totali), cosi'
 // il client puo' attribuire il dato riga per riga senza scaricare tutto l'archivio.
@@ -884,8 +737,7 @@ const canonRegione = s => REGIONE_BY_NORM.get(normReg(s)) || null;
 function parseSearchParams(query) {
   const {
     tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione, raggio,
-    mmmvAutoscout, motoitBrandSlug, motoitModelSlug, motoitBikeCode,
-    versioneSubito, versioneNome, versioneAs24, fetta,
+    mmmvAutoscout, motoitBrandSlug, motoitModelSlug, motoitBikeCode, versione, fetta,
   } = query;
 
   const errors = [];
@@ -922,18 +774,18 @@ function parseSearchParams(query) {
       motoitBrandSlug:  motoitBrandSlug  || null,
       motoitModelSlug:  motoitModelSlug  || null,
       motoitBikeCode:   motoitBikeCode   || null,   // versione/allestimento Moto.it (param `bike=`)
-      // LA VERSIONE, e ogni fonte la riceve nella lingua che parla:
-      //   Subito     l'id del catalogo → parametro nativo `cv` (auto) / `bv` (moto)
-      //   Moto.it    il codice → parametro nativo `bike=`
-      //   Autoscout  il NOME, perche' li' un catalogo di versioni non esiste: la
-      //              versione e' testo scritto dal venditore, e `modelVersionInput`
-      //              cerca dentro quel testo.
-      versioneSubito:   versioneSubito   || null,
-      versioneNome:     versioneNome     || null,
-      // Il nome che Autoscout da' a questa versione nel PROPRIO catalogo, scelto dal
-      // menu. Va nel suo campo `modelVersionInput` cosi' com'e': non e' una traduzione
-      // nostra del nome di Subito, ed e' la ragione per cui li' la precisione e' piena.
-      versioneAs24:     versioneAs24     || null,
+      /**
+       * LA VERSIONE, scritta libera. Una sola, e ogni fonte la riceve come puo':
+       *   Subito     va in `q=` SOPRA gli id di marca e modello. Non e' la ricerca a
+       *              testo libero di Subito (quella sbaglia un risultato su tre): gli id
+       *              garantiscono gia' marca e modello, `q` restringe dentro.
+       *   Autoscout  va nel suo `modelVersionInput`, che e' nativo e cerca per parole
+       *              intere in AND. E' letteralmente la ricerca che faresti sul sito.
+       *   Moto.it    e' l'unica che vuole un codice, quindi l'unica dove il testo va
+       *              TRADOTTO — contro il catalogo di Moto.it, non contro un altro.
+       * 80 caratteri: oltre non e' piu' una versione, e' una frase.
+       */
+      versione:         versione ? String(versione).trim().slice(0, 80) : null,
     }
   };
 }
@@ -1062,14 +914,14 @@ function searchCacheKey(p) {
   // review: includere i param-VARIANTE (mmmv AS24, slug/versione Moto.it). Senza, due ricerche
   // che differiscono SOLO per versione Moto.it o mmmv restituivano la cache l'una dell'altra
   // (es. 'Honda CBR' senza versione poi con versione scelta → payload sbagliato per 3 min).
-  // Lo stesso morso, una seconda volta: i parametri-versione nati dopo (`versioneSubito`,
-  // `versioneNome`, `versioneAs24`) non erano qui, e cercando la stessa Golf prima con
+  // Lo stesso morso, una seconda volta: il parametro-versione nato dopo (`versione`)
+  // non era qui, e cercando la stessa Golf prima con
   // versione GTI e poi con GTD la seconda riceveva i risultati della prima per tre minuti.
   // Visto succedere: "Golf GTD" tornava sessanta GTI, con le etichette tutte "esatto".
   // Chi aggiunge un parametro che cambia i RISULTATI deve aggiungerlo anche qui.
   return ['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax',
           'regione', 'raggio', 'mmmvAutoscout', 'motoitBrandSlug', 'motoitModelSlug', 'motoitBikeCode',
-          'versioneSubito', 'versioneNome', 'versioneAs24', 'fetta']
+          'versione', 'fetta']
     .map(f => `${f}=${p[f] ?? ''}`).join('&').toLowerCase();
 }
 function cacheable(data) {
@@ -1147,7 +999,7 @@ async function runSearchCore(params) {
   // catalogo Autoscout serve lo stesso, perche' senza famiglia non c'e' nemmeno l'insieme
   // di id su cui filtrare. Visto succedere: "BMW 320" + versione "320d" tornava cento
   // annunci e nessuno marcato esatto, perche' il nodo restava vuoto.
-  if (!params.subitoNodo && (params.versioneSubito || params.versioneAs24) && params.mmmvAutoscout) {
+  if (!params.subitoNodo && params.versione && params.mmmvAutoscout) {
     const famiglia = famigliaSubito(params.tipo, params.mmmvAutoscout);
     const alt = famiglia ? risolviNodo(params.tipo, params.marca, famiglia) : null;
     if (alt && alt.famigliaIds) {
@@ -1273,52 +1125,59 @@ async function runSearchCore(params) {
     // esattamente il testo che il campo `modelVersionInput` riconosce: misurato "320d"
     // 50 annunci su 50, "Gran Turismo 320d" 50 su 50.
     //
-    // Arriva dal menu (`versioneAs24`), scelto dall'utente: non e' una nostra traduzione.
+    // Arriva dal campo versione, scritto dall'utente: non e' una nostra traduzione.
     // Se non c'e' non si manda niente, e la riga lo dichiara — vedi `etichettaAs24`.
     //
     // IL VINCOLO DA NON ROMPERE: se il testo restringesse troppo, la ricerca tornerebbe
     // vuota; il ritentativo senza testo (piu' sotto, `asRes.status === 'empty'`) deve
     // restare — e' la rete che impedisce a una versione rara di azzerare la fonte.
-    if (params.versioneAs24) {
-      params.autoscoutVersionText = [params.autoscoutVersionText, params.versioneAs24].filter(Boolean).join(' ');
-      console.log(`[server] AS24 versione dal suo catalogo: "${params.versioneAs24}"`);
-    } else if (params.tipo === 'moto' && params.versioneSubito && params.versioneNome) {
-      // LE MOTO NON HANNO LA TASSONOMIA. Il campo testo di AS24 pero' funziona anche li'
-      // — verificato su Yamaha MT-07: senza testo 15 annunci su 50 dicono ABS, con
-      // "ABS" 50 su 50 — e i nomi-versione di Subito per le moto sono allestimenti
-      // corti ("ABS", "Trail", "35kW"), non le stringhe-motorizzazione delle auto.
-      // Quelle non si mandano MAI: e' la regola fragile che abbiamo tolto.
-      //
-      // Se il nome restringesse troppo, la ricerca torna vuota e il ritentativo senza
-      // testo la riapre; quelle righe si marcano da se' "versione non verificata".
-      params.autoscoutVersionText = [params.autoscoutVersionText, params.versioneNome].filter(Boolean).join(' ');
-      console.log(`[server] AS24 moto: testo "${params.versioneNome}" dal catalogo Subito`);
+    if (params.versione) {
+      params.autoscoutVersionText = [params.autoscoutVersionText, params.versione].filter(Boolean).join(' ');
+      console.log(`[server] AS24 versione: "${params.versione}"`);
     }
   }
 
-  // E SUBITO? Una versione presa dal catalogo Autoscout un id Subito non ce l'ha, quindi
-  // `cv`/`bv` non parte: cercando "Golf" + versione "GTI" tornavano 109 Golf di cui 3 GTI.
-  // Onesto — la riga lo diceva — ma inutile in un aggregatore, che le due colonne le
-  // mette una accanto all'altra.
-  //
-  // Si usa la ricetta gia' provata sui buchi del ponte: il testo alla fonte concentra
-  // l'insieme (le Golf sono 11.646, con `q=gti` diventano 1.631) e il filtro sulla
-  // versione che l'annuncio dichiara tiene solo quelle vere. Misurata su Golf GTI:
-  // dall'1% all'88%. La differenza e' che ora il testo non me lo invento: e' il nome che
-  // Autoscout da' a quella versione, ed e' quello che l'utente ha scelto dal menu.
-  if (params.versioneAs24 && !params.versioneSubito && params.subitoNodo && params.subitoNodo.famigliaIds) {
-    params.subitoNodo = { ...params.subitoNodo, testo: params.versioneAs24 };
-    // E IL FILTRO QUI E' PER ID, NON PER TESTO. `cv` accetta un id solo (virgola 400,
-    // pipe 400, parametro ripetuto ne considera uno), quindi le 87 versioni Golf che
-    // dicono GTI non si possono chiedere insieme. Il testo va alla fonte per concentrare
-    // l'insieme; a decidere chi resta e' l'id dichiarato dall'annuncio. Cambia i casi in
-    // cui il testo e' ambiguo: "R" nel titolo pesca qualsiasi cosa, come id no.
-    const ammesse = versioniCheDicono(params.tipo, params.subitoNodo.marcaId, params.subitoNodo.famigliaIds, params.versioneAs24);
-    if (ammesse.size) {
-      params.subitoVersioniAmmesse = ammesse;
-      console.log(`[server] Subito: "${params.versioneAs24}" → ${ammesse.size} versioni del suo catalogo, filtro per id`);
-    } else {
-      console.log(`[server] Subito: "${params.versioneAs24}" non trova versioni nel catalogo Subito → resta il confronto sul testo`);
+  /**
+   * E SUBITO? Il testo va in `q=`, SOPRA gli id di marca e modello.
+   *
+   * Non e' la ricerca a testo libero di Subito — quella sbaglia un risultato su tre
+   * (misurato: 213 su 300, e su "Audi 80" zero, perche' "80" pesca dentro "180 CV" e
+   * "80.000 km"). Qui gli id garantiscono gia' marca e modello, e `q` restringe DENTRO:
+   * le Golf sono 11.646, con `q=gti` diventano 1.631.
+   *
+   * E NON FILTRIAMO NOI A VALLE. La fonte risponde, e quello che risponde si mostra:
+   * "Subito riceve quello che ho scritto" vuol dire anche che non ci mettiamo in mezzo
+   * dopo. Il controllo sul nome-versione dichiarato resta acceso solo per `nodo.testo`,
+   * che e' un'altra cosa — il modello che vive dentro una famiglia ("Golf GTI" dentro
+   * Golf) — e senza quello "Golf GTI" tornerebbe a pescare tutte le Golf.
+   */
+  if (params.versione && params.subitoNodo) {
+    params.subitoVersioneTesto = params.versione;
+    console.log(`[server] Subito: q="${params.versione}" sopra gli id di marca/modello`);
+  }
+
+  /**
+   * E MOTO.IT? E' l'unica che vuole un codice, quindi l'unica dove il testo va tradotto.
+   * Vedi backend/scrapers/motoit-versione.js per il come e per i numeri.
+   */
+  if (params.versione && params.tipo === 'moto' && params.motoitBrandSlug && params.motoitModelSlug && !params.motoitBikeCode) {
+    try {
+      const bikes = await getModelBikes(params.motoitBrandSlug, params.motoitModelSlug);
+      const r = motoitVersione.risolvi(bikes, params.versione, { marca: params.marca, modello: params.modello });
+      if (r.versioni.length === 1) {
+        params.motoitBikeCode = r.versioni[0].code;
+        console.log(`[server] Moto.it: "${params.versione}" → bike=${r.versioni[0].code} ("${r.versioni[0].nome}")`);
+      } else if (r.versioni.length > 1) {
+        // Piu' voci = la stessa moto spezzata per periodo. `bike=` ne accetta una sola,
+        // quindi non si chiede alla fonte: si tengono gli annunci il cui slug e' fra queste.
+        params.motoitSlugAmmessi = new Set(r.versioni.map(v => v.slug));
+        console.log(`[server] Moto.it: "${params.versione}" → ${r.versioni.length} versioni, filtro sullo slug dell'annuncio`);
+      } else {
+        console.log(`[server] Moto.it: "${params.versione}" non e' nel suo catalogo → nessun filtro versione`);
+      }
+      if (r.scartate.length) console.log(`[server] Moto.it: parole ignorate ${JSON.stringify(r.scartate)}`);
+    } catch (e) {
+      console.warn('[server] Moto.it versione non risolta: ' + e.message);   // la ricerca vale lo stesso
     }
   }
   // Regione AS24 NATIVA (verificato live): centroide capoluogo + raggio (default 100km,
@@ -1504,7 +1363,7 @@ async function runSearchCore(params) {
      * IL VINCOLO DA NON ROMPERE: senza versione scelta "esatto" continua a valere quello
      * che valeva — modello garantito dalla fonte — e non va declassato.
      */
-    const versioneChiesta = Boolean(params.versioneNome || params.versioneSubito || params.versioneAs24);
+    const versioneChiesta = Boolean(params.versione);
     const as24HaVistoLaVersione = Boolean(params.autoscoutVersionText);
     const etichettaAs24 = r => (versioneChiesta && !as24HaVistoLaVersione)
       ? 'versione-non-verificata'
@@ -1517,15 +1376,16 @@ async function runSearchCore(params) {
     for (const r of risultati) {
       if (r.fonte !== 'moto' || r.dichiarazione) continue;
       if (!params.motoitModelSlug) r.dichiarazione = 'senza-modello';
-      else r.dichiarazione = params.motoitBikeCode ? 'esatto' : 'senza-versione';
+      // La versione su Moto.it e' filtrata in due modi, e valgono uguale: `bike=` quando
+      // il testo ne aggancia una sola, lo slug dichiarato dall'annuncio quando ne aggancia
+      // piu' d'una (la stessa moto spezzata per periodo).
+      else r.dichiarazione = (params.motoitBikeCode || (params.motoitSlugAmmessi && params.motoitSlugAmmessi.size)) ? 'esatto' : 'senza-versione';
     }
 
-    // SUBITO, quando la versione scelta non e' sua. Le voci del catalogo Autoscout non
-    // hanno un id Subito: `cv`/`bv` non parte, quindi su Subito la versione non e' stata
-    // filtrata ne' confrontata. Vale la stessa regola di Autoscout — non si scrive
-    // "esatto" dove non si e' guardato, e la simmetria conta: e' lo stesso utente che
-    // legge le due colonne una accanto all'altra.
-    const subitoHaConfrontato = Boolean(params.versioneSubito || (params.subitoNodo && params.subitoNodo.testo));
+    // SUBITO. Stessa regola di Autoscout, e la simmetria conta perche' e' lo stesso
+    // utente che legge le due colonne affiancate: se il testo e' partito, la fonte ha
+    // filtrato; se non e' partito, non si scrive "esatto" dove non si e' guardato.
+    const subitoHaConfrontato = Boolean(params.subitoVersioneTesto || (params.subitoNodo && params.subitoNodo.testo));
     if (versioneChiesta && !subitoHaConfrontato) {
       for (const r of risultati) if (r.fonte === 'subito') r.dichiarazione = 'versione-non-verificata';
     }

@@ -24,6 +24,7 @@ const cheerio      = require('cheerio');
 
 const { kindForStatus, fail } = require('./utils');   // salute crawler (come AS24/Subito)
 const budget = require('../budget-richieste');        // conta le richieste, non le limita
+const { slugDaUrl } = require('./motoit-versione');    // lo slug-versione che l'annuncio dichiara nell'URL
 
 const BASE = 'https://www.moto.it';
 const MAX_PAGES = 3;                  // on-search: ~30 annunci (~10-13/pag), cheapest-first.
@@ -189,6 +190,22 @@ function dedup(pages) {
   return pages.flat().filter(r => { if (visti.has(r.url)) return false; visti.add(r.url); return true; });
 }
 
+/**
+ * IL FILTRO VERSIONE QUANDO `bike=` NON BASTA.
+ *
+ * Moto.it spezza la stessa moto per periodo — "MT-07 (2014-16)", "(2017-18)", "(2018-20)",
+ * "(2021-24)" sono quattro voci di catalogo. Il parametro `bike=` ne accetta UNA sola
+ * (verificato: la virgola prende la prima e ignora il resto, il pipe risponde vuoto),
+ * quindi quando il testo scritto ne aggancia piu' d'una non si puo' chiedere alla fonte.
+ *
+ * Ma non serve: ogni annuncio dichiara la propria versione nello slug dell'URL — verificato
+ * su Honda SH 125, 13 annunci e 6 slug distinti. Si filtra qui, esatto e senza richieste.
+ */
+function filtraPerSlug(items, ammessi) {
+  if (!ammessi || !ammessi.size) return items;
+  return items.filter(r => { const s = slugDaUrl(r.url); return s && ammessi.has(s); });
+}
+
 // ─── Fetch HTTPS sequenziale (cheerio) — on-search e crawler ─────────────────
 // SEQUENZIALE con delay anti-ban (mai parallelo: il burst a raffica è l'unica cosa
 // che soft-blocca). On block (403/429) → throw taggato alla salute. `opts.httpTimeoutMs`
@@ -256,7 +273,7 @@ async function scrapeMotoIt(params, opts = {}) {
   if (deep) {
     const { pages, blocked, truncated, total } = await scrapeMotoViaHttp(urls, { ...opts, httpTimeoutMs: HTTP_TIMEOUT_DEFAULT });
     if (blocked) throw fail('Moto.it-HTTP: sospetto blocco (pagina-1 vuota)', { kind: 'blocked' });
-    const risultati = dedup(pages);
+    const risultati = filtraPerSlug(dedup(pages), params.motoitSlugAmmessi);
     console.log(`[Moto.it-HTTP] OK ${risultati.length} annunci (${pages.map(p => p.length).join('+')})${truncated ? ' [troncato]' : ''}`);
     return opts.withMeta ? { items: risultati, truncated, total } : risultati;
   }
@@ -270,7 +287,7 @@ async function scrapeMotoIt(params, opts = {}) {
     console.warn('[Moto.it] on-search: sospetto blocco (pagina-1 vuota) → fonte vuota');
     return [];
   }
-  const risultati = dedup(pages);
+  const risultati = filtraPerSlug(dedup(pages), params.motoitSlugAmmessi);
   console.log(`[Moto.it] on-search OK ${risultati.length} annunci (${pages.map(p => p.length).join('+')})${truncated ? ' [troncato]' : ''}`);
   return risultati;
 }

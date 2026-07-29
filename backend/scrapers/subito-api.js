@@ -309,17 +309,27 @@ function buildPath(params, start) {
       ? NON_DICHIARATO                       // la passata di RECUPERO, vedi scrapeSubitoApi
       : valoreModello(params.tipo, nodo.famigliaIds);
     if (v) qs.set(p.modello, v);
-    if (nodo.testo) qs.set('q', String(nodo.testo));
-    // LA VERSIONE, chiesta alla fonte col SUO parametro. Subito ha `cv` nel proprio
-    // menu e il catalogo ci da' l'id: mandarlo vuol dire farsi filtrare da chi ha il
-    // dato, invece di scaricare la famiglia intera e indovinare qui.
-    // IL VINCOLO DA NON ROMPERE: chi la versione non l'ha dichiarata resta comunque
-    // visibile nel gruppo a parte — `cv` lo escluderebbe, e per questo la passata di
-    // RECUPERO (piu' sotto) non deve mai portarsi dietro questo parametro.
-    // Il parametro cambia col tipo, e sbagliarlo NON da' errore: verificato su Yamaha
-    // MT-07 "ABS" — `bv` porta 1296 annunci a 397, `cv` sulla stessa moto ne da' zero.
-    // Un tipo col parametro dell'altro svuoterebbe la ricerca in silenzio.
-    if (params.versioneSubito && !params.subitoSoloNonDichiarati) qs.set(p.versione, String(params.versioneSubito));
+    /**
+     * DUE TESTI, UNO SOLO `q`. Sono cose diverse e vanno tenute distinte:
+     *   `nodo.testo`             il MODELLO che vive dentro una famiglia ("Golf GTI"
+     *                            dentro Golf) — vedi ponte-buchi.js. Ha anche un controllo
+     *                            a valle in `riconosci`, senza il quale "Golf GTI"
+     *                            tornerebbe a pescare tutte le Golf.
+     *   `versioneTesto`          la VERSIONE scritta a mano nel campo. Restringe e basta:
+     *                            nessun controllo nostro dopo, la fonte risponde e si mostra.
+     * Insieme restringono di piu', ed e' corretto: sono due vincoli diversi.
+     */
+    const q = [nodo.testo, params.subitoVersioneTesto].filter(Boolean).join(' ').trim();
+    if (q) qs.set('q', q);
+    /**
+     * LA VERSIONE NON SI CHIEDE PIU' PER ID. `cv`/`bv` accettano un id solo e filtrano
+     * benissimo — verificato, 50 annunci su 50 dichiarano esattamente quella versione —
+     * ma il campo versione ora e' testo libero: quello che scrivi va in `q` qui sopra,
+     * e chi resta lo decide la fonte. Vedi il commento in cima a buildPath.
+     * L'id resta nel catalogo e serve altrove (la versione dedotta lo legge); qui non
+     * arriva piu' nessuno a passarlo, e un ramo che nessuno percorre e' un ramo che un
+     * giorno qualcuno riaccende senza sapere perche' era spento.
+     */
   } else {
     const q = [params.marca, params.modello].filter(Boolean).join(' ').trim();
     if (q) qs.set('q', q);
@@ -396,21 +406,8 @@ function riconosci(ad, nodo, opts = {}) {
     // le GTI, non le Golf. Qui la versione dichiarata E' il modello, quindi si guarda
     // quella. Chi non l'ha dichiarata resta marcato: `q` alla fonte gli ha gia' letto
     // il titolo. Vedi backend/scrapers/ponte-buchi.js.
-    // LA VERSIONE SCELTA VIENE PRIMA DI TUTTO. Il testo del ponte isola il modello
-    // dentro la famiglia (Golf GTI dentro Golf), ma non e' una versione e non deve
-    // sostituirla: prima lo faceva, e un annuncio con esattamente la versione chiesta
-    // veniva scartato perche' il suo nome non conteneva il token.
-    if (opts.versione) {
-      if (!dichiarata) return 'senza-versione';
-      return liv.versione.id === String(opts.versione) ? 'esatto' : null;
-    }
-    // L'INSIEME DI ID, quando la versione scelta viene da un altro catalogo. Il testo
-    // serve alla FONTE per concentrare l'insieme; qui si guarda l'id, che non ha le
-    // ambiguita' del testo — "R" nel titolo pesca qualsiasi cosa, come id no.
-    if (opts.versioniAmmesse && opts.versioniAmmesse.size) {
-      if (!dichiarata) return 'senza-versione';
-      return opts.versioniAmmesse.has(liv.versione.id) ? 'esatto' : null;
-    }
+    // IL TESTO DEL PONTE isola il modello dentro la famiglia (Golf GTI dentro Golf).
+    // NON e' il campo versione: quello va in `q` e basta, e non filtra qui.
     if (nodo.testo) {
       if (!dichiarata) return 'senza-versione';
       return diceIlTesto(nodo.testo, liv.versione.nome) ? 'esatto' : null;
@@ -484,8 +481,7 @@ async function scrapeSubitoApi(params, opts = {}) {
   const tipo = params.tipo === 'moto' ? 'moto' : (!params.tipo || params.tipo === 'auto') ? 'auto' : null;
   const gen = new Set((nodo && nodo.generazioni || []).map(g => String(g.id)));
   const titoloCombacia = faTitolo(params.modello);
-  const rico = { generazioni: gen, titoloCombacia, versione: params.versioneSubito || null,
-                 versioniAmmesse: params.subitoVersioniAmmesse || null };
+  const rico = { generazioni: gen, titoloCombacia };
   const out = [];
   let truncated = false;
   let total = null;                          // F50 count_all (tetto), additivo

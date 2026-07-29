@@ -1381,16 +1381,11 @@ section.search.cat-attivo #searchForm { min-height: 0; }
   .pn-marche-lista { max-height:120px; }
 }
 
-/* ── Versione: un campo per catalogo ──────────────────────────────────────────
-   Tre fonti, tre nozioni di "versione". Affiancarle invece di mescolarle rende
-   visibile quale filtrera' davvero: e' l'informazione che la lista unica nascondeva. */
-.ver-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; max-width: 900px; }
-.ver-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.ver-lab { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; }
-.ver-fonte { font-weight: 600; color: var(--text); }
-.ver-campo .ac-wrap { display: flex; }
-.ver-vuoto { font-size: 0.76rem; color: var(--text-muted); font-style: italic; padding: 2px 2px 0; }
-@media (max-width: 640px) { .ver-grid { grid-template-columns: 1fr; } }
+/* ── Versione: un campo solo ──────────────────────────────────────────
+   Un campo solo, a testo libero: le tre colonne per catalogo promettevano una
+   corrispondenza fra fonti che non esiste. */
+.ver-lab { display: block; font-size: 0.78rem; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; }
+#versione { max-width: 420px; }
 
 /* ── Scheda del ricambio dalla fonte OE, dentro la ricerca ricambi ────────────
    I codici stanno RAGGRUPPATI per costruttore: in piano erano trentuno pastiglie in
