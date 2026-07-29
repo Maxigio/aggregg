@@ -99,14 +99,25 @@ const pulisci = s => String(s || '').replace(/\s+/g, ' ').trim();
  * su due righe, e stampandole com'e' un negozio con la pausa pranzo occupa undici righe.
  * Si uniscono per giorno, tenendo l'ordine in cui la fonte li ha dati.
  */
+const GIORNI_ORD = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 function orariUniti(arr) {
   const per = new Map();
   for (const riga of arr) {
-    const m = String(riga).match(/^\s*([A-Za-z]{2})\s+(.+?)\s*$/);
+    // "Mo 09:00-13:00" ma anche "Mo-Fr 09:00-19:00": la forma con l'intervallo e' quella
+    // canonica dello standard, e prendendo solo la prima veniva buttata via — con un misto
+    // "Mo-Fr" + "Sa" restava il solo sabato, e la scheda diceva che il concorrente apre un
+    // giorno alla settimana. L'intervallo si apre nei giorni che contiene.
+    const m = String(riga).match(/^\s*([A-Za-z]{2})(?:\s*[-–]\s*([A-Za-z]{2}))?\s+(.+?)\s*$/);
     if (!m) continue;
-    per.set(m[1], (per.has(m[1]) ? per.get(m[1]) + ', ' : '') + m[2]);
+    const da = GIORNI_ORD.indexOf(m[1]), a = m[2] ? GIORNI_ORD.indexOf(m[2]) : da;
+    if (da < 0) continue;
+    const giorni = (a < 0 || a < da) ? [m[1]] : GIORNI_ORD.slice(da, a + 1);
+    for (const g of giorni) per.set(g, (per.has(g) ? per.get(g) + ', ' : '') + m[3]);
   }
-  return [...per.entries()].map(([g, o]) => `${g} ${o}`);
+  // In ordine di settimana: aprendo gli intervalli, l'ordine di arrivo non e' piu' quello.
+  return [...per.entries()]
+    .sort((x, y) => GIORNI_ORD.indexOf(x[0]) - GIORNI_ORD.indexOf(y[0]))
+    .map(([g, o]) => `${g} ${o}`);
 }
 
 function schedaLd(html, tipoAtteso = /Dealer/i) {
@@ -354,85 +365,4 @@ function aggrega(veicoli) {
   };
 }
 
-/* ─── lo stesso mezzo su piu' vetrine ─────────────────────────────────────── */
-/**
- * QUANTI MEZZI HA DAVVERO, contro quanti annunci mostra.
- *
- * Un concessionario espone lo stesso veicolo su tre siti, e sommando i parchi sembra averne
- * il triplo. Non c'e' nessun id in comune fra le fonti: l'accostamento si fa sui dati del
- * veicolo, e va fatto TOLLERANTE, perche' misurando i tre parchi di uno stesso
- * concessionario lo stesso mezzo NON e' descritto allo stesso modo:
- *
- *   Kawasaki Ninja 650 2025 → 8.000 km su Moto.it, 5.000 su Subito, stesso prezzo
- *   Triumph Rocket 3 GT     → 5.800 km su Moto.it, 0 (non dichiarati) su Subito
- *   Suzuki SV 650 2002      → stessi km, ma 2.300 euro su Moto.it e 1.900 su Autoscout
- *
- * Quindi: marca e anno devono combaciare, il titolo deve condividere almeno una parola che
- * non sia la marca, e poi basta che REGGA UNO fra chilometri e prezzo. Chiedere che
- * combacino tutti e due non accoppierebbe nemmeno i casi qui sopra, che sono veri.
- *
- * Un mezzo si accoppia con UNO solo per vetrina, e la coppia migliore vince: senza, la
- * stessa moto usata veniva contata due volte contro due annunci diversi della stessa fonte.
- */
-const STOP_TIT = new Set(['abs', 'the', 'con', 'del', 'pat', 'a2', 'km', 'cv', 'e', 'i', 'ii', 'iii']);
-function paroleTitolo(v) {
-  const marca = new Set(String(v.marca || '').toLowerCase().split(/[^a-z0-9]+/i).filter(Boolean));
-  return new Set(String(v.titolo || '').toLowerCase().split(/[^a-z0-9]+/i)
-    .filter(w => w.length >= 2 && !marca.has(w) && !STOP_TIT.has(w) && !/^(19|20)\d{2}$/.test(w)));
-}
-const vicino = (a, b, tolleranza) => {
-  if (a == null || b == null || a <= 0 || b <= 0) return null;   // non dichiarato: non e' ne' un si' ne' un no
-  return Math.abs(a - b) / Math.max(a, b) <= tolleranza;
-};
-
-/** Distanza fra due annunci che potrebbero essere lo stesso mezzo, o null se non lo sono. */
-function distanza(a, b) {
-  if (a.fonte === b.fonte) return null;
-  if (!a.marca || !b.marca || pulisci(a.marca).toLowerCase() !== pulisci(b.marca).toLowerCase()) return null;
-  if (!a.anno || !b.anno || a.anno !== b.anno) return null;
-  const pa = paroleTitolo(a), pb = paroleTitolo(b);
-  if (![...pa].some(w => pb.has(w))) return null;               // due modelli diversi della stessa marca
-  const kmOk = vicino(a.km, b.km, 0.25);
-  const przOk = vicino(a.prezzo, b.prezzo, 0.20);
-  if (kmOk === false && przOk === false) return null;           // discordano su tutti e due: non e' lui
-  if (kmOk === null && przOk === null) return null;             // non dichiarano ne' l'uno ne' l'altro
-  const d = (kmOk === true && a.km && b.km ? Math.abs(a.km - b.km) / Math.max(a.km, b.km) : 0.3)
-          + (przOk === true && a.prezzo && b.prezzo ? Math.abs(a.prezzo - b.prezzo) / Math.max(a.prezzo, b.prezzo) : 0.3);
-  return d;
-}
-
-/**
- * @returns {{gruppi: Array<{urls:string[], fonti:string[], titolo:string, prezzi:number[]}>, mezzi:number}}
- */
-function accoppia(veicoli) {
-  const coppie = [];
-  for (let i = 0; i < veicoli.length; i++) {
-    for (let j = i + 1; j < veicoli.length; j++) {
-      const d = distanza(veicoli[i], veicoli[j]);
-      if (d != null) coppie.push({ i, j, d });
-    }
-  }
-  coppie.sort((x, y) => x.d - y.d);
-  const preso = new Map();          // indice → chiave gruppo
-  const gruppi = new Map();
-  const fontiDi = k => new Set(gruppi.get(k).map(x => veicoli[x].fonte));
-  for (const { i, j } of coppie) {
-    const ki = preso.get(i), kj = preso.get(j);
-    if (ki != null && kj != null) continue;                                  // gia' sistemati tutti e due
-    if (ki == null && kj == null) { const k = 'g' + i; gruppi.set(k, [i, j]); preso.set(i, k); preso.set(j, k); continue; }
-    const k = ki != null ? ki : kj, nuovo = ki != null ? j : i;
-    if (fontiDi(k).has(veicoli[nuovo].fonte)) continue;                      // una vetrina, un annuncio
-    gruppi.get(k).push(nuovo); preso.set(nuovo, k);
-  }
-  const out = [...gruppi.values()].map(idx => ({
-    urls: idx.map(x => veicoli[x].url),
-    fonti: idx.map(x => veicoli[x].fonte),
-    titolo: veicoli[idx[0]].titolo,
-    anno: veicoli[idx[0]].anno,
-    prezzi: idx.map(x => veicoli[x].prezzo),
-    km: idx.map(x => veicoli[x].km),
-  }));
-  return { gruppi: out, mezzi: veicoli.length - out.reduce((n, g) => n + g.urls.length - 1, 0) };
-}
-
-module.exports = { leggi, scrivi, risolviVetrina, parco, aggrega, accoppia, _filePath: filePath, _distanza: distanza };
+module.exports = { leggi, scrivi, risolviVetrina, parco, aggrega, _filePath: filePath };

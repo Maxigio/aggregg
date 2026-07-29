@@ -61,6 +61,11 @@ const cmatrixBody = document.getElementById('cmatrixBody');
 
 // ─── Stato ────────────────────────────────────────────────────────────────────
 let currentResults = [];
+// L'ultima fetta DISEGNATA (ordinata e ristretta dal cursore del prezzo). `currentResults`
+// e' tutto lo scaricato: esportare quello significava consegnare un documento che descrive
+// un insieme diverso da quello che si sta guardando.
+let ultimiVisti = null;
+const risultatiAVista = () => (Array.isArray(ultimiVisti) && ultimiVisti.length ? ultimiVisti : currentResults);
 let confronto      = [];                       // annunci selezionati per il confronto (cap 10)
 let matrixList     = [];                        // annunci attualmente mostrati nella matrice
 let salvati        = [];
@@ -421,8 +426,16 @@ async function init() {
     if (!cmatrixPanel.classList.contains('d-none')) renderMatrix();   // tabella↔card attraversando il breakpoint
   }, 200); });
 
-  btnStatCsv.addEventListener('click', () => exportCsv(currentResults));
-  btnStatPdf.addEventListener('click', () => exportPdf(currentResults));
+  // "Carica altri annunci": il collegamento era andato perso insieme alla sezione registri
+  // (8f3501e). Il bottone c'era, la funzione c'era, il clic non arrivava a nessuno.
+  document.getElementById('caricaAltri')?.addEventListener('click', e => {
+    if (e.target.closest('button')) caricaAltri();
+  });
+  // SI ESPORTA QUELLO CHE SI STA GUARDANDO. `currentResults` e' tutto lo scaricato: con il
+  // cursore del prezzo stretto, il CSV e il PDF uscivano con annunci e statistiche di un
+  // insieme diverso da quello a schermo — e sono i documenti che escono di mano.
+  btnStatCsv.addEventListener('click', () => exportCsv(risultatiAVista()));
+  btnStatPdf.addEventListener('click', () => exportPdf(risultatiAVista()));
   errorClose.addEventListener('click', hideError);
   backToSearch.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
   form.addEventListener('submit', async (e) => {
@@ -1139,7 +1152,10 @@ async function rcCaricaOe(codice, gen) {
       + '&tipo=' + encodeURIComponent(rcVeicolo));
     const d = await r.json();
     if (gen !== rcGen) return;                       // ricerca superata: non toccare piu' niente
-    if (!r.ok || d.error) rcOe = { codice, stato: 'ko', articoli: [], motivo: d.motivo || d.error || null };
+    // La rotta risponde `ok:false` con il motivo, non `error`: cercando il campo sbagliato
+    // un blocco della fonte diventava "questo codice non e' a catalogo", che e'
+    // un'affermazione di fatto sul catalogo e non un avviso di servizio.
+    if (!r.ok || d.error || d.ok === false) rcOe = { codice, stato: 'ko', articoli: [], motivo: d.motivo || d.error || null, bloccataFino: d.bloccataFino || null };
     else rcOe = { codice, stato: 'ok', articoli: d.articoli || [], motivo: d.motivo || null };
   } catch (_) {
     if (gen !== rcGen) return;
@@ -1999,6 +2015,7 @@ function renderResults(results) {
     filtered = filtered.filter(r => r.prezzo == null || (r.prezzo >= sMin && r.prezzo <= sMax));
   }
   const sorted = sortResults([...filtered]);
+  ultimiVisti = sorted;              // quello che e' davvero a schermo: lo esportano CSV e PDF
   renderFacetChips();
 
   resultsToolbar.classList.remove('d-none');
@@ -2175,23 +2192,10 @@ const DICHIARAZIONE = {
   'versione-non-verificata': { et: 'versione non verificata', cl: 'med', tit: 'Il modello e\' quello giusto, ma su questa fonte la versione che hai scelto non si e\' potuta confrontare: potrebbe essere un altro allestimento.' },
 };
 
-/**
- * LO STESSO MEZZO, ALTRA VETRINA. Compare solo guardando un profilo unico: l'annuncio dice
- * su quali altri siti quel concessionario espone lo stesso veicolo — e a che prezzo, che
- * sui parchi veri non e' sempre lo stesso.
- */
-function ancheHTML(item) {
-  const a = item && item._anche;
-  if (!a || !a.fonti || !a.fonti.length) return '';
-  const dove = a.fonti.map(f => FONTE_LABEL[f] || f).join(', ');
-  const prezzi = [...new Set((a.prezzi || []).filter(Boolean))];
-  const diverso = prezzi.length > 1 ? ` · ${prezzi.map(p => eurRound(p)).join(' / ')}` : '';
-  return `<span class="anche-badge${diverso ? ' anche-diff' : ''}" title="${escapeHtml('Lo stesso mezzo e\' esposto anche su: ' + dove + (diverso ? ' — a prezzi diversi' : ''))}">anche su ${escapeHtml(dove)}${diverso}</span>`;
-}
-
 function rowHTML(item, bestSet) {
   const pr = vPricing(item.prezzo, passDi(item));
-  const prezzoStr = pr ? eurRound(pr.finale) : 'n/d';
+  // "su richiesta" non e' "n/d": il venditore il prezzo ce l'ha, ha scelto di non scriverlo.
+  const prezzoStr = pr ? eurRound(pr.finale) : (item.prezzoSuRichiesta ? 'su richiesta' : 'n/d');
   const fonteLabel = FONTE_LABEL[item.fonte] || item.fonte;
   const fonteTag = { subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[item.fonte] || '';
   const urlSafe = /^https?:\/\//i.test(item.url) ? escapeHtml(item.url) : '#';
@@ -2233,7 +2237,7 @@ function rowHTML(item, bestSet) {
     switch (key) {
       case 'foto':    return thumbHTML;
       case 'veicolo': return `<div class="row-main">
-          <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}${dichBadge}${ancheHTML(item)}</div>
+          <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}${dichBadge}</div>
           ${item.variante ? `<div class="row-variante">${escapeHtml(item.variante)}</div>` : ''}
           ${sub ? `<div class="row-sub">${sub}</div>` : ''}
           <div class="row-sub-m">${escapeHtml(subM)}${liqBadgeHTML(item)}</div>
@@ -2295,10 +2299,9 @@ function cardHTML(item, bestSet) {
           <span class="tag ${{ subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[item.fonte] || ''}">${escapeHtml(FONTE_LABEL[item.fonte] || item.fonte)}</span>
           ${item.provincia ? `<span class="ann-dove">${escapeHtml(item.provincia)}</span>` : ''}
           ${item.venditore ? `<span class="vend-badge vend-${conc ? 'conc' : 'priv'}">${conc ? 'Conc.' : 'Privato'}</span>` : ''}
-          ${ancheHTML(item)}
         </div>
         <div class="ann-piede">
-          <span class="ann-prezzo">${pr ? eurRound(pr.finale) : 'n/d'}</span>
+          <span class="ann-prezzo">${pr ? eurRound(pr.finale) : (item.prezzoSuRichiesta ? 'su richiesta' : 'n/d')}</span>
           <div class="row-actions">
             <button class="row-act btn-info" title="Dettagli e foto">${icon('info')}</button>
             <button class="row-act btn-confronta${inConfronto ? ' attivo' : ''}" title="Aggiungi al confronto">${icon(inConfronto ? 'square-check' : 'square')}</button>
@@ -2357,8 +2360,11 @@ function versioneDedottaRiga(r) {
   const d = r && r.versioneDedotta;
   if (!d || r.variante) return [];
   const nota = 'Non l\'ha dichiarata il venditore: e\' riconosciuta nel testo dell\'annuncio contro il catalogo Subito. ' + (d.perche || '');
-  return d.esito === 'esatta'
-    ? [['Versione (dedotta)', d.versione, nota]]
+  if (d.esito === 'esatta') return [['Versione (dedotta)', d.versione, nota]];
+  // "320d" e' la MOTORIZZAZIONE, e il catalogo lo dice da solo (e' la parola con cui apre il
+  // nome della versione). Il dato resta, l'etichetta smette di chiamarlo allestimento.
+  return d.cosa === 'motorizzazione'
+    ? [['Motorizzazione (dedotta)', d.allestimento, nota]]
     : [['Allestimento (dedotto)', d.allestimento, nota]];
 }
 
@@ -2510,9 +2516,12 @@ function vetrinaHTML(r) {
 //  - l'IPT si paga sulla provincia di RESIDENZA di chi intesta (fonte ACI), non su quella
 //    dove sta il venditore. Se l'operatore ha scelto la sua provincia si usa quella; la
 //    localita' dell'annuncio e' un ripiego, e si dice sempre quale delle due si sta usando.
+// IL TIPO LO DICE L'ANNUNCIO. Prendendolo dall'ultima ricerca, nel parco di un
+// concessionario — dove una ricerca non c'e' mai stata — una moto riceveva la tariffa
+// autoveicoli e usciva un importo credibile per un conto che sulle moto non si fa.
 function passTipo(r) {
-  const t = (lastSearchParams || {}).tipo;
-  return (t === 'moto' || r.fonte === 'moto') ? 'moto' : 'auto';
+  const t = (r && r.tipo) || (lastSearchParams || {}).tipo;
+  return (t === 'moto' || (r && r.fonte === 'moto')) ? 'moto' : 'auto';
 }
 function passProvincia(r) {
   const mia = carbProvincia();
@@ -2527,9 +2536,12 @@ async function calcolaPassaggio(r, panel) {
   const q = new URLSearchParams({ provincia: pv.testo, tipo: passTipo(r) });
   // marca e modello servono al server per cercare i kW DICHIARATI di listino invece di
   // stimarli dai CV: sulla soglia dei 53 kW la differenza e' una categoria di tariffa.
+  // Marca e modello di QUESTO annuncio; la ricerca resta solo come rete.
   const sp = lastSearchParams || {};
-  if (sp.marca) q.set('marca', sp.marca);
-  if (sp.modello) q.set('modello', sp.modello);
+  const pMarca = r.marca || sp.marca;
+  const pModello = r.modello || r.modelloDichiarato || sp.modello;
+  if (pMarca) q.set('marca', pMarca);
+  if (pModello) q.set('modello', pModello);
   if (r._passStorico) q.set('storico', '1');
   if (!pv.mia) { const z = r.zip || r.cap; if (z) q.set('cap', String(z)); }   // il CAP e' dell'annuncio
   if (r.potenzaCv > 0) q.set('cv', String(r.potenzaCv));
@@ -2836,11 +2848,15 @@ function renderDetailInto(panel, r) {
       if (h) { vehHost = h; renderVehScheda(); }
     }
   };
-  renderBody();   // apertura immediata (cover + dati on-search) → niente freeze del click
+  // SEMPRE `panel._render()`, mai `renderBody()` da fuori: il solo corpo butta via il
+  // contenitore della scheda tecnica senza riagganciarla, e siccome l'annuncio risulta
+  // ancora il suo proprietario al posto del bottone resta il vuoto — la scheda spariva e
+  // non c'era piu' modo di richiederla.
+  panel._render();   // apertura immediata (cover + dati on-search) → niente freeze del click
   // Moto.it: galleria piena + spec dalla pagina-dettaglio. Riusa enrichMotoRow (merge
   // immagini+spec, cache 12h server, aggiorna anche il thumb della riga); poi ri-rende.
   if (r.fonte === 'moto' && !r._enriched && /^https?:/.test(r.url || '')) {
-    enrichMotoRow(r.url).then(() => { if (panel.isConnected) renderBody(); });
+    enrichMotoRow(r.url).then(() => { if (panel.isConnected) panel._render(); });
   }
 }
 
@@ -3382,6 +3398,20 @@ function clearVehScheda() { vehGen++; vehData = null; vehErrore = null; vehSpecs
  * (bastava aprire il passaggio di proprieta') il bottone tornava, si ricliccava, e si
  * ripartiva da capo. Hai premuto tu: la risposta arriva, anche quando e' un no.
  */
+/**
+ * IL MODELLO SECONDO L'ANNUNCIO — ed e' l'ULTIMA scelta, non la prima.
+ *
+ * Le fonti non chiamano il modello come lo chiama il catalogo tecnico: misurato su una
+ * ricerca vera, la stessa BMW e' "Serie 3 (E90/91)" su Subito, "320" su Autoscout e
+ * "Serie 3" nel catalogo. Facendolo vincere sul modello CERCATO, la scheda non trovava piu'
+ * niente in nessuna ricerca. Vale quindi solo dove un modello cercato non c'e' — il parco di
+ * un concessionario — e il codice di generazione fra parentesi si toglie.
+ */
+function modelloAnnuncio(r) {
+  const m = (r && (r.modello || r.modelloDichiarato)) || '';
+  return String(m).replace(/\s*\(.*$/, '').trim();
+}
+
 function vehFallita(motivo) {
   vehData = null; vehSpecs = {}; vehSelUrl = null;
   vehErrore = motivo || 'Scheda tecnica non disponibile per questo annuncio.';
@@ -3413,7 +3443,10 @@ async function loadVehScheda(r, host) {
   const tipo = (r && r.tipo) || p.tipo || currentTipo();
   if (tipo !== 'auto' && tipo !== 'moto') { vehFallita('La scheda tecnica esiste solo per auto e moto.'); return; }
   const marca = (r && r.marca) || p.marca || (matchedBrand() && matchedBrand().nome) || '';
-  const modello = (r && (r.modello || r.modelloDichiarato)) || p.modello || (selectedModel && selectedModel.nome) || '';
+  // Nel parco di un concessionario la ricerca precedente non c'entra: se restasse a bordo,
+  // aprendo un Transit si chiederebbe la scheda della Serie 3 cercata mezz'ora prima.
+  const daRicerca = cpApertoId ? '' : (p.modello || (selectedModel && selectedModel.nome) || '');
+  const modello = daRicerca || modelloAnnuncio(r);
   if (!marca || !modello) { vehFallita('Questo annuncio non dichiara marca e modello: senza quelli la scheda non si compone.'); return; }
   // L'anno dell'ANNUNCIO. Prima era `annoMin || annoMax` dei filtri: un numero che parla
   // della ricerca, non del veicolo, e su una ricerca senza filtri era vuoto.
@@ -3463,7 +3496,7 @@ async function preselezionaDaAnnuncio(r, my) {
   const qs = new URLSearchParams({
     tipo: r.tipo || p.tipo || 'auto',
     marca: (r.marca || p.marca || ''),
-    modello: (r.modello || r.modelloDichiarato || p.modello || ''),
+    modello: (cpApertoId ? '' : p.modello) || modelloAnnuncio(r),
   });
   if (r.anno) qs.set('anno', r.anno);
   if (r.potenzaCv) qs.set('cv', r.potenzaCv);
@@ -3794,7 +3827,11 @@ function carbDetHTML(per100, consumo, voce, kmSt) {
 // Aggiorna le cifre gia' a schermo senza ricostruire il DOM: se ridisegnassimo, il campo dei
 // km perderebbe il fuoco a meta' del numero e l'operatore non riuscirebbe a scriverlo.
 function vehCostoAggiorna() {
-  const box = document.querySelector('#vehicleScheda .veh-costo');
+  // La scheda vive dentro l'annuncio: `#vehicleScheda` non esiste piu' da c543983, e questa
+  // funzione usciva alla prima riga — cambiavi provincia o chilometri e a schermo non si
+  // muoveva niente, mentre il passaggio di proprieta' usava subito la provincia nuova.
+  const host = vehEl();
+  const box = host && host.querySelector('.veh-costo');
   const spec = vehSpecs[vehSelUrl];
   if (!box || !spec || carbStato !== 'ok' || !carbIdx) return;
   const { consumo, famiglia } = vehConsumo(spec);
@@ -4470,11 +4507,14 @@ const modoRaggiungibile = m => !!m && !!document.querySelector(`#modeToggle .mod
 function ripristinaModo() {
   let m = null, t = null;
   try { m = localStorage.getItem('amrModo'); t = localStorage.getItem('amrModoTipo'); } catch (_) {}
+  // 'cerca' non e' un bottone della barra: i bottoni sono auto, moto, ricambi, competitor.
+  // La guardia qui sotto lo scartava sempre, quindi chi lavorava in Moto ripartiva in Auto
+  // a ogni ricaricamento — mentre Ricambi e Competitor tornavano al loro posto.
+  if (m === 'cerca') { if (t === 'moto' && modoRaggiungibile('moto')) selectPrimary('moto'); return; }
   // Una modalita' tolta dalla barra non deve tornare da localStorage: chi l'aveva salvata
   // ci resterebbe dentro senza avere il bottone per uscirne.
   if (!modoRaggiungibile(m)) return;
   if (m === 'ricambi' || area(m)) return selectPrimary(m);
-  if (m === 'cerca' && t === 'moto') return selectPrimary('moto');
 }
 
 // ─── CATALOGO ─────────────────────────────────────────────────────────────────
@@ -5938,14 +5978,7 @@ function cpGruppoHTML(g, voci) {
     : st.stato === 'carico' ? '<div class="cp-att">Scarico le vetrine…</div>'
     : st.stato === 'ko' ? `<div class="cp-att">Non riuscito: ${escapeHtml(st.errore || 'la fonte non risponde')}</div>`
     : '<div class="cp-numeri">'
-      + cpRiga('mezzi veri', `${cpNum(st.dati.mezzi)} <em>${cpNum((st.dati.veicoli || []).length)} annunci sulle ${voci.length} vetrine</em>`)
-      + cpRiga('esposti su piu\' vetrine', `${(st.dati.doppioni || []).length}`
-        + (() => {
-          // Quando lo stesso mezzo ha due prezzi, il fatto e' quello: lo stesso veicolo
-          // costa diverso a seconda del sito. Si conta, e si vede sulla riga dell'annuncio.
-          const diversi = (st.dati.doppioni || []).filter(d => new Set(d.prezzi.filter(Boolean)).size > 1).length;
-          return diversi ? ` <em>${diversi} con prezzi diversi fra una vetrina e l'altra</em>` : '';
-        })())
+      + cpRiga('annunci in tutto', `${cpNum((st.dati.veicoli || []).length)} <em>sulle ${voci.length} vetrine</em>`)
       + '</div>'
       + (st.dati.errori && st.dati.errori.length
           ? `<div class="cp-avviso">${st.dati.errori.map(e => escapeHtml(`${e.nome}: ${e.error}`)).join(' · ')}</div>` : '');
@@ -6008,13 +6041,6 @@ async function cpScaricaGruppo(g, forza) {
 function cpMostraGruppo(g) {
   const st = cpGruppi[g];
   if (!st || st.stato !== 'ok') return;
-  // "Anche su Subito": l'annuncio porta con se' su quali altre vetrine sta lo stesso mezzo,
-  // e con che prezzo. E' il pezzo che nessuna fonte da' da sola.
-  const per = new Map();
-  for (const d of st.dati.doppioni || []) {
-    d.urls.forEach((u, i) => per.set(u, { fonti: d.fonti.filter((_, k) => k !== i), prezzi: d.prezzi }));
-  }
-  for (const v of st.dati.veicoli) v._anche = per.get(v.url) || null;
   cpApertoId = 'g:' + g;
   currentResults = st.dati.veicoli;
   searchActive = true; fettaPresa = 0; lastSources = null;

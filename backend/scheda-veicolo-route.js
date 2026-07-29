@@ -412,7 +412,14 @@ async function schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, c
   const auto = cam ? (/manuale/.test(cam) ? false : /autom|sequen/.test(cam) ? true : null) : null;
   const usati = [cvN && 'potenza', fam && 'carburante', auto != null && 'cambio', carrozzeria && 'carrozzeria'].filter(Boolean);
   // I CV dichiarati e quelli di catalogo ballano di un paio: arrotondamenti kW→CV.
-  let vive = voci.filter(m => (!cvN || (m.hp && Math.abs(m.hp - cvN) <= 3))
+  /**
+   * LA POTENZA SI CONFRONTA CON CHI LA DICHIARA. Il catalogo Moto.it porta solo nome, codice
+   * e annate: senza cavalli, `m.hp` e' sempre assente e il confronto era falso per OGNI voce
+   * moto — con la potenza dell'annuncio (che sulle moto c'e' quasi sempre) non ne
+   * sopravviveva nessuna e la preselezione non riusciva mai. Ora una voce che non dichiara
+   * la potenza non viene esclusa da essa: resta in gioco e la decidono gli altri vincoli.
+   */
+  let vive = voci.filter(m => (!cvN || m.hp == null || Math.abs(m.hp - cvN) <= 3)
                            && (!fam || !carbDiverso(fam, FAM_CARB(m.fuel)))
                            && (auto == null || AUTOM_ETI.test(m.label || '') === auto));
   // Doppioni: la stessa motorizzazione compare in generazioni gemelle (Variant, facelift).

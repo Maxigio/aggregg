@@ -221,7 +221,11 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
     const { status, body } = await httpGetText(urls[i], 0, tmo);
     if (status === 403 || status === 429) throw fail(`Moto.it HTTP ${status}`, { status, kind: 'blocked' });
     if (status !== 200) {
-      if (i === 0) return { pages: [], blocked: true, truncated: false };  // pagina-1 sospetta
+      // Un 500 o un 503 NON sono un blocco: 403 e 429 sono gia' presi sopra. Dichiarandoli
+      // "blocked" il registro salute non arrivava mai a classificarli come guasti
+      // passeggeri, e una manutenzione momentanea di Moto.it faceva saltare la fonte per
+      // sei ore su tutti i target. Qui si porta fuori lo stato e chi chiama decide.
+      if (i === 0) return { pages: [], statoKo: status, truncated: false };
       break;                                                               // pagina dopo non-200 = fine
     }
     if (i === 0) total = extractTotal(body);             // tetto dalla 1ª pagina (anche se 0 card)
@@ -271,8 +275,11 @@ async function scrapeMotoIt(params, opts = {}) {
   const urls = Array.from({ length: maxPages }, (_, i) => buildUrl(params, salta + i + 1));
 
   if (deep) {
-    const { pages, blocked, truncated, total } = await scrapeMotoViaHttp(urls, { ...opts, httpTimeoutMs: HTTP_TIMEOUT_DEFAULT });
-    if (blocked) throw fail('Moto.it-HTTP: sospetto blocco (pagina-1 vuota)', { kind: 'blocked' });
+    const { pages, statoKo, truncated, total } = await scrapeMotoViaHttp(urls, { ...opts, httpTimeoutMs: HTTP_TIMEOUT_DEFAULT });
+    // L'etichetta la calcola `kindForStatus`: 5xx = passeggero, non blocco. E il messaggio
+    // non dice piu' "pagina-1 vuota", che era un residuo di codice tolto tempo fa e mandava
+    // a cercare un problema anti-bot inesistente.
+    if (statoKo) throw fail(`Moto.it-HTTP ${statoKo}`, { status: statoKo, kind: kindForStatus(statoKo) });
     const risultati = filtraPerSlug(dedup(pages), params.motoitSlugAmmessi);
     console.log(`[Moto.it-HTTP] OK ${risultati.length} annunci (${pages.map(p => p.length).join('+')})${truncated ? ' [troncato]' : ''}`);
     return opts.withMeta ? { items: risultati, truncated, total } : risultati;
@@ -280,11 +287,11 @@ async function scrapeMotoIt(params, opts = {}) {
 
   // ON-SEARCH: HTTP sequenziale gentile (come il crawler). Niente browser, niente
   // fallback. Su blocco → fonte vuota (Subito/AS24 portano la ricerca), NON crash.
-  const { pages, blocked, truncated } = await scrapeMotoViaHttp(urls, {
+  const { pages, statoKo, truncated } = await scrapeMotoViaHttp(urls, {
     pageDelayMs: ONSEARCH_DELAY_MS, httpTimeoutMs: ONSEARCH_TIMEOUT_MS,
   });
-  if (blocked) {
-    console.warn('[Moto.it] on-search: sospetto blocco (pagina-1 vuota) → fonte vuota');
+  if (statoKo) {
+    console.warn(`[Moto.it] on-search: HTTP ${statoKo} sulla prima pagina → fonte vuota`);
     return [];
   }
   const risultati = filtraPerSlug(dedup(pages), params.motoitSlugAmmessi);

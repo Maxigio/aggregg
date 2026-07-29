@@ -130,11 +130,20 @@ test('mapListing: specs ricche assenti → null (nessuna fabbricazione)', () => 
   assert.strictEqual(r.venditore, null);
 });
 
-test('mapListing: scarta onRequestOnly e prezzo nullo', () => {
+test('mapListing: "prezzo su richiesta" resta, e lo dichiara', () => {
+  // Scartandolo qui spariva anche dall'elenco degli annunci VISTI del crawler: un annuncio
+  // ancora in vetrina che toglie il cartellino veniva archiviato come venduto dopo due
+  // passate. Ora esce senza prezzo e col flag; e' il DB che lo salta (`it.prezzo == null`).
   const onReq = JSON.parse(JSON.stringify(NODE));
   onReq.details.prices.public.onRequestOnly = true;
-  assert.strictEqual(mapListing(onReq), null);
+  onReq.details.prices.public.amountInEUR = null;
+  const r = mapListing(onReq);
+  assert.ok(r, 'l\'annuncio non si butta');
+  assert.strictEqual(r.prezzo, null);
+  assert.strictEqual(r.prezzoSuRichiesta, true);
+  assert.ok(r.url);
 
+  // Il prezzo assente SENZA "su richiesta" resta scartato: li' non sappiamo cosa manchi.
   const noPrice = JSON.parse(JSON.stringify(NODE));
   noPrice.details.prices.public.amountInEUR = null;
   assert.strictEqual(mapListing(noPrice), null);

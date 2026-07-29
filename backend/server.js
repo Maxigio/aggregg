@@ -1230,8 +1230,10 @@ async function runSearchCore(params) {
   // meglio "ti mostro anche il modello imparentato, segnalato" che una schermata vuota.
   let asRes = asRes0, as24Allargato = false;
   if (params.autoscoutVersionText && asRes.status === 'empty') {
+    // La fetta va ripassata: senza, il riallargamento ripartiva sempre dalla prima pagina, e
+    // dal secondo "Carica altri" in poi da Autoscout tornavano solo annunci gia' visti.
     const retry = await runSource(
-      scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null, autoscoutSpellings: null }, { withMeta: true }), TIMEOUT_MS, 'Autoscout24');
+      scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null, autoscoutSpellings: null }, { withMeta: true, fetta: params.fetta || 0 }), TIMEOUT_MS, 'Autoscout24');
     if (retry.items.length) { asRes = retry; as24Allargato = true; }
   }
 

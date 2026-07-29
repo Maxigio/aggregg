@@ -147,10 +147,14 @@ async function getBrandModels(brandSlug) {
         })
         .filter(Boolean);
     } catch (e) {
+      // L'errore SALE, cosi' `cached` non lo mette in memoria: una lista vuota restituita qui
+      // ci sarebbe rimasta dodici ore, e un timeout sarebbe diventato "questa marca non ha
+      // modelli" fino a domani. Chi chiama continua a vedere una lista vuota (`.catch` sotto):
+      // cambia solo che al prossimo tentativo si riprova davvero.
       console.warn(`[motoit-models] models ${brandSlug}: ${e.message}`);
-      return [];
+      throw e;
     }
-  });
+  }).catch(() => []);
 }
 
 /** Versioni di un modello: [{name, code}]. `code` (opaco) = il param `bike=`. */
@@ -176,10 +180,12 @@ async function getModelBikes(brandSlug, modelSlug) {
         .map(d => { if (!d.value) return null; const name = String(d.text || '').trim(); return { name, code: String(d.value), ...parseYears(name) }; })
         .filter(Boolean);
     } catch (e) {
+      // Stesso motivo di `models`: un errore di rete non e' un catalogo vuoto da tenere
+      // in memoria mezza giornata. Sale per non finire in cache, e si spegne qui.
       console.warn(`[motoit-models] bikes ${brandSlug}|${modelSlug}: ${e.message}`);
-      return [];
+      throw e;
     }
-  });
+  }).catch(() => []);
 }
 
 /**

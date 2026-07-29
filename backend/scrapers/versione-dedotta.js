@@ -285,14 +285,49 @@ function deduci(versioni, ann) {
    */
   const trovati = new Set();
   for (const v of vivi) for (const t of v.trims) if (titolo.includes(' ' + t + ' ')) trovati.add(t);
-  // Una sola. Due parole d'allestimento diverse nello stesso testo vogliono dire che non
-  // si sta leggendo l'allestimento: si sta leggendo la prosa del venditore.
-  if (trovati.size !== 1) return null;
-  const trim = [...trovati][0];
+  /**
+   * LA SIGLA DEL MOTORE NON E' UN ALLESTIMENTO, E IL CATALOGO LO DICE DA SOLO.
+   *
+   * "320d Touring Futura" porta due parole — `320d` e `futura` — e la regola qui sotto
+   * taceva, perdendo la risposta giusta. Serviva un modo di riconoscere la sigla senza
+   * indovinarla dalla forma: e' il POSTO in cui sta. Subito apre il nome della versione con
+   * la motorizzazione ("320d cat Touring MSport", "118d 5p. Sport"), l'allestimento no.
+   *
+   * Misurato su 797 annunci veri di 8 modelli (BMW Serie 1/3/5, Golf, Panda, A3, Giulietta,
+   * Focus): 122 parole-sigla su 122 aprono il nome, 44 parole-allestimento su 44 quasi mai
+   * (3 eccezioni, di cui "fire" che il motore Fiat lo e' davvero). Contro le versioni
+   * dichiarate dagli annunci: 190 risposte → 196, giuste 172 → 178, sbagliate 18 → 18,
+   * nessuna risposta persa.
+   *
+   * Vale solo quando c'e' un'alternativa: se la sigla e' l'unica parola trovata resta lei,
+   * altrimenti si perderebbero anche le sigle che sono davvero il nome della versione (RS3).
+   */
+  const apreIlNome = t => {
+    const conT = vivi.filter(v => v.trims.includes(t));
+    if (!conT.length) return false;
+    const primo = nome => { for (const w of norm(nome).split(' ')) { if (!w) continue; if (/^\d+([.,]\d+)?$/.test(w)) continue; return w; } return null; };
+    return conT.filter(v => primo(v.nome) === t).length / conT.length > 0.8;
+  };
+  let cand = [...trovati];
+  if (cand.length > 1) {
+    const veri = cand.filter(t => !apreIlNome(t));
+    if (veri.length) cand = veri;
+  }
+  // Due parole d'allestimento diverse nello stesso testo vogliono dire che non si sta
+  // leggendo l'allestimento: si sta leggendo la prosa del venditore.
+  if (cand.length !== 1) return null;
+  const trim = cand[0];
   const conTrim = vivi.filter(v => v.trims.includes(trim));
   if (!conTrim.length) return null;
   const etichetta = comeScritto(conTrim[0].nome, trim);
+  /**
+   * E SI DICE COS'E'. Quando la parola rimasta e' quella che apre il nome di catalogo, e'
+   * la MOTORIZZAZIONE, non l'allestimento — misurato: 118 delle 147 risposte su 797 annunci
+   * veri erano "320d", "118d", "330d" stampate sotto la parola "Allestimento". Il dato e'
+   * giusto (Subito la versione la chiama proprio cosi'), a mentire era l'etichetta.
+   */
   return { esito: 'allestimento', allestimento: etichetta, quante: conTrim.length,
+           cosa: apreIlNome(trim) ? 'motorizzazione' : 'allestimento',
            perche: conTrim.length === 1
              ? 'unica versione compatibile con quello che l\'annuncio dichiara'
              : conTrim.length + ' versioni compatibili, tutte ' + etichetta };

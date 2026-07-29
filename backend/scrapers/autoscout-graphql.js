@@ -272,9 +272,17 @@ function mapListing(node, opts = {}) {
   const dt = node && node.details;
   if (!dt) return null;
   const pub = dt.prices && dt.prices.public;
-  if (pub && pub.onRequestOnly) return null;          // scarta "prezzo su richiesta"
+  /**
+   * "PREZZO SU RICHIESTA" NON E' UN ANNUNCIO DA BUTTARE. Scartandolo qui spariva anche
+   * dall'elenco degli annunci VISTI che il crawler passa a `markGone`: un annuncio ancora
+   * in vetrina che toglieva il cartellino risultava non visto per due passate e finiva
+   * archiviato come venduto, con tanto di data di uscita. Ora esce con il prezzo a `null` e
+   * lo dichiara — il DB lo salta da solo (`listings-repo.js`: `it.prezzo == null` → skip),
+   * ma resta fra i visti e nessuno lo dichiara venduto.
+   */
+  const suRichiesta = !!(pub && pub.onRequestOnly);
   const prezzo = pub && pub.amountInEUR ? pub.amountInEUR.raw : null;
-  if (prezzo == null) return null;
+  if (prezzo == null && !suRichiesta) return null;
 
   const v = dt.vehicle || {};
   const c = v.classification || {};
@@ -323,6 +331,7 @@ function mapListing(node, opts = {}) {
     fonte: 'autoscout',
     titolo,
     prezzo,
+    prezzoSuRichiesta: suRichiesta || null,   // il cartellino c'e', il numero no: si dice
     km: v.condition && v.condition.mileageInKm ? v.condition.mileageInKm.raw : null,
     anno: yearOf(v.condition && v.condition.firstRegistrationDate && v.condition.firstRegistrationDate.formatted),
     carburante: (() => {

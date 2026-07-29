@@ -462,7 +462,16 @@ const RECUPERO_TTL = 10 * 60 * 1000;
 const recuperoCache = new Map();   // `${tipo}|${marcaId}` → { ts, ads }
 
 async function paginaRecupero(params) {
-  const chiave = `${params.tipo}|${params.subitoNodo.marcaId}`;
+  /**
+   * LA CHIAVE DEVE CONTENERE TUTTO QUELLO CHE ENTRA NELLA RICHIESTA. Con `tipo|marca` la
+   * stessa lista veniva riusata per dieci minuti anche cambiando regione, prezzo, anno,
+   * chilometri o testo: cerchi, stringi un filtro, ricerchi, e ti torna la lista di prima.
+   * Sui chilometri, che a valle non si ricontrollano per scelta, entravano annunci fuori
+   * dal filtro impostato.
+   */
+  const chiave = [params.tipo, params.subitoNodo.marcaId, params.regione, params.prezzoMin, params.prezzoMax,
+    params.annoMin, params.annoMax, params.kmMin, params.kmMax, params.sort,
+    params.subitoVersioneTesto, (params.subitoNodo && params.subitoNodo.testo) || ''].join('|');
   const hit = recuperoCache.get(chiave);
   if (hit && Date.now() - hit.ts < RECUPERO_TTL) return hit.ads;
   const page = await fetchPage({ ...params, subitoSoloNonDichiarati: true }, 0);

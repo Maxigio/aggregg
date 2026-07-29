@@ -19,8 +19,17 @@ const cleanEbayTitle = t => String(t || '')
   .replace(/\s+/g, ' ').trim();
 
 // "EUR 50,00" / "EUR 1.234,56" → numero. Pura (testabile).
+/**
+ * SOLO EURO, e scritto all'italiana. Qui serve eBay.it: un importo in dollari o in sterline
+ * non e' un prezzo da convertire a occhio, ed e' anche formattato al contrario — provato,
+ * "US $1,234.56" con questa lettura diventava 1,23, e usciva marcato "EUR". Meglio nessun
+ * prezzo che un prezzo di mille volte sbagliato nella valuta sbagliata.
+ */
+const ALTRA_VALUTA = /(\$|£|\bUSD\b|\bGBP\b|\bCHF\b)/i;
 function parsePrezzoEur(s) {
-  const m = String(s || '').match(/(\d{1,3}(?:\.\d{3})*|\d+)(?:,(\d{2}))?/);
+  const t = String(s || '');
+  if (ALTRA_VALUTA.test(t)) return null;
+  const m = t.match(/(\d{1,3}(?:\.\d{3})*|\d+)(?:,(\d{2}))?/);
   if (!m) return null;
   const n = parseFloat(m[1].replace(/\./g, '') + '.' + (m[2] || '00'));
   return isFinite(n) ? n : null;
@@ -88,7 +97,13 @@ function normalizzaVal(v) {
 let _ctx = null, _warm = false;
 async function getCtx() {
   const browser = await getBrowser();
-  if (_ctx) { try { _ctx.pages(); return _ctx; } catch { _ctx = null; _warm = false; } }
+  // `pages()` su una sessione chiusa NON lancia: torna una lista vuota. Il ramo di recupero
+  // era quindi irraggiungibile, e dopo un crash di Chromium restava un browser nuovo
+  // accoppiato a una sessione morta: eBay spento fino al riavvio dell'applicazione.
+  // Il controllo sul browser serve perche' `getBrowser()` puo' averne creato uno nuovo:
+  // una sessione del browser precedente e' morta anche se non risulta chiusa.
+  if (_ctx && !_ctx.isClosed?.() && _ctx.browser() === browser) return _ctx;
+  if (_ctx) { _ctx = null; _warm = false; }
   _ctx = await browser.newContext({ userAgent: UA, locale: 'it-IT', viewport: { width: 1280, height: 900 } });
   return _ctx;
 }

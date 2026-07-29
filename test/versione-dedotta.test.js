@@ -176,3 +176,42 @@ test('nel corpo vale solo un nome che porta un allestimento', () => {
   const r = deduci(cat, ann({ titolo: 'AUDI A3 Sportback', descrizione: 'ottimo stato, motore 2.0 TDI' }));
   assert.notEqual(r && r.esito, 'esatta');
 });
+
+test('la sigla del motore non copre l\'allestimento: "530xd Touring Futura" e\' una Futura', () => {
+  // Caso vero, dagli annunci: la risposta giusta c'era e veniva buttata perche' nel titolo
+  // comparivano DUE parole conosciute — la sigla del motore e l'allestimento. La sigla si
+  // riconosce da dove sta: Subito apre con lei il nome della versione.
+  const versioni = preparaVersioni([
+    '530xd cat Touring Futura', '530xd cat Touring Eletta', '530xd cat Touring',
+    '520d cat Touring Futura', '525d cat Touring Attiva',
+  ], 'Serie 5');
+  const r = deduci(versioni, ann({ titolo: 'Bmw 530xd Touring Futura' }));
+  assert.ok(r, 'una risposta ci deve essere');
+  assert.equal(r.esito, 'allestimento');
+  assert.match(r.allestimento, /futura/i);
+});
+
+test('se la sigla e\' l\'unica parola conosciuta, resta lei', () => {
+  // Senza questo, sparirebbero anche le sigle che SONO il nome della versione (Audi RS3).
+  const versioni = preparaVersioni(['RS3 SPB 2.5 TFSI quattro S tronic', 'A3 SPB 1.6 TDI Business'], 'A3');
+  // cambio automatico: la voce di catalogo e' una "S tronic", e un annuncio dichiarato
+  // manuale la escluderebbe prima di arrivare all'allestimento.
+  const r = deduci(versioni, ann({ titolo: 'Audi RS3 Sportback', carburante: 'Benzina', cambio: 'Automatico' }));
+  assert.ok(r);
+  assert.match(r.allestimento, /rs3/i);
+});
+
+test('la sigla si dichiara come motorizzazione, non come allestimento', () => {
+  // 118 risposte su 147 (misurate su 797 annunci veri) erano "320d", "118d", "330d" stampate
+  // sotto la parola "Allestimento". Il dato e' giusto, l'etichetta no.
+  const versioni = preparaVersioni([
+    '320d cat Touring MSport', '320d cat Touring', '318d cat Touring Futura',
+  ], 'Serie 3');
+  const sigla = deduci(versioni, ann({ titolo: 'Bmw 320d e91' }));
+  assert.ok(sigla);
+  assert.equal(sigla.cosa, 'motorizzazione');
+  const trim = deduci(versioni, ann({ titolo: 'Bmw 318d Touring Futura' }));
+  assert.ok(trim);
+  assert.equal(trim.cosa, 'allestimento');
+  assert.match(trim.allestimento, /futura/i);
+});

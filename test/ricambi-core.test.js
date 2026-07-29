@@ -217,6 +217,11 @@ test('parsePrezzoEur: formati IT', () => {
   assert.strictEqual(parsePrezzoEur('EUR 1.234,56'), 1234.56);
   assert.strictEqual(parsePrezzoEur('EUR 30,00 a EUR 45,00'), 30);
   assert.strictEqual(parsePrezzoEur(''), null);
+  // Serve eBay.it: un importo in un'altra valuta e' anche formattato al contrario, e letto
+  // all'italiana "US $1,234.56" diventava 1,23 — marcato euro. Meglio nessun prezzo.
+  assert.strictEqual(parsePrezzoEur('US $1,234.56'), null);
+  assert.strictEqual(parsePrezzoEur('$89.99'), null);
+  assert.strictEqual(parsePrezzoEur('GBP 45.00'), null);
 });
 
 test('isPlaceholder: scarta gli slot pubblicitari della serp', () => {

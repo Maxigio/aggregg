@@ -1570,10 +1570,6 @@ select.cp-unisci { max-width: 190px; }
 .cp-grp-fonti { display: flex; gap: 4px; flex-wrap: wrap; }
 .cp-grp .cp-scheda { background: var(--surface); }
 .cp-grp .cp-numeri { margin-bottom: 10px; }
-/* "anche su Subito · € 1.900 / € 2.300": lo stesso mezzo altrove, e a che prezzo. */
-.anche-badge { display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 0.7rem; border-radius: 999px;
-  color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--line); white-space: nowrap; }
-.anche-badge.anche-diff { color: var(--accent); border-color: var(--accent); }
 .cp-aperto { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .cp-btn { padding: 4px 10px; font-size: 0.8rem; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; text-decoration: none; }
 .cp-btn:hover { border-color: var(--accent); color: var(--accent); }

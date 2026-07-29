@@ -135,8 +135,13 @@ function mount(app, deps = {}) {
   });
 
   /**
-   * Il parco di un GRUPPO di vetrine: i tre elenchi insieme, piu' l'unica cosa che nessuna
-   * fonte da' da sola — quanti mezzi ha davvero contro quanti annunci mostra.
+   * Il parco di un GRUPPO di vetrine: i suoi elenchi, uno dietro l'altro.
+   *
+   * Qui c'era anche l'accostamento dello stesso mezzo fra vetrine diverse ("40 annunci, 16
+   * veicoli"). E' stato tolto: senza un identificativo in comune fra le fonti quel giudizio
+   * si regge su marca, anno, titolo, chilometri e prezzo, e su un parco vero di scooter due
+   * mezzi diversi con la stessa cilindrata finivano nello stesso veicolo. Meglio nessun
+   * numero che un numero che sembra buono.
    */
   app.get('/api/competitor/gruppo/:g/parco', async (req, res) => {
     const g = String(req.params.g);
@@ -149,13 +154,10 @@ function mount(app, deps = {}) {
       catch (e) { errori.push({ id: v.id, nome: v.nome, error: e.message }); }
     }
     const veicoli = parti.flatMap(p => p.veicoli);
-    const acc = C.accoppia(veicoli);
     res.json({
       ok: true, gruppo: g, errori,
       parti: parti.map(p => ({ voce: p.voce, numeri: p.numeri, storico: p.storico, troncato: p.troncato, quando: p.quando, daCache: p.daCache })),
       numeri: C.aggrega(veicoli),
-      mezzi: acc.mezzi,
-      doppioni: acc.gruppi,
       veicoli,
     });
   });
