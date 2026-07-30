@@ -233,7 +233,43 @@ function resolveMoto({ marca, modello, anno }) {
 }
 
 // marca+modello(+anno|gen) → { title, marca, modello, generations[], gen, motorizzazioni[] }
-async function resolveScheda({ tipo, marca, modello, anno, genSlug }) {
+/**
+ * IL NOME DEL MODELLO SENZA LA GENERAZIONE CHE LA FONTE GLI ATTACCA.
+ *
+ * Subito non scrive "Golf": scrive "Golf 5ª serie", "Panda 3ª serie", "Serie 3 (E90/91)".
+ * Il catalogo tecnico ha "Golf" e "Serie 3", quindi con il nome cosi' com'e' non trovava
+ * niente. Misurato su 120 annunci veri di sei modelli: 74 volte su 120 la scheda rispondeva
+ * "modello non a catalogo", e togliendo questo suffisso scendono a 11.
+ *
+ * Sta QUI e non nel frontend perche' vale per ogni chiamante — la griglia, il parco di un
+ * concessionario, la preselezione — e perche' la generazione, quando serve, si legge dal nome
+ * grezzo prima di questa pulizia (vedi `schedaPerAnnuncio`).
+ */
+const senzaGenerazione = m => String(m == null ? '' : m)
+  .replace(/\s*\(.*$/, '')                        // "Serie 3 (E90/91)"
+  .replace(/\s+\d+[ªa°]?\s*serie\b.*$/i, '')      // "Golf 5ª serie"
+  .trim();
+
+/** Quella stessa generazione, letta invece di buttata: "5ª serie" → V, "(E90/91)" → [E90,E91]. */
+const ROMANI = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+function generazioneDichiarata(modello) {
+  const s = String(modello == null ? '' : modello);
+  const n = s.match(/\s(\d+)[ªa°]?\s*serie\b/i);
+  const c = s.match(/\(([^)]+)\)/);
+  return {
+    romano: n && ROMANI[Number(n[1])] ? ROMANI[Number(n[1])] : null,
+    codici: c ? c[1].split(/[\/,\s]+/).filter(x => /^[A-Za-z0-9]{2,6}$/.test(x)) : [],
+  };
+}
+
+/** La cilindrata in litri, da dove la fonte l'ha messa. Le etichette del catalogo la scrivono
+ *  cosi' ("1.9 TDI 105 Hp"), tranne su BMW dove al suo posto c'e' la sigla ("320d"). */
+const litri = t => { const m = String(t == null ? '' : t).match(/\b([0-9])[.,]([0-9])\b/); return m ? Number(m[1] + '.' + m[2]) : null; };
+/** Le sigle-motore scritte nell'annuncio: "320d", "116d", "340i". */
+const sigleMotore = t => [...new Set((String(t == null ? '' : t).toLowerCase().match(/\b\d{2,4}[a-z]{1,3}\b/g) || []))];
+
+async function resolveScheda({ tipo, marca, modello: modelloGrezzo, anno, genSlug }) {
+  const modello = senzaGenerazione(modelloGrezzo) || modelloGrezzo;
   if (tipo === 'moto') return (await resolveMotoit({ marca, modello, anno })) || resolveMoto({ marca, modello, anno });
   if (tipo && tipo !== 'auto') return { unsupported: true };
   const idx = loadIndex();
@@ -365,7 +401,8 @@ function generazioneCompatibile(nome, carrozzeria) {
   return !GEN_FAMIGLIA.test(n) && !GEN_APERTA.test(n) && !GEN_MONOV.test(n);
 }
 
-async function schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria, titolo }) {
+async function schedaPerAnnuncio({ tipo, marca, modello: modelloGrezzo, anno, cv, carburante, cambio, carrozzeria, titolo, variante, cilindrata }) {
+  const modello = senzaGenerazione(modelloGrezzo) || modelloGrezzo;
   const base = await resolveScheda({ tipo, marca, modello, anno });
   if (!base || base.unsupported || base.notFound) return { ok: false, motivo: 'modello non a catalogo' };
 
@@ -432,15 +469,36 @@ async function schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, c
     const p = gens.filter(g => generazioneCompatibile(g.name, carrozzeria));
     if (p.length) gens = p;
   }
+  /**
+   * LA GENERAZIONE CHE L'ANNUNCIO DICHIARA. Subito la scrive nel nome del modello e finora la
+   * buttavamo: "Golf 5ª serie" e' la V, "Serie 3 (E90/91)" e' la E90 o la E91. Restringe le
+   * generazioni da aprire, quindi taglia anche le richieste.
+   *
+   * Le due lingue non combaciano allo stesso modo per tutte le marche — misurato: il catalogo
+   * tecnico usa il numero romano su Volkswagen, Fiat, Ford e Renault, il codice telaio su BMW,
+   * il codice progetto ("8V") su Audi, dove "4ª serie" non ha nessun ponte con "8V". Quindi
+   * questo aggancio riesce su alcune marche e non su altre, e quando non riesce si ignora.
+   */
+  const gd = generazioneDichiarata(modelloGrezzo);
+  const gensTutte = gens;
+  if ((gd.romano || gd.codici.length) && gens.length > 1) {
+    const p = gens.filter(g => gd.codici.some(c => new RegExp('\\b' + c + '\\b', 'i').test(g.name))
+      || (gd.romano && new RegExp('\\b' + gd.romano + '\\b').test(g.name)));
+    if (p.length) gens = p;
+  }
   // Il tetto resta una richiesta per generazione: sei bastano; oltre, l'anno e la
   // carrozzeria non stanno restringendo niente e la scelta e' tua.
-  let voci = (base.motorizzazioni || []).slice();
-  for (const g of gens.slice(0, 6)) {
-    try {
-      const d = await resolveScheda({ tipo, marca, modello, genSlug: g.slug });
-      for (const m of (d && d.motorizzazioni) || []) voci.push({ ...m, gen: g.name, genSlug: g.slug });
-    } catch (_) { /* una generazione che non si apre non deve far cadere le altre */ }
-  }
+  const apri = async (quali) => {
+    const voci = (base.motorizzazioni || []).slice();
+    for (const g of quali.slice(0, 6)) {
+      try {
+        const d = await resolveScheda({ tipo, marca, modello, genSlug: g.slug });
+        for (const m of (d && d.motorizzazioni) || []) voci.push({ ...m, gen: g.name, genSlug: g.slug });
+      } catch (_) { /* una generazione che non si apre non deve far cadere le altre */ }
+    }
+    return voci;
+  };
+  let voci = await apri(gens);
   if (!voci.length) return { ok: false, motivo: 'nessuna motorizzazione a catalogo' };
 
   /**
@@ -469,7 +527,43 @@ async function schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, c
   // Doppioni: la stessa motorizzazione compare in generazioni gemelle (Variant, facelift).
   const visti = new Set();
   vive = vive.filter(m => { const k = m.url; if (visti.has(k)) return false; visti.add(k); return true; });
+  /**
+   * LA RETE SOTTO LA GENERAZIONE. Quel filtro taglia PRIMA di aprire le generazioni, quindi
+   * quando sbaglia — e su Audi sbaglia per costruzione, "4ª serie" non e' "(8V)" — la
+   * motorizzazione giusta non viene nemmeno scaricata, e un annuncio che prima finiva in
+   * griglia finiva a mani vuote. Misurato: un caso su 120. Qui si riapre tutto e si rifa' il
+   * conto, cosi' un vincolo puo' solo aggiungere risposte, mai togliere.
+   */
+  if (!vive.length && gens !== gensTutte) {
+    voci = await apri(gensTutte);
+    vive = voci.filter(m => (!cvN || m.hp == null || Math.abs(m.hp - cvN) <= 3)
+                         && (!fam || !carbDiverso(fam, FAM_CARB(m.fuel)))
+                         && (auto == null || AUTOM_ETI.test(m.label || '') === auto));
+    const visti2 = new Set();
+    vive = vive.filter(m => { const k = m.url; if (visti2.has(k)) return false; visti2.add(k); return true; });
+  }
   if (!vive.length) return { ok: false, motivo: 'nessuna motorizzazione del catalogo combacia con ' + (usati.join(' e ') || 'questo annuncio') };
+
+  /**
+   * DUE VINCOLI IN PIU', E OGNUNO SI IGNORA SE SVUOTA.
+   *
+   * La cilindrata e la sigla-motore stanno nell'annuncio ma non nei campi: la prima nel campo
+   * nativo di Autoscout o dentro la versione ("1.6 TDI Highline"), la seconda nel titolo
+   * ("320d"). Sono complementari per marca, ed e' per questo che valgono solo insieme —
+   * misurato su 117 annunci: la cilindrata da sola non guadagna NIENTE (i cavalli hanno gia'
+   * fatto quel lavoro), la sigla porta 19 riconoscimenti a 27, tutti e tre insieme a 39.
+   *
+   * La regola dello scarto e' quella di sempre e qui vale come garanzia: un filtro che
+   * azzererebbe le candidate viene ignorato, quindi nessun annuncio che oggi si riconosce
+   * puo' peggiorare — un vincolo puo' solo togliere candidate, e se le toglie tutte non conta.
+   */
+  const stringi = (v, f) => { const q = v.filter(f); return q.length ? q : v; };
+  // La cilindrata: dal campo nativo (Autoscout la manda in cm³) o dal testo della versione.
+  const cc = (Number(cilindrata) > 300 ? Math.round(Number(cilindrata) / 100) / 10 : null)
+    || litri(variante) || litri(titolo);
+  if (cc) vive = stringi(vive, m => { const c = litri(m.label); return c == null || Math.abs(c - cc) < 0.05; });
+  const sg = sigleMotore(`${titolo || ''} ${variante || ''}`);
+  if (sg.length) vive = stringi(vive, m => sg.some(s => String(m.label || '').toLowerCase().includes(s)));
 
   /**
    * LA GENERAZIONE, quando le candidate sono tutte la stessa. Scegliere fra due
@@ -477,8 +571,44 @@ async function schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, c
    * condividono non lo e' — e salta una griglia da decine di voci.
    */
   const gs = [...new Set(vive.map(m => m.genSlug).filter(Boolean))];
+
+  /**
+   * QUANDO LE CANDIDATE SONO LO STESSO MOTORE.
+   *
+   * Misurato: delle 78 volte in cui restano piu' candidate, in 50 (il 64%) hanno cilindrata,
+   * potenza e carburante IDENTICI — "1.9 TDI 105 Hp DSG", "1.9 TDI 105 Hp manual 6 speed",
+   * "1.9 TDI 105 Hp manual 5 speed". Quattordici righe per un motore solo, che si distinguono
+   * per cambio, trazione e sigle commerciali (bmt, bluemotion). E la distinzione l'annuncio non
+   * la porta: nessun venditore scrive "manual 5 speed".
+   *
+   * Quindi non si sceglie e non si mostra un elenco muto: si DICE che il motore e' quello, e si
+   * dice cosa resta da distinguere. Il motore e' identificato, l'allestimento no, e la
+   * differenza fra le due cose e' esattamente quello che chi guarda deve sapere.
+   */
+  let stessoMotore = null;
+  if (vive.length > 1) {
+    const chiave = m => `${litri(m.label) || ''}|${m.hp || ''}|${norm(m.fuel || '')}`;
+    if (new Set(vive.map(chiave)).size === 1) {
+      const parole = l => String(l || '').toLowerCase().split(/[^a-z0-9.]+/).filter(Boolean);
+      const insiemi = vive.map(m => parole(m.label));
+      const comuni = insiemi[0].filter(w => insiemi.every(t => t.includes(w)));
+      const differenze = [...new Set(vive.map(m => parole(m.label).filter(w => !comuni.includes(w)).join(' ')).filter(Boolean))];
+      // Il nome del motore si scrive come lo scrive il catalogo ("1.9 TDI 105 Hp"), non
+      // minuscolo: la lista di parole comuni serve al confronto, non alla lettura.
+      const suo = String(vive[0].label || '').split(/[^A-Za-z0-9.]+/).filter(Boolean);
+      stessoMotore = {
+        quante: vive.length,
+        motore: suo.filter(w => comuni.includes(w.toLowerCase())).join(' ') || (vive[0].label || ''),
+        cv: vive[0].hp || null,
+        carburante: vive[0].fuel || null,
+        differenze: differenze.slice(0, 8),
+      };
+    }
+  }
+
   return {
     ok: true,
+    stessoMotore,
     source: base.source,
     genUnica: gs.length === 1 ? gs[0] : null,
     scelta: vive.length === 1 ? vive[0] : null,
@@ -498,11 +628,15 @@ function mount(app, deps = {}) {
     // Il titolo dell'annuncio serve SOLO alle moto: e' da li' che si legge la variante
     // ("ABS", "Moto Cage", "Rally"), l'unica cosa che il periodo di produzione non separa.
     const titolo = String((req.query || {}).titolo || '').slice(0, 120);
+    // La versione e la cilindrata dichiarate dall'annuncio: servono ai due vincoli in piu'
+    // (cilindrata e sigla-motore), che sulle auto valgono solo insieme alla generazione.
+    const variante = String((req.query || {}).variante || '').slice(0, 120);
+    const cilindrata = String((req.query || {}).cilindrata || '').slice(0, 8);
     if (!marca || !modello) return res.status(400).json({ error: 'marca/modello mancanti' });
-    const key = `ann:${tipo}|${norm(marca)}|${norm(modello)}|${anno || ''}|${cv || ''}|${norm(carburante)}|${norm(cambio)}|${norm(carrozzeria)}|${norm(titolo)}`;
+    const key = `ann:${tipo}|${norm(marca)}|${norm(modello)}|${anno || ''}|${cv || ''}|${norm(carburante)}|${norm(cambio)}|${norm(carrozzeria)}|${norm(titolo)}|${norm(variante)}|${cilindrata}`;
     const hit = cacheGet(key); if (hit != null) return res.json(hit);
     try {
-      const out = await schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria, titolo });
+      const out = await schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria, titolo, variante, cilindrata });
       cacheSet(key, out, out.ok ? PAGE_TTL : EMPTY_TTL);
       res.json(out);
     } catch (_) { res.json({ ok: false, motivo: 'scheda non disponibile' }); }

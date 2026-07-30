@@ -1496,3 +1496,10 @@ select.cp-unisci { max-width: 190px; }
 .veh-mis-link { font-size: 0.76rem; font-weight: 400; color: var(--accent); text-decoration: none; }
 .veh-mis-b + .veh-mis-b { margin-top: 8px; }
 .veh-mis-bh { font-size: 0.74rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 2px; }
+
+/* Il motore e' identificato, l'allestimento no: si scrive, invece di mostrare quattordici
+   righe che si distinguono per il cambio. */
+.veh-motore-uno { margin: 0 0 8px; padding: 8px 10px; border-left: 3px solid var(--accent);
+  background: var(--surface-2); border-radius: 6px; font-size: 0.82rem; line-height: 1.5; }
+.veh-motore-uno b { display: block; color: var(--text); }
+.veh-motore-uno span { color: var(--text-muted); font-size: 0.78rem; }

@@ -53,3 +53,7 @@ data/osm-territorio-cache.json
 data/eprel-cache.json
 data/bilstein-cache.json
 data/wheelsize-cache.json
+
+# La landing showcase e' un repo A SE': ha la sua storia git e si pubblica da sola
+# (netlify.toml). Committandola qui git salverebbe un puntatore vuoto, non i file.
+landing/

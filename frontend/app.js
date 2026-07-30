@@ -3396,7 +3396,10 @@ let vehErrore = null;   // perche' la scheda non si e' potuta fare: si scrive, n
 // `vehData.modello` diventa il nome di quella ("Golf Cabriolet"): cercare le prove con
 // quello non trovava niente, mentre il modello vero ("Golf") le trova tutte.
 let vehModelloBase = '';
-function clearVehScheda() { vehGen++; vehData = null; vehErrore = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; vehRichiami = null; vehOmoStato = {}; vehMisure = null; vehProva = null; vehAddonAperto = false; const el = vehEl(); if (el) el.innerHTML = ''; vehHost = null; vehHostUrl = null; }   // vehGen++ invalida le fetch in volo; i richiami sono del veicolo cercato, non si tengono
+// Quando le candidate sono LO STESSO MOTORE: il server lo calcola sull'annuncio, e la griglia
+// lo scrive invece di mostrare quattordici righe che si distinguono per il cambio.
+let vehStessoMotore = null;
+function clearVehScheda() { vehGen++; vehData = null; vehErrore = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; vehRichiami = null; vehOmoStato = {}; vehMisure = null; vehProva = null; vehStessoMotore = null; vehAddonAperto = false; const el = vehEl(); if (el) el.innerHTML = ''; vehHost = null; vehHostUrl = null; }   // vehGen++ invalida le fetch in volo; i richiami sono del veicolo cercato, non si tengono
 
 /**
  * LA SCHEDA CHE NON SI PUO' FARE LO DEVE DIRE.
@@ -3462,7 +3465,7 @@ async function loadVehScheda(r, host) {
   vehModelloBase = modello;
   vehSchedaCollapsed = false;  // l'hai aperta tu dall'annuncio: si apre
   vehXf.compare = null; vehXf.q = ''; vehXf.highlight = new Set(); vehGenChosen = false; vehShowAll = false;   // reset per ricerca (traduci/unità restano preferenze)
-  vehRichiami = null; vehOmoStato = {}; vehMisure = null; vehProva = null; vehAddonAperto = false;   // richiami e misure sono di QUEL veicolo: cambiando annuncio ripartono
+  vehRichiami = null; vehOmoStato = {}; vehMisure = null; vehProva = null; vehStessoMotore = null; vehAddonAperto = false;   // richiami e misure sono di QUEL veicolo: cambiando annuncio ripartono
   // La targa NON e' un parametro di ricerca: non filtra gli annunci e non va alle fonti.
   // Si legge qui e resta nel browser, cosi' non finisce nemmeno nella chiave di cache.
   targaCercata = String((document.getElementById('targaFiltro') || {}).value || '')
@@ -3505,7 +3508,9 @@ async function preselezionaDaAnnuncio(r, my) {
   const qs = new URLSearchParams({
     tipo: r.tipo || p.tipo || 'auto',
     marca: (r.marca || p.marca || ''),
-    modello: (cpApertoId ? '' : p.modello) || modelloAnnuncio(r),
+    // GREZZO: "Golf 5ª serie" porta dentro la generazione, e il server la legge prima di
+    // ripulire il nome. Ripulendolo qui, quell'informazione la buttavamo via.
+    modello: (cpApertoId ? '' : p.modello) || r.modello || r.modelloDichiarato || '',
   });
   if (r.anno) qs.set('anno', r.anno);
   if (r.potenzaCv) qs.set('cv', r.potenzaCv);
@@ -3515,10 +3520,19 @@ async function preselezionaDaAnnuncio(r, my) {
   // Il titolo: sulle moto e' da li' che si legge la variante, e il periodo di produzione da
   // solo non la separa. Misurato: 71 risposte giuste 65 con il solo anno, 157 su 157 con
   // anno + titolo (verita' esatta = lo slug versione nell'URL dell'annuncio Moto.it).
-  if (r.tipo === 'moto' && r.titolo) qs.set('titolo', r.titolo);
+  if (r.titolo) qs.set('titolo', r.titolo);
+  // Versione e cilindrata dell'annuncio: sulle auto sono i due vincoli che, insieme alla
+  // generazione, portano i riconoscimenti da 19 a 39 su 117 (misurato). Sulle moto il titolo
+  // serve alla variante, il resto non c'entra.
+  if (r.variante) qs.set('variante', r.variante);
+  if (r.cilindrata) qs.set('cilindrata', r.cilindrata);
   try {
     const d = await fetch('/api/scheda-veicolo/annuncio?' + qs).then(x => x.json());
     if (mio !== vehGen || !d || !d.ok) return;
+    // Anche quando non si sceglie, il server ha qualcosa da dire: se le candidate sono lo
+    // stesso motore, la griglia lo scrive invece di far scegliere fra righe quasi identiche.
+    vehStessoMotore = d.stessoMotore || null;
+    if (vehStessoMotore) renderVehScheda();
     // La generazione si apre anche senza una motorizzazione scelta, purche' le candidate
     // stiano tutte li': non e' una scelta al posto tuo, e' una griglia in meno da leggere.
     const gen = (d.scelta && d.scelta.genSlug) || d.genUnica;
@@ -4163,7 +4177,24 @@ function vehMotoCardHTML(m, sug) {
 }
 function vehMotoGridHTML(tipo) {
   const list = (vehData && vehData.motorizzazioni) || [];
-  return vehCardGrid(list, vehMotoCardHTML, 'veh-moto-grid', `Scegli ${tipo === 'moto' ? "l'annata / allestimento" : 'la motorizzazione'}:`);
+  return vehStessoMotoreHTML() + vehCardGrid(list, vehMotoCardHTML, 'veh-moto-grid', `Scegli ${tipo === 'moto' ? "l'annata / allestimento" : 'la motorizzazione'}:`);
+}
+
+/**
+ * IL MOTORE E' QUELLO, L'ALLESTIMENTO NO — e la differenza si dice.
+ *
+ * Misurato: quando restano piu' candidate, in due casi su tre hanno cilindrata, potenza e
+ * carburante identici e si distinguono per cambio, trazione e sigle commerciali, cose che
+ * l'annuncio non scrive mai. Una griglia da quattordici righe non e' una scelta: e' una resa.
+ */
+function vehStessoMotoreHTML() {
+  const s = vehStessoMotore;
+  if (!s || !s.quante) return '';
+  const cosa = (s.differenze || []).length
+    ? ` — cambia: ${escapeHtml(s.differenze.join(' · '))}`
+    : '';
+  return `<div class="veh-motore-uno"><b>Il motore e' questo: ${escapeHtml(s.motore)}</b>`
+    + `<span>${s.quante} allestimenti a catalogo lo condividono${cosa}. L'annuncio non dice quale sia, quindi la scelta resta a te.</span></div>`;
 }
 // banda "In evidenza": SOLO i campi spuntati dall'utente (niente highlight automatico)
 function vehHlBandHTML(spec) {
