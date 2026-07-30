@@ -48,6 +48,9 @@ function risolviVersione(indice, annuncio) {
   // con esito 'una', cioe' dichiarata certa.
   const senzaAnni = vm.filter(v => !v.anni);
   let c = vm, perche = 'nessun anno nell\'annuncio: nessun filtro applicato';
+  // `ripiego` = siamo arrivati alle candidate per esclusione, non per corrispondenza. Chi
+  // legge questo esito NON preseleziona: mostra la griglia e lascia scegliere.
+  let ripiego = false;
   if (anno && conAnni.length) {
     const dentro = conAnni.filter(v => anno >= v.anni.da && anno <= v.anni.a);
     if (dentro.length) { c = dentro.concat(senzaAnni); perche = 'anno ' + anno + ' dentro il periodo'; }
@@ -56,7 +59,12 @@ function risolviVersione(indice, annuncio) {
       // versione, dichiarando che e' un ripiego e non una corrispondenza.
       const max = Math.max(...conAnni.map(v => v.anni.a));
       const min = Math.min(...conAnni.map(v => v.anni.da));
-      if (anno > max) { c = conAnni.filter(v => v.anni.a === max).concat(senzaAnni); perche = 'anno ' + anno + ' oltre l\'ultimo periodo noto (' + max + '): presa l\'ultima'; }
+      // NON SI INDOVINA. Prima qui si teneva l'ultima versione conosciuta e la si presentava
+      // come una corrispondenza: la scheda si apriva gia' scelta, con potenza, peso e consumi
+      // di un'annata diversa da quella dell'annuncio, e senza nessun segno che fosse un ripiego.
+      // Se il catalogo non arriva a quell'anno, la risposta onesta e' "scegli tu": si portano
+      // le candidate e si dichiara perche', la griglia resta aperta.
+      if (anno > max) { c = conAnni.filter(v => v.anni.a === max).concat(senzaAnni); ripiego = true; perche = 'anno ' + anno + ' oltre l\'ultimo periodo noto (' + max + '): il catalogo non arriva a quest\'anno, scegli tu'; }
       // gemello del caso sopra: un annuncio piu' VECCHIO del primo periodo noto. Prima
       // usciva 'nessuna' anche quando c'erano versioni senza periodo che lo coprivano.
       else if (anno < min && senzaAnni.length) { c = senzaAnni; perche = 'anno ' + anno + ' prima del primo periodo noto (' + min + '): restano le versioni senza periodo'; }
@@ -64,7 +72,9 @@ function risolviVersione(indice, annuncio) {
       else return { esito: 'nessuna', versioni: [], perche: 'anno ' + anno + ' in nessun periodo' };
     }
   }
-  if (c.length === 1) return { esito: 'una', versioni: c, perche };
+  // Anche con UNA sola candidata: se ci siamo arrivati per esclusione non e' una risposta,
+  // e' la cosa piu' vicina che abbiamo. Si dichiara 'ripiego' e la scelta resta a chi guarda.
+  if (c.length === 1) return { esito: ripiego ? 'ripiego' : 'una', versioni: c, perche };
 
   // 2) la VARIANTE, e solo dopo: "ABS", "Pure", "Moto Cage". Match piu' LUNGO, a parola
   //    intera. Il confronto senza confini di parola aggancia "s" a qualunque testo — errore

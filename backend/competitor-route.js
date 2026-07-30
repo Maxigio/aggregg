@@ -16,8 +16,34 @@ const comp = require('./competitor');
 const TTL = 10 * 60 * 1000;
 const cache = new Map();   // `${fonte}:${id}` → { ts, dati }
 
+/**
+ * IL LIMITATORE, che qui mancava mentre ogni altra rotta ce l'ha (ricambi-route:44,
+ * fonti-route:134, richiami-route:130, prove-route:29). Uno scarico di parco puo' costare
+ * fino a ottanta pagine di richieste alle fonti: senza freno, un doppio clic sul bottone —
+ * che un umano fa senza cattiveria quando l'attesa e' lunga — ne fa partire due in parallelo.
+ * Il rischio non e' un dato sbagliato: e' che la fonte ci blocchi, e con lei si ferma la
+ * ricerca, che e' il cuore dell'app.
+ */
+const PARCO_MAX = 6;               // scarichi per finestra
+const PARCO_FINESTRA = 10 * 60 * 1000;
+const parcoHits = new Map();       // ip → [ts]
+function parcoOk(ip) {
+  const ora = Date.now();
+  if (parcoHits.size > 500) parcoHits.clear();
+  const a = (parcoHits.get(ip) || []).filter(t => ora - t < PARCO_FINESTRA);
+  a.push(ora); parcoHits.set(ip, a);
+  return a.length <= PARCO_MAX;
+}
+/** Quanti scarichi restano, per dirlo invece di far sembrare rotta la sezione. */
+function parcoRestanti(ip) {
+  const ora = Date.now();
+  const a = (parcoHits.get(ip) || []).filter(t => ora - t < PARCO_FINESTRA);
+  return Math.max(0, PARCO_MAX - a.length);
+}
+
 function mount(app, deps = {}) {
   const C = deps.competitor || comp;
+  const clientIp = deps.clientIp || (req => req.ip || '');
   // Il body JSON si monta per-rotta in questa app, non globalmente: arriva da server.js.
   const json = deps.json || ((req, res, next) => next());
 
@@ -131,6 +157,8 @@ function mount(app, deps = {}) {
       // Le card presenti che non si sono lasciate leggere: dirle e' l'unico modo perche' chi
       // guarda sappia che i numeri sono calcolati su meno mezzi di quelli in vetrina.
       illeggibili: p.illeggibili || 0,
+      // Quanti ne dichiara la FONTE: "presi 180 di 240" dice una cosa che "presi 180" non dice.
+      totaleFonte: p.totaleFonte != null ? p.totaleFonte : null,
       storico: p.storico || null,      // Moto.it: quanti ne ha pubblicati in tutto, e da quando
       /**
        * L'ANNUNCIO INTERO. Qui c'era una rimappatura a otto campi che buttava via tutto il
@@ -150,8 +178,24 @@ function mount(app, deps = {}) {
   }
 
   app.get('/api/competitor/:id/parco', async (req, res) => {
-    try { res.json({ ok: true, ...await scaricaParco(req.params.id, String(req.query.forza || '') === '1') }); }
-    catch (e) { res.status(e.stato || 500).json({ ok: false, error: e.message }); }
+    const forza = String(req.query.forza || '') === '1';
+    const ip = clientIp(req);
+    // La cache non conta come scarico: riaprire una scheda gia' letta non costa niente alle
+    // fonti, e non deve consumare il budget. Il limite morde solo quando si va davvero in rete.
+    const k = `${req.params.id}`;
+    const daCache = !forza && [...cache.values()].some(h => Date.now() - h.ts < TTL
+      && h.dati && h.dati.voce && String(h.dati.voce.id) === k);
+    if (!daCache && !parcoOk(ip)) {
+      return res.status(429).json({
+        ok: false,
+        error: `Troppi scarichi di parco: sono ${PARCO_MAX} ogni ${PARCO_FINESTRA / 60000} minuti. Uno scarico costa fino a ottanta richieste alla fonte, e superare il limite significa farsi bloccare.`,
+        riprovaFra: PARCO_FINESTRA / 60000,
+      });
+    }
+    try {
+      const d = await scaricaParco(req.params.id, forza);
+      res.json({ ok: true, ...d, scarichiRestanti: parcoRestanti(ip) });
+    } catch (e) { res.status(e.stato || 500).json({ ok: false, error: e.message }); }
   });
 
   /**

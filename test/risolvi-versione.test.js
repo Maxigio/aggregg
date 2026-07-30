@@ -80,10 +80,15 @@ test('la variante di una lettera non aggancia dentro una parola', () => {
   assert.strictEqual(r.versioni[0].id, 'base');
 });
 
-test('anno oltre l ultimo periodo: si ripiega sull ultima e lo si dichiara', () => {
+test('anno oltre l ultimo periodo: NON si indovina, si lascia scegliere', () => {
+  // Prima usciva 'una', cioe' una corrispondenza: la scheda si apriva gia' scelta con le
+  // specifiche di un'altra annata e nessun segno che fosse un ripiego. Se il catalogo non
+  // arriva a quell'anno la risposta onesta e' "scegli tu": 'ripiego' non preseleziona.
   const r = risolviVersione(mt07, { anno: 2030, versione: 'Yamaha MT-07' });
-  assert.strictEqual(r.esito, 'una');
+  assert.strictEqual(r.esito, 'ripiego');
+  assert.ok(r.versioni.length >= 1, 'le candidate si mostrano comunque, non si perdono');
   assert.match(r.perche, /oltre l'ultimo periodo/);
+  assert.match(r.perche, /scegli tu/);
 });
 
 test('anno in nessun periodo: nessuna, non un ripiego silenzioso', () => {

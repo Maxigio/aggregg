@@ -916,7 +916,7 @@ require('./ricambi-route').mount(app, { clientIp });
 require('./scheda-veicolo-route').mount(app, { clientIp });
 
 // ─── Competitor: il parco di un concessionario, il tuo e quello degli altri ───
-require('./competitor-route').mount(app, { json: express.json({ limit: '8kb' }) });
+require('./competitor-route').mount(app, { json: express.json({ limit: '8kb' }), clientIp });
 
 // ─── Richiami di sicurezza (Safety Gate UE) — vedi richiami-route.js ───────────
 require('./richiami-route').mount(app, { clientIp });

@@ -75,6 +75,10 @@ let confronto      = [];                       // annunci selezionati per il con
 let matrixList     = [];                        // annunci attualmente mostrati nella matrice
 let salvati        = [];
 let groupDim       = '';                        // dimensione di raggruppamento attiva ('' = nessuna)
+// SOLO IVA ESPOSTA. Per un operatore un'auto a 10.000 con IVA esposta e' un'ALTRA auto
+// rispetto a una a 10.000 in margine: la prima gliene costa 8.197 netti, la seconda 10.000.
+// Il dato lo mandano gia' le fonti (`ivaEsposta`), non serve nessuna richiesta in piu'.
+let soloIva = false;
 // Lista (densa, confrontabile) o schede (foto grande). Si ricorda: e' una preferenza di
 // come si guarda, non un pezzo della ricerca.
 let vista          = (() => { try { return localStorage.getItem('amrVista') === 'schede' ? 'schede' : 'lista'; } catch (_) { return 'lista'; } })();
@@ -304,6 +308,8 @@ async function init() {
   });
   facetChipsEl?.addEventListener('click', e => {
     const chip = e.target.closest('.facet-chip'); if (!chip) return;
+    // Il chip dell'IVA e' un interruttore, non un raggruppamento: non deve azzerare `groupDim`.
+    if (chip.dataset.iva) { soloIva = !soloIva; renderResults(currentResults); return; }
     groupDim = chip.dataset.dim || '';
     renderResults(currentResults);
   });
@@ -853,7 +859,17 @@ const FACET_DIMS = [
 function renderFacetChips() {
   if (!facetChipsEl) return;
   facetChipsEl.innerHTML = FACET_DIMS.map(([dim, label]) =>
-    `<button type="button" class="facet-chip${dim === groupDim ? ' active' : ''}" data-dim="${dim}">${label}</button>`).join('');
+    `<button type="button" class="facet-chip${dim === groupDim ? ' active' : ''}" data-dim="${dim}">${label}</button>`).join('')
+    // QUANTI SONO, scritto nel chip. Misurato su annunci veri: su cento Golf usate Autoscout
+    // ne dichiara zero con IVA esposta e cento in margine, Subito venticinque in margine e
+    // settantacinque che non lo dicono. Senza il numero davanti, chi clicca vede una lista
+    // vuota e pensa che il filtro sia rotto: cosi' invece sa prima di premere.
+    + (() => {
+        const n = (currentResults || []).filter(r => r.ivaEsposta === true).length;
+        const dis = n === 0 && !soloIva ? ' facet-chip-vuoto' : '';
+        return `<button type="button" class="facet-chip${soloIva ? ' active' : ''}${dis}" data-iva="1"`
+          + ` title="Solo annunci con IVA esposta: quelli su cui l'imposta la scarichi. In questa ricerca sono ${n}.">Solo IVA esposta <b>${n}</b></button>`;
+      })();
 }
 
 // ─── Modi di ricerca (Cerca / Ricambi / Catalogo) ──────────────────────────
@@ -2069,6 +2085,10 @@ function renderResults(results) {
     return;
   }
   let filtered = results.slice();
+  // `ivaEsposta` e' a tre stati: true, false, e null quando la fonte non lo dice. Il filtro
+  // tiene SOLO i true — un annuncio che non lo dichiara non e' un annuncio con IVA esposta,
+  // e tenerlo dentro renderebbe il filtro una speranza invece di un filtro.
+  if (soloIva) filtered = filtered.filter(r => r.ivaEsposta === true);
   if (prezzoSliderInstance) {
     const [sMin, sMax] = prezzoSliderInstance.get().map(Number);
     filtered = filtered.filter(r => r.prezzo == null || (r.prezzo >= sMin && r.prezzo <= sMax));
@@ -4906,7 +4926,7 @@ const cpRiga = (k, v) => `<div class="cp-n"><span>${escapeHtml(k)}</span><b>${v}
  * ricavano — chi e' fermo da troppo, chi e' appena arrivato, quanto ha venduto in dieci
  * anni.
  */
-function cpNumeriChiave(n, storico, v, troncato, illeggibili) {
+function cpNumeriChiave(n, storico, v, troncato, illeggibili, totaleFonte) {
   if (!n) return '';
   const dich = v && v.annunciDichiarati;
   // Tre avvisi, non tre statistiche: dicono che quello che stai guardando potrebbe non
@@ -4916,7 +4936,10 @@ function cpNumeriChiave(n, storico, v, troncato, illeggibili) {
     + (n.venditori && n.venditori.length > 1
         ? `<div class="cp-avviso">Attenzione: nella risposta compaiono ${n.venditori.length} venditori diversi (${escapeHtml(n.venditori.map(x => x.nome).join(', ')).slice(0, 90)}). Il filtro della fonte non ha tenuto.</div>` : '');
   return '<div class="cp-numeri">'
+    // Quanti ne abbiamo presi SUL TOTALE che la fonte dichiara: senza il secondo numero non
+    // si sa se e' tutto il piazzale o la punta.
     + cpRiga('veicoli presi', cpNum(n.veicoli)
+        + (totaleFonte != null && totaleFonte > n.veicoli ? ` <em>di ${cpNum(totaleFonte)} dichiarati dalla fonte</em>` : '')
         + ((n.auto || n.moto) ? ` <em>${n.auto} auto · ${n.moto} moto</em>` : '')
         + (n.nuovo ? ` <em>${cpNum(n.usato)} usati · ${cpNum(n.nuovo)} nuovi</em>` : '')
         // Non e' una statistica, e' un controllo: se la vetrina ne dichiara piu' di quanti
@@ -4948,7 +4971,7 @@ function cpSchedaHTML(v) {
   const corpo = !st ? '<div class="cp-att">Il parco non e\' ancora stato scaricato.</div>'
     : st.stato === 'carico' ? '<div class="cp-att">Scarico il parco… su un concessionario grande ci vuole un minuto.</div>'
     : st.stato === 'ko' ? `<div class="cp-att">Non riuscito: ${escapeHtml(st.errore || 'la fonte non risponde')}</div>`
-    : cpNumeriChiave(st.dati.numeri, st.dati.storico, v, st.dati.troncato, st.dati.illeggibili);
+    : cpNumeriChiave(st.dati.numeri, st.dati.storico, v, st.dati.troncato, st.dati.illeggibili, st.dati.totaleFonte);
   const quando = st && st.stato === 'ok' && st.dati.quando
     ? `<span class="cp-quando">dati del ${new Date(st.dati.quando).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${st.dati.daCache ? ' · dalla cache' : ''}</span>` : '';
   const aperto = cpApertoId === v.id;

@@ -1506,3 +1506,7 @@ select.cp-unisci { max-width: 190px; }
   background: var(--surface-2); border-radius: 6px; font-size: 0.82rem; line-height: 1.5; }
 .veh-motore-uno b { display: block; color: var(--text); }
 .veh-motore-uno span { color: var(--text-muted); font-size: 0.78rem; }
+
+/* Il chip "Solo IVA esposta" quando in questa ricerca non ce n'e' nessuno: si vede che c'e'
+   ma si legge che non porterebbe niente. Non si nasconde — sapere che sono zero e' un dato. */
+.facet-chip-vuoto { opacity: .5; }

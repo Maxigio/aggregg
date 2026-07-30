@@ -269,6 +269,7 @@ async function risolviVetrina(urlRaw) {
 async function parco(voce) {
   const veicoli = [];
   let troncato = false;
+  let totaleFonte = null;      // quanti ne dichiara la FONTE, contro quanti ne abbiamo presi
 
   // Moto.it non passa dagli scraper di ricerca: quel motore non filtra per venditore, e il
   // parco si legge dalla vetrina. Solo moto, e solo l'usato — il nuovo la fonte lo tiene
@@ -290,7 +291,8 @@ async function parco(voce) {
         }
       } catch (_) { /* lo storico e' un di piu': se non arriva, il parco resta */ }
     }
-    return { veicoli: r.items.map(v => ({ ...v, tipo: 'moto' })), troncato: r.troncato, illeggibili: r.illeggibili || 0, storico };
+    // Moto.it la vetrina non dichiara un totale: si conta finche' le pagine finiscono.
+    return { veicoli: r.items.map(v => ({ ...v, tipo: 'moto' })), troncato: r.troncato, illeggibili: r.illeggibili || 0, totaleFonte: null, storico };
   }
 
   for (const tipo of ['auto', 'moto']) {
@@ -312,9 +314,14 @@ async function parco(voce) {
     }
     const items = Array.isArray(r) ? r : (r.items || []);
     if (!Array.isArray(r) && r.truncated) troncato = true;
+    // QUANTI NE HA LA FONTE. Lo dichiara lei nella stessa risposta e finora lo buttavamo:
+    // senza, "veicoli presi 180" non si sa se sono tutti o la puntadi un piazzale da 400.
+    // Si somma sulle due passate (auto + moto), e resta null se nessuna delle due lo dice —
+    // meglio non dirlo che dire un numero che non descrive tutto il parco.
+    if (!Array.isArray(r) && Number.isFinite(r.total)) totaleFonte = (totaleFonte || 0) + r.total;
     for (const v of items) veicoli.push({ ...v, tipo });
   }
-  return { veicoli, troncato, illeggibili: 0 };
+  return { veicoli, troncato, illeggibili: 0, totaleFonte };
 }
 
 /* ─── i numeri ────────────────────────────────────────────────────────────── */
