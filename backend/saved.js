@@ -199,6 +199,19 @@ function recordCheck(id, results, { extraSeen = {}, removedUrls = [] } = {}) {
   const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
   const queue = [...(s.alerts || []), ...alerts].filter(a => !a.letto || (a.ts || 0) >= cutoff);
 
+  /**
+   * IL TAGLIO DEVE PRENDERE I PIU' VECCHI DA VEDERE, NON I PRIMI ENTRATI.
+   *
+   * L'ordine delle chiavi di `seen` e' quello di INSERIMENTO, cioe' il PRIMO avvistamento, e
+   * `capObject` taglia da li'. Un annuncio ancora VIVO ma entrato mesi fa veniva sfrattato, e al
+   * check successivo `prev` era di nuovo null: arrivava come "nuovo" un mezzo in lista da
+   * settimane. Riassegnare la chiave non basta — in JS non sposta la posizione — quindi quello
+   * che si e' visto ADESSO si toglie e si rimette, e finisce in coda.
+   */
+  for (const r of results) {
+    const u = r && r.url;
+    if (u && Object.prototype.hasOwnProperty.call(seen, u)) { const p = seen[u]; delete seen[u]; seen[u] = p; }
+  }
   s.seen        = capObject(seen, SEEN_CAP);
   s.alerted     = alertedKeys.slice(-ALERTED_CAP);
   s.alerts      = queue.slice(-200);

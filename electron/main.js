@@ -66,14 +66,27 @@ function tailscaleBin() {
   return 'tailscale';   // ultimo tentativo: PATH
 }
 
+/**
+ * LA STESSA DOMANDA CHE SI FA IL BACKEND, non una che le somiglia.
+ *
+ * Qui si guardava solo se il file ESISTE; backend/auth.js:34 pretende invece che si LEGGA e si
+ * PARSIFICHI, e backend/server.js lascia passare ogni rotta senza autenticazione quando quella
+ * risposta e' no. Con un auth.json presente ma troncato o illeggibile le due condizioni
+ * divergevano nel verso peggiore: Funnel acceso e login spento, cioe' l'app intera su un URL
+ * pubblico senza password. Ed e' un guasto muto — l'unico segno sarebbe stata la scomparsa
+ * della schermata di accesso, che chi usa l'app legge come "sono gia' entrato".
+ * Si controllano anche i campi: un JSON valido ma senza hash non e' una password impostata.
+ */
 function authEnabled() {
-  try { return fs.existsSync(path.join(app.getPath('userData'), 'auth.json')); }
-  catch (_) { return false; }
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'auth.json'), 'utf8'));
+    return !!(j && j.hash && j.salt);
+  } catch (_) { return false; }
 }
 
 function enableFunnel() {
   if (!authEnabled()) {
-    console.log('[funnel] password non impostata → Funnel NON attivato (nessuna esposizione pubblica)');
+    console.log('[funnel] password non impostata o auth.json illeggibile → Funnel NON attivato (nessuna esposizione pubblica)');
     return;
   }
   execFile(tailscaleBin(), ['funnel', '--bg', String(PORT)], { timeout: 15000 }, (err, _out, stderr) => {

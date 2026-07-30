@@ -21,12 +21,15 @@ function verifySignature(rawBuf, header) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-// ── Allowlist mittenti (csv in WHATSAPP_ALLOWED_SENDERS). Vuoto = nessun filtro
-// app-level (il numero di test Meta è comunque limitato a 5 destinatari).
+// ── Allowlist mittenti (csv in WHATSAPP_ALLOWED_SENDERS).
+// VUOTO = NESSUNO, non "tutti". Prima l'elenco vuoto lasciava passare chiunque, e il `from`
+// lo scrive chi manda il payload: era anche il modo di aggirare il rate limit, che e' chiavato
+// proprio su quel numero (basta cambiare una cifra). Una porta che si apre da sola quando non
+// la si configura e' il contrario di una porta.
 const digits = s => String(s || '').replace(/\D/g, '');
 function allowed(from) {
   const raw = (process.env.WHATSAPP_ALLOWED_SENDERS || '').trim();
-  if (!raw) return true;
+  if (!raw) return false;
   return raw.split(',').map(digits).filter(Boolean).includes(digits(from));
 }
 
@@ -66,19 +69,22 @@ function handleVerify(req, res) {
 let _warnedUnsigned = false;
 function warnUnsigned() {
   if (_warnedUnsigned) return; _warnedUnsigned = true;
-  console.warn('[wa] ⚠ WHATSAPP_APP_SECRET assente → POST accettate SENZA verifica firma (MVP). Aggiungilo per integrità piena.');
+  console.warn('[wa] ⚠ WHATSAPP_APP_SECRET assente → la webhook RIFIUTA le POST (503). Aggiungilo per attivarla.');
 }
 
 function handlePost(req, res, searchFn) {
   const raw = req.body;   // Buffer (express.raw)
   if (!Buffer.isBuffer(raw)) return res.sendStatus(400);
-  // Firma HMAC obbligatoria SE WHATSAPP_APP_SECRET è configurato. Se assente (MVP col numero test
-  // Meta), si accetta senza verifica con avviso — la webhook resta gated dall'URL Funnel semi-segreto.
-  if (process.env.WHATSAPP_APP_SECRET) {
-    if (!verifySignature(raw, req.get('x-hub-signature-256'))) return res.status(401).send('firma non valida');
-  } else {
-    warnUnsigned();
-  }
+  // FIRMA HMAC OBBLIGATORIA, SEMPRE.
+  //
+  // Prima, senza `WHATSAPP_APP_SECRET`, si accettava qualunque POST "perche' l'URL del Funnel
+  // e' semi-segreto". Non regge: e' l'UNICA rotta in AUTH_FREE, sta su internet mentre tutto il
+  // resto e' dietro login, e dentro ci gira `runSearch` vero — cioe' scraping verso Subito,
+  // Autoscout e Moto.it dall'IP di casa, piu' un messaggio in uscita. Un URL indovinato o
+  // finito in un log altrui bastava. Senza segreto la rotta non risponde: 503, non 200.
+  const segreto = process.env.WHATSAPP_APP_SECRET;
+  if (!segreto) { warnUnsigned(); return res.status(503).send('webhook non configurata'); }
+  if (!verifySignature(raw, req.get('x-hub-signature-256'))) return res.status(401).send('firma non valida');
   let payload;
   try { payload = JSON.parse(raw.toString('utf8')); } catch { return res.sendStatus(400); }
   res.sendStatus(200);   // ack immediato, poi lavoro async

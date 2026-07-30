@@ -160,3 +160,25 @@ test('famigliaMotoit: fra piu famiglie non si sceglie, si torna null', () => {
   // Nessun candidato: null come prima.
   assert.strictEqual(famigliaMotoit(scrambler, 'Panigale'), null);
 });
+
+// ── L'anno dell'annuncio contro il periodo della motorizzazione ───────────────
+const { copreAnno } = require('../backend/scheda-veicolo-route');
+
+test('copreAnno: il periodo della voce, com e scritto dal catalogo', () => {
+  // Il catalogo scrive "2016–2018" col trattino lungo, "2022–" quando e' ancora in listino.
+  assert.strictEqual(copreAnno({ yearRange: '2016–2018' }, 2016), true);
+  assert.strictEqual(copreAnno({ yearRange: '2016–2018' }, 2018), true);
+  assert.strictEqual(copreAnno({ yearRange: '2016–2018' }, 2015), false);
+  assert.strictEqual(copreAnno({ yearRange: '2016–2018' }, 2019), false);
+  // Fine aperta: nessun tetto.
+  assert.strictEqual(copreAnno({ yearRange: '2022–' }, 2024), true);
+  assert.strictEqual(copreAnno({ yearRange: '2022–' }, 2021), false);
+  // Anno singolo, e il ripiego sul campo `year`.
+  assert.strictEqual(copreAnno({ yearRange: '2016' }, 2017), false);
+  assert.strictEqual(copreAnno({ year: 2010 }, 2010), true);
+  // PERIODO IGNOTO = NON SI SCARTA. E' la regola che tiene: un formato che non sappiamo
+  // leggere non deve far sparire una motorizzazione buona.
+  assert.strictEqual(copreAnno({}, 2016), true);
+  assert.strictEqual(copreAnno({ yearRange: 'boh' }, 2016), true);
+  assert.strictEqual(copreAnno({ yearRange: '2007 - 16' }, 2010), true);
+});

@@ -102,7 +102,7 @@ async function getBrowser() {
 }
 
 // ─── Costruzione URL ─────────────────────────────────────────────────────────
-function buildFilters({ prezzoMin, prezzoMax, annoMin, annoMax, kmMax }) {
+function buildFilters({ prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax }) {
   const qs = new URLSearchParams({ cy: 'I' });
   qs.set('sort', 'price');
   qs.set('desc', '0');
@@ -110,6 +110,12 @@ function buildFilters({ prezzoMin, prezzoMax, annoMin, annoMax, kmMax }) {
   if (prezzoMax != null) qs.set('priceto',   prezzoMax);
   if (annoMin   != null) qs.set('fregfrom',  annoMin);
   if (annoMax   != null) qs.set('fregto',    annoMax);
+  // `kmfrom` mancava: il tetto c'era, il PAVIMENTO no. E il post-filtro del server esclude i km
+  // di proposito, nella convinzione — vera solo per il GraphQL — che il filtro sia nativo su
+  // tutte le fonti: quindi nessuno lo ricontrollava a valle. Chi cercava "Fiesta da 100.000 km
+  // in su" con il GraphQL giu' si vedeva arrivare Fiesta da 20.000, e per giunta in cima,
+  // perche' qui si legge per prezzo crescente e solo 3 pagine.
+  if (kmMin     != null) qs.set('kmfrom',    kmMin);
   if (kmMax     != null) qs.set('kmto',      kmMax);
   return qs;
 }

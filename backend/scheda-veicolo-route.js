@@ -329,6 +329,21 @@ function codiciDaParentesi(dentro) {
   return [...out];
 }
 
+/**
+ * Il periodo di una voce del catalogo. `yearRange` lo scrive "2016–2018" (trattino lungo),
+ * "2016–" quando e' ancora in listino, e a volte c'e' solo `year`. Fine aperta = niente tetto.
+ * Null quando il periodo non si sa: in quel caso la voce non va mai scartata.
+ */
+function copreAnno(voce, anno) {
+  const r = String((voce && voce.yearRange) || '').replace(/\s+/g, '');
+  const m = r.match(/^(\d{4})[–—-]?(\d{4})?$/);
+  const da = m ? Number(m[1]) : (Number.isFinite(voce && voce.year) ? voce.year : null);
+  if (!da) return true;                                  // periodo ignoto: non si scarta
+  const aperto = m ? /[–—-]$/.test(r) : false;
+  const a = m && m[2] ? Number(m[2]) : (aperto ? null : da);
+  return anno >= da && (a == null || anno <= a);
+}
+
 /** La cilindrata in litri, da dove la fonte l'ha messa. Le etichette del catalogo la scrivono
  *  cosi' ("1.9 TDI 105 Hp"), tranne su BMW dove al suo posto c'e' la sigla ("320d"). */
 const litri = t => { const m = String(t == null ? '' : t).match(/\b([0-9])[.,]([0-9])\b/); return m ? Number(m[1] + '.' + m[2]) : null; };
@@ -498,7 +513,24 @@ async function schedaPerAnnuncio({ tipo, marca, modello: modelloGrezzo, anno, cv
     const indice = {
       marca, subito: { nome: nomeMod },
       versioniMotoit: voci.map(v => {
-        const pulito = String(v.label || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
+        /**
+         * IL NOME, RIPULITO DAVVERO. La regex toglieva solo una parentesi in FONDO alla riga,
+         * e questi nomi non sono tutti fatti cosi':
+         *   Moto.it        "Scarabeo 500 (2002 - 06)"           → parentesi in fondo, ok
+         *   ultimatespecs  "Panigale V4 · 2019"                 → l'anno appeso col punto medio
+         *   Harley         "CVO Street Glide (2016) - FLHXSE"   → sigla DOPO la parentesi
+         * Quando l'anno o la sigla restavano dentro, finivano nella `variante` — e
+         * risolvi-versione pretende che ogni parola della variante compaia nel titolo
+         * dell'annuncio. Nessun venditore scrive "flhxse", quindi non vinceva mai nessuna
+         * candidata e la preselezione moto non scattava: 304 nomi (240 Harley) e tutte le
+         * 35.221 voci del ripiego ultimatespecs.
+         */
+        const pulito = String(v.label || '')
+          .replace(/\([^)]*\)/g, ' ')                      // qualunque parentesi, non solo in fondo
+          .replace(/\s*[·•-]\s*(?:19|20)\d{2}\s*$/, ' ')   // "· 2019" appeso in coda
+          .replace(/\s*-\s*[A-Za-z0-9]{3,}\s*$/, ' ')      // la sigla di fabbrica dopo la parentesi
+          .replace(/\b(?:19|20)\d{2}\b/g, ' ')             // anni rimasti in mezzo
+          .replace(/\s+/g, ' ').trim();
         const a = String(v.yearRange || '').match(/(\d{4})\D+(\d{4})/);
         return {
           nome: v.label, _voce: v,
@@ -654,6 +686,18 @@ async function schedaPerAnnuncio({ tipo, marca, modello: modelloGrezzo, anno, cv
   if (cc) vive = stringi(vive, m => { const c = litri(m.label); return c == null || Math.abs(c - cc) < 0.05; });
   const sg = sigleMotore(`${titolo || ''} ${variante || ''}`);
   if (sg.length) vive = stringi(vive, m => sg.some(s => String(m.label || '').toLowerCase().includes(s)));
+  /**
+   * L'ANNO DELL'ANNUNCIO, di nuovo — qui fra le MOTORIZZAZIONI, non fra le generazioni.
+   * Ogni voce del catalogo porta il periodo in cui quel motore e' stato venduto, e una
+   * macchina del 2005 non puo' essere una voce 2012-2016.
+   *
+   * Misurato su 88 annunci veri: delle 44 volte in cui restano piu' candidate, l'anno ne
+   * restringe 22 e in 6 le risolve da solo (griglia → scheda gia' aperta); ne svuota 5, che
+   * la regola dello scarto ignora. Delle 44 gia' risolte ne toccherebbe 2, ed erano annunci
+   * con l'anno sbagliato dal venditore — una Serie 3 (E46) dichiarata 2024, una Scarabeo 100
+   * dichiarata 2025: li' il filtro svuota, quindi viene ignorato e non tolgono niente.
+   */
+  if (y) vive = stringi(vive, m => copreAnno(m, y));
 
   /**
    * LA GENERAZIONE, quando le candidate sono tutte la stessa. Scegliere fra due
@@ -762,4 +806,4 @@ function mount(app, deps = {}) {
 module.exports = { mount, resolveScheda, schedaPerAnnuncio, matchModel, matchMotoModels, resolveMoto,
   // Puri e provabili senza rete: la pulizia del nome (la usa anche la rotta cerchi) e la
   // lettura della generazione dichiarata nel nome Subito.
-  senzaGenerazione, generazioneDichiarata, famigliaMotoit };
+  senzaGenerazione, generazioneDichiarata, famigliaMotoit, copreAnno };

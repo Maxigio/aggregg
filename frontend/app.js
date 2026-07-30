@@ -65,7 +65,12 @@ let currentResults = [];
 // e' tutto lo scaricato: esportare quello significava consegnare un documento che descrive
 // un insieme diverso da quello che si sta guardando.
 let ultimiVisti = null;
-const risultatiAVista = () => (Array.isArray(ultimiVisti) && ultimiVisti.length ? ultimiVisti : currentResults);
+// `.length` NO: zero a schermo e' un insieme, non un'assenza. Con il cursore del prezzo stretto
+// su una fascia vuota, l'elenco disegnato e' vuoto — e cadere su `currentResults` faceva uscire
+// un CSV e un PDF con TUTTI gli annunci scaricati, cioe' l'esatto contrario di quello che si
+// stava guardando. Su un documento che esce di mano e' il tipo di errore che non si scopre.
+// Il ripiego resta solo per il "mai disegnato" (null), dove ultimiVisti non esiste ancora.
+const risultatiAVista = () => (Array.isArray(ultimiVisti) ? ultimiVisti : currentResults);
 let confronto      = [];                       // annunci selezionati per il confronto (cap 10)
 let matrixList     = [];                        // annunci attualmente mostrati nella matrice
 let salvati        = [];
@@ -442,8 +447,11 @@ async function init() {
   // SI ESPORTA QUELLO CHE SI STA GUARDANDO. `currentResults` e' tutto lo scaricato: con il
   // cursore del prezzo stretto, il CSV e il PDF uscivano con annunci e statistiche di un
   // insieme diverso da quello a schermo — e sono i documenti che escono di mano.
-  btnStatCsv.addEventListener('click', () => exportCsv(risultatiAVista()));
-  btnStatPdf.addEventListener('click', () => exportPdf(risultatiAVista()));
+  // Zero a schermo = zero da esportare, e lo si dice — come fa gia' l'export dei ricambi
+  // (`exportCsvRicambi`). Un file col solo intestazione sarebbe muto quanto quello sbagliato.
+  const daEsportare = () => { const v = risultatiAVista(); if (!v.length) { showError('Niente da esportare: a schermo non c\'e\' nessun annuncio.'); return null; } return v; };
+  btnStatCsv.addEventListener('click', () => { const v = daEsportare(); if (v) exportCsv(v); });
+  btnStatPdf.addEventListener('click', () => { const v = daEsportare(); if (v) exportPdf(v); });
   errorClose.addEventListener('click', hideError);
   backToSearch.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
   form.addEventListener('submit', async (e) => {
@@ -508,6 +516,10 @@ async function init() {
     if (row.dataset.detail) {
       if (e.target.closest('.btn-salva'))    { toggleSalva(url); return; }
       if (e.target.closest('.btn-confronta')) { toggleConfronto(url); return; }
+      // Il venditore di questo annuncio, nella lista di Competitor. Solo aggiunto: il parco
+      // lo si scarica da li', quando si vuole — e' una richiesta lunga e non parte a sorpresa.
+      const btnCp = e.target.closest('.btn-competitor');
+      if (btnCp) { const r = trovaResult(url); if (r) aggiungiVenditoreAlCompetitor(r, btnCp); return; }
       // Passaggio di proprieta': si calcola su richiesta, sui dati di QUESTO annuncio.
       if (e.target.closest('.btn-passaggio')) { const r = trovaResult(url); if (r) calcolaPassaggio(r, row); return; }
       // Scambio provincia (tua / del venditore): stessa pratica, importo diverso.
@@ -1905,7 +1917,11 @@ async function doSearch() {
   syncColMenu();
 
   confronto = []; renderCompareBar(); closeMatrix();
-  document.body.classList.add('has-results');
+  // `has-results` NON si mette qui: quattro righe piu' sotto `hideResults()` la toglie —
+  // sempre, in tutti i rami — quindi in Auto/Moto il body non l'ha avuta mai, nemmeno dopo la
+  // prima ricerca. Effetto: la barra di ricerca restava alta un'intera schermata (misurato:
+  // 670px invece di 158 su un viewport da 900) e lo sfondo dello stato-vuoto restava in
+  // filigrana dietro i risultati. Si mette quando i risultati ci sono davvero.
   document.body.dataset.tipo = tipo;
 
   const myGen = ++searchGen;   // review: se ne parte un'altra mentre questa è in volo, la stantia si scarta
@@ -1918,6 +1934,10 @@ async function doSearch() {
 
     currentResults = data.risultati || [];
     searchActive = true;
+    // La ricerca e' andata: la pagina smette di vestirsi da schermo vuoto (barra compatta,
+    // niente sfondo). Anche a zero risultati — perche' a quel punto la risposta e' il pannello
+    // "nessun annuncio", non la schermata di partenza.
+    document.body.classList.add('has-results');
     fettaPresa = 0;                      // ricerca nuova: si riparte dalla prima fetta
     lastSources = data.sources || null;
     renderSourceStatus();
@@ -2540,11 +2560,63 @@ function testoHTML(r) {
     `<div class="det-testo">${escapeHtml(d)}</div>`);
 }
 
-// Il link alla vetrina del venditore, quando la fonte lo dice (oggi Moto.it).
+/**
+ * CHI VENDE, e la porta per andarlo a guardare.
+ *
+ * Il link alla vetrina quando la fonte lo dice (Moto.it), e il bottone che mette quel
+ * venditore nella lista di Competitor. L'id che serve sta GIA' nell'annuncio ed e' lo stesso
+ * spazio di id che Competitor usa come porta d'ingresso — verificato sulle due fonti:
+ *   Subito    venditoreId 105412305 → uid=105412305        → 100 annunci, un solo venditore
+ *   Autoscout venditoreId 7008      → as24Customer=7008     → 44 annunci, un solo venditore
+ * Quindi non serve incollare nessun link: si aggiunge e basta.
+ *
+ * SOLO CONCESSIONARI. Sui privati Subito scrive il nome della persona, e comunque un privato
+ * non ha un parco da guardare: il bottone non comparirebbe a vuoto, non comparirebbe affatto.
+ * Il parco NON si scarica qui: si aggiunge alla lista, e quando scaricarlo lo decide chi guarda.
+ */
+function competitorDaAnnuncio(r) {
+  if (!r || r.venditore !== 'concessionario') return null;
+  if (r.fonte === 'moto') return r.vetrinaUrl ? { url: r.vetrinaUrl } : null;
+  if ((r.fonte === 'subito' || r.fonte === 'autoscout') && r.venditoreId) {
+    return { fonte: r.fonte, id: String(r.venditoreId), nome: r.venditoreNome || null };
+  }
+  return null;
+}
+
+/** Mette il venditore di questo annuncio nella lista di Competitor. Non scarica niente. */
+async function aggiungiVenditoreAlCompetitor(r, btn) {
+  const cp = competitorDaAnnuncio(r);
+  if (!cp) return;
+  const testo = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Aggiungo…';
+  try {
+    // Moto.it ha il link della vetrina: passa dalla porta di sempre, che legge anche
+    // l'anagrafica. Subito e Autoscout hanno l'id e basta: la loro anagrafica sta sulla
+    // pagina della vetrina, e si legge quando il parco lo si scarica davvero.
+    const via = cp.url ? '/api/competitor' : '/api/competitor/da-annuncio';
+    const res = await fetch(via, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cp),
+    });
+    const d = await res.json().catch(() => ({}));
+    // 409 = c'era gia'. Non e' un errore: e' una risposta, e va detta come tale.
+    if (res.status === 409) { toast(d.error || 'Era gia\' nell\'elenco'); btn.textContent = 'Gia\' in Competitor'; return; }
+    if (!res.ok || !d.ok) { showError(d.error || 'Non riuscito'); btn.disabled = false; btn.textContent = testo; return; }
+    toast(`${(d.voce && d.voce.nome) || 'Venditore'} aggiunto a Competitor — il parco lo scarichi da lì`);
+    btn.textContent = 'In Competitor ✓';
+    cpVoci = null;   // l'elenco in memoria e' vecchio: si rilegge alla prossima apertura
+  } catch (_) {
+    showError('Impossibile contattare il server'); btn.disabled = false; btn.textContent = testo;
+  }
+}
+
 function vetrinaHTML(r) {
-  return r.vetrinaUrl
+  const vet = r.vetrinaUrl
     ? `<a class="det-open" href="${escapeHtml(r.vetrinaUrl)}" target="_blank" rel="noopener noreferrer">Vetrina venditore ↗</a>`
     : '';
+  const cp = competitorDaAnnuncio(r);
+  if (!cp) return vet;
+  const chi = r.venditoreNome ? ` (${escapeHtml(r.venditoreNome)})` : '';
+  return vet + `<button type="button" class="det-open btn-competitor">Aggiungi a Competitor${chi}</button>`;
 }
 // ── Passaggio di proprieta' del singolo annuncio ─────────────────────────────
 // Potenza e localita' sono gia' scritte nell'annuncio: il costo per metterlo a nome proprio

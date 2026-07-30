@@ -72,22 +72,31 @@ test('handlePost: firma valida → 200, firma non valida → 401, body non-buffe
   assert.strictEqual(rNoBuf.code, 400);
 });
 
-test('handlePost: senza APP_SECRET accetta il POST (200) — MVP no-firma', () => {
+test('handlePost: senza APP_SECRET la webhook NON risponde (503)', () => {
+  // Prima qui si asseriva il contrario — 200, "MVP no-firma" — e quel 200 era il difetto:
+  // e' l'unica rotta senza autenticazione, sta su internet mentre tutto il resto e' dietro
+  // login, e dentro gira una ricerca vera verso le tre fonti dall'IP di casa. Senza segreto
+  // non si accetta niente, e chi la vuole accesa mette la variabile.
   const prev = process.env.WHATSAPP_APP_SECRET;
   delete process.env.WHATSAPP_APP_SECRET;
-  const raw = Buffer.from(JSON.stringify({ entry: [] }));   // niente messaggi → processPayload no-op
-  const req = { body: raw, get: () => undefined };          // nessuna firma
+  const raw = Buffer.from(JSON.stringify({ entry: [] }));
+  let chiamata = false;
   const r = mockRes();
-  wh.handlePost(req, r, async () => ({}));
-  assert.strictEqual(r.code, 200);                          // accettato senza verifica
+  wh.handlePost({ body: raw, get: () => undefined }, r, async () => { chiamata = true; return {}; });
+  assert.strictEqual(r.code, 503);
+  assert.strictEqual(chiamata, false, 'la ricerca non deve nemmeno partire');
   if (prev === undefined) delete process.env.WHATSAPP_APP_SECRET; else process.env.WHATSAPP_APP_SECRET = prev;
 });
 
 // ─── allowlist ────────────────────────────────────────────────────────────────
-test('allowed: vuoto = tutti; csv filtra per sole cifre', () => {
+test('allowed: elenco vuoto = NESSUNO; csv filtra per sole cifre', () => {
   const prev = process.env.WHATSAPP_ALLOWED_SENDERS;
   process.env.WHATSAPP_ALLOWED_SENDERS = '';
-  assert.strictEqual(wh.allowed('393520727252'), true);       // vuoto → nessun filtro
+  // Prima l'elenco vuoto valeva "tutti", e il `from` lo scrive chi manda il payload: era anche
+  // il modo di aggirare il rate limit, che e' chiavato proprio su quel numero.
+  assert.strictEqual(wh.allowed('393520727252'), false, 'elenco vuoto non deve aprire a chiunque');
+  delete process.env.WHATSAPP_ALLOWED_SENDERS;
+  assert.strictEqual(wh.allowed('393520727252'), false, 'variabile assente = come vuota');
   process.env.WHATSAPP_ALLOWED_SENDERS = '+39 352 072 7252, 39111';
   assert.strictEqual(wh.allowed('393520727252'), true);        // match ignorando spazi/+
   assert.strictEqual(wh.allowed('399999999'), false);          // non in lista

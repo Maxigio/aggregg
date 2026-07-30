@@ -26,6 +26,46 @@ function mount(app, deps = {}) {
     res.json({ ok: true, voci: C.leggi() });
   });
 
+  /**
+   * IL VENDITORE DI UN ANNUNCIO, senza incollare nessun link.
+   *
+   * L'id del venditore sta gia' dentro l'annuncio, ed e' lo STESSO che il parco usa come
+   * porta d'ingresso — verificato sulle due fonti: Subito `venditoreId` 105412305 → `uid=`
+   * torna 100 annunci di quel solo venditore; Autoscout `venditoreId` 7008 → `as24Customer=`
+   * ne torna 44, sempre suoi. Quindi qui non si risolve niente: si prende l'id e lo si mette
+   * in elenco.
+   *
+   * L'ANAGRAFICA (indirizzo, telefoni, orari) sta sulla pagina della vetrina, che da un
+   * annuncio non conosciamo: si legge quando il parco lo si scarica davvero, ed e' esattamente
+   * a cosa serve `schedaLetta`. Il parco NON parte da qui: e' una richiesta lunga e la decide
+   * chi guarda.
+   */
+  app.post('/api/competitor/da-annuncio', json, (req, res) => {
+    const b = req.body || {};
+    const fonte = String(b.fonte || '');
+    const id = String(b.id || '');
+    // Solo le due fonti che l'id ce l'hanno nell'annuncio: Moto.it passa dal link della
+    // vetrina, che la porta di sempre sa gia' risolvere.
+    if (fonte !== 'subito' && fonte !== 'autoscout') return res.status(400).json({ ok: false, error: 'fonte non valida' });
+    if (!/^\d{1,15}$/.test(id)) return res.status(400).json({ ok: false, error: 'id venditore non valido' });
+    const voci = C.leggi();
+    const gia = voci.find(v => v.fonte + ':' + v.id === fonte + ':' + id);
+    if (gia) return res.status(409).json({ ok: false, error: `${gia.nome || 'Questo venditore'} e' gia' nell'elenco`, voce: gia });
+    const nome = String(b.nome || '').trim().slice(0, 80) || `${fonte === 'subito' ? 'Venditore Subito' : 'Venditore Autoscout'} ${id}`;
+    const voce = {
+      fonte, id, nome,
+      dove: null, via: null,
+      url: null,                 // la vetrina non la conosciamo: l'annuncio non la porta
+      mio: !!b.mio,
+      schedaLetta: true,         // non c'e' niente da rileggere finche' non c'e' un url
+      daAnnuncio: true,          // com'e' entrato in elenco: si vede, non si indovina
+      aggiunto: new Date().toISOString(),
+    };
+    voci.push(voce);
+    C.scrivi(voci);
+    res.json({ ok: true, voce });
+  });
+
   app.post('/api/competitor', json, async (req, res) => {
     const url = (req.body && req.body.url) || (req.query && req.query.url);
     if (!url) return res.status(400).json({ ok: false, error: 'serve il link della vetrina' });
@@ -66,7 +106,10 @@ function mount(app, deps = {}) {
     // molti di piu' (telefoni, orari, valutazione, servizi, logo) e chi ce l'ha gia' in
     // elenco non deve toglierla e rimetterla per vederli: si rilegge una volta sola,
     // quando quel parco lo si scarica comunque.
-    if (!voce.schedaLetta) {
+    // `voce.url` puo' mancare: le vetrine aggiunte da un annuncio hanno l'id ma non il link
+    // della pagina. Senza questa guardia si tentava una risoluzione destinata a fallire a
+    // ogni singolo scarico del parco.
+    if (!voce.schedaLetta && voce.url) {
       try {
         const fresca = await C.risolviVetrina(voce.url);
         voce = { ...voce, ...fresca, id: voce.id, mio: voce.mio, aggiunto: voce.aggiunto, gruppo: voce.gruppo, schedaLetta: true };
