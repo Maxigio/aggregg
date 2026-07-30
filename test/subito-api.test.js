@@ -56,6 +56,25 @@ test('mapAd: i km vengono dal valore esatto, non dalla fascia (payload hades ver
   assert.strictEqual(km([S('0 Km')]), 0, 'zero km e\' un dato vero (km 0), non un assente');
 });
 
+test('km: quanto e\' larga davvero la fascia chiesta, sui due lati', () => {
+  // `ms` e `me` sono CATEGORIE, non numeri: il filtro km di Subito arriva fino alla fine della
+  // fascia e parte dal suo inizio. Finora non si notava perche' l'app stampava il fondo-fascia;
+  // ora che i km sono quelli veri, quegli annunci si vedono e vanno spiegati a chi guarda.
+  const { kmTettoFascia: su, kmPavimentoFascia: giu } = scrape;
+  assert.strictEqual(su(200000), 249999, 'chiedendo max 200.000 arrivano annunci fino a 249.999');
+  assert.strictEqual(su(100000), 109999);
+  assert.strictEqual(giu(22000), 20000, 'chiedendo min 22.000 arrivano annunci da 20.000');
+  assert.strictEqual(giu(205000), 200000);
+  // Sui numeri tondi la fascia combacia: niente da avvertire, e l'avviso non deve comparire.
+  assert.strictEqual(giu(20000), null);
+  assert.strictEqual(giu(30000), null);
+  assert.strictEqual(su(24999), null);
+  // Valori assenti o senza senso: nessun avviso, mai un NaN a schermo.
+  for (const v of [null, undefined, 0, -1, 'boh']) {
+    assert.strictEqual(su(v), null); assert.strictEqual(giu(v), null);
+  }
+});
+
 test('mapAd: senza url → null', () => {
   const ad = JSON.parse(JSON.stringify(AD)); ad.urls = {};
   assert.strictEqual(mapAd(ad), null);

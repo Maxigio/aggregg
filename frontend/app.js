@@ -2981,12 +2981,17 @@ function renderSourceStatus() {
   if (as && as.allargato && as.reason) {
     fonteBreakdown.innerHTML += `<span class="src-avviso">${escapeHtml(as.reason)}</span>`;
   }
-  // Il filtro km di Subito e' a fasce, non a numero: chiedendo 200.000 arrivano annunci fino a
-  // 249.999. Ora che la colonna Km mostra il chilometraggio VERO e non il fondo-fascia, quelli
-  // si vedono — e senza questa riga sembrerebbero un errore dell'app.
+  // Il filtro km di Subito e' a fasce, non a numero, su ENTRAMBI i lati: chiedendo un massimo di
+  // 200.000 arrivano annunci fino a 249.999, chiedendone un minimo di 22.000 arrivano da 20.000.
+  // Ora che la colonna Km mostra il chilometraggio VERO e non il fondo-fascia, quelli si vedono
+  // — e senza questa riga sembrerebbero un errore dell'app. Coi numeri tondi non compare nulla.
   const sub = lastSources.subito;
-  if (sub && sub.kmFino && sub.status === 'ok' && sub.count > 0) {
-    fonteBreakdown.innerHTML += `<span class="src-avviso">Subito filtra i km a fasce: possono arrivare annunci fino a ${Number(sub.kmFino).toLocaleString('it-IT')} km</span>`;
+  if (sub && sub.status === 'ok' && sub.count > 0 && (sub.kmFino || sub.kmDa)) {
+    const km = n => Number(n).toLocaleString('it-IT');
+    const pezzi = [];
+    if (sub.kmDa) pezzi.push(`da ${km(sub.kmDa)}`);
+    if (sub.kmFino) pezzi.push(`fino a ${km(sub.kmFino)}`);
+    fonteBreakdown.innerHTML += `<span class="src-avviso">Subito filtra i km a fasce: possono arrivare annunci ${pezzi.join(' e ')} km</span>`;
   }
 }
 

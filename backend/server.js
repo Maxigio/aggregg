@@ -1537,10 +1537,13 @@ async function runSearchCore(params) {
       subito:    { status: subitoRes.status, reason: subitoRes.reason || null, count: countBy('subito'),
                    totale: subitoRes.total ?? null,
                    come: params.subitoNodo ? (params.subitoNodo.come || 'id') : 'testo libero',
-                   // Il filtro km di Subito lavora a FASCE: chiedendo 200.000 arrivano annunci
-                   // fino a 249.999. Finora non si notava perche' mostravamo il fondo-fascia;
-                   // ora che i km sono quelli veri, si dice invece di far sembrare un errore.
-                   kmFino: scrapeSubitoApi.kmTettoFascia(params.kmMax) },
+                   // Il filtro km di Subito lavora a FASCE, su ENTRAMBI i lati: chiedendo un
+                   // massimo di 200.000 arrivano annunci fino a 249.999, e chiedendone un minimo
+                   // di 22.000 arrivano da 20.000. Finora non si notava perche' mostravamo il
+                   // fondo-fascia; ora che i km sono quelli veri, si dice invece di far sembrare
+                   // un errore dell'app. Coi numeri tondi non c'e' niente da dire: e' null.
+                   kmFino: scrapeSubitoApi.kmTettoFascia(params.kmMax),
+                   kmDa:   scrapeSubitoApi.kmPavimentoFascia(params.kmMin) },
       // `allargato` sta ACCANTO allo status, mai al posto suo ('ok' resta 'ok', quindi cache e
       // "Carica altri" non cambiano comportamento). Serve perche' `reason` la UI la stampava
       // solo per le fonti 'skipped', e queste frasi nascono proprio a status 'ok': il

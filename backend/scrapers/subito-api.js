@@ -291,6 +291,24 @@ function kmTettoFascia(kmMax) {
   for (const [limit] of KM_KEY_TABLE) if (limit >= n) return limit > n ? limit : null;
   return null;   // oltre 499.999 il tetto non e' dichiarato
 }
+/**
+ * Lo stesso, sul lato basso. `ms` e' anch'esso una CATEGORIA, quindi il minimo vero e' l'INIZIO
+ * della fascia che contiene kmMin: chiedendo 22.000 tornano annunci da 20.000 in su, cioe' fino
+ * a 4.999 km sotto quello chiesto (49.999 sopra i 200.000). Finora non si notava perche' l'app
+ * stampava il fondo-fascia; ora che i km sono quelli veri, quegli annunci si vedono e vanno
+ * spiegati. Null quando il numero chiesto cade esattamente sull'inizio di una fascia — con i
+ * numeri tondi (20.000, 25.000, 30.000) non c'e' niente da avvertire.
+ */
+function kmPavimentoFascia(kmMin) {
+  const n = Number(kmMin);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  let inizio = 0;
+  for (const [limit] of KM_KEY_TABLE) {
+    if (limit >= n) return inizio < n ? inizio : null;
+    inizio = limit + 1;
+  }
+  return null;   // oltre 499.999 non c'e' una fascia superiore da dichiarare
+}
 
 /**
  * I nomi dei parametri NON sono gli stessi per auto e moto. Sbagliarli non da' errore:
@@ -611,4 +629,6 @@ module.exports._buildPath = buildPath;
 module.exports._extractTotal = extractTotal;   // F50 copertura
 module.exports._riconosci = riconosci;         // filtro sui livelli dichiarati dall'annuncio
 module.exports._faTitolo = faTitolo;
-module.exports.kmTettoFascia = kmTettoFascia;  // quanto e' largo davvero il filtro km chiesto
+// Quanto e' largo DAVVERO il filtro km chiesto, sui due lati: `ms` e `me` sono categorie.
+module.exports.kmTettoFascia = kmTettoFascia;
+module.exports.kmPavimentoFascia = kmPavimentoFascia;
