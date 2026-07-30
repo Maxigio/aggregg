@@ -1269,9 +1269,9 @@ section.search.area-attiva #searchForm { min-height: 0; }
    restano solo le due cose che nella griglia non ci stanno — la lista degli optional e
    il testo scritto dal venditore — a tutta larghezza e in chiaro. */
 .det-fonte { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
-.det-blocco { width: 100%; }
-.det-blocco-t { font-size: 0.82rem; font-weight: 600; color: var(--text); margin-bottom: 5px; }
-.det-blocco-n { font-weight: 600; color: var(--accent); margin-left: 3px; }
+/* .det-blocco/-t/-n: erano il riquadro sempre aperto degli Optional. Ora quel blocco usa
+   la forma richiudibile `mini`, come il testo dell'annuncio, e quelle tre regole non le
+   usava piu' nessuno. */
 .opt-cat { padding: 5px 0; border-bottom: 1px dotted var(--line); }
 .opt-cat-t { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 3px; }
 .opt-voci { display: flex; flex-wrap: wrap; gap: 4px 6px; }

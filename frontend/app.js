@@ -2504,8 +2504,10 @@ function campiNativi(r) {
 
 /**
  * Optional: la lista che il venditore ha spuntato, raggruppata come la manda Autoscout.
- * Dato dell'annuncio, quindi visibile senza aprire niente — ma a tutta larghezza,
- * perche' incolonnarlo nella griglia delle coppie lo spezzerebbe.
+ *
+ * CHIUSO di default, come il testo dell'annuncio: e' un dato dell'annuncio, ma su una
+ * berlina tedesca ben accessoriata sono ottanta voci, e aperte spingono in fondo tutto
+ * quello che viene dopo. Chiuso si vede che c'e' e quanti sono; aperto si leggono.
  */
 function optionalHTML(r) {
   const list = Array.isArray(r.optional) ? r.optional.filter(o => o && o.nome) : [];
@@ -2519,7 +2521,9 @@ function optionalHTML(r) {
   const corpo = [...perCat.entries()].map(([cat, voci]) =>
     `<div class="opt-cat"><span class="opt-cat-t">${escapeHtml(cat)}</span>`
     + `<div class="opt-voci">${voci.map(v => `<span class="opt-v">${escapeHtml(v)}</span>`).join('')}</div></div>`).join('');
-  return `<div class="det-blocco"><div class="det-blocco-t">Optional <span class="det-blocco-n">${list.length}</span></div>${corpo}</div>`;
+  // Stessa forma richiudibile del testo annuncio (miniHTML): la chiave e' per-annuncio,
+  // cosi' aprirne uno non apre quello di tutti gli altri.
+  return miniHTML('optional:' + r.url, 'Optional', list.length + (list.length === 1 ? ' voce' : ' voci'), corpo);
 }
 
 // Il testo dell'annuncio: quello che il venditore ha voluto scrivere. Alto al massimo
