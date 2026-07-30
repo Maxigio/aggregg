@@ -263,6 +263,22 @@ async function init() {
   setupMarcaAutocomplete();
   setupModelloAutocomplete();
   validateMarca();
+
+  // PRIMA del ripristino, non dopo: `ripristinaModo()` rimette il radio su Moto e lancia il
+  // suo `change`, ed e' QUESTO gestore l'unico posto che chiama populateMarca('moto').
+  // Registrandolo dopo, l'evento partiva senza ascoltatori: chi chiudeva l'app in Moto la
+  // riapriva con la barra su Moto e il catalogo marche vuoto — nessuna marca accettata,
+  // "Cerca" spento, e l'unico modo di uscirne era passare da Auto e tornare indietro.
+  tipoInputs.forEach(input => input.addEventListener('change', async () => {
+    document.body.dataset.tipo = input.value;
+    await populateMarca(input.value);
+    marcaSelect.value = '';
+    document.getElementById('modello').value = '';
+    resetModelloVersione();
+    validateMarca();
+    currentResults = []; hideResults();
+  }));
+
   const daUrl = await applyUrlParams();
   if (!daUrl) ripristinaModo();
 
@@ -273,16 +289,6 @@ async function init() {
   } catch (_) {}
 
   themeToggle?.addEventListener('click', () => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
-
-  tipoInputs.forEach(input => input.addEventListener('change', async () => {
-    document.body.dataset.tipo = input.value;
-    await populateMarca(input.value);
-    marcaSelect.value = '';
-    document.getElementById('modello').value = '';
-    resetModelloVersione();
-    validateMarca();
-    currentResults = []; hideResults();
-  }));
 
   // Toolbar: sort mobile + facet
   sortMobile?.addEventListener('change', () => {
@@ -1642,11 +1648,16 @@ function exportPdfRicambi() {
 }
 
 // 3 input DEDICATI (uno per modo, valore persistente al cambio tab) + selettore veicolo.
-const rcActiveInput = () => document.querySelector(`.rc-input[data-rcfor="${ricambiMode}"]`);
+// La ricerca e' ANCORATA a #ricambiFields: `.rc-input` non e' uno stile, e' il gancio con cui
+// si sceglie quale dei tre input mostrare. Presa larga su tutto il documento agganciava anche
+// #cpUrl (il link della vetrina, che sta in un'altra riga della stessa barra): non avendo
+// `data-rcfor`, il confronto era vero sempre e ogni cambio tab dei Ricambi lo nascondeva —
+// la sezione Competitor restava senza campo, e senza ricaricare la pagina non tornava.
+const rcActiveInput = () => document.querySelector(`#ricambiFields .rc-input[data-rcfor="${ricambiMode}"]`);
 function setRicambiMode(m) {
   ricambiMode = ['nome', 'prodotto'].includes(m) ? m : 'oem';
   document.querySelectorAll('#ricambiModeToggle .rc-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.rcmode === ricambiMode));
-  document.querySelectorAll('.rc-input').forEach(i => i.classList.toggle('d-none', i.dataset.rcfor !== ricambiMode));
+  document.querySelectorAll('#ricambiFields .rc-input').forEach(i => i.classList.toggle('d-none', i.dataset.rcfor !== ricambiMode));
 }
 function setRcVeicolo(v) {
   rcVeicolo = v === 'moto' ? 'moto' : 'auto';
@@ -1805,11 +1816,19 @@ async function caricaAltri() {
     const nuovi = (data.risultati || []).filter(r => r && r.url && !visti.has(r.url));
     fettaPresa++;
     if (!nuovi.length) { lastSources = fondiTotali(data.sources); toast('Non ci sono altri annunci'); return; }
+    // IL CURSORE VA RIFATTO. Il suo BINARIO (non solo le maniglie) era calcolato sui prezzi
+    // della PRIMA fetta soltanto, e renderResults filtra su quel binario: ogni annuncio nuovo
+    // fuori da quella finestra spariva in silenzio, e l'utente non poteva nemmeno allargarlo.
+    // Nel caso peggiore — una fonte sola, ordinata per prezzo crescente — la fetta successiva
+    // e' per costruzione tutta sopra il massimo: 100 annunci scaricati, uno solo a schermo.
+    const stretta = manigliePrezzoStrette();
     currentResults = currentResults.concat(nuovi);
     lastSources = fondiTotali(data.sources);
     renderSourceStatus();
-    renderResults(currentResults);          // riordina TUTTO: l'ordine per prezzo resta vero
-    toast(`Aggiunti ${nuovi.length} annunci`);
+    initPrezzoSlider(currentResults, stretta);
+    if (!prezzoSliderInstance) renderResults(currentResults);   // niente cursore → disegna qui
+    const fuori = stretta ? nuovi.filter(r => r.prezzo != null && (r.prezzo < stretta[0] || r.prezzo > stretta[1])).length : 0;
+    toast(fuori ? `Aggiunti ${nuovi.length} annunci · ${fuori} fuori dal filtro prezzo` : `Aggiunti ${nuovi.length} annunci`);
   } catch (_) {
     toast('Impossibile contattare il server');
   } finally { caricandoAltri = false; renderAltriBtn(); }
@@ -1824,7 +1843,11 @@ function fondiTotali(nuove) {
     const n = (nuove || {})[f] || null;
     if (!vecchia && !n) continue;
     out[f] = { ...(vecchia || {}), ...(n || {}), count: presiDa(f),
-               totale: (n && n.totale != null) ? n.totale : (vecchia && vecchia.totale) };
+               totale: (n && n.totale != null) ? n.totale : (vecchia && vecchia.totale),
+               // L'avviso di allargamento vale per gli annunci a schermo, non per l'ultima
+               // fetta: se resta anche una riga allargata, l'avviso deve restare con lei.
+               allargato: (n && n.allargato) || (vecchia && vecchia.allargato) || null,
+               reason: (n && n.reason) || (vecchia && vecchia.reason) || null };
   }
   return out;
 }
@@ -1968,7 +1991,15 @@ fetchSubitoStatus();
 setInterval(fetchSubitoStatus, SUBITO_POLL_INTERVAL);
 
 // ─── Slider prezzo ──────────────────────────────────────────────────────────
-function initPrezzoSlider(results) {
+/** Le maniglie sono state mosse a mano? (cioe' non stanno agli estremi del binario) */
+function manigliePrezzoStrette() {
+  if (!prezzoSliderInstance) return null;
+  const [a, b] = prezzoSliderInstance.get().map(Number);
+  const [gMin, gMax] = sliderGlobalBounds;
+  return (a > gMin || b < gMax) ? [a, b] : null;
+}
+
+function initPrezzoSlider(results, mantieni = null) {
   if (prezzoSliderInstance) { try { prezzoSliderInstance.destroy(); } catch (_) {} prezzoSliderInstance = null; }
   prezzoSliderEl.innerHTML = '';
   document.getElementById('sliderLabelMin').textContent = '';
@@ -1979,8 +2010,12 @@ function initPrezzoSlider(results) {
   const maxP = Math.ceil(Math.max(...prices) / 100) * 100;
   if (minP === maxP) return;
   sliderGlobalBounds = [minP, maxP];
+  // `mantieni` lo passa solo "Carica altri": il BINARIO si allarga sui prezzi di tutto lo
+  // scaricato, ma la stretta fatta a mano resta dov'era invece di essere buttata via.
+  const da = mantieni ? Math.max(minP, Math.min(maxP, mantieni[0])) : minP;
+  const a  = mantieni ? Math.max(minP, Math.min(maxP, mantieni[1])) : maxP;
   prezzoSliderInstance = noUiSlider.create(prezzoSliderEl, {
-    start: [minP, maxP], connect: true, range: { min: minP, max: maxP }, step: 100,
+    start: [da, a], connect: true, range: { min: minP, max: maxP }, step: 100,
     format: { to: v => Math.round(v), from: v => Number(v) },
   });
   prezzoSliderInstance.on('update', ([sMin, sMax]) => {
@@ -2718,9 +2753,21 @@ function passStoricoHTML(r) {
 /** marca e modello vengono dalla RICERCA (l'annuncio non li porta), l'anno dall'annuncio. */
 function gommeChiave(r) {
   const p = lastSearchParams || {};
-  if ((p.tipo || currentTipo()) !== 'auto') return null;      // Wheel-Size qui e' solo auto
-  if (!p.marca || !p.modello || !r.anno) return null;
-  return { marca: p.marca, modello: p.modello, anno: r.anno };
+  // La chiave la dice l'ANNUNCIO, non l'ultima ricerca. Nel parco di un concessionario gli
+  // annunci non vengono da una ricerca, e `lastSearchParams` restava quello di prima: aprendo
+  // una Fiat Panda dopo aver cercato una BMW 320d, sotto la Panda comparivano cerchi, gomme e
+  // pressioni della BMW, attribuiti a lei. Stessa forma gia' usata da passTipo e loadVehScheda.
+  if (passTipo(r) !== 'auto') return null;                    // Wheel-Size qui e' solo auto
+  // La MARCA di catalogo vince quando c'e' (doSearch rifiuta una ricerca senza marca a
+  // catalogo, quindi in griglia e' sempre valorizzata e canonica); nel parco si spegne e vale
+  // quella dell'annuncio. Facendo vincere sempre l'annuncio si peggiorava la griglia normale,
+  // dove `r.marca` e' il nome grezzo della fonte e non quello del catalogo.
+  const marca = (cpApertoId ? '' : p.marca) || r.marca || '';
+  const modello = (cpApertoId ? '' : p.modello) || modelloAnnuncio(r) || '';
+  // 'Altro' e' il segnaposto di Subito quando il venditore la marca non l'ha scelta: non e'
+  // una marca, e chiederla a Wheel-Size darebbe una risposta a caso o nessuna.
+  if (!marca || marca === 'Altro' || !modello || !r.anno) return null;
+  return { marca, modello, anno: r.anno };
 }
 
 function gommePneuHTML(r, misura) {
@@ -2761,7 +2808,11 @@ function gommeCorpoHTML(r, k) {
   if (!calz.length) {
     // Wheel-Size mette la misura in chiaro solo sul primo allestimento di ogni generazione:
     // se qui non ce n'e' nessuna, dirlo e' l'unica cosa onesta — un riquadro vuoto no.
-    return `<div class="gom-att">Nessuna misura in chiaro per ${escapeHtml(k.marca)} ${escapeHtml(k.modello)} ${k.anno}`
+    // Il nome che si dice deve essere quello DAVVERO interrogato: il server ripulisce il
+    // suffisso di generazione ("Panda 3ª serie" → "Panda"), e scrivere qui il nome grezzo
+    // farebbe cercare all'utente un errore dove non c'e'.
+    const nome = (d && d.modello) || k.modello;
+    return `<div class="gom-att">Nessuna misura in chiaro per ${escapeHtml(k.marca)} ${escapeHtml(nome)} ${k.anno}`
       + ((d.calzate || []).length ? ` (la fonte elenca ${d.calzate.length} allestimenti ma senza misura)` : '') + '.</div>';
   }
   // una riga per MISURA distinta: la stessa gomma torna su piu' allestimenti
@@ -2922,6 +2973,21 @@ function renderSourceStatus() {
     const dim = s.status === 'ok' ? '' : ' src-dim';
     return `<span class="src ${meta.cls}${dim}">${FONTE_LABEL[f]} <b>${txt}</b></span>`;
   }).join('');
+  // L'AVVISO DI ALLARGAMENTO. `reason` veniva stampata solo per le fonti 'skipped', ma la frase
+  // "nessun X su Autoscout: mostro Y" nasce a status 'ok' — quindi non compariva mai, e si
+  // leggevano annunci di un altro modello (o di un altro allestimento) senza nessun segnale.
+  // Riga propria sotto le pill, come `.veh-liq-avviso` per la liquidita'.
+  const as = lastSources.autoscout;
+  if (as && as.allargato && as.reason) {
+    fonteBreakdown.innerHTML += `<span class="src-avviso">${escapeHtml(as.reason)}</span>`;
+  }
+  // Il filtro km di Subito e' a fasce, non a numero: chiedendo 200.000 arrivano annunci fino a
+  // 249.999. Ora che la colonna Km mostra il chilometraggio VERO e non il fondo-fascia, quelli
+  // si vedono — e senza questa riga sembrerebbero un errore dell'app.
+  const sub = lastSources.subito;
+  if (sub && sub.kmFino && sub.status === 'ok' && sub.count > 0) {
+    fonteBreakdown.innerHTML += `<span class="src-avviso">Subito filtra i km a fasce: possono arrivare annunci fino a ${Number(sub.kmFino).toLocaleString('it-IT')} km</span>`;
+  }
 }
 
 // ─── Spec (dettaglio) ────────────────────────────────────────────────────────
@@ -3641,12 +3707,21 @@ let vehAddonAperto = false;    // il gruppo resta aperto quando il corpo si ridi
 
 async function vehRichiamiCarica() {
   const p = lastSearchParams || {};
-  if (!p.marca || vehRichiami) return;
+  // Le campagne sono quelle del VEICOLO che si sta guardando. La scheda si apre solo dal
+  // pannello di un annuncio, e nel parco di un concessionario gli annunci non vengono da una
+  // ricerca: prendendo marca e modello dai filtri, dentro la scheda di una Fiat Panda si
+  // leggevano i richiami della BMW cercata prima, con scritto "per questo modello".
+  // Stessa forma di gommeChiave e loadVehScheda: la ricerca vale solo fuori dal parco.
+  // Stessa coppia con cui vehMisureCarica (riga ~3846) chiede le prove: vehData e' la scheda
+  // aperta, vehModelloBase il nome-modello con cui e' stata risolta.
+  const marca = (vehData && vehData.marca) || (cpApertoId ? '' : p.marca) || '';
+  const modello = vehModelloBase || (vehData && vehData.modello) || (cpApertoId ? '' : p.modello) || '';
+  if (!marca || vehRichiami) return;
   vehRichiami = { loading: true };
   const my = vehGen;
   renderVehBody();
-  const q = new URLSearchParams({ marca: p.marca });
-  if (p.modello) q.set('modello', p.modello);
+  const q = new URLSearchParams({ marca });
+  if (modello) q.set('modello', modello);
   try {
     const [rdw, sg] = await Promise.all([
       fetch('/api/richiami/rdw/cerca?' + q.toString() + '&quante=8').then(r => r.json()).catch(() => null),
@@ -4750,12 +4825,13 @@ const cpRiga = (k, v) => `<div class="cp-n"><span>${escapeHtml(k)}</span><b>${v}
  * ricavano — chi e' fermo da troppo, chi e' appena arrivato, quanto ha venduto in dieci
  * anni.
  */
-function cpNumeriChiave(n, storico, v, troncato) {
+function cpNumeriChiave(n, storico, v, troncato, illeggibili) {
   if (!n) return '';
   const dich = v && v.annunciDichiarati;
-  // Due avvisi, non due statistiche: dicono che quello che stai guardando potrebbe non
+  // Tre avvisi, non tre statistiche: dicono che quello che stai guardando potrebbe non
   // essere tutto, o non essere solo suo.
   const avvisi = (troncato ? '<div class="cp-avviso">Elenco troncato al tetto di sicurezza: questo parco e\' piu\' grande di quello mostrato.</div>' : '')
+    + (illeggibili ? `<div class="cp-avviso">${illeggibili} annunci della vetrina non si sono lasciati leggere: i numeri qui sotto sono calcolati senza di loro.</div>` : '')
     + (n.venditori && n.venditori.length > 1
         ? `<div class="cp-avviso">Attenzione: nella risposta compaiono ${n.venditori.length} venditori diversi (${escapeHtml(n.venditori.map(x => x.nome).join(', ')).slice(0, 90)}). Il filtro della fonte non ha tenuto.</div>` : '');
   return '<div class="cp-numeri">'
@@ -4791,7 +4867,7 @@ function cpSchedaHTML(v) {
   const corpo = !st ? '<div class="cp-att">Il parco non e\' ancora stato scaricato.</div>'
     : st.stato === 'carico' ? '<div class="cp-att">Scarico il parco… su un concessionario grande ci vuole un minuto.</div>'
     : st.stato === 'ko' ? `<div class="cp-att">Non riuscito: ${escapeHtml(st.errore || 'la fonte non risponde')}</div>`
-    : cpNumeriChiave(st.dati.numeri, st.dati.storico, v, st.dati.troncato);
+    : cpNumeriChiave(st.dati.numeri, st.dati.storico, v, st.dati.troncato, st.dati.illeggibili);
   const quando = st && st.stato === 'ok' && st.dati.quando
     ? `<span class="cp-quando">dati del ${new Date(st.dati.quando).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${st.dati.daCache ? ' · dalla cache' : ''}</span>` : '';
   const aperto = cpApertoId === v.id;
@@ -4930,7 +5006,8 @@ function cpMostraGruppo(g) {
 async function cpAggiungi() {
   const inp = document.getElementById('cpUrl');
   const url = (inp && inp.value || '').trim();
-  if (!url) return;
+  // Il silenzio non aiuta: come fa la gemella dei Ricambi (doRicambi), si dice cosa manca.
+  if (!url) { showError('Incolla il link della vetrina di un concessionario.'); return; }
   const mio = !!(document.getElementById('cpMio') || {}).checked;
   cpErrore = null;
   // Il bottone ora sta nella barra e non viene ridisegnato: se non lo si rimette a posto

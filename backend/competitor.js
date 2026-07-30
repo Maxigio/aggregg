@@ -259,7 +259,7 @@ async function parco(voce) {
         }
       } catch (_) { /* lo storico e' un di piu': se non arriva, il parco resta */ }
     }
-    return { veicoli: r.items.map(v => ({ ...v, tipo: 'moto' })), troncato: r.troncato, storico };
+    return { veicoli: r.items.map(v => ({ ...v, tipo: 'moto' })), troncato: r.troncato, illeggibili: r.illeggibili || 0, storico };
   }
 
   for (const tipo of ['auto', 'moto']) {
@@ -268,13 +268,22 @@ async function parco(voce) {
       : { tipo, subitoUid: voce.id };
     const scr = voce.fonte === 'autoscout' ? scrapeAs24 : scrapeSubito;
     let r;
+    // La seconda passata che fallisce non deve buttare via la prima: un venditore di auto ha
+    // zero moto, e un 429 su quella passata cancellava tutte le auto gia' scaricate e mostrava
+    // "Non riuscito" su un parco che c'era tutto. Se almeno una passata ha portato veicoli,
+    // si tiene quello che c'e' e si dichiara il parco incompleto.
     try { r = await scr(params, { maxPages: MAX_PAGINE, withMeta: true }); }
-    catch (e) { throw new Error(`${voce.fonte}: ${e.message}`); }
+    catch (e) {
+      if (!veicoli.length) throw new Error(`${voce.fonte}: ${e.message}`);
+      troncato = true;
+      console.warn(`[competitor] passata ${tipo} fallita (${e.message}) → parco parziale, dichiarato troncato`);
+      continue;
+    }
     const items = Array.isArray(r) ? r : (r.items || []);
     if (!Array.isArray(r) && r.truncated) troncato = true;
     for (const v of items) veicoli.push({ ...v, tipo });
   }
-  return { veicoli, troncato };
+  return { veicoli, troncato, illeggibili: 0 };
 }
 
 /* ─── i numeri ────────────────────────────────────────────────────────────── */

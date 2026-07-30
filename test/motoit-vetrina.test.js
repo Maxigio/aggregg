@@ -64,3 +64,45 @@ test('senza id la card non diventa un annuncio', () => {
   assert.deepEqual(v._mapCards('<div class="dlr-card"><h4>Yamaha</h4></div>'), []);
   assert.deepEqual(v._mapCards(''), []);
 });
+
+test('parco: l\'elenco finisce sulle card PRESENTI, non su quelle che si sono lette', async () => {
+  // Il ciclo confrontava le card RIUSCITE con 12: una sola card fuori standard (promo, "in
+  // arrivo", markup diverso) su una pagina piena faceva credere che l'elenco fosse finito, e
+  // un parco da sessanta si fermava a undici — con `troncato: false` e le mediane calcolate
+  // su quegli undici, senza nessun avviso.
+  const card = id => '<div class="dlr-card">' + (id ? `<a data-target="#annuncio_${id}"></a>` : '')
+    + '<span class="dlr-card__info__title__brand">Yamaha</span>'
+    + '<span class="dlr-card__info__title__model">MT-07</span>'
+    + '<span class="dlr-card__extrainfo__price">5.000 €</span>'
+    + '<span class="dlr-card__meta">10.000 km del 2019</span></div>';
+  const pag = ids => `<html><body>${ids.map(card).join('')}</body></html>`;
+
+  const motoit = require('../backend/scrapers/motoit');
+  const orig = motoit._get;
+  const chieste = [];
+  // Pagina 1: 12 card grezze, di cui UNA senza data-target → 11 leggibili. Pagina 2: 5 card.
+  motoit._get = async url => {
+    chieste.push(url);
+    if (/pagina-2/.test(url)) return { status: 200, body: pag([2001, 2002, 2003, 2004, 2005]) };
+    if (/pagina-/.test(url)) return { status: 200, body: pag([]) };
+    return { status: 200, body: pag([null, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011]) };
+  };
+  try {
+    const r = await v.parco('prova', { maxPagine: 5 });
+    assert.strictEqual(chieste.length, 2, 'la pagina 2 deve essere chiesta: la pagina 1 era PIENA');
+    assert.strictEqual(r.items.length, 16, '11 leggibili + 5 = 16');
+    assert.strictEqual(r.illeggibili, 1, 'la card non letta si conta e si dice');
+    assert.strictEqual(r.troncato, false);
+  } finally { motoit._get = orig; }
+});
+
+test('parco: card presenti ma nessuna leggibile → errore dichiarato, non parco vuoto', async () => {
+  // Se cambiano le classi della vetrina, prima si rispondeva "veicoli presi 0" come se il
+  // piazzale fosse vuoto: un parco inesistente archiviato come completo.
+  const motoit = require('../backend/scrapers/motoit');
+  const orig = motoit._get;
+  motoit._get = async () => ({ status: 200, body: '<html><body>' + '<div class="dlr-card"></div>'.repeat(12) + '</body></html>' });
+  try {
+    await assert.rejects(() => v.parco('prova', { maxPagine: 2 }), /non si leggono/);
+  } finally { motoit._get = orig; }
+});

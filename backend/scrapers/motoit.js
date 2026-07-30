@@ -71,9 +71,14 @@ function buildUrl(params, page = 1) {
   const brandSlug = motoitBrandSlug;
   qs.set('brand', brandSlug);
 
-  // Modello: formato "brandSlug|modelSlug" (es. "ducati|monster-1100")
+  // Modello: formato "brandSlug|modelSlug" (es. "ducati|monster-1100"). Gli slug possono
+  // essere PIU' D'UNO separati da virgola — Moto.it li tratta in OR, verificato sul sito:
+  // scarabeo-50 (29) + scarabeo-125 (4) + scarabeo-500 (8) = 41, esattamente il totale della
+  // query con le tre insieme. Serve a chi scrive il nome largo ("Scarabeo") di un modello che
+  // su Moto.it e' spezzato per cilindrata: prima se ne sceglieva una sola, a caso.
   if (motoitModelSlug) {
-    qs.set('model', `${brandSlug}|${motoitModelSlug}`);
+    const slugs = String(motoitModelSlug).split(',').map(s => s.trim()).filter(Boolean);
+    if (slugs.length) qs.set('model', slugs.map(s => `${brandSlug}|${s}`).join(','));
   }
 
   // Versione (allestimento): codice opaco dall'API `bikes` → param `bike=`

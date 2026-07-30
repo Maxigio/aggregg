@@ -145,7 +145,9 @@
              di ricerca come le altre, nella stessa barra e con gli stessi stili. -->
         <div class="cp-fields d-none" id="competitorFields">
           <div class="rc-input-row">
-            <input type="text" id="cpUrl" class="field-input rc-input" autocomplete="off" spellcheck="false"
+            <!-- NIENTE `rc-input`: non e' uno stile (in style.css esiste solo .rc-input-row),
+                 e' il gancio dei tre input dei Ricambi. Qui era una classe di troppo. -->
+            <input type="text" id="cpUrl" class="field-input" autocomplete="off" spellcheck="false"
                    placeholder="Link della vetrina — autoscout24.it/concessionari/… · subito.it/shops/… · dealer.moto.it/…" />
             <button type="submit" class="btn-cerca" id="cpAdd">Analizza</button>
           </div>

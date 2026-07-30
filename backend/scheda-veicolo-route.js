@@ -144,6 +144,19 @@ function motoBrandEntry(marca) {
 // scheda parla della STESSA versione che l'utente sceglie cercando (prima ricerca e
 // scheda usavano fonti diverse, da cui la confusione "Explorer" di moto.it vs "Explore").
 // Ritorna null se Moto.it non copre la moto → il chiamante ripiega su ultimatespecs.
+/**
+ * La famiglia Moto.it che corrisponde al modello cercato — o NIENTE.
+ * Fuori da resolveMotoit solo per poterla provare senza rete: e' la regola, non la richiesta.
+ */
+function famigliaMotoit(modelli, modello) {
+  const q = norm(modello), qt = motoTokens(modello);
+  const cand = (modelli || []).map(m => ({ ...m, n: norm(m.name), t: motoTokens(m.name) }));
+  const unico = lista => (lista.length === 1 ? lista[0] : null);
+  return cand.find(m => m.n === q)
+    || unico(cand.filter(m => q.length >= 3 && prefissoSicuro(m.n, q)))
+    || (qt.length ? unico(cand.filter(m => qt.every(t => m.t.includes(t)))) : null);
+}
+
 async function resolveMotoit({ marca, modello, anno }) {
   if (!marca || !modello) return null;
   const brandEntry = motoBrandEntry(marca);
@@ -152,12 +165,14 @@ async function resolveMotoit({ marca, modello, anno }) {
   let modelli = [];
   try { modelli = await getBrandModels(brandSlug); } catch (_) { return null; }
   if (!modelli.length) return null;
-  // stesso criterio del match ultimatespecs: esatto → prefisso → token (ordine libero)
-  const q = norm(modello), qt = motoTokens(modello);
-  const cand = modelli.map(m => ({ ...m, n: norm(m.name), t: motoTokens(m.name) }));
-  const hit = cand.find(m => m.n === q)
-    || cand.filter(m => q.length >= 3 && prefissoSicuro(m.n, q)).sort((a, b) => a.n.length - b.n.length)[0]
-    || (qt.length ? cand.filter(m => qt.every(t => m.t.includes(t))).sort((a, b) => a.n.length - b.n.length)[0] : null);
+  // UN SOLO CANDIDATO O NIENTE — la stessa regola che `matchModel` applica gia' al catalogo
+  // auto (righe 80-91). Qui non c'era: fra piu' famiglie si teneva la PIU' CORTA, e a parita'
+  // di lunghezza vinceva l'ordine di inserimento del catalogo, cioe' il caso. Misurato su
+  // 5.639 nomi Subito: 235 finivano su una famiglia scelta a sorte fra 2 e 12 — un annuncio
+  // Ducati Scrambler 800 apriva la scheda "Scrambler 350", una monocilindrica anni '60, con
+  // le specifiche presentate come quelle dell'annuncio. Tornando null si ripiega su
+  // ultimatespecs, che di quelle 235 ne copre 185.
+  const hit = famigliaMotoit(modelli, modello);
   if (!hit) return null;
   let versioni = [];
   try { versioni = await getModelBikes(brandSlug, hit.slug); } catch (_) { return null; }
@@ -281,8 +296,37 @@ function generazioneDichiarata(modello) {
   const c = s.match(/\(([^)]+)\)/);
   return {
     romano: n && ROMANI[Number(n[1])] ? ROMANI[Number(n[1])] : null,
-    codici: c ? c[1].split(/[\/,\s]+/).filter(x => /^[A-Za-z0-9]{2,6}$/.test(x)) : [],
+    codici: c ? codiciDaParentesi(c[1]) : [],
   };
+}
+/**
+ * LA PARENTESI VALE INTERA. Subito scrive due codici accorciando il primo — "Classe C (W/S205)"
+ * sono W205 (berlina) e S205 (station wagon), "Serie 3 (E90/91)" sono E90 ed E91. Scartando i
+ * pezzi troppo corti restava un codice solo, e su Mercedes era SEMPRE quello della wagon: chi
+ * apriva la scheda di una berlina si vedeva peso, bagagliaio e consumi della familiare,
+ * presentati come quelli del suo annuncio. Ogni pezzo si ricompone con la coda del vicino
+ * completo, come versione-dedotta.js:207 fa con le porte "3/5" → [3,5].
+ */
+function codiciDaParentesi(dentro) {
+  const VALIDO = /^[A-Za-z0-9]{2,6}$/;
+  const pezzi = String(dentro).split(/[\/,\s]+/).filter(Boolean);
+  // Un codice e' COMPLETO quando ha sia lettere sia cifre ("S205", "E90", "F20"): e' da
+  // quelli che si ricava la parte mancante degli altri.
+  const completi = pezzi.filter(x => VALIDO.test(x) && /[A-Za-z]/.test(x) && /\d/.test(x));
+  const prefisso = (completi.map(x => (x.match(/^[A-Za-z]+/) || [''])[0]).find(Boolean)) || '';
+  const cifre = (completi.map(x => (x.match(/\d+$/) || [''])[0]).find(Boolean)) || '';
+  const out = new Set(completi);
+  for (const p of pezzi) {
+    if (completi.includes(p)) continue;
+    let cand = null;
+    if (/^[A-Za-z]+$/.test(p) && cifre) cand = p + cifre;                 // "W"  + 205 → W205
+    else if (/^\d+$/.test(p) && prefisso) cand = prefisso + p;            // "E" + "91" → E91
+    if (cand && VALIDO.test(cand)) { out.add(cand); continue; }
+    // Nessun vicino da cui ricavare niente: si tiene il pezzo se e' valido da solo.
+    // E' il caso di "Panda (169)", dove le cifre nude SONO il codice.
+    if (VALIDO.test(p)) out.add(p);
+  }
+  return [...out];
 }
 
 /** La cilindrata in litri, da dove la fonte l'ha messa. Le etichette del catalogo la scrivono
@@ -408,7 +452,10 @@ const AUTOM_ETI = /\b(dsg|s.?tronic|tiptronic|multitronic|steptronic|geartronic|
  * Cabriolet). L'annuncio la dichiara — campo nativo, presente nel 99% — quindi non c'e'
  * ragione di aprirle tutte e poi far scegliere a mano.
  */
-const GEN_FAMIGLIA = /\b(variant|alltrack|sportwagon|estate|touring|avant|wagon|sw)\b/i;
+// `t-modell` e' come auto-data chiama la station wagon Mercedes: verificato sulla pagina della
+// Classe C, dove le generazioni si chiamano "Classe C (W205)" e "Classe C T-modell (S205)".
+// Senza, la carrozzeria dichiarata dall'annuncio non riusciva a distinguerle.
+const GEN_FAMIGLIA = /\b(variant|alltrack|sportwagon|estate|touring|avant|wagon|sw|t-modell)\b/i;
 const GEN_APERTA    = /\b(cabrio|cabriolet|roadster|convertible|spider|spyder)\b/i;
 const GEN_COUPE     = /\b(coupe|coup[eé])\b/i;
 const GEN_MONOV     = /\b(sportsvan|plus|van|monovolume|tourer)\b/i;
@@ -712,4 +759,7 @@ function mount(app, deps = {}) {
   });
 }
 
-module.exports = { mount, resolveScheda, schedaPerAnnuncio, matchModel, matchMotoModels, resolveMoto };
+module.exports = { mount, resolveScheda, schedaPerAnnuncio, matchModel, matchMotoModels, resolveMoto,
+  // Puri e provabili senza rete: la pulizia del nome (la usa anche la rotta cerchi) e la
+  // lettura della generazione dichiarata nel nome Subito.
+  senzaGenerazione, generazioneDichiarata, famigliaMotoit };

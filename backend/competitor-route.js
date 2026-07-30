@@ -85,6 +85,9 @@ function mount(app, deps = {}) {
       voce,
       numeri: C.aggrega(p.veicoli),
       troncato: p.troncato,
+      // Le card presenti che non si sono lasciate leggere: dirle e' l'unico modo perche' chi
+      // guarda sappia che i numeri sono calcolati su meno mezzi di quelli in vetrina.
+      illeggibili: p.illeggibili || 0,
       storico: p.storico || null,      // Moto.it: quanti ne ha pubblicati in tutto, e da quando
       /**
        * L'ANNUNCIO INTERO. Qui c'era una rimappatura a otto campi che buttava via tutto il

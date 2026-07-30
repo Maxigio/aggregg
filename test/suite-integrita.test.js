@@ -66,6 +66,46 @@ test('ogni dipendenza dichiarata dai file di test si risolve', () => {
   assert.deepStrictEqual(ko, [], 'dipendenze di test non risolvibili');
 });
 
+test('init: il gestore del cambio tipo e\' registrato PRIMA del ripristino del modo', () => {
+  // `ripristinaModo()` rimette il radio su Moto e lancia `change`; l'unico posto che chiama
+  // populateMarca('moto') e' il gestore di quel `change`. Registrandolo dopo, l'evento partiva
+  // a vuoto e chi riapriva l'app in Moto non poteva scrivere NESSUNA marca.
+  const src = fs.readFileSync(path.join(RADICE, 'frontend', 'app.js'), 'utf8');
+  const init = src.slice(src.indexOf('async function init()'), src.indexOf('\n// ─── Modi di ricerca'));
+  const gestore = init.indexOf("tipoInputs.forEach(input => input.addEventListener('change'");
+  // La CHIAMATA, non il nome: cercando la sola `ripristinaModo()` si aggancia il commento
+  // qui sopra in app.js, e il test diventa rosso per un motivo che non c'entra.
+  const ripristino = init.indexOf('daUrl) ripristinaModo()');
+  assert.ok(gestore > 0, 'il gestore del cambio tipo non e\' piu\' in init()');
+  assert.ok(ripristino > 0, 'la chiamata `if (!daUrl) ripristinaModo();` non e\' piu\' in init()');
+  assert.ok(gestore < ripristino,
+    'il gestore di `change` va registrato PRIMA di ripristinaModo(), altrimenti il ripristino su Moto lascia il catalogo marche vuoto');
+});
+
+test('il cambio tab dei Ricambi tocca tutti e soli gli input dei Ricambi', () => {
+  // `.rc-input` e' un GANCIO, non uno stile: decide quale dei tre input mostrare. Quando la
+  // presa era su tutto il documento agganciava anche #cpUrl (il link della vetrina, altra riga
+  // della stessa barra), che senza `data-rcfor` finiva nascosto a ogni cambio tab.
+  const app = fs.readFileSync(path.join(RADICE, 'frontend', 'app.js'), 'utf8');
+  const html = fs.readFileSync(path.join(RADICE, 'frontend', 'index.html'), 'utf8');
+
+  // 1) la presa e' ancorata al contenitore dei Ricambi
+  for (const sel of ["#ricambiFields .rc-input[data-rcfor=", "'#ricambiFields .rc-input'"]) {
+    assert.ok(app.includes(sel), `la ricerca di .rc-input non e' piu' ancorata a #ricambiFields (${sel})`);
+  }
+  // 2) e nessun elemento fuori da #ricambiFields porta quella classe
+  // `\b` non basta: il trattino e' un confine di parola, quindi \brc-input\b aggancia anche
+  // `rc-input-row`, che e' la riga contenitore e non c'entra. Serve il token intero.
+  const GANCIO = /class="[^"]*\brc-input(?=[\s"])/g;
+  const dentro = html.slice(html.indexOf('id="ricambiFields"'), html.indexOf('id="competitorFields"'));
+  const fuori = html.replace(dentro, '');
+  assert.strictEqual((fuori.match(GANCIO) || []).length, 0,
+    'un elemento fuori da #ricambiFields porta la classe-gancio rc-input: verra\' nascosto dal cambio tab');
+  // 3) e i tre input dei Ricambi ce l'hanno ancora, con il loro data-rcfor
+  assert.strictEqual((dentro.match(/class="[^"]*\brc-input(?=[\s"])[^"]*"[^>]*data-rcfor=/g) || []).length, 3,
+    'i tre input dei Ricambi devono avere sia rc-input sia data-rcfor');
+});
+
 test('richiedere server.js resta senza effetti collaterali', () => {
   // Se qualcuno rimettesse app.listen incondizionato, l'intera suite aprirebbe una porta e
   // scalderebbe due browser headless a ogni esecuzione.

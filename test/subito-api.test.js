@@ -39,6 +39,23 @@ test('mapAd: km esatto "124000 Km" → 124000', () => {
   assert.strictEqual(mapAd(ad).km, 124000);
 });
 
+test('mapAd: i km vengono dal valore esatto, non dalla fascia (payload hades vero)', () => {
+  // Nel payload vero l'etichetta 'Km' e' DOPPIA: /mileage (fascia "95.000 - 99.999") e
+  // /mileage_scalar (98000). La fascia viene prima, e cercando per label si prendeva quella:
+  // un'auto con "Km 98.000 certificati" scritto dal venditore usciva come 95.000.
+  const fx = require('./fixtures/subito-hades-sample.json');
+  assert.strictEqual(mapAd(fx.ads[0]).km, 98000);
+
+  const km = feats => mapAd({ urls: { default: 'u' }, features: feats }).km;
+  const S = v => ({ uri: '/mileage_scalar', label: 'Km', values: [{ value: v }] });
+  const F = v => ({ uri: '/mileage', label: 'Km', values: [{ value: v }] });
+  assert.strictEqual(km([F('95.000 - 99.999'), S('98000 Km')]), 98000, 'lo scalare vince sulla fascia');
+  assert.strictEqual(km([F('120.000 - 129.999')]), 120000, 'senza scalare, la fascia resta il ripiego');
+  // 9999999 e' il segnaposto di "non dichiarato": stamparlo sarebbe peggio di non dire niente.
+  assert.strictEqual(km([S('9999999 Km')]), null, 'il segnaposto non diventa un chilometraggio');
+  assert.strictEqual(km([S('0 Km')]), 0, 'zero km e\' un dato vero (km 0), non un assente');
+});
+
 test('mapAd: senza url → null', () => {
   const ad = JSON.parse(JSON.stringify(AD)); ad.urls = {};
   assert.strictEqual(mapAd(ad), null);

@@ -132,7 +132,8 @@ function schedaDaHtml(body, slug) {
 function mapCards(html, ctx = {}) {
   const $ = cheerio.load(html);
   const out = [];
-  $('.dlr-card').each((_, el) => {
+  const carte = $('.dlr-card');
+  carte.each((_, el) => {
     const c = $(el);
     const id = (c.find('[data-target^="#annuncio_"]').first().attr('data-target') || '').replace('#annuncio_', '');
     if (!/^\d{3,}$/.test(id)) return;
@@ -172,6 +173,18 @@ function mapCards(html, ctx = {}) {
 }
 
 /**
+ * Le card di una pagina PIU' quante ce n'erano davvero.
+ * Il conteggio GREZZO non e' un di piu': e' quello che dice se la pagina era piena. Contando
+ * solo le card riuscite, una sola card fuori standard (promo, "in arrivo", markup diverso)
+ * faceva sembrare finita una pagina piena. Stessa regola di autoscout-graphql.js:490 e
+ * subito-api.js:521, dove il conteggio grezzo c'e' gia'.
+ */
+function leggiPagina(html, ctx = {}) {
+  const grezze = cheerio.load(html)('.dlr-card').length;
+  return { items: mapCards(html, ctx), grezze };
+}
+
+/**
  * Tutto il parco di una sezione della vetrina.
  * @param {string} slug
  * @param {{sezione?: 'Usato'|'Nuovo', maxPagine?: number, ctx?: object}} opts
@@ -185,6 +198,7 @@ async function parco(slug, opts = {}) {
   const items = [];
   const visti = new Set();
   let troncato = false;
+  let illeggibili = 0;      // card presenti che non si sono lasciate leggere: si dicono, non si nascondono
 
   for (let p = 1; p <= maxPagine; p++) {
     const url = `${BASE}/${slug}/${sezione}` + (p > 1 ? `/pagina-${p}` : '');
@@ -193,14 +207,29 @@ async function parco(slug, opts = {}) {
       if (p === 1) throw new Error(`la vetrina risponde ${status}`);
       break;                                   // una pagina in fondo che sparisce non e' un errore
     }
-    const pagina = mapCards(body, ctx);
-    if (!pagina.length) break;                 // e' cosi' che finisce il parco, non col widget
+    const { items: pagina, grezze } = leggiPagina(body, ctx);
+    // CARD PRESENTI MA ILLEGGIBILI = il markup della fonte e' cambiato, non il piazzale e'
+    // vuoto. Dichiararlo, invece di archiviare un parco vuoto come se fosse completo.
+    if (grezze > 0 && !pagina.length) {
+      if (p === 1) throw new Error('le card della vetrina non si leggono piu\': la pagina della fonte e\' cambiata');
+      break;
+    }
+    if (!grezze) break;                        // e' cosi' che finisce il parco, non col widget
+    const prima = items.length;
     for (const v of pagina) { if (!visti.has(v.url)) { visti.add(v.url); items.push(v); } }
-    if (pagina.length < CARD_PER_PAGINA) break;
+    illeggibili += grezze - pagina.length;
+    // Si guarda il conteggio GREZZO: una pagina piena di dodici card resta piena anche se una
+    // non si e' lasciata leggere. Prima il confronto era sulle card riuscite, e undici su
+    // dodici significavano "elenco finito" — un parco da sessanta si fermava a undici, con
+    // scritto `troncato: false` e le mediane calcolate su quegli undici.
+    if (grezze < CARD_PER_PAGINA) break;
+    // Una pagina piena che non porta NIENTE di nuovo: la fonte sta ripetendo l'ultima pagina.
+    // Senza questa uscita si ciclerebbe fino a maxPagine ripetendo richieste inutili.
+    if (items.length === prima) break;
     if (p === maxPagine) troncato = true;
     await sleep(DELAY_MS);
   }
-  return { items, troncato };
+  return { items, troncato, illeggibili };
 }
 
 module.exports = { slugVetrina, scheda, parco, _mapCards: mapCards, _scheda: schedaDaHtml, _urlAnnuncio: urlAnnuncio };

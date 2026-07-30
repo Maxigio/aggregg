@@ -29,7 +29,7 @@ const scrapeMotoIt    = require('./scrapers/motoit');
 const subitoSession   = require('./scrapers/subito-session');
 const { runBootstrap } = require('./scrapers/subito-bootstrap');
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
-const { resolveMotoitModelSlug, getBrandModels, getModelBikes, resolveMotoitVersionEntry } = require('./scrapers/motoit-models');
+const { famiglieMotoit, getBrandModels, getModelBikes, resolveMotoitVersionEntry } = require('./scrapers/motoit-models');
 const motoitVersione = require('./scrapers/motoit-versione');   // testo libero → codice/slug versione Moto.it
 const { getDetail } = require('./scrapers/detail');
 const liquidita      = require('./liquidita');    // liquidita modello (ACI Autoritratto)
@@ -126,6 +126,11 @@ async function scrapeAutoscoutSmart(params, opts = {}) {
     try { return await scrapeAutoscoutGraphql(params, opts); }
     catch (e) { console.warn(`[AS24] GraphQL fallito (${e.message}) → fallback Playwright`); }
   }
+  // Il ripiego Playwright NON legge autoscoutVersionText (buildFilters non lo usa): la versione
+  // scritta non parte. Chi etichetta piu' sotto leggeva `params.autoscoutVersionText` — cioe'
+  // l'INTENZIONE — e concludeva che la fonte l'avesse confrontata, marcando 'esatto' righe di
+  // qualunque allestimento. Qui lo si dichiara, e l'etichetta torna onesta.
+  if (params.autoscoutVersionText) params.as24VersioneNonInviata = true;
   return scrapeAutoscout(params);   // il ripiego Playwright non conta: totale null
 }
 
@@ -139,11 +144,19 @@ async function scrapeAutoscoutUnion(params, opts = {}) {
   const grafie = params.autoscoutSpellings;
   if (!grafie || grafie.length < 2) return scrapeAutoscoutSmart(params, opts);
   let unaOk = false;
+  // `g` e' una riscrittura del solo NOME-MODELLO, mentre autoscoutVersionText a questo punto
+  // vale "modello + versione": sostituendolo per intero, la parola scritta dall'utente non
+  // partiva MAI su questo ramo. Misurato dal vivo su Volkswagen Golf (74|2084): con "Golf"
+  // tornano 6.442 annunci, esattamente quanti senza testo — la versione era ignorata; con
+  // "Golf GTD Variant" ne tornano 1. Qui si sostituisce la sola parte-modello.
+  const conVersione = g => [g, params.versione].filter(Boolean).join(' ');
   const liste = await Promise.all(grafie.map(async g => {
-    try { const r = await scrapeAutoscoutGraphql({ ...params, autoscoutVersionText: g }, { fetta: opts.fetta || 0 }); unaOk = true; return r; }
+    try { const r = await scrapeAutoscoutGraphql({ ...params, autoscoutVersionText: conVersione(g) }, { fetta: opts.fetta || 0 }); unaOk = true; return r; }
     catch (_) { return []; }
   }));
-  if (!unaOk) return scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null }, opts);   // GraphQL giù → un solo tentativo classico
+  // Tutte le grafie cadute: si riprova una volta sola per la via classica. NON si toglie qui il
+  // testo-versione — chi lo toglie deve dirlo, e scrapeAutoscoutSmart lo dichiara da se'.
+  if (!unaOk) return scrapeAutoscoutSmart(params, opts);   // GraphQL giù → un solo tentativo classico
   const byUrl = new Map();
   for (const lista of liste) for (const r of lista) if (r && r.url && !byUrl.has(r.url)) byUrl.set(r.url, r);
   // Piu' grafie = piu' ricerche che si sovrappongono: sommare i totali conterebbe due
@@ -170,9 +183,13 @@ async function scrapeSubitoSmart(params) {
 // Quando attiva, protegge TUTTE le rotte: niente scorciatoia loopback (Funnel
 // proxa a 127.0.0.1 → indistinguibile dal desktop). L'Electron locale fa login
 // una volta e tiene il cookie. Disattiva = comportamento locale di prima.
-const loginAttempts = new Map();   // ip → { fails, until }
+const loginAttempts = new Map();   // ip → { fails, until, last }
 const LOCK_MAX = 8;
 const LOCK_MS  = 10 * 60 * 1000;
+// I fallimenti DECADONO: passata mezz'ora senza errori si riparte da zero. Senza, il contatore
+// lo azzerava solo un login riuscito, e otto errori sommati da piu' persone dietro lo stesso IP
+// pubblico (il Funnel) le bloccavano tutte a oltranza.
+const LOCK_DECAY_MS = 30 * 60 * 1000;
 const AUTH_FREE = new Set(['/login', '/logout', '/api/public-url', '/api/health', '/api/whatsapp/webhook']);
 
 function parseCookies(req) {
@@ -189,7 +206,7 @@ function parseCookies(req) {
   return out;
 }
 
-app.use((req, res, next) => {
+function gateAuth(req, res, next) {
   if (!auth.isEnabled()) return next();          // nessuna password → app locale aperta
   if (AUTH_FREE.has(req.path)) return next();     // /login, /logout sempre raggiungibili
   const role = auth.checkToken(parseCookies(req).amr_auth);   // 'full' | 'demo' | null
@@ -211,32 +228,46 @@ app.use((req, res, next) => {
     // leased_by/until) o espongono dati PRIVATI dell'owner (GET /api/saved = ricerche/avvisi di
     // papà). Blocca il demo da questi prefissi a prescindere dal metodo. (/api/saved/check è POST,
     // già coperto da isWrite; qui copriamo la GET di lista e le route di coordinamento crawl.)
-    const isPrivate = req.path === '/api/saved' || req.path.startsWith('/api/saved/')
-      || req.path.startsWith('/api/crawl/');
+    // Il confronto va fatto sul percorso NORMALIZZATO. Express instrada senza distinguere le
+    // maiuscole (`case sensitive routing` non e' impostato), il gate invece le distingueva:
+    // `GET /API/saved` finiva all'handler di `/api/saved` con `req.path` ancora maiuscolo,
+    // quindi isPrivate era falso e l'ospite demo leggeva le ricerche salvate del proprietario.
+    // Misurato: /api/saved → 403, /API/saved → 200, /Api/Saved → 200.
+    const p = req.path.toLowerCase();
+    const isPrivate = p === '/api/saved' || p.startsWith('/api/saved/')
+      || p.startsWith('/api/crawl/');
     if ((isWrite || isPrivate) && !isReport) {
-      if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'modalità demo: sola lettura' });
+      if (p.startsWith('/api/')) return res.status(403).json({ error: 'modalità demo: sola lettura' });
       if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) return res.redirect(302, '/');
       return res.status(403).send('modalità demo: sola lettura');
     }
   }
   return next();
-});
+}
+app.use(gateAuth);
 
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, '../frontend/login.html')));
 
-app.post('/login', express.urlencoded({ extended: false }), async (req, res) => {
+async function postLogin(req, res) {
   // IP reale dietro Funnel (RIGHTMOST X-Forwarded-For, vedi clientIp). Senza,
   // dietro Funnel ogni utente è 127.0.0.1 → lockout globale.
   const ip = clientIp(req);
+  const ora = Date.now();
   const rec = loginAttempts.get(ip);
-  if (rec && rec.until > Date.now()) return res.redirect(302, '/login?err=locked');   // lockout
+  if (rec && rec.until > ora) return res.redirect(302, '/login?err=locked');   // lockout
 
   const role = auth.verifyRole(req.body && req.body.password);   // 'full' | 'demo' | null
   if (!role) {
-    await new Promise(r => setTimeout(r, 1000));   // delay anti-brute
-    const fails = (rec ? rec.fails : 0) + 1;
-    loginAttempts.set(ip, { fails, until: fails >= LOCK_MAX ? Date.now() + LOCK_MS : 0 });
+    // SI CONTA PRIMA DI DORMIRE. Con l'attesa in mezzo, fra il `get` e il `set` c'era un await:
+    // tutte le richieste arrivate nella stessa finestra leggevano lo stesso `rec` e scrivevano
+    // tutte lo stesso valore, l'ultima vinceva. Misurato: 200 password provate in parallelo,
+    // contatore finale 1, lockout mai scattato. Ora fra lettura e scrittura non c'e' nessun
+    // await, quindi sul thread unico il conteggio torna atomico.
+    const precedenti = (rec && ora - (rec.last || 0) < LOCK_DECAY_MS) ? rec.fails : 0;
+    const fails = precedenti + 1;
+    loginAttempts.set(ip, { fails, until: fails >= LOCK_MAX ? ora + LOCK_MS : 0, last: ora });
     accessLog.record('login_fail', { ip, ua: req.headers['user-agent'] });   // best-effort
+    await new Promise(r => setTimeout(r, 1000));   // delay anti-brute, DOPO aver contato
     return res.redirect(302, '/login?err=1');
   }
 
@@ -246,7 +277,10 @@ app.post('/login', express.urlencoded({ extended: false }), async (req, res) => 
   const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
   res.setHeader('Set-Cookie', `amr_auth=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(auth.TTL_MS / 1000)}${secure}`);
   res.redirect(302, '/');
-});
+}
+// Funzione nominata e poi registrata: e' l'unico modo di provare il conteggio dei tentativi
+// senza aprire una porta (supertest non e' fra le dipendenze). Stessi middleware di prima.
+app.post('/login', express.urlencoded({ extended: false }), postLogin);
 
 app.get('/logout', (req, res) => {
   res.setHeader('Set-Cookie', 'amr_auth=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
@@ -901,7 +935,7 @@ require('./prove-route').mount(app, { clientIp });
 
 // ─── Cache ricerche recenti (§17.4) ───────────────────────────────────────────
 // Stessa ricerca entro il TTL → risposta istantanea. NON cacha se una fonte è
-// error/needs_bootstrap (non congelare uno stato-bloccato) né i 0-risultati totali.
+// error/needs_bootstrap/timeout (non congelare uno stato-bloccato) né i 0-risultati totali.
 const SEARCH_CACHE_TTL = 3 * 60 * 1000;
 const SEARCH_CACHE_MAX = 50;
 const searchCache = new Map();   // key → { ts, data }
@@ -920,7 +954,12 @@ function searchCacheKey(p) {
     .map(f => `${f}=${p[f] ?? ''}`).join('&').toLowerCase();
 }
 function cacheable(data) {
-  const bad = s => s === 'error' || s === 'needs_bootstrap';
+  // 'timeout' e' uno stato-rotto come gli altri, e mancava: se AS24 o Moto.it scadevano mentre
+  // un'altra fonte portava annunci, la risposta MONCA entrava in cache per tre minuti. L'utente
+  // vedeva il badge rosso, ripremeva Cerca e riceveva istantaneamente la stessa risposta senza
+  // che nessuna richiesta ripartisse: l'unico gesto per rimediare non faceva nulla.
+  // Stessa regola gia' scritta in ricambi-route.js:27.
+  const bad = s => s === 'error' || s === 'needs_bootstrap' || s === 'timeout';
   const src = data.sources || {};
   if (bad(src.subito?.status) || bad(src.autoscout?.status) || bad(src.moto?.status)) return false;
   return (data.totale || 0) > 0;
@@ -1080,7 +1119,11 @@ async function runSearchCore(params) {
     // in uso normale. Risolto lo slug, il browser cerca server-side `model=`.
     if (!params.motoitModelSlug && params.motoitBrandSlug && params.modello) {
       try {
-        params.motoitModelSlug = await resolveMotoitModelSlug(params.motoitBrandSlug, params.modello) || null;
+        // TUTTE le famiglie che il nome aggancia, non una sorteggiata: su Moto.it la stessa
+        // moto e' spezzata per cilindrata ("Scarabeo" sono nove famiglie) e prima si teneva la
+        // piu' corta — cercando le Scarabeo 500 arrivavano gli scooter 50. Misurato dal vivo:
+        // una famiglia 29 annunci, tutte e nove 71.
+        params.motoitModelSlug = await famiglieMotoit(params.motoitBrandSlug, params.modello) || null;
       } catch (_) { /* fallback brand-only + post-filter */ }
     }
   }
@@ -1127,6 +1170,10 @@ async function runSearchCore(params) {
     // vuota; il ritentativo senza testo (piu' sotto, `asRes.status === 'empty'`) deve
     // restare — e' la rete che impedisce a una versione rara di azzerare la fonte.
     if (params.versione) {
+      // Il testo del SOLO modello si tiene da parte: e' il gradino intermedio del
+      // riallargamento (vedi piu' sotto). Senza, l'unica via di uscita da una versione che
+      // svuota sarebbe saltare direttamente al bucket del padre, cioe' a un altro modello.
+      params.autoscoutVersionModello = params.autoscoutVersionText || null;
       params.autoscoutVersionText = [params.autoscoutVersionText, params.versione].filter(Boolean).join(' ');
       console.log(`[server] AS24 versione: "${params.versione}"`);
     }
@@ -1157,7 +1204,16 @@ async function runSearchCore(params) {
    */
   if (params.versione && params.tipo === 'moto' && params.motoitBrandSlug && params.motoitModelSlug && !params.motoitBikeCode) {
     try {
-      const bikes = await getModelBikes(params.motoitBrandSlug, params.motoitModelSlug);
+      // `motoitModelSlug` puo' essere una LISTA di famiglie (vedi famiglieMotoit): getModelBikes
+      // ne vuole una sola, quindi si raccolgono le versioni di tutte. Le richieste sono cachate
+      // 12h. Tetto a 12 famiglie: oltre si cerca senza filtro versione, e lo si dice.
+      const fam = String(params.motoitModelSlug).split(',').map(s => s.trim()).filter(Boolean);
+      const TETTO_FAM = 12;
+      if (fam.length > TETTO_FAM) {
+        console.log(`[server] Moto.it: "${params.modello}" aggancia ${fam.length} famiglie (oltre ${TETTO_FAM}): niente filtro versione, si cerca largo`);
+        throw new Error(`troppe famiglie (${fam.length}) per risolvere la versione`);
+      }
+      const bikes = (await Promise.all(fam.map(s => getModelBikes(params.motoitBrandSlug, s).catch(() => [])))).flat();
       const r = motoitVersione.risolvi(bikes, params.versione, { marca: params.marca, modello: params.modello });
       if (r.versioni.length === 1) {
         params.motoitBikeCode = r.versioni[0].code;
@@ -1225,11 +1281,31 @@ async function runSearchCore(params) {
   // meglio "ti mostro anche il modello imparentato, segnalato" che una schermata vuota.
   let asRes = asRes0, as24Allargato = false;
   if (params.autoscoutVersionText && asRes.status === 'empty') {
+    // UN GRADINO PER VOLTA. Ora che la versione parte davvero (vedi scrapeAutoscoutUnion), lo
+    // zero-risultati non e' piu' un caso raro: il filtro di AS24 e' un AND su tutte le parole
+    // ed e' durissimo — misurato su Golf, "Golf GTD" 145 annunci, "Golf GTD Variant" 1.
+    // Saltare qui al bucket del padre vorrebbe dire togliere versione E modello insieme, cioe'
+    // mostrare un altro modello dove prima c'erano gli annunci di questo. Quindi: prima si
+    // riprova col SOLO modello (le richieste che partivano prima del fix), e solo se anche
+    // quella e' vuota si scende al padre.
     // La fetta va ripassata: senza, il riallargamento ripartiva sempre dalla prima pagina, e
     // dal secondo "Carica altri" in poi da Autoscout tornavano solo annunci gia' visti.
-    const retry = await runSource(
-      scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null, autoscoutSpellings: null }, { withMeta: true, fetta: params.fetta || 0 }), TIMEOUT_MS, 'Autoscout24');
-    if (retry.items.length) { asRes = retry; as24Allargato = true; }
+    const fetta = params.fetta || 0;
+    if (params.autoscoutVersionModello) {
+      const soloModello = await runSource(
+        scrapeAutoscoutUnion({ ...params, versione: null, autoscoutVersionText: params.autoscoutVersionModello },
+          { withMeta: true, fetta }), TIMEOUT_MS, 'Autoscout24');
+      if (soloModello.items.length) { asRes = { ...soloModello, viaSoloModello: true }; as24Allargato = true; }
+    }
+    if (!as24Allargato) {
+      const retry = await runSource(
+        scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null, autoscoutSpellings: null }, { withMeta: true, fetta }), TIMEOUT_MS, 'Autoscout24');
+      if (retry.items.length) { asRes = retry; as24Allargato = true; }
+      // Un ritentativo SCADUTO non e' "la fonte non ha nulla": lasciando 'empty' la risposta
+      // monca finiva pure in cache per tre minuti (vedi `cacheable`). Si porta fuori lo stato
+      // vero, cosi' il badge e' rosso e la ricerca si puo' rifare davvero.
+      else if (retry.status === 'timeout' || retry.status === 'error') asRes = { ...asRes, status: retry.status, reason: retry.reason };
+    }
   }
 
   const grezzi = [...subitoRes.items, ...asRes.items, ...motoRes.items];
@@ -1289,7 +1365,11 @@ async function runSearchCore(params) {
     // autoscoutVersionText (fase 1) = AS24 ha già filtrato per modello server-side; il
     // filtro-titolo locale qui taglierebbe grafie legittime ("CFMOTO 800 MT X" non
     // contiene "800mtx") proprio sul ramo che vogliamo recuperare.
-    const autoscoutModelFiltered = r.fonte === 'autoscout' && (Boolean(params.mmmvAutoscout) || Boolean(params.autoscoutVersionText)) && !params.asFilterToken;
+    // `as24VersioneNonInviata` = si e' finiti sul ripiego Playwright, che il testo NON lo manda:
+    // li' il filtro server-side per modello non c'e' stato, e spegnere anche quello locale
+    // lasciava passare la marca intera. Il testo vale come filtro solo se e' partito davvero.
+    const as24TestoPartito = Boolean(params.autoscoutVersionText) && !params.as24VersioneNonInviata;
+    const autoscoutModelFiltered = r.fonte === 'autoscout' && (Boolean(params.mmmvAutoscout) || as24TestoPartito) && !params.asFilterToken;
     // Moto.it filtra per modello quando il client/server ha risolto motoitModelSlug
     const motoitModelFiltered    = r.fonte === 'moto'      && Boolean(params.motoitModelSlug);
     const siteAlreadyFilteredModel = subitoModelFiltered || autoscoutModelFiltered || motoitModelFiltered;
@@ -1361,7 +1441,13 @@ async function runSearchCore(params) {
      * che valeva — modello garantito dalla fonte — e non va declassato.
      */
     const versioneChiesta = Boolean(params.versione);
-    const as24HaVistoLaVersione = Boolean(params.autoscoutVersionText);
+    // `params.autoscoutVersionText` dice cosa VOLEVAMO mandare, non cosa e' partito: i due rami
+    // che lo tolgono (riallargamento e ripiego Playwright) lavorano su una COPIA dei parametri e
+    // lasciano intatto l'originale. Leggendo solo quello, dopo un riallargamento ogni riga con
+    // una variante usciva marcata 'esatto' — cioe' "versione confrontata" — su annunci di
+    // qualunque allestimento, e senza nessun segno a schermo. Ora si guarda anche se e' partita.
+    const as24HaVistoLaVersione = Boolean(params.autoscoutVersionText)
+      && !as24Allargato && !params.as24VersioneNonInviata;
     const etichettaAs24 = r => (versioneChiesta && !as24HaVistoLaVersione)
       ? 'versione-non-verificata'
       : (r.variante ? 'esatto' : 'senza-versione');
@@ -1408,8 +1494,22 @@ async function runSearchCore(params) {
 
   // §12: AS24 brand-only narrowato per titolo (serie/modello irrisolto) e finito a 0
   // → reason esplicita, così la UI distingue "0 per filtro titolo" da errore/vuoto-vero.
+  // La frase diceva sempre "mostro il padre / la marca", anche quando il riallargamento si era
+  // fermato al gradino intermedio (stesso modello, senza versione): li' il modello e' ancora
+  // quello giusto ed e' la VERSIONE a non essere stata applicata. Dirlo com'e'.
+  // A CHE LIVELLO ci si e' allargati. Non basta guardare `as24Padre`: quando il modello ha il
+  // suo codice AS24 (`mmmv` con la parte-modello valorizzata) il ritentativo lo TIENE, e toglie
+  // la sola versione — misurato su Golf + una versione inesistente: tornano 100 annunci, tutti
+  // Golf. Dire li' "mostro tutta la marca" sarebbe una bugia, ed e' proprio il difetto che
+  // questo blocco corregge.
+  const as24ModelloAncoraFiltrato = Boolean(String(params.autoscoutMmmv || params.mmmvAutoscout || '').split('|')[1]);
+  const asAllargatoA = !as24Allargato ? null
+    : (asRes.viaSoloModello || as24ModelloAncoraFiltrato) ? 'versione'
+      : (params.as24Padre ? 'padre' : 'marca');
   const asReason = as24Allargato
-    ? `nessun "${params.modello}" su Autoscout: mostro ${params.as24Padre ? `"${params.as24Padre}"` : 'la marca'}`
+    ? (asAllargatoA === 'versione'
+        ? `nessuna "${params.versione}" su Autoscout: mostro tutte le versioni di "${params.modello}"`
+        : `nessun "${params.modello}" su Autoscout: mostro ${params.as24Padre ? `il modello base "${params.as24Padre}"` : 'tutta la marca'}`)
     : (autoTokenRe && asCount === 0 && asRes.status === 'ok')
       ? 'modello filtrato per titolo'
       : (asRes.reason || null);
@@ -1436,9 +1536,17 @@ async function runSearchCore(params) {
       // FONTE per questa ricerca. Sono due popolazioni diverse e restano due numeri.
       subito:    { status: subitoRes.status, reason: subitoRes.reason || null, count: countBy('subito'),
                    totale: subitoRes.total ?? null,
-                   come: params.subitoNodo ? (params.subitoNodo.come || 'id') : 'testo libero' },
+                   come: params.subitoNodo ? (params.subitoNodo.come || 'id') : 'testo libero',
+                   // Il filtro km di Subito lavora a FASCE: chiedendo 200.000 arrivano annunci
+                   // fino a 249.999. Finora non si notava perche' mostravamo il fondo-fascia;
+                   // ora che i km sono quelli veri, si dice invece di far sembrare un errore.
+                   kmFino: scrapeSubitoApi.kmTettoFascia(params.kmMax) },
+      // `allargato` sta ACCANTO allo status, mai al posto suo ('ok' resta 'ok', quindi cache e
+      // "Carica altri" non cambiano comportamento). Serve perche' `reason` la UI la stampava
+      // solo per le fonti 'skipped', e queste frasi nascono proprio a status 'ok': il
+      // riallargamento veniva calcolato, spedito, e non arrivava mai sotto gli occhi di nessuno.
       autoscout: { status: asRes.status,     reason: asReason,                 count: asCount,
-                   totale: asRes.total ?? null },
+                   totale: asRes.total ?? null, allargato: asAllargatoA },
       moto:      { status: motoRes.status,   reason: motoRes.reason || null,   count: countBy('moto'),
                    totale: motoRes.total ?? null },
     },
@@ -1668,4 +1776,7 @@ const server = !avviaAscolto ? null : app.listen(PORT, () => {
 });
 // Esposte per i test di caratterizzazione: sono le funzioni con cui inizia OGNI risoluzione
 // marca/modello, e finora non erano raggiungibili da fuori. Prefisso _ = superficie interna.
-module.exports = { server, app, _lookupBrand: lookupBrand, _lookupModelGroup: lookupModelGroup, _catalogResolver: catalogResolver };
+module.exports = { server, app, _lookupBrand: lookupBrand, _lookupModelGroup: lookupModelGroup, _catalogResolver: catalogResolver,
+  // Superficie interna per i test: due gestori che senza questo non sarebbero raggiungibili
+  // senza aprire una porta (supertest non e' fra le dipendenze).
+  _gateAuth: gateAuth, _postLogin: postLogin, _loginAttempts: loginAttempts, _cacheable: cacheable };

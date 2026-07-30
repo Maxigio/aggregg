@@ -25,6 +25,10 @@ const osm = require('./scrapers/osm-territorio');
 const eprel = require('./scrapers/eprel-pneumatici');
 const bilstein = require('./scrapers/bilstein-oe');
 const wheelsize = require('./scrapers/wheelsize');
+// La pulizia del nome-modello sta nella scheda veicolo perche' vale per ogni chiamante:
+// qui si riusa quella invece di ricopiarne le regex. Nessun ciclo — scheda-veicolo-route
+// non richiede fonti-route (verificato: l'unico che carica entrambi e' server.js).
+const { senzaGenerazione } = require('./scheda-veicolo-route');
 const carburanti = require('./carburanti');
 const costi = require('./costi-possesso');
 const PROVINCE = require('../data/province.json');
@@ -209,7 +213,12 @@ function mount(app, deps = {}) {
   // ─── Cerchi e gomme ────────────────────────────────────────────────────────
   via('/api/fonti/cerchi/calzate', 'cerchi', q => {
     if (!q.marca || !q.modello || !q.anno) return Promise.resolve({ calzate: [], motivo: 'servono marca, modello e anno' });
-    return wheelsize.calzate(String(q.marca), String(q.modello), String(q.anno));
+    // Il nome che arriva dall'annuncio porta il suffisso di generazione di Subito
+    // ("Panda 3ª serie", "Serie 3 (E90/91)"): Wheel-Size non lo conosce e risponde vuoto.
+    // Si ripulisce QUI, non nel frontend, per la stessa ragione scritta in
+    // scheda-veicolo-route.js:244 — vale per ogni chiamante, non per uno solo.
+    const modello = senzaGenerazione(String(q.modello)) || String(q.modello);
+    return wheelsize.calzate(String(q.marca), modello, String(q.anno));
   });
 
   // ─── Costi di possesso ─────────────────────────────────────────────────────

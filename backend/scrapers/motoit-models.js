@@ -189,8 +189,46 @@ async function getModelBikes(brandSlug, modelSlug) {
 }
 
 /**
- * Risolve uno slug-modello dal testo (retro-compat: crawler + runSearchCore fallback).
- * Match fuzzy SOLO tra i nomi reali dell'API (non slug inventati). null = brand-only.
+ * Risolve lo slug-modello dal testo. Puo' tornare PIU' SLUG separati da virgola.
+ *
+ * I tre cataloghi tagliano lo stesso mezzo a livelli diversi: la "Aprilia Scarabeo 500" su
+ * Moto.it e' un MODELLO a se', su Autoscout e' modello "Scarabeo" + versione "500", su Subito
+ * non esiste. Chi scrive il nome largo ("Scarabeo") su Moto.it aggancia nove famiglie, e prima
+ * se ne teneva UNA — la piu' corta, cioe' `scarabeo-50`: il concessionario cercava i 500 e la
+ * colonna Moto.it gli mostrava gli scooter 50, senza che niente lo dicesse.
+ *
+ * Non serve ne' scegliere ne' rinunciare: MISURATO sul sito, `model=` accetta una lista
+ * separata da virgola e la tratta in OR — `scarabeo-50` 29 annunci, `scarabeo-125` 4,
+ * `scarabeo-500` 8, le tre insieme 41. Regge anche le 284 famiglie Honda in una sola URL
+ * (5.334 caratteri, HTTP 200) e il filtro resta applicato: le prime 120 danno 3.410 annunci,
+ * le restanti 164 ne danno 1.834, e 3.410 + 1.834 = 5.244 = il totale della marca.
+ *
+ * Il nome preciso continua a vincere da solo: "Scarabeo 500" e' un match esatto, una famiglia.
+ * null = brand-only.
+ */
+async function famiglieMotoit(brandSlug, modelloText) {
+  if (!brandSlug || !modelloText) return null;
+  const models = await getBrandModels(brandSlug);
+  if (!models.length) return null;
+  const nomi = models.map(m => ({ name: m.name, value: m.slug }));
+  const q = normN(modelloText);
+  // Esatto: una sola famiglia, ed e' quella.
+  const esatto = nomi.find(m => normN(m.name) === q);
+  if (esatto) return esatto.value;
+  // Altrimenti TUTTE le famiglie che iniziano col nome cercato, senza spezzare una cifra
+  // ("Scarabeo" prende Scarabeo 50/125/500, "R 1200" non prende R 12000).
+  const figlie = nomi.filter(m => q.length >= 3 && normN(m.name).startsWith(q)
+    && !/\d/.test(normN(m.name).charAt(q.length) || ''));
+  if (figlie.length) return figlie.map(m => m.value).join(',');
+  // Ultima spiaggia: il vecchio resolver fuzzy, che una risposta la da' sempre.
+  const resolver = makeModelResolver(nomi);
+  return resolver(modelloText) || null;
+}
+
+/**
+ * UNO slug solo — la vecchia risoluzione, invariata.
+ * La usa il crawler, che archivia sotto UN nome-modello: dargli una famiglia allargata
+ * cambierebbe cosa finisce in `listings`, e quel lato non e' in discussione adesso.
  */
 async function resolveMotoitModelSlug(brandSlug, modelloText) {
   if (!brandSlug || !modelloText) return null;
@@ -260,6 +298,6 @@ async function resolveMotoitVersionEntry(brandSlug, entryName) {
 
 // versionBase e parseYears sono pure e contengono le regole piu' delicate del confine
 // famiglia/versione: esposte per poterle sorvegliare con dei test (prefisso _ = interne).
-module.exports = { resolveMotoitModelSlug, getBrandModels, getModelBikes, resolveMotoitVersionEntry,
+module.exports = { resolveMotoitModelSlug, famiglieMotoit, getBrandModels, getModelBikes, resolveMotoitVersionEntry,
   decodifica,
   _versionBase: versionBase, _parseYears: parseYears };

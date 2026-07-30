@@ -12,6 +12,10 @@
  *  ad.subject (titolo), ad.urls.default (URL), ad.geo.region.friendly_name +
  *  ad.geo.city.value, ad.features[] (label→values[0].value): Prezzo, Km,
  *  Immatricolazione, Carburante, Cambio, Potenza, …
+ *
+ *  ATTENZIONE alle etichette DOPPIE. 'Km' non e' una: sono due feature con la stessa label,
+ *  `/mileage` (fascia) e `/mileage_scalar` (valore esatto), e la fascia viene prima. Chi
+ *  aggiunge un campo qui controlli l'`uri` prima di fidarsi della label, come fa il ramo km.
  */
 const https = require('https');
 
@@ -89,9 +93,27 @@ const yearOf = s => { const y = parseInt(String(s || '').split('/').pop(), 10); 
 function mapAd(ad, opts = {}) {
   const url = ad.urls && (ad.urls.default || ad.urls.mobile);
   if (!url) return null;
-  // km: "124000 Km" oppure bucket "120.000 - 129.999" → estremo inferiore
-  const kmRaw = feat(ad, 'Km');
-  const km = kmRaw ? digits(String(kmRaw).split('-')[0]) : null;
+  // KM: il VALORE ESATTO, non la fascia. Nel payload di hades l'etichetta 'Km' compare DUE
+  // volte — `/mileage` (la fascia: "95.000 - 99.999") e `/mileage_scalar` (il valore vero:
+  // "98000 Km") — e la fascia viene prima. Cercando per label si prendeva sempre quella e se
+  // ne teneva l'estremo inferiore: sul fixture del repo un'auto con "Km 98.000 certificati"
+  // scritto dal venditore usciva come 95.000, e sopra i 200.000 l'errore arriva a -49.999.
+  // Si sceglie per `uri`, come fa gia' subito-playwright.js:124 sullo stesso dato.
+  // La fascia resta il RIPIEGO dichiarato: quando lo scalare non c'e', meglio l'estremo
+  // inferiore che nessun chilometraggio.
+  // La fascia si prende per `uri` e, se l'uri non c'e', per label ESCLUDENDO lo scalare —
+  // altrimenti quando la fascia manca si ripescava lo scalare stesso e il guard sul
+  // segnaposto 9999999 non serviva a niente.
+  const feats = ad.features || [];
+  const primoValore = f => { const v = f && f.values && f.values[0]; return v ? (v.value != null ? v.value : v.key) : null; };
+  const fScal = feats.find(x => x.uri === '/mileage_scalar');
+  const fFascia = feats.find(x => x.uri === '/mileage') || feats.find(x => x.label === 'Km' && x !== fScal);
+  const kmEsatto = digits(primoValore(fScal));
+  const fascia = primoValore(fFascia);
+  const kmFascia = fascia ? digits(String(fascia).split('-')[0]) : null;
+  // 9999999 e' il segnaposto di "non dichiarato" (stesso guard di subito-playwright.js:125):
+  // stamparlo come chilometraggio sarebbe peggio che non stampare niente.
+  const km = (kmEsatto != null && kmEsatto < 9999999) ? kmEsatto : kmFascia;
   // data pubblicazione: hades espone ad.date (ISO) — usata come posted_at.
   const posted = ad.date || (ad.dates && (ad.dates.display || ad.dates.created)) || null;
   // Condizione nativa 'Condizioni del veicolo': Nuovo/Km 0 → nuovo=true, Usato → false.
@@ -255,6 +277,19 @@ const KM_KEY_TABLE = [
 function kmToKey(km) {
   for (const [limit, key] of KM_KEY_TABLE) if (limit >= km) return key;
   return 36; // oltre 499.999 km
+}
+/**
+ * Il TETTO VERO che si ottiene chiedendo `kmMax`. `me` e' una categoria, non un numero: la
+ * categoria che contiene kmMax arriva fino al suo estremo superiore, quindi chiedendo 200.000
+ * tornano annunci fino a 249.999. Prima non si vedeva perche' l'app stampava il fondo-fascia
+ * (95.000 al posto di 98.000); ora che i km sono quelli veri, va detto invece che nascosto.
+ * Null quando il tetto coincide con quello chiesto: non c'e' niente da avvertire.
+ */
+function kmTettoFascia(kmMax) {
+  const n = Number(kmMax);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  for (const [limit] of KM_KEY_TABLE) if (limit >= n) return limit > n ? limit : null;
+  return null;   // oltre 499.999 il tetto non e' dichiarato
 }
 
 /**
@@ -576,3 +611,4 @@ module.exports._buildPath = buildPath;
 module.exports._extractTotal = extractTotal;   // F50 copertura
 module.exports._riconosci = riconosci;         // filtro sui livelli dichiarati dall'annuncio
 module.exports._faTitolo = faTitolo;
+module.exports.kmTettoFascia = kmTettoFascia;  // quanto e' largo davvero il filtro km chiesto

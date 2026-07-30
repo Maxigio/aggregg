@@ -121,3 +121,42 @@ test('matchModel: la corrispondenza esatta non e toccata dalla stretta', () => {
   const m = matchModel(models, 'Transit');
   assert.ok(m && m.slug === 'big', 'con l esatto presente vince l esatto');
 });
+
+// ── La generazione dichiarata nel nome Subito ─────────────────────────────────
+const { generazioneDichiarata } = require('../backend/scheda-veicolo-route');
+
+test('generazioneDichiarata: la parentesi vale intera, non a meta', () => {
+  // "Classe C (W/S205)" sono DUE codici: W205 (berlina) e S205 (station wagon). Scartando i
+  // pezzi corti restava il solo S205, e la scheda di ogni berlina Mercedes mostrava peso,
+  // bagagliaio e consumi della familiare — senza che niente a schermo lo dicesse.
+  assert.deepStrictEqual(generazioneDichiarata('Classe C (W/S205)').codici.sort(), ['S205', 'W205']);
+  assert.deepStrictEqual(generazioneDichiarata('CLA (C/X117)').codici.sort(), ['C117', 'X117']);
+  // Il gemello BMW: "91" da solo non aggancia mai "E91" (\b91\b non entra dentro E91).
+  assert.deepStrictEqual(generazioneDichiarata('Serie 3 (E90/91)').codici.sort(), ['E90', 'E91']);
+  assert.deepStrictEqual(generazioneDichiarata('Serie 5 (F10/11)').codici.sort(), ['F10', 'F11']);
+  // Le cifre nude, quando NON c'e' un vicino con le lettere, sono il codice vero: non si tocca.
+  assert.deepStrictEqual(generazioneDichiarata('Panda (169)').codici, ['169']);
+  assert.deepStrictEqual(generazioneDichiarata('Classe A (W176)').codici, ['W176']);
+  // Nessuna parentesi, nessun codice — e la serie in numero romano resta quello che era.
+  assert.deepStrictEqual(generazioneDichiarata('Golf 5ª serie').codici, []);
+  assert.strictEqual(generazioneDichiarata('Golf 5ª serie').romano, 'V');
+});
+
+// ── La famiglia moto: un solo candidato o niente ──────────────────────────────
+const { famigliaMotoit } = require('../backend/scheda-veicolo-route');
+
+test('famigliaMotoit: fra piu famiglie non si sceglie, si torna null', () => {
+  // Prima vinceva il nome piu' CORTO, e a parita' di lunghezza l'ordine del catalogo: un
+  // annuncio "Ducati Scrambler 800" apriva la scheda di "Scrambler 350", una moto degli anni
+  // '60, con le sue specifiche presentate come quelle dell'annuncio. Misurato sui dati veri:
+  // 205 nomi Subito finivano su una famiglia sorteggiata fra 2 e 12.
+  const scrambler = ['Scrambler 350', 'Scrambler 400', 'Scrambler 800', 'Scrambler 1100']
+    .map(name => ({ name, slug: name.toLowerCase().replace(/\s+/g, '-') }));
+  assert.strictEqual(famigliaMotoit(scrambler, 'Scrambler'), null, 'quattro candidate: nessuna scelta');
+  // Il nome preciso continua a vincere, ed e' il caso normale.
+  assert.strictEqual(famigliaMotoit(scrambler, 'Scrambler 800').slug, 'scrambler-800');
+  // Un solo candidato per prefisso resta valido: non si e' stretto piu' del necessario.
+  assert.strictEqual(famigliaMotoit([{ name: 'Monster 796', slug: 'm796' }], 'Monster').slug, 'm796');
+  // Nessun candidato: null come prima.
+  assert.strictEqual(famigliaMotoit(scrambler, 'Panigale'), null);
+});
