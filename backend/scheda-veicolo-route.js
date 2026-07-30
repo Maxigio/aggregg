@@ -263,6 +263,12 @@ function resolveMoto({ marca, modello, anno }) {
 const senzaGenerazione = m => String(m == null ? '' : m)
   .replace(/\s*\(.*$/, '')                        // "Serie 3 (E90/91)"
   .replace(/\s+\d+[ªa°]?\s*serie\b.*$/i, '')      // "Golf 5ª serie"
+  // Subito scrive la stessa cosa anche ABBREVIATA — "Macan 1ªs.", "Picanto 2ª s.",
+  // "C3 Aircross 1ª-2ª s." — e spesso con una coda di anni appresso ("14-18", "'17-->").
+  // Con il suffisso attaccato il nome non combacia con nessuna voce del catalogo tecnico e
+  // la scheda risponde "il catalogo non ha X": non una scheda incompleta, proprio niente.
+  .replace(/\s+\d+[ªa°]?(?:\s*-\s*\d+[ªa°]?)?\s*s\.?(?:\s|$).*$/i, '')
+  .replace(/\s+'?\d{2}\s*-+>?\s*'?\d{0,2}\s*$/, '')   // la coda di anni rimasta sola
   .trim();
 
 /**

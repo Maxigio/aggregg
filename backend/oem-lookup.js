@@ -9,14 +9,22 @@
 //
 // La compatibilità-veicoli NON è qui: vive solo nell'AJAX bloccato. Follow-up.
 const path = require('path');
+const fs = require('fs');
 const { chromium } = require('playwright-extra');
 const stealth = require('puppeteer-extra-plugin-stealth')();
 chromium.use(stealth);
 const { resolveChromiumExecutable } = require('./scrapers/utils');
 
 // pw-browsers come negli scraper (bundle Electron → resources/pw-browsers).
-const PW_BROWSERS = process.env.RESOURCES_PATH
-  ? path.join(process.env.RESOURCES_PATH, 'pw-browsers')
+// Con `existsSync`, come fanno gli altri tre moduli con browser (autoscout-playwright.js:76,
+// subito-playwright.js:53, subito-bootstrap.js:30): electron/main.js inietta RESOURCES_PATH
+// SEMPRE, anche non impacchettato, e in `npm run electron` quel percorso e'
+// node_modules/electron/dist/Electron.app/Contents/Resources — dove pw-browsers non c'e'.
+// Senza il controllo, li' tutta l'area Ricambi che passa dal browser (Autodoc, CMSNL, eBay)
+// falliva con "pw-browsers non trovato", e il sintomo diceva "i ricambi sono rotti".
+const _res = process.env.RESOURCES_PATH;
+const PW_BROWSERS = (_res && fs.existsSync(path.join(_res, 'pw-browsers')))
+  ? path.join(_res, 'pw-browsers')
   : path.join(__dirname, '../pw-browsers');
 process.env.PLAYWRIGHT_BROWSERS_PATH = PW_BROWSERS;
 

@@ -47,12 +47,37 @@ function filePath() {
   const dir = (ud && fs.existsSync(ud)) ? ud : path.join(__dirname, '..', 'data');
   return path.join(dir, 'competitor.json');
 }
+/**
+ * Un file ILLEGGIBILE non e' un file ASSENTE, e dirlo cambia cosa succede dopo: rispondendo
+ * `[]` a entrambi, il pannello scriveva "nessun concessionario" su un elenco che c'era, e il
+ * gesto istintivo — reincollare un link — riscriveva il file con quella sola voce, rendendo
+ * la perdita definitiva. Ora l'elenco resta vuoto (non si inventa niente) ma il guasto si
+ * vede nel log, e `leggi.ultimoErrore` lo tiene per chi vuole mostrarlo.
+ */
 function leggi() {
-  try { const j = JSON.parse(fs.readFileSync(filePath(), 'utf8')); return Array.isArray(j.voci) ? j.voci : []; }
-  catch (_) { return []; }
+  const p = filePath();
+  if (!fs.existsSync(p)) { leggi.ultimoErrore = null; return []; }
+  try {
+    const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+    leggi.ultimoErrore = null;
+    return Array.isArray(j.voci) ? j.voci : [];
+  } catch (e) {
+    leggi.ultimoErrore = e.message;
+    console.error(`[competitor] elenco illeggibile (${e.message}) — NON si sovrascrive da solo: ${p}`);
+    return [];
+  }
 }
+/**
+ * Scrittura ATOMICA: prima su `.tmp`, poi rename. `writeFileSync` sul file di destinazione
+ * comincia troncandolo, quindi fra "il vecchio elenco non c'e' piu'" e "il nuovo e' scritto"
+ * esiste una finestra in cui il file e' a zero byte — e questo file sta su un SSD esterno che
+ * si puo' staccare. E' la stessa cura che saved.js:43 usa gia' per le ricerche salvate.
+ */
 function scrivi(voci) {
-  fs.writeFileSync(filePath(), JSON.stringify({ aggiornato: new Date().toISOString(), voci }, null, 1));
+  const p = filePath();
+  const tmp = p + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify({ aggiornato: new Date().toISOString(), voci }, null, 1));
+  fs.renameSync(tmp, p);
   return voci;
 }
 
@@ -141,7 +166,13 @@ function schedaLd(html, tipoAtteso = /Dealer/i) {
       // Lo slogan e' quello che il concessionario ha scelto di dire di se' in una riga.
       slogan: pulisci(j.slogan || '') || null,
       // `url` qui e' il sito del negozio, non la pagina della vetrina (quella la sappiamo).
-      sito: (typeof j.url === 'string' && !/autoscout24\.it|subito\.it/i.test(j.url)) ? j.url : null,
+      // LO SCHEMA SI CONTROLLA: questa stringa finisce in un `href`, ed `escapeHtml` sostituisce
+      // `& < > "` — caratteri che il parser ri-decodifica dentro l'attributo — quindi non
+      // neutralizza `javascript:`. Le righe annuncio lo verificano gia' (app.js:2205); qui no,
+      // e sarebbe stato l'unico punto in cui una stringa scritta da un terzo diventa un link
+      // cliccabile nell'origine dell'app. Solo http/https, il resto vale null.
+      sito: (typeof j.url === 'string' && /^https?:\/\//i.test(j.url.trim())
+             && !/autoscout24\.it|subito\.it/i.test(j.url)) ? j.url.trim() : null,
       indirizzo: typeof j.address === 'string' ? pulisci(j.address) : null,
       // Cosa fa oltre a vendere: officina, gommista, perizie. E' il pezzo che dice se e' un
       // concorrente sullo stesso mestiere o un rivenditore e basta.
