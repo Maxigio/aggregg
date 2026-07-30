@@ -250,6 +250,29 @@ const senzaGenerazione = m => String(m == null ? '' : m)
   .replace(/\s+\d+[ªa°]?\s*serie\b.*$/i, '')      // "Golf 5ª serie"
   .trim();
 
+/**
+ * LE PAROLE CHE DISTINGUONO LE GENERAZIONI FRA LORO, dette dal catalogo e non da una tabella.
+ *
+ * Il catalogo tecnico separa "A3 Sportback (8V)" da "A3 (8V)", "Serie 3 Touring (F31)" da
+ * "Serie 3 Berlina (F30)", "Golf Variant" da "Golf". Quelle parole — sportback, touring,
+ * variant, cabriolet, 4x4, e persino i codici telaio — l'annuncio spesso le scrive nel titolo,
+ * e finora non le guardavamo. Prendendole dai NOMI delle generazioni non c'e' nessun elenco da
+ * mantenere: quando il catalogo cambia, cambiano da sole.
+ *
+ * Misurato sul testo degli annunci: BMW Serie 3 142 su 208 (touring 94, e i codici e46/e90/e91
+ * scritti dal venditore), Audi A3 32 su 210 (sportback), Golf 21, Classe A 16, Panda 19.
+ */
+const RUMORE_GEN = /^(i|ii|iii|iv|v|vi|vii|viii|ix|x|xi|xii|facelift|phase|door|doors|porte|lci|typ|restyling|mk|serie|series|\d+)$/i;
+const paroleDi = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .split(/[^a-z0-9]+/).filter(Boolean);
+function paroleDistintive(gens, marca, modello) {
+  const escluse = new Set([...paroleDi(marca), ...paroleDi(modello)]);
+  const insiemi = gens.map(g => new Set(paroleDi(g.name).filter(w => w.length > 2 && !escluse.has(w) && !RUMORE_GEN.test(w))));
+  const conta = new Map();
+  for (const ins of insiemi) for (const w of ins) conta.set(w, (conta.get(w) || 0) + 1);
+  return [...conta.entries()].filter(([, n]) => n < gens.length).map(([w]) => w);
+}
+
 /** Quella stessa generazione, letta invece di buttata: "5ª serie" → V, "(E90/91)" → [E90,E91]. */
 const ROMANI = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 function generazioneDichiarata(modello) {
@@ -485,6 +508,26 @@ async function schedaPerAnnuncio({ tipo, marca, modello: modelloGrezzo, anno, cv
     const p = gens.filter(g => gd.codici.some(c => new RegExp('\\b' + c + '\\b', 'i').test(g.name))
       || (gd.romano && new RegExp('\\b' + gd.romano + '\\b').test(g.name)));
     if (p.length) gens = p;
+  }
+  /**
+   * LA CARROZZERIA (E IL TELAIO) SCRITTI NEL TESTO. Subito mette Sportback, Berlina e Sedan
+   * tutte sotto "Berlina" — 172 annunci su 210 sull'A3 — quindi il campo carrozzeria non le
+   * separa. Il titolo invece lo fa, e con lui i codici telaio che i venditori BMW scrivono.
+   * Vince la generazione che ne contiene PIU' di quelle trovate: chiederle tutte scarterebbe
+   * un titolo che ne nomina due appartenenti a generazioni diverse.
+   */
+  if (gens.length > 1) {
+    const dis = paroleDistintive(gens, marca, modello);
+    // SOLO quello che ha scritto il venditore. Il nome del modello NO: "Serie 3 (E90/91)"
+    // porta dentro DUE codici — berlina e touring — e ne farebbe due indizi a pari merito,
+    // cioe' rumore. Quella coppia la gestisce gia' `generazioneDichiarata` come tale.
+    const nel = new Set(paroleDi(`${titolo || ''} ${variante || ''}`));
+    const cercate = dis.filter(w => nel.has(w));
+    if (cercate.length) {
+      const punti = g => { const p = paroleDi(g.name); return cercate.filter(w => p.includes(w)).length; };
+      const max = Math.max(...gens.map(punti));
+      if (max > 0) gens = gens.filter(g => punti(g) === max);
+    }
   }
   // Il tetto resta una richiesta per generazione: sei bastano; oltre, l'anno e la
   // carrozzeria non stanno restringendo niente e la scelta e' tua.
