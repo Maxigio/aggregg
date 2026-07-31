@@ -333,7 +333,10 @@ body:not(.has-results) .search {
 .veh-row.veh-hl { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
 /* toolbar trasformazioni scheda */
 .veh-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px 2px 10px; border-bottom: 1px solid var(--line); }
-.veh-tb-btn { height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); font: inherit; font-size: 0.8rem; cursor: pointer; }
+/* `display:inline-flex` e non il default: Unita' ed Esporta sono <summary>, non <button>,
+   e un summary e' un blocco — il testo restava appoggiato in alto a sinistra dentro i
+   30px invece di stare al centro come negli altri comandi della stessa barra. */
+.veh-tb-btn { display: inline-flex; align-items: center; justify-content: center; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); color: var(--text); font: inherit; font-size: 0.8rem; cursor: pointer; }
 .veh-tb-btn:hover { border-color: var(--accent); }
 .veh-tb-btn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 /* Cerca campo valorizzata: input primario con icona, cresce per riempire la riga */
@@ -1026,6 +1029,7 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
 }
 .det-act:hover { border-color: var(--accent); color: var(--accent); }
 .det-act.attivo { background: var(--accent-weak); border-color: var(--accent); color: var(--accent); }
+.det-open-gia { color: var(--text-muted); border-color: var(--line); background: var(--surface-2); font-weight: 600; cursor: default; }
 @media (max-width: 860px) { .det-act, .det-open { min-height: 40px; padding: 8px 14px; } }
 .result-row.detail-open { background: var(--surface-2); }
 

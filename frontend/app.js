@@ -70,6 +70,10 @@ let ultimiVisti = null;
 // stava guardando. Su un documento che esce di mano e' il tipo di errore che non si scopre.
 // Il ripiego resta solo per il "mai disegnato" (null), dove ultimiVisti non esiste ancora.
 const risultatiAVista = () => (Array.isArray(ultimiVisti) ? ultimiVisti : currentResults);
+// Il bottone "Verifica" della targa: la sua visibilita' dipende sia dal campo sia dal fatto
+// che ci siano annunci a schermo, quindi va risincronizzato quando cambia l'una o l'altra
+// cosa. Definita qui perche' la assegna init() e la chiamano render/hide dei risultati.
+let targaBtnSync = () => {};
 let confronto      = [];                       // annunci selezionati per il confronto (cap 10)
 let matrixList     = [];                        // annunci attualmente mostrati nella matrice
 let salvati        = [];
@@ -326,11 +330,14 @@ async function init() {
     const chip = e.target.closest('.facet-chip'); if (!chip) return;
     vista = chip.dataset.vista === 'schede' ? 'schede' : 'lista';
     try { localStorage.setItem('amrVista', vista); } catch (_) {}
+    // Il default cambia con la vista (vedi colsDefault), ma solo se non l'hai gia' deciso tu.
+    if (!colsToccate) { visibleCols = colsDefault(lastSearchParams); syncColMenu(); }
     renderResults(currentResults);
   });
   // Menu "Colonne": toggle colonne opzionali (anno/km/carb/cv) live.
   document.querySelectorAll('.col-toggle').forEach(cb => cb.addEventListener('change', () => {
     visibleCols = OPTIONAL_COLS.filter(k => document.querySelector(`.col-toggle[value="${k}"]`)?.checked);
+    colsToccate = true;   // da qui in poi comandi tu, anche cambiando vista
     renderResults(currentResults);
   }));
   renderPriceMenuV();   // menu "Prezzo €" (Commissione/Spese/Margine/IVA) nella toolbar veicoli
@@ -626,9 +633,13 @@ async function init() {
   // puo' funzionare e' peggio di nessun comando.
   const targaInput = document.getElementById('targaFiltro');
   const targaBtn = document.getElementById('targaVai');
-  const targaBtnSync = () => {
+  // Serve UNA TARGA E DEGLI ANNUNCI A SCHERMO: la verifica vive dentro la scheda tecnica
+  // di un annuncio, quindi prima della ricerca non ha dove andare. Mostrarlo comunque
+  // significava offrire un comando che risponde solo con un errore.
+  targaBtnSync = () => {
     const t = String(targaInput?.value || '').replace(/[^A-Za-z0-9]/g, '');
-    targaBtn?.classList.toggle('d-none', t.length < 5);
+    const ci = (risultatiAVista() || []).length > 0;
+    targaBtn?.classList.toggle('d-none', t.length < 5 || !ci);
   };
   targaInput?.addEventListener('input', targaBtnSync);
   targaBtnSync();
@@ -1941,7 +1952,8 @@ async function doSearch() {
   // finivano accanto a una moto — "Fiat 500: 94.618 passaggi, fonte ACI" su una Honda CB 500.
   if (params.tipo !== 'moto' && params.marca) liqCarica(params.marca, params.modello, params.tipo);
   else { liqMarca = null; liqModelli = null; liqVoce = null; liqStato = 'mai'; }
-  visibleCols = colsFromFilters(params);   // colonne default = filtri usati (anno/km); resto via menu
+  colsToccate = false;                     // ricerca nuova: si riparte dal default della vista
+  visibleCols = colsDefault(params);
   syncColMenu();
 
   confronto = []; renderCompareBar(); closeMatrix();
@@ -2115,6 +2127,7 @@ function renderResults(results) {
   resultsToolbar.classList.remove('d-none');
   if (!document.querySelector('#priceMenuV summary')) renderPriceMenuV();   // rete di sicurezza: menu "Prezzo €" popolato quando la toolbar appare
   updateStats();
+  targaBtnSync();   // annunci a schermo → il bottone della targa ha dove andare
 
   if (sorted.length === 0) {
     noResults.classList.remove('d-none'); resultsSection.classList.add('d-none');
@@ -2250,6 +2263,17 @@ function colsFromFilters(p) {
   if (p && (p.kmMin || p.kmMax)) v.push('km');
   return v;
 }
+/**
+ * IL DEFAULT NON E' LO STESSO NELLE DUE VISTE, e non e' una svista.
+ *
+ * Nella LISTA ogni campo acceso e' una COLONNA in piu': larghezza vera sottratta al
+ * titolo, per questo di partenza si accendono solo quelle su cui hai davvero filtrato.
+ * Nella SCHEDA sono parole in una riga che va a capo da sola: non costano niente, e
+ * partono tutte accese — com'era prima che il menu le comandasse.
+ * Se le spunte le hai toccate tu, comandano loro: cambiare vista non te le rimette a posto.
+ */
+let colsToccate = false;
+const colsDefault = params => (vista === 'schede' ? OPTIONAL_COLS.slice() : colsFromFilters(params));
 function syncColMenu() {
   document.querySelectorAll('.col-toggle').forEach(cb => { cb.checked = visibleCols.includes(cb.value); });
 }
@@ -2358,6 +2382,10 @@ function rowHTML(item, bestSet) {
 
 function vistaChipsRender() {
   document.querySelectorAll('#vistaChips .facet-chip').forEach(b => b.classList.toggle('active', b.dataset.vista === vista));
+  // In vista schede colonne non ce ne sono: le stesse quattro spunte comandano i campi
+  // della riga di dati, e il bottone lo dice invece di promettere una cosa che non c'e'.
+  const cols = document.querySelector('.tb-cols-group .tb-cols > summary');
+  if (cols) cols.textContent = (vista === 'schede' ? 'Campi' : 'Colonne') + ' ▾';
 }
 
 /**
@@ -2378,8 +2406,21 @@ function cardHTML(item, bestSet) {
     : `<div class="row-thumb noimg${needEnrich ? ' enrich' : ''}"${enrichAttr} aria-hidden="true"></div>`;
   const conc = item.venditore && /conc/i.test(item.venditore);
   const ggV = giorniInVendita(item);
-  const meta = [item.anno || null, item.km != null ? `${item.km.toLocaleString('it-IT')} km` : null,
-    item.carburante || null, item.potenzaCv != null ? `${item.potenzaCv} CV` : null,
+  /**
+   * LE STESSE SPUNTE DELLA LISTA, qui applicate alla riga di dati sotto il titolo.
+   * In vista schede colonne non ce ne sono, ma i campi facoltativi sono gli stessi
+   * quattro: il menu comanda le due viste allo stesso modo invece di restare acceso e
+   * non fare niente. I giorni in vendita non sono fra i quattro e restano sempre.
+   */
+  // `visibleCols` e non `effVisibleCols()`: quest'ultima toglie carburante e CV sotto i
+  // 1180px perche' le COLONNE della lista hanno larghezze fisse e sfonderebbero. Qui
+  // colonne non ce ne sono — la riga di dati va a capo da sola — quindi la spunta vale
+  // a qualunque larghezza, senno' sparirebbe senza che nessuno l'abbia tolta.
+  const vis = visibleCols;
+  const meta = [vis.includes('anno') ? (item.anno || null) : null,
+    vis.includes('km') && item.km != null ? `${item.km.toLocaleString('it-IT')} km` : null,
+    vis.includes('carb') ? (item.carburante || null) : null,
+    vis.includes('cv') && item.potenzaCv != null ? `${item.potenzaCv} CV` : null,
     ggV != null ? `in vendita da ${ggV} gg` : null].filter(Boolean).join(' · ');
   const isSalvato = salvati.some(r => r.url === item.url);
   const inConfronto = confronto.some(r => r.url === item.url);
@@ -2633,12 +2674,20 @@ async function aggiungiVenditoreAlCompetitor(r, btn) {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cp),
     });
     const d = await res.json().catch(() => ({}));
-    // 409 = c'era gia'. Non e' un errore: e' una risposta, e va detta come tale.
-    if (res.status === 409) { toast(d.error || 'Era gia\' nell\'elenco'); btn.textContent = 'Gia\' in Competitor'; return; }
+    // 409 = c'era gia'. Non e' un errore: e' una risposta, e va detta come tale. E la voce
+    // che il server rimanda si mette in elenco: cosi' le altre righe dello stesso venditore
+    // smettono subito di offrire "Aggiungi".
+    if (res.status === 409) {
+      toast(d.error || 'Era gia\' nell\'elenco'); btn.textContent = 'Gia\' in Competitor';
+      if (d.voce) cpVoci = (cpVoci || []).concat([d.voce]);
+      return;
+    }
     if (!res.ok || !d.ok) { showError(d.error || 'Non riuscito'); btn.disabled = false; btn.textContent = testo; return; }
     toast(`${(d.voce && d.voce.nome) || 'Venditore'} aggiunto a Competitor — il parco lo scarichi da lì`);
     btn.textContent = 'In Competitor ✓';
-    cpVoci = null;   // l'elenco in memoria e' vecchio: si rilegge alla prossima apertura
+    // L'elenco in memoria si AGGIORNA invece di azzerarsi: azzerandolo, ogni altra riga
+    // dello stesso venditore tornava a offrire "Aggiungi" fino alla riapertura della sezione.
+    if (d.voce) cpVoci = (cpVoci || []).concat([d.voce]);
   } catch (_) {
     showError('Impossibile contattare il server'); btn.disabled = false; btn.textContent = testo;
   }
@@ -2651,6 +2700,16 @@ function vetrinaHTML(r) {
   const cp = competitorDaAnnuncio(r);
   if (!cp) return vet;
   const chi = r.venditoreNome ? ` (${escapeHtml(r.venditoreNome)})` : '';
+  /**
+   * CHI E' GIA' IN ELENCO NON SI PUO' AGGIUNGERE. Guardando gli annunci di un concorrente
+   * dalla sezione Competitor, ogni riga offriva "Aggiungi a Competitor" per il
+   * concorrente che si stava gia' guardando: il server rispondeva 409 e l'app un avviso,
+   * cioe' un giro completo per sapere una cosa che sapeva gia'. `cpVoci` e' l'elenco vero,
+   * ed e' caricato ogni volta che la sezione e' stata aperta almeno una volta; se non lo
+   * e' (null) il bottone resta com'era — meglio offrirlo che nasconderlo per un dubbio.
+   */
+  const gia = Array.isArray(cpVoci) && cpVoci.some(v => v.fonte === cp.fonte && String(v.id) === String(cp.id));
+  if (gia) return vet + `<span class="det-open det-open-gia" title="Questo venditore e' gia' nella sezione Competitor">Già in Competitor${chi}</span>`;
   return vet + `<button type="button" class="det-open btn-competitor">Aggiungi a Competitor${chi}</button>`;
 }
 // ── Passaggio di proprieta' del singolo annuncio ─────────────────────────────
@@ -3547,6 +3606,7 @@ function hideResults() {
   // rimetteva `lastSources` e concatenava annunci in uno stato che era stato azzerato.
   searchGen++;
   searchActive = false;
+  targaBtnSync();   // niente annunci: il bottone della targa non ha dove andare
   document.body.classList.remove('has-results');   // torna allo stato iniziale → sfondo + search centrata
   _enrichQueue.length = 0; if (enrichObserver) enrichObserver.disconnect();   // stop enrichment Moto.it pendente
   resultsSection.classList.add('d-none'); noResults.classList.add('d-none'); resultsToolbar.classList.add('d-none');
