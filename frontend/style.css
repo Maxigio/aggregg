@@ -269,13 +269,11 @@ body:not(.has-results) .search {
 .det-pass-cifra b { font-family: var(--num); font-size: 1.3rem; font-weight: 800; }
 .det-pass-cifra span { font-size: 0.8rem; color: var(--text); }
 .det-pass-det { font-size: 0.76rem; color: var(--text-muted); font-family: var(--num); }
-.det-pass-prov { font-size: 0.74rem; color: var(--text-muted); }
 .det-pass-alt { border: 0; background: none; padding: 0; font: inherit; font-size: 0.74rem; color: var(--accent); text-decoration: underline; cursor: pointer; }
 .det-pass-opz { display: flex; gap: 12px; flex-wrap: wrap; }
 .det-pass-opzv { display: inline-flex; align-items: center; gap: 5px; font-size: 0.76rem; color: var(--text-muted); cursor: pointer; }
 .det-pass-opzv input { margin: 0; cursor: pointer; }
 .det-pass-avviso { font-size: 0.74rem; color: var(--warn); }
-.det-pass-fonte { font-size: 0.68rem; color: var(--text-faint); }
 .veh-sel-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 /* combobox scheda: input + lista visibile filtrata (riusa .ac-list/.ac-item di marca/modello) */
 #vehicleScheda .veh-combo-wrap { flex: 0 1 260px; min-width: 160px; }
@@ -630,12 +628,6 @@ body.has-results .search { padding: 14px 0 12px; }
 .tb-stat b { font-family: var(--num); font-weight: 700; color: var(--text); }
 .tb-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
 
-.stat-clickable {
-  background: none; border: none; padding: 0; cursor: pointer;
-  font-family: var(--num); font-weight: 700; color: var(--accent);
-  text-decoration: underline dotted; font-size: inherit;
-}
-.stat-clickable:hover { color: var(--text); }
 
 /* Chip facet (raggruppa) */
 .facet-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -1170,12 +1162,19 @@ section.search.area-attiva #searchForm { min-height: 0; }
 .ver-lab { display: block; font-size: 0.78rem; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; }
 .ver-lab em { font-style: normal; opacity: 0.75; }
 /* Versione e targa in riga: i due campi che DESCRIVONO il veicolo, non quelli che
-   restringono la ricerca. Su schermo stretto si impilano da soli. */
-.riga-libera { display: flex; flex-wrap: wrap; gap: 12px; }
-.campo-libero { flex: 1 1 260px; min-width: 0; }
+   restringono la ricerca. Stesso passo di marca/modello (gap 10px) e larghezza data
+   dall'input, non dalla colonna: con le colonne elastiche i due campi restavano agli
+   estremi della riga con un vuoto in mezzo. Su schermo stretto si impilano da soli. */
+.riga-libera { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.campo-libero { flex: 0 1 auto; min-width: 0; }
 .campo-libero .field-input { width: 100%; }
-#versione { max-width: 420px; }
-#targaFiltro { max-width: 220px; text-transform: uppercase; }
+#versione { width: 420px; max-width: 100%; }
+#targaFiltro { width: 200px; max-width: 100%; text-transform: uppercase; }
+.targa-riga { display: flex; gap: 6px; align-items: center; }
+.btn-targa-vai { align-self: stretch; padding: 0 12px; border: 1px solid var(--accent); border-radius: var(--r);
+  background: transparent; color: var(--accent); font: inherit; font-size: 0.82rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap; }
+.btn-targa-vai:hover { background: var(--accent); color: #fff; }
 
 /* ── Scheda del ricambio dalla fonte OE, dentro la ricerca ricambi ────────────
    I codici stanno RAGGRUPPATI per costruttore: in piano erano trentuno pastiglie in
@@ -1249,6 +1248,16 @@ section.search.area-attiva #searchForm { min-height: 0; }
    stavano sempre aperti e riempivano la scheda anche quando non li guardavi. Chiusi si
    legge comunque la cifra che conta: e' nell'intestazione, accanto al titolo. */
 .mini { border-top: 1px solid var(--line); margin-top: 8px; }
+/* I blocchi richiudibili dell'annuncio in GRIGLIA: erano quattro righe incolonnate con
+   mezzo pannello vuoto a destra. Stessa regola dell'area ADD ON, gia' provata: dove c'e'
+   spazio si affiancano, dove non c'e' tornano in colonna. */
+.det-blocchi { display: grid; gap: 0 20px; align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+/* In griglia ogni blocco e' una colonna a se': il filo sopra separava dal precedente, che
+   ora sta di fianco e non sopra. Il primo di OGNI colonna non lo vuole. */
+.det-blocchi > * { min-width: 0; }
+.det-blocchi > .det-pass > .mini, .det-blocchi > .det-gomme > .mini { border-top: 0; margin-top: 0; }
+.det-blocchi > .mini:first-of-type { border-top: 0; margin-top: 0; }
 .mini:first-child { border-top: 0; margin-top: 0; }
 .mini-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 7px 0; cursor: pointer; list-style: none; }
 .mini-h::-webkit-details-marker { display: none; }

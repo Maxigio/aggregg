@@ -113,8 +113,13 @@
                versione — l'altro campo che descrive il veicolo invece di restringere. -->
           <div class="campo-libero">
             <label class="ver-lab" for="targaFiltro">Targa <em>(non filtra: apre la verifica)</em></label>
-            <input type="text" id="targaFiltro" class="field-input" placeholder="es. AB123CD"
-                   maxlength="8" autocomplete="off" spellcheck="false" />
+            <div class="targa-riga">
+              <input type="text" id="targaFiltro" class="field-input" placeholder="es. AB123CD"
+                     maxlength="8" autocomplete="off" spellcheck="false" />
+              <!-- La verifica vive dentro ADD ON, in fondo alla scheda tecnica di un
+                   annuncio: scritta la targa, questo bottone ci porta senza farla cercare. -->
+              <button type="button" id="targaVai" class="btn-targa-vai d-none">Verifica →</button>
+            </div>
           </div>
         </div>
 
@@ -201,8 +206,9 @@
     <div id="resultsToolbar" class="results-toolbar d-none">
       <div class="tb-group">
         <span id="resultsCount" class="tb-count"></span>
-        <span class="tb-stat"><span class="tb-stat-label">min</span><b id="statMin">—</b></span>
-        <span class="tb-stat"><span class="tb-stat-label">max</span><b id="statMax">—</b></span>
+        <!-- Il prezzo min e max stavano qui: il minimo e' la prima riga se ordini per
+             prezzo, il massimo l'ultima, e li vedi gia' nella griglia. Due numeri che
+             ripetevano quello che c'e' sotto. -->
       </div>
       <span class="tb-sep"></span>
       <div class="tb-group">

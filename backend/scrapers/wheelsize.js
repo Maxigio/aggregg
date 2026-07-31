@@ -170,10 +170,11 @@ const calzate = (marca, modello, anno) => {
       calzate: righe,
       totale: righe.length,
       conMisura,
-      // Si dichiara la copertura invece di lasciarla dedurre: e' il limite principale della fonte.
-      nota: conMisura < righe.length
-        ? `Misura di pneumatico e cerchio in chiaro su ${conMisura} righe su ${righe.length}: sulle altre la fonte la carica via JavaScript. Distanza fori, centraggio e coppia di serraggio non sono disponibili per questa via.`
-        : 'Distanza fori, centraggio e coppia di serraggio non sono disponibili per questa via.',
+      // La nota che spiegava la copertura ("in chiaro su N righe su M... distanza fori,
+      // centraggio e coppia di serraggio non disponibili") e' stata tolta: raccontava i
+      // limiti della fonte a chi voleva solo le misure. `conMisura` e `totale` restano nel
+      // dato per chi li vuole leggere.
+      nota: null,
     };
   }, d => !d || !d.totale);
 };

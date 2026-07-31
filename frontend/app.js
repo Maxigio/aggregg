@@ -80,7 +80,9 @@ let groupDim       = '';                        // dimensione di raggruppamento 
 let soloIva = false;
 // Lista (densa, confrontabile) o schede (foto grande). Si ricorda: e' una preferenza di
 // come si guarda, non un pezzo della ricerca.
-let vista          = (() => { try { return localStorage.getItem('amrVista') === 'schede' ? 'schede' : 'lista'; } catch (_) { return 'lista'; } })();
+// Di default SCHEDE: la foto e' il primo filtro che fa un operatore, e la lista densa
+// resta a un clic per chi vuole confrontare. Chi ha gia' scelto tiene la sua preferenza.
+let vista          = (() => { try { return localStorage.getItem('amrVista') === 'lista' ? 'lista' : 'schede'; } catch (_) { return 'schede'; } })();
 let modelCache     = {};                        // `${tipo}|${marca}` → [{nome, sites, mmmvAutoscout, slugMotoIt}]
 let selectedModel  = null;                       // modello scelto dalla force-select (con _marca) o null (testo libero)
 let sortState      = { key: 'prezzo', dir: 'asc' };
@@ -607,11 +609,6 @@ async function init() {
     const rm = e.target.closest('.cm-rm'); if (rm) { removeMatrixCol(rm.dataset.url); return; }
   });
 
-  // min/max cliccabili (toolbar)
-  resultsToolbar.addEventListener('click', e => {
-    const btn = e.target.closest('.stat-clickable'); if (btn) scrollToCard(btn.dataset.url);
-  });
-
   // Filtri avanzati toggle
   advancedToggle?.addEventListener('click', () => {
     const open = advancedFilters.classList.toggle('d-none');
@@ -624,6 +621,18 @@ async function init() {
   // di tornare a casa. Il QR resta sulla pagina di accesso, dove ha senso.
   // Il modo si ricorda, quindi ricaricando si torna nella sezione dove si stava.
   logoBtn?.addEventListener('click', () => location.reload());
+
+  // Il bottone della targa compare solo quando una targa c'e' davvero: un comando che non
+  // puo' funzionare e' peggio di nessun comando.
+  const targaInput = document.getElementById('targaFiltro');
+  const targaBtn = document.getElementById('targaVai');
+  const targaBtnSync = () => {
+    const t = String(targaInput?.value || '').replace(/[^A-Za-z0-9]/g, '');
+    targaBtn?.classList.toggle('d-none', t.length < 5);
+  };
+  targaInput?.addEventListener('input', targaBtnSync);
+  targaBtnSync();
+  targaBtn?.addEventListener('click', () => targaVaiAllaVerifica());
   document.getElementById('btnReportNav')?.addEventListener('click', () => openReport());   // p4: Segnala in navbar
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeReport(); });
 
@@ -2105,7 +2114,7 @@ function renderResults(results) {
 
   resultsToolbar.classList.remove('d-none');
   if (!document.querySelector('#priceMenuV summary')) renderPriceMenuV();   // rete di sicurezza: menu "Prezzo €" popolato quando la toolbar appare
-  updateStats(sorted);
+  updateStats();
 
   if (sorted.length === 0) {
     noResults.classList.remove('d-none'); resultsSection.classList.add('d-none');
@@ -2779,24 +2788,24 @@ function passCorpoHTML(r) {
     + `${passAvvisiHTML(d)}${opz}`;
   const eur = n => Number(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const loc = d.localita || {};
-  const stima = d.potenzaListino
-    ? ` · ${d.potenzaListino.kw} kW da listino (${d.potenzaListino.cv} CV), non stimati`
-    : d.potenzaStimata
-      ? ` · ${d.potenzaStimata.kw} kW stimati da ${d.potenzaStimata.cv} CV (la cifra esatta e sul libretto)`
-      : (d.kW ? ` · ${d.kW} kW` : '');
   // Da quale provincia viene l'importo, e come si passa all'altra: la differenza tra le due
   // sono euro veri (dallo 0% di Bolzano al 30% di quasi tutte le altre).
   const altra = st.mia ? (r.provincia || '') : carbProvincia();
   const scambio = altra
     ? ` <button type="button" class="det-pass-alt" data-alt="${st.mia ? 'annuncio' : 'mia'}">usa ${st.mia ? `la provincia dell'annuncio (${escapeHtml(altra)})` : `la tua provincia (${escapeHtml(altra)})`}</button>`
     : '';
+  /**
+   * SOLO I NUMERI. Qui c'erano cinque righe di prosa attorno a tre cifre: da dove viene la
+   * potenza, chi paga l'IPT e su quale residenza, la fonte, cosa non e' incluso. Roba giusta
+   * ma spiegata ogni volta a chi il conto lo conosce meglio di noi. Restano l'importo, i due
+   * addendi, la provincia con il bottone per cambiarla, e gli avvisi — che non sono prosa:
+   * sono condizioni che cambiano quanto paghi.
+   */
   return `<div class="det-pass-box">
     <div class="det-pass-cifra"><b>${eur(d.totaleNoto)} €</b><span>IPT ${eur(d.ipt)} € + emolumenti ${eur(d.emolumenti)} €</span></div>
-    <div class="det-pass-det">${escapeHtml(loc.sigla || '')}${loc.via && loc.via !== 'sigla' ? ` (da &laquo;${escapeHtml(loc.testo)}&raquo;)` : ''}${d.storico ? '' : ` · maggiorazione ${d.maggiorazione}%`}${stima}</div>
-    <div class="det-pass-prov">${st.mia ? 'La tua provincia' : 'Provincia del venditore'} — l'IPT si paga su quella di residenza di chi intesta.${scambio}</div>
+    <div class="det-pass-det">${escapeHtml(loc.sigla || '')}${scambio}</div>
     ${opz}
     ${passAvvisiHTML(d)}
-    <div class="det-pass-fonte">Fonte ACI. Nel margine di questa riga. Non incluso: ${escapeHtml((d.nonIncluso || []).join('; '))}.</div>
   </div>`;
 }
 
@@ -2886,7 +2895,7 @@ function gommePneuHTML(r, misura) {
         + `<span class="gom-pneu-v">${x.rumoreDb ? escapeHtml(String(x.rumoreDb)) + ' dB' : '—'}<em>rumore</em></span>`
         + (x.neve ? '<span class="gom-pneu-s" title="marcatura 3PMSF">❄︎</span>' : '')
         + '</div>').join('')
-    + (p.length > 8 ? `<div class="gom-att">e altri ${p.length - 8}</div>` : '') + '</div>';
+    + (p.length > 8 ? `<div class="gom-att">e altri ${p.length - 8} · lista limitata dall'area demo</div>` : '') + '</div>';
 }
 
 function gommeHTML(r) {
@@ -2981,18 +2990,28 @@ function renderDetailInto(panel, r) {
     const salBtn  = `<button type="button" class="det-act btn-salva${isSal ? ' attivo' : ''}">${icon(isSal ? 'bookmark-filled' : 'bookmark')}<span class="ra-txt">${isSal ? 'Salvato' : 'Salva'}</span></button>`;
     const confBtn = `<button type="button" class="det-act btn-confronta${inConf ? ' attivo' : ''}">${icon(inConf ? 'square-check' : 'square')}<span class="ra-txt">${inConf ? 'Nel confronto' : 'Confronta'}</span></button>`;
     panel.innerHTML = `<div class="det-inner">${gallery}<div class="det-specs">${detailSpecsHTML(r)}</div>`
-      // Liste e testo dell'annuncio: dati nativi anche questi, quindi in chiaro. A tutta
-      // larghezza perche' non stanno nella griglia delle coppie.
-      + `<div class="det-fonte">${optionalHTML(r)}${testoHTML(r)}${vetrinaHTML(r)}</div>`
-      // Da qui in giu' le INTEGRAZIONI ESTERNE: costano una richiesta e non stanno
-      // nell'annuncio, quindi restano richiudibili e non partono da sole.
-      + `<div class="det-pass">${passHTML(r)}</div>`
-      // La scheda tecnica DI QUESTO ANNUNCIO: sta qui e non nella ricerca, perche' i
-      // vincoli con cui si trova la motorizzazione giusta li dichiara l'annuncio.
-      // LA SCHEDA TECNICA vive qui dentro. E' la stessa di prima, intera: si sposta nel
-      // pannello dell'annuncio che la chiede. Pigra: niente parte finche' non premi.
+      /**
+       * I BLOCCHI RICHIUDIBILI IN GRIGLIA, non in colonna.
+       *
+       * Optional, testo, passaggio e cerchi erano quattro <div> uno sotto l'altro: su uno
+       * schermo largo restavano quattro righe alte una riga, con mezzo pannello vuoto a
+       * destra, e per arrivare all'ultimo si scorreva. E' la stessa griglia che l'area
+       * ADD ON usa gia' (`auto-fit` a 290px): dove c'e' spazio si affiancano, dove non
+       * c'e' tornano in colonna da soli.
+       * Da qui in giu' ci sono anche le INTEGRAZIONI ESTERNE: costano una richiesta e non
+       * stanno nell'annuncio, quindi restano richiudibili e non partono da sole.
+       */
+      + `<div class="det-blocchi"><div class="det-pass">${passHTML(r)}</div>`
+      + `${optionalHTML(r)}${testoHTML(r)}`
+      + `<div class="det-gomme">${gommeHTML(r)}</div></div>`
+      // La vetrina del venditore sono BOTTONI, non un blocco richiudibile: resta fuori
+      // dalla griglia, sulla sua riga.
+      + `<div class="det-fonte">${vetrinaHTML(r)}</div>`
+      // LA SCHEDA TECNICA di QUESTO annuncio: sta qui e non nella ricerca, perche' i
+      // vincoli con cui si trova la motorizzazione giusta li dichiara l'annuncio. Pigra:
+      // niente parte finche' non premi. Quando si apre e' larga quanto il pannello, quindi
+      // resta fuori dalla griglia: dentro finirebbe schiacciata in una colonna da 290px.
       + `<div class="det-scheda">${vehHostUrl === r.url ? '' : '<button type="button" class="det-scheda-apri">Scheda tecnica</button>'}</div>`
-      + `<div class="det-gomme">${gommeHTML(r)}</div>`
       + `<div class="det-foot">${openBtn}${salBtn}${confBtn}</div></div>`;
   };
   panel._render = () => {
@@ -3019,25 +3038,10 @@ function renderDetailInto(panel, r) {
 
 function openAd(url) { if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener,noreferrer'); }
 
-// ─── Statistiche ──────────────────────────────────────────────────────────────
-function updateStats(results) {
-  const withP = results.map(r => ({ r, p: vPricing(r.prezzo) })).filter(x => x.p && x.p.finale > 0).sort((a, b) => a.p.finale - b.p.finale);
-  if (!withP.length) {
-    document.getElementById('statMin').innerHTML = '—'; document.getElementById('statMax').innerHTML = '—'; return;
-  }
-  const lo = withP[0], hi = withP[withP.length - 1];
-  const mk = (val, r) => r ? `<button class="stat-clickable" data-url="${escapeHtml(r.url)}">${eurRound(val)}</button>` : eurRound(val);
-  document.getElementById('statMin').innerHTML = mk(lo.p.finale, lo.r);
-  document.getElementById('statMax').innerHTML = mk(hi.p.finale, hi.r);
-}
-
-function scrollToCard(url) {
-  const card = resultsGrid.querySelector(`[data-url="${CSS.escape(url)}"]`);
-  if (!card) return;
-  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  card.classList.remove('highlight-card'); void card.offsetWidth; card.classList.add('highlight-card');
-  setTimeout(() => card.classList.remove('highlight-card'), 2000);
-}
+// Il prezzo min/max in toolbar non c'e' piu': ripeteva la prima e l'ultima riga della
+// griglia ordinata per prezzo. `updateStats` resta come punto unico da cui chiamare, se
+// un giorno torna una statistica che aggiunge qualcosa.
+function updateStats() {}
 
 // ─── Stato per-fonte ──────────────────────────────────────────────────────────
 const SOURCE_STATUS = {
@@ -4407,7 +4411,10 @@ const VEH_UNIT_ROWS = [
 ];
 function vehToolbarHTML() {
   const unitsActive = Object.values(vehXf.units).some(Boolean);
-  const unitsMenu = VEH_UNIT_ROWS.map(([fam, lab, opts]) => `<label class="veh-u-row"><span>${lab}</span><select class="veh-tb-unit" data-fam="${fam}" aria-label="${lab}">${opts.map(([v, l]) => `<option value="${v}"${(vehXf.units[fam] || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`).join('');
+  // Solo le famiglie che su QUESTA fonte hanno qualcosa da convertire: sulle moto potenza
+  // e coppia arrivano gia' in due unita', e offrirle sarebbe un comando che non fa niente.
+  const righeUnita = VEH_UNIT_ROWS.filter(([fam]) => vehFamAttiva(fam));
+  const unitsMenu = righeUnita.map(([fam, lab, opts]) => `<label class="veh-u-row"><span>${lab}</span><select class="veh-tb-unit" data-fam="${fam}" aria-label="${lab}">${opts.map(([v, l]) => `<option value="${v}"${(vehXf.units[fam] || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`).join('');
   let cmpCombo = '';
   if (vehXf.compare) {
     const cm = vehData.motorizzazioni.find(m => m.url === vehXf.compare) || {};
@@ -4416,7 +4423,7 @@ function vehToolbarHTML() {
   }
   return `<div class="veh-toolbar">`
     + `<div class="veh-q-wrap">${icon('search', 'veh-q-ico')}<input type="search" class="veh-tb-q" placeholder="Cerca campo…" value="${escapeHtml(vehXf.q)}"></div>`
-    + (vehNumeriIT() ? '' : `<details class="tb-cols veh-units${unitsActive ? ' has-adj' : ''}"><summary class="veh-tb-btn">Unità</summary><div class="tb-cols-menu veh-units-menu">${unitsMenu}</div></details>`)
+    + (righeUnita.length ? `<details class="tb-cols veh-units${unitsActive ? ' has-adj' : ''}"><summary class="veh-tb-btn">Unità</summary><div class="tb-cols-menu veh-units-menu">${unitsMenu}</div></details>` : '')
     + `<button type="button" class="veh-tb-btn veh-tb-all">${vehXf.allOpen === true ? 'Comprimi tutto' : 'Espandi tutto'}</button>`
     + `<button type="button" class="veh-tb-btn veh-tb-cmp${vehXf.compare ? ' on' : ''}">Confronta</button>`
     + `<details class="tb-cols veh-export"><summary class="veh-tb-btn">Esporta</summary><div class="tb-cols-menu veh-export-menu"><button type="button" class="veh-exp" data-exp="copia">Copia negli appunti</button><button type="button" class="veh-exp" data-exp="csv">Scarica CSV</button><button type="button" class="veh-exp" data-exp="pdf">Scarica PDF</button></div></details>`
@@ -4630,21 +4637,46 @@ function vehTrVal(v) { if (!vehXf.translate) return v; let out = v; for (const [
 
 // Conversione unità per famiglia (dal grezzo). Salta i rapporti (unità seguita da "/").
 // NB: la virgola è separatore delle MIGLIAIA sulle fonti ("1,460 mm") → va rimossa, non trattata come decimale.
-const vehFmt = n => (isFinite(n) ? String(Math.round(n * 100) / 100) : '');
+/**
+ * LE DUE CONVENZIONI DEI NUMERI, e perche' vanno distinte.
+ *
+ * Il catalogo auto scrive all'inglese ("1,460 mm" = millequattrocentosessanta), quello
+ * moto all'italiana ("73,4 CV", "8.750 rpm"): la virgola e' migliaia nella prima e
+ * DECIMALE nella seconda. Leggendo l'una con le regole dell'altra, 73,4 CV diventano 734.
+ * Per questo la conversione sulle moto era spenta del tutto — ma cosi' spariva anche
+ * quella che serve (cilindrata, peso, lunghezze). Qui si legge e si riscrive con la
+ * convenzione della fonte, e la conversione torna disponibile su entrambe.
+ */
+const vehParse = s => (vehNumeriIT()
+  ? parseFloat(String(s).replace(/\./g, '').replace(',', '.'))
+  : parseFloat(String(s).replace(/,/g, '')));
+const vehFmt = n => {
+  if (!isFinite(n)) return '';
+  const t = String(Math.round(n * 100) / 100);
+  return vehNumeriIT() ? t.replace('.', ',') : t;
+};
 const VEH_UNITS = [
+  // 'ccm' PRIMA di 'cc', senno' il confine di parola dopo 'cc' non combacia mai su "ccm".
   { fam: 'len', pat: 'mm', f: { cm: 0.1, m: 0.001 }, lab: { cm: 'cm', m: 'm' } },
-  { fam: 'disp', pat: 'cm3|ccm', f: { L: 0.001 }, lab: { L: 'L' } },
+  { fam: 'disp', pat: 'cm3|ccm|cc', f: { L: 0.001 }, lab: { L: 'L' } },
   { fam: 'mass', pat: 'kg', f: { t: 0.001 }, lab: { t: 't' } },
   { fam: 'pow', pat: 'Hp|HP|PS|CV', f: { kW: 0.7355 }, lab: { kW: 'kW' } },
   { fam: 'trq', pat: 'Nm', f: { kgm: 0.101972 }, lab: { kgm: 'kgm' } },
 ];
 VEH_UNITS.forEach(u => { u.re = new RegExp('([\\d][\\d.,]*(?:\\s*[-x×]\\s*[\\d][\\d.,]*)?)\\s*(?:' + u.pat + ')\\b(?!\\s*\\/)', 'g'); });   // precompilata
+/**
+ * Potenza e coppia NON si convertono sulla fonte moto: le stampa gia' in due unita'
+ * ("73,4 CV - 54 kW", "6,9 kgm - 68 Nm"), e convertirle darebbe "54 kW - 54 kW".
+ * Non e' un limite del convertitore: e' che li' non c'e' niente da convertire.
+ */
+const VEH_FAM_DOPPIE = new Set(['pow', 'trq']);
+const vehFamAttiva = fam => !(vehNumeriIT() && VEH_FAM_DOPPIE.has(fam));
 function vehConv(v) {
-  if (vehNumeriIT()) return v;   // formato italiano: convertire darebbe numeri falsi (vedi vehNumeriIT)
   let out = v;
   for (const u of VEH_UNITS) {
+    if (!vehFamAttiva(u.fam)) continue;
     const tgt = vehXf.units[u.fam]; if (!tgt || !u.f[tgt]) continue;
-    out = out.replace(u.re, (m, nums) => nums.replace(/[\d][\d.,]*/g, n => vehFmt(parseFloat(n.replace(/,/g, '')) * u.f[tgt])) + ' ' + u.lab[tgt]);
+    out = out.replace(u.re, (m, nums) => nums.replace(/[\d][\d.,]*/g, n => vehFmt(vehParse(n) * u.f[tgt])) + ' ' + u.lab[tgt]);
   }
   return out;
 }
@@ -5379,13 +5411,85 @@ function tgCorpoHTML() {
     </div>`;
   }
   return `<div class="tg-corpo">
-    <p class="tg-nota">Targa <b>${escapeHtml(targaCercata)}</b>. I caratteri dell'immagine li leggi tu:
-      il portale li chiede per distinguere una persona da un programma. <b>La targa non viene salvata.</b></p>
+    <p class="tg-nota">Vuoi più dati? Faccelo sapere!</p>
     ${form}${tgEsitoHTML()}</div>`;
 }
 
 // Il blocco compare SOLO se una targa e' stata scritta nei filtri: senza, non c'e'
 // niente da chiedere e un riquadro vuoto sarebbe solo ingombro.
+/**
+ * DALLA TARGA SCRITTA ALLA VERIFICA, senza andarsela a cercare.
+ *
+ * La verifica al Portale vive in fondo alla scheda tecnica di UN annuncio, dentro ADD ON:
+ * scritta la targa nella barra, per arrivarci bisognava aprire un annuncio, aprire la
+ * scheda, aspettarla, aprire ADD ON e trovare il blocco. Questo bottone fa quella strada.
+ * Prende il PRIMO annuncio a schermo — la targa non filtra, quindi vale uno qualunque:
+ * serve solo un posto dove la scheda possa vivere.
+ */
+async function targaVaiAllaVerifica() {
+  const t = String((document.getElementById('targaFiltro') || {}).value || '')
+    .toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!t) { showError('Scrivi prima la targa.'); return; }
+  const primo = (risultatiAVista() || [])[0];
+  if (!primo) { showError('Fai prima una ricerca: la verifica vive dentro la scheda di un annuncio.'); return; }
+
+  const attendi = (sel, ms = 20000) => new Promise(res => {
+    const t0 = Date.now();
+    const giro = () => {
+      const el = document.querySelector(sel);
+      if (el) return res(el);
+      if (Date.now() - t0 > ms) return res(null);
+      setTimeout(giro, 120);
+    };
+    giro();
+  });
+
+  // 1. il pannello dell'annuncio
+  const riga = resultsGrid.querySelector(`.result-row[data-url="${CSS.escape(primo.url)}"], .ann-card[data-url="${CSS.escape(primo.url)}"]`);
+  if (!riga) { showError('Non trovo l\'annuncio a schermo.'); return; }
+  const pannello = riga.nextElementSibling;
+  if (pannello && pannello.classList.contains('d-none')) toggleDetail(riga);
+
+  // 2. la scheda tecnica dentro quel pannello (se non c'e' gia')
+  if (vehHostUrl !== primo.url) {
+    const btn = await attendi('.det-scheda-apri', 4000);
+    if (!btn) { showError('Scheda tecnica non disponibile per questo annuncio.'); return; }
+    loadVehScheda(primo, btn.parentElement);
+  }
+
+  // 3. ADD ON aperto e blocco targa in vista. `vehAddonAperto` e `miniAperte` sono gli
+  //    stessi interruttori che usa l'utente a mano: si accendono e si ridisegna.
+  //
+  //    MA L'ADD ON PUO' NON ESSERCI ANCORA: vive dentro le specifiche di UNA
+  //    motorizzazione, e quando l'annuncio non basta a sceglierne una la scheda mostra
+  //    la griglia e aspetta. Quella scelta e' di chi guarda, non nostra: si arriva fin
+  //    li' e lo si dice, invece di sceglierne una a caso o di non fare niente.
+  const dove = await new Promise(res => {
+    const t0 = Date.now();
+    const giro = () => {
+      const addon = document.querySelector('.veh-grp[data-addon]');
+      if (addon) return res('addon');
+      const griglia = document.querySelector('.veh-moto-grid, .veh-gen-grid');
+      if (griglia) return res('scelta');
+      if (Date.now() - t0 > 20000) return res(null);
+      setTimeout(giro, 120);
+    };
+    giro();
+  });
+  if (!dove) { showError('La scheda ci sta mettendo troppo: riprova fra un istante.'); return; }
+  if (dove === 'scelta') {
+    document.querySelector('.veh-moto-grid, .veh-gen-grid')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    toast('Scegli la motorizzazione: la verifica della targa e\' in fondo alla scheda, dentro ADD ON.');
+    return;
+  }
+  vehAddonAperto = true;
+  miniAperte.add('veh-targa');
+  renderVehBody();
+  const blocco = await attendi('[data-mini="veh-targa"]', 5000);
+  if (blocco) blocco.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 function vehTargaHTML() {
   if (!targaCercata) return '';
   const meta = tgEsito && tgEsito.tabelle && tgEsito.tabelle.length ? 'letta' : '';
