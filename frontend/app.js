@@ -2872,8 +2872,13 @@ function passCorpoHTML(r) {
    * sono condizioni che cambiano quanto paghi.
    */
   return `<div class="det-pass-box">
-    <div class="det-pass-cifra"><b>${eur(d.totaleNoto)} €</b><span>IPT ${eur(d.ipt)} € + emolumenti ${eur(d.emolumenti)} €</span></div>
-    <div class="det-pass-det">${escapeHtml(loc.sigla || '')}${scambio}</div>
+    <div class="pp-tot"><b>${eur(d.totaleNoto)} €</b><span class="pp-tot-lab">per metterlo a nome tuo</span></div>
+    <div class="pp-voci">
+      <span class="pp-voce"><em>IPT</em>${eur(d.ipt)} €</span>
+      <span class="pp-piu">+</span>
+      <span class="pp-voce"><em>emolumenti</em>${eur(d.emolumenti)} €</span>
+    </div>
+    <div class="det-pass-det"><span class="pp-prov">${escapeHtml(loc.sigla || '')}</span>${scambio}</div>
     ${opz}
     ${passAvvisiHTML(d)}
   </div>`;
@@ -3849,19 +3854,22 @@ function vehBodyHTML() {
   if (!spec || spec.loading) return '<div class="rc-loading">Carico le specifiche…</div>';
   if (!spec.ok || !spec.groups || !spec.groups.length) return '<div class="rc-empty">Specifiche non disponibili per questa motorizzazione.</div>';
   /**
-   * Le integrazioni ESTERNE stanno in fondo, in un gruppo come gli altri.
+   * Le integrazioni ESTERNE stanno PRIME, in un gruppo come gli altri.
    *
-   * Prima erano fasce sopra le sezioni: arrivavano prima delle specifiche vere, e la
-   * scheda si apriva su roba che non e' la scheda. Ora "ADD ON" e' l'ultimo gruppo, con
-   * la stessa intestazione di MOTORE e PRESTAZIONI, chiuso di default come loro.
+   * Sono il motivo per cui questa scheda esiste: le specifiche le trovi ovunque, quello
+   * che gli succede intorno — quanto costa girarlo, quanto costa tenerlo, se ha un
+   * richiamo aperto — no. Stavano in fondo, dopo sei gruppi di specifiche, e per
+   * arrivarci si scorreva. Restano CHIUSE di default come tutte le altre: prime non vuol
+   * dire aperte, vuol dire a portata di clic.
    *
-   * Dentro restano tre blocchi richiudibili, ognuno con la sua fonte scritta: il costo
-   * carburante (MIMIT), i passaggi di proprieta' del modello (ACI) e i richiami (RDW e
-   * Safety Gate). Non si mescolano fra loro e non si mescolano con le specifiche: quelle
-   * descrivono il veicolo, queste dicono cosa gli succede intorno.
+   * Dentro, blocchi richiudibili con la loro fonte scritta: costo carburante (MIMIT),
+   * passaggi di proprieta' (ACI + il conto dell'IPT) e richiami (RDW e Safety Gate). Non
+   * si mescolano fra loro e non si mescolano con le specifiche: quelle descrivono il
+   * veicolo, queste dicono cosa gli succede intorno.
    */
-  return (vehXf.compare ? '' : vehHlBandHTML(spec)) + vehSectionsHTML(spec)
-    + (vehXf.compare ? '' : vehAddonHTML(spec));
+  return (vehXf.compare ? '' : vehHlBandHTML(spec))
+    + (vehXf.compare ? '' : vehAddonHTML(spec))
+    + vehSectionsHTML(spec);
 }
 
 // ── ADD ON: le integrazioni esterne, in un gruppo come gli altri ─────────────
@@ -4130,7 +4138,7 @@ function vehProvaHTML() {
 function vehAddonHTML(spec) {
   const pezzi = [vehCostoHTML(spec), vehPassaggiHTML(), vehMisureHTML(), vehRichiamiHTML()].filter(Boolean);
   if (!pezzi.length) return '';
-  return vehGrpHTML('ADD ON', pezzi.length, 1, `<div class="veh-addon">${pezzi.join('')}</div>`, '',
+  return vehGrpHTML('ADD ON — Ne vuoi di più? Si può!', pezzi.length, 1, `<div class="veh-addon">${pezzi.join('')}</div>`, '',
     { chiuso: !vehAddonAperto, attr: ' data-addon="1"' });
 }
 // Versione Moto.it scelta nella ricerca → la stessa voce nella scheda, già selezionata.
@@ -4362,11 +4370,18 @@ function liqCorpoHTML() {
   const m = (liqVoce && liqVoce.ok) ? liqVoce : liqPerTitolo(`${p.marca} ${p.modello || ''}`);
   if (!m || m.ricambio == null) return '';
   const n = x => Number(x).toLocaleString('it-IT');
+  // Tre numeri, tre riquadri. Erano una riga sola separata da puntini — "GOLF · 1.037.466
+  // in circolazione · ricambio 7%/anno" — dove per leggere il secondo bisognava contare i
+  // punti. Sono grandezze diverse e stanno una accanto all'altra, ognuna con la sua unita'.
+  const tile = (val, lab) => `<div class="pp-tile"><b>${val}</b><span>${lab}</span></div>`;
   return `<div class="veh-liq">
-    <div class="veh-liq-tit">Sul modello: <b>${n(m.trasferimenti)}</b> passaggi nel ${m.anno || liqAnno}</div>
-    <div class="veh-liq-det">${escapeHtml(m.modello)} · ${m.parco ? n(m.parco) + ' in circolazione' : 'parco non disponibile'} · ricambio ${String(m.ricambio).replace('.', ',')}%/anno</div>
+    <div class="pp-tiles">
+      ${tile(n(m.trasferimenti), `passaggi nel ${m.anno || liqAnno}`)}
+      ${m.parco ? tile(n(m.parco), 'in circolazione') : ''}
+      ${tile(String(m.ricambio).replace('.', ',') + '%', 'ricambio all\'anno')}
+    </div>
     ${m.viaPadre ? `<div class="veh-liq-avviso">Dato del modello base &laquo;${escapeHtml(m.viaPadre)}&raquo;, non della variante cercata.</div>` : ''}
-    <div class="veh-liq-fonte">${escapeHtml(m.fonte || ('ACI Autoritratto ' + liqAnno))}. ${escapeHtml(m.nota || 'Dato aggregato sul modello, non sulla singola versione.')}</div>
+    <div class="veh-liq-fonte">${escapeHtml(m.modello)} — ${escapeHtml(m.fonte || ('ACI Autoritratto ' + liqAnno))}. ${escapeHtml(m.nota || 'Dato aggregato sul modello, non sulla singola versione.')}</div>
   </div>`;
 }
 
@@ -4388,8 +4403,16 @@ function vehPassaggiHTML() {
   const st = r && r._pass;
   const meta = (st && st.stato === 'ok' && st.d && st.d.ok && st.d.totaleNoto != null)
     ? escapeHtml(eurRound(st.d.totaleNoto)) : '';
+  // Le due meta' si DICHIARANO. Prima erano quattro righe di seguito e non si capiva dove
+  // finiva il conto di questo veicolo e dove cominciava la statistica del modello: sono
+  // due domande diverse — quanto mi costa girarlo, quanto spesso si gira — e ognuna ha la
+  // sua intestazione. Su schermo largo stanno affiancate, su stretto una sotto l'altra.
+  const meta2 = [
+    costo ? `<section class="pp-meta"><h4 class="pp-h">Quanto costa girarlo<em>questo veicolo</em></h4>${costo}</section>` : '',
+    modello ? `<section class="pp-meta"><h4 class="pp-h">Quanto si gira<em>tutto il modello, in Italia</em></h4>${modello}</section>` : '',
+  ].filter(Boolean).join('');
   return miniHTML('passaggi', 'Passaggi di proprieta', meta,
-    (costo ? `<div class="veh-pass-costo">${costo}</div>` : '') + modello, { carica: 'pass' });
+    `<div class="pp-wrap">${meta2}</div>`, { carica: 'pass' });
 }
 
 // ── Filtro/suggerimento per anno (dai filtri ricerca "anno da/anno a"): suggerisce ma NON sceglie ──

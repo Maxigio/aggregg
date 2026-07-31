@@ -274,11 +274,30 @@ body:not(.has-results) .search {
 .det-pass-opzv { display: inline-flex; align-items: center; gap: 5px; font-size: 0.76rem; color: var(--text-muted); cursor: pointer; }
 .det-pass-opzv input { margin: 0; cursor: pointer; }
 .det-pass-avviso { font-size: 0.74rem; color: var(--warn); }
-/* Il costo di QUESTO passaggio, sopra la statistica del modello: un filo li separa,
-   sono due cose diverse che parlano della stessa pratica. */
-.veh-pass-costo { padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
-.veh-liq-tit { font-size: 0.82rem; color: var(--text); margin-bottom: 3px; }
-.veh-liq-tit b { font-family: var(--num); }
+/* ── PASSAGGI DI PROPRIETA': due domande diverse, due meta' dichiarate ──────────
+   "quanto mi costa girarlo" (questo veicolo) e "quanto spesso si gira" (il modello).
+   Affiancate dove c'e' spazio, in colonna dove non ce n'e'. */
+.pp-wrap { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-items: start; }
+.pp-meta { min-width: 0; }
+.pp-h { margin: 0 0 7px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-muted); display: flex; flex-direction: column; gap: 1px; }
+.pp-h em { font-style: normal; font-weight: 500; font-size: 0.68rem; text-transform: none; letter-spacing: 0; color: var(--text-faint); }
+/* Il totale: la cifra che decide, e sotto cosa e'. */
+.pp-tot { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pp-tot b { font-family: var(--num); font-size: 1.5rem; font-weight: 800; line-height: 1.1; }
+.pp-tot-lab { font-size: 0.74rem; color: var(--text-muted); }
+/* I due addendi: voci con la loro etichetta, non una frase da leggere. */
+.pp-voci { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.pp-voce { display: inline-flex; flex-direction: column; font-family: var(--num); font-size: 0.86rem; color: var(--text); }
+.pp-voce em { font-family: var(--font); font-style: normal; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); }
+.pp-piu { color: var(--text-faint); font-size: 0.9rem; align-self: flex-end; }
+.pp-prov { font-family: var(--num); font-weight: 700; color: var(--text); }
+/* I tre numeri del modello: riquadri affiancati, ognuno con la sua unita'. */
+.pp-tiles { display: flex; gap: 8px; flex-wrap: wrap; }
+.pp-tile { flex: 1 1 84px; min-width: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--surface-2); display: flex; flex-direction: column; gap: 1px; }
+.pp-tile b { font-family: var(--num); font-size: 1.02rem; font-weight: 700; color: var(--text); }
+.pp-tile span { font-size: 0.66rem; color: var(--text-muted); line-height: 1.25; }
 .veh-sel-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 /* combobox scheda: input + lista visibile filtrata (riusa .ac-list/.ac-item di marca/modello) */
 #vehicleScheda .veh-combo-wrap { flex: 0 1 260px; min-width: 160px; }
@@ -1387,7 +1406,11 @@ select.cp-unisci { max-width: 190px; }
 .veh-addon .mini-b { padding-bottom: 4px; }
 /* Il blocco richiami e' il piu' largo: quando c'e' spazio si prende due colonne, cosi'
    le due fonti stanno affiancate invece di incolonnarsi in una striscia stretta. */
-@media (min-width: 900px) { .veh-addon .mini[data-mini="veh-rich"] { grid-column: span 2; } }
+/* Richiami e Passaggi sono i due blocchi larghi: quando c'e' spazio si prendono due
+   colonne, cosi' le due fonti (richiami) e le due meta' (passaggi) stanno affiancate
+   invece di incolonnarsi dentro una striscia da 290px. */
+@media (min-width: 900px) { .veh-addon .mini[data-mini="veh-rich"],
+                            .veh-addon .mini[data-mini="passaggi"] { grid-column: span 2; } }
 /* I comandi del carburante su una riga sola. */
 .veh-costo-ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .veh-costo-ctrl .veh-carb-prov { min-width: 0; flex: 1 1 120px; }
