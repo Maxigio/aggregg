@@ -325,6 +325,18 @@
        a niente (sei gia' davanti allo schermo) e il logo e' il posto dove si clicca per
        ricaricare. Il QR resta dov'e' utile, sulla pagina di accesso (login.html). -->
 
+  <!-- VERIFICA PER TARGA, in piedi da sola. Prima viveva solo in fondo alla scheda tecnica
+       di un annuncio, dentro ADD ON: per leggere due dati di un veicolo che stai valutando
+       bisognava aprire un annuncio qualunque, aprire la scheda, sceglierne la
+       motorizzazione e poi cercare il blocco. La targa non c'entra con nessun annuncio —
+       e' del mezzo che hai davanti — quindi ha una sua finestra. -->
+  <div id="targaModal" class="report-modal d-none">
+    <div class="report-card">
+      <div class="report-head"><span>Verifica per targa</span><button type="button" class="report-close" id="targaClose" aria-label="Chiudi">✕</button></div>
+      <div id="targaModalBody"></div>
+    </div>
+  </div>
+
   <!-- OFFCANVAS: tab Annunci salvati | Ricerche -->
   <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasSaved"
        aria-labelledby="offcanvasSavedLabel" style="width:min(400px,100vw)">

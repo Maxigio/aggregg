@@ -587,7 +587,6 @@ async function init() {
     // era il vecchio contenitore fisso: da quando la scheda vive dentro l'annuncio, aprire
     // "Richiami" o "Targa" non faceva partire niente. Stessa famiglia del costo carburante.
     if (cosa === 'richiami' && !vehRichiami) vehRichiamiCarica();
-    if (cosa === 'targa' && !tgSfida && !tgOccupato) tgNuovaSfida();
     if (cosa === 'misure' && !vehMisure) vehMisureCarica();
   }), true);
 
@@ -643,9 +642,21 @@ async function init() {
   };
   targaInput?.addEventListener('input', targaBtnSync);
   targaBtnSync();
-  targaBtn?.addEventListener('click', () => targaVaiAllaVerifica());
+  targaBtn?.addEventListener('click', () => tgApriModale());
+  // Comandi DENTRO la finestra: gli stessi id del blocco in ADD ON, quindi i gestori si
+  // agganciano alla finestra e non al documento — senno' un clic qui finirebbe all'altro.
+  const tgModal = document.getElementById('targaModal');
+  document.getElementById('targaClose')?.addEventListener('click', tgChiudiModale);
+  tgModal?.addEventListener('click', e => { if (e.target === tgModal) tgChiudiModale(); });
+  tgModal?.addEventListener('click', e => {
+    if (e.target.closest('#tgVai')) return tgVerifica();
+    if (e.target.closest('#tgCambia') || e.target.closest('#tgRiprova')) return tgNuovaSfida();
+  });
+  tgModal?.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.id === 'tgCaptcha') { e.preventDefault(); tgVerifica(); }
+  });
   document.getElementById('btnReportNav')?.addEventListener('click', () => openReport());   // p4: Segnala in navbar
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeReport(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeReport(); tgChiudiModale(); } });
 
   renderSalvati();
 }
@@ -2740,7 +2751,14 @@ function passProvincia(r) {
 
 async function calcolaPassaggio(r, panel) {
   r._pass = { stato: 'carico' };
-  if (panel && panel._render) panel._render();
+  // Il blocco vive dentro ADD ON, cioe' dentro la SCHEDA: ridisegnare l'intero pannello
+  // dell'annuncio la butterebbe via e la rimonterebbe a ogni ricalcolo. Si ridisegna solo
+  // la scheda; se la scheda non e' di questo annuncio, vale il pannello come prima.
+  const disegna = () => {
+    if (vehHostUrl === r.url) renderVehBody();
+    else if (panel && panel._render) panel._render();
+  };
+  disegna();
   const pv = passProvincia(r);
   const q = new URLSearchParams({ provincia: pv.testo, tipo: passTipo(r) });
   // marca e modello servono al server per cercare i kW DICHIARATI di listino invece di
@@ -2761,7 +2779,8 @@ async function calcolaPassaggio(r, panel) {
     const d = await fetch('/api/passaggio?' + q.toString()).then(x => x.json());
     r._pass = { stato: 'ok', d, mia: pv.mia };
   } catch (_) { r._pass = { stato: 'ko' }; }
-  if (panel && panel.isConnected && panel._render) panel._render();
+  if (vehHostUrl === r.url) renderVehBody();
+  else if (panel && panel.isConnected && panel._render) panel._render();
   aggiornaNoteRiga(r);
 }
 
@@ -2811,20 +2830,12 @@ function miniToggle(e, ctx) {
   ctx(d.dataset.carica, d);
 }
 
-// Il bottone compare solo se i dati per calcolare ci sono davvero: senza potenza o senza
-// localita' il conto non si fa, e lo si dice invece di mostrare un pulsante che fallisce.
-// Le due spunte (storico, IVA) restano raggiungibili SEMPRE, anche quando il calcolo non
-// riesce: sono proprio loro a poterlo far riuscire (una moto non storica non e' calcolabile).
-function passHTML(r) {
-  const dentro = passCorpoHTML(r);
-  if (!dentro) return '';
-  const st = r._pass;
-  // Il numero nell'intestazione: chiuso si legge lo stesso, ed e' l'unica cifra che
-  // conta. Aperto ci sono provincia, opzioni e come si e' arrivati a quella cifra.
-  const meta = (st && st.stato === 'ok' && st.d && st.d.ok && st.d.totaleNoto != null)
-    ? escapeHtml(eurRound(st.d.totaleNoto)) : '';
-  return miniHTML('pass:' + r.url, 'Passaggio di proprieta', meta, dentro, { carica: 'pass' });
-}
+// Il guscio del blocco "Passaggio di proprieta" stava qui: ora il corpo (`passCorpoHTML`)
+// e' dentro ADD ON, unito alla statistica del modello — vedi `vehPassaggiHTML`.
+// Il bottone dentro compare solo se i dati per calcolare ci sono davvero: senza potenza o
+// senza localita' il conto non si fa, e lo si dice invece di mostrare un pulsante che
+// fallisce. Le due spunte (storico, IVA) restano raggiungibili SEMPRE, anche quando il
+// calcolo non riesce: sono proprio loro a poterlo far riuscire.
 
 function passCorpoHTML(r) {
   const haPot = r.potenzaCv > 0;
@@ -3060,8 +3071,7 @@ function renderDetailInto(panel, r) {
        * Da qui in giu' ci sono anche le INTEGRAZIONI ESTERNE: costano una richiesta e non
        * stanno nell'annuncio, quindi restano richiudibili e non partono da sole.
        */
-      + `<div class="det-blocchi"><div class="det-pass">${passHTML(r)}</div>`
-      + `${optionalHTML(r)}${testoHTML(r)}`
+      + `<div class="det-blocchi">${optionalHTML(r)}${testoHTML(r)}`
       + `<div class="det-gomme">${gommeHTML(r)}</div></div>`
       // La vetrina del venditore sono BOTTONI, non un blocco richiudibile: resta fuori
       // dalla griglia, sulla sua riga.
@@ -3992,9 +4002,7 @@ function vehRichiamiHTML() {
     const bloccoS = nS
       ? `<div class="veh-rich-b"><div class="veh-rich-h">Allerte Safety Gate <b>${nS}</b></div>${(st.sg.allerte || []).slice(0, 5).map(rigaSg).join('')}</div>`
       : '<div class="veh-rich-b"><div class="veh-rich-h">Allerte Safety Gate <b>0</b></div><div class="veh-rich-att">Nessuna allerta per questo modello.</div></div>';
-    corpo = `<div class="veh-rich">${bloccoR}${bloccoS}
-      <div class="veh-rich-fonte">Semaforo di MODELLO: la campagna riguarda i telai decisi dal costruttore, non tutti gli esemplari.
-      L'anno non filtra, l'archivio RDW non porta la finestra di produzione. <b>Ogni riga apre il richiamo originale</b>, dove il guasto e' scritto per esteso.</div></div>`;
+    corpo = `<div class="veh-rich">${bloccoR}${bloccoS}</div>`;
   }
   return miniHTML('veh-rich', 'Richiami', escapeHtml(meta), corpo, { carica: 'richiami' });
 }
@@ -4120,7 +4128,7 @@ function vehProvaHTML() {
 }
 
 function vehAddonHTML(spec) {
-  const pezzi = [vehCostoHTML(spec), vehLiqHTML(), vehMisureHTML(), vehRichiamiHTML(), vehTargaHTML()].filter(Boolean);
+  const pezzi = [vehCostoHTML(spec), vehPassaggiHTML(), vehMisureHTML(), vehRichiamiHTML()].filter(Boolean);
   if (!pezzi.length) return '';
   return vehGrpHTML('ADD ON', pezzi.length, 1, `<div class="veh-addon">${pezzi.join('')}</div>`, '',
     { chiuso: !vehAddonAperto, attr: ' data-addon="1"' });
@@ -4342,7 +4350,9 @@ let liqAnno = 2025;
 // la scheda: il veicolo. Sta qui e non in un pannello a parte perche' l'operatore che guarda
 // le specifiche di una Panda vuole sapere nella stessa occhiata quanto quel modello gira.
 // Nessuna richiesta in piu': riusa i dati gia' scaricati per i segni accanto agli annunci.
-function vehLiqHTML() {
+/** Quanti ne cambiano proprietario in un anno, sul MODELLO. Solo il corpo: il guscio lo
+ *  mette `vehPassaggiHTML`, che lo unisce al costo del passaggio di QUESTO annuncio. */
+function liqCorpoHTML() {
   const p = lastSearchParams || {};
   if (!p.marca) return '';
   if (liqStato === 'carico') return '<div class="veh-liq veh-liq-attesa">Carico la liquidita del modello…</div>';
@@ -4352,13 +4362,34 @@ function vehLiqHTML() {
   const m = (liqVoce && liqVoce.ok) ? liqVoce : liqPerTitolo(`${p.marca} ${p.modello || ''}`);
   if (!m || m.ricambio == null) return '';
   const n = x => Number(x).toLocaleString('it-IT');
-  return miniHTML('liq', 'Passaggi di proprieta',
-    `${n(m.trasferimenti)}<em>nel ${m.anno || liqAnno}</em>`,
-    `<div class="veh-liq">
+  return `<div class="veh-liq">
+    <div class="veh-liq-tit">Sul modello: <b>${n(m.trasferimenti)}</b> passaggi nel ${m.anno || liqAnno}</div>
     <div class="veh-liq-det">${escapeHtml(m.modello)} · ${m.parco ? n(m.parco) + ' in circolazione' : 'parco non disponibile'} · ricambio ${String(m.ricambio).replace('.', ',')}%/anno</div>
     ${m.viaPadre ? `<div class="veh-liq-avviso">Dato del modello base &laquo;${escapeHtml(m.viaPadre)}&raquo;, non della variante cercata.</div>` : ''}
     <div class="veh-liq-fonte">${escapeHtml(m.fonte || ('ACI Autoritratto ' + liqAnno))}. ${escapeHtml(m.nota || 'Dato aggregato sul modello, non sulla singola versione.')}</div>
-  </div>`);
+  </div>`;
+}
+
+/**
+ * PASSAGGI DI PROPRIETA', i due sensi in un blocco solo.
+ *
+ * Erano separati e distanti: il COSTO per mettere a nome tuo QUESTO veicolo stava fra i
+ * blocchi dell'annuncio, e quanti esemplari di quel MODELLO cambiano proprietario in un
+ * anno stava in ADD ON. Due cose diverse — una e' un euro da pagare, l'altra una
+ * statistica ACI — ma parlano della stessa pratica, e chi guarda le vuole vicine: quanto
+ * mi costa girarlo, e quanto spesso si gira. Il numero in intestazione e' il costo,
+ * perche' e' quello che decide.
+ */
+function vehPassaggiHTML() {
+  const r = vehHostUrl ? trovaResult(vehHostUrl) : null;
+  const costo = r ? passCorpoHTML(r) : '';
+  const modello = liqCorpoHTML();
+  if (!costo && !modello) return '';
+  const st = r && r._pass;
+  const meta = (st && st.stato === 'ok' && st.d && st.d.ok && st.d.totaleNoto != null)
+    ? escapeHtml(eurRound(st.d.totaleNoto)) : '';
+  return miniHTML('passaggi', 'Passaggi di proprieta', meta,
+    (costo ? `<div class="veh-pass-costo">${costo}</div>` : '') + modello, { carica: 'pass' });
 }
 
 // ── Filtro/suggerimento per anno (dai filtri ricerca "anno da/anno a"): suggerisce ma NON sceglie ──
@@ -4995,7 +5026,6 @@ function ripristinaModo() {
 // ─── Avvio ────────────────────────────────────────────────────────────────────
 init();
 
-
 // ─── COMPETITOR ───────────────────────────────────────────────────────────────
 // Il parco di un concessionario: il tuo e quello di chi ti sta intorno.
 //
@@ -5396,22 +5426,24 @@ function tgReset() { tgSfida = null; tgEsito = null; tgOccupato = false; }
 async function tgNuovaSfida(tieniEsito) {
   tgOccupato = true;
   if (!tieniEsito) tgEsito = null;
-  renderVehBody();
+  tgRender();
   try {
     const d = await fetch('/api/targa/sfida').then(r => r.json());
     tgSfida = d.ok ? d : { errore: d.error || 'il portale non risponde' };
   } catch (_) { tgSfida = { errore: 'server non raggiungibile' }; }
-  tgOccupato = false; renderVehBody();
+  tgOccupato = false; tgRender();
 }
 
 async function tgVerifica() {
   if (tgOccupato || !tgSfida || !tgSfida.id) return;
-  const el = id => document.getElementById(id);
+  // Il campo sta dentro la finestra: si legge da li', non dal documento.
+  const box = document.getElementById('targaModalBody') || document;
+  const el = id => box.querySelector('#' + id);
   const captcha = ((el('tgCaptcha') || {}).value || '').trim();
   tgTipoScelto = (el('tgTipo') || {}).value || 'A';
   if (!targaCercata) { toast('Scrivi la targa nel campo accanto alla versione, poi riapri la scheda'); return; }
   if (!captcha) { toast('Scrivi i caratteri dell\'immagine'); return; }
-  tgOccupato = true; tgEsito = null; renderVehBody();
+  tgOccupato = true; tgEsito = null; tgRender();
   try {
     const r = await fetch('/api/targa/verifica', {
       method: 'POST', headers: { 'content-type': 'application/json' },
@@ -5423,7 +5455,7 @@ async function tgVerifica() {
   tgOccupato = false;
   // La sfida e' bruciata: il portale ne rigenera una a ogni invio. L'esito appena letto
   // resta a schermo — azzerarlo qui lo faceva sparire nell'istante in cui arrivava.
-  tgSfida = null; renderVehBody();
+  tgSfida = null; tgRender();
   await tgNuovaSfida(true);
 }
 
@@ -5448,6 +5480,37 @@ function tgEsitoHTML() {
   }
   return `<div class="tg-esito">${avvisi}${blocchi}${sciolte ? `<div class="det-specs">${sciolte}</div>` : ''}${extra}</div>`;
 }
+
+/** La verifica vive in un posto solo — la sua finestra — e li' si ridisegna. */
+const tgModaleAperta = () => !document.getElementById('targaModal')?.classList.contains('d-none');
+function tgRender() {
+  if (!tgModaleAperta()) return;
+  const b = document.getElementById('targaModalBody');
+  if (b) b.innerHTML = tgCorpoHTML();
+}
+
+/**
+ * LA VERIFICA IN PIEDI DA SOLA. La targa e' del mezzo che hai davanti, non di un annuncio:
+ * per leggerne i dati non deve servire aprire un annuncio qualunque, la sua scheda tecnica
+ * e sceglierne la motorizzazione. Il bottone accanto al campo apre questa finestra, chiede
+ * subito l'immagine al portale, e il risultato compare qui dentro.
+ *
+ * IL CAPTCHA LO RISOLVI TU: l'immagine e' quella del portale, la leggi e la scrivi. Il
+ * server tiene la sessione e rimanda i tuoi caratteri — non c'e' nessun tentativo di
+ * indovinarla, ne' ci sara'.
+ */
+function tgApriModale() {
+  const t = String((document.getElementById('targaFiltro') || {}).value || '')
+    .toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  if (!t) { showError('Scrivi prima la targa.'); return; }
+  targaCercata = t;
+  const m = document.getElementById('targaModal'); if (!m) return;
+  m.classList.remove('d-none');
+  tgEsito = null; tgSfida = null;
+  tgRender();
+  if (!tgOccupato) tgNuovaSfida();
+}
+function tgChiudiModale() { document.getElementById('targaModal')?.classList.add('d-none'); }
 
 function tgCorpoHTML() {
   const s = tgSfida;
@@ -5477,84 +5540,6 @@ function tgCorpoHTML() {
 
 // Il blocco compare SOLO se una targa e' stata scritta nei filtri: senza, non c'e'
 // niente da chiedere e un riquadro vuoto sarebbe solo ingombro.
-/**
- * DALLA TARGA SCRITTA ALLA VERIFICA, senza andarsela a cercare.
- *
- * La verifica al Portale vive in fondo alla scheda tecnica di UN annuncio, dentro ADD ON:
- * scritta la targa nella barra, per arrivarci bisognava aprire un annuncio, aprire la
- * scheda, aspettarla, aprire ADD ON e trovare il blocco. Questo bottone fa quella strada.
- * Prende il PRIMO annuncio a schermo — la targa non filtra, quindi vale uno qualunque:
- * serve solo un posto dove la scheda possa vivere.
- */
-async function targaVaiAllaVerifica() {
-  const t = String((document.getElementById('targaFiltro') || {}).value || '')
-    .toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (!t) { showError('Scrivi prima la targa.'); return; }
-  const primo = (risultatiAVista() || [])[0];
-  if (!primo) { showError('Fai prima una ricerca: la verifica vive dentro la scheda di un annuncio.'); return; }
-
-  const attendi = (sel, ms = 20000) => new Promise(res => {
-    const t0 = Date.now();
-    const giro = () => {
-      const el = document.querySelector(sel);
-      if (el) return res(el);
-      if (Date.now() - t0 > ms) return res(null);
-      setTimeout(giro, 120);
-    };
-    giro();
-  });
-
-  // 1. il pannello dell'annuncio
-  const riga = resultsGrid.querySelector(`.result-row[data-url="${CSS.escape(primo.url)}"], .ann-card[data-url="${CSS.escape(primo.url)}"]`);
-  if (!riga) { showError('Non trovo l\'annuncio a schermo.'); return; }
-  const pannello = riga.nextElementSibling;
-  if (pannello && pannello.classList.contains('d-none')) toggleDetail(riga);
-
-  // 2. la scheda tecnica dentro quel pannello (se non c'e' gia')
-  if (vehHostUrl !== primo.url) {
-    const btn = await attendi('.det-scheda-apri', 4000);
-    if (!btn) { showError('Scheda tecnica non disponibile per questo annuncio.'); return; }
-    loadVehScheda(primo, btn.parentElement);
-  }
-
-  // 3. ADD ON aperto e blocco targa in vista. `vehAddonAperto` e `miniAperte` sono gli
-  //    stessi interruttori che usa l'utente a mano: si accendono e si ridisegna.
-  //
-  //    MA L'ADD ON PUO' NON ESSERCI ANCORA: vive dentro le specifiche di UNA
-  //    motorizzazione, e quando l'annuncio non basta a sceglierne una la scheda mostra
-  //    la griglia e aspetta. Quella scelta e' di chi guarda, non nostra: si arriva fin
-  //    li' e lo si dice, invece di sceglierne una a caso o di non fare niente.
-  const dove = await new Promise(res => {
-    const t0 = Date.now();
-    const giro = () => {
-      const addon = document.querySelector('.veh-grp[data-addon]');
-      if (addon) return res('addon');
-      const griglia = document.querySelector('.veh-moto-grid, .veh-gen-grid');
-      if (griglia) return res('scelta');
-      if (Date.now() - t0 > 20000) return res(null);
-      setTimeout(giro, 120);
-    };
-    giro();
-  });
-  if (!dove) { showError('La scheda ci sta mettendo troppo: riprova fra un istante.'); return; }
-  if (dove === 'scelta') {
-    document.querySelector('.veh-moto-grid, .veh-gen-grid')
-      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    toast('Scegli la motorizzazione: la verifica della targa e\' in fondo alla scheda, dentro ADD ON.');
-    return;
-  }
-  vehAddonAperto = true;
-  miniAperte.add('veh-targa');
-  renderVehBody();
-  const blocco = await attendi('[data-mini="veh-targa"]', 5000);
-  if (blocco) blocco.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-function vehTargaHTML() {
-  if (!targaCercata) return '';
-  const meta = tgEsito && tgEsito.tabelle && tgEsito.tabelle.length ? 'letta' : '';
-  return miniHTML('veh-targa', 'Targa', escapeHtml(meta), tgCorpoHTML(), { carica: 'targa' });
-}
 
 resultsGrid?.addEventListener('click', e => {
   const omoBtn = e.target.closest('.veh-omo-btn');
