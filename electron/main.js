@@ -199,7 +199,13 @@ async function createWindow() {
   });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith(`http://localhost:${PORT}`) && !url.startsWith('data:')) {
+    // Confronto di ORIGIN, non di prefisso: `http://localhost:47321@evil.com/x` supera un
+    // startsWith ma il suo host vero e' evil.com, e la navigazione restava in-window.
+    // Le due concessioni di prima restano identiche: l'app locale e i data: URL.
+    let interna = false;
+    if (url.startsWith('data:')) interna = true;
+    else { try { interna = new URL(url).origin === `http://localhost:${PORT}`; } catch (_) { interna = false; } }
+    if (!interna) {
       event.preventDefault();
       shell.openExternal(url);
     }

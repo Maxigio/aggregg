@@ -1,4 +1,9 @@
 'use strict';
+// Il log dei test non va nel registro operativo vero (vedi backend/logger.js): deve stare
+// PRIMA di ogni require di backend, perche' LOG_DIR e' una const valutata al caricamento.
+const osTmp = require('node:os'), fsTmp = require('node:fs'), pathTmp = require('node:path');
+process.env.AMR_LOG_DIR = fsTmp.mkdtempSync(pathTmp.join(osTmp.tmpdir(), 'amr-log-'));
+
 const { test } = require('node:test');
 const assert = require('node:assert');
 const crypto = require('node:crypto');

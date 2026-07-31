@@ -67,8 +67,12 @@ function risolviVersione(indice, annuncio) {
       if (anno > max) { c = conAnni.filter(v => v.anni.a === max).concat(senzaAnni); ripiego = true; perche = 'anno ' + anno + ' oltre l\'ultimo periodo noto (' + max + '): il catalogo non arriva a quest\'anno, scegli tu'; }
       // gemello del caso sopra: un annuncio piu' VECCHIO del primo periodo noto. Prima
       // usciva 'nessuna' anche quando c'erano versioni senza periodo che lo coprivano.
-      else if (anno < min && senzaAnni.length) { c = senzaAnni; perche = 'anno ' + anno + ' prima del primo periodo noto (' + min + '): restano le versioni senza periodo'; }
-      else if (senzaAnni.length) c = senzaAnni;
+      // Anche questo e' un'esclusione, non una corrispondenza: `ripiego` come sopra —
+      // l'asimmetria era una svista, non una scelta.
+      else if (anno < min && senzaAnni.length) { c = senzaAnni; ripiego = true; perche = 'anno ' + anno + ' prima del primo periodo noto (' + min + '): restano le versioni senza periodo, scegli tu'; }
+      // anno nel BUCO fra due periodi noti: stessa natura, e il `perche` non deve restare
+      // quello di partenza ("nessun anno nell'annuncio"), che sarebbe falso.
+      else if (senzaAnni.length) { c = senzaAnni; ripiego = true; perche = 'anno ' + anno + ' in nessun periodo noto: restano le versioni senza periodo, scegli tu'; }
       else return { esito: 'nessuna', versioni: [], perche: 'anno ' + anno + ' in nessun periodo' };
     }
   }
@@ -96,7 +100,11 @@ function risolviVersione(indice, annuncio) {
     const quante = v => spezza(v.variante).length;
     const max = Math.max(...conVar.map(quante));
     const vinti = conVar.filter(v => quante(v) === max);
-    if (vinti.length === 1) return { esito: 'una', versioni: vinti, perche: perche + ' + variante "' + vinti[0].variante + '"' };
+    // `ripiego` va portato fin qui: la variante restringe fra candidate a cui si e'
+    // arrivati per esclusione, e restringere un ripiego non lo trasforma in una certezza.
+    // Prima il flag si consultava solo al caso "una candidata sola" (sopra): con due o piu'
+    // candidate l'esito usciva 'una' con dentro un `perche` che diceva "scegli tu".
+    if (vinti.length === 1) return { esito: ripiego ? 'ripiego' : 'una', versioni: vinti, perche: perche + ' + variante "' + vinti[0].variante + '"' };
     return { esito: 'ambigua', versioni: vinti, perche: perche + ' + piu\' varianti uguali' };
   }
 
@@ -118,7 +126,7 @@ function risolviVersione(indice, annuncio) {
     ]);
     const estranee = [...paroleAnnuncio].filter(w => !noteVarianti.has(w) && !noteModello.has(w) && !/^\d+$/.test(w));
     if (estranee.length) return { esito: 'ripiego', versioni: base, perche: perche + ' + nel testo ci sono parole che nessuna variante spiega (' + estranee.slice(0, 3).join(', ') + '): la base e un ripiego' };
-    return { esito: 'una', versioni: base, perche: perche + ' + nessuna variante nel testo: versione base' };
+    return { esito: ripiego ? 'ripiego' : 'una', versioni: base, perche: perche + ' + nessuna variante nel testo: versione base' };
   }
 
   return { esito: 'ambigua', versioni: c, perche: perche + ' + ' + c.length + ' candidate, niente le separa' };

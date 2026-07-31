@@ -86,3 +86,23 @@ test('buildPath: categoria auto=2 / moto=3 + query', () => {
   assert.match(buildPath({ tipo: 'moto', marca: 'Honda' }, 50), /[?&]c=3&/);
   assert.match(buildPath({ tipo: 'moto', marca: 'Honda' }, 50), /start=50/);
 });
+
+/**
+ * REGRESSIONE. Il commento diceva "hades espone ad.date (ISO)", ma nel payload vero quel
+ * campo non esiste (ne' `dates.created`): la catena ripiegava sempre su `dates.display`,
+ * che e' la stessa data SENZA fuso — `new Date()` la interpreta col fuso della macchina,
+ * quindi su un host UTC slitta di due ore. Il campo giusto e' li' accanto, gia' pronto.
+ */
+test('posted_at: si legge display_iso8601, non la stringa locale senza fuso', () => {
+  const dates = {
+    display: '2026-06-24 11:17:20',
+    display_iso8601: '2026-06-24T11:17:20.26+0200',
+  };
+  const r = mapAd({ ...AD, dates }, {});
+  assert.strictEqual(r.posted_at, '2026-06-24T11:17:20.26+0200');
+  // La prova che conta: l'istante e' univoco, non dipende dal fuso di chi legge.
+  assert.strictEqual(new Date(r.posted_at).toISOString(), '2026-06-24T09:17:20.260Z');
+  // Senza il campo ISO si dice null: meglio nessuna data che una che slitta.
+  assert.strictEqual(mapAd({ ...AD, dates: { display: '2026-06-24 11:17:20' } }, {}).posted_at, null);
+  assert.strictEqual(mapAd({ ...AD }, {}).posted_at, null);
+});

@@ -182,7 +182,18 @@ function capObject(obj, max) {
  * avvisi, aggiorna seen/alerted/fingerprint/lastChecked. `extraSeen` = prezzi
  * dei tracciati "profondi" ri-fetchati (two-tier). Ritorna i nuovi avvisi.
  */
-function recordCheck(id, results, { extraSeen = {}, removedUrls = [] } = {}) {
+/** La fonte di un URL salvato, per capire quali `seen` non sono verificabili adesso. */
+const fonteDaUrl = u => /(^|\.)subito\.it\//i.test(u) ? 'subito'
+  : /(^|\.)autoscout24\.[a-z]+\//i.test(u) ? 'autoscout'
+  : /(^|\.)moto\.it\//i.test(u) ? 'moto' : null;
+
+/**
+ * @param {string[]} [opts.fontiMute] fonti che in questo giro non hanno risposto: i loro
+ *   annunci NON vanno sfrattati da `seen`. Un annuncio di una fonte giu' non e' "non
+ *   visto", e' "non verificabile" — e trattarlo da vecchio lo fa tornare "nuovo" al
+ *   ritorno della fonte, cioe' un falso avviso su un mezzo in lista da settimane.
+ */
+function recordCheck(id, results, { extraSeen = {}, removedUrls = [], fontiMute = [] } = {}) {
   const list = loadAll();
   const s = list.find(x => x.id === id);
   if (!s) return [];
@@ -208,9 +219,16 @@ function recordCheck(id, results, { extraSeen = {}, removedUrls = [] } = {}) {
    * settimane. Riassegnare la chiave non basta — in JS non sposta la posizione — quindi quello
    * che si e' visto ADESSO si toglie e si rimette, e finisce in coda.
    */
-  for (const r of results) {
-    const u = r && r.url;
+  const inCoda = u => {
     if (u && Object.prototype.hasOwnProperty.call(seen, u)) { const p = seen[u]; delete seen[u]; seen[u] = p; }
+  };
+  for (const r of results) inCoda(r && r.url);
+  // I "non verificabili" vanno IN FONDO, dopo i visti davvero: sono gli unici che un
+  // controllo successivo non puo' recuperare da solo, quindi sono i piu' cari da tenere.
+  // Messi prima, una fonte molto prolifica li avrebbe spinti fuori lo stesso.
+  if (fontiMute.length) {
+    const mute = new Set(fontiMute);
+    for (const u of Object.keys(seen)) if (mute.has(fonteDaUrl(u))) inCoda(u);
   }
   s.seen        = capObject(seen, SEEN_CAP);
   s.alerted     = alertedKeys.slice(-ALERTED_CAP);

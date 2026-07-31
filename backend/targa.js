@@ -257,11 +257,22 @@ async function verifica(id, { tipo, targa, captcha }) {
     tipoVeicolo: v, targa: t, captcha: c, ricercaUltimaRevisioneEffettuata: 'Ricerca',
   }).toString();
 
-  const r = await chiamata(s.azione, { metodo: 'POST', cookie: s.cookie, corpo, referer: `https://${HOST}${PAGINA}` });
+  let r = await chiamata(s.azione, { metodo: 'POST', cookie: s.cookie, corpo, referer: `https://${HOST}${PAGINA}` });
   // La sfida vale una volta sola: il portale rigenera il CAPTCHA a ogni invio, e tenerla
   // aperta darebbe l'illusione di poter ritentare con gli stessi caratteri.
   sfide.delete(id);
-  if (r.status !== 200 && r.status !== 302) throw new Error(`il portale risponde ${r.status}`);
+  // IL 302 VA SEGUITO. Il portale risponde spesso con un redirect alla pagina-risultato:
+  // accettarlo come esito e leggere il corpo del 302 (vuoto, o "Redirecting...") faceva
+  // uscire "non c'era niente da leggere" DOPO aver bruciato il CAPTCHA che l'utente aveva
+  // appena scritto a mano. Si segue una volta sola, sullo stesso host (`chiamata` lo
+  // verifica da se'), e portandosi dietro i cookie di sessione.
+  if (r.status === 302 && r.headers && r.headers.location) {
+    const dopo = new URL(r.headers.location, s.azione).href;
+    const cookieDopo = [s.cookie, ...(r.cookie || [])].filter(Boolean).join('; ');
+    try { r = await chiamata(dopo, { cookie: cookieDopo, referer: s.azione }); }
+    catch (e) { throw new Error(`il portale rimanda a una pagina che non risponde (${e.message})`); }
+  }
+  if (r.status !== 200) throw new Error(`il portale risponde ${r.status}`);
   const html = r.buf.toString('utf8');
   const { coppie, tabelle, avvisi, nuove } = leggiRisultato(html, s.vuoto);
   return { coppie, tabelle, avvisi, nuove,

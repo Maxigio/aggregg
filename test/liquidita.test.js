@@ -63,3 +63,30 @@ test('copertura: il dato copre la maggior parte del parco italiano in volume', (
   assert.ok(tot > 40e6, `parco nazionale coperto: ${tot}`);
   assert.ok(Object.keys(liq.dati.modelli).length > 1500);
 });
+
+/**
+ * REGRESSIONE. I nomi delle marche non combaciano fra le due fonti: il catalogo dice
+ * "Mercedes-Benz", l'Autoritratto dice "MERCEDES". La chiave non agganciava e il pannello
+ * rispondeva "non disponibile" su 1.512.332 veicoli di parco — e la catena passa proprio i
+ * nomi lunghi (/api/brands serve le chiavi di models.json).
+ */
+test('marche scritte diversamente dalle due fonti: si traducono, non si perdono', () => {
+  const r = liq.cerca('Mercedes-Benz', 'Classe A', 'auto');
+  assert.ok(r && r.ok, 'col nome lungo del catalogo il dato deve arrivare');
+  assert.ok(r.parco > 0);
+  // Col nome corto il risultato e' lo STESSO: e' la stessa marca.
+  assert.deepStrictEqual(liq.cerca('Mercedes', 'Classe A', 'auto'), r);
+  assert.ok(liq.cerca('DS Automobiles', 'DS3', 'auto').ok);
+  assert.ok(liq.cerca('DR Automobiles', 'DR3', 'auto').ok);
+});
+
+test('la traduzione della marca e STRETTA: prefisso di parole intere, mai somiglianza', () => {
+  // chi combaciava gia' non cambia
+  assert.strictEqual(liq.risolviMarca('Fiat'), 'fiat');
+  assert.strictEqual(liq.risolviMarca('Alfa Romeo'), 'alfa romeo');
+  assert.strictEqual(liq.risolviMarca('Land Rover'), 'land rover');
+  // Alpina nell'Autoritratto non c'e': si dice null, non si ripiega su una marca vicina.
+  assert.strictEqual(liq.risolviMarca('Alpina'), null);
+  assert.strictEqual(liq.risolviMarca('Marca Inventata'), null);
+  assert.strictEqual(liq.risolviMarca(''), null);
+});

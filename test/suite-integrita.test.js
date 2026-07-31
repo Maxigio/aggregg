@@ -20,6 +20,14 @@
  * gia' da soli al load. Serve pero' a scoprire subito QUALE simbolo e' sparito, senza leggere
  * lo stack di un altro file.
  */
+// Il log NON va nel registro operativo vero: questo file requira server.js (o un modulo
+// che lo tira dentro), e server.js installa il tee su file. Senza questa riga ogni run
+// appendeva a data/logs/amr.log, righe ERROR comprese, e con la rotazione a 5 MB poteva
+// far ruotare il log vero. Deve stare PRIMA di ogni require di backend: LOG_DIR e' una
+// const valutata al caricamento del modulo.
+const os = require('node:os'), fsTmp = require('node:fs'), pathTmp = require('node:path');
+process.env.AMR_LOG_DIR = fsTmp.mkdtempSync(pathTmp.join(os.tmpdir(), 'amr-log-'));
+
 const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -49,10 +57,18 @@ test('ogni dipendenza dichiarata dai file di test si risolve', () => {
   // Si caricano le DIPENDENZE dei file di test, non i file stessi (li ri-registrerebbe).
   // E' la difesa diretta: se un backend cambia nome, qui diventa rosso invece di far sparire
   // in silenzio il file che lo usava.
-  // Ricorsivo: senza, un file spostato in test/unit/ sparisce dal conteggio E dall'esecuzione
-  // (il glob di package.json e' anch'esso ricorsivo, per la stessa ragione).
+  // La lettura qui e' RICORSIVA, il glob di npm test NO — e le due cose insieme erano una
+  // trappola: `node --test test/*.test.js` non attraversa le cartelle (misurato su node
+  // v26.4.0: un file in test/_prova/ non viene eseguito), mentre questo conteggio lo
+  // includeva. Un test spostato in una sottocartella smetteva di girare IN SILENZIO e la
+  // suite restava verde. Il commento di prima prometteva il contrario.
   const files = fs.readdirSync(__dirname, { recursive: true }).map(String).filter(f => f.endsWith('.test.js'));
   assert.ok(files.length >= 30, `attesi almeno 30 file di test, trovati ${files.length}`);
+  // La guardia che rende vera la promessa: se un file finisce in una sottocartella, il
+  // runner non lo esegue — quindi qui diventa rosso invece di sparire.
+  const nascosti = files.filter(f => f.includes(path.sep));
+  assert.deepStrictEqual(nascosti, [],
+    'questi file NON vengono eseguiti da "npm test" (il glob non e\' ricorsivo): riportali in test/ o cambia lo script');
   const ko = [];
   for (const f of files) {
     const testo = fs.readFileSync(path.join(__dirname, f), 'utf8');

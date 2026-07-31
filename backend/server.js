@@ -143,26 +143,37 @@ async function scrapeAutoscoutSmart(params, opts = {}) {
 async function scrapeAutoscoutUnion(params, opts = {}) {
   const grafie = params.autoscoutSpellings;
   if (!grafie || grafie.length < 2) return scrapeAutoscoutSmart(params, opts);
-  let unaOk = false;
   // `g` e' una riscrittura del solo NOME-MODELLO, mentre autoscoutVersionText a questo punto
   // vale "modello + versione": sostituendolo per intero, la parola scritta dall'utente non
   // partiva MAI su questo ramo. Misurato dal vivo su Volkswagen Golf (74|2084): con "Golf"
   // tornano 6.442 annunci, esattamente quanti senza testo — la versione era ignorata; con
   // "Golf GTD Variant" ne tornano 1. Qui si sostituisce la sola parte-modello.
   const conVersione = g => [g, params.versione].filter(Boolean).join(' ');
+  // Gli errori per-grafia NON si inghiottono: una grafia caduta e' una fetta di risultati
+  // che manca, e prima spariva in silenzio — risultato parziale spacciato per 'ok' (e
+  // cachato), o 'empty' che innescava un riallargamento su un errore transitorio.
+  const errori = [];
   const liste = await Promise.all(grafie.map(async g => {
-    try { const r = await scrapeAutoscoutGraphql({ ...params, autoscoutVersionText: conVersione(g) }, { fetta: opts.fetta || 0 }); unaOk = true; return r; }
-    catch (_) { return []; }
+    try { return await scrapeAutoscoutGraphql({ ...params, autoscoutVersionText: conVersione(g) }, { fetta: opts.fetta || 0 }); }
+    catch (e) { errori.push(e); return []; }
   }));
   // Tutte le grafie cadute: si riprova una volta sola per la via classica. NON si toglie qui il
   // testo-versione — chi lo toglie deve dirlo, e scrapeAutoscoutSmart lo dichiara da se'.
-  if (!unaOk) return scrapeAutoscoutSmart(params, opts);   // GraphQL giù → un solo tentativo classico
+  if (errori.length >= grafie.length) return scrapeAutoscoutSmart(params, opts);   // GraphQL giù → un solo tentativo classico
   const byUrl = new Map();
   for (const lista of liste) for (const r of lista) if (r && r.url && !byUrl.has(r.url)) byUrl.set(r.url, r);
+  // Superstiti a zero item CON grafie cadute: quelle cadute potevano essere proprio la
+  // grafia dell'utente. Non e' "empty", e' un errore: runSource lo classifica 'error',
+  // che da solo disinnesca riallargamento, banner "nessuna X" e cache.
+  if (errori.length && byUrl.size === 0) throw errori[0];
   // Piu' grafie = piu' ricerche che si sovrappongono: sommare i totali conterebbe due
   // volte gli stessi annunci, e prendere il piu' grande sarebbe arbitrario. Qui il totale
   // della fonte NON e' definito, e si dice null invece di inventarlo.
-  return opts.withMeta ? { items: [...byUrl.values()], total: null } : [...byUrl.values()];
+  // `parziale` viaggia anche senza withMeta: sciogli() normalizza entrambe le forme, e un
+  // risultato monco che non si dichiara e' esattamente il difetto che questo campo chiude.
+  const parziale = errori.length
+    ? `${errori.length}/${grafie.length} grafie AS24 fallite: ${errori[0].message}` : null;
+  return { items: [...byUrl.values()], total: null, parziale };
 }
 
 // Subito: API di prima parte hades.subito.it come PRIMARIO (JSON diretto, niente
@@ -600,8 +611,12 @@ app.get('/api/liquidita', (req, res) => {
   const modello = String((req.query || {}).modello || '').trim();
   const tipo = String((req.query || {}).tipo || 'auto');
   if (!marca) return res.json({ ok: false });
-  const norm = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-  const pref = norm(marca) + '|';
+  // La marca del catalogo va TRADOTTA in quella dell'Autoritratto ("Mercedes-Benz" \u2192
+  // "mercedes"), senno' la scansione per prefisso non trova niente e la lista dei modelli
+  // torna vuota \u2014 stesso difetto che `cerca()` aveva sulla voce singola.
+  const marcaAci = liquidita.risolviMarca(marca);
+  if (!marcaAci) return res.json({ ok: true, marca, anno: liquidita.dati.anno, fonte: liquidita.dati.fonte, modelli: [], voce: null });
+  const pref = marcaAci + '|';
   const modelli = [];
   for (const [k, m] of Object.entries(liquidita.dati.modelli)) {
     if (!k.startsWith(pref)) continue;
@@ -839,8 +854,14 @@ function parseSearchParams(query) {
  * qui le due forme diventano una sola, cosi' chi chiama non deve saperlo.
  */
 function sciogli(r) {
-  if (Array.isArray(r)) return { items: r, total: null };
-  return { items: (r && r.items) || [], total: (r && Number.isFinite(r.total)) ? r.total : null };
+  if (Array.isArray(r)) return { items: r, total: null, parziale: null };
+  return {
+    items: (r && r.items) || [],
+    total: (r && Number.isFinite(r.total)) ? r.total : null,
+    // Il risultato copre TUTTE le richieste fatte alla fonte? La union multi-grafia lo
+    // dichiara quando una grafia e' caduta: gli item ci sono ma ne mancano altri.
+    parziale: (r && r.parziale) || null,
+  };
 }
 
 async function runSource(promise, ms, nomeSito) {
@@ -848,8 +869,11 @@ async function runSource(promise, ms, nomeSito) {
     setTimeout(() => reject(new Error('__timeout__')), ms)
   );
   try {
-    const { items, total } = sciogli(await Promise.race([promise, timeout]));
-    return { items, total, status: items.length ? 'ok' : 'empty', reason: null };
+    const { items, total, parziale } = sciogli(await Promise.race([promise, timeout]));
+    // Un risultato parziale con item resta 'ok' (il flag sta ACCANTO allo status, mai al
+    // posto suo — stessa regola di `allargato`), ma il perche' viaggia in `reason` e il
+    // campo `parziale` arriva fino a `sources`, dove cacheable() lo legge.
+    return { items, total, parziale, status: items.length ? 'ok' : 'empty', reason: parziale || null };
   } catch (err) {
     const isTimeout = err.message === '__timeout__';
     console.warn(`[WARN] ${nomeSito}: ${isTimeout ? 'timeout' : err.message}`);
@@ -962,6 +986,9 @@ function cacheable(data) {
   const bad = s => s === 'error' || s === 'needs_bootstrap' || s === 'timeout';
   const src = data.sources || {};
   if (bad(src.subito?.status) || bad(src.autoscout?.status) || bad(src.moto?.status)) return false;
+  // Un risultato PARZIALE (grafie AS24 cadute con item superstiti) e' monco quanto un
+  // timeout: congelarlo tre minuti renderebbe inutile il gesto di ripremere Cerca.
+  if (src.subito?.parziale || src.autoscout?.parziale || src.moto?.parziale) return false;
   return (data.totale || 0) > 0;
 }
 
@@ -982,6 +1009,24 @@ async function runSearch(params) {
     if (searchCache.size > SEARCH_CACHE_MAX) searchCache.delete(searchCache.keys().next().value);
   }
   return data;
+}
+
+/**
+ * A CHE LIVELLO si e' allargata la ricerca AS24 quando la prima passata era vuota.
+ *
+ * Il codice PROPRIO del modello e' solo `mmmvAutoscout`: `autoscoutMmmv` sul ramo moto
+ * fase-1 porta il codice del PADRE, che ha SEMPRE la parte-modello valorizzata (misurato:
+ * 7779/7779 nel catalogo). Leggendo quello, l'esito 'padre' era irraggiungibile — ogni
+ * riallargamento usciva 'versione', il banner interpolava `params.versione` (null,
+ * letteralmente a schermo, su ricerche senza versione) e diceva "mostro tutte le versioni
+ * di Dorsoduro 1200" mentre in lista c'erano i fratelli 750 e 900.
+ * Pura e a modulo per essere provabile senza aprire porte.
+ */
+function as24LivelloAllargamento(params, asRes, as24Allargato) {
+  if (!as24Allargato) return null;
+  const modelloAncoraFiltrato = Boolean(String(params.mmmvAutoscout || '').split('|')[1]);
+  if (asRes.viaSoloModello || modelloAncoraFiltrato) return 'versione';
+  return params.as24Padre ? 'padre' : 'marca';
 }
 
 // ─── Core ricerca RIUSABILE (§11) ─────────────────────────────────────────────
@@ -1148,6 +1193,15 @@ async function runSearchCore(params) {
       params.autoscoutVersionText = nar.versionText;
       params.autoscoutSpellings = as24Spellings(params.modello);   // grafie alternative (unione)
       params.as24Padre = nar.padre;   // solo per diagnostica/UI
+      // I FRATELLI del modello cercato dentro il bucket del padre ("Dorsoduro 750"/"900"
+      // cercando "Dorsoduro 1200"): servono alla marcatura per-riga quando il testo nativo
+      // cade e il bucket porta anche loro. Si escludono il padre stesso e ogni prefisso del
+      // cercato, senno' "Dorsoduro" marcherebbe 'altro-modello' anche i veri 1200.
+      params.as24Fratelli = nar.padre
+        ? (brandEntry?.models || []).map(m => m.nome).filter(n =>
+            norm(n).startsWith(norm(nar.padre)) && norm(n) !== norm(params.modello)
+            && !norm(params.modello).startsWith(norm(n)))
+        : null;
       console.log(`[server] AS24 fase1 "${params.marca} ${params.modello}": mmmv=${nar.mmmv}${nar.padre ? ` (padre "${nar.padre}")` : ' (brand-only)'} + grafie ${JSON.stringify(params.autoscoutSpellings)}`);
     }
     // LA VERSIONE SU AUTOSCOUT, E IL TESTO LO SCRIVE LUI, NON NOI.
@@ -1420,7 +1474,17 @@ async function runSearchCore(params) {
     // e' garantito dalla fonte: confrontarlo col testo digitato darebbe il falso allarme
     // piu' odioso — cercando "Serie 3" gli annunci tornano come "320", che e' giusto.
     // Il confronto sul nome serve SOLO sul ramo allargato a livello marca.
-    const as24HaFiltrato = Boolean(String(params.autoscoutMmmv || params.mmmvAutoscout || '').split('|')[1]);
+    //
+    // ATTENZIONE ALLA TRAPPOLA gia' morsa: `params.autoscoutMmmv` sul ramo moto fase-1
+    // porta il codice del PADRE, che ha SEMPRE la parte-modello valorizzata (misurato:
+    // 7779/7779 nel catalogo). Leggerlo qui marcava "modello garantito" le righe dei
+    // FRATELLI (Dorsoduro 750/900 cercando la 1200). Il codice PROPRIO e' solo
+    // `mmmvAutoscout`; sul ramo padre la garanzia esiste solo se il testo-modello nativo
+    // e' partito davvero (non tolto dal retry, non sul ripiego Playwright).
+    const codiceProprio = Boolean(String(params.mmmvAutoscout || '').split('|')[1]);
+    const testoModelloArrivato = Boolean(params.autoscoutVersionText)
+      && !params.as24VersioneNonInviata && (!as24Allargato || Boolean(asRes.viaSoloModello));
+    const as24HaFiltrato = codiceProprio || (Boolean(params.as24Padre) && testoModelloArrivato);
     // I nomi che valgono come risposta: quello digitato PIU' i membri della serie
     // commerciale. Cercando "Serie 3" gli annunci tornano come "320" o "318": senza i
     // membri verrebbero marcati "altro modello", che e' un falso allarme — sono
@@ -1476,6 +1540,23 @@ async function runSearchCore(params) {
     for (const r of risultati) {
       if (r.fonte !== 'autoscout' || r.dichiarazione) continue;
       if (as24HaFiltrato) { r.dichiarazione = etichettaAs24(r); continue; }
+      /**
+       * BUCKET DEL PADRE SENZA TESTO NATIVO: qui `combaciaModello` non basta. Ogni
+       * annuncio del bucket dichiara il nome del PADRE ("Dorsoduro"), che per la regola
+       * del sottoinsieme combacia con "Dorsoduro 1200" — e i fratelli (750/900)
+       * uscirebbero 'esatto'. Si decide col TITOLO, come il post-filtro moto: se nomina
+       * il modello cercato e' 'senza-modello' (riconosciuto dal titolo, non dal
+       * catalogo — esattamente vero qui); se nomina un fratello e' 'altro-modello';
+       * altrimenti nessuna pretesa. L'ordine cercato-prima-dei-fratelli e' obbligatorio:
+       * "Dorsoduro 1200" contiene "Dorsoduro". Le righe fratelle RESTANO in lista
+       * ("se svuota, si ignora"): cambia solo l'etichetta.
+       */
+      if (params.as24Padre && !testoModelloArrivato) {
+        const t = norm(r.titolo);
+        if (nomiAmmessi.some(n => t.includes(norm(n)))) r.dichiarazione = 'senza-modello';
+        else if ((params.as24Fratelli || []).some(n => t.includes(norm(n)))) r.dichiarazione = 'altro-modello';
+        continue;
+      }
       let c = null;
       for (const nome of nomiAmmessi) {
         const x = combaciaModello(r.modelloDichiarato, nome);
@@ -1502,10 +1583,7 @@ async function runSearchCore(params) {
   // la sola versione — misurato su Golf + una versione inesistente: tornano 100 annunci, tutti
   // Golf. Dire li' "mostro tutta la marca" sarebbe una bugia, ed e' proprio il difetto che
   // questo blocco corregge.
-  const as24ModelloAncoraFiltrato = Boolean(String(params.autoscoutMmmv || params.mmmvAutoscout || '').split('|')[1]);
-  const asAllargatoA = !as24Allargato ? null
-    : (asRes.viaSoloModello || as24ModelloAncoraFiltrato) ? 'versione'
-      : (params.as24Padre ? 'padre' : 'marca');
+  const asAllargatoA = as24LivelloAllargamento(params, asRes, as24Allargato);
   const asReason = as24Allargato
     ? (asAllargatoA === 'versione'
         ? `nessuna "${params.versione}" su Autoscout: mostro tutte le versioni di "${params.modello}"`
@@ -1549,7 +1627,10 @@ async function runSearchCore(params) {
       // solo per le fonti 'skipped', e queste frasi nascono proprio a status 'ok': il
       // riallargamento veniva calcolato, spedito, e non arrivava mai sotto gli occhi di nessuno.
       autoscout: { status: asRes.status,     reason: asReason,                 count: asCount,
-                   totale: asRes.total ?? null, allargato: asAllargatoA },
+                   totale: asRes.total ?? null, allargato: asAllargatoA,
+                   // Grafie AS24 cadute con superstiti: gli item ci sono ma ne mancano
+                   // altri. cacheable() lo legge per non congelare la risposta monca.
+                   parziale: asRes.parziale || null },
       moto:      { status: motoRes.status,   reason: motoRes.reason || null,   count: countBy('moto'),
                    totale: motoRes.total ?? null },
     },
@@ -1584,7 +1665,13 @@ function normalizeSavedParams(raw) {
 async function _checkSavedOne(s) {
   if (!s) return null;
   const out = await runSearch(normalizeSavedParams(s.params));
-  const alerts = saved.recordCheck(s.id, out.risultati || []);
+  // Le fonti che in questo giro non hanno parlato: i loro annunci restano in `seen` e non
+  // vanno sfrattati, senno' al ritorno della fonte arrivano tutti come "nuovi". 'skipped'
+  // non conta: la marca su quella fonte non c'e' e non ci sara' fra sei ore.
+  const rotto = st => st === 'error' || st === 'timeout' || st === 'needs_bootstrap';
+  const fontiMute = Object.entries(out.sources || {})
+    .filter(([, v]) => v && rotto(v.status)).map(([f]) => f);
+  const alerts = saved.recordCheck(s.id, out.risultati || [], { fontiMute });
   return { id: s.id, label: s.label, nuovi: alerts.length, sources: out.sources };
 }
 
@@ -1782,4 +1869,5 @@ const server = !avviaAscolto ? null : app.listen(PORT, () => {
 module.exports = { server, app, _lookupBrand: lookupBrand, _lookupModelGroup: lookupModelGroup, _catalogResolver: catalogResolver,
   // Superficie interna per i test: due gestori che senza questo non sarebbero raggiungibili
   // senza aprire una porta (supertest non e' fra le dipendenze).
-  _gateAuth: gateAuth, _postLogin: postLogin, _loginAttempts: loginAttempts, _cacheable: cacheable };
+  _gateAuth: gateAuth, _postLogin: postLogin, _loginAttempts: loginAttempts, _cacheable: cacheable,
+  _as24LivelloAllargamento: as24LivelloAllargamento };

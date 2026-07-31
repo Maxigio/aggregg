@@ -32,15 +32,27 @@ const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (
 const MAX_ARTICOLI = 12;
 
 let browserInstance = null;
+// Il LANCIO IN CORSO, memoizzato. Senza, due chiamate concorrenti trovavano entrambe
+// `browserInstance` a null e lanciavano DUE Chromium: il perdente non veniva mai chiuso
+// (closeBrowser chiude solo il singleton) e restava in RAM per tutta la giornata. Succede
+// alla prima ricerca ricambi dopo ogni avvio, perche' autodoc/cmsnl ed eBay partono
+// insieme in Promise.all — e il singleton e' condiviso anche con ebay-scrape e cmsnl-lookup.
+let launching = null;
 async function getBrowser() {
   if (browserInstance) { try { browserInstance.contexts(); return browserInstance; } catch { /* riavvia */ } }
-  browserInstance = await chromium.launch({
+  if (launching) return launching;
+  launching = chromium.launch({
     executablePath: resolveChromiumExecutable(PW_BROWSERS),
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-  });
-  browserInstance.on('disconnected', () => { browserInstance = null; });
-  return browserInstance;
+  }).then(b => {
+    browserInstance = b;
+    // `b === browserInstance` prima di azzerare: un'istanza vecchia che si disconnette
+    // dopo che ne e' nata una nuova non deve buttare via quella buona.
+    b.on('disconnected', () => { if (browserInstance === b) browserInstance = null; });
+    return b;
+  }).finally(() => { launching = null; });
+  return launching;
 }
 
 // Normalizza un OEN: maiuscolo, solo alfanumerici (l'utente scrive con/ senza spazi).

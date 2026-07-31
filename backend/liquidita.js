@@ -29,6 +29,26 @@ const PARCO_MIN = 300;
 const ricambioUtile = m =>
   (m && m.ricambio != null && m.parco >= PARCO_MIN && m.ricambio <= 100) ? m.ricambio : null;
 
+/**
+ * IL NOME DELLA MARCA NON E' LO STESSO NELLE DUE FONTI, e finora bastava questo a far
+ * sparire il dato. Il catalogo dice "Mercedes-Benz", l'Autoritratto ACI dice "MERCEDES":
+ * la chiave non combaciava e il pannello rispondeva "non disponibile" su 1.512.332 veicoli
+ * di parco. Stessa storia per "DS Automobiles"→DS, "DR Automobiles"→DR, "Austin-Healey".
+ *
+ * La regola e' stretta di proposito: si accetta solo una marca ACI che sia un PREFISSO DI
+ * PAROLE INTERE del nome cercato, e fra piu' candidate vince la piu' lunga. Cosi'
+ * "Mercedes-Benz" trova "mercedes" ma nessun nome viene agganciato per somiglianza.
+ */
+const MARCHE_ACI = [...new Set(Object.keys(L.modelli).map(k => k.split('|')[0]))]
+  .sort((a, b) => b.length - a.length);   // la piu' lunga vince
+
+function risolviMarca(marca) {
+  const m = norm(marca);
+  if (!m) return null;
+  if (MARCHE_ACI.includes(m)) return m;              // combacia gia': niente da tradurre
+  return MARCHE_ACI.find(a => m.startsWith(a + ' ')) || null;
+}
+
 // NESSUN GIUDIZIO. Qui c'era una funzione che dal tasso di ricambio tirava fuori frasi
 // come "si rivende in fretta" o "veicolo da collezione o fuori mercato": erano opinioni
 // sulla vendibilita' di un'auto, scritte da noi e presentate accanto a un dato ACI come
@@ -45,7 +65,7 @@ function cerca(marca, modello, tipo) {
   if (tipo === 'moto') {
     return { ok: false, motivo: 'non disponibile per le moto', spiegazione: L.soloAuto, fonte: L.fonte, anno: L.anno };
   }
-  const m = norm(marca), t = norm(modello);
+  const m = risolviMarca(marca), t = norm(modello);
   if (!m || !t) return null;
   const trova = k => L.modelli[k] || null;
 
@@ -73,4 +93,4 @@ function cerca(marca, modello, tipo) {
   };
 }
 
-module.exports = { cerca, ricambioUtile, dati: L };
+module.exports = { cerca, ricambioUtile, risolviMarca, dati: L };

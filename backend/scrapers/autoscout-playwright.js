@@ -45,6 +45,17 @@ function httpGetText(url, hops = 0) {
   });
 }
 
+/**
+ * Blocco/challenge nel path BROWSER — l'ultima rete di sicurezza. Il path HTTP qui sotto
+ * marca ok:false su status≠200 o __NEXT_DATA__ assente, e Subito nello stesso caso lancia
+ * SubitoBlockedError: il browser era l'unico ramo che rispondeva [] muto, e quel [] a valle
+ * diventava "Autoscout: 0 risultati" — un blocco presentato come dato di mercato genuino,
+ * e per tre minuti in cache. Un blocco e' un errore, e si dichiara.
+ */
+class As24BlockedError extends Error {
+  constructor(reason) { super('AS24 bloccato: ' + reason); this.reason = reason; }
+}
+
 // Parse __NEXT_DATA__ da HTML → { items, ok }. ok=false ⇒ struttura attesa
 // assente (probabile challenge/soft-block) → il chiamante fa fallback al browser.
 function parseAs24Html(html) {
@@ -229,20 +240,22 @@ async function fetchPage(browser, url) {
       console.log(`[AS24-PW] 404 su ${url} — skip`);
       return [];
     }
+    // 403/429/5xx: non e' "zero risultati", e' la fonte che ci respinge. Stessa regola
+    // del path HTTP (status≠200&≠404 ⇒ ok:false). `resp &&` resta: goto puo' tornare null.
+    if (resp && resp.status() !== 200) throw new As24BlockedError('http_' + resp.status());
 
     const nextDataJson = await page.$eval(
       '#__NEXT_DATA__',
       el => el.textContent
     ).catch(() => null);
 
-    if (!nextDataJson) {
-      console.warn('[AS24-PW] __NEXT_DATA__ non trovato su:', url);
-      return [];
-    }
+    // Pagina senza __NEXT_DATA__: challenge o markup cambiato — identico al 'no_data'
+    // di subito-playwright ("trattalo come blocco soft"), mai uno zero genuino.
+    if (!nextDataJson) throw new As24BlockedError('no_data');
 
     const nextData = JSON.parse(nextDataJson);
     const listings = nextData?.props?.pageProps?.listings;
-    if (!Array.isArray(listings)) return [];
+    if (!Array.isArray(listings)) throw new As24BlockedError('no_listings');
 
     return listings.map(parseListing).filter(Boolean);
   } finally {
@@ -292,18 +305,26 @@ async function scrapeAutoscout(params) {
 
   const browser = await getBrowser();
   console.log(`[AS24-PW] Fetching ${NUM_PAGES} pagine (browser): ${urls[0]}`);
+  // Una pagina bloccata NON butta via le altre: se qualche pagina ha portato annunci si
+  // tengono (comportamento di sempre, e con sort priceasc la pagina 1 porta il segnale).
+  // Ma se l'esito sarebbe lo ZERO e almeno una pagina era un blocco, quello zero e' un
+  // fantasma: si dichiara il blocco invece di spacciarlo per mercato vuoto.
+  let sospetto = false;
   const pages = await Promise.all(urls.map(u => fetchPage(browser, u).catch(err => {
+    if (err instanceof As24BlockedError) sospetto = true;
     console.warn(`[AS24-PW] Errore pagina ${u}: ${err.message}`);
     return [];
   })));
 
   const risultati = dedup(pages);
+  if (!risultati.length && sospetto) throw new As24BlockedError('soft_block');
   console.log(`[AS24-PW] Totale: ${risultati.length} annunci (${pages.map(p => p.length).join('+')})`);
   return risultati;
 }
 
 // Esposto per pre-warm al boot del server.
 scrapeAutoscout.warmup = async () => { await getBrowser(); };
-scrapeAutoscout._parseListing = parseListing;   // hook per i test (§20)
+scrapeAutoscout._parseListing = parseListing;        // hook per i test (§20)
+scrapeAutoscout._As24BlockedError = As24BlockedError; // hook per i test
 
 module.exports = scrapeAutoscout;

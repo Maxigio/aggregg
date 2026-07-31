@@ -267,7 +267,12 @@ const senzaGenerazione = m => String(m == null ? '' : m)
   // "C3 Aircross 1ª-2ª s." — e spesso con una coda di anni appresso ("14-18", "'17-->").
   // Con il suffisso attaccato il nome non combacia con nessuna voce del catalogo tecnico e
   // la scheda risponde "il catalogo non ha X": non una scheda incompleta, proprio niente.
-  .replace(/\s+\d+[ªa°]?(?:\s*-\s*\d+[ªa°]?)?\s*s\.?(?:\s|$).*$/i, '')
+  // ATTENZIONE: ordinale e punto NON possono essere entrambi facoltativi. Con "\d+ s" nudo
+  // la regola decapitava nomi di catalogo VERI che finiscono in "<cifre> S" — "K 1200 S"
+  // diventava "K", "Monster 620 S" diventava "Monster" (misurato su data/models.json: 90
+  // nomi alterati, 28 famiglie Moto.it esatte perse). Serve almeno un segnale della serie
+  // abbreviata: l'ordinale attaccato alla cifra, oppure il punto dopo la s.
+  .replace(/\s+\d+(?:[ªa°](?:\s*-\s*\d+[ªa°]?)?\s*s\.?|(?:\s*-\s*\d+[ªa°]?)?\s*s\.)(?:\s|$).*$/i, '')
   .replace(/\s+'?\d{2}\s*-+>?\s*'?\d{0,2}\s*$/, '')   // la coda di anni rimasta sola
   .trim();
 
@@ -394,8 +399,14 @@ async function resolveModelPage(brand, model, genSlug) {
   // Senza generazione scelta: NON caricare i trim (l'utente sceglie prima la generazione).
   const gen = genSlug ? gens.find(g => g.slug === genSlug) : null;
   if (!gen) return { ...base, gen: null, motorizzazioni: [] };
-  const gp = await fetchCached(`${vs.HOST}/it/${gen.slug}`, PAGE_TTL);
-  return { ...base, gen: { name: gen.name, slug: gen.slug }, motorizzazioni: vs.parseTrimList(gp, gen.slug) };
+  const genUrl = `${vs.HOST}/it/${gen.slug}`;
+  const gp = await fetchCached(genUrl, PAGE_TTL);
+  const motorizzazioni = vs.parseTrimList(gp, gen.slug);
+  // Stesso trattamento della pagina-modello qui sopra: una pagina transitoria servita 200
+  // resta in cache 12 ore, e per mezza giornata quella generazione risponde "nessuna
+  // motorizzazione". Declassando il TTL si riprova fra pochi minuti.
+  if (!motorizzazioni.length) cacheSet(genUrl, gp, EMPTY_TTL);
+  return { ...base, gen: { name: gen.name, slug: gen.slug }, motorizzazioni };
 }
 
 // Ricerca interna auto-data.net (get-words.php): se indica un modello del nostro indice usa il flusso
@@ -464,7 +475,13 @@ function carbDiverso(a, b) {
  * dichiara in un campo. Vale un dimezzamento della lista: fra "150 Hp" e "150 Hp DSG"
  * l'annuncio sa quale delle due e'.
  */
-const AUTOM_ETI = /\b(dsg|s.?tronic|tiptronic|multitronic|steptronic|geartronic|dualogic|powershift|automatic|automatica|automatico|cvt|edc|dct|tct|pdk|amt|at\d?)\b/i;
+// I marcatori mancanti costavano motorizzazioni GIUSTE: col cambio "Automatico" il filtro
+// e' a uguaglianza stretta e senza rete "se svuota si ignora", quindi un'etichetta scritta
+// "9G-TRONIC" (Mercedes), "Lineartronic" (Subaru) o "Xtronic" (Nissan) veniva trattata da
+// manuale ed esclusa — fino a "nessuna motorizzazione del catalogo combacia". Qui sbagliava
+// il nostro dizionario, non il venditore. `\d?g.?tronic` copre 7G/9G-TRONIC e G-TRONIC, col
+// separatore facoltativo perche' le etichette arrivano anche con lo spazio ("9g tronic").
+const AUTOM_ETI = /\b(dsg|s.?tronic|\d?g.?tronic|lineartronic|xtronic|tiptronic|multitronic|steptronic|geartronic|dualogic|powershift|automatic|automatica|automatico|cvt|edc|dct|tct|pdk|amt|at\d?)\b/i;
 
 /**
  * LA CARROZZERIA TAGLIA LE GENERAZIONI, ed e' il taglio piu' utile perche' arriva PRIMA
@@ -514,7 +531,13 @@ async function schedaPerAnnuncio({ tipo, marca, modello: modelloGrezzo, anno, cv
   if (tipo === 'moto' && Array.isArray(base.motorizzazioni) && base.motorizzazioni.length) {
     const voci = base.motorizzazioni;
     const nomeMod = base.modello || modello || '';
-    const parole = s => String(s || '').toLowerCase().split(/[^a-z0-9]+/i).filter(Boolean);
+    // `motoTokens`, non un tokenizzatore locale: quello di prima NON toglieva gli accenti,
+    // quindi "Cafè Racer" produceva la variante "caf racer", che nessun titolo puo'
+    // soddisfare. E siccome il controllo delle parole estranee dentro risolviVersione gli
+    // accenti li toglie, "cafe" e "racer" risultavano parole del modello e la versione BASE
+    // usciva con esito 'una' — preselezionata come certa al posto di quella giusta.
+    // (48 etichette accentate nel catalogo Moto.it, 26 varianti cambiano.)
+    const parole = motoTokens;
     const modTok = new Set(parole(nomeMod));
     const indice = {
       marca, subito: { nome: nomeMod },

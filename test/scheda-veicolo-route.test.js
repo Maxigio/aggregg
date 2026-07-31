@@ -182,3 +182,25 @@ test('copreAnno: il periodo della voce, com e scritto dal catalogo', () => {
   assert.strictEqual(copreAnno({ yearRange: 'boh' }, 2016), true);
   assert.strictEqual(copreAnno({ yearRange: '2007 - 16' }, 2010), true);
 });
+
+/**
+ * REGRESSIONE. La regola che toglie la "serie abbreviata" di Subito ("Macan 1ªs.") aveva
+ * ordinale E punto entrambi facoltativi: qualunque nome che finisse in "<cifre> S" veniva
+ * decapitato. "K 1200 S" diventava "K", e la scheda perdeva la famiglia Moto.it esatta
+ * ripiegando su una lista di 166 voci di famiglie mescolate. Misurato: 68 nomi di catalogo
+ * riparati dal fix, zero abbreviazioni vere perse.
+ */
+const { senzaGenerazione } = require('../backend/scheda-veicolo-route');
+
+test('senzaGenerazione: toglie la serie abbreviata ma NON i nomi che finiscono in "<cifre> S"', () => {
+  // quello per cui la regola esiste: Subito scrive cosi'
+  assert.strictEqual(senzaGenerazione('Macan 1ªs.'), 'Macan');
+  assert.strictEqual(senzaGenerazione('Picanto 2ª s.'), 'Picanto');
+  assert.strictEqual(senzaGenerazione('C3 Aircross 1ª-2ª s.'), 'C3 Aircross');
+  assert.strictEqual(senzaGenerazione('Serie 3 (E90/91)'), 'Serie 3');
+  assert.strictEqual(senzaGenerazione('Golf 5ª serie'), 'Golf');
+  // i nomi VERI che venivano troncati: la S e' parte del modello, non una serie
+  assert.strictEqual(senzaGenerazione('K 1200 S'), 'K 1200 S');
+  assert.strictEqual(senzaGenerazione('Monster 620 S'), 'Monster 620 S');
+  assert.strictEqual(senzaGenerazione('Multistrada 1200 S'), 'Multistrada 1200 S');
+});

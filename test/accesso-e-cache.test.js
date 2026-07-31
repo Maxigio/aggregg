@@ -9,6 +9,14 @@
  *   2. i tentativi di login in parallelo si contano davvero (e decadono)
  *   3. la cache delle ricerche non congela una risposta con una fonte scaduta
  */
+// Il log NON va nel registro operativo vero: questo file requira server.js (o un modulo
+// che lo tira dentro), e server.js installa il tee su file. Senza questa riga ogni run
+// appendeva a data/logs/amr.log, righe ERROR comprese, e con la rotazione a 5 MB poteva
+// far ruotare il log vero. Deve stare PRIMA di ogni require di backend: LOG_DIR e' una
+// const valutata al caricamento del modulo.
+const os = require('node:os'), fsTmp = require('node:fs'), pathTmp = require('node:path');
+process.env.AMR_LOG_DIR = fsTmp.mkdtempSync(pathTmp.join(os.tmpdir(), 'amr-log-'));
+
 const { test } = require('node:test');
 const assert = require('node:assert');
 const auth = require('../backend/auth');
@@ -110,4 +118,8 @@ test('cache ricerche: NON congela una risposta con una fonte in timeout', () => 
   assert.strictEqual(srv._cacheable({ totale: 60, sources: { subito: { status: 'ok' }, autoscout: { status: 'ok' }, moto: { status: 'timeout' } } }), false);
   // 'skipped' NON e' uno stato-rotto: la marca non c'e' su quella fonte e non ci sara' fra tre minuti.
   assert.strictEqual(srv._cacheable(con('skipped')), true, 'una fonte saltata non deve impedire la cache');
+  // PARZIALE: grafie AS24 cadute con superstiti. Lo status resta 'ok' (gli item ci sono),
+  // ma la risposta e' monca quanto un timeout: congelarla renderebbe inutile ripremere Cerca.
+  assert.strictEqual(srv._cacheable({ totale: 60, sources: { subito: { status: 'ok' }, autoscout: { status: 'ok', parziale: '1/3 grafie AS24 fallite: http 429' }, moto: { status: 'ok' } } }), false,
+    'un risultato dichiarato parziale non si cacha');
 });

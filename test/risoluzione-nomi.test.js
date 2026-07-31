@@ -22,6 +22,14 @@
  * che hai cambiato un comportamento. Guarda la differenza, decidi se e' voluta, e se lo e'
  * rigenera la fixture.
  */
+// Il log NON va nel registro operativo vero: questo file requira server.js (o un modulo
+// che lo tira dentro), e server.js installa il tee su file. Senza questa riga ogni run
+// appendeva a data/logs/amr.log, righe ERROR comprese, e con la rotazione a 5 MB poteva
+// far ruotare il log vero. Deve stare PRIMA di ogni require di backend: LOG_DIR e' una
+// const valutata al caricamento del modulo.
+const os = require('node:os'), fsTmp = require('node:fs'), pathTmp = require('node:path');
+process.env.AMR_LOG_DIR = fsTmp.mkdtempSync(pathTmp.join(os.tmpdir(), 'amr-log-'));
+
 const { test } = require('node:test');
 const assert = require('node:assert');
 

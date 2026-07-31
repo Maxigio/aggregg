@@ -114,8 +114,13 @@ function mapAd(ad, opts = {}) {
   // 9999999 e' il segnaposto di "non dichiarato" (stesso guard di subito-playwright.js:125):
   // stamparlo come chilometraggio sarebbe peggio che non stampare niente.
   const km = (kmEsatto != null && kmEsatto < 9999999) ? kmEsatto : kmFascia;
-  // data pubblicazione: hades espone ad.date (ISO) — usata come posted_at.
-  const posted = ad.date || (ad.dates && (ad.dates.display || ad.dates.created)) || null;
+  // DATA DI PUBBLICAZIONE. Il commento di prima dichiarava `ad.date`, che nel payload vero
+  // NON esiste (verificato sul fixture di cattura: ne' `date` ne' `dates.created`), quindi
+  // la catena ripiegava sempre su `dates.display` — "2026-06-24 11:17:20", cioe' una data
+  // SENZA fuso, che `new Date()` interpreta col fuso della macchina che la legge: la stessa
+  // stringa slitta di due ore su un host UTC. Il campo giusto sta nello stesso oggetto ed
+  // e' gia' pronto: `display_iso8601` ("2026-06-24T11:17:20.26+0200").
+  const posted = (ad.dates && ad.dates.display_iso8601) || null;
   // Condizione nativa 'Condizioni del veicolo': Nuovo/Km 0 → nuovo=true, Usato → false.
   const cond = feat(ad, 'Condizioni del veicolo');
   const nuovo = cond == null ? null : (cond === 'Nuovo' || cond === 'Km 0');
@@ -523,7 +528,11 @@ async function paginaRecupero(params) {
    * dal filtro impostato.
    */
   const chiave = [params.tipo, params.subitoNodo.marcaId, params.regione, params.prezzoMin, params.prezzoMax,
-    params.annoMin, params.annoMax, params.kmMin, params.kmMax, params.sort,
+    // `_sort`, non `sort`: l'ordinamento arriva in `opts.sort` e viene copiato in `_sort`
+    // (vedi scrapeSubitoApi), ed e' `_sort` che buildPath spedisce a hades. Leggendo un
+    // campo che nessun chiamante imposta, due recuperi che differivano SOLO per
+    // ordinamento condividevano la stessa entry per dieci minuti.
+    params.annoMin, params.annoMax, params.kmMin, params.kmMax, params._sort,
     params.subitoVersioneTesto, (params.subitoNodo && params.subitoNodo.testo) || ''].join('|');
   const hit = recuperoCache.get(chiave);
   if (hit && Date.now() - hit.ts < RECUPERO_TTL) return hit.ads;

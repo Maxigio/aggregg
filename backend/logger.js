@@ -10,7 +10,13 @@ const path = require('node:path');
 const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
 const threshold = () => LEVELS[(process.env.LOG_LEVEL || (process.env.DEBUG === '1' ? 'debug' : 'info')).toLowerCase()] || LEVELS.info;
 
-const LOG_DIR = path.join(process.env.USER_DATA_PATH || path.join(__dirname, '..', 'data'), 'logs');
+// `AMR_LOG_DIR` esiste per i TEST: puntare USER_DATA_PATH a una cartella temporanea
+// isolerebbe anche auth.json, e le prove sull'accesso si auto-salterebbero. Con questa
+// variabile si sposta il solo log — che era il problema: i test requirono server.js, che
+// installa il tee, e ogni run appendeva al registro operativo vero (373 boot fantasma
+// contati, piu' righe ERROR che un operatore avrebbe letto come guasti dell'app).
+const LOG_DIR = process.env.AMR_LOG_DIR
+  || path.join(process.env.USER_DATA_PATH || path.join(__dirname, '..', 'data'), 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'amr.log');
 const MAX_BYTES = 5 * 1024 * 1024;   // ruota amr.log → amr.log.1 oltre i 5MB
 const RING_MAX = 500;

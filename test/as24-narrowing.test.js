@@ -1,6 +1,14 @@
 'use strict';
 // F50 fase 1: restringimento AS24 per i modelli senza codice-modello.
 // La parentela è dedotta dal CATALOGO per prefisso normalizzato — nessuna lista scritta a mano.
+// Il log NON va nel registro operativo vero: questo file requira server.js (o un modulo
+// che lo tira dentro), e server.js installa il tee su file. Senza questa riga ogni run
+// appendeva a data/logs/amr.log, righe ERROR comprese, e con la rotazione a 5 MB poteva
+// far ruotare il log vero. Deve stare PRIMA di ogni require di backend: LOG_DIR e' una
+// const valutata al caricamento del modulo.
+const os = require('node:os'), fsTmp = require('node:fs'), pathTmp = require('node:path');
+process.env.AMR_LOG_DIR = fsTmp.mkdtempSync(pathTmp.join(os.tmpdir(), 'amr-log-'));
+
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { resolveAs24Narrowing, as24Spellings } = require('../backend/scrapers/brand-match');
@@ -97,4 +105,27 @@ test('grafie: tetto di 4 richieste e input vuoto gestito', () => {
   assert.ok(as24Spellings('300CL-X').length <= 4);
   assert.deepStrictEqual(as24Spellings(''), []);
   assert.deepStrictEqual(as24Spellings(null), []);
+});
+
+/**
+ * REGRESSIONE. Il livello di riallargamento leggeva `autoscoutMmmv`, che sul ramo fase-1
+ * porta il codice del PADRE — sempre pieno. Risultato: l'esito 'padre' era irraggiungibile,
+ * ogni riallargamento usciva 'versione', e il banner interpolava params.versione (null,
+ * letteralmente a schermo) dicendo "mostro tutte le versioni di Dorsoduro 1200" mentre in
+ * lista c'erano i fratelli 750 e 900.
+ */
+test('livello riallargamento: bucket del padre → "padre", non "versione"', () => {
+  const { _as24LivelloAllargamento: livello } = require('../backend/server');
+  // Ramo fase-1: mmmv del PADRE in autoscoutMmmv, nessun codice proprio, nessuna versione.
+  const fase1 = { mmmvAutoscout: null, autoscoutMmmv: '50005|70123||', as24Padre: 'Dorsoduro' };
+  assert.strictEqual(livello(fase1, {}, true), 'padre');
+  // Codice PROPRIO del modello: il retry toglie solo la versione → 'versione'.
+  const proprio = { mmmvAutoscout: '74|2084||', autoscoutMmmv: '74|2084||' };
+  assert.strictEqual(livello(proprio, {}, true), 'versione');
+  // Gradino intermedio (solo-modello riuscito): 'versione' anche senza codice proprio.
+  assert.strictEqual(livello(fase1, { viaSoloModello: true }, true), 'versione');
+  // Brand-only puro, nessun padre: 'marca'.
+  assert.strictEqual(livello({ autoscoutMmmv: '74|||' }, {}, true), 'marca');
+  // Nessun riallargamento: null.
+  assert.strictEqual(livello(fase1, {}, false), null);
 });

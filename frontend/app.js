@@ -1870,6 +1870,15 @@ function fondiTotali(nuove) {
     const vecchia = (lastSources || {})[f] || null;
     const n = (nuove || {})[f] || null;
     if (!vecchia && !n) continue;
+    // UNO STATO BUONO NON SI PERDE PER UNA FETTA ANDATA MALE. Con lo spread nudo, un
+    // timeout sulla fetta 2 sovrascriveva l' 'ok' della prima: la pill passava da
+    // "Subito 100 di 11.610" a "Subito timeout" con i 100 annunci ancora a schermo, e
+    // "Carica altri" spariva (altriDisponibili pretende 'ok') senza modo di riprovare.
+    // Il conteggio invece si aggiorna sempre: conta cio' che si vede.
+    if (vecchia && vecchia.status === 'ok' && n && n.status !== 'ok') {
+      out[f] = { ...vecchia, count: presiDa(f) };
+      continue;
+    }
     out[f] = { ...(vecchia || {}), ...(n || {}), count: presiDa(f),
                totale: (n && n.totale != null) ? n.totale : (vecchia && vecchia.totale),
                // L'avviso di allargamento vale per gli annunci a schermo, non per l'ultima
@@ -1940,8 +1949,11 @@ async function doSearch() {
   // filigrana dietro i risultati. Si mette quando i risultati ci sono davvero.
   document.body.dataset.tipo = tipo;
 
-  const myGen = ++searchGen;   // review: se ne parte un'altra mentre questa è in volo, la stantia si scarta
+  // ORDINE OBBLIGATO: `hideResults()` brucia il token (una fetta in volo non deve atterrare
+  // in uno stato azzerato), quindi il token di QUESTA ricerca si prende DOPO, senno' la
+  // ricerca scarterebbe se stessa.
   showLoading(); hideResults();
+  const myGen = ++searchGen;   // review: se ne parte un'altra mentre questa è in volo, la stantia si scarta
   try {
     const res = await fetch(`/api/search?${new URLSearchParams(params)}`);
     const data = await res.json();
@@ -3532,6 +3544,11 @@ function hideLoading() {
 function showError(msg) { statusBox.classList.remove('d-none'); loadingState.classList.add('d-none'); errorState.classList.remove('d-none'); errorText.textContent = msg; }
 function hideError() { errorState.classList.add('d-none'); if (subitoBanner.classList.contains('d-none')) statusBox.classList.add('d-none'); }
 function hideResults() {
+  // IL CONTESTO E' CAMBIATO: una fetta di "Carica altri" ancora in volo non deve piu'
+  // atterrare. Il token proteggeva solo da una ricerca nuova (doSearch): uscendo dai
+  // risultati — cambio tipo, cambio sezione, vetrina tolta — la risposta in ritardo
+  // rimetteva `lastSources` e concatenava annunci in uno stato che era stato azzerato.
+  searchGen++;
   searchActive = false;
   document.body.classList.remove('has-results');   // torna allo stato iniziale → sfondo + search centrata
   _enrichQueue.length = 0; if (enrichObserver) enrichObserver.disconnect();   // stop enrichment Moto.it pendente
@@ -4823,7 +4840,13 @@ async function applyUrlParams() {
   if (!p.has('marca')) return false;
   const tipo = p.get('tipo') || 'auto';
   const tipoInput = document.querySelector(`input[name="tipo"][value="${tipo}"]`);
-  if (tipoInput) { tipoInput.checked = true; document.body.dataset.tipo = tipo; }
+  if (tipoInput) {
+    tipoInput.checked = true; document.body.dataset.tipo = tipo;
+    // La barra primaria e' l'unico indicatore visibile (il seg-toggle radio e' nascosto):
+    // senza questa riga, arrivando da un link ?tipo=moto l'app cercava moto mentre "Auto"
+    // restava evidenziato. Stessa riga di selectPrimary, che qui non viene chiamato.
+    document.querySelectorAll('#modeToggle .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === tipo));
+  }
   await populateMarca(tipo);   // brand cache del tipo (serve al force-select per il replay)
   const marca = p.get('marca') || '';
   if (marca) marcaSelect.value = marca;
@@ -4873,11 +4896,16 @@ init();
 // l'elenco salvato e basta. Il parco arriva quando lo chiedi, perche' un concessionario
 // grosso costa una richiesta ogni cinquanta veicoli.
 let cpVoci = null;                 // l'elenco salvato (null = mai caricato)
-let cpParchi = {};                 // id → { stato, dati }
+let cpParchi = {};                 // chiave → { stato, dati }
 let cpErrore = null;
 let cpApertoId = null;             // di chi sono gli annunci che stanno nella griglia
 let cpGruppi = {};                 // gruppo → { stato, dati }: le vetrine unite, scaricate insieme
 const cpAperte = new Set();        // quali schede sono aperte: il re-render non deve richiuderle
+
+// La chiave di una voce e' `fonte:id`, non il solo id: le fonti numerano ognuna per conto
+// suo, e con una collisione il solo id apriva il parco del venditore sbagliato. E' la
+// stessa chiave che il backend usa nelle rotte e nella cache.
+const cpChiave = v => v.fonte + ':' + v.id;
 
 // Gli orari arrivano come li scrive Autoscout ("Mo 09:00-12:30, 14:30-19:30").
 const CP_GIORNI = { Mo: 'Lun', Tu: 'Mar', We: 'Mer', Th: 'Gio', Fr: 'Ven', Sa: 'Sab', Su: 'Dom' };
@@ -4903,6 +4931,9 @@ async function cpApri() {
     try {
       const d = await fetch('/api/competitor').then(r => r.json());
       cpVoci = d.voci || [];
+      // Elenco vuoto per file corrotto ≠ elenco vuoto davvero: se il server lo dichiara,
+      // si avvisa PRIMA che il gesto istintivo (reincollare un link) peggiori le cose.
+      if (d.erroreElenco) cpErrore = `L'elenco su disco e' illeggibile (${d.erroreElenco}): non aggiungere niente, il file si recupera a mano.`;
     } catch (_) { cpVoci = []; cpErrore = 'elenco non raggiungibile'; }
   }
   cpRender();
@@ -4959,22 +4990,22 @@ function cpNumeriChiave(n, storico, v, troncato, illeggibili, totaleFonte) {
  */
 function cpUnisciHTML(v) {
   if (v.gruppo) return '<button type="button" class="cp-btn cp-separa" title="Togli dal profilo unico">Separa</button>';
-  const altre = (cpVoci || []).filter(x => String(x.id) !== String(v.id));
+  const altre = (cpVoci || []).filter(x => cpChiave(x) !== cpChiave(v));
   if (!altre.length) return '';
   return `<select class="cp-btn cp-unisci"><option value="">Unisci a…</option>`
-    + altre.map(x => `<option value="${escapeHtml(String(x.id))}">${escapeHtml(x.nome)} · ${escapeHtml(FONTE_LABEL[x.fonte] || x.fonte)}</option>`).join('')
+    + altre.map(x => `<option value="${escapeHtml(cpChiave(x))}">${escapeHtml(x.nome)} · ${escapeHtml(FONTE_LABEL[x.fonte] || x.fonte)}</option>`).join('')
     + '</select>';
 }
 
 function cpSchedaHTML(v) {
-  const st = cpParchi[v.id];
+  const st = cpParchi[cpChiave(v)];
   const corpo = !st ? '<div class="cp-att">Il parco non e\' ancora stato scaricato.</div>'
     : st.stato === 'carico' ? '<div class="cp-att">Scarico il parco… su un concessionario grande ci vuole un minuto.</div>'
     : st.stato === 'ko' ? `<div class="cp-att">Non riuscito: ${escapeHtml(st.errore || 'la fonte non risponde')}</div>`
     : cpNumeriChiave(st.dati.numeri, st.dati.storico, v, st.dati.troncato, st.dati.illeggibili, st.dati.totaleFonte);
   const quando = st && st.stato === 'ok' && st.dati.quando
     ? `<span class="cp-quando">dati del ${new Date(st.dati.quando).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${st.dati.daCache ? ' · dalla cache' : ''}</span>` : '';
-  const aperto = cpApertoId === v.id;
+  const aperto = cpApertoId === cpChiave(v);
   const tel = (v.telefoni && v.telefoni.length ? v.telefoni : [v.telefono].filter(Boolean));
   const fatti = [
     v.valutazione ? `<span class="cp-fatto cp-voto">★ ${String(v.valutazione.media).replace('.', ',')}<em>${v.valutazione.n} recensioni</em></span>` : '',
@@ -4984,8 +5015,8 @@ function cpSchedaHTML(v) {
   ].filter(Boolean).join('');
   // La riga chiusa dice chi e' e dov'e', e basta. Tutto il resto — contatti, orari,
   // servizi, descrizione, numeri — sta dentro, e ogni pezzo si richiude per conto suo.
-  return `<article class="cp-scheda${v.mio ? ' cp-mio' : ''}${aperto ? ' cp-aperto' : ''}" data-cid="${escapeHtml(String(v.id))}">
-    <details class="cp-det"${cpAperte.has(String(v.id)) ? ' open' : ''} data-cpdet="${escapeHtml(String(v.id))}">
+  return `<article class="cp-scheda${v.mio ? ' cp-mio' : ''}${aperto ? ' cp-aperto' : ''}" data-cid="${escapeHtml(cpChiave(v))}">
+    <details class="cp-det"${cpAperte.has(cpChiave(v)) ? ' open' : ''} data-cpdet="${escapeHtml(cpChiave(v))}">
       <summary class="cp-sum">
         <span class="cp-nome">${escapeHtml(v.nome)}</span>
         <span class="tag ${{ subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[v.fonte] || ''}">${escapeHtml(FONTE_LABEL[v.fonte] || v.fonte)}</span>
@@ -5010,10 +5041,10 @@ function cpSchedaHTML(v) {
             ${fatti ? `<div class="cp-fatti">${fatti}</div>` : ''}
           </div>
         </div>
-        ${miniHTML('cp-orari:' + v.id, 'Orari', (v.orari || []).length ? `${v.orari.length} giorni` : '', cpOrariHTML(v.orari))}
-        ${miniHTML('cp-serv:' + v.id, 'Servizi', (v.servizi || []).length ? String(v.servizi.length) : '',
+        ${miniHTML('cp-orari:' + cpChiave(v), 'Orari', (v.orari || []).length ? `${v.orari.length} giorni` : '', cpOrariHTML(v.orari))}
+        ${miniHTML('cp-serv:' + cpChiave(v), 'Servizi', (v.servizi || []).length ? String(v.servizi.length) : '',
           (v.servizi || []).length ? `<div class="cp-servizi">${v.servizi.map(s => `<span class="opt-v">${escapeHtml(s)}</span>`).join('')}</div>` : '')}
-        ${miniHTML('cp-desc:' + v.id, 'Come si descrive', '', v.descrizione ? `<div class="cp-desc">${escapeHtml(v.descrizione)}</div>` : '')}
+        ${miniHTML('cp-desc:' + cpChiave(v), 'Come si descrive', '', v.descrizione ? `<div class="cp-desc">${escapeHtml(v.descrizione)}</div>` : '')}
         ${corpo}
       </div>
     </details>
@@ -5100,6 +5131,9 @@ function cpMostraGruppo(g) {
   if (!st || st.stato !== 'ok') return;
   cpApertoId = 'g:' + g;
   currentResults = st.dati.veicoli;
+  // Come in hideResults: da qui in poi una fetta in ritardo si fonderebbe nel parco.
+  // Questi due punti non passano da hideResults, quindi il token va bruciato a mano.
+  searchGen++;
   searchActive = true; fettaPresa = 0; lastSources = null;
   document.body.classList.add('has-results');
   initPrezzoSlider(currentResults);
@@ -5131,21 +5165,21 @@ async function cpAggiungi() {
   // Incollare il link E' la richiesta: il parco si scarica subito. La regola "non si
   // scarica da solo" vale per l'apertura della sezione, non per chi ha appena chiesto
   // questo concessionario.
-  if (nuova) cpScarica(nuova.id);
+  if (nuova) cpScarica(cpChiave(nuova));
 }
 
-async function cpScarica(id, forza) {
-  cpParchi[id] = { stato: 'carico' };
+async function cpScarica(chiave, forza) {
+  cpParchi[chiave] = { stato: 'carico' };
   cpRender();
   try {
-    const d = await fetch(`/api/competitor/${encodeURIComponent(id)}/parco${forza ? '?forza=1' : ''}`).then(r => r.json());
-    cpParchi[id] = d.ok ? { stato: 'ok', dati: d } : { stato: 'ko', errore: d.error };
+    const d = await fetch(`/api/competitor/${encodeURIComponent(chiave)}/parco${forza ? '?forza=1' : ''}`).then(r => r.json());
+    cpParchi[chiave] = d.ok ? { stato: 'ok', dati: d } : { stato: 'ko', errore: d.error };
     // L'anagrafica puo' essere stata riletta dal server (le vetrine vecchie non avevano
     // orari, telefoni, valutazione): si prende quella, altrimenti la scheda resta magra.
-    if (d.ok && d.voce) cpVoci = (cpVoci || []).map(v => (String(v.id) === String(id) ? d.voce : v));
-  } catch (_) { cpParchi[id] = { stato: 'ko', errore: 'il server non risponde' }; }
+    if (d.ok && d.voce) cpVoci = (cpVoci || []).map(v => (cpChiave(v) === chiave ? d.voce : v));
+  } catch (_) { cpParchi[chiave] = { stato: 'ko', errore: 'il server non risponde' }; }
   cpRender();
-  if (cpParchi[id].stato === 'ok') cpMostraParco(id);
+  if (cpParchi[chiave].stato === 'ok') cpMostraParco(chiave);
 }
 
 /**
@@ -5155,11 +5189,12 @@ async function cpScarica(id, forza) {
  * scheda tecnica, salvati, confronto, raggruppamenti, ordinamenti, CSV. Rifarli qui
  * dentro avrebbe voluto dire tenerne allineate due versioni per sempre.
  */
-function cpMostraParco(id) {
-  const st = cpParchi[id];
+function cpMostraParco(chiave) {
+  const st = cpParchi[chiave];
   if (!st || st.stato !== 'ok' || !Array.isArray(st.dati.veicoli)) return;
-  cpApertoId = id;
+  cpApertoId = chiave;
   currentResults = st.dati.veicoli;
+  searchGen++;                       // vedi cpMostraGruppo: la fetta in volo non atterra qui
   searchActive = true;
   fettaPresa = 0;
   // Un parco arriva intero: non c'e' una fetta successiva da chiedere, e il bottone
@@ -5171,13 +5206,13 @@ function cpMostraParco(id) {
   cpRender();
 }
 
-async function cpTogli(id) {
-  try { await fetch(`/api/competitor/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch (_) {}
-  cpVoci = (cpVoci || []).filter(v => String(v.id) !== String(id));
-  delete cpParchi[id];
+async function cpTogli(chiave) {
+  try { await fetch(`/api/competitor/${encodeURIComponent(chiave)}`, { method: 'DELETE' }); } catch (_) {}
+  cpVoci = (cpVoci || []).filter(v => cpChiave(v) !== chiave);
+  delete cpParchi[chiave];
   // Se a schermo c'erano i SUOI annunci, vanno via con lui: restare li' vorrebbe dire
   // guardare il parco di un concessionario che non e' piu' in elenco.
-  if (cpApertoId === id) { cpApertoId = null; hideResults(); }
+  if (cpApertoId === chiave) { cpApertoId = null; hideResults(); }
   cpRender();
 }
 

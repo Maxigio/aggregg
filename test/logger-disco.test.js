@@ -20,6 +20,9 @@ const RADICE = path.join(__dirname, '..');
 test('il tetto regge DURANTE la corsa, non solo all\'avvio', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amrlog-'));
   const codice = `
+    // Questo test verifica la cartella di log DEL LOGGER: deve controllarla lui, quindi
+    // toglie l'override che la suite mette per non sporcare il registro operativo vero.
+    delete process.env.AMR_LOG_DIR;
     process.env.USER_DATA_PATH = ${JSON.stringify(dir)};
     const lg = require(${JSON.stringify(path.join(RADICE, 'backend', 'logger.js'))});
     const riga = 'x'.repeat(500);
@@ -44,6 +47,9 @@ test('una pipe chiusa non genera un ciclo di log', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amrlog-'));
   // stdout mandato a un processo che esce subito: da li' in poi ogni write e' EPIPE
   const codice = `
+    // Questo test verifica la cartella di log DEL LOGGER: deve controllarla lui, quindi
+    // toglie l'override che la suite mette per non sporcare il registro operativo vero.
+    delete process.env.AMR_LOG_DIR;
     process.env.USER_DATA_PATH = ${JSON.stringify(dir)};
     require(${JSON.stringify(path.join(RADICE, 'backend', 'logger.js'))}).install();
     let n = 0;

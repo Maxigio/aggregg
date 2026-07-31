@@ -109,3 +109,88 @@ test('da-annuncio: fonte e id sono controllati, e senza nome se ne mette uno leg
     assert.match(senzaNome.body.voce.nome, /Venditore Subito 999/);
   });
 });
+
+/**
+ * REGRESSIONE. A file corrotto leggi() risponde [] — e il primo POST riscriveva il file
+ * partendo da quel vuoto, rendendo definitiva una perdita che era ancora recuperabile a
+ * mano. Ora chi scrive controlla leggi.ultimoErrore e risponde 503 senza toccare il disco.
+ */
+test('elenco corrotto: le scritture rispondono 503 e il file resta byte per byte com\'era', async () => {
+  await conCartellaPulita(async () => {
+    const H = monta();
+    const p = path.join(process.env.USER_DATA_PATH, 'competitor.json');
+    const rotto = '{"voci":[{"fonte":"subito","id":"1","nome":"Recuperabi';   // troncato
+    fs.writeFileSync(p, rotto);
+    const r = resFinta();
+    await H['POST /api/competitor/da-annuncio']({ body: { fonte: 'subito', id: '42', nome: 'X' } }, r);
+    assert.strictEqual(r.code, 503);
+    assert.strictEqual(r.body.corrotto, true);
+    assert.match(r.body.error, /illeggibile/);
+    assert.strictEqual(fs.readFileSync(p, 'utf8'), rotto, 'il file corrotto NON va sovrascritto');
+    // E chi legge lo viene a sapere: elenco vuoto per guasto ≠ elenco vuoto davvero.
+    const lista = resFinta();
+    H['GET /api/competitor']({}, lista);
+    assert.ok(lista.body.erroreElenco, 'la GET deve dichiarare il guasto');
+  });
+});
+
+/**
+ * REGRESSIONE. Le rotte indirizzavano per solo id, ma Subito e Autoscout numerano ognuno
+ * per conto suo: con una collisione si serviva il parco del venditore sbagliato e DELETE
+ * toglieva due voci. La chiave e' `fonte:id`, la stessa dei POST e della cache.
+ */
+test('collisione di id fra fonti: la chiave composta indirizza la voce giusta, DELETE ne toglie una', async () => {
+  await conCartellaPulita(async () => {
+    const H = monta();
+    await H['POST /api/competitor/da-annuncio']({ body: { fonte: 'subito', id: '7008', nome: 'Sub' } }, resFinta());
+    await H['POST /api/competitor/da-annuncio']({ body: { fonte: 'autoscout', id: '7008', nome: 'As' } }, resFinta());
+    // DELETE con la chiave composta toglie SOLO quella voce.
+    const del = resFinta();
+    H['DELETE /api/competitor/:id']({ params: { id: 'autoscout:7008' } }, del);
+    assert.strictEqual(del.code, 200);
+    assert.strictEqual(del.body.tolti, 1, 'una voce sola, non tutte quelle con quell\'id');
+    const lista = resFinta();
+    H['GET /api/competitor']({}, lista);
+    assert.deepStrictEqual(lista.body.voci.map(x => x.fonte + ':' + x.id), ['subito:7008']);
+  });
+});
+
+/**
+ * REGRESSIONE. La rotta di gruppo scavalcava PARCO_MAX: N scarichi reali per richiesta,
+ * nessun addebito, e il doppio clic (la ragione d'esistere del limitatore) non coperto.
+ * Ora ogni voce non in cache passa dal budget, e il budget e' condiviso con la rotta singola.
+ */
+test('rotta di gruppo: gli scarichi passano dal limitatore e si addebitano', async () => {
+  const chiamate = [];
+  const stub = {
+    leggi: () => [
+      { fonte: 'subito', id: '1', nome: 'A', gruppo: 'g1', schedaLetta: true },
+      { fonte: 'autoscout', id: '2', nome: 'B', gruppo: 'g1', schedaLetta: true },
+    ],
+    scrivi: v => v,
+    parco: async voce => { chiamate.push(voce.fonte + ':' + voce.id); return { veicoli: [], troncato: false, illeggibili: 0, totaleFonte: null }; },
+    aggrega: () => ({ veicoli: 0 }),
+  };
+  const H = {};
+  const app = {
+    get: (p, ...h) => { H['GET ' + p] = h[h.length - 1]; },
+    post: (p, ...h) => { H['POST ' + p] = h[h.length - 1]; },
+    delete: (p, ...h) => { H['DELETE ' + p] = h[h.length - 1]; },
+  };
+  route.mount(app, { json: (req, res, next) => next(), competitor: stub, clientIp: () => 'ip-test-gruppo' });
+  // Prima richiesta: 2 voci, 2 scarichi, entrambi addebitati.
+  const r1 = resFinta();
+  await H['GET /api/competitor/gruppo/:g/parco']({ params: { g: 'g1' }, query: { forza: '1' } }, r1);
+  assert.strictEqual(r1.code, 200);
+  assert.strictEqual(chiamate.length, 2);
+  assert.ok(r1.body.scarichiRestanti < 6, 'gli scarichi di gruppo devono consumare il budget');
+  // Si insiste col doppio clic: al giro che sfora il budget la risposta e' 429, non
+  // un giro silenzioso di scarichi (budget 6: 2+2+2 ok, il quarto giro rifiuta).
+  await H['GET /api/competitor/gruppo/:g/parco']({ params: { g: 'g1' }, query: { forza: '1' } }, resFinta());
+  await H['GET /api/competitor/gruppo/:g/parco']({ params: { g: 'g1' }, query: { forza: '1' } }, resFinta());
+  const r4 = resFinta();
+  await H['GET /api/competitor/gruppo/:g/parco']({ params: { g: 'g1' }, query: { forza: '1' } }, r4);
+  assert.strictEqual(r4.code, 429, 'a budget esaurito il gruppo risponde 429 come la rotta singola');
+  assert.match(r4.body.error, /Troppi scarichi/);
+  assert.strictEqual(chiamate.length, 6, 'oltre il budget non deve partire nessuno scarico reale');
+});

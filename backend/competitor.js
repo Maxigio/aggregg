@@ -270,6 +270,11 @@ async function parco(voce) {
   const veicoli = [];
   let troncato = false;
   let totaleFonte = null;      // quanti ne dichiara la FONTE, contro quanti ne abbiamo presi
+  // Il totale dichiarato descrive TUTTE le passate che hanno portato veicoli? Se una
+  // passata fallisce, o riesce con veicoli ma senza dichiarare il suo totale, la somma
+  // diventa parziale: un "presi 300 di 200" o un "di 200" che copre meta' parco. In quel
+  // caso si tace (null), come per Moto.it che il totale non lo dichiara mai.
+  let totaleCopreTutto = true;
 
   // Moto.it non passa dagli scraper di ricerca: quel motore non filtra per venditore, e il
   // parco si legge dalla vetrina. Solo moto, e solo l'usato — il nuovo la fonte lo tiene
@@ -309,19 +314,24 @@ async function parco(voce) {
     catch (e) {
       if (!veicoli.length) throw new Error(`${voce.fonte}: ${e.message}`);
       troncato = true;
+      totaleCopreTutto = false;   // una passata fallita rende qualunque somma parziale
       console.warn(`[competitor] passata ${tipo} fallita (${e.message}) → parco parziale, dichiarato troncato`);
       continue;
     }
     const items = Array.isArray(r) ? r : (r.items || []);
     if (!Array.isArray(r) && r.truncated) troncato = true;
     // QUANTI NE HA LA FONTE. Lo dichiara lei nella stessa risposta e finora lo buttavamo:
-    // senza, "veicoli presi 180" non si sa se sono tutti o la puntadi un piazzale da 400.
-    // Si somma sulle due passate (auto + moto), e resta null se nessuna delle due lo dice —
-    // meglio non dirlo che dire un numero che non descrive tutto il parco.
+    // senza, "veicoli presi 180" non si sa se sono tutti o la punta di un piazzale da 400.
+    // Si somma sulle due passate (auto + moto), e resta null non solo quando nessuna lo
+    // dichiara, ma anche quando una passata fallisce o porta veicoli SENZA dichiarare il
+    // suo totale: un totale che non descrive tutto il parco e' peggio di nessun totale.
+    // Una passata vuota senza totale invece non invalida niente: zero presi e zero
+    // dichiarati coincidono (il caso quotidiano: concessionario solo-auto, passata moto).
     if (!Array.isArray(r) && Number.isFinite(r.total)) totaleFonte = (totaleFonte || 0) + r.total;
+    else if (items.length) totaleCopreTutto = false;
     for (const v of items) veicoli.push({ ...v, tipo });
   }
-  return { veicoli, troncato, illeggibili: 0, totaleFonte };
+  return { veicoli, troncato, illeggibili: 0, totaleFonte: totaleCopreTutto ? totaleFonte : null };
 }
 
 /* ─── i numeri ────────────────────────────────────────────────────────────── */

@@ -67,3 +67,29 @@ test('CRUD + recordCheck: baseline silenziosa, poi nuovo', () => {
   assert.deepStrictEqual(al.map(a => a.motivo), ['nuovo']);
   assert.ok(saved.removeSaved(s.id));
 });
+
+/**
+ * REGRESSIONE. Il re-accodamento proteggeva dal taglio FIFO solo gli URL PRESENTI nei
+ * risultati del check corrente. Con una fonte in outage (torna [] senza lanciare) i suoi
+ * annunci vivi restavano in testa a `seen` e, col cap pieno, venivano sfrattati: al ritorno
+ * della fonte `prev` era null e scattava un falso "nuovo" su mezzi in lista da settimane.
+ */
+test('recordCheck: gli annunci di una fonte MUTA non vengono sfrattati da seen', () => {
+  const s = saved.addSaved({ label: 'outage', params: { marca: 'BMW' } });
+  const subito = 'https://www.subito.it/auto/bmw-320d-roma-1.htm';
+  const as24   = 'https://www.autoscout24.it/annunci/bmw-320d-2.html';
+  // Baseline: due annunci, uno per fonte.
+  saved.recordCheck(s.id, [R(subito, 10000), R(as24, 11000)]);
+  // Giro successivo: Autoscout e' giu' (nessun risultato suo) e arrivano 900 annunci
+  // nuovi da Subito — piu' del cap di 800, quindi il taglio morde davvero.
+  const valanga = Array.from({ length: 900 }, (_, i) => R(`https://www.subito.it/auto/x-${i}.htm`, 5000 + i));
+  saved.recordCheck(s.id, [R(subito, 10000), ...valanga], { fontiMute: ['autoscout'] });
+  const dopo = saved.getSaved(s.id);
+  assert.ok(Object.prototype.hasOwnProperty.call(dopo.seen, as24),
+    'l\'annuncio della fonte muta deve restare: non e\' "non visto", e\' "non verificabile"');
+  // Senza dichiarare la fonte muta, invece, viene sfrattato: e' il comportamento di prima.
+  const s2 = saved.addSaved({ label: 'outage2', params: { marca: 'BMW' } });
+  saved.recordCheck(s2.id, [R(subito, 10000), R(as24, 11000)]);
+  saved.recordCheck(s2.id, [R(subito, 10000), ...valanga]);
+  assert.ok(!Object.prototype.hasOwnProperty.call(saved.getSaved(s2.id).seen, as24));
+});

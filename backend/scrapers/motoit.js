@@ -220,10 +220,11 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
   const tmo = opts.httpTimeoutMs || HTTP_TIMEOUT_DEFAULT;
   const pages = [];
   let truncated = false;
+  let driftBreak = false;                    // pagina illeggibile dopo pagine buone
   let total = null;                          // F50 "N annunci" (tetto), dalla 1ª pagina
   for (let i = 0; i < urls.length; i++) {
     if (i > 0 && delay) await sleep(delay);
-    const { status, body } = await httpGetText(urls[i], 0, tmo);
+    const { status, body } = await module.exports._get(urls[i], 0, tmo);
     if (status === 403 || status === 429) throw fail(`Moto.it HTTP ${status}`, { status, kind: 'blocked' });
     if (status !== 200) {
       // Un 500 o un 503 NON sono un blocco: 403 e 429 sono gia' presi sopra. Dichiarandoli
@@ -234,10 +235,30 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
       break;                                                               // pagina dopo non-200 = fine
     }
     if (i === 0) total = extractTotal(body);             // tetto dalla 1ª pagina (anche se 0 card)
-    const items = mapCards(extractCardsHtml(body), opts);
-    if (items.length === 0) break;                       // esaurito (fine risultati genuina)
+    const grezze = extractCardsHtml(body);
+    const items = mapCards(grezze, opts);
+    if (items.length === 0) {
+      /**
+       * ZERO CARD LEGGIBILI ≠ FINE GENUINA — la guardia che la vetrina gemella
+       * (motoit-vetrina.js) ha gia' e che qui mancava. Due segnali di deriva del markup:
+       * card grezze presenti ma nessuna mappata, oppure prima pagina "vuota" mentre la
+       * testata dichiara annunci. `total > 0` e MAI `!= null`: total=0 e' legittimo e
+       * null e' un'estrazione best-effort fallita. Il gate `!(opts.fetta > 0)` esclude
+       * "Carica altri" oltre il fondo, dove una pagina vuota con la testata che dichiara
+       * ancora il totale della query e' plausibile e genuina.
+       */
+      const deriva = grezze.length > 0 || (i === 0 && !(opts.fetta > 0) && total > 0);
+      if (deriva && i === 0) {
+        throw fail(`Moto.it: ${grezze.length} card in pagina, ${total == null ? '?' : total} annunci dichiarati, 0 leggibili — e' cambiato il markup della fonte, non il piazzale a essere vuoto`, { kind: 'error' });
+      }
+      if (deriva) driftBreak = true;                     // pagine buone gia' prese: si tengono
+      break;                                             // altrimenti: esaurito (fine genuina)
+    }
     pages.push(items);
   }
+  // Un break per deriva a pagina >1 non e' una vista completa: senza `truncated` il
+  // crawler, quando tornera' attivo, farebbe markGone su una lista parziale.
+  if (driftBreak) truncated = true;
   // review: prima truncated=true su QUALSIASI ultima pagina non vuota (Moto.it non ha un
   // PAGE_SIZE fisso: ~10-13/pag → niente check raw<PAGE_SIZE come Subito/AS24) → un target
   // esaurito ESATTAMENTE al cap restava "troncato" per sempre (escalation cap + markGone mai +
@@ -272,7 +293,11 @@ async function scrapeMotoIt(params, opts = {}) {
   await throttle();
 
   // deep = chiamata dal crawler (opts) → HTTP paziente, throw alla salute su blocco.
-  const deep = !!(opts.pageDelayMs || opts.withMeta || opts.maxPages);
+  // `withMeta` NON discrimina piu': da quando il server lo passa a OGNI ricerca (per il
+  // totale F50), teneva TUTTE le ricerche live sul ramo crawler — delay zero fra pagine e
+  // timeout lungo, l'esatto contrario dell'"HTTP sequenziale gentile" promesso qui sotto.
+  // I tre chiamanti crawler veri passano tutti maxPages+pageDelayMs.
+  const deep = !!(opts.pageDelayMs || opts.maxPages);
   const maxPages = deep ? (opts.maxPages || MAX_PAGES) : MAX_PAGES;
   // "Carica altri": la fetta successiva. Provato pagina 1 contro pagina 50 — nessun
   // link in comune, quindi le pagine profonde portano moto diverse e non le stesse.
@@ -291,17 +316,18 @@ async function scrapeMotoIt(params, opts = {}) {
   }
 
   // ON-SEARCH: HTTP sequenziale gentile (come il crawler). Niente browser, niente
-  // fallback. Su blocco → fonte vuota (Subito/AS24 portano la ricerca), NON crash.
-  const { pages, statoKo, truncated } = await scrapeMotoViaHttp(urls, {
-    pageDelayMs: ONSEARCH_DELAY_MS, httpTimeoutMs: ONSEARCH_TIMEOUT_MS,
+  // fallback. Il ramo onora `withMeta` (totale F50 e "Carica altri" ne dipendono) e
+  // `fetta`: senza, tornato vivo questo ramo, sarebbero regrediti entrambi.
+  const { pages, statoKo, truncated, total } = await scrapeMotoViaHttp(urls, {
+    pageDelayMs: ONSEARCH_DELAY_MS, httpTimeoutMs: ONSEARCH_TIMEOUT_MS, fetta: opts.fetta || 0,
   });
   if (statoKo) {
     console.warn(`[Moto.it] on-search: HTTP ${statoKo} sulla prima pagina → fonte vuota`);
-    return [];
+    return opts.withMeta ? { items: [], truncated: false } : [];
   }
   const risultati = filtraPerSlug(dedup(pages), params.motoitSlugAmmessi);
   console.log(`[Moto.it] on-search OK ${risultati.length} annunci (${pages.map(p => p.length).join('+')})${truncated ? ' [troncato]' : ''}`);
-  return risultati;
+  return opts.withMeta ? { items: risultati, truncated, total } : risultati;
 }
 
 module.exports = scrapeMotoIt;
@@ -310,3 +336,5 @@ module.exports._extractTotal = extractTotal;   // F50 copertura
 // La vetrina del concessionario (Competitor) parla con lo stesso host e deve contare le
 // richieste nello stesso budget: una sola porta HTTP verso Moto.it, non due.
 module.exports._get = httpGetText;
+// Il loop di pagine, testabile senza il throttle da 1.5s (stubbando _get come fa la vetrina).
+module.exports._scrapeVia = scrapeMotoViaHttp;
