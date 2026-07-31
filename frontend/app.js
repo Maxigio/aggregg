@@ -338,7 +338,7 @@ async function init() {
   document.querySelectorAll('.col-toggle').forEach(cb => cb.addEventListener('change', () => {
     visibleCols = OPTIONAL_COLS.filter(k => document.querySelector(`.col-toggle[value="${k}"]`)?.checked);
     colsToccate = true;   // da qui in poi comandi tu, anche cambiando vista
-    renderResults(currentResults);
+    ridisegnaTenendoAperti();
   }));
   renderPriceMenuV();   // menu "Prezzo €" (Commissione/Spese/Margine/IVA) nella toolbar veicoli
   // riposiziona il dropdown "Prezzo €" all'apertura (veicoli + ricambi; delegato → sopravvive ai re-render)
@@ -456,8 +456,25 @@ async function init() {
   });
   // Responsività colonne in JS (l'inline grid-template vince sulle media-query).
   let _resizeT;
+  /**
+   * IL RIDIMENSIONAMENTO NON DEVE COSTARE QUELLO CHE STAI LEGGENDO.
+   *
+   * Qui si ridisegnava la griglia a OGNI resize, e `renderResults` rifa' l'innerHTML:
+   * spariva il pannello dell'annuncio aperto e, dentro, la scheda tecnica — con la
+   * motorizzazione scelta, l'ADD ON aperto, il conto del passaggio gia' fatto. Bastava
+   * allargare la finestra di un centimetro.
+   *
+   * Due cose: (1) si ridisegna solo quando la larghezza cambia DAVVERO la griglia, cioe'
+   * quando si attraversa la soglia dei 1180px (sotto, carburante e CV non sono colonne);
+   * (2) quando serve davvero, i pannelli aperti si riaprono da soli — `toggleDetail` passa
+   * da `renderDetailInto`, che riaggancia la scheda quando l'annuncio e' il suo ospite.
+   */
+  let _layoutPrec = effVisibleCols().join(',');
   window.addEventListener('resize', () => { clearTimeout(_resizeT); _resizeT = setTimeout(() => {
-    if (searchActive) renderResults(currentResults);
+    const ora = effVisibleCols().join(',');
+    // Si ridisegna solo quando la larghezza cambia DAVVERO la griglia: sotto i 1180
+    // carburante e CV non sono colonne, sopra si'. Ogni altro resize non tocca niente.
+    if (searchActive && ora !== _layoutPrec) { _layoutPrec = ora; ridisegnaTenendoAperti(); }
     if (!cmatrixPanel.classList.contains('d-none')) renderMatrix();   // tabella↔card attraversando il breakpoint
   }, 200); });
 
@@ -2457,6 +2474,27 @@ function cardHTML(item, bestSet) {
       </div>
     </article>` +
     `<div class="row-detail d-none" data-url="${urlSafe}" data-detail="1"></div>`;
+}
+
+/**
+ * RIDISEGNA SENZA PORTARE VIA QUELLO CHE STAI LEGGENDO.
+ *
+ * `renderResults` rifa' l'innerHTML della griglia: con lui spariscono i pannelli degli
+ * annunci aperti e, dentro, la scheda tecnica — motorizzazione scelta, ADD ON aperto,
+ * conto del passaggio gia' fatto. Succedeva a ogni ridimensionamento della finestra e a
+ * ogni spunta nel menu dei campi. Qui si segna cosa era aperto, si ridisegna e si riapre:
+ * `toggleDetail` passa da `renderDetailInto`, che riaggancia da sola la scheda
+ * all'annuncio che la ospita.
+ */
+function ridisegnaTenendoAperti() {
+  const aperti = [...resultsGrid.querySelectorAll('.row-detail:not(.d-none)')].map(d => d.dataset.url);
+  const scorrimento = window.scrollY;
+  renderResults(currentResults);
+  for (const u of aperti) {
+    const riga = resultsGrid.querySelector(`.result-row[data-url="${CSS.escape(u)}"], .ann-card[data-url="${CSS.escape(u)}"]`);
+    if (riga) toggleDetail(riga);
+  }
+  window.scrollTo({ top: scorrimento });
 }
 
 // ─── Dettaglio inline (ℹ → fisarmonica sotto la riga, niente salto in cima) ────
