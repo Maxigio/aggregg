@@ -148,17 +148,7 @@ a:hover { text-decoration: underline; }
 }
 .theme-toggle:hover { border-color: var(--line-strong); color: var(--text); }
 
-/* QR panel (URL pubblico per il telefono) */
-.qr-panel {
-  max-width: 300px; margin: 10px auto 0; padding: 14px;
-  border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface);
-  text-align: center;
-}
-.qr-hint { font-size: 0.8rem; color: var(--text-muted); margin: 0 0 10px; }
-.qr-img { display: flex; justify-content: center; }
-.qr-img svg { width: 200px; height: 200px; display: block; background: #fff; padding: 6px; border-radius: var(--r); }
-.qr-link { display: inline-block; margin-top: 10px; font-size: 0.82rem; font-weight: 600; color: var(--accent); word-break: break-all; }
-.qr-empty { font-size: 0.84rem; color: var(--text-muted); font-style: italic; margin: 0; }
+/* Il pannello QR viveva qui: e' rimasto solo su login.html, che ha stili propri. */
 
 /* ─── Area di ricerca (command) ──────────────────────────────────────────────
    A vuoto: centrata e ampia. Dopo la ricerca (body.has-results): compatta. */
@@ -1089,7 +1079,6 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
 .report-status { font-size: 0.8rem; color: var(--text-muted); margin-right: auto; }
 .report-foot .foot-btn { background: var(--accent); border-color: var(--accent); color: #fff; }
 .report-foot .foot-btn:hover { background: #1a5fcc; color: #fff; }
-.report-card .qr-panel { border: none; padding: 0; max-width: none; margin: 0; }   /* no box annidato nel modal */
 
 /* ─── Griglia full-bleed (esce dal gutter del .container) ───────────────────── */
 #resultsSection {

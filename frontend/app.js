@@ -40,7 +40,6 @@ const sortMobile      = document.getElementById('sortMobile');
 const advancedToggle  = document.getElementById('advancedToggle');
 const advancedFilters = document.getElementById('advancedFilters');
 const logoBtn         = document.getElementById('logoBtn');
-const qrPanel         = document.getElementById('qrPanel');
 const themeToggle     = document.getElementById('themeToggle');
 const prezzoSliderEl  = document.getElementById('prezzoSlider');
 const btnStatCsv      = document.getElementById('btnStatCsv');
@@ -264,11 +263,19 @@ async function init() {
   document.getElementById('annoMin').max = currentYear;
   document.getElementById('annoMax').max = currentYear;
   document.getElementById('annoMax').placeholder = `es. ${currentYear}`;
+  // PRIMA di qualunque attesa. Il ripristino del modo stava in fondo a init(), dopo
+  // `await populateMarca('auto')` e `await applyUrlParams()`: ogni ricaricamento partiva
+  // da Auto — radio su Auto, bottone Auto attivo (e' cablato cosi' in index.html) e il
+  // catalogo AUTO scaricato per intero — e solo alla fine saltava al modo vero. Misurato
+  // rallentando quella sola richiesta di 1,5s: l'utente resta in Auto per 1,5s tondi.
+  // Qui si mette a posto lo stato visibile subito, e si scarica UN catalogo solo: quello
+  // giusto. `ripristinaModo()` piu' sotto fa il resto (pannelli, aree) ed e' idempotente.
+  preImpostaModo();
   document.body.dataset.tipo = currentTipo();
 
   populateRegione();
   renderFacetChips();
-  await populateMarca('auto');
+  await populateMarca(currentTipo());
   setupMarcaAutocomplete();
   setupModelloAutocomplete();
   validateMarca();
@@ -612,32 +619,15 @@ async function init() {
     advancedToggle.classList.toggle('open', !open);
   });
 
-  // Logo → QR
-  logoBtn?.addEventListener('click', async () => {
-    document.getElementById('qrModal')?.classList.remove('d-none');   // p1: modal, niente scroll pagina
-    logoBtn.setAttribute('aria-expanded', 'true');
-    await loadQrPanel();
-  });
-  document.getElementById('qrClose')?.addEventListener('click', closeQr);
-  document.getElementById('qrModal')?.addEventListener('click', e => { if (e.target.id === 'qrModal') closeQr(); });
+  // Logo → RICARICA. Prima apriva un QR per aprire l'app dal telefono: da dentro l'app non
+  // serve (sei gia' davanti allo schermo), e il logo e' il posto dove si clicca aspettandosi
+  // di tornare a casa. Il QR resta sulla pagina di accesso, dove ha senso.
+  // Il modo si ricorda, quindi ricaricando si torna nella sezione dove si stava.
+  logoBtn?.addEventListener('click', () => location.reload());
   document.getElementById('btnReportNav')?.addEventListener('click', () => openReport());   // p4: Segnala in navbar
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeQr(); closeReport(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeReport(); });
 
   renderSalvati();
-}
-
-// ─── QR ──────────────────────────────────────────────────────────────────────
-async function loadQrPanel() {
-  qrPanel.innerHTML = '<p class="qr-empty">Caricamento…</p>';
-  try {
-    const r = await fetch('/api/public-url');
-    const { url, svg } = await r.json();
-    if (!url) { qrPanel.innerHTML = '<p class="qr-empty">Accesso pubblico non attivo (Funnel spento).</p>'; return; }
-    qrPanel.innerHTML =
-      '<p class="qr-hint">Inquadra col telefono per aprire l\'app (serve la password):</p>' +
-      `<div class="qr-img">${svg}</div>` +
-      `<a class="qr-link" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-  } catch (_) { qrPanel.innerHTML = '<p class="qr-empty">Impossibile leggere l\'indirizzo.</p>'; }
 }
 
 function populateRegione() {
@@ -742,20 +732,22 @@ async function loadModels(tipo, marca) {
   return modelCache[key];
 }
 
+// Si svuota il testo, ma il campo RESTA a schermo: e' facoltativo e a testo libero, e
+// nasconderlo nascondeva anche il fatto che esistesse. L'unico posto che lo toglie sono i
+// Ricambi, dove non c'entra niente.
 function resetVersioneOnly() {
   if (versioneInput) versioneInput.value = '';
-  versioniRow?.classList.add('d-none');
 }
 function resetModelloVersione() { selectedModel = null; resetVersioneOnly(); }
 
 /**
- * Il campo versione si mostra quando c'e' un modello: prima non vuol dire niente.
- * Non chiede piu' niente al server — non c'e' una lista da servire, e' testo libero.
+ * Scelto un modello: si svuota la versione scritta prima (era di un altro modello) e si
+ * tiene da parte la famiglia Moto.it, che serve a tradurre il testo in un codice.
+ * Il campo e' sempre a schermo: qui non c'e' piu' niente da mostrare.
  */
 function mostraVersione(model) {
   resetVersioneOnly();
   if (selectedModel) selectedModel._familySlug = model.slugMotoIt || null;
-  versioniRow?.classList.remove('d-none');
 }
 
 function setupModelloAutocomplete() {
@@ -947,7 +939,9 @@ function setSearchMode(mode) {
   btnCerca.textContent = 'Cerca';
   document.getElementById('modello').placeholder =
     currentTipo() === 'moto' ? 'Modello — es. MT-07 (opzionale)' : 'Modello — es. 318d (opzionale)';
-  if (ricambi) versioniRow?.classList.add('d-none');   // nei ricambi la versione non c'entra
+  // Nei Ricambi la versione non c'entra; ovunque altro il campo torna, senno' uscendo dai
+  // Ricambi resterebbe nascosto per sempre (prima lo riaccendeva solo la scelta di un modello).
+  versioniRow?.classList.toggle('d-none', ricambi);
 }
 
 // ═══ Modo Ricambi — pipeline parti SEPARATA (multi-fonte, full-width) ═══════════
@@ -3478,7 +3472,6 @@ function openReport() {
   document.getElementById('reportMsg').focus();
 }
 function closeReport() { document.getElementById('reportModal')?.classList.add('d-none'); }
-function closeQr() { document.getElementById('qrModal')?.classList.add('d-none'); }
 async function submitReport() {
   const msg = document.getElementById('reportMsg').value.trim();
   const status = document.getElementById('reportStatus');
@@ -4867,9 +4860,36 @@ async function applyUrlParams() {
 /** Una modalita' esiste per l'utente solo se ha il suo bottone nella barra. */
 const modoRaggiungibile = m => !!m && !!document.querySelector(`#modeToggle .mode-btn[data-mode="${CSS.escape(m)}"]`);
 
+/** Quello che si era salvato l'ultima volta. Non lancia: localStorage puo' essere negato. */
+function modoSalvato() {
+  try { return { m: localStorage.getItem('amrModo'), t: localStorage.getItem('amrModoTipo') }; }
+  catch (_) { return { m: null, t: null }; }
+}
+
+/**
+ * LO STATO VISIBILE, SUBITO — prima di ogni richiesta di rete.
+ *
+ * Mette a posto tre cose che altrimenti restano su Auto per tutta la durata del primo
+ * caricamento: il radio del tipo, l'attributo del body e il bottone acceso nella barra.
+ * Cosi' `populateMarca` scarica il catalogo GIUSTO, uno solo (prima ne scaricava due:
+ * auto e poi quello vero), e chi lavora in Moto non vede piu' l'app passare da Auto.
+ *
+ * Non apre pannelli e non chiama `setSearchMode`: quello resta a `ripristinaModo()`, che
+ * gira a fine init quando il catalogo c'e'. Qui si tocca solo cio' che si vede.
+ */
+function preImpostaModo() {
+  const { m, t } = modoSalvato();
+  if (t === 'moto') { const r = document.getElementById('tipoMoto'); if (r) r.checked = true; }
+  // Il bottone acceso: per 'cerca' e' il tipo, per le aree e' l'area stessa. Se il modo
+  // salvato non ha piu' un bottone (area tolta dalla barra), non si tocca niente.
+  const bottone = m === 'cerca' ? (t === 'moto' ? 'moto' : 'auto') : m;
+  if (modoRaggiungibile(bottone)) {
+    document.querySelectorAll('#modeToggle .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === bottone));
+  }
+}
+
 function ripristinaModo() {
-  let m = null, t = null;
-  try { m = localStorage.getItem('amrModo'); t = localStorage.getItem('amrModoTipo'); } catch (_) {}
+  const { m, t } = modoSalvato();
   // 'cerca' non e' un bottone della barra: i bottoni sono auto, moto, ricambi, competitor.
   // La guardia qui sotto lo scartava sempre, quindi chi lavorava in Moto ripartiva in Auto
   // a ogni ricaricamento — mentre Ricambi e Competitor tornavano al loro posto.

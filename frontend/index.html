@@ -26,9 +26,9 @@
 
   <main class="container">
 
-    <!-- TOP BAR: brand (QR) + toggle tema -->
+    <!-- TOP BAR: brand (ricarica) + toggle tema -->
     <div class="topbar">
-      <button type="button" class="brand" id="logoBtn" aria-expanded="false" title="Mostra QR per aprire dal telefono">
+      <button type="button" class="brand" id="logoBtn" title="Ricarica l'app">
         <svg class="brand-logo" width="30" height="30" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <rect width="32" height="32" rx="6" fill="#1f6feb"/>
           <circle cx="16" cy="16" r="10" fill="none" stroke="#bfdbfe" stroke-width="1.8"/>
@@ -97,7 +97,10 @@
           Ora quello che scrivi va alle fonti com'e': Subito e Autoscout hanno una ricerca
           testuale loro, Moto.it e' l'unica dove il testo va tradotto in un codice.
         -->
-        <div class="d-none" id="versioniRow" style="margin-top:8px">
+        <!-- SEMPRE VISIBILE. Prima compariva solo dopo aver scelto un modello dalla tendina:
+             il campo e' testo libero e facoltativo, quindi nascondendolo si nascondeva anche
+             il fatto che esistesse, e chi cercava per sola marca non poteva usarlo affatto. -->
+        <div id="versioniRow" style="margin-top:8px">
           <label class="ver-lab" for="versione">Versione</label>
           <input type="text" id="versione" autocomplete="off"
                  class="field-input" placeholder="facoltativa — es. Highline, GTI, S line, ABS" />
@@ -304,13 +307,9 @@
     </div>
   </div>
 
-  <!-- MODALE QR (apri dal telefono) -->
-  <div id="qrModal" class="report-modal d-none">
-    <div class="report-card">
-      <div class="report-head"><span>Apri dal telefono</span><button type="button" class="report-close" id="qrClose" aria-label="Chiudi">✕</button></div>
-      <div class="qr-panel" id="qrPanel"></div>
-    </div>
-  </div>
+  <!-- Il QR "apri dal telefono" stava qui, appeso al logo. Tolto: da dentro l'app non serve
+       a niente (sei gia' davanti allo schermo) e il logo e' il posto dove si clicca per
+       ricaricare. Il QR resta dov'e' utile, sulla pagina di accesso (login.html). -->
 
   <!-- OFFCANVAS: tab Annunci salvati | Ricerche -->
   <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasSaved"
