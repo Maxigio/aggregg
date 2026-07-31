@@ -377,11 +377,14 @@ function buildPath(params, start) {
      *                            dentro Golf) — vedi ponte-buchi.js. Ha anche un controllo
      *                            a valle in `riconosci`, senza il quale "Golf GTI"
      *                            tornerebbe a pescare tutte le Golf.
+     *   `nodo.testoDedotto`      quello che resta del nome tolta la famiglia ("200" da
+     *                            "CLA 200"), dedotto dal catalogo invece che scritto a
+     *                            mano. Restringe e basta: non marca e non scarta.
      *   `versioneTesto`          la VERSIONE scritta a mano nel campo. Restringe e basta:
      *                            nessun controllo nostro dopo, la fonte risponde e si mostra.
-     * Insieme restringono di piu', ed e' corretto: sono due vincoli diversi.
+     * Insieme restringono di piu', ed e' corretto: sono vincoli diversi.
      */
-    const q = [nodo.testo, params.subitoVersioneTesto].filter(Boolean).join(' ').trim();
+    const q = [nodo.testo, nodo.testoDedotto, params.subitoVersioneTesto].filter(Boolean).join(' ').trim();
     if (q) qs.set('q', q);
     /**
      * LA VERSIONE NON SI CHIEDE PIU' PER ID. `cv`/`bv` accettano un id solo e filtrano
@@ -464,15 +467,22 @@ function riconosci(ad, nodo, opts = {}) {
    */
   const versione = liv => {
     const dichiarata = liv.versione && liv.versione.id !== NON_DICHIARATO;
-    // Il modello che vive DENTRO la famiglia (Golf GTI dentro Golf): l'utente ha chiesto
-    // le GTI, non le Golf. Qui la versione dichiarata E' il modello, quindi si guarda
-    // quella. Chi non l'ha dichiarata resta marcato: `q` alla fonte gli ha gia' letto
-    // il titolo. Vedi backend/scrapers/ponte-buchi.js.
-    // IL TESTO DEL PONTE isola il modello dentro la famiglia (Golf GTI dentro Golf).
-    // NON e' il campo versione: quello va in `q` e basta, e non filtra qui.
+    /**
+     * IL TESTO DEL PONTE isola il modello dentro la famiglia (Golf GTD dentro Golf), e va
+     * alla FONTE dentro `q`. Qui NON si scarta piu' niente.
+     *
+     * Prima, se la versione dichiarata non diceva il testo, l'annuncio spariva. Due danni
+     * misurati sullo stesso caso: cercando "Golf GTD" una GTD Variant che dichiara
+     * "Variant" come versione veniva buttata via — era esattamente quella cercata — e chi
+     * guardava non poteva accorgersene, perche' un annuncio tolto non lascia traccia.
+     * Il progetto la regola ce l'ha gia' scritta per il campo versione due funzioni piu'
+     * su ("la fonte risponde, e quello che risponde si mostra") e per Autoscout e Moto.it,
+     * dove le righe che non combaciano restano in lista MARCATE. Qui si fa lo stesso:
+     * marcare e' informazione, nascondere e' una decisione presa al posto di chi guarda.
+     */
     if (nodo.testo) {
       if (!dichiarata) return 'senza-versione';
-      return diceIlTesto(nodo.testo, liv.versione.nome) ? 'esatto' : null;
+      return diceIlTesto(nodo.testo, liv.versione.nome) ? 'esatto' : 'altro-modello';
     }
     return dichiarata ? 'esatto' : 'senza-versione';
   };
@@ -533,7 +543,8 @@ async function paginaRecupero(params) {
     // campo che nessun chiamante imposta, due recuperi che differivano SOLO per
     // ordinamento condividevano la stessa entry per dieci minuti.
     params.annoMin, params.annoMax, params.kmMin, params.kmMax, params._sort,
-    params.subitoVersioneTesto, (params.subitoNodo && params.subitoNodo.testo) || ''].join('|');
+    params.subitoVersioneTesto, (params.subitoNodo && params.subitoNodo.testo) || '',
+    (params.subitoNodo && params.subitoNodo.testoDedotto) || ''].join('|');
   const hit = recuperoCache.get(chiave);
   if (hit && Date.now() - hit.ts < RECUPERO_TTL) return hit.ads;
   const page = await fetchPage({ ...params, subitoSoloNonDichiarati: true }, 0);

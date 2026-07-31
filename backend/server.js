@@ -1130,7 +1130,28 @@ async function runSearchCore(params) {
   // smette di servire: il costo scende, non sale.
   // AMR_PONTE_AS24=0 spegne la traduzione senza toccare il codice: serve a confrontare
   // vecchio e nuovo sulla stessa app, ed e' la leva se il ponte sbagliasse un aggancio.
-  if (params.subitoNodo && params.subitoNodo.famigliaNome && process.env.AMR_PONTE_AS24 !== '0') {
+  /**
+   * MA LA FAMIGLIA PUO' ESSERE PIU' LARGA DI QUELLO CHE HAI CHIESTO, e allora unire
+   * ALLARGA invece di completare.
+   *
+   * Il ponte parte dal nome della FAMIGLIA Subito. Quando la famiglia E' il veicolo
+   * chiesto ("Golf" → Golf, Golf Variant, Golf Plus su AS24) unire e' esattamente il
+   * punto. Ma quando il chiesto vive DENTRO la famiglia ("Golf GTD" sta nella famiglia
+   * Subito "Golf"), unire rimette in lista tutte le Golf: misurato dal vivo, "Golf GTD"
+   * + versione "Variant" tornava 74|76518|| UNITO a 74|2084||, cioe' 68 Golf Variant
+   * senza GTD — e tutte marcate 'esatto', perche' il codice-modello c'era e nessuno
+   * dichiarava che era stato allargato.
+   *
+   * Il segnale di "famiglia piu' larga" c'e' gia': e' il testo che isola il modello
+   * dentro di essa — quello provato a mano (`testo`) o quello dedotto dal catalogo
+   * (`testoDedotto`). Se c'e' quel testo E abbiamo gia' il codice del modello, il ponte
+   * non ha niente da aggiungere: sarebbe solo rumore piu' largo.
+   */
+  const codiceModello = Boolean(String(params.mmmvAutoscout || '').split('|')[1]);
+  const famigliaPiuLarga = Boolean(params.subitoNodo
+    && (params.subitoNodo.testo || params.subitoNodo.testoDedotto));
+  if (params.subitoNodo && params.subitoNodo.famigliaNome && process.env.AMR_PONTE_AS24 !== '0'
+      && !(codiceModello && famigliaPiuLarga)) {
     const dalPonte = codiciAs24(params.tipo, params.subitoNodo.marcaNome, params.subitoNodo.famigliaNome);
     const uniti = unisciCodici(params.mmmvAutoscout, dalPonte);
     if (uniti.length > 1) {

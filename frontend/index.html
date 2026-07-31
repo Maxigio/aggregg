@@ -100,10 +100,22 @@
         <!-- SEMPRE VISIBILE. Prima compariva solo dopo aver scelto un modello dalla tendina:
              il campo e' testo libero e facoltativo, quindi nascondendolo si nascondeva anche
              il fatto che esistesse, e chi cercava per sola marca non poteva usarlo affatto. -->
-        <div id="versioniRow" style="margin-top:8px">
-          <label class="ver-lab" for="versione">Versione</label>
-          <input type="text" id="versione" autocomplete="off"
-                 class="field-input" placeholder="facoltativa — es. Highline, GTI, S line, ABS" />
+        <div class="riga-libera" id="versioniRow" style="margin-top:8px">
+          <div class="campo-libero">
+            <label class="ver-lab" for="versione">Versione</label>
+            <input type="text" id="versione" autocomplete="off"
+                   class="field-input" placeholder="facoltativa — es. Highline, GTI, S line, ABS" />
+          </div>
+          <!-- La targa NON filtra gli annunci: e' del veicolo che stai valutando, e apre la
+               verifica al Portale dell'Automobilista dentro ADD ON, nella scheda tecnica.
+               Stava nei filtri avanzati, cioe' chiusa: un campo che non filtra, dentro un
+               pannello di filtri, che per vederlo bisogna aprire. Qui e' accanto alla
+               versione — l'altro campo che descrive il veicolo invece di restringere. -->
+          <div class="campo-libero">
+            <label class="ver-lab" for="targaFiltro">Targa <em>(non filtra: apre la verifica)</em></label>
+            <input type="text" id="targaFiltro" class="field-input" placeholder="es. AB123CD"
+                   maxlength="8" autocomplete="off" spellcheck="false" />
+          </div>
         </div>
 
         <button type="button" class="adv-toggle" id="advancedToggle" aria-expanded="false">Filtri avanzati</button>
@@ -116,10 +128,6 @@
           <label class="adv-field"><span>Km max</span><input type="number" id="kmMax" placeholder="100000" min="0" /></label>
           <label class="adv-field"><span>Regione</span><select id="regione"><option value="">Tutta Italia</option></select></label>
           <label class="adv-field"><span>Raggio km (Autoscout)</span><input type="number" id="raggio" placeholder="100" min="1" /></label>
-          <!-- La targa NON filtra gli annunci: e' del veicolo che stai valutando, e apre
-               la verifica al Portale dell'Automobilista dentro ADD ON, nella scheda
-               tecnica. Sta qui perche' e' li' che si scrivono i dati del veicolo. -->
-          <label class="adv-field"><span>Targa <em>(non filtra)</em></span><input type="text" id="targaFiltro" placeholder="es. AB123CD" maxlength="8" autocomplete="off" spellcheck="false" /></label>
         </div>
 
         <!-- Campi modalità RICAMBI: veicolo (auto|moto) + 3 tab con input DEDICATI (valori persistenti) -->

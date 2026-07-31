@@ -90,6 +90,36 @@ function matchModel(models, query) {
   return null;
 }
 
+/** Come `norm`, ma le parole restano separate: qui il confine di parola decide. */
+const aParole = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * MODELLO + ALLESTIMENTO, quando il nome che riceviamo li porta insieme.
+ *
+ * Il nostro catalogo scende all'allestimento ("CLA 200", "Golf GTD"); il catalogo tecnico
+ * tiene il modello ("CLA") e mette il 200 fra le MOTORIZZAZIONI di una generazione —
+ * verificato sulla CLA Coupé C118: "Cla 200 163 Hp mild hybrid 7g dct" e' li'. Chiedendo
+ * "CLA 200" come modello si riceveva `notFound` e il "200" finiva nel cestino: il dato
+ * c'era e non lo si andava a prendere.
+ *
+ * Qui il nome si spezza UNA volta sola contro il vocabolario della fonte stessa: si cerca
+ * il suo modello piu' LUNGO che sia la testa del nome chiesto, a confine di parola, e il
+ * resto diventa l'allestimento da selezionare piu' avanti. Non e' un ripiego dopo un
+ * fallimento: e' il livello giusto a cui chiedere, piu' il pezzo che serve a scegliere.
+ * Il confine di parola e' quello che impedisce a "Classe A" di agganciare "CLA".
+ */
+function testaEAllestimento(models, query) {
+  const q = aParole(query);
+  if (!q) return null;
+  const teste = models
+    .map(m => ({ n: aParole(cleanName(m.name)), m }))
+    .filter(x => x.n && x.n.length >= 2 && q.startsWith(x.n + ' '))
+    .sort((a, b) => b.n.length - a.n.length);
+  if (!teste.length) return null;
+  return { model: teste[0].m, allestimento: q.slice(teste[0].n.length).trim() };
+}
+
 // ── Moto (ultimatespecs) ─────────────────────────────────────────────────────
 // Match modello moto: esatto-normalizzato + varianti (chiave che estende q con un
 // carattere NON numerico → "mt07" pesca mt07/mt07abs/mt07tr, ma non "r1"→"r15").
@@ -372,9 +402,16 @@ async function resolveScheda({ tipo, marca, modello: modelloGrezzo, anno, genSlu
   const candidates = [modello];
   let mm = /^serie\s+(.+)$/i.exec(modello); if (mm) candidates.push(mm[1] + ' Series');
   mm = /^classe\s+(.+)$/i.exec(modello); if (mm) { candidates.push(mm[1] + '-Class'); candidates.push(mm[1] + ' Class'); }
+  const voci = Object.values(brand.models);
   let model = null;
-  for (const q of candidates) { model = matchModel(Object.values(brand.models), q); if (model) break; }
+  for (const q of candidates) { model = matchModel(voci, q); if (model) break; }
   if (model) return await resolveModelPage(brand, model, genSlug);
+  // Il nome porta modello E allestimento insieme ("CLA 200"): si chiede il modello e si
+  // tiene da parte l'allestimento, che serve a scegliere la motorizzazione.
+  for (const q of candidates) {
+    const t = testaEAllestimento(voci, q);
+    if (t) return { ...(await resolveModelPage(brand, t.model, genSlug)), allestimento: t.allestimento };
+  }
   // Fallback: la ricerca interna di auto-data.net risolve le sigle-motore/varianti che NON sono
   // modelli ("318"→trim Serie 3, "CT 200h"→trim Lexus CT). Delego il matching alla fonte, niente liste.
   return (await searchScheda(brand, marca, modello, genSlug)) || { notFound: 'modello' };
@@ -709,6 +746,21 @@ async function schedaPerAnnuncio({ tipo, marca, modello: modelloGrezzo, anno, cv
    * puo' peggiorare — un vincolo puo' solo togliere candidate, e se le toglie tutte non conta.
    */
   const stringi = (v, f) => { const q = v.filter(f); return q.length ? q : v; };
+  /**
+   * L'ALLESTIMENTO che il nome del modello portava con se' ("CLA 200" → "200"), quando il
+   * catalogo tecnico tiene il modello a un livello piu' alto. E' il vincolo piu' preciso
+   * che abbiamo, perche' l'etichetta lo scrive per esteso ("Cla 200 163 Hp mild hybrid"):
+   * senza, la CLA 200 restava indistinguibile dalla 180 e dalla 220 e la scheda non si
+   * preselezionava mai. Vale a parole intere, e come tutti gli altri si ignora se svuota.
+   */
+  const allest = (base.allestimento || '').trim();
+  if (allest) {
+    const parole = allest.split(' ').filter(Boolean);
+    vive = stringi(vive, m => {
+      const et = aParole(m.label);
+      return parole.every(p => new RegExp('(^| )' + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '( |$)').test(et));
+    });
+  }
   // La cilindrata: dal campo nativo (Autoscout la manda in cm³) o dal testo della versione.
   const cc = (Number(cilindrata) > 300 ? Math.round(Number(cilindrata) / 100) / 10 : null)
     || litri(variante) || litri(titolo);

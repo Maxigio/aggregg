@@ -1168,7 +1168,14 @@ section.search.area-attiva #searchForm { min-height: 0; }
    Un campo solo, a testo libero: le tre colonne per catalogo promettevano una
    corrispondenza fra fonti che non esiste. */
 .ver-lab { display: block; font-size: 0.78rem; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; }
+.ver-lab em { font-style: normal; opacity: 0.75; }
+/* Versione e targa in riga: i due campi che DESCRIVONO il veicolo, non quelli che
+   restringono la ricerca. Su schermo stretto si impilano da soli. */
+.riga-libera { display: flex; flex-wrap: wrap; gap: 12px; }
+.campo-libero { flex: 1 1 260px; min-width: 0; }
+.campo-libero .field-input { width: 100%; }
 #versione { max-width: 420px; }
+#targaFiltro { max-width: 220px; text-transform: uppercase; }
 
 /* ── Scheda del ricambio dalla fonte OE, dentro la ricerca ricambi ────────────
    I codici stanno RAGGRUPPATI per costruttore: in piano erano trentuno pastiglie in

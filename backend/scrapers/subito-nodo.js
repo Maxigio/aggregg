@@ -139,7 +139,36 @@ function risolviNodo(tipo, marca, modello, opts = {}) {
   // l'utente ha chiesto senza dirglielo. Si portano tutte e chi interroga lo dichiara.
   if (cercato.length >= 3) {
     const pref = fam.filter(f => { const n = norm(f.nome); return n.length >= 3 && (n.startsWith(cercato) || cercato.startsWith(n)); });
-    if (pref.length) return { ...perFamiglie(pref), come: pref.length > 1 ? 'prefisso (' + pref.length + ' famiglie)' : 'prefisso' };
+    if (pref.length) {
+      const n = { ...perFamiglie(pref), come: pref.length > 1 ? 'prefisso (' + pref.length + ' famiglie)' : 'prefisso' };
+      /**
+       * QUELLO CHE RESTA DEL NOME, tolta la famiglia — e che senza questo si perdeva.
+       *
+       * Il nostro catalogo scende all'allestimento ("CLA 200", "Golf GTD", "DS 3
+       * Crossback"), quello di Subito si ferma alla famiglia ("CLA", "Golf", "DS 3"):
+       * cercando una CLA 200 partiva l'id della famiglia e basta, e tornavano tutte le
+       * CLA — 180, 220, 250, 45 AMG. Misurato sul catalogo: 237 modelli auto sono piu'
+       * stretti della loro famiglia Subito, e il ponte scritto a mano ne copriva 6.
+       *
+       * Il resto va SOLO alla fonte, dentro `q`: e' un campo diverso da `testo`, che
+       * invece e' provato a mano e vale anche per la marcatura. Qui non si marca e non
+       * si scarta niente — si chiede a Subito di restringere, e quello che risponde si
+       * mostra. Due caratteri minimo: "Fiat 500C" meno "500" fa "c", che non distingue
+       * niente e allargherebbe il rumore invece di ridurlo.
+       */
+      if (pref.length === 1) {
+        // Il `norm` condiviso INCOLLA tutto ("CLA 45 AMG" → "cla45amg"), e tagliandolo li'
+        // il resto usciva "45amg", che in nessun titolo esiste. Qui serve una
+        // normalizzazione che tenga le parole separate, e il confine di parola va preteso:
+        // cosi' "Fiat 500C" non produce "c" (non e' "500 C", e' un nome attaccato).
+        const spazi = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+          .replace(/[^a-z0-9]+/g, ' ').trim();
+        const mo = spazi(modello), fa = spazi(pref[0].nome);
+        const resto = mo.startsWith(fa + ' ') ? mo.slice(fa.length).trim() : '';
+        if (resto.length >= 2) n.testoDedotto = resto;
+      }
+      return n;
+    }
     const hg = makeModelResolver(gen.map(x => ({ name: x.g.nome, value: x })))(modello);
     if (hg) return perGenerazione(hg);
   }

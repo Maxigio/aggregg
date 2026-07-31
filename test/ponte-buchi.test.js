@@ -40,20 +40,27 @@ test('il testo va alla fonte insieme agli id', () => {
   assert.match(p, /[?&]q=gti/);
 });
 
-test('col testo si tiene solo chi lo dichiara davvero', () => {
+/**
+ * IL TESTO MARCA, NON SCARTA. Prima l'annuncio la cui versione dichiarata non diceva il
+ * testo spariva: cercando "Golf GTD" una GTD Variant che dichiara "Variant" veniva buttata
+ * via — era proprio quella cercata — e chi guardava non poteva accorgersene, perche' un
+ * annuncio tolto non lascia traccia. Ora resta in lista marcato, come gia' fanno Autoscout
+ * e Moto.it: marcare e' informazione, nascondere e' decidere al posto di chi guarda.
+ */
+test('col testo, chi non lo dichiara resta in lista MARCATO (non si butta)', () => {
   const nodo = agganciaSubito('auto', 'Volkswagen', 'Golf GTI');
   const M = ['000101', 'Volkswagen'], F = [nodo.famigliaIds[0], 'Golf'];
   assert.equal(_riconosci(ann(M, F, ['00123', 'Golf 2.0 TSI GTI']), nodo, {}), 'esatto');
-  assert.equal(_riconosci(ann(M, F, ['00124', 'Golf 1.6 TDI Comfortline']), nodo, {}), null);
+  assert.equal(_riconosci(ann(M, F, ['00124', 'Golf 1.6 TDI Comfortline']), nodo, {}), 'altro-modello');
   // Non dichiarata: RESTA marcata — `q` alla fonte le ha gia' letto il titolo, ed e'
   // spesso l'annuncio compilato male, cioe' dove sta l'affare.
   assert.equal(_riconosci(ann(M, F, ['000000', 'Altro allestimento']), nodo, {}), 'senza-versione');
 });
 
-test('parola intera e nell\'ordine scritto', () => {
+test('parola intera e nell\'ordine scritto: cambia l\'ETICHETTA, non la presenza', () => {
   const nodo = agganciaSubito('auto', 'Mini', 'Cooper S');
   const M = [nodo.marcaId, 'Mini'], F = [nodo.famigliaIds[0], 'Mini'];
   assert.equal(_riconosci(ann(M, F, ['1', 'Mini 2.0 Cooper S']), nodo, {}), 'esatto');
-  assert.equal(_riconosci(ann(M, F, ['2', 'Mini Cooper D Business']), nodo, {}), null);   // non "Cooper S"
-  assert.equal(_riconosci(ann(M, F, ['3', 'Mini Cooper SE Yours']), nodo, {}), null);     // "SE" non e' "S"
+  assert.equal(_riconosci(ann(M, F, ['2', 'Mini Cooper D Business']), nodo, {}), 'altro-modello');   // non "Cooper S"
+  assert.equal(_riconosci(ann(M, F, ['3', 'Mini Cooper SE Yours']), nodo, {}), 'altro-modello');     // "SE" non e' "S"
 });

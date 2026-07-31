@@ -5275,11 +5275,14 @@ document.getElementById('competitorPanel')?.addEventListener('click', e => {
 /**
  * Classe ambientale, CO2 e ultima revisione dal Portale dell'Automobilista.
  *
- * DOVE STA, e non e' un caso. La targa si scrive nei FILTRI AVANZATI insieme agli altri
- * dati del veicolo, ma NON filtra gli annunci: e' del mezzo che stai valutando, non di
- * quelli in vendita. Il risultato compare in ADD ON, dentro la scheda tecnica, accanto
- * alle altre integrazioni esterne — perche' e' esattamente quello: un dato che viene da
- * fuori e costa una richiesta.
+ * DOVE STA, e non e' un caso. La targa si scrive ACCANTO ALLA VERSIONE, in chiaro nella
+ * barra di ricerca. Stava nei filtri avanzati — cioe' in un pannello chiuso, insieme ai
+ * campi che restringono — ed era la posizione sbagliata due volte: la targa NON filtra
+ * niente (e' del mezzo che stai valutando, non di quelli in vendita) e sepolta li' non la
+ * trovava nessuno. Versione e targa sono i due campi che DESCRIVONO il veicolo: stanno
+ * insieme, sempre visibili. Il risultato compare in ADD ON, dentro la scheda tecnica,
+ * accanto alle altre integrazioni esterne — perche' e' esattamente quello: un dato che
+ * viene da fuori e costa una richiesta.
  *
  * IL CAPTCHA LO RISOLVI TU. L'immagine e' quella del portale, arriva qui dentro e la
  * leggi tu: nessun tentativo di indovinarla. Il server tiene la sessione e rimanda i
@@ -5314,7 +5317,7 @@ async function tgVerifica() {
   const el = id => document.getElementById(id);
   const captcha = ((el('tgCaptcha') || {}).value || '').trim();
   tgTipoScelto = (el('tgTipo') || {}).value || 'A';
-  if (!targaCercata) { toast('Scrivi la targa nei filtri avanzati'); return; }
+  if (!targaCercata) { toast('Scrivi la targa nel campo accanto alla versione, poi riapri la scheda'); return; }
   if (!captcha) { toast('Scrivi i caratteri dell\'immagine'); return; }
   tgOccupato = true; tgEsito = null; renderVehBody();
   try {

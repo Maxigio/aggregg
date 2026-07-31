@@ -154,3 +154,31 @@ test('legge anche il pack /car (auto), non solo /bike', () => {
   const l = livelliAnnuncio({ features: { 0: { uri: '/car', values: [{ key: '000083', value: 'ALFA ROMEO', label: 'Marca' }] } } });
   assert.equal(l.marca.id, '000083');
 });
+
+/**
+ * IL RESTO DEL NOME, tolta la famiglia — e senza il quale la ricerca si allargava sola.
+ *
+ * Il nostro catalogo scende all'allestimento ("CLA 200", "Golf GTD"), quello di Subito si
+ * ferma alla famiglia ("CLA", "Golf"): partiva l'id della famiglia e basta, e cercando una
+ * CLA 200 tornavano tutte le CLA. Misurato: 272 modelli auto sono piu' stretti della loro
+ * famiglia Subito e il ponte scritto a mano ne copriva 6; ora 195 restringono da soli.
+ */
+const { risolviNodo: rn } = require('../backend/scrapers/subito-nodo');
+
+test('testoDedotto: quello che resta del nome dopo la famiglia', () => {
+  assert.strictEqual(rn('auto', 'Mercedes-Benz', 'CLA 200').testoDedotto, '200');
+  assert.strictEqual(rn('auto', 'DS Automobiles', 'DS 3 Crossback').testoDedotto, 'crossback');
+  assert.strictEqual(rn('auto', 'Abarth', '595 Competizione').testoDedotto, 'competizione');
+  // Le parole restano SEPARATE: la normalizzazione condivisa incolla tutto ("cla45amg") e
+  // un testo cosi' non compare in nessun titolo. Questo e' il caso che l'ha scoperto.
+  assert.strictEqual(rn('auto', 'Mercedes-Benz', 'CLA 45 AMG').testoDedotto, '45 amg');
+});
+
+test('testoDedotto: si pretende il confine di parola, e niente resti minuscoli', () => {
+  // "500C" non e' "500 C": e' un nome attaccato, e "c" non distinguerebbe niente.
+  assert.strictEqual(rn('auto', 'Fiat', '500C').testoDedotto, undefined);
+  assert.strictEqual(rn('auto', 'Aston Martin', 'DB9').testoDedotto, undefined);
+  // La famiglia cercata per intero non ha nessun resto da aggiungere.
+  assert.strictEqual(rn('auto', 'Mercedes-Benz', 'CLA').testoDedotto, undefined);
+  assert.strictEqual(rn('auto', 'Volkswagen', 'Golf').testoDedotto, undefined);
+});
