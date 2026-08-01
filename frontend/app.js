@@ -1111,32 +1111,16 @@ function rcSortArts(arts) {
   else arr.sort((a, b) => cmpNum(a, b, x => (typeof x.prezzo === 'number' ? x.prezzo : null)));   // prezzo default
   return arr;
 }
-const rcMedian = nums => { if (!nums.length) return null; const s = [...nums].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
-function rcStats(arts) {
-  const prices = arts.map(a => a.prezzo).filter(n => typeof n === 'number');
-  if (!prices.length) return null;
-  return { n: prices.length, min: Math.min(...prices), max: Math.max(...prices), mediana: rcMedian(prices) };
-}
+// `rcMedian` e `rcStats` (min/max/mediana sui ricambi) sono state tolte con la striscia in
+// toolbar: nessuno le chiamava piu', e lasciarle in giro e' un invito a rimettere quei numeri
+// da qualche altra parte.
 function rcBestKey(arts) {   // rcKey del più economico visibile (badge "più economico")
   let best = null;
   for (const a of arts) if (typeof a.prezzo === 'number' && (!best || a.prezzo < best.prezzo)) best = a;
   return best ? rcKey(best) : null;
 }
-// P4: click su min/max in toolbar → scroll + flash sull'annuncio di riferimento (apre il gruppo se collassato)
-function rcJumpToStat(which) {
-  const arts = rcVisibleArts().filter(a => typeof a.prezzo === 'number');
-  if (!arts.length) return;
-  const target = arts.reduce((m, a) => (which === 'max' ? (a.prezzo > m.prezzo ? a : m) : (a.prezzo < m.prezzo ? a : m)));
-  const key = rcKey(target);
-  const panel = document.getElementById('ricambiPanel');
-  const sel = `.rc-item[data-rk="${CSS.escape(key)}"]`;
-  let el = panel.querySelector(sel);
-  const group = el && el.closest('.rc-group');
-  if (group && group.classList.contains('collapsed')) { group.classList.remove('collapsed'); rcCollapsed.delete(group.dataset.gkey); el = panel.querySelector(sel); }
-  if (!el) return;
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  el.classList.add('rc-flash'); setTimeout(() => el && el.classList.remove('rc-flash'), 1500);
-}
+// `rcJumpToStat` (salto all'articolo piu' economico / piu' caro dalla toolbar) e' sparita
+// insieme ai due bottoni min/max che la chiamavano.
 
 /**
  * LA SCHEDA DEL PEZZO, accanto alla ricerca per codice originale.
@@ -1609,14 +1593,11 @@ function renderRicambiPanel() {
 // Toolbar rispecchiata su quella auto/moto (.results-toolbar a sezioni .tb-group / .tb-sep).
 function rcToolbarHTML() {
   const list = rcVisibleArts();
-  const finals = list.map(a => { const pr = rPricing(a.prezzo); return pr ? pr.finale : null; }).filter(n => typeof n === 'number');
-  // Solo min/max (intervallo verificabile, come nella ricerca veicoli): niente mediana.
-  // Il campione è la pesca troncata delle fonti, quindi una "media" sarebbe fuorviante.
-  const stats = finals.length ? { n: finals.length, min: Math.min(...finals), max: Math.max(...finals) } : null;
-  // sez.1 — conteggio + statistiche prezzo (min/max cliccabili → annuncio di riferimento)
-  const statJump = (which, val) => `<button type="button" class="tb-stat rc-stat-jump" data-which="${which}" title="Vai all'annuncio ${which === 'min' ? 'più economico' : 'più caro'}"><span class="tb-stat-label">${which}</span><b>${rcEur(val)}</b></button>`;
-  const statsHTML = `<span class="tb-count">${list.length} ricambi</span>` + (stats
-    ? `${statJump('min', stats.min)}${statJump('max', stats.max)}` : '');
+  // NIENTE min/max. Il campione mette insieme cose che non si confrontano — un catalogo di
+  // ricambi nuovi, annunci usati e offerte eBay — quindi un intervallo aggregato descrive un
+  // mercato che non esiste. Il piu' economico si trova ordinando la colonna Prezzo, che e'
+  // un'operazione che si vede, non un numero da credere.
+  const statsHTML = `<span class="tb-count">${list.length} ricambi</span>`;
   // sez.2 — raggruppa (facet-chips, "Fonte" è QUI)
   const facets = RC_GROUP_DIMS.map(([dim, lab]) => `<button type="button" class="facet-chip${rcGroupDim === dim ? ' active' : ''}" data-dim="${dim}">${escapeHtml(lab)}</button>`).join('');
   // sez.3 — colonne (dropdown come auto) + salva ricerca + export
@@ -1703,28 +1684,54 @@ function exportCsvRicambi() {
 
 function exportPdfRicambi() {
   const arts = rcCurrentList(); if (!arts.length) { showError('Niente da esportare.'); return; }
-  if (!window.jspdf || !window.jspdf.jsPDF) { showError('Export PDF non disponibile (libreria non caricata).'); return; }
-  try {
-  const { jsPDF } = window.jspdf; const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const pageW = doc.internal.pageSize.getWidth();
-  doc.setFillColor(20, 24, 31); doc.rect(0, 0, pageW, 20, 'F');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(255, 255, 255); doc.text('AUTO MOTO RADAR — Ricambi', 14, 12);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(170, 185, 210);
+  /**
+   * Anche questo documento lo disegna il server, con lo STESSO layout del PDF veicoli.
+   * Qui c'era la quarta copia dello stesso foglio — header, tabella, pastiglia fonte — e si
+   * vedeva: banda alta 20mm invece di 24, niente logo, niente piede numerato, caratteri di un
+   * altro corpo. "Allineato" non si ottiene ricopiando meglio, si ottiene smettendo di copiare.
+   */
   const meta = rcData || {};
-  doc.text(`${[meta.tipoPezzo, meta.veicoli].filter(Boolean).join(' · ').slice(0, 110)}  ·  ${meta.oen || ''}`, 14, 17);
-  const rcCfg = priceCfgR, rcExtraH = priceExtraHeaders(rcCfg);
-  doc.autoTable({
-    startY: 26,
-    head: [['Fonte', 'Ricambio', 'Marca', 'Prezzo', 'Venditore', ...rcExtraH]],
-    body: arts.map(a => { const pr = rPricing(a.prezzo); return [RC_FONTE[a.fonte] || a.fonte, a.nome, a.marca || '—', pr ? rcEur(pr.finale) : rcPriceText(a), a.venditore || '—', ...priceExtraValues(pr, rcCfg).map(x => x === '' ? '—' : rcEur(x))]; }),
-    styles: { font: 'helvetica', fontSize: 8, cellPadding: 2, overflow: 'ellipsize' },
-    headStyles: { fillColor: [20, 24, 31], textColor: [255, 255, 255], fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [247, 248, 250] },
-    columnStyles: Object.assign({ 0: { cellWidth: 22 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 30 }, 3: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }, 4: { cellWidth: 40 } }, ...rcExtraH.map((_, i) => ({ [5 + i]: { cellWidth: 26, halign: 'right' } }))),
-    margin: { left: 14, right: 14 },
+  const cfg = priceCfgR;
+  const extraH = priceExtraHeaders(cfg);
+  const conConti = extraH.length > 0;
+  const colonne = ['Fonte', 'Ricambio', 'Marca', conConti ? 'Prezzo finale' : 'Prezzo', 'Venditore', ...extraH];
+  const righe = arts.map(a => {
+    const pr = rPricing(a.prezzo);
+    return [' ', a.nome || '\u2014', a.marca || '\u2014', pr ? rcEur(pr.finale) : rcPriceText(a), a.venditore || '\u2014',
+      ...priceExtraValues(pr, cfg).map(x => x === '' ? '\u2014' : rcEur(x))];
   });
-  doc.save(`ricambi-${meta.oen || 'export'}-${new Date().toISOString().slice(0, 10)}.pdf`);
-  } catch (e) { console.error('[ricambi pdf]', e); showError('Export PDF non riuscito.'); }
+  const colonneStile = Object.assign(
+    { 0: { halign: 'center', cellWidth: 24 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 34 },
+      3: { halign: 'right', cellWidth: 30, fontStyle: 'bold', textColor: [31, 111, 235] }, 4: { cellWidth: 44 } },
+    ...extraH.map((_, i) => ({ [5 + i]: { cellWidth: 26, halign: 'right' } })));
+  const nome = `ricambi-${String(meta.oen || 'export').toLowerCase().replace(/[^a-z0-9]/g, '')}-${new Date().toISOString().slice(0, 10)}.pdf`;
+  scaricaPdf({
+    titolo: 'AUTO MOTO RADAR \u2014 Ricambi',
+    sottotitolo: [[meta.tipoPezzo, meta.veicoli].filter(Boolean).join(' \u00b7 '), meta.oen ? 'OE/OEM ' + meta.oen : null].filter(Boolean).join('   \u00b7   '),
+    contatore: arts.length + (arts.length === 1 ? ' ricambio' : ' ricambi'),
+    colonne, righe, colonneStile,
+    fonti: arts.map(a => a.fonte),
+    nome,
+  });
+}
+
+/**
+ * L'unica porta verso il PDF: compone la richiesta, riceve il documento e lo scarica.
+ * Sta qui perche' i due bottoni (veicoli e ricambi) facevano ognuno il suo download a mano.
+ */
+function scaricaPdf(payload) {
+  fetch('/api/report-pdf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).then(r => (r.ok ? r.blob() : Promise.reject(new Error('HTTP ' + r.status))))
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement('a'), { href: url, download: payload.nome || 'automotoradar.pdf' });
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    })
+    .catch(e => { console.error('[pdf]', e); showError('PDF non generato: ' + e.message); });
 }
 
 // 3 input DEDICATI (uno per modo, valore persistente al cambio tab) + selettore veicolo.
@@ -1805,7 +1812,6 @@ function setRcVeicolo(v) {
     // ordinamento via header colonna (mirror .gh-sort auto)
     const gs = t.closest('.gh-sort'); if (gs) { const k = gs.dataset.rckey; if (rcSortState.key === k) rcSortState.dir = rcSortState.dir === 'asc' ? 'desc' : 'asc'; else rcSortState = { key: k, dir: k === 'stelle' ? 'desc' : 'asc' }; renderRicambiPanel(); return; }
     // prezzo min/max in toolbar → vai all'annuncio di riferimento
-    const sj = t.closest('.rc-stat-jump'); if (sj) { rcJumpToStat(sj.dataset.which); return; }
     // collapse gruppo: toggle diretto (niente re-render → no scroll jump); rcCollapsed persiste
     const gh = t.closest('.rc-group-head'); if (gh) { const g = gh.closest('.rc-group');
       if (gh.classList.contains('rc-sched-head')) { g.classList.toggle('collapsed'); rcSchedaCollapsed = g.classList.contains('collapsed'); return; }
@@ -2348,6 +2354,27 @@ const DICHIARAZIONE = {
   'versione-non-verificata': { et: 'versione non verificata', cl: 'med', tit: 'Il modello e\' quello giusto, ma su questa fonte la versione che hai scelto non si e\' potuta confrontare: potrebbe essere un altro allestimento.' },
 };
 
+/**
+ * LA PASTIGLIA DELLA CORRISPONDENZA, in un posto solo.
+ *
+ * Stava dentro `rowHTML`, quindi la vista a schede — che dal commit 853ce47 e' quella
+ * PREDEFINITA — mostrava i titoli nudi: un annuncio di un altro modello arrivava a schermo
+ * senza nessun segnale, proprio dove si guarda. Ogni vista nuova ripartirebbe cieca allo
+ * stesso modo finche' la regola vive dentro una funzione di disegno.
+ *
+ * La regola resta quella decisa a suo tempo: sulla riga (e sulla scheda) solo i casi in cui
+ * il VEICOLO potrebbe non essere quello cercato — "altro modello", "da verificare" — perche'
+ * sono rari e cambiano cosa stai guardando; la versione mancante capita di continuo e una
+ * chip su una riga su due non segnala piu' niente, quindi si legge nel pannello dell'annuncio
+ * (`detailSpecsHTML` → riga "Corrispondenza"). Nel PDF e nel CSV, dove c'e' una colonna
+ * apposta e nessun ingombro, compaiono tutte.
+ */
+function dichBadgeHTML(item) {
+  const dich = DICHIARAZIONE[item.dichiarazione];
+  if (!dich || /versione/.test(item.dichiarazione || '')) return '';
+  return `<span class="dich-badge dich-${dich.cl}" title="${escapeHtml(dich.tit)}">${escapeHtml(dich.et)}</span>`;
+}
+
 function rowHTML(item, bestSet) {
   const pr = vPricing(item.prezzo, passDi(item));
   // "su richiesta" non e' "n/d": il venditore il prezzo ce l'ha, ha scelto di non scriverlo.
@@ -2382,9 +2409,7 @@ function rowHTML(item, bestSet) {
   // La versione mancante invece capita di continuo, e una chip su una riga su due e' un
   // ingombro che non segnala piu' niente: quella si legge aprendo l'annuncio, insieme a
   // tutti gli altri dati (`detailSpecsHTML` → riga "Corrispondenza").
-  const dich = DICHIARAZIONE[item.dichiarazione];
-  const dichInRiga = dich && !/versione/.test(item.dichiarazione || '');   // 'senza-versione' e 'versione-non-verificata'
-  const dichBadge = dichInRiga ? `<span class="dich-badge dich-${dich.cl}" title="${escapeHtml(dich.tit)}">${escapeHtml(dich.et)}</span>` : '';
+  const dichBadge = dichBadgeHTML(item);
   const sub = [item.provincia ? escapeHtml(item.provincia) : '', vendBadge].filter(Boolean).join(' ');
   const ggV = giorniInVendita(item);
   const subM = [item.anno || null, item.km != null ? `${item.km.toLocaleString('it-IT')} km` : null, item.carburante || null, item.potenzaCv != null ? `${item.potenzaCv} CV` : null, ggV != null ? `in vendita da ${ggV} gg` : null, fonteLabel].filter(Boolean).join(' · ');
@@ -2465,7 +2490,7 @@ function cardHTML(item, bestSet) {
   return `<article class="ann-card${bestSet && bestSet.has(item.url) ? ' best' : ''}${inConfronto ? ' selected' : ''}" data-url="${urlSafe}">
       <div class="ann-foto">${foto}</div>
       <div class="ann-corpo">
-        <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}</div>
+        <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}${dichBadgeHTML(item)}</div>
         ${item.variante ? `<div class="ann-variante">${escapeHtml(item.variante)}</div>` : ''}
         <div class="ann-meta">${escapeHtml(meta) || '&nbsp;'}</div>
         <div class="ann-riga">
@@ -3208,6 +3233,14 @@ function renderSourceStatus() {
   const as = lastSources.autoscout;
   if (as && as.allargato && as.reason) {
     fonteBreakdown.innerHTML += `<span class="src-avviso">${escapeHtml(as.reason)}</span>`;
+  }
+  // Le parole della versione che Moto.it non conosce vengono ignorate di proposito — un filtro
+  // che svuoterebbe l'insieme si scarta — ma finora quel "di proposito" restava in un log del
+  // server: a schermo la colonna Moto.it si presentava filtrata come le altre.
+  const mo = lastSources.moto;
+  if (mo && mo.versioneIgnorata && mo.versioneIgnorata.length) {
+    const p = mo.versioneIgnorata;
+    fonteBreakdown.innerHTML += `<span class="src-avviso">Moto.it non ha ${p.length === 1 ? 'la parola' : 'le parole'} “${escapeHtml(p.join('”, “'))}” nel suo catalogo versioni: quella parte del filtro non è stata applicata.</span>`;
   }
   // Il filtro km di Subito e' a fasce, non a numero, su ENTRAMBI i lati: chiedendo un massimo di
   // 200.000 arrivano annunci fino a 249.999, chiedendone un minimo di 22.000 arrivano da 20.000.
@@ -4929,8 +4962,15 @@ function exportCsv(results) {
   const cell = csvCell;
   const cfg = priceCfgV;
   const conPass = results.some(r => passDi(r) != null);
-  const cols = ['Fonte', 'Titolo', 'Prezzo (€)', 'Anno', 'KM', 'Carburante', 'Provincia', ...priceExtraHeaders(cfg, conPass), 'URL'];
-  const rows = results.map(r => { const pr = vPricing(r.prezzo, passDi(r)); return [r.fonte, r.titolo, pr ? Math.round(pr.finale) : '', r.anno != null ? r.anno : '', r.km != null ? r.km : '', r.carburante || '', r.provincia || '', ...priceExtraValues(pr, cfg, conPass), r.url].map(cell).join(','); });
+  // "Corrispondenza": senza, un CSV aperto in foglio di calcolo mette sulla stessa riga un
+  // annuncio del modello cercato e uno di un altro modello, e chi ci costruisce sopra un
+  // conto non ha modo di accorgersene. Qui non c'e' ingombro: e' una colonna in fondo.
+  const cols = ['Fonte', 'Titolo', 'Prezzo (€)', 'Anno', 'KM', 'Carburante', 'Provincia', ...priceExtraHeaders(cfg, conPass), 'Corrispondenza', 'URL'];
+  const rows = results.map(r => {
+    const pr = vPricing(r.prezzo, passDi(r));
+    const d = DICHIARAZIONE[r.dichiarazione];
+    return [r.fonte, r.titolo, pr ? Math.round(pr.finale) : '', r.anno != null ? r.anno : '', r.km != null ? r.km : '', r.carburante || '', r.provincia || '', ...priceExtraValues(pr, cfg, conPass), d ? d.et : 'corrisponde', r.url].map(cell).join(',');
+  });
   const csv = [cols.join(','), ...rows].join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -4939,111 +4979,50 @@ function exportCsv(results) {
 }
 
 // ─── Export PDF ───────────────────────────────────────────────────────────────
-// PDF "scheda tecnica": header scuro full-width + criteri + striscia metriche
-// inline + tabella pulita con chip-fonte. (Niente Top5/riepilogo — rimossi.)
 function exportPdf(results) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const today = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
-  const dateFilename = new Date().toISOString().slice(0, 10);
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-
-  const INK = [20, 24, 31], ACCENT = [31, 111, 235], SLATE = [91, 100, 114];
-  const LINE = [210, 216, 222], WHITE = [255, 255, 255], ZEBRA = [247, 248, 250];
-  const fmtEur = n => '€ ' + n.toLocaleString('it-IT');
-  const FONTE_LABEL_PDF = { subito: 'Subito.it', autoscout: 'Autoscout24', moto: 'Moto.it' };
-  const FONTE_COLORS = { subito: { fill: [231, 240, 253], text: [19, 87, 196] }, autoscout: { fill: [250, 240, 213], text: [138, 97, 0] }, moto: { fill: [225, 243, 232], text: [17, 122, 55] } };
-
-  // ── Header band scura full-width
-  doc.setFillColor(...INK); doc.rect(0, 0, pageW, 24, 'F');
-  doc.setFillColor(...ACCENT); doc.rect(14, 8, 7, 7, 'F');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...WHITE); doc.text('AUTO MOTO RADAR', 25, 13.5);
-  const _p = lastSearchParams || {};
-  const crit = [
-    [_p.marca, _p.modello].filter(Boolean).join(' '),
-    _p.regione ? _p.regione.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Tutta Italia',
-    (_p.prezzoMin || _p.prezzoMax) ? `prezzo ${_p.prezzoMin || 0}-${_p.prezzoMax || 'max'}` : null,
-    (_p.annoMin || _p.annoMax) ? `anni ${_p.annoMin || ''}-${_p.annoMax || ''}` : null,
-    (_p.kmMin || _p.kmMax) ? `km ${_p.kmMin || 0}-${_p.kmMax || 'max'}` : null,
-  ].filter(Boolean).join('   ·   ');
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(170, 185, 210);
-  doc.text((crit + '   ·   ' + today).slice(0, 150), 25, 19);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...WHITE); doc.text(results.length + ' annunci', pageW - 14, 14, { align: 'right' });
-
-  // ── Striscia metriche inline (sui prezzi finali: base + commissione − spese)
+  /**
+   * IL DISEGNO LO FA IL SERVER, non questa funzione.
+   *
+   * Qui c'erano centoventi righe che ridisegnavano lo stesso documento di
+   * `backend/report-pdf.js`: due implementazioni dello stesso PDF, gia' divergenti (questa
+   * aveva le colonne dei prezzi finali e una striscia di metriche calcolata su valori
+   * diversi). Restava solo da aspettare che una correzione toccasse una sola delle due.
+   *
+   * Quello che il server NON puo' sapere sono i prezzi finali — commissione, spese, margine,
+   * passaggio e IVA vivono nelle preferenze del browser — quindi le righe si compongono qui e
+   * si spediscono gia' fatte. La marcatura di corrispondenza viaggia con loro: e' il motivo
+   * per cui prima nel PDF una riga "altro modello" e una giusta erano identiche.
+   */
   const cfg = priceCfgV;
-  const prices = results.map(r => vPricing(r.prezzo)).filter(p => p && p.finale > 0).map(p => p.finale).sort((a, b) => a - b);
-  const mid = prices.length / 2;
-  const metrics = [
-    ['MIN', prices.length ? fmtEur(prices[0]) : '—'],
-    ['MEDIANA', prices.length ? fmtEur(prices.length % 2 === 0 ? Math.round((prices[mid - 1] + prices[mid]) / 2) : prices[Math.floor(mid)]) : '—'],
-    ['MEDIA', prices.length ? fmtEur(Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)) : '—'],
-    ['MAX', prices.length ? fmtEur(prices[prices.length - 1]) : '—'],
-    ['CON PREZZO', `${prices.length}/${results.length}`],
-  ];
-  const stripY = 31, colW = (pageW - 28) / metrics.length;
-  metrics.forEach(([label, val], i) => {
-    const x = 14 + i * colW;
-    if (i > 0) { doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(x, stripY - 1, x, stripY + 7); }
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...SLATE); doc.text(label, x + 4, stripY + 1.5);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK); doc.text(String(val), x + 4, stripY + 7);
-  });
-
-  // ── Nota adjustment + tabella pulita + chip fonte
   const conPass = results.some(r => passDi(r) != null);
   const extraH = priceExtraHeaders(cfg, conPass);
-  const tableBody = results.map(r => { const pr = vPricing(r.prezzo, passDi(r)); return [FONTE_LABEL_PDF[r.fonte] || r.fonte, r.titolo, pr ? fmtEur(Math.round(pr.finale)) : '—', r.anno != null ? String(r.anno) : '—', r.km != null ? r.km.toLocaleString('it-IT') + ' km' : '—', r.carburante || '—', r.provincia || '—', ...priceExtraValues(pr, cfg, conPass).map(x => x === '' ? '—' : fmtEur(x))]; });
-  // La legenda si decide sui `bits`, non su priceAdjActive: con il solo passaggio impostato e
-  // margine 0 quest'ultimo e' vero ma non c'e' niente da elencare, e usciva "Prezzi finali · "
-  // monca. Il passaggio entra in legenda quando conta davvero, cioe' quando alimenta la
-  // colonna "Margine netto (€)": senza, il PDF sottrae un costo che non dichiara da nessuna parte.
-  const bits = [];
-  if (cfg.comm) bits.push(`Commissione +${cfg.comm}${cfg.commUnit === 'pct' ? '%' : ' €'}`);
-  if (cfg.spese) bits.push(`Spese −${cfg.spese} €`);
-  if (cfg.margine) bits.push(`Margine ${cfg.margine}%`);
-  // Stessa condizione della colonna "Margine netto", non una piu' stretta: il passaggio puo'
-  // arrivare per riga da /api/passaggio anche col campo del menu vuoto, e in quel caso il PDF
-  // sottraeva un costo senza dichiararlo da nessuna parte.
-  if (cfg.margine && (cfg.passaggio || conPass)) {
-    bits.push(cfg.passaggio ? `Passaggio −${cfg.passaggio} €` : 'Passaggio calcolato per annuncio');
-  }
-  if (cfg.iva) bits.push('IVA 22% scorporata');
-  if (bits.length) {
-    doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(...SLATE);
-    doc.text('Prezzi finali · ' + bits.join(' · '), 14, stripY + 11);
-  }
-  doc.autoTable({
-    startY: stripY + (bits.length ? 15 : 12),
-    head: [['Fonte', 'Veicolo', 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia', ...extraH]],
-    body: tableBody,
-    theme: 'plain',
-    styles: { font: 'helvetica', fontSize: 7.5, cellPadding: { top: 2.6, right: 3, bottom: 2.6, left: 3 }, valign: 'middle', overflow: 'ellipsize' },
-    headStyles: { fillColor: INK, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
-    alternateRowStyles: { fillColor: ZEBRA },
-    columnStyles: Object.assign({ 0: { halign: 'center', cellWidth: 24 }, 1: { cellWidth: 'auto' }, 2: { halign: 'right', cellWidth: 26, fontStyle: 'bold', textColor: ACCENT }, 3: { halign: 'center', cellWidth: 14 }, 4: { halign: 'right', cellWidth: 24 }, 5: { halign: 'center', cellWidth: 24 }, 6: { halign: 'center', cellWidth: 24 } }, ...extraH.map((_, i) => ({ [7 + i]: { halign: 'right', cellWidth: 22 } }))),
-    didParseCell(data) { if (data.section === 'body' && data.column.index === 0) data.cell.text = [' ']; },   // chip disegnato a mano
-    didDrawCell(data) {
-      if (data.section !== 'body' || data.column.index !== 0) return;
-      const fonte = results[data.row.index]?.fonte; const colors = FONTE_COLORS[fonte]; if (!colors) return;
-      const cw = data.cell.width - 4, ch = 5, cx = data.cell.x + 2, cy = data.cell.y + (data.cell.height - ch) / 2;
-      doc.setFillColor(...colors.fill); doc.roundedRect(cx, cy, cw, ch, 1, 1, 'F');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(...colors.text);
-      doc.text(FONTE_LABEL_PDF[fonte] || fonte, cx + cw / 2, cy + ch / 2 + 0.3, { align: 'center', baseline: 'middle' });
-    },
-    margin: { left: 14, right: 14 },
+  const fmtEur = n => '\u20ac ' + n.toLocaleString('it-IT');
+  // Il prezzo lo dice l'INTESTAZIONE, non una riga di legenda sopra la tabella: se i tuoi
+  // conti (commissione, spese, margine, IVA) sono attivi, quella colonna non e' il prezzo
+  // dell'annuncio ed e' giusto che il nome della colonna lo dica.
+  const conConti = extraH.length > 0 || cfg.comm || cfg.spese || cfg.iva;
+  const colonne = ['Fonte', 'Veicolo', conConti ? 'Prezzo finale' : 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia', ...extraH, 'Corrispondenza'];
+  const righe = results.map(r => {
+    const pr = vPricing(r.prezzo, passDi(r));
+    const d = DICHIARAZIONE[r.dichiarazione];
+    return [
+      ' ',                                   // la cella della fonte la disegna il server (chip)
+      r.titolo,
+      pr ? fmtEur(Math.round(pr.finale)) : '\u2014',
+      r.anno != null ? String(r.anno) : '\u2014',
+      r.km != null ? r.km.toLocaleString('it-IT') + ' km' : '\u2014',
+      r.carburante || '\u2014',
+      r.provincia || '\u2014',
+      ...priceExtraValues(pr, cfg, conPass).map(x => x === '' ? '\u2014' : fmtEur(x)),
+      d ? d.et : 'corrisponde',
+    ];
   });
-
-  // ── Footer per pagina
-  const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(14, pageH - 10, pageW - 14, pageH - 10);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...SLATE);
-    doc.text('Auto Moto Radar — uso personale', 14, pageH - 5.5);
-    doc.text(`Pagina ${i} di ${pageCount}`, pageW - 14, pageH - 5.5, { align: 'right' });
-  }
-  doc.save(`automotoradar-${dateFilename}.pdf`);
+  scaricaPdf({
+    params: lastSearchParams || {},
+    colonne, righe,
+    fonti: results.map(r => r.fonte),
+    nome: `automotoradar-${new Date().toISOString().slice(0, 10)}.pdf`,
+  });
 }
 
 // ─── Pre-fill da URL params ───────────────────────────────────────────────────

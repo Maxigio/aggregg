@@ -26,6 +26,7 @@ const scrapeAutoscoutGraphql = require('./scrapers/autoscout-graphql');
 const { combaciaModello } = require('./scrapers/autoscout-graphql');   // modello dichiarato vs cercato
 const scrapeSubitoApi = require('./scrapers/subito-api');
 const scrapeMotoIt    = require('./scrapers/motoit');
+const { renderReportPdf } = require('./report-pdf');   // un solo layout: lo usa anche il bottone del frontend
 const subitoSession   = require('./scrapers/subito-session');
 const { runBootstrap } = require('./scrapers/subito-bootstrap');
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
@@ -201,7 +202,11 @@ const LOCK_MS  = 10 * 60 * 1000;
 // lo azzerava solo un login riuscito, e otto errori sommati da piu' persone dietro lo stesso IP
 // pubblico (il Funnel) le bloccavano tutte a oltranza.
 const LOCK_DECAY_MS = 30 * 60 * 1000;
-const AUTH_FREE = new Set(['/login', '/logout', '/api/public-url', '/api/health', '/api/whatsapp/webhook']);
+// L'interruttore del bot WhatsApp. Default SPENTO: la webhook non viene montata affatto e la
+// sua deroga all'autenticazione non esiste. Si riaccende solo con AMR_WHATSAPP=1.
+const WHATSAPP_ON = process.env.AMR_WHATSAPP === '1';
+const AUTH_FREE = new Set(['/login', '/logout', '/api/public-url', '/api/health',
+  ...(WHATSAPP_ON ? ['/api/whatsapp/webhook'] : [])]);
 
 function parseCookies(req) {
   const out = {};
@@ -245,7 +250,10 @@ function gateAuth(req, res, next) {
   // /login·/logout sono già esenti via AUTH_FREE. (Il pannello admin non esiste più →
   // l'owner-tool DB-puro lo sostituisce; nessuna route /admin da gateare qui.)
   if (role === 'demo') {
-    const isReport = req.path === '/api/report';   // l'utente demo DEVE poter segnalare (match esatto)
+    // L'utente demo DEVE poter segnalare, e puo' esportare in PDF cio' che ha gia' a schermo:
+    // il PDF si compone dalle righe che il suo browser ha gia' in mano, quindi negarlo non
+    // proteggerebbe nessun dato. (Match esatto, non prefisso.)
+    const isReport = req.path === '/api/report' || req.path === '/api/report-pdf';
     const isWrite = req.method !== 'GET' && req.method !== 'HEAD';
     // review: il gate method-based NON basta. Alcune GET MUTANO (GET /api/crawl/lease scrive
     // leased_by/until) o espongono dati PRIVATI dell'owner (GET /api/saved = ricerche/avvisi di
@@ -374,6 +382,43 @@ app.post('/api/report', express.json({ limit: '32kb' }), (req, res) => {
   } catch (e) {
     console.error('[report]', e.message);
     res.status(500).json({ error: 'Impossibile salvare la segnalazione' });
+  }
+});
+
+/**
+ * IL PDF DEL REPORT, DISEGNATO IN UN POSTO SOLO.
+ *
+ * C'erano due implementazioni dello stesso documento — `backend/report-pdf.js` per il bot e
+ * `exportPdf` dentro frontend/app.js per il bottone — con lo stesso layout scritto due volte.
+ * Erano gia' divergenti: quella del browser aveva le colonne dei prezzi finali (commissione,
+ * spese, margine, passaggio) e la striscia delle metriche calcolata su valori diversi. Due
+ * gemelli cosi' non restano uguali: basta una correzione applicata a uno solo.
+ *
+ * Il conto dei prezzi finali dipende da preferenze che vivono nel browser, quindi resta di
+ * la': il browser manda le RIGHE gia' composte e qui si fa solo il disegno.
+ *
+ * L'utente demo puo' usarla: il documento contiene esattamente cio' che ha gia' a schermo.
+ */
+app.post('/api/report-pdf', express.json({ limit: '4mb' }), (req, res) => {
+  const b = req.body || {};
+  const righe = Array.isArray(b.righe) ? b.righe.slice(0, 2000) : [];
+  if (!righe.length) return res.status(400).json({ error: 'niente da stampare' });
+  try {
+    const buf = renderReportPdf([], b.params || {}, {
+      titolo: b.titolo || null,
+      sottotitolo: b.sottotitolo || null,
+      contatore: b.contatore || null,
+      colonne: Array.isArray(b.colonne) ? b.colonne : null,
+      righe,
+      fonti: Array.isArray(b.fonti) ? b.fonti : [],
+      colonneStile: (b.colonneStile && typeof b.colonneStile === 'object') ? b.colonneStile : null,
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${String(b.nome || 'automotoradar.pdf').replace(/[^\w.-]/g, '')}"`);
+    res.send(buf);
+  } catch (e) {
+    console.error('[report-pdf]', e.message);
+    res.status(500).json({ error: 'PDF non generato' });
   }
 });
 
@@ -1313,7 +1358,20 @@ async function runSearchCore(params) {
       } else {
         console.log(`[server] Moto.it: "${params.versione}" non e' nel suo catalogo → nessun filtro versione`);
       }
-      if (r.scartate.length) console.log(`[server] Moto.it: parole ignorate ${JSON.stringify(r.scartate)}`);
+      /**
+       * LE PAROLE BUTTATE VANNO DETTE A CHI GUARDA, non al registro del server.
+       *
+       * "Se svuota, si ignora" e' la dottrina giusta, ma il file stesso dice che la parola
+       * scartata "si dice quale" — e l'unico posto in cui si diceva era questo console.log.
+       * Intanto, se una parola restava, il codice versione veniva impostato e OGNI riga
+       * Moto.it usciva marcata 'esatto', cioe' "versione confrontata e combaciante", su un
+       * confronto fatto a meta'. Cercando "MT-07 ABS Rally": "abs" aggancia, "rally" sparisce,
+       * e le righe si dichiaravano esatte.
+       */
+      if (r.scartate.length) {
+        params.motoitVersioneScartate = r.scartate.slice();
+        console.log(`[server] Moto.it: parole ignorate ${JSON.stringify(r.scartate)}`);
+      }
     } catch (e) {
       console.warn('[server] Moto.it versione non risolta: ' + e.message);   // la ricerca vale lo stesso
     }
@@ -1559,7 +1617,13 @@ async function runSearchCore(params) {
       // La versione su Moto.it e' filtrata in due modi, e valgono uguale: `bike=` quando
       // il testo ne aggancia una sola, lo slug dichiarato dall'annuncio quando ne aggancia
       // piu' d'una (la stessa moto spezzata per periodo).
-      else r.dichiarazione = (params.motoitBikeCode || (params.motoitSlugAmmessi && params.motoitSlugAmmessi.size)) ? 'esatto' : 'senza-versione';
+      // Con una parola della versione buttata via, il confronto e' stato fatto a META': la
+      // riga non puo' dirsi 'esatto', che significa "versione confrontata e combaciante".
+      // "MT-07 ABS Rally": "abs" aggancia, "rally" non esiste in quel catalogo e sparisce.
+      else if (params.motoitBikeCode || (params.motoitSlugAmmessi && params.motoitSlugAmmessi.size)) {
+        r.dichiarazione = (params.motoitVersioneScartate && params.motoitVersioneScartate.length)
+          ? 'versione-non-verificata' : 'esatto';
+      } else r.dichiarazione = 'senza-versione';
     }
 
     // SUBITO. Stessa regola di Autoscout, e la simmetria conta perche' e' lo stesso
@@ -1665,7 +1729,13 @@ async function runSearchCore(params) {
                    // altri. cacheable() lo legge per non congelare la risposta monca.
                    parziale: asRes.parziale || null },
       moto:      { status: motoRes.status,   reason: motoRes.reason || null,   count: countBy('moto'),
-                   totale: motoRes.total ?? null },
+                   totale: motoRes.total ?? null,
+                   // Le parole della versione che il catalogo Moto.it non conosce e che sono
+                   // state ignorate ("se svuota, si ignora"). Finora finivano in un log del
+                   // server, cioe' in nessun posto che l'utente possa guardare, mentre a
+                   // schermo le righe si dichiaravano "esatto".
+                   versioneIgnorata: (params.motoitVersioneScartate && params.motoitVersioneScartate.length)
+                     ? params.motoitVersioneScartate : null },
     },
   };
 }
@@ -1824,8 +1894,23 @@ const amrSearchFn = async (input) => {
   return { params: parsed.params, risultati: data.risultati || [], sources: data.sources || {} };
 };
 
-// ─── Webhook WhatsApp (Meta Cloud API) — in AUTH_FREE (firma HMAC), searchFn condivisa ─────────
-require('./whatsapp/webhook').mount(app, { searchFn: amrSearchFn });
+/**
+ * WEBHOOK WHATSAPP — SPENTA, e spenta vuol dire che la rotta NON ESISTE.
+ *
+ * Il bot e' un sistema che conversa con una persona, e dal 2 agosto 2026 il proprietario non
+ * vuole tenerlo acceso finche' non e' pronto sul fronte AI Act. Spegnerlo con un 503 avrebbe
+ * lasciato in piedi un endpoint pubblico che risponde: qui non viene proprio montato, quindi
+ * `/api/whatsapp/webhook` da' 404 come qualunque percorso inesistente.
+ *
+ * Il codice e i test restano dove sono: si riaccende mettendo AMR_WHATSAPP=1 nell'ambiente,
+ * scelta esplicita e mai per difetto. Anche la deroga all'autenticazione segue l'interruttore:
+ * spenta la rotta, quel percorso non ha piu' motivo di stare fra i liberi.
+ */
+if (WHATSAPP_ON) {
+  require('./whatsapp/webhook').mount(app, { searchFn: amrSearchFn });
+} else {
+  console.log('[wa] webhook NON montata (AMR_WHATSAPP non vale 1): /api/whatsapp/webhook risponde 404');
+}
 
 // Si mette in ascolto SOLO se questo file e' il programma avviato, mai se qualcuno lo
 // richiede come modulo. Serve ai test: la catena di risoluzione marca/modello vive qui dentro

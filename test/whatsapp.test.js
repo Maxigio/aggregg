@@ -8,8 +8,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const crypto = require('node:crypto');
 const wh = require('../backend/whatsapp/webhook');
-const { renderReportPdf, reportStats } = require('../backend/report-pdf');
-const { renderRicambiPdf, ricambiStats } = require('../backend/report-pdf-ricambi');
+const { renderReportPdf, tabellaRicambi } = require('../backend/report-pdf');
 const logger = require('../backend/logger');
 const { normOen, dedupeOe } = require('../backend/oem-lookup');
 const { cleanHistory } = require('../backend/whatsapp/bot');
@@ -109,7 +108,7 @@ test('allowed: elenco vuoto = NESSUNO; csv filtra per sole cifre', () => {
 });
 
 // ─── PDF server-side ────────────────────────────────────────────────────────────
-test('renderReportPdf: ritorna un Buffer PDF; reportStats calcola mediana', () => {
+test('renderReportPdf: ritorna un Buffer PDF', () => {
   const rows = [
     { fonte: 'subito', titolo: 'A', prezzo: 10000, anno: 2018, km: 50000, carburante: 'Diesel', provincia: 'MI' },
     { fonte: 'autoscout', titolo: 'B', prezzo: 20000, anno: 2019, km: 40000, carburante: 'Benzina', provincia: 'RM' },
@@ -118,29 +117,43 @@ test('renderReportPdf: ritorna un Buffer PDF; reportStats calcola mediana', () =
   const buf = renderReportPdf(rows, { marca: 'Audi', modello: 'A3' });
   assert.ok(Buffer.isBuffer(buf) && buf.length > 0);
   assert.strictEqual(buf.slice(0, 5).toString(), '%PDF-');
-  const s = reportStats(rows);
-  assert.deepStrictEqual([s.totale, s.conPrezzo, s.min, s.mediana, s.media, s.max], [3, 2, 10000, 15000, 15000, 20000]);
 });
 
 test('renderReportPdf: 0 risultati non crasha', () => {
   const buf = renderReportPdf([], { marca: 'Fiat', modello: 'Panda' });
   assert.strictEqual(buf.slice(0, 5).toString(), '%PDF-');
-  assert.deepStrictEqual(reportStats([]), { totale: 0, conPrezzo: 0, min: null, mediana: null, media: null, max: null });
 });
 
-// ─── PDF ricambi (bot multi-fonte) ────────────────────────────────────────────
-test('renderRicambiPdf: ritorna Buffer PDF; ricambiStats calcola min/max', () => {
+// Il layout e' UNO SOLO: quando le righe arrivano gia' calcolate (e' cosi' che le manda il
+// frontend, che i prezzi finali li conosce solo lui) il documento si compone lo stesso.
+test('renderReportPdf: righe e colonne fornite da fuori', () => {
+  const buf = renderReportPdf([], { marca: 'Audi' }, {
+    colonne: ['Fonte', 'Veicolo', 'Prezzo finale', 'Corrispondenza'],
+    righe: [[' ', 'Audi A3', '€ 16.000', 'altro modello']],
+    fonti: ['subito'],
+  });
+  assert.strictEqual(buf.slice(0, 5).toString(), '%PDF-');
+});
+
+// ─── PDF ricambi: STESSO disegno, altre colonne ───────────────────────────────
+test('tabellaRicambi + renderReportPdf: un solo layout per i due documenti', () => {
   const arts = [
     { fonte: 'autodoc', nome: 'Bloccasterzo', marca: 'TOPRAN', prezzo: 30.99, venditore: 'Autodoc' },
     { fonte: 'subito', nome: 'Serratura usata', prezzo: 25, venditore: 'privato' },
     { fonte: 'web', nome: 'Ricambio OE', prezzo: null, venditore: 'ricambi.it' },
+    { fonte: 'subito', nome: 'Serratura senza prezzo', prezzo: null, venditore: 'privato' },
   ];
-  const buf = renderRicambiPdf(arts, { oen: '1K0905851B', tipoPezzo: 'Bloccasterzo', veicoli: 'VW Golf' });
+  const t = tabellaRicambi(arts);
+  assert.deepStrictEqual(t.colonne, ['Fonte', 'Ricambio', 'Marca', 'Prezzo', 'Venditore']);
+  assert.strictEqual(t.righe.length, 4);
+  assert.strictEqual(t.righe[1][3], '€ 25,00');
+  assert.strictEqual(t.righe[2][3], '—', 'una fonte web senza prezzo non promette niente');
+  assert.strictEqual(t.righe[3][3], 'trattabile', 'su Subito il prezzo assente vuol dire trattabile, non ignoto');
+  const buf = renderReportPdf([], {}, { titolo: 'AUTO MOTO RADAR — Ricambi', contatore: '4 ricambi', ...t });
   assert.ok(Buffer.isBuffer(buf) && buf.length > 0);
   assert.strictEqual(buf.slice(0, 5).toString(), '%PDF-');
-  const s = ricambiStats(arts);
-  assert.deepStrictEqual([s.totale, s.conPrezzo, s.min, s.max], [3, 2, 25, 30.99]);
-  assert.strictEqual(renderRicambiPdf([], {}).slice(0, 5).toString(), '%PDF-');   // 0 articoli non crasha
+  // 0 articoli non crasha
+  assert.strictEqual(renderReportPdf([], {}, { ...tabellaRicambi([]) }).slice(0, 5).toString(), '%PDF-');
 });
 
 // ─── logger: redazione segreti + ring-buffer ──────────────────────────────────

@@ -10,10 +10,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { Anthropic } = require('@anthropic-ai/sdk');
-const { renderReportPdf, reportStats } = require('../report-pdf');
+const { renderReportPdf, tabellaRicambi } = require('../report-pdf');
 const { searchRicambi } = require('../ricambi-core');   // multi-fonte: Autodoc + Web + Subito
 const { fetchAutodocSpecs } = require('../oem-lookup');  // compat veicoli (l'envelope v7 è lazy)
-const { renderRicambiPdf, ricambiStats } = require('../report-pdf-ricambi');
 const waClient = require('./client');
 
 const PROMPT_PATH = path.join(__dirname, 'prompt.md');
@@ -94,7 +93,10 @@ async function runCercaAuto(input, ctx) {
   }
   if (r.error) return `Parametri non validi: ${r.error}. Chiedi all'utente di precisare.`;
   const risultati = r.risultati || [];
-  const stats = reportStats(risultati);
+  // Niente mediana, media, min e max: erano calcolati su TUTTE le righe, comprese quelle
+  // marcate "altro modello", e su un canale dove l'utente non vede la tabella un solo numero
+  // aggregato diventa l'unica cosa che gli resta in testa. Restano il conteggio e la tabella.
+  const fuoriBersaglio = risultati.filter(x => x.dichiarazione && x.dichiarazione !== 'esatto').length;
   if (!risultati.length) {
     const ko = fontiRotte(r.sources);
     // Zero annunci con le fonti a terra non e' "questo mercato e' vuoto": e' "non ho potuto
@@ -105,26 +107,29 @@ async function runCercaAuto(input, ctx) {
     return `Nessun annuncio trovato per ${label(r.params)} (fonti — ${srcCounts(r.sources)}). Nessun PDF inviato: suggerisci di allargare i filtri (anni/km/regione).`;
   }
   const rotte = fontiRotte(r.sources);
-  // Lo stato delle fonti viaggia DENTRO il PDF: e' il foglio che resta in mano, ed e' proprio
-  // quello che non diceva su quante fonti fossero calcolate le sue statistiche.
-  const buf = renderReportPdf(risultati, r.params, r.sources);
+  // Lo stato delle fonti NON sta nel PDF (il documento porta solo la tabella): viaggia nella
+  // didascalia del messaggio e nel riassunto che legge il modello.
+  const buf = renderReportPdf(risultati, r.params);
   const fname = pdfName(r.params);
-  const caption = `${label(r.params)} · ${stats.totale} annunci · mediana ${eur(stats.mediana)}`
+  const caption = `${label(r.params)} · ${risultati.length} annunci`
+    + (fuoriBersaglio ? ` (${fuoriBersaglio} non sono il modello cercato)` : '')
     + (rotte.length ? ` · ATTENZIONE: ${rotte.join(' e ')} non ${rotte.length === 1 ? 'ha' : 'hanno'} risposto` : '');
   if (waClient.configured()) {
     try {
       await waClient.sendPdf(ctx.from, buf, fname, caption);
     } catch (e) {
       console.error('[wa] invio PDF KO:', e.message);
-      return `Trovati ${stats.totale} annunci (mediana ${eur(stats.mediana)}) ma l'invio del PDF è fallito. Avvisa l'utente.`;
+      return `Trovati ${risultati.length} annunci ma l'invio del PDF è fallito. Avvisa l'utente.`;
     }
   } else {
     console.warn('[wa] client non configurato → PDF non inviato');
-    return `Ricerca ok per ${label(r.params)}: totale ${stats.totale}, con prezzo ${stats.conPrezzo}, min ${eur(stats.min)}, mediana ${eur(stats.mediana)}, media ${eur(stats.media)}, max ${eur(stats.max)}. ATTENZIONE: l'invio del PDF NON è configurato → NON dire all'utente che hai inviato un PDF; dai i numeri chiave a voce.`;
+    return `Ricerca ok per ${label(r.params)}: ${risultati.length} annunci. ATTENZIONE: l'invio del PDF NON è configurato → NON dire all'utente che hai inviato un PDF.`;
   }
-  return `PDF inviato all'utente. Risultati ${label(r.params)}: totale ${stats.totale}, con prezzo ${stats.conPrezzo}, min ${eur(stats.min)}, mediana ${eur(stats.mediana)}, media ${eur(stats.media)}, max ${eur(stats.max)}. Fonti — ${srcCounts(r.sources)}.`
-    + (rotte.length ? ` ATTENZIONE: ${rotte.join(' e ')} non ${rotte.length === 1 ? 'ha' : 'hanno'} risposto, quindi questi numeri descrivono solo una PARTE del mercato: dillo esplicitamente all'utente prima di commentare i prezzi.` : '')
-    + ` Commenta i numeri chiave in 1-2 frasi.`;
+  return `PDF inviato all'utente. Risultati ${label(r.params)}: ${risultati.length} annunci`
+    + (fuoriBersaglio ? `, di cui ${fuoriBersaglio} NON sono il modello cercato (la ricerca si e' allargata)` : '')
+    + `. Fonti — ${srcCounts(r.sources)}.`
+    + (rotte.length ? ` ATTENZIONE: ${rotte.join(' e ')} non ${rotte.length === 1 ? 'ha' : 'hanno'} risposto, quindi l'elenco copre solo una PARTE del mercato: dillo esplicitamente all'utente.` : '')
+    + ` NON calcolare ne' citare prezzi medi o mediani: il PDF non li riporta e su un campione misto non vorrebbero dire niente. Commenta cosa c'e' nell'elenco, in 1-2 frasi.`;
 }
 
 // Handler del tool `oem_lookup`: codice OE/OEM/OEN → articoli su PIÙ fonti (Autodoc + Web + Subito)
@@ -156,7 +161,8 @@ async function runOemLookup(input, ctx) {
       } catch (e) { console.error('[wa] specs veicoli KO:', e.message); }
     }
   }
-  const stats = ricambiStats(articoli);
+  // Come per le auto: niente intervallo aggregato. Le sei righe qui sotto portano gia' il
+  // prezzo di ciascuna, ed e' un numero che si puo' verificare aprendo il link.
   const price = p => (typeof p === 'number' ? '€ ' + p.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
   const top = articoli.slice(0, 6).map(a =>
     `- ${a.marca ? a.marca + ' ' : ''}${a.nome}${typeof a.prezzo === 'number' ? ` — ${price(a.prezzo)}` : ''} [${a.fonte}]${a.url ? `\n  ${a.url}` : ''}`).join('\n');
@@ -164,15 +170,20 @@ async function runOemLookup(input, ctx) {
   let pdfSent = false;
   if (waClient.configured()) {
     try {
-      const buf = renderRicambiPdf(articoli, { oen: r.oen, tipoPezzo: r.tipoPezzo, veicoli: r.veicoli });
+      // Stesso disegno del PDF veicoli: cambiano solo le colonne.
+      const buf = renderReportPdf([], {}, {
+        titolo: 'AUTO MOTO RADAR — Ricambi',
+        sottotitolo: [[r.tipoPezzo, r.veicoli].filter(Boolean).join(' · '), r.oen ? 'OE/OEM ' + r.oen : null].filter(Boolean).join('   ·   '),
+        contatore: articoli.length + ' ricambi',
+        ...tabellaRicambi(articoli),
+      });
       const fname = `ricambi-${String(r.oen || 'export').toLowerCase().replace(/[^a-z0-9]/g, '')}-${new Date().toISOString().slice(0, 10)}.pdf`;
-      await waClient.sendPdf(ctx.from, buf, fname, `${r.tipoPezzo || 'Ricambio'} · ${r.oen} · ${stats.totale} articoli`);
+      await waClient.sendPdf(ctx.from, buf, fname, `${r.tipoPezzo || 'Ricambio'} · ${r.oen} · ${articoli.length} articoli`);
       pdfSent = true;
     } catch (e) { console.error('[wa] invio PDF ricambi KO:', e.message); }
   }
   const pdfNote = pdfSent ? 'Il PDF con tutti gli articoli è stato inviato. ' : (waClient.configured() ? 'ATTENZIONE: invio PDF fallito, non dire di averlo inviato. ' : 'Invio PDF non configurato: dai i numeri a voce, non dire di aver inviato un PDF. ');
-  const range = stats.conPrezzo ? `, prezzi da ${price(stats.min)} a ${price(stats.max)}` : '';
-  return `Codice ${r.oen} = ${r.tipoPezzo || 'ricambio'}${r.veicoli ? ` (${r.veicoli})` : ''}. ${stats.totale} articoli su più fonti (Autodoc/Web/Subito)${range}:\n${top}\n\n${pdfNote}Riassumi cos'è il pezzo e proponi 2-3 opzioni con prezzo e link. Non elencare tutti e ${stats.totale}.`;
+  return `Codice ${r.oen} = ${r.tipoPezzo || 'ricambio'}${r.veicoli ? ` (${r.veicoli})` : ''}. ${articoli.length} articoli su più fonti (Autodoc/Web/Subito):\n${top}\n\n${pdfNote}Riassumi cos'è il pezzo e proponi 2-3 opzioni con prezzo e link. Non elencare tutti e ${articoli.length}.`;
 }
 
 // Chiamata Claude con guardia: se il tool server web_search viene rifiutato (id versione
