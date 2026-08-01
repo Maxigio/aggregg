@@ -418,3 +418,141 @@ test('saved: il clic segna letto SOLO quell\'avviso', () => {
     delete require.cache[require.resolve('../backend/saved')];
   }
 });
+
+// ═══ IL CONTESTO CAMBIA IN UN PUNTO SOLO ══════════════════════════════════════
+// Non difendono otto correzioni: difendono la regola. Quando cambia CIO' CHE SI STA
+// GUARDANDO — una ricerca nuova, il parco di un concessionario, un gruppo di vetrine, il
+// passaggio Auto/Moto — lo stato che descriveva la schermata di prima deve sparire tutto
+// insieme, in un posto solo. Finche' erano tre punti a farlo, ognuno ne dimenticava un
+// pezzo diverso, e il pezzo dimenticato descriveva un'altra ricerca.
+const APP = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+const INDEX = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
+/** il corpo di `function nome(` fino alla parentesi graffa di chiusura in colonna 0 */
+function corpoDi(src, firma) {
+  const i = src.indexOf(firma);
+  assert.ok(i > 0, `non trovo piu' \`${firma}\` in frontend/app.js`);
+  const fine = src.indexOf('\n}\n', i);
+  return src.slice(i, fine === -1 ? undefined : fine);
+}
+
+test('contesto: ogni punto che riempie la griglia passa dall\'azzeramento', () => {
+  // I tre che scrivono `currentResults` con dei veicoli dentro. Nessuno puo' cavarsela da
+  // solo: `doSearch` ci arriva via hideResults, gli altri due chiamano direttamente.
+  assert.ok(/function resetContesto\(\)/.test(APP), 'resetContesto() non esiste piu\'');
+  assert.ok(/function hideResults\(\)\s*\{\s*resetContesto\(\);/.test(APP),
+    'hideResults deve cominciare azzerando il contesto');
+  for (const f of ['function cpMostraParco(', 'function cpMostraGruppo(']) {
+    assert.ok(/resetContesto\(\)/.test(corpoDi(APP, f)),
+      `${f}...) riempie la griglia senza azzerare il contesto: i criteri, i filtri e le colonne della ricerca di prima restano addosso al parco`);
+  }
+  assert.ok(/showLoading\(\); hideResults\(\);/.test(corpoDi(APP, 'async function doSearch(')),
+    'doSearch non passa piu\' da hideResults: il contesto precedente non verrebbe azzerato');
+});
+
+test('contesto: lo stato della ricerca si azzera SOLO dentro resetContesto', () => {
+  const reset = corpoDi(APP, 'function resetContesto()');
+  // Ognuno di questi descrive la ricerca, non il modo di guardare. Se ricompare un secondo
+  // azzeramento altrove, le due copie divergono — ed e' esattamente com'era nato il difetto.
+  // `(?<!let )` toglie di mezzo la DICHIARAZIONE della variabile, che ha lo stesso testo.
+  const soloLi = {
+    'lastSearchParams = null': /(?<!let )lastSearchParams = null/g,
+    'soloIva = false': /(?<!let )soloIva = false/g,
+    "groupDim = ''": /(?<!let )groupDim = ''/g,
+    'liqMarca = null': /(?<!let )liqMarca = null/g,
+    'liqAnn = null': /(?<!let )liqAnn = null/g,
+  };
+  for (const [nome, re] of Object.entries(soloLi)) {
+    assert.ok(reset.match(re), `resetContesto non azzera piu' ${nome}`);
+    const quante = (APP.match(re) || []).length;
+    assert.strictEqual(quante, 1,
+      `${nome} compare ${quante} volte: l'azzeramento del contesto deve stare in un punto solo (resetContesto)`);
+  }
+  // E queste NON si azzerano: sono come guardi, non cosa guardi (decisione del proprietario).
+  assert.ok(!/sortState = \{ key: 'prezzo', dir: 'asc' \}/.test(reset),
+    'l\'ordinamento e\' una preferenza di lettura: non si azzera al cambio contesto');
+  assert.ok(!/confronto = \[\]/.test(reset),
+    'gli annunci spuntati attraversano i contesti di proposito: non si svuotano');
+  // L'unico che puo' svuotarlo e' il bottone "Svuota": lo svuota chi lo chiede, non un
+  // cambio di schermata. Prima lo faceva anche `doSearch`, e la selezione spariva da sola.
+  const svuotamenti = (APP.match(/confronto = \[\]/g) || []).length;
+  assert.strictEqual(svuotamenti, 1,
+    `il confronto viene svuotato in ${svuotamenti} punti: deve restare solo il bottone "Svuota"`);
+  assert.ok(/compareClear\?\.addEventListener\('click', \(\) => \{ confronto = \[\];/.test(APP),
+    'l\'unico svuotamento del confronto deve essere il bottone "Svuota"');
+});
+
+test('scheda: quel che si mostra di un annuncio non si chiede all\'ultima ricerca', () => {
+  // La regola di campagna 2-bis, portata dove non era arrivata. Questi tre decidono COSA
+  // mostrare sotto un annuncio: nel parco di un concessionario `lastSearchParams` e' di
+  // un'altra ricerca (o non c'e'), e leggerlo qui significava attribuire a questo veicolo i
+  // dati di un altro. Passano tutti da `coppiaAnnuncio`/`richiamiMarca`.
+  for (const f of ['function liqCorpoHTML(', 'function gommeChiave(', 'function vehRichiamiHTML(']) {
+    assert.ok(!/lastSearchParams/.test(corpoDi(APP, f)),
+      `${f}...) legge di nuovo lastSearchParams: sotto un annuncio del parco mostrerebbe i dati del modello CERCATO`);
+  }
+  // E chi carica e chi disegna devono chiedere alla stessa funzione, senno' il blocco
+  // sparisce proprio nei casi in cui la ricerca sarebbe riuscita.
+  assert.ok(/function richiamiMarca\(\)/.test(APP), 'richiamiMarca() non esiste piu\'');
+  for (const f of ['async function vehRichiamiCarica(', 'function vehRichiamiHTML(']) {
+    assert.ok(/richiamiMarca\(\)/.test(corpoDi(APP, f)), `${f}...) non usa piu' richiamiMarca()`);
+  }
+});
+
+test('scheda: chi scarta una risposta vecchia non lascia il blocco in attesa per sempre', () => {
+  assert.ok(/const scartata = my => my !== vehGen;/.test(APP), 'scartata() non esiste piu\'');
+  // Questi cinque scrivono un\'attesa PERSISTENTE e ripartono solo se quello stato e' vuoto:
+  // uscire senza azzerarlo li lascia su "Cerco..." finche' non si cambia annuncio.
+  const attese = {
+    'async function vehRichiamiCarica(': 'vehRichiami = null',
+    'async function vehMisureCarica(': 'vehMisure = null',
+    'async function vehProvaCarica(': 'vehProva = null',
+    'async function vehOmoCarica(': 'delete vehOmoStato[numero]',
+    'async function fetchVehSpecs(': 'delete vehSpecs[url]',
+  };
+  for (const [f, azzera] of Object.entries(attese)) {
+    const c = corpoDi(APP, f);
+    assert.ok(c.includes('scartata('), `${f}...) non usa scartata(): il token va letto da un punto solo`);
+    assert.ok(c.includes(azzera),
+      `${f}...) scarta la risposta vecchia senza azzerare l'attesa (${azzera}): il blocco resta su "Cerco…" per sempre`);
+  }
+});
+
+test('versione: il campo e\' spento esattamente quando la ricerca non la userebbe', () => {
+  // `doSearch` spedisce `params.versione` SOLO dentro il ramo del modello scelto. Finche' e'
+  // cosi', scriverla senza aver scelto un modello significa buttarla in silenzio.
+  const ds = corpoDi(APP, 'async function doSearch(');
+  const ramo = ds.indexOf('if (selectedModel && selectedModel._marca === marca');
+  const invio = ds.indexOf('params.versione = vt');
+  assert.ok(ramo > 0 && invio > ramo, 'params.versione non e\' piu\' dentro il ramo del modello scelto');
+  assert.ok(/versioneInput\.disabled = !ok/.test(APP) && /const ok = !!selectedModel/.test(APP),
+    'syncVersione non lega piu\' l\'accensione del campo alla scelta del modello');
+  assert.ok(/id="versione"[^>]*\bdisabled\b/.test(INDEX),
+    'il campo versione deve nascere spento: al primo disegno nessun modello e\' stato scelto');
+});
+
+test('foto: niente richieste allo scorrimento, e la miniatura si aggiorna nelle due viste', () => {
+  assert.ok(!/new IntersectionObserver/.test(APP),
+    'e\' tornato l\'arricchimento allo scorrimento: i dettagli si chiedono al clic sull\'annuncio');
+  const u = corpoDi(APP, 'function updateRowThumb(');
+  assert.ok(u.includes('.result-row[data-url=') && u.includes('.ann-card[data-url='),
+    'updateRowThumb deve trovare la riga in TUTTE E DUE le viste: quella predefinita e\' a schede (.ann-card)');
+});
+
+test('province: una preferenza per una domanda sola', () => {
+  // Prezzi del carburante e costo del passaggio sono due domande diverse e vivevano sulla
+  // stessa preferenza: cambiare la tendina dentro "Costo carburante" per confrontare il
+  // prezzo al litro spostava l'IPT. Misurato sui dati veri (107 province, aliquote
+  // 0/20/25/30%): su un'auto da 90 kW il passaggio va da 343,07 € ad Aosta a 437,89 € a
+  // Viterbo. Chi calcola il passaggio non deve piu' leggere la provincia del carburante.
+  for (const f of ['function passProvincia(', 'function passCorpoHTML(']) {
+    assert.ok(!/carbProvincia\(\)/.test(corpoDi(APP, f)),
+      `${f}...) legge di nuovo carbProvincia(): la tendina della benzina tornerebbe a spostare l'IPT`);
+  }
+  assert.ok(/localStorage\.getItem\('amrPassProvincia'\)/.test(APP) &&
+            /localStorage\.setItem\('amrPassProvincia'/.test(APP),
+    'la provincia del passaggio non ha piu\' una preferenza sua');
+  // E cambiandola, i conti gia' fatti con l'altra provincia si buttano invece di restare
+  // a schermo con la sigla nuova sopra un importo vecchio.
+  assert.ok(/if \(x\._pass && !x\._passProvAnnuncio\) delete x\._pass/.test(APP),
+    'cambiando la tua provincia, i passaggi gia' + "'" + ' calcolati devono essere rifatti');
+});

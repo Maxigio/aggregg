@@ -296,6 +296,9 @@ body:not(.has-results) .search {
 .pp-voce em { font-family: var(--font); font-style: normal; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); }
 .pp-piu { color: var(--text-faint); font-size: 0.9rem; align-self: flex-end; }
 .pp-prov { font-family: var(--num); font-weight: 700; color: var(--text); }
+/* Quando la provincia e' LA TUA e' una tendina, non una scritta: la sigla resta identica,
+   cambia solo che si puo' aprire (vedi passProvSelHTML). */
+.pp-prov-sel { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 1px 4px; cursor: pointer; font-size: inherit; }
 /* I tre numeri del modello: riquadri affiancati, ognuno con la sua unita'. */
 .pp-tiles { display: flex; gap: 8px; flex-wrap: wrap; }
 .pp-tile { flex: 1 1 84px; min-width: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: var(--r);
@@ -1059,10 +1062,9 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
 @media (max-width: 860px) { .det-act, .det-open { min-height: 40px; padding: 8px 14px; } }
 .result-row.detail-open { background: var(--surface-2); }
 
-/* Placeholder foto Moto.it "in caricamento" (arricchimento on-scroll) */
-.row-thumb.enrich { position: relative; overflow: hidden; }
-.row-thumb.enrich::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, rgba(127,127,127,0.14) 50%, transparent 100%); animation: enrich-shimmer 1.2s ease-in-out infinite; }
-@keyframes enrich-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+/* Il luccichio "sto caricando la foto" viveva qui: l'arricchimento allo scorrimento e'
+   spento (i dettagli si chiedono al clic), quindi non c'era piu' niente in arrivo da
+   annunciare. Un'animazione di attesa senza attesa e' solo una promessa falsa. */
 
 /* Menu "Colonne ▾" (toolbar) */
 .tb-cols { position: relative; }

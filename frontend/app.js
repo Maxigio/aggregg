@@ -598,7 +598,10 @@ async function init() {
     const pan = d.closest('[data-detail]');
     const r = pan && trovaResult(pan.dataset.url);
     if (!r || !pan) return;
+    // Il gruppo "Passaggi di proprieta" ha due meta': quanto costa girare QUESTO veicolo, e
+    // quanto gira il MODELLO. Nessuna delle due parte da sola: si chiedono all'apertura.
     if (cosa === 'pass' && !r._pass) calcolaPassaggio(r, pan);
+    if (cosa === 'pass') liqAnnCarica(r);
     if (cosa === 'gomme' && !r._gomme) caricaGomme(r, pan);
     // I blocchi della SCHEDA TECNICA dichiaravano `carica:` da sempre, ma chi li ascoltava
     // era il vecchio contenitore fisso: da quando la scheda vive dentro l'annuncio, aprire
@@ -609,6 +612,17 @@ async function init() {
 
   // Spunta "veicolo storico" dentro il pannello di un annuncio: cambia la tariffa, si rifa' il conto.
   resultsGrid.addEventListener('change', e => {
+    // La TUA provincia per il passaggio. Cambiandola, i conti gia' fatti sugli altri annunci
+    // sono di un'altra provincia: si buttano, cosi' riaprendoli si rifanno invece di mostrare
+    // un importo vecchio sotto una sigla nuova.
+    if (e.target.classList.contains('pp-prov-sel')) {
+      try { localStorage.setItem('amrPassProvincia', e.target.value); } catch (_) {}
+      for (const x of currentResults) if (x._pass && !x._passProvAnnuncio) delete x._pass;
+      const rw = e.target.closest('[data-url]');
+      const rr = rw && trovaResult(rw.dataset.url);
+      if (rr) calcolaPassaggio(rr, rw);
+      return;
+    }
     const storico = e.target.classList.contains('pass-storico-chk');
     const iva = e.target.classList.contains('pass-iva-chk');
     if (!storico && !iva) return;
@@ -785,8 +799,28 @@ async function loadModels(tipo, marca) {
 // Ricambi, dove non c'entra niente.
 function resetVersioneOnly() {
   if (versioneInput) versioneInput.value = '';
+  syncVersione();
 }
 function resetModelloVersione() { selectedModel = null; resetVersioneOnly(); }
+
+/**
+ * LA VERSIONE SI SCRIVE SOLO SOPRA UN MODELLO SCELTO DALL'ELENCO.
+ *
+ * Il campo accettava testo sempre, ma `doSearch` lo spediva solo dentro il ramo
+ * `selectedModel`: scritta senza aver scelto un modello dalla tendina, la versione veniva
+ * buttata in silenzio e partiva una ricerca piu' larga di quella che si era chiesta —
+ * senza che niente lo dicesse. Delle tre fonti solo Autoscout e Moto.it saprebbero
+ * usarla da sola; su Subito serve il nodo di catalogo, che senza modello scelto non c'e'.
+ * Decisione del proprietario: non permetterlo. Il campo resta spento, e dice perche'.
+ */
+function syncVersione() {
+  if (!versioneInput) return;
+  const ok = !!selectedModel;
+  versioneInput.disabled = !ok;
+  versioneInput.placeholder = ok
+    ? 'facoltativa — es. Highline, GTI, S line, ABS'
+    : 'scegli prima un modello dall’elenco';
+}
 
 /**
  * Scelto un modello: si svuota la versione scritta prima (era di un altro modello) e si
@@ -794,8 +828,9 @@ function resetModelloVersione() { selectedModel = null; resetVersioneOnly(); }
  * Il campo e' sempre a schermo: qui non c'e' piu' niente da mostrare.
  */
 function mostraVersione(model) {
-  resetVersioneOnly();
+  if (versioneInput) versioneInput.value = '';
   if (selectedModel) selectedModel._familySlug = model.slugMotoIt || null;
+  syncVersione();   // il modello c'e': il campo si accende
 }
 
 function setupModelloAutocomplete() {
@@ -2022,18 +2057,7 @@ async function doSearch() {
     if (vt) params.versione = vt.slice(0, 80);
   }
   Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });
-  lastSearchParams = { ...params };
-  // Liquidita per la marca cercata: alimenta il segno accanto a ogni annuncio. Solo auto
-  // (le moto non hanno il dato) e solo con una marca: una richiesta per ricerca, cachata.
-  // L'else non e' facoltativo: senza, i dati della marca AUTO precedente restavano in memoria e
-  // finivano accanto a una moto — "Fiat 500: 94.618 passaggi, fonte ACI" su una Honda CB 500.
-  if (params.tipo !== 'moto' && params.marca) liqCarica(params.marca, params.modello, params.tipo);
-  else { liqMarca = null; liqModelli = null; liqVoce = null; liqStato = 'mai'; }
-  colsToccate = false;                     // ricerca nuova: si riparte dal default della vista
-  visibleCols = colsDefault(params);
-  syncColMenu();
-
-  confronto = []; renderCompareBar(); closeMatrix();
+  closeMatrix();   // le spunte restano (attraversano i contesti), il pannello aperto no
   // `has-results` NON si mette qui: quattro righe piu' sotto `hideResults()` la toglie —
   // sempre, in tutti i rami — quindi in Auto/Moto il body non l'ha avuta mai, nemmeno dopo la
   // prima ricerca. Effetto: la barra di ricerca restava alta un'intera schermata (misurato:
@@ -2041,10 +2065,19 @@ async function doSearch() {
   // filigrana dietro i risultati. Si mette quando i risultati ci sono davvero.
   document.body.dataset.tipo = tipo;
 
-  // ORDINE OBBLIGATO: `hideResults()` brucia il token (una fetta in volo non deve atterrare
-  // in uno stato azzerato), quindi il token di QUESTA ricerca si prende DOPO, senno' la
+  // ORDINE OBBLIGATO: `hideResults()` azzera il contesto (vedi `resetContesto`) e brucia il
+  // token, quindi TUTTO cio' che descrive questa ricerca si scrive DOPO — senno' lo
+  // cancellava il reset — e il token di QUESTA ricerca si prende per ultimo, senno' la
   // ricerca scarterebbe se stessa.
   showLoading(); hideResults();
+  lastSearchParams = { ...params };
+  // Liquidita per la marca cercata: alimenta il segno accanto a ogni annuncio. Solo auto
+  // (le moto non hanno il dato) e solo con una marca: una richiesta per ricerca, cachata.
+  // Il ramo negativo lo fa gia' `resetContesto`: senza, i dati della marca AUTO precedente
+  // restavano e finivano accanto a una moto — "Fiat 500: 94.618 passaggi" su una Honda CB 500.
+  if (params.tipo !== 'moto' && params.marca) liqCarica(params.marca, params.modello, params.tipo);
+  visibleCols = colsDefault(params);   // il default della ricerca, piu' preciso di quello a vuoto
+  syncColMenu();
   const myGen = ++searchGen;   // review: se ne parte un'altra mentre questa è in volo, la stantia si scarta
   try {
     const res = await fetch(`/api/search?${new URLSearchParams(params)}`);
@@ -2068,9 +2101,8 @@ async function doSearch() {
     initPrezzoSlider(currentResults);
     if (!prezzoSliderInstance) renderResults(currentResults);
     // La scheda tecnica non parte piu' con la ricerca: vive dentro l'annuncio e la chiedi
-    // tu da li'. Qui si azzera soltanto, altrimenti richiami e targa della ricerca
-    // precedente resterebbero attaccati a un veicolo che non c'entra.
-    clearVehScheda();
+    // tu da li'. L'azzeramento e' gia' passato da `resetContesto` (via hideResults), che e'
+    // l'unico punto: qui una seconda copia poteva solo divergere.
     if (currentResults.length > 0) resultsToolbar.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch {
     if (myGen === searchGen) showError('Impossibile contattare il server. Assicurati che sia avviato con "npm start".');
@@ -2236,41 +2268,20 @@ function renderResults(results) {
   } else {
     resultsGrid.innerHTML = disegna(sorted, bestUrlSet(sorted));
   }
-  observeEnrich();   // Moto.it: foto+spec reali quando la riga entra in viewport
   renderAltriBtn();
 }
 
-// ─── Arricchimento Moto.it on-scroll (foto + spec reali dalla pagina-dettaglio) ─
-// Le card Moto.it on-search non hanno foto; la pagina-dettaglio sì. Quando una
-// riga moto entra nel viewport → fetch /api/detail (pool concorrenza 4), merge
-// immagini+spec nel result, aggiorna la thumbnail IN PLACE (niente full re-render).
-let enrichObserver = null;
-let _enrichActive = 0; const _enrichQueue = [];
-function _enrichPump() {
-  while (_enrichActive < 4 && _enrichQueue.length) {
-    const fn = _enrichQueue.shift(); _enrichActive++;
-    fn().finally(() => { _enrichActive--; _enrichPump(); });
-  }
-}
-function _enqueueEnrich(url) { _enrichQueue.push(() => enrichMotoRow(url)); _enrichPump(); }
-function observeEnrich() {
-  if (enrichObserver) enrichObserver.disconnect();
-  const targets = resultsGrid.querySelectorAll('.row-thumb[data-enrich]');
-  if (!targets.length) return;
-  if (!('IntersectionObserver' in window)) {
-    [...targets].slice(0, 12).forEach(el => { const u = el.closest('[data-url]')?.dataset.url; if (u) _enqueueEnrich(u); });
-    return;
-  }
-  enrichObserver = new IntersectionObserver(entries => {
-    entries.forEach(e => {
-      if (!e.isIntersecting) return;
-      enrichObserver.unobserve(e.target);
-      const u = e.target.closest('[data-url]')?.dataset.url;
-      if (u) _enqueueEnrich(u);
-    });
-  }, { rootMargin: '300px' });
-  targets.forEach(el => enrichObserver.observe(el));
-}
+// ─── Dettagli Moto.it: AL CLIC, non allo scorrimento ──────────────────────────
+// La galleria piena e le spec di Moto.it stanno sulla pagina-dettaglio, non nella card della
+// ricerca. Fino a ieri un IntersectionObserver le chiedeva mentre scorrevi (fino a 4 in
+// parallelo, con 300px di margine): una sola ricerca Yamaha MT-07 — misurata dal vivo, 239
+// annunci di cui 39 di Moto.it — faceva partire 39 richieste a Moto.it per annunci che non
+// avevi ancora deciso di guardare. E meta' di quel lavoro non si vedeva nemmeno:
+// `updateRowThumb` cercava `.result-row`, e la vista predefinita e' quella a SCHEDE
+// (`.ann-card`). Decisione del proprietario: i dati mancanti si chiedono APRENDO l'annuncio.
+// Chi lo fa e' il pannello di dettaglio (vedi `renderDetail`), che gia' chiamava questa
+// funzione. In griglia non si perde niente di visibile: la cover ce l'hanno gia' tutte
+// (misurato: 39 su 39), quello che arriva al clic e' la galleria piena e le spec.
 async function enrichMotoRow(url) {
   const r = trovaResult(url);
   if (!r || r._enriched) return;   // già arricchita (cover-only NON conta: ha solo 1 foto)
@@ -2288,7 +2299,10 @@ async function enrichMotoRow(url) {
   updateRowThumb(url);
 }
 function updateRowThumb(url) {
-  const row = resultsGrid.querySelector(`.result-row[data-url="${CSS.escape(url)}"]`);
+  // LE DUE VISTE, non una. Qui c'era solo `.result-row`, e la vista predefinita e' quella a
+  // SCHEDE (`.ann-card`): la foto appena scaricata da Moto.it non compariva mai, a meno di
+  // essere passati alla lista densa. Stesso selettore doppio gia' usato da `refreshRowState`.
+  const row = resultsGrid.querySelector(`.result-row[data-url="${CSS.escape(url)}"], .ann-card[data-url="${CSS.escape(url)}"]`);
   if (!row) return;
   const thumb = row.querySelector('.row-thumb'); if (!thumb) return;
   const r = trovaResult(url); const imgs = (r && Array.isArray(r.immagini)) ? r.immagini : [];
@@ -2297,7 +2311,7 @@ function updateRowThumb(url) {
     btn.type = 'button'; btn.className = 'row-thumb'; btn.title = 'Vedi foto';
     btn.innerHTML = `<img src="${escapeHtml(imgs[0].thumb)}" loading="lazy" referrerpolicy="no-referrer" alt="">`;
     thumb.replaceWith(btn);
-  } else { thumb.classList.remove('enrich'); thumb.removeAttribute('data-enrich'); }
+  }
 }
 
 // Set di URL col prezzo più basso (1 per gruppo/lista) → evidenziazione "best".
@@ -2430,15 +2444,13 @@ function rowHTML(item, bestSet) {
   const inConfronto = confronto.some(r => r.url === item.url);
   const isBest = bestSet && bestSet.has(item.url);
   const imgs = Array.isArray(item.immagini) ? item.immagini : [];
-  // Foto: chi le ha → thumbnail (click=lightbox). Moto.it ha la cover dalla card
-  // (thumb subito) ma la galleria piena arriva dall'arricchimento /api/detail →
-  // la riga resta marcata `data-enrich` finché non arricchita (l'observer la fetcha).
-  // Subito/AS24 senza foto → placeholder semplice.
-  const needEnrich = item.fonte === 'moto' && !item._enriched;
-  const enrichAttr = needEnrich ? ' data-enrich="1"' : '';
+  // Foto: chi le ha → thumbnail (click=lightbox). Moto.it ha la cover dalla card, la
+  // galleria piena arriva aprendo l'annuncio. Il segnaposto NON fa piu' l'animazione di
+  // caricamento: adesso che nessuno arricchisce allo scorrimento, quel luccichio prometteva
+  // una foto che non stava arrivando. Subito/AS24 senza foto → stesso segnaposto fermo.
   const thumbHTML = imgs.length
-    ? `<button type="button" class="row-thumb"${enrichAttr} title="Vedi foto"><img src="${escapeHtml(imgs[0].thumb)}" loading="lazy" referrerpolicy="no-referrer" alt=""></button>`
-    : `<div class="row-thumb noimg${needEnrich ? ' enrich' : ''}"${enrichAttr} aria-hidden="true"></div>`;
+    ? `<button type="button" class="row-thumb" title="Vedi foto"><img src="${escapeHtml(imgs[0].thumb)}" loading="lazy" referrerpolicy="no-referrer" alt=""></button>`
+    : '<div class="row-thumb noimg" aria-hidden="true"></div>';
 
   const conc = item.venditore && /conc/i.test(item.venditore);
   const vendBadge = item.venditore ? `<span class="vend-badge vend-${conc ? 'conc' : 'priv'}">${conc ? 'Conc.' : 'Privato'}</span>` : '';
@@ -2506,11 +2518,9 @@ function cardHTML(item, bestSet) {
   const pr = vPricing(item.prezzo, passDi(item));
   const urlSafe = /^https?:\/\//i.test(item.url) ? escapeHtml(item.url) : '#';
   const imgs = Array.isArray(item.immagini) ? item.immagini : [];
-  const needEnrich = item.fonte === 'moto' && !item._enriched;
-  const enrichAttr = needEnrich ? ' data-enrich="1"' : '';
-  const foto = imgs.length
-    ? `<button type="button" class="row-thumb"${enrichAttr} title="Vedi foto"><img src="${escapeHtml(imgs[0].thumb)}" loading="lazy" referrerpolicy="no-referrer" alt=""></button>`
-    : `<div class="row-thumb noimg${needEnrich ? ' enrich' : ''}"${enrichAttr} aria-hidden="true"></div>`;
+  const foto = imgs.length     // vedi rowHTML: niente luccichio, la foto piena arriva al clic
+    ? `<button type="button" class="row-thumb" title="Vedi foto"><img src="${escapeHtml(imgs[0].thumb)}" loading="lazy" referrerpolicy="no-referrer" alt=""></button>`
+    : '<div class="row-thumb noimg" aria-hidden="true"></div>';
   const conc = item.venditore && /conc/i.test(item.venditore);
   const ggV = giorniInVendita(item);
   /**
@@ -2860,8 +2870,28 @@ function passTipo(r) {
   const t = (r && r.tipo) || (lastSearchParams || {}).tipo;
   return (t === 'moto' || (r && r.fonte === 'moto')) ? 'moto' : 'auto';
 }
+/**
+ * LA TUA PROVINCIA PER IL PASSAGGIO, che non e' quella del carburante.
+ *
+ * Erano la stessa preferenza. Cambiare la tendina dentro "Costo carburante" per confrontare
+ * il prezzo al litro spostava anche l'IPT: sono 107 province con quattro aliquote
+ * (0/20/25/30%), e su un'auto da 90 kW il passaggio va da 343,07 € ad Aosta a 437,89 € a
+ * Viterbo — 94,82 € mossi da una tendina che parlava di benzina. Due domande diverse, due
+ * preferenze. La prima volta si eredita quella del carburante, cosi' chi l'aveva gia'
+ * impostata non si ritrova il bottone "usa la tua provincia" sparito; da li' in poi vivono
+ * separate.
+ */
+const passProvinciaMia = () => {
+  try {
+    const p = localStorage.getItem('amrPassProvincia');
+    if (p != null) return p;
+    const eredita = localStorage.getItem('amrCarbProvincia') || '';
+    localStorage.setItem('amrPassProvincia', eredita);
+    return eredita;
+  } catch (_) { return ''; }
+};
 function passProvincia(r) {
-  const mia = carbProvincia();
+  const mia = passProvinciaMia();
   if (r._passProvAnnuncio) return { testo: r.provincia || '', mia: false };
   return mia ? { testo: mia, mia: true } : { testo: r.provincia || '', mia: false };
 }
@@ -2959,7 +2989,7 @@ function passCorpoHTML(r) {
   const st = r._pass;
   const opz = passOpzioniHTML(r);
   if (!st) {
-    if (!r.provincia && !carbProvincia()) return '';
+    if (!r.provincia && !passProvinciaMia()) return '';
     if (!haPot && !r._passStorico) {
       return `<div class="det-pass-no">Manca la potenza in questo annuncio: il conto non si fa.</div>${opz}`;
     }
@@ -2977,7 +3007,7 @@ function passCorpoHTML(r) {
   const loc = d.localita || {};
   // Da quale provincia viene l'importo, e come si passa all'altra: la differenza tra le due
   // sono euro veri (dallo 0% di Bolzano al 30% di quasi tutte le altre).
-  const altra = st.mia ? (r.provincia || '') : carbProvincia();
+  const altra = st.mia ? (r.provincia || '') : passProvinciaMia();
   const scambio = altra
     ? ` <button type="button" class="det-pass-alt" data-alt="${st.mia ? 'annuncio' : 'mia'}">usa ${st.mia ? `la provincia dell'annuncio (${escapeHtml(altra)})` : `la tua provincia (${escapeHtml(altra)})`}</button>`
     : '';
@@ -2995,10 +3025,31 @@ function passCorpoHTML(r) {
       <span class="pp-piu">+</span>
       <span class="pp-voce"><em>emolumenti</em>${eur(d.emolumenti)} €</span>
     </div>
-    <div class="det-pass-det"><span class="pp-prov">${escapeHtml(loc.sigla || '')}</span>${scambio}</div>
+    <div class="det-pass-det">${passProvSelHTML(loc.sigla || '', st.mia)}${scambio}</div>
     ${opz}
     ${passAvvisiHTML(d)}
   </div>`;
+}
+
+/**
+ * La sigla della provincia da cui viene l'importo: scegliibile quando e' LA TUA, ferma
+ * quando e' quella dell'annuncio (quella la decide il venditore, non tu — per cambiarla c'e'
+ * il bottone accanto). Prima l'unico modo di dire quale fosse "la tua" era la tendina del
+ * carburante, che pero' parla d'altro: separate le due preferenze, serviva un posto per
+ * dirlo, ed e' questo — accanto al numero che decide.
+ *
+ * L'elenco e' quello dell'indice carburanti (le stesse 107 province della tabella IPT): e'
+ * gia' scaricato o si scarica da se'. Finche' non c'e', resta la sigla scritta.
+ */
+function passProvSelHTML(sigla, mia) {
+  const prov = (carbIdx && carbIdx.province) ? Object.keys(carbIdx.province).sort() : [];
+  if (!mia || !prov.length) {
+    if (mia && carbStato === 'mai') loadCarburanti();   // serve l'elenco: si chiede una volta sola
+    return `<span class="pp-prov">${escapeHtml(sigla)}</span>`;
+  }
+  return `<select class="pp-prov pp-prov-sel" aria-label="la tua provincia per il costo del passaggio">`
+    + prov.map(x => `<option value="${escapeHtml(x)}"${x === sigla ? ' selected' : ''}>${escapeHtml(x)}</option>`).join('')
+    + '</select>';
 }
 
 // TUTTI gli avvisi, non solo il primo: sono condizioni verificate su fonte (uso professionale,
@@ -3053,28 +3104,38 @@ function passStoricoHTML(r) {
 // Il risultato resta sull'oggetto annuncio (r._gomme, r._pneu): riaprire la riga non
 // ricarica niente.
 
-/** marca e modello vengono dalla RICERCA (l'annuncio non li porta), l'anno dall'annuncio. */
-function gommeChiave(r) {
+/**
+ * MARCA E MODELLO DI QUESTO ANNUNCIO, una regola sola per chiunque debba chiedere qualcosa
+ * a una fonte esterna a nome di un annuncio (gomme, liquidita', e chi verra').
+ *
+ * La chiave la dice l'ANNUNCIO, non l'ultima ricerca. Nel parco di un concessionario gli
+ * annunci non vengono da una ricerca, e `lastSearchParams` restava quello di prima: aprendo
+ * una Fiat Panda dopo aver cercato una BMW 320d, sotto la Panda comparivano cerchi, gomme e
+ * pressioni della BMW, attribuiti a lei. Stessa forma gia' usata da passTipo e loadVehScheda.
+ */
+function coppiaAnnuncio(r) {
   const p = lastSearchParams || {};
-  // La chiave la dice l'ANNUNCIO, non l'ultima ricerca. Nel parco di un concessionario gli
-  // annunci non vengono da una ricerca, e `lastSearchParams` restava quello di prima: aprendo
-  // una Fiat Panda dopo aver cercato una BMW 320d, sotto la Panda comparivano cerchi, gomme e
-  // pressioni della BMW, attribuiti a lei. Stessa forma gia' usata da passTipo e loadVehScheda.
-  if (passTipo(r) !== 'auto') return null;                    // Wheel-Size qui e' solo auto
   // La MARCA di catalogo vince quando c'e' (doSearch rifiuta una ricerca senza marca a
   // catalogo, quindi in griglia e' sempre valorizzata e canonica); nel parco si spegne e vale
   // quella dell'annuncio. Facendo vincere sempre l'annuncio si peggiorava la griglia normale,
   // dove `r.marca` e' il nome grezzo della fonte e non quello del catalogo.
-  const marca = (cpApertoId ? '' : p.marca) || r.marca || '';
-  // Il MODELLO invece lo dice l'annuncio: chiedere a Wheel-Size le misure del modello CERCATO
-  // sotto un annuncio marcato "altro modello" significa mostrare cerchi, gomme e pressioni di
-  // un altro veicolo. Il modello della ricerca vale solo quando la fonte ha confermato che
-  // l'annuncio e' quello, ed e' la stessa regola che usa `loadVehScheda`.
-  const confermato = !r.dichiarazione || ['esatto', 'senza-versione', 'versione-non-verificata'].includes(r.dichiarazione);
+  const marca = (cpApertoId ? '' : p.marca) || (r && r.marca) || '';
+  // Il MODELLO invece lo dice l'annuncio: chiedere le misure del modello CERCATO sotto un
+  // annuncio marcato "altro modello" significa mostrare i dati di un altro veicolo. Il
+  // modello della ricerca vale solo quando la fonte ha confermato che l'annuncio e' quello,
+  // ed e' la stessa regola che usa `loadVehScheda`.
+  const confermato = !r || !r.dichiarazione || ['esatto', 'senza-versione', 'versione-non-verificata'].includes(r.dichiarazione);
   const modello = modelloAnnuncio(r) || (confermato && !cpApertoId ? p.modello : '') || '';
   // 'Altro' e' il segnaposto di Subito quando il venditore la marca non l'ha scelta: non e'
-  // una marca, e chiederla a Wheel-Size darebbe una risposta a caso o nessuna.
-  if (!marca || marca === 'Altro' || !modello || !r.anno) return null;
+  // una marca, e chiederla a una fonte darebbe una risposta a caso o nessuna.
+  return { marca: marca === 'Altro' ? '' : marca, modello };
+}
+
+/** marca e modello dall'annuncio (vedi `coppiaAnnuncio`), l'anno dall'annuncio. */
+function gommeChiave(r) {
+  if (passTipo(r) !== 'auto') return null;                    // Wheel-Size qui e' solo auto
+  const { marca, modello } = coppiaAnnuncio(r);
+  if (!marca || !modello || !r.anno) return null;
   return { marca, modello, anno: r.anno };
 }
 
@@ -3746,7 +3807,10 @@ function openReport() {
   document.getElementById('reportMsg').value = '';
   document.getElementById('reportStatus').textContent = '';
   const att = document.getElementById('reportAttach');
-  if (att) { att.checked = false; att.parentElement.style.display = searchActive ? '' : 'none'; }
+  // "Allega i dati della ricerca" esiste se una RICERCA c'e' stata. `searchActive` e' vero
+  // anche nel parco di un concessionario, dove i criteri non esistono: la spunta si offriva
+  // e allegava il nulla (o, prima del reset, i criteri di tutt'altro).
+  if (att) { att.checked = false; att.parentElement.style.display = lastSearchParams ? '' : 'none'; }
   m.classList.remove('d-none');
   document.getElementById('reportMsg').focus();
 }
@@ -3755,7 +3819,7 @@ async function submitReport() {
   const msg = document.getElementById('reportMsg').value.trim();
   const status = document.getElementById('reportStatus');
   if (!msg) { status.textContent = 'Scrivi un messaggio.'; return; }
-  const attach = document.getElementById('reportAttach')?.checked && searchActive;
+  const attach = document.getElementById('reportAttach')?.checked && !!lastSearchParams;
   const body = { type: attach ? 'search' : 'bug', message: msg };
   if (attach) { body.searchParams = lastSearchParams; body.count = currentResults.length; }
   const btn = document.getElementById('reportSend'); btn.disabled = true; status.textContent = 'Invio…';
@@ -3815,19 +3879,50 @@ function hideLoading() {
 }
 function showError(msg) { statusBox.classList.remove('d-none'); loadingState.classList.add('d-none'); errorState.classList.remove('d-none'); errorText.textContent = msg; }
 function hideError() { errorState.classList.add('d-none'); if (subitoBanner.classList.contains('d-none')) statusBox.classList.add('d-none'); }
-function hideResults() {
-  // IL CONTESTO E' CAMBIATO: una fetta di "Carica altri" ancora in volo non deve piu'
-  // atterrare. Il token proteggeva solo da una ricerca nuova (doSearch): uscendo dai
-  // risultati — cambio tipo, cambio sezione, vetrina tolta — la risposta in ritardo
-  // rimetteva `lastSources` e concatenava annunci in uno stato che era stato azzerato.
+/**
+ * IL CONTESTO E' CAMBIATO. Un punto solo, chiamato da chiunque cambi cosa si sta guardando.
+ *
+ * Erano TRE i posti che riempiono la griglia — `doSearch`, il parco di un concessionario
+ * (`cpMostraParco`) e un gruppo di vetrine (`cpMostraGruppo`) — piu' `hideResults` che la
+ * svuota e il cambio Auto/Moto. Ognuno azzerava un sottoinsieme diverso, e quello che
+ * restava indietro descriveva la schermata di PRIMA: la liquidita' della BMW cercata sotto
+ * la Panda del parco, il PDF del parco con in testa i criteri di un'altra ricerca, "Solo
+ * IVA esposta" che sopravvive alla ricerca nuova e la svuota mentre il pannello dice che
+ * non c'e' niente, il raggruppamento della ricerca auto ancora attivo passando alle moto.
+ *
+ * Il confine e' quello deciso dal proprietario: si azzera QUELLO CHE DESCRIVE LA RICERCA
+ * (i suoi dati, i filtri attivi, le colonne). NON si azzera come guardi — ordinamento,
+ * vista lista/schede, menu prezzi, provincia, unita' — ne' gli annunci spuntati per il
+ * confronto, che di proposito attraversano i contesti: spunti la tua auto nel parco, torni
+ * alla ricerca, spunti un annuncio di mercato e li metti a fianco.
+ */
+function resetContesto() {
+  // Una fetta di "Carica altri" ancora in volo non deve piu' atterrare: la risposta in
+  // ritardo rimetteva `lastSources` e concatenava annunci in uno stato gia' azzerato.
   searchGen++;
+  lastSearchParams = null;
+  lastSources = null;
+  fettaPresa = 0;
+  ultimiVisti = null;
+  soloIva = false;
+  groupDim = '';
+  colsToccate = false;
+  visibleCols = colsDefault(null);
+  syncColMenu();
+  // I segni di liquidita' accanto alle righe sono della MARCA cercata: senza ricerca non
+  // esistono, e tenerli significava attribuirli agli annunci di un altro contesto.
+  liqMarca = null; liqModelli = null; liqVoce = null; liqStato = 'mai';
+  liqAnn = null;
+  clearVehScheda();
+}
+function hideResults() {
+  resetContesto();
   searchActive = false;
   targaBtnSync();   // niente annunci: il bottone della targa non ha dove andare
   document.body.classList.remove('has-results');   // torna allo stato iniziale → sfondo + search centrata
-  _enrichQueue.length = 0; if (enrichObserver) enrichObserver.disconnect();   // stop enrichment Moto.it pendente
   resultsSection.classList.add('d-none'); noResults.classList.add('d-none'); resultsToolbar.classList.add('d-none');
   fonteBreakdown.innerHTML = ''; resultsGrid.innerHTML = ''; compareBar.classList.add('d-none'); closeMatrix();
-  clearVehScheda();
+  renderCompareBar();   // le spunte restano: la barra torna se ci sono ancora annunci a confronto
 }
 
 // ─── Scheda tecnica veicolo (auto-data.net) — highlighted, collassabile, sopra gli annunci ──
@@ -3848,6 +3943,18 @@ let vehHost = null;                    // il .det-scheda del pannello che ospita
 let vehHostUrl = null;                 // di quale annuncio e'
 const vehEl = () => (vehHost && vehHost.isConnected) ? vehHost : null;
 let vehData = null, vehSpecs = {}, vehSchedaCollapsed = false, vehSelUrl = null, vehGen = 0;   // vehGen: token anti-race — scarta risposte di ricerche/generazioni superate
+/**
+ * LA RISPOSTA E' VECCHIA, e chi la scarta deve anche DISFARE L'ATTESA che aveva messo.
+ *
+ * Ogni blocco che carica scrive prima `{loading:true}`, poi controlla il token e, se un'altra
+ * scheda ha preso il posto, esce. Uscendo e basta lasciava l'attesa scritta: cambiando
+ * generazione mentre ADD ON stava caricando, "Cerco nei due archivi…" restava li' per
+ * sempre — e non ripartiva, perche' proprio quello stato non-nullo dice "sto gia' caricando".
+ * `switchVehGen` incrementa il token senza toccare i blocchi, quindi il caso non e' raro.
+ *
+ * La regola: chi scarta AZZERA. Il blocco torna a "Apri per cercare", e riaprendolo riparte.
+ */
+const scartata = my => my !== vehGen;
 let vehErrore = null;   // perche' la scheda non si e' potuta fare: si scrive, non si tace
 // Il modello con cui la scheda e' stata CHIESTA. Dopo aver scelto una generazione,
 // `vehData.modello` diventa il nome di quella ("Golf Cabriolet"): cercare le prove con
@@ -4152,29 +4259,40 @@ async function vehOmoCarica(numero) {
   renderVehBody();
   try {
     const d = await fetch('/api/richiami/omologazione?n=' + encodeURIComponent(numero)).then(r => r.json());
-    if (my !== vehGen) return;
+    if (scartata(my)) { delete vehOmoStato[numero]; return; }
     vehOmoStato[numero] = d && d.ok && (d.nomi || []).length
       ? d : { ko: (d && d.motivo) || 'nessuna versione trovata per questa omologazione' };
   } catch (_) {
-    if (my !== vehGen) return;
+    if (scartata(my)) { delete vehOmoStato[numero]; return; }
     vehOmoStato[numero] = { ko: 'catalogo non raggiungibile' };
   }
   renderVehBody();
 }
 let vehAddonAperto = false;    // il gruppo resta aperto quando il corpo si ridisegna
 
-async function vehRichiamiCarica() {
+/**
+ * LA MARCA DI CUI CERCARE I RICHIAMI, in un posto solo.
+ *
+ * Le campagne sono quelle del VEICOLO che si sta guardando. La scheda si apre solo dal
+ * pannello di un annuncio, e nel parco di un concessionario gli annunci non vengono da una
+ * ricerca: prendendo marca e modello dai filtri, dentro la scheda di una Fiat Panda si
+ * leggevano i richiami della BMW cercata prima, con scritto "per questo modello".
+ * Stessa forma di coppiaAnnuncio e loadVehScheda: la ricerca vale solo fuori dal parco.
+ *
+ * Chi CARICA e chi DISEGNA devono usare lo stesso valore. Erano due espressioni diverse —
+ * il caricamento guardava `vehData`, il disegno solo `lastSearchParams` — e il blocco
+ * spariva dallo schermo esattamente nei casi in cui la ricerca dei richiami sarebbe
+ * riuscita: nel parco, e in qualunque scheda aperta senza una ricerca prima.
+ */
+function richiamiMarca() {
   const p = lastSearchParams || {};
-  // Le campagne sono quelle del VEICOLO che si sta guardando. La scheda si apre solo dal
-  // pannello di un annuncio, e nel parco di un concessionario gli annunci non vengono da una
-  // ricerca: prendendo marca e modello dai filtri, dentro la scheda di una Fiat Panda si
-  // leggevano i richiami della BMW cercata prima, con scritto "per questo modello".
-  // Stessa forma di gommeChiave e loadVehScheda: la ricerca vale solo fuori dal parco.
-  // Stessa coppia con cui vehMisureCarica (riga ~3846) chiede le prove: vehData e' la scheda
-  // aperta, vehModelloBase il nome-modello con cui e' stata risolta.
-  const marca = (vehData && vehData.marca) || (cpApertoId ? '' : p.marca) || '';
-  // `p.modello` non e' piu' fra i ripieghi: `vehModelloBase` e' il modello con cui la scheda
-  // e' stata composta, e da oggi quello lo decide l'annuncio. Tenere la ricerca come rete
+  return (vehData && vehData.marca) || (cpApertoId ? '' : p.marca) || '';
+}
+
+async function vehRichiamiCarica() {
+  const marca = richiamiMarca();
+  // `p.modello` non e' fra i ripieghi: `vehModelloBase` e' il modello con cui la scheda
+  // e' stata composta, e quello lo decide l'annuncio. Tenere la ricerca come rete
   // significava, su una lista allargata alla marca, cercare i richiami del modello CERCATO
   // dentro il pannello di un annuncio che e' un altro veicolo — ed e' l'unico dato di
   // sicurezza della scheda.
@@ -4190,18 +4308,17 @@ async function vehRichiamiCarica() {
       fetch('/api/richiami/rdw/cerca?' + q.toString() + '&quante=8').then(r => r.json()).catch(() => null),
       fetch('/api/richiami/cerca?' + q.toString() + '&quante=8').then(r => r.json()).catch(() => null),
     ]);
-    if (my !== vehGen) return;                 // una ricerca piu' recente ha preso il posto
+    if (scartata(my)) { vehRichiami = null; return; }
     vehRichiami = { rdw, sg };
   } catch (_) {
-    if (my !== vehGen) return;
+    if (scartata(my)) { vehRichiami = null; return; }
     vehRichiami = { ko: true };
   }
   renderVehBody();
 }
 
 function vehRichiamiHTML() {
-  const p = lastSearchParams || {};
-  if (!p.marca) return '';
+  if (!richiamiMarca()) return '';   // la stessa marca che userebbe il caricamento, vedi richiamiMarca
   const st = vehRichiami;
   let corpo, meta = '';
   if (!st) corpo = '<div class="veh-rich-att">Apri per cercare negli archivi dei richiami.</div>';
@@ -4328,9 +4445,9 @@ async function vehMisureCarica() {
   if (anno) q.set('anno', anno);
   try {
     const r = await fetch(`/api/prove/${tipo === 'moto' ? 'moto' : 'auto'}?${q}`).then(x => x.json());
-    if (my !== vehGen) return;
+    if (scartata(my)) { vehMisure = null; return; }
     vehMisure = r && r.ok ? r : { ko: (r && r.error) || 'fonte non raggiungibile' };
-  } catch (_) { if (my === vehGen) vehMisure = { ko: 'fonte non raggiungibile' }; }
+  } catch (_) { vehMisure = scartata(my) ? null : { ko: 'fonte non raggiungibile' }; }
   renderVehBody();
 }
 
@@ -4340,9 +4457,9 @@ async function vehProvaCarica(slug) {
   renderVehBody();
   try {
     const r = await fetch('/api/prove/moto/prova?slug=' + encodeURIComponent(slug)).then(x => x.json());
-    if (my !== vehGen) return;
+    if (scartata(my)) { vehProva = null; return; }
     vehProva = r && r.ok ? { dati: r.prova } : { ko: (r && r.error) || 'prova non disponibile' };
-  } catch (_) { if (my === vehGen) vehProva = { ko: 'prova non disponibile' }; }
+  } catch (_) { vehProva = scartata(my) ? null : { ko: 'prova non disponibile' }; }
   renderVehBody();
 }
 
@@ -4593,7 +4710,7 @@ function vehCostoHTML(spec) {
 // L'attribuzione riga→modello usa il nome ACI piu' LUNGO contenuto nel titolo: e' preciso
 // perche' la marca e' gia' fissata dalla ricerca. Nessun match → nessun segno, mai un
 // numero attribuito a caso. Le moto non hanno questo dato (vedi backend/liquidita.js).
-let liqMarca = null, liqModelli = null, liqStato = 'mai', liqVoce = null;
+let liqMarca = null, liqModelli = null, liqStato = 'mai';
 const liqNorm = x => String(x || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
 async function liqCarica(marca, modello, tipo) {
@@ -4605,7 +4722,8 @@ async function liqCarica(marca, modello, tipo) {
     if (modello) q.set('modello', modello);
     if (tipo) q.set('tipo', tipo);
     const d = await fetch('/api/liquidita?' + q.toString()).then(r => r.json());
-    liqVoce = (d && d.voce) || null;      // voce del modello cercato, con fonte e avvisi
+    // `d.voce` (il modello CERCATO) non si tiene piu': il riquadro dentro la scheda parla
+    // dell'annuncio aperto, non della ricerca, e ha il suo stato — vedi `liqAnn`.
     liqAnno = (d && d.anno) || liqAnno;
     if (d && d.ok && d.modelli.length) {
       // ordinati per nome decrescente di lunghezza: il primo che combacia e' il piu' specifico
@@ -4629,6 +4747,11 @@ function liqPerTitolo(titolo) {
 }
 
 function liqBadgeHTML(item) {
+  // Si memorizza SOLO quando il dato c'e' davvero. Memorizzando anche il "non lo so", la
+  // prima disegnata — che capita mentre l'archivio ACI sta ancora arrivando — fissava un
+  // `null` su ogni riga, e la ridisegnata che l'archivio innesca lo trovava gia' deciso:
+  // i segni non comparivano piu' per tutta la ricerca.
+  if (liqStato !== 'ok') return '';
   if (item._liq === undefined) item._liq = liqPerTitolo(item.titolo);   // memo: una volta per riga
   const m = item._liq;
   if (!m || m.ricambio == null) return '';
@@ -4644,18 +4767,52 @@ let liqAnno = 2025;
 // Quanto si rivende un modello e' un dato economico, ma parla della STESSA cosa di cui parla
 // la scheda: il veicolo. Sta qui e non in un pannello a parte perche' l'operatore che guarda
 // le specifiche di una Panda vuole sapere nella stessa occhiata quanto quel modello gira.
-// Nessuna richiesta in piu': riusa i dati gia' scaricati per i segni accanto agli annunci.
+//
+// IL MODELLO E' QUELLO DELL'ANNUNCIO APERTO, non quello cercato. Prima il blocco leggeva
+// `lastSearchParams`: nel parco di un concessionario — dove una ricerca non c'e' mai stata —
+// sotto ogni veicolo comparivano i passaggi del modello cercato prima, e su una lista
+// allargata alla marca un annuncio marcato "altro modello" mostrava i numeri di un altro
+// veicolo. Stessa regola di gomme e scheda tecnica: la coppia la dice `coppiaAnnuncio`.
+//
+// Una richiesta per MODELLO DIVERSO APERTO, e solo all'apertura del gruppo "Passaggi di
+// proprieta" (vedi il gestore `carica: 'pass'`): chi non guarda il blocco non chiede niente.
+let liqAnn = null;   // { chiave, stato: 'carico'|'ok'|'vuoto'|'ko', voce } del modello aperto
+
+async function liqAnnCarica(r) {
+  const { marca, modello } = coppiaAnnuncio(r);
+  if (!marca || passTipo(r) !== 'auto') return;   // le moto non hanno il dato (backend/liquidita.js)
+  const chiave = liqNorm(marca) + '|' + liqNorm(modello);
+  if (liqAnn && (liqAnn.chiave === chiave)) return;
+  liqAnn = { chiave, stato: 'carico', voce: null };
+  const mio = liqAnn;
+  renderVehBody();
+  try {
+    const q = new URLSearchParams({ marca, tipo: 'auto' });
+    if (modello) q.set('modello', modello);
+    const d = await fetch('/api/liquidita?' + q.toString()).then(x => x.json());
+    if (liqAnn !== mio) return;                    // un altro annuncio ha preso il posto
+    liqAnno = (d && d.anno) || liqAnno;
+    const voce = (d && d.voce && d.voce.ok) ? d.voce : null;
+    liqAnn = { chiave, stato: voce ? 'ok' : 'vuoto', voce };
+  } catch (_) {
+    if (liqAnn !== mio) return;
+    liqAnn = { chiave, stato: 'ko', voce: null };
+  }
+  renderVehBody();
+}
+
 /** Quanti ne cambiano proprietario in un anno, sul MODELLO. Solo il corpo: il guscio lo
  *  mette `vehPassaggiHTML`, che lo unisce al costo del passaggio di QUESTO annuncio. */
-function liqCorpoHTML() {
-  const p = lastSearchParams || {};
-  if (!p.marca) return '';
-  if (liqStato === 'carico') return '<div class="veh-liq veh-liq-attesa">Carico la liquidita del modello…</div>';
-  if (liqStato !== 'ok') return '';
-  // Prima la voce del server (sa ripiegare sul modello base e porta fonte, nota e avviso);
-  // in mancanza, l'attribuzione per titolo usata anche dai segni accanto agli annunci.
-  const m = (liqVoce && liqVoce.ok) ? liqVoce : liqPerTitolo(`${p.marca} ${p.modello || ''}`);
-  if (!m || m.ricambio == null) return '';
+function liqCorpoHTML(r) {
+  // Le moto non hanno il dato e senza marca non si puo' chiedere: niente riquadro vuoto e
+  // niente attesa che non finisce mai — il blocco proprio non esiste.
+  if (!r || passTipo(r) !== 'auto' || !coppiaAnnuncio(r).marca) return '';
+  if (!liqAnn) return '<div class="veh-liq veh-liq-attesa">Apri per avere i passaggi di questo modello.</div>';
+  if (liqAnn.stato === 'carico') return '<div class="veh-liq veh-liq-attesa">Carico la liquidita del modello…</div>';
+  // "Zero passaggi" e "l'archivio non ha risposto" non sono la stessa cosa: si separano.
+  if (liqAnn.stato === 'ko') return '<div class="veh-liq veh-liq-attesa">Archivio ACI non raggiungibile.</div>';
+  const m = liqAnn.voce;
+  if (!m || m.ricambio == null) return '<div class="veh-liq veh-liq-attesa">L\'archivio ACI non ha una voce per questo modello.</div>';
   const n = x => Number(x).toLocaleString('it-IT');
   // Tre numeri, tre riquadri. Erano una riga sola separata da puntini — "GOLF · 1.037.466
   // in circolazione · ricambio 7%/anno" — dove per leggere il secondo bisognava contare i
@@ -4685,7 +4842,7 @@ function liqCorpoHTML() {
 function vehPassaggiHTML() {
   const r = vehHostUrl ? trovaResult(vehHostUrl) : null;
   const costo = r ? passCorpoHTML(r) : '';
-  const modello = liqCorpoHTML();
+  const modello = liqCorpoHTML(r);
   if (!costo && !modello) return '';
   const st = r && r._pass;
   const meta = (st && st.stato === 'ok' && st.d && st.d.ok && st.d.totaleNoto != null)
@@ -4897,8 +5054,8 @@ async function fetchVehSpecs(url) {
   if (hit && hit.ok) { if (shows()) renderVehBody(); return; }   // già ok → mostra (ok:false ricade sotto → riprova)
   vehSpecs[url] = { loading: true };
   if (shows()) renderVehBody();
-  try { const r = await fetch(`/api/scheda-veicolo/specs?url=${encodeURIComponent(url)}`); const j = await r.json(); if (my !== vehGen) return; vehSpecs[url] = j; }
-  catch (_) { if (my !== vehGen) return; vehSpecs[url] = { ok: false }; }
+  try { const r = await fetch(`/api/scheda-veicolo/specs?url=${encodeURIComponent(url)}`); const j = await r.json(); if (scartata(my)) { delete vehSpecs[url]; return; } vehSpecs[url] = j; }
+  catch (_) { if (scartata(my)) { delete vehSpecs[url]; return; } vehSpecs[url] = { ok: false }; }
   if (shows()) renderVehBody();
 }
 
@@ -5554,11 +5711,11 @@ function cpMostraGruppo(g) {
   const st = cpGruppi[g];
   if (!st || st.stato !== 'ok') return;
   cpApertoId = 'g:' + g;
+  // Il contesto cambia: quello che descriveva la ricerca di prima non descrive questo
+  // gruppo di vetrine (vedi `resetContesto`). Prima qui si azzeravano tre cose su dieci.
+  resetContesto();
   currentResults = st.dati.veicoli;
-  // Come in hideResults: da qui in poi una fetta in ritardo si fonderebbe nel parco.
-  // Questi due punti non passano da hideResults, quindi il token va bruciato a mano.
-  searchGen++;
-  searchActive = true; fettaPresa = 0; lastSources = null;
+  searchActive = true;
   document.body.classList.add('has-results');
   initPrezzoSlider(currentResults);
   if (!prezzoSliderInstance) renderResults(currentResults);
@@ -5617,13 +5774,13 @@ function cpMostraParco(chiave) {
   const st = cpParchi[chiave];
   if (!st || st.stato !== 'ok' || !Array.isArray(st.dati.veicoli)) return;
   cpApertoId = chiave;
+  // Un parco NON e' la ricerca di prima: `resetContesto` porta via i suoi criteri, i suoi
+  // filtri e le sue colonne. Porta via anche `lastSources`, ed e' voluto — un parco arriva
+  // intero, non c'e' una fetta successiva da chiedere e "Carica altri" qui rimanderebbe
+  // alla ricerca precedente.
+  resetContesto();
   currentResults = st.dati.veicoli;
-  searchGen++;                       // vedi cpMostraGruppo: la fetta in volo non atterra qui
   searchActive = true;
-  fettaPresa = 0;
-  // Un parco arriva intero: non c'e' una fetta successiva da chiedere, e il bottone
-  // "Carica altri" qui rimanderebbe alla ricerca di prima.
-  lastSources = null;
   document.body.classList.add('has-results');
   initPrezzoSlider(currentResults);
   if (!prezzoSliderInstance) renderResults(currentResults);
