@@ -235,3 +235,66 @@ test('saved: un annuncio di un altro modello non genera avviso, ma resta fra i v
     delete require.cache[require.resolve('../backend/saved')];
   }
 });
+
+// ─── Un ripiego che risponde sempre qualcosa e' un fallback travestito ────────
+test('motoit: l\'ultima spiaggia non salda le cifre ("CRF 1100" non e\' la CRF 110)', async () => {
+  const mm = require('../backend/scrapers/motoit-models');
+  // Il ramo `figlie` la guardia sul confine di cifra ce l'ha da sempre; l'ultima spiaggia
+  // fuzzy no, e normalizzando via i separatori "crf1100" iniziava per "crf110".
+  assert.strictEqual(await mm.famiglieMotoit('honda', 'CRF 1100'), null,
+    'meglio cercare a livello marca — che il chiamante dichiara — che rispondere minimoto da 110 cc');
+  // E non deve aver rotto i casi buoni.
+  assert.strictEqual(await mm.famiglieMotoit('honda', 'CRF 110'), 'crf-110');
+  assert.strictEqual(await mm.famiglieMotoit('yamaha', 'MT-07'), 'mt-07');
+  assert.strictEqual(await mm.famiglieMotoit('aprilia', 'Scarabeo 500'), 'scarabeo-500');
+  const scarabeo = await mm.famiglieMotoit('aprilia', 'Scarabeo');
+  assert.ok(scarabeo.split(',').length >= 8, 'il nome largo continua a prendere tutte le famiglie');
+  const r1200 = await mm.famiglieMotoit('bmw', 'R 1200');
+  assert.ok(r1200 && !r1200.includes('r-12000'), 'la guardia storica del ramo figlie resta');
+});
+
+// ─── Il ponte Autoscout→Subito non sceglie una famiglia a caso ───────────────
+test('ponte: un codice che aggancia piu\' famiglie le porta TUTTE', () => {
+  const { famiglieSubito, famigliaSubito, _inverso } = require('../backend/scrapers/as24-modelli');
+  const inv = _inverso();
+  // Misurato sull'indice di oggi: 207 codici su 3.692 agganciano piu' di una famiglia.
+  const multi = [];
+  for (const t of ['auto', 'moto']) for (const [k, v] of inv[t]) if (v.length > 1) multi.push({ t, k, v });
+  assert.ok(multi.length > 100, 'se questo numero crolla a zero, il ponte e\' cambiato: rileggere il caso');
+  // Su uno di quelli: la vecchia funzione ne dava una sola, la nuova le dichiara tutte.
+  const x = multi.find(m => m.t === 'auto') || multi[0];
+  const tutte = famiglieSubito(x.t, x.k);
+  assert.ok(tutte.length > 1, 'piu\' di una famiglia per quel codice');
+  assert.strictEqual(famigliaSubito(x.t, x.k), tutte[0], 'la vecchia firma resta compatibile');
+  // Un codice di sola marca non dice quale famiglia: non si inventa.
+  assert.deepStrictEqual(famiglieSubito('auto', '13|||'), []);
+});
+
+// ─── Le moto: una famiglia per richiesta, e il tetto si dichiara ──────────────
+test('subito: sulle moto le famiglie si chiedono tutte, non solo la prima', async () => {
+  const sub = require('../backend/scrapers/subito-api');
+  const chieste = [];
+  // Si stuba la porta HTTP: ogni famiglia risponde un annuncio suo, piu' uno in comune
+  // (che deve essere unito, non ripetuto).
+  const annuncio = (id, prezzo) => ({
+    urn: id, urls: { default: `https://www.subito.it/x/${id}` }, subject: 'Moto ' + id,
+    features: [{ label: 'Prezzo', uri: '/price', values: [{ key: String(prezzo), value: `${prezzo} €` }] }],
+  });
+  sub._setHttpGetJson(async path => {
+    const bm = (path.match(/[?&]bm=([^&]+)/) || [])[1];
+    chieste.push(bm);
+    return { status: 200, body: JSON.stringify({ count_all: 10, ads: [annuncio(bm, 5000), annuncio('comune', 6000)] }) };
+  });
+  try {
+    const r = await sub({
+      tipo: 'moto', marca: 'Ducati', modello: 'Monster',
+      subitoNodo: { marcaId: '000123', famigliaIds: ['111', '222', '333'] },
+    }, { withMeta: true, pageDelayMs: 0 });
+    assert.deepStrictEqual(chieste, ['111', '222', '333'],
+      'una richiesta per famiglia: prima ne partiva UNA sola e le altre venivano costruite e buttate');
+    assert.strictEqual(r.total, 30, 'i totali delle famiglie si sommano: sono insiemi disgiunti del catalogo');
+    const urls = r.items.map(x => x.url);
+    assert.strictEqual(urls.filter(u => /comune/.test(u)).length, 1, 'il doppione si unisce, non si ripete');
+    assert.strictEqual(r.items.length, 4, '3 propri + 1 comune');
+  } finally { sub._setHttpGetJson(null); }
+});

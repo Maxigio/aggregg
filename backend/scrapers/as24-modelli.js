@@ -94,7 +94,16 @@ function inverso(iniettato) {
       for (const [famiglia, codici] of Object.entries(famiglie || {})) {
         for (const c of (codici || [])) {
           const k = String(c).split('|').slice(0, 2).join('|');
-          if (!out[t].has(k)) out[t].set(k, famiglia);   // il primo vince: ordine stabile
+          // TUTTE le famiglie, non la prima. Con "il primo vince" un codice Autoscout che
+          // ne aggancia piu' d'una — 207 codici su questo indice — mandava la ricerca Subito
+          // su UNA sola, scelta dall'ordine di costruzione dell'indice: cioe' su un altro
+          // veicolo. Misurato sull'API di Subito: `cm=000455,000471` risponde 17.338, che e'
+          // esattamente 11.582 (Golf) + 5.756 (Polo), quindi chiederle tutte non costa una
+          // richiesta in piu'. (Sulle moto `bm` con la virgola risponde 400: vedi il
+          // chiamante, che li' non puo' fare lo stesso.)
+          const gia = out[t].get(k);
+          if (!gia) out[t].set(k, [famiglia]);
+          else if (!gia.includes(famiglia)) gia.push(famiglia);
         }
       }
     }
@@ -109,10 +118,16 @@ function inverso(iniettato) {
  * accetta, ed e' l'unica forma che il ponte conserva.
  */
 function famigliaSubito(tipo, mmmv, opts = {}) {
-  const t = tipo === 'moto' ? 'moto' : 'auto';
-  const k = String(mmmv || '').split('|').slice(0, 2).join('|');
-  if (!k.split('|')[1]) return null;              // brand-only: non dice quale famiglia
-  return inverso(opts.indice)[t].get(k) || null;
+  const f = famiglieSubito(tipo, mmmv, opts);
+  return f.length ? f[0] : null;
 }
 
-module.exports = { codiciAs24, unisciCodici, famigliaSubito, _indice: indice, _inverso: inverso, norm };
+/** TUTTE le famiglie Subito che quel codice Autoscout aggancia (puo' essere piu' d'una). */
+function famiglieSubito(tipo, mmmv, opts = {}) {
+  const t = tipo === 'moto' ? 'moto' : 'auto';
+  const k = String(mmmv || '').split('|').slice(0, 2).join('|');
+  if (!k.split('|')[1]) return [];                // brand-only: non dice quale famiglia
+  return inverso(opts.indice)[t].get(k) || [];
+}
+
+module.exports = { codiciAs24, unisciCodici, famigliaSubito, famiglieSubito, _indice: indice, _inverso: inverso, norm };

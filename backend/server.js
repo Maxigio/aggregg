@@ -42,7 +42,7 @@ const saved = require('./saved');
 const budget = require('./budget-richieste');     // quante richieste costa una ricerca: contate, non stimate
 const { risolviNodo } = require('./scrapers/subito-nodo');   // testo digitato → id del catalogo Subito
 const { agganciaSubito } = require('./scrapers/ponte-buchi'); // i modelli che il ponte non copriva
-const { codiciAs24, unisciCodici, famigliaSubito } = require('./scrapers/as24-modelli');   // traduzione di livello, nei due versi
+const { codiciAs24, unisciCodici, famigliaSubito, famiglieSubito } = require('./scrapers/as24-modelli');   // traduzione di livello, nei due versi
 const { versioniAs24 } = require('./scrapers/as24-tassonomia');   // il catalogo versioni di AS24 (la sua tendina)
 const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings, norm } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
@@ -181,14 +181,27 @@ async function scrapeAutoscoutUnion(params, opts = {}) {
 // DataDome/bootstrap CAPTCHA). Su errore/blocco → fallback allo scraper Playwright
 // (browser+stealth, che gestisce SubitoBlockedError → needs_bootstrap). Così il
 // CAPTCHA serve solo se ANCHE l'API fallisce. Spegnibile con USE_SUBITO_API=0.
+/**
+ * NIENTE RIPIEGO. Se l'API cade, Subito e' caduta.
+ *
+ * Qui, su qualunque errore di hades, partiva in silenzio lo scraper Playwright. Ma quello
+ * cerca in un modo DIVERSO da quello che hai chiesto: `buildUrl` costruisce solo `?q=marca
+ * modello` e ignora gli id di catalogo, la versione scritta e la fetta. Quindi non gira
+ * nemmeno `riconosci()`, il controllo sui livelli che l'annuncio dichiara — mentre il
+ * post-filtro del server salta le righe Subito proprio perche' le assume gia' filtrate dalla
+ * fonte. Il risultato era una ricerca a parole spacciata per una ricerca per catalogo: sulla
+ * query "Audi 80" il repo ha misurato zero risultati giusti, perche' "80" pesca dentro
+ * "180 CV" e "80.000 km".
+ *
+ * Un secondo tentativo che cambia le regole senza dirlo e' peggio di una fonte che manca:
+ * una fonte che manca si vede, questa no. Adesso l'errore sale e Subito risulta caduta, come
+ * qualunque altra fonte. (Lo scraper Playwright resta: serve al bootstrap della sessione.)
+ */
 const USE_SUBITO_API = process.env.USE_SUBITO_API !== '0';
 async function scrapeSubitoSmart(params) {
-  if (USE_SUBITO_API) {
-    // on-search: economici in cima (sort nativo). Regione/prezzo/anno nativi via buildPath.
-    try { return await scrapeSubitoApi(params, { sort: 'priceasc', withMeta: true, fetta: params.fetta || 0 }); }
-    catch (e) { console.warn(`[Subito] API hades fallita (${e.message}) → fallback Playwright`); }
-  }
-  return scrapeSubito(params);
+  if (!USE_SUBITO_API) return scrapeSubito(params);   // interruttore di servizio, non un ripiego
+  // on-search: economici in cima (sort nativo). Regione/prezzo/anno nativi via buildPath.
+  return scrapeSubitoApi(params, { sort: 'priceasc', withMeta: true, fetta: params.fetta || 0 });
 }
 
 // ─── Auth (attiva SOLO se è stata impostata una password) ────────────────────
@@ -1136,11 +1149,32 @@ async function runSearchCore(params) {
   // di id su cui filtrare. Visto succedere: "BMW 320" + versione "320d" tornava cento
   // annunci e nessuno marcato esatto, perche' il nodo restava vuoto.
   if (!params.subitoNodo && params.versione && params.mmmvAutoscout) {
-    const famiglia = famigliaSubito(params.tipo, params.mmmvAutoscout);
-    const alt = famiglia ? risolviNodo(params.tipo, params.marca, famiglia) : null;
-    if (alt && alt.famigliaIds) {
-      params.subitoNodo = alt;
-      console.log(`[ponte] Subito "${params.marca} ${params.modello}": famiglia "${famiglia}" dal ponte, per portare la versione`);
+    /**
+     * TUTTE LE FAMIGLIE CHE QUEL CODICE AGGANCIA, non la prima.
+     *
+     * Il ponte letto al contrario ne teneva una sola, scelta dall'ordine con cui l'indice era
+     * stato costruito: 207 codici ne agganciano piu' d'una, e la ricerca Subito partiva su un
+     * altro veicolo. Sulle AUTO chiederle tutte e' gratis — misurato sull'API: due famiglie
+     * insieme rispondono la somma esatta delle due separate, in una richiesta sola.
+     * Sulle MOTO no: `bm` con la virgola risponde 400 (misurato oggi, come dice il commento
+     * in subito-api.js), quindi li' resta la prima e lo si dichiara.
+     */
+    const famiglie = famiglieSubito(params.tipo, params.mmmvAutoscout);
+    const nodi = famiglie.map(f => risolviNodo(params.tipo, params.marca, f)).filter(n => n && n.famigliaIds);
+    if (nodi.length) {
+      const primo = nodi[0];
+      if (params.tipo !== 'moto' && nodi.length > 1) {
+        const ids = [...new Set(nodi.flatMap(n => n.famigliaIds.map(String)))];
+        params.subitoNodo = { ...primo, famigliaIds: ids };
+        console.log(`[ponte] Subito "${params.marca} ${params.modello}": ${nodi.length} famiglie dal ponte (${famiglie.join(', ')}) → ${ids.length} id`);
+      } else {
+        params.subitoNodo = primo;
+        if (nodi.length > 1) {
+          params.subitoFamiglieNonChieste = famiglie.slice(1);
+          console.warn(`[ponte] Subito moto "${params.marca} ${params.modello}": ${famiglie.length} famiglie agganciate, chiesta solo "${famiglie[0]}" (bm non accetta piu' valori)`);
+        }
+        console.log(`[ponte] Subito "${params.marca} ${params.modello}": famiglia "${famiglie[0]}" dal ponte, per portare la versione`);
+      }
     }
   }
 

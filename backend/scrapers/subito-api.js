@@ -49,6 +49,10 @@ function httpGetJson(path) {
   });
 }
 
+// La porta HTTP, in una variabile: e' l'unico modo di provare l'unione delle famiglie moto
+// (una richiesta per famiglia) senza uscire davvero verso Subito.
+let _http = httpGetJson;
+
 // feature per label → primo value
 function feat(ad, label) {
   const f = (ad.features || []).find(x => x.label === label);
@@ -424,7 +428,7 @@ function extractTotal(j) {
 }
 
 async function fetchPage(params, start) {
-  const res = await httpGetJson(buildPath(params, start));
+  const res = await _http(buildPath(params, start));
   if (res.status !== 200) throw fail(`Subito hades HTTP ${res.status}`, { status: res.status, kind: kindForStatus(res.status) });
   let j;
   try { j = JSON.parse(res.body); } catch (_) { throw fail('Subito hades: body non-JSON (blocco?)', { status: res.status, kind: 'blocked' }); }
@@ -553,7 +557,58 @@ async function paginaRecupero(params) {
   return page.ads;
 }
 
+/**
+ * LE MOTO SI CHIEDONO UNA FAMIGLIA PER VOLTA.
+ *
+ * `valoreModello` manda `ids[0]` per le moto perche' `bm` con la virgola risponde 400
+ * (rimisurato oggi: due famiglie Yamaha insieme → HTTP 400, mentre sulle auto `cm` con la
+ * virgola risponde la somma esatta). Il resto della lista veniva costruito, portato in giro
+ * e buttato: 437 famiglie moto non venivano mai chieste, e il totale accanto alla fonte era
+ * quello di una sola. Cercando "Ducati Monster" arrivavano solo i Monster 1000.
+ *
+ * Quindi si fa come Moto.it: una richiesta per famiglia, in fila e con la pausa che c'e'
+ * gia', e si uniscono i risultati per url. Il tetto e' dichiarato, non silenzioso.
+ */
+const MAX_FAMIGLIE_MOTO = 8;
+async function unioneFamiglieMoto(params, opts) {
+  const nodo = params.subitoNodo;
+  const tutte = nodo.famigliaIds.map(String);
+  const chieste = tutte.slice(0, MAX_FAMIGLIE_MOTO);
+  const perUrl = new Map();
+  let truncated = false, total = null, errori = 0;
+  for (let i = 0; i < chieste.length; i++) {
+    if (i > 0) await sleep(opts.pageDelayMs || 400);      // mai raffica verso la stessa fonte
+    const uno = { ...params, subitoNodo: { ...nodo, famigliaIds: [chieste[i]] } };
+    try {
+      const r = await scrapeSubitoApi(uno, { ...opts, withMeta: true });
+      for (const x of r.items) if (x && x.url && !perUrl.has(x.url)) perUrl.set(x.url, x);
+      if (r.truncated) truncated = true;
+      // I totali si sommano: sono famiglie DISGIUNTE del catalogo, non insiemi che si
+      // sovrappongono (e' la stessa somma che l'API fa da sola sulle auto con la virgola).
+      if (Number.isFinite(r.total)) total = (total || 0) + r.total;
+    } catch (e) {
+      errori++;
+      console.warn(`[subito] famiglia moto ${chieste[i]} KO: ${e.message}`);
+    }
+  }
+  // Tutte cadute: e' un errore della fonte, non un mercato vuoto.
+  if (errori === chieste.length) throw fail(`Subito: nessuna delle ${chieste.length} famiglie ha risposto`, { kind: 'error' });
+  const fuori = tutte.length - chieste.length;
+  const parziale = [
+    fuori ? `${fuori} famiglie Subito oltre il tetto di ${MAX_FAMIGLIE_MOTO} non sono state chieste` : null,
+    errori ? `${errori} famiglie su ${chieste.length} non hanno risposto` : null,
+  ].filter(Boolean).join(' · ') || null;
+  if (parziale) console.warn(`[subito] moto "${params.marca} ${params.modello || ''}": ${parziale}`);
+  const items = [...perUrl.values()];
+  console.log(`[subito] moto "${params.marca} ${params.modello || ''}": ${chieste.length} famiglie → ${items.length} annunci`);
+  return opts.withMeta ? { items, truncated, total, parziale } : items;
+}
+
 async function scrapeSubitoApi(params, opts = {}) {
+  const nodoIn = params.subitoNodo;
+  if (params.tipo === 'moto' && nodoIn && Array.isArray(nodoIn.famigliaIds) && nodoIn.famigliaIds.length > 1) {
+    return unioneFamiglieMoto(params, opts);
+  }
   const regione = params.regione ? String(params.regione).trim().toLowerCase() : null;
   const maxPages = opts.maxPages || MAX_PAGES;
   const pageDelay = opts.pageDelayMs || 0;   // pausa tra le pagine (anti-ban su crawl profondi)
@@ -652,3 +707,4 @@ module.exports._faTitolo = faTitolo;
 // Quanto e' largo DAVVERO il filtro km chiesto, sui due lati: `ms` e `me` sono categorie.
 module.exports.kmTettoFascia = kmTettoFascia;
 module.exports.kmPavimentoFascia = kmPavimentoFascia;
+module.exports._setHttpGetJson = fn => { _http = fn || httpGetJson; };

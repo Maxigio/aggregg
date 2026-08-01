@@ -227,9 +227,35 @@ async function famiglieMotoit(brandSlug, modelloText) {
   const figlie = nomi.filter(m => q.length >= 3 && normN(m.name).startsWith(q)
     && !/\d/.test(normN(m.name).charAt(q.length) || ''));
   if (figlie.length) return figlie.map(m => m.value).join(',');
-  // Ultima spiaggia: il vecchio resolver fuzzy, che una risposta la da' sempre.
+  /**
+   * ULTIMA SPIAGGIA, MA CON LA STESSA GUARDIA DI SOPRA.
+   *
+   * Il resolver fuzzy una risposta la da' sempre, e normalizza togliendo OGNI separatore:
+   * "CRF 1100" diventa "crf1100", la famiglia "CRF 110" diventa "crf110", il prefisso
+   * combacia e la ricerca partiva su `model=honda|crf-110` — minimoto da 110 cc, con ogni
+   * riga marcata "versione n.d.", cioe' "il modello e' quello giusto". Il ramo `figlie` qui
+   * sopra quella guardia ce l'ha da sempre ("R 1200" non prende R 12000): mancava solo qui.
+   *
+   * Se dopo la guardia non resta niente si torna null, cioe' si cerca a livello marca — e
+   * quel livello il chiamante lo dichiara gia' come 'senza-modello'.
+   */
   const resolver = makeModelResolver(nomi);
-  return resolver(modelloText) || null;
+  const scelto = resolver(modelloText) || null;
+  if (!scelto) return null;
+  const nome = (nomi.find(m => m.value === scelto) || {}).name || '';
+  const nq = normN(nome), qq = q;
+  const confineDentroUnNumero = (a, b) => {
+    const corto = a.length <= b.length ? a : b, lungo = a.length <= b.length ? b : a;
+    if (!corto || !lungo.startsWith(corto)) return false;
+    // Il carattere DOPO il prefisso e' una cifra, e anche l'ultimo del prefisso lo e':
+    // il taglio cade in mezzo a un numero ("crf110" contro "crf1100").
+    return /\d/.test(lungo.charAt(corto.length)) && /\d/.test(corto.charAt(corto.length - 1));
+  };
+  if (confineDentroUnNumero(nq.replace(/ /g, ''), qq.replace(/ /g, ''))) {
+    console.warn(`[motoit-models] "${modelloText}" → "${nome}" scartato: il confronto spezza un numero`);
+    return null;
+  }
+  return scelto;
 }
 
 /**
