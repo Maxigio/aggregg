@@ -21,6 +21,7 @@
 
 const https        = require('https');
 const cheerio      = require('cheerio');
+const annullo = require('../annullo');
 
 const { kindForStatus, fail } = require('./utils');   // salute crawler (come AS24/Subito)
 const budget = require('../budget-richieste');        // conta le richieste, non le limita
@@ -40,7 +41,8 @@ function httpGetText(url, hops = 0, timeoutMs = HTTP_TIMEOUT_DEFAULT) {
   budget.conta('motoit', hops ? 'redirect' : null);
   return new Promise((resolve, reject) => {
     if (hops > 5) return reject(new Error('too many redirects'));
-    const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'it-IT,it;q=0.9' } }, res => {
+    const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'it-IT,it;q=0.9' },
+      signal: annullo.segnale() }, res => {   // ricerca abbandonata → la presa si chiude (annullo.js)
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
         const next = res.headers.location.startsWith('http') ? res.headers.location : new URL(res.headers.location, url).href;

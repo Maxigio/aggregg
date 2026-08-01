@@ -50,17 +50,32 @@ function loadStorageState() {
 
 /**
  * Salva lo storageState (output di `context.storageState()`) sul disco.
+ *
+ * TRE PERCORSI SCRIVONO QUI: la ricerca a browser (due punti) e il bootstrap dopo il
+ * CAPTCHA. Il file NON si scriveva in modo atomico, e un lettore poteva trovarlo a meta' —
+ * cioe' un JSON rotto, cioe' nessuna sessione, cioe' un CAPTCHA in piu'. Ora si scrive su
+ * un temporaneo e si rinomina, come fa gia' auth.js: chi legge vede il vecchio o il nuovo.
+ *
+ * Una fila d'attesa NON serve e non l'ho messa: `writeFileSync` e `renameSync` sono
+ * sincrone, quindi due salvataggi non possono intrecciarsi. Resta vero che vince l'ULTIMO
+ * che chiama, e se quello porta uno stato catturato prima si perde il cookie piu' fresco —
+ * ma quello non lo risolve un lock: lo risolverebbe datare lo stato, ed e' un'altra cosa.
  */
 function saveStorageState(state) {
   const file = getSessionPath();
-  try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify(state, null, 2), 'utf8');
-    return true;
-  } catch (err) {
-    console.warn('[subito-session] save failed: ' + err.message);
-    return false;
-  }
+  const scrivi = () => {
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      const tmp = file + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
+      fs.renameSync(tmp, file);            // atomica: chi legge vede il vecchio o il nuovo, mai meta'
+      return true;
+    } catch (err) {
+      console.warn('[subito-session] save failed: ' + err.message);
+      return false;
+    }
+  };
+  return scrivi();
 }
 
 /**

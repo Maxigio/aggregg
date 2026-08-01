@@ -200,29 +200,12 @@ async function indice() {
   }
 }
 
-// "Benzina"/"Gasolio"/"Diesel"/"Ibrida benzina"… → famiglia, o null se non quotabile
-// (elettrico: il prezzo dell'energia è un'altra fonte, non la si finge qui).
-function famigliaDa(alimentazione) {
-  const s = String(alimentazione || '').toLowerCase();
-  if (!s) return null;
-  if (/elettric|electric/.test(s) && !/ibrid|hybrid/.test(s)) return null;
-  if (/gpl|lpg/.test(s)) return 'gpl';
-  if (/metano|cng|natural/.test(s)) return 'metano';
-  if (/diesel|gasolio/.test(s)) return 'gasolio';
-  if (/benzin|petrol|gasoline/.test(s)) return 'benzina';
-  return null;
-}
-
-// "6.4-7.2 l/100 km" / "5,1 l/100 km" → 6.8 (media del range). null se non è litri.
-function consumoDa(valore) {
-  const s = String(valore || '');
-  if (!/l\s*\/\s*100/i.test(s)) return null;          // kWh/100km (elettriche) → non qui
-  const num = s.replace(',', '.').match(/\d+(?:\.\d+)?/g);
-  if (!num || !num.length) return null;
-  const v = num.slice(0, 2).map(Number).filter(x => x > 0 && x < 60);
-  if (!v.length) return null;
-  return +(v.reduce((a, b) => a + b, 0) / v.length).toFixed(2);
-}
+// `famigliaDa` e `consumoDa` stavano qui, esportate e con nove test. Non le chiamava
+// NESSUNO: la coppia viva e' `carbFamigliaDa`/`carbConsumoDa` nel frontend, che e' dove il
+// costo carburante si calcola davvero. E le due erano anche diverse — correggendo la
+// lettura della virgola all'italiana ("6,9-7,2") si era toccata solo la viva, quindi i nove
+// test provavano una copia sbagliata che nessuno esegue: un test che non puo' fallire dove
+// serve e' peggio di nessun test. Tolte da qui; i test sono passati sulla copia vera.
 
 /**
  * PREZZI PER SINGOLO IMPIANTO, che l'indice per provincia butta via aggregando.
@@ -291,5 +274,5 @@ async function impianti() {
 
 module.exports = {
   indice, costruisciIndice, parseImpianti, parseAnagrafica, perImpianto, impianti,
-  famigliaDa, consumoDa, FAMIGLIE, FONTE, _scarica: scarica,
+  FAMIGLIE, FONTE, _scarica: scarica,
 };

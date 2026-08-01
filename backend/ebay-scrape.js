@@ -94,8 +94,18 @@ function normalizzaVal(v) {
 }
 
 // Context persistente con warm-up (la sessione amortizza il 403 a freddo). Si ricrea se il browser cade.
-let _ctx = null, _warm = false;
+let _ctx = null, _warm = false, _ctxInVolo = null;
 async function getCtx() {
+  // UNA SESSIONE SOLA, anche se due richieste partono insieme. `newContext()` e' await:
+  // due chiamate concorrenti trovavano entrambe `_ctx` a null, ne creavano una ciascuna, e
+  // la seconda sovrascriveva `_ctx` — lasciando la prima aperta e senza nessuno che la
+  // chiudesse. Due sessioni di Chromium per un lavoro che ne vuole una. Chi arriva mentre
+  // l'apertura e' in corso aspetta quella, invece di aprirne un'altra.
+  if (_ctxInVolo) return _ctxInVolo;
+  _ctxInVolo = (async () => { try { return await apriCtx(); } finally { _ctxInVolo = null; } })();
+  return _ctxInVolo;
+}
+async function apriCtx() {
   const browser = await getBrowser();
   // `pages()` su una sessione chiusa NON lancia: torna una lista vuota. Il ramo di recupero
   // era quindi irraggiungibile, e dopo un crash di Chromium restava un browser nuovo

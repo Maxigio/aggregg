@@ -3,6 +3,8 @@
 // Riga 1 "Estrazione del…", riga 2 intestazione, separatore PIPE, codifica latin1.
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
 const c = require('../backend/carburanti');
 
 const IMPIANTI = [
@@ -99,25 +101,48 @@ test('costruisciIndice: prezzi impossibili scartati', () => {
   assert.ok(i.province.MI.benzina.p > 1 && i.province.MI.benzina.p < 3);
 });
 
-test('famigliaDa: alimentazione della scheda → famiglia quotabile', () => {
-  assert.strictEqual(c.famigliaDa('Benzina'), 'benzina');
-  assert.strictEqual(c.famigliaDa('Gasolio'), 'gasolio');
-  assert.strictEqual(c.famigliaDa('Diesel'), 'gasolio');
-  assert.strictEqual(c.famigliaDa('GPL'), 'gpl');
-  assert.strictEqual(c.famigliaDa('Metano'), 'metano');
-  assert.strictEqual(c.famigliaDa('Ibrida benzina'), 'benzina');   // l'ibrida brucia benzina
-  assert.strictEqual(c.famigliaDa('Energia elettrica'), null);      // il prezzo energia è altra fonte
-  assert.strictEqual(c.famigliaDa(''), null);
-  assert.strictEqual(c.famigliaDa(null), null);
+/**
+ * LE DUE REGOLE VIVE STANNO NEL FRONTEND, e sono quelle che si provano.
+ *
+ * `famigliaDa`/`consumoDa` esistevano anche in backend/carburanti.js, esportate e con nove
+ * test — ma non le chiamava nessuno. La coppia che decide davvero famiglia e consumo per il
+ * costo carburante e' `carbFamigliaDa`/`carbConsumoDa` in frontend/app.js. Le due erano
+ * pure divergenti: la correzione della virgola all'italiana era andata solo sulla viva, e
+ * questi test restavano verdi provando una copia sbagliata che nessuno esegue.
+ * La copia morta e' stata tolta; qui si ritaglia dal sorgente quella vera e la si esegue.
+ */
+const APP = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+function regoleVive() {
+  const da = APP.indexOf('function carbConsumoDa(v)');
+  assert.ok(da > 0, 'carbConsumoDa non e\' piu\' in frontend/app.js');
+  const a = APP.indexOf('\n// Aritmetica del costo', da);
+  assert.ok(a > da, 'non trovo la fine del blocco delle due regole');
+  return new Function(APP.slice(da, a) + '\nreturn { carbConsumoDa, carbFamigliaDa };')();
+}
+
+test('carbFamigliaDa: alimentazione della scheda → famiglia quotabile', () => {
+  const { carbFamigliaDa } = regoleVive();
+  assert.strictEqual(carbFamigliaDa('Benzina'), 'benzina');
+  assert.strictEqual(carbFamigliaDa('Gasolio'), 'gasolio');
+  assert.strictEqual(carbFamigliaDa('Diesel'), 'gasolio');
+  assert.strictEqual(carbFamigliaDa('GPL'), 'gpl');
+  assert.strictEqual(carbFamigliaDa('Metano'), 'metano');
+  assert.strictEqual(carbFamigliaDa('Ibrida benzina'), 'benzina');   // l'ibrida brucia benzina
+  assert.strictEqual(carbFamigliaDa('Elettrica'), null);             // il prezzo energia e' altra fonte
+  assert.strictEqual(carbFamigliaDa(''), null);
+  assert.strictEqual(carbFamigliaDa(null), null);
 });
 
-test('consumoDa: legge i litri, ignora le elettriche', () => {
-  assert.strictEqual(c.consumoDa('6.4-7.2 l/100 km'), 6.8);   // media del range
-  assert.strictEqual(c.consumoDa('5,1 l/100 km'), 5.1);        // virgola decimale italiana
-  assert.strictEqual(c.consumoDa('7 l/100 km'), 7);
-  assert.strictEqual(c.consumoDa('15.9-17.2 kWh/100 km'), null);
-  assert.strictEqual(c.consumoDa('218 kg'), null);
-  assert.strictEqual(c.consumoDa(''), null);
+test('carbConsumoDa: legge il consumo come lo scrive la fonte', () => {
+  const { carbConsumoDa } = regoleVive();
+  assert.strictEqual(carbConsumoDa('7 l/100 km'), 7);
+  assert.strictEqual(carbConsumoDa('6.4-7.2 l/100 km'), 6.8);        // media dell'intervallo
+  // All'italiana: era il caso che sfuggiva, perche' si sostituiva UNA virgola sola e la
+  // seconda cifra diventava un numero a se'.
+  assert.strictEqual(carbConsumoDa('6,9-7,2 l/100 km'), 7.05);
+  assert.strictEqual(carbConsumoDa('10,42 l/100 km'), 10.42);
+  assert.strictEqual(carbConsumoDa('18 kWh/100 km'), null);          // elettrica: non si quota qui
+  assert.strictEqual(carbConsumoDa(''), null);
 });
 
 test('scarica: anti-SSRF, host diverso da mimit.gov.it rifiutato', async () => {

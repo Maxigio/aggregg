@@ -172,13 +172,22 @@ Yamaha MT-07 — Subito 0 su 100, Autoscout 40 su 100, Moto.it 0 su 39: farebbe 
 indicata» da 199. E il campo `tipo` non arriva da nessuna fonte (0 su 239). Prima viene il
 dato: la cilindrata sta nel titolo ("MT-07 689") e va letta lì — lavoro sugli scraper.
 
-**Restano** (verificati vivi, non toccati): il timeout che non ferma la richiesta abbandonata;
-la sessione Subito riscritta da tre percorsi concorrenti e riparabile solo da chi è davanti
-all'iMac; le etichette Moto.it/Autoscout in `server.js` (4 voci); l'annuncio Subito senza
-prezzo; le due sessioni eBay in parallelo; il kW cercato nel listino del nuovo; le due regole
-del carburante che i test provano ma non girano; l'auto-update che sceglie il DMG senza
-guardare l'architettura. Più i tre dell'area in pausa e le scritture dentro GET (decisione
-esplicita: si lasciano).
+**Secondo giro — fatti anche questi**: il timeout ora **ferma** davvero (`backend/annullo.js`,
+segnale via AsyncLocalStorage come `budget-richieste`: nessuna firma cambiata, e provato che
+la presa si chiude); una sola sessione eBay anche con due richieste insieme; la sessione
+Subito si scrive in modo atomico; il kW non si chiede al listino del nuovo su un'auto oltre
+gli 8 anni; le due regole del carburante sono una sola (tolta la copia morta del backend, i
+nove test spostati sulla copia viva — provavano quella sbagliata).
+
+**Trovato dal collaudo, non era in elenco**: con un filtro del browser che svuota lo schermo,
+il pannello diceva «Nessun risultato trovato» — cioè dava la colpa al mercato mentre gli
+annunci c'erano tutti (misurato: 210, filtro «Solo IVA esposta»). Ora dice quanti sono e chi
+li nasconde.
+
+**Restano davvero**: le etichette Moto.it/Autoscout in `server.js` (4 voci, da verificare una
+per una); l'annuncio Subito senza prezzo; il DMG scelto senza guardare l'architettura del Mac
+(**decisione esplicita: si lascia**); i tre dell'area in pausa e le scritture dentro GET
+(**decisione esplicita: si lasciano**).
 
 ### Coda — **CHIUSA**
 Due erano già chiusi da campagne precedenti: la marcatura nel confronto affiancato (riga

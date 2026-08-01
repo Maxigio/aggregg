@@ -887,3 +887,71 @@ test('minori: la verifica targa non dipende da una ricerca, e ha un freno', () =
   const targa = fs.readFileSync(path.join(__dirname, '..', 'backend', 'targa.js'), 'utf8');
   assert.match(targa, /limite-richieste/, 'la sfida targa deve passare dal limitatore comune');
 });
+
+// ═══ QUELLO CHE SI ABBANDONA, SI FERMA ════════════════════════════════════════
+test('annullo: una richiesta abbandonata si chiude davvero', async () => {
+  const http = require('http');
+  const annullo = require('../backend/annullo');
+  let interrotte = 0, complete = 0;
+  const srv = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.write('{"a":');
+    const t = setInterval(() => { try { res.write('0'); } catch (_) {} }, 20);
+    const fine = setTimeout(() => { clearInterval(t); res.end('1}'); complete++; }, 3000);
+    req.on('aborted', () => { interrotte++; clearInterval(t); clearTimeout(fine); });
+    res.on('close', () => { clearInterval(t); clearTimeout(fine); });
+  });
+  await new Promise(r => srv.listen(0, r));
+  const porta = srv.address().port;
+  // Come lo fanno gli scraper: chiedono il segnale al momento della richiesta.
+  const chiedi = () => new Promise((ok, ko) => {
+    const r = http.get({ host: '127.0.0.1', port: porta, path: '/', signal: annullo.segnale() },
+      res => { let d = ''; res.on('data', c => d += c); res.on('end', () => ok(d.length)); });
+    r.on('error', ko);
+  });
+  try {
+    const ctrl = new AbortController();
+    const p = annullo.dentro(ctrl.signal, () => chiedi());
+    await new Promise(r => setTimeout(r, 120));
+    ctrl.abort();                                    // e' quello che fa runSource allo scadere
+    await assert.rejects(() => p, e => e.name === 'AbortError' || e.code === 'ABORT_ERR',
+      'la richiesta abbandonata deve chiudersi, non restare aperta a scaricare');
+    await new Promise(r => setTimeout(r, 120));
+    assert.strictEqual(interrotte, 1, 'il server deve vedere la presa chiudersi');
+    assert.strictEqual(complete, 0, 'e la risposta non deve arrivare a fondo');
+    // Fuori da una ricerca il segnale non c'e', e non cambia niente: crawler, test e rotte
+    // che riusano gli stessi scraper restano com'erano.
+    assert.strictEqual(annullo.segnale(), undefined);
+    assert.strictEqual(annullo.annullata(), false);
+  } finally { srv.close(); }
+});
+
+test('annullo: le tre fonti chiedono il segnale al momento della richiesta', () => {
+  for (const f of ['subito-api.js', 'motoit.js', 'autoscout-graphql.js']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', f), 'utf8');
+    assert.match(src, /signal: annullo\.segnale\(\)/,
+      `${f} non passa il segnale: una ricerca abbandonata continuerebbe a scaricare da quella fonte`);
+  }
+  // E `runSource` deve ricevere una FUNZIONE, senno' il lavoro nasce fuori dal contesto e
+  // il segnale non lo raggiunge: e' l'errore facile da fare rileggendo questo codice.
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
+  assert.match(srv, /runSource\(\(\) =>/, 'le fonti vanno passate a runSource come funzione');
+  assert.match(srv, /ctrl\.abort\(\)/, 'runSource deve annullare quando il tempo scade');
+});
+
+test('minori: una sessione sola, e il file si scrive intero o niente', () => {
+  const ebay = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ebay-scrape.js'), 'utf8');
+  assert.match(ebay, /_ctxInVolo/,
+    'due richieste eBay partite insieme tornano ad aprire due sessioni di Chromium');
+  const sess = fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'subito-session.js'), 'utf8');
+  assert.match(sess, /renameSync/,
+    'la sessione Subito torna a scriversi sul posto: un lettore puo\' trovarla a meta\'');
+});
+
+test('minori: uno schermo vuoto per un filtro non e\' un mercato vuoto', () => {
+  const r = ritaglia(APP, 'if (sorted.length === 0) {', '\n  noResults.classList.add(');
+  assert.match(r, /Nessuno di questi \$\{nascosti\} annunci passa/,
+    'il pannello torna a dare la colpa alla ricerca quando a nascondere gli annunci e\' un filtro nostro');
+  assert.match(r, /Solo IVA esposta/);
+  assert.match(r, /cursore dei prezzi/);
+});

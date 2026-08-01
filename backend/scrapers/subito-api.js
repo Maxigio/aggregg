@@ -20,7 +20,8 @@
 const https = require('https');
 
 const { kindForStatus, fail } = require('./utils');   // classificazione salute crawler (F1.5)
-const budget = require('../budget-richieste');        // conta le richieste, non le limita
+const budget = require('../budget-richieste');
+const annullo = require('../annullo');        // il segnale che chiude le richieste abbandonate
 const { livelliAnnuncio, dichiarato } = require('./subito-nodo'); // cosa l'annuncio dichiara di se'
 const dedotta = require('./versione-dedotta');        // la versione che il venditore non ha scelto dal menu
 const { _perMarca } = require('./versioni-unificate');// il catalogo versioni, gia' in cache per marca
@@ -39,6 +40,9 @@ function httpGetJson(path) {
     const req = https.get({
       host: HOST, path,
       headers: { 'user-agent': UA, 'referer': 'https://www.subito.it/', 'accept': 'application/json' },
+      // Se la ricerca e' stata abbandonata (timeout), Node chiude la presa invece di
+      // scaricare una risposta che nessuno leggera'. Vedi backend/annullo.js.
+      signal: annullo.segnale(),
     }, res => {
       let d = ''; res.setEncoding('utf8');
       res.on('data', c => d += c);

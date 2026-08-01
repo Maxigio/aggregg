@@ -337,7 +337,21 @@ async function cerca(marca, modello) {
  *
  * @returns {Promise<{kw:number, cavalli:number, versioni:string[], fonte:string, url:string}|null>}
  */
-async function kwDaCavalli(marca, modello, cavalli) {
+/**
+ * IL LISTINO QUI E' QUELLO DEL NUOVO, DI OGGI (`/nuovo/auto/versione`). Su un'auto di dieci
+ * anni fa quel modello non c'e' piu': la richiesta parte, non trova niente, e si ripiega
+ * sulla stima dei kW dai CV — che e' gia' dichiarata a schermo. Cioe' e' una richiesta di
+ * rete che non puo' riuscire, verso una fonte che ha un freno anti-raffica.
+ *
+ * `anno` e' facoltativo: quando c'e' e il veicolo e' piu' vecchio della finestra in cui il
+ * listino del nuovo puo' ancora contenerlo, non si chiede proprio. Il conto del passaggio
+ * non cambia — cambiava solo il tempo perso.
+ */
+const ANNI_NUOVO = 8;   // oltre, il modello dal listino del nuovo e' sparito (e non torna)
+
+async function kwDaCavalli(marca, modello, cavalli, anno) {
+  const y = Number(anno);
+  if (Number.isFinite(y) && y > 1900 && (new Date().getFullYear() - y) > ANNI_NUOVO) return null;
   const r = await cerca(marca, modello);
   if (!r.ok) return null;
   const k = kwPerCavalli(r.versioni, cavalli);

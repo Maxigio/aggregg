@@ -34,6 +34,7 @@ const { famiglieMotoit, getBrandModels, getModelBikes, resolveMotoitVersionEntry
 const motoitVersione = require('./scrapers/motoit-versione');   // testo libero → codice/slug versione Moto.it
 const { getDetail } = require('./scrapers/detail');
 const liquidita      = require('./liquidita');    // liquidita modello (ACI Autoritratto)
+const annullo        = require('./annullo');       // il segnale che chiude le richieste abbandonate
 const iptCalc        = require('./ipt');          // costo passaggio di proprieta per provincia
 const provSigla      = require('./province-sigla'); // localita' dell'annuncio -> sigla provincia
 const motornet       = require('./scrapers/motornet');  // kW ufficiali di listino (SPENTO se AMR_MOTORNET!=1)
@@ -766,7 +767,11 @@ app.get('/api/passaggio', async (req, res) => {
   // libretto puo' dire 53 → 49 € di differenza). Il listino li ha; se non li ha, si stima e si dice.
   let kwListino = null;
   if (motornet.ATTIVO && marca && modello && cvN >= 1) {
-    try { kwListino = await motornet.kwDaCavalli(marca, modello, cvN); }
+    // L'anno dell'annuncio arriva fin qui: su un'auto vecchia la richiesta al listino del
+    // NUOVO non parte proprio (vedi motornet.js) e si va dritti alla stima dai CV, che e'
+    // dichiarata. Prima si spendeva una richiesta a una fonte con un freno anti-raffica per
+    // un modello che quel listino non ha piu'.
+    try { kwListino = await motornet.kwDaCavalli(marca, modello, cvN, (req.query || {}).anno); }
     catch (e) { console.warn('[api/passaggio] motornet KO:', e.message); }
   }
   const kwDiretti = kwN >= 1 ? kwN : (kwListino ? kwListino.kw : null);
@@ -978,33 +983,51 @@ function sciogli(r) {
   };
 }
 
-async function runSource(promise, ms, nomeSito) {
-  const timeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('__timeout__')), ms)
-  );
+/**
+ * @param {Function|Promise} lavoro  meglio una FUNZIONE: cosi' parte dentro il contesto di
+ *   annullamento e, quando il timeout scade, la richiesta si chiude davvero invece di
+ *   restare aperta verso la fonte a scaricare una pagina che nessuno guardera'. Una Promise
+ *   gia' avviata si accetta ancora (il crawler e i test la passano cosi'), ma non e'
+ *   annullabile: e' nata fuori dal contesto.
+ */
+async function runSource(lavoro, ms, nomeSito) {
+  const ctrl = new AbortController();
+  let scattato;
+  const timeout = new Promise((_, reject) => {
+    scattato = setTimeout(() => { ctrl.abort(); reject(new Error('__timeout__')); }, ms);
+  });
+  const avviato = typeof lavoro === 'function' ? annullo.dentro(ctrl.signal, lavoro) : lavoro;
   try {
-    const { items, total, parziale } = sciogli(await Promise.race([promise, timeout]));
+    const { items, total, parziale } = sciogli(await Promise.race([avviato, timeout]));
     // Un risultato parziale con item resta 'ok' (il flag sta ACCANTO allo status, mai al
     // posto suo — stessa regola di `allargato`), ma il perche' viaggia in `reason` e il
     // campo `parziale` arriva fino a `sources`, dove cacheable() lo legge.
     return { items, total, parziale, status: items.length ? 'ok' : 'empty', reason: parziale || null };
   } catch (err) {
     const isTimeout = err.message === '__timeout__';
+    // Anche su un errore: se la fonte ha risposto male, quello che resta in volo non serve.
+    ctrl.abort();
     console.warn(`[WARN] ${nomeSito}: ${isTimeout ? 'timeout' : err.message}`);
     return { items: [], status: isTimeout ? 'timeout' : 'error', reason: isTimeout ? 'timeout' : err.message };
-  }
+  } finally { clearTimeout(scattato); }
 }
 
 // Wrapper Subito-specifico: distingue fra bloccato (CAPTCHA/403 → needs_bootstrap)
 // e altri errori (timeout/parsing → 'error'). Ritorna { items, status }.
 async function runSubito(params, ms) {
-  const timeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('Timeout su Subito.it')), ms)
-  );
+  // Stesso annullamento di runSource: scaduto il tempo, la richiesta a Subito si chiude
+  // invece di restare aperta a scaricare una risposta che nessuno leggera'.
+  const ctrl = new AbortController();
+  let scattato;
+  const timeout = new Promise((_, reject) => {
+    scattato = setTimeout(() => { ctrl.abort(); reject(new Error('Timeout su Subito.it')); }, ms);
+  });
   try {
-    const { items, total } = sciogli(await Promise.race([scrapeSubitoSmart(params), timeout]));
+    const avviato = annullo.dentro(ctrl.signal, () => scrapeSubitoSmart(params));
+    const { items, total } = sciogli(await Promise.race([avviato, timeout]));
     return { items, total, status: items.length ? 'ok' : 'empty', reason: null };
   } catch (err) {
+    ctrl.abort();
     if (err instanceof SubitoBlockedError) {
       // Senza fallback browser (es. M2) il bootstrap non è proponibile → degrada a
       // "vuoto" silenzioso (AS24/Moto.it portano la ricerca), niente banner-errore.
@@ -1013,7 +1036,7 @@ async function runSubito(params, ms) {
     }
     console.warn('[WARN] ' + err.message);
     return { items: [], status: 'error', reason: err.message };
-  }
+  } finally { clearTimeout(scattato); }
 }
 
 // Rate-limit generoso per-IP (seatbelt anti-abuso; un umano non lo tocca, uno script sì).
@@ -1543,11 +1566,11 @@ async function runSearchCore(params) {
       // confinanti — misurato in Sicilia: dei 100 letti, 25 calabresi — e quelli il filtro
       // sul CAP li toglie. Senza compensare, la regione mostrerebbe MENO annunci di prima
       // pur pescando da un insieme piu' grande (75 contro 83). Costa una richiesta.
-      : runSource(scrapeAutoscoutUnion(params, { withMeta: true, fetta: params.fetta || 0,
+      : runSource(() => scrapeAutoscoutUnion(params, { withMeta: true, fetta: params.fetta || 0,
           ...(params.as24RegioneDaCap ? { maxPages: 3 } : {}) }), TIMEOUT_MS, 'Autoscout24'),
     skipMotoIt
       ? Promise.resolve({ items: [], status: 'skipped', reason: motoSkipReason })
-      : runSource(scrapeMotoIt(params, { withMeta: true, fetta: params.fetta || 0 }), TIMEOUT_MS, 'Moto.it'),
+      : runSource(() => scrapeMotoIt(params, { withMeta: true, fetta: params.fetta || 0 }), TIMEOUT_MS, 'Moto.it'),
   ]);
 
   // F50 fase 1 — riallargamento SOLO a zero risultati (scelta di prodotto: mai allargare
@@ -1566,13 +1589,13 @@ async function runSearchCore(params) {
     // dal secondo "Carica altri" in poi da Autoscout tornavano solo annunci gia' visti.
     const fetta = params.fetta || 0;
     if (params.autoscoutVersionModello) {
-      const soloModello = await runSource(
+      const soloModello = await runSource(() =>
         scrapeAutoscoutUnion({ ...params, versione: null, autoscoutVersionText: params.autoscoutVersionModello },
           { withMeta: true, fetta }), TIMEOUT_MS, 'Autoscout24');
       if (soloModello.items.length) { asRes = { ...soloModello, viaSoloModello: true }; as24Allargato = true; }
     }
     if (!as24Allargato) {
-      const retry = await runSource(
+      const retry = await runSource(() =>
         scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null, autoscoutSpellings: null }, { withMeta: true, fetta }), TIMEOUT_MS, 'Autoscout24');
       if (retry.items.length) { asRes = retry; as24Allargato = true; }
       // Un ritentativo SCADUTO non e' "la fonte non ha nulla": lasciando 'empty' la risposta

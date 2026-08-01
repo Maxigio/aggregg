@@ -12,6 +12,7 @@
  * ri-catturare dal Network tab di autoscout24.it.
  */
 const https = require('https');
+const annullo = require('../annullo');
 
 const { kindForStatus, fail } = require('./utils');   // classificazione salute crawler (F1.5)
 const budget = require('../budget-richieste');        // conta le richieste, non le limita
@@ -109,6 +110,9 @@ function httpPost(body, auth = AUTH) {
   return new Promise((resolve, reject) => {
     const data = Buffer.from(body, 'utf8');
     const req = https.request({
+      // Ricerca abbandonata (timeout) → la presa si chiude, invece di restare aperta verso
+      // Autoscout a scaricare una risposta che nessuno leggera'. Vedi backend/annullo.js.
+      signal: annullo.segnale(),
       host: HOST, path: '/graphql', method: 'POST',
       headers: {
         'authorization': auth,

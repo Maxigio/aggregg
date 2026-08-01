@@ -2358,6 +2358,32 @@ function renderResults(results) {
   targaBtnSync();   // annunci a schermo → il bottone della targa ha dove andare
 
   if (sorted.length === 0) {
+    /**
+     * "NESSUN RISULTATO" DEVE DIRE DI CHI E' LA COLPA.
+     *
+     * Qui compariva sempre "Nessun risultato trovato. Prova a modificare i filtri" — anche
+     * quando gli annunci c'erano eccome ed era un filtro NOSTRO a nasconderli tutti.
+     * Misurato: una ricerca Golf da 210 annunci in cui nessuno dichiara l'IVA esposta;
+     * acceso il chip "Solo IVA esposta", lo schermo si svuota e il pannello dava la colpa
+     * al mercato. E' la stessa forma di tutto il resto: una lista vuota per un filtro non
+     * e' un piazzale vuoto, e chi guarda deve poter distinguere le due cose.
+     */
+    const nascosti = (results || []).length;
+    const perFiltro = [];
+    if (soloIva) perFiltro.push('il filtro «Solo IVA esposta»');
+    if (prezzoSliderInstance) {
+      const [sMin, sMax] = prezzoSliderInstance.get().map(Number);
+      if (results.some(r => r.prezzo != null && (r.prezzo < sMin || r.prezzo > sMax))) perFiltro.push('il cursore dei prezzi');
+    }
+    const testo = noResults.querySelector('p');
+    const nota = noResults.querySelector('p.small');
+    if (nascosti > 0 && perFiltro.length && testo) {
+      testo.textContent = `Nessuno di questi ${nascosti} annunci passa ${perFiltro.join(' e ')}.`;
+      if (nota) nota.textContent = 'Gli annunci ci sono: a nasconderli è un filtro, non la ricerca. Toglilo per rivederli.';
+    } else if (testo) {
+      testo.textContent = 'Nessun risultato trovato.';
+      if (nota) nota.textContent = 'Prova a modificare i filtri o selezionare una regione più ampia.';
+    }
     noResults.classList.remove('d-none'); resultsSection.classList.add('d-none');
     return;
   }
@@ -3038,6 +3064,9 @@ async function calcolaPassaggio(r, panel) {
   if (r._passStorico) q.set('storico', '1');
   if (!pv.mia) { const z = r.zip || r.cap; if (z) q.set('cap', String(z)); }   // il CAP e' dell'annuncio
   if (r.potenzaCv > 0) q.set('cv', String(r.potenzaCv));
+  // L'anno serve al server per NON chiedere i kW al listino del nuovo quando il veicolo e'
+  // troppo vecchio perche' quel listino lo abbia ancora (vedi backend/scrapers/motornet.js).
+  if (r.anno) q.set('anno', String(r.anno));
   // A Torino un atto con IVA esposta paga il 20% invece del 30%: per un operatore che compra
   // con fattura e' la normalita', quindi la scelta esiste (e vale solo la' — vedi ipt.js).
   if (r._passIva) q.set('ivaEsposta', '1');
