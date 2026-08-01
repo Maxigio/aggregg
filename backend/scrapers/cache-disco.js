@@ -19,8 +19,25 @@
  * davvero, altrimenti due scritture diverse si sovrappongono o la stessa si ripete due volte.
  */
 const fs = require('fs');
+const path = require('path');
 
 const ORA = 60 * 60 * 1000;
+
+/**
+ * DOVE SI SCRIVE. I chiamanti passano `<radice>/data/*.json`, calcolato da __dirname. Nel
+ * pacchetto Electron quella radice finisce dentro app.asar, che e' di SOLA LETTURA: ogni
+ * writeFileSync falliva e il `catch` la ingoiava, quindi nessuna cache sopravviveva a un
+ * riavvio e a ogni avvio si ricrawlava tutto da zero — proprio la raffica che si becca il
+ * 403. Il file impacchettato resta la SEMENTE (si legge se non c'e' ancora niente di
+ * scritto), e si scrive accanto ai dati utente, come fanno gia' auth.js e saved.js.
+ */
+function percorsoScrittura(file) {
+  const ud = process.env.USER_DATA_PATH;
+  if (!ud || !fs.existsSync(ud)) return file;
+  const dir = path.join(ud, 'cache');
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (_) { return file; }
+  return path.join(dir, path.basename(file));
+}
 
 /**
  * @param {string} file      percorso del JSON su disco
@@ -34,10 +51,17 @@ function crea(file, opt = {}) {
   const ttlCorto = opt.ttlCorto || 15 * 60 * 1000;
   const max = opt.max || 500;
 
+  const fileScrittura = percorsoScrittura(file);
+  let scritturaKo = false;   // si dice UNA volta, non a ogni miss
+
   let memo = null;
   const leggi = () => {
     if (!memo) {
-      try { memo = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { memo = null; }
+      // Prima quello che abbiamo scritto noi, poi la semente impacchettata.
+      for (const p of (fileScrittura === file ? [file] : [fileScrittura, file])) {
+        try { memo = JSON.parse(fs.readFileSync(p, 'utf8')); } catch (_) { memo = null; }
+        if (memo) break;
+      }
       if (!memo || memo.schema !== schema) memo = { schema, voci: {} };   // formato vecchio: si riparte
       if (!memo.voci) memo.voci = {};
     }
@@ -54,7 +78,12 @@ function crea(file, opt = {}) {
       for (const k of vive) nuove[k] = c.voci[k];
       c.voci = nuove;
     }
-    try { fs.writeFileSync(file, JSON.stringify(c)); } catch (_) {}
+    // Una cache che non riesce a scrivere continua a funzionare — in memoria — ma il costo
+    // si paga al riavvio, e in silenzio non se ne accorge nessuno.
+    try { fs.writeFileSync(fileScrittura, JSON.stringify(c)); scritturaKo = false; }
+    catch (e) {
+      if (!scritturaKo) { scritturaKo = true; console.warn('[' + tag + '] cache non scrivibile in ' + fileScrittura + ' (' + e.message + '): resta in memoria e si perde al riavvio'); }
+    }
   };
 
   const inVolo = new Map();

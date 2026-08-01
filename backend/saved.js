@@ -63,6 +63,10 @@ function listSaved() {
     return {
       id: s.id, label: s.label, params: s.params, createdAt: s.createdAt,
       lastChecked: s.lastChecked || null,
+      // L'ultimo controllo in cui hanno risposto TUTTE le fonti, e quali sono state mute
+      // nell'ultimo: senza, "nessuna novita'" e "una fonte non ha parlato" sono identiche.
+      lastCheckedFull: s.lastCheckedFull || null,
+      fontiMute: (s.fontiMute && s.fontiMute.length) ? s.fontiMute : null,
       novita: unread.length,
       digest,
       alerts: unread.slice(-30).reverse(),   // più recenti in cima
@@ -235,6 +239,12 @@ function recordCheck(id, results, { extraSeen = {}, removedUrls = [], fontiMute 
   s.alerts      = queue.slice(-200);
   s.fingerprint = fp;
   s.lastChecked = Date.now();
+  // Un controllo fatto con una fonte muta NON e' un controllo completo. Prima l'informazione
+  // serviva solo a non sfrattare da `seen` gli annunci della fonte caduta e poi veniva buttata:
+  // il record timbrava l'ora e basta, e la scheda diceva "controllata adesso, nessuna novita'"
+  // anche quando Autoscout — dove stava il grosso degli annunci — era andato in timeout.
+  s.fontiMute = fontiMute.length ? fontiMute.slice() : null;
+  if (!fontiMute.length) s.lastCheckedFull = s.lastChecked;
   saveAll(list);
   return alerts;
 }

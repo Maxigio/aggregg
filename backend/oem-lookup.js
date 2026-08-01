@@ -181,13 +181,25 @@ async function lookupOem(oenRaw) {
         const scope = oeHead.closest('section,table,dl,ul,div') || oeHead.parentElement;
         if (scope) oeRaw = (scope.textContent.match(/[A-Z0-9][A-Z0-9 .\-\/]{4,}/gi) || []).map(s => s.trim());
       }
-      return { categoria, items, oeRaw };
+      // Quanti elementi di listino c'erano PRIMA del filtro sul codice. Zero articoli dopo il
+      // filtro e zero elementi in pagina sono due cose diverse, e finora uscivano identiche.
+      return { categoria, items, oeRaw, visti: document.querySelectorAll('.listing-item[data-product-item]').length };
     }, { cap: MAX_ARTICOLI, want: oen });
 
     const tipoPezzo = data.items.find(i => i.generic)?.generic || null;
     const articoli = data.items.map(({ generic, _oem, ...rest }) => rest);   // togli i campi interni
     const oeAlternativi = dedupeOe(data.oeRaw || [], oen);
-    return { oen, categoria: data.categoria, tipoPezzo, oeAlternativi, articoli, count: articoli.length };
+    // "Autodoc non ha quel codice" e "non sono riuscito a leggere l'elenco" hanno lo stesso
+    // aspetto: zero articoli. Li separa DOVE siamo finiti: quando il codice non e' a catalogo
+    // Autodoc porta via dalla pagina /oem/, quando invece ci siamo restati e non c'e' nemmeno
+    // un elemento di listino l'elenco non e' stato letto (classe rinominata, attributo cambiato,
+    // pagina servita a meta'). Nel dubbio non si afferma un fatto sul catalogo.
+    const suPaginaOem = /\/pezzi-di-ricambio\/oem\//i.test(page.url() || '');
+    const sospetto = (!articoli.length && !data.visti && suPaginaOem)
+      ? 'nessun elemento di listino nella pagina del codice: prima di dire "non a catalogo" va guardato il markup di Autodoc'
+      : null;
+    if (sospetto) require('./logger').warn('[oem-lookup]', `"${oen}": ${sospetto}`);
+    return { oen, categoria: data.categoria, tipoPezzo, oeAlternativi, articoli, count: articoli.length, visti: data.visti, sospetto };
   } catch (e) {
     require('./logger').error('[oem-lookup]', `scrape "${oen}" fallito:`, e);
     return { oen, articoli: [], count: 0, error: e.message };
@@ -199,15 +211,18 @@ async function lookupOem(oenRaw) {
 // fetchAutodocSpecs(url): +1 navigazione alla pagina-prodotto dell'articolo → tabella "Informazioni
 // prodotto" (Potenza/Anno/Codice produttore + eventuali misure) + modelli compatibili. Solo AUTO.
 // Le specs della listing-card sono dietro uno <span> AJAX (non estraibili); la product page sì (verificato).
+// `motivo` distingue i tre modi in cui questa funzione tornava lo stesso identico shape vuoto:
+// pagina senza tabelle, HTTP >= 400 e qualunque eccezione. Senza, il frontend non disegnava
+// nulla e chi guardava leggeva "questo articolo non ha specifiche", che e' un'altra cosa.
 async function fetchAutodocSpecs(url) {
   const u = String(url || '');
-  if (!/^https?:\/\/(www\.)?auto-doc\.it\//i.test(u)) return { datiTecnici: {}, compatibilita: null };
+  if (!/^https?:\/\/(www\.)?auto-doc\.it\//i.test(u)) return { datiTecnici: {}, compatibilita: null, motivo: 'url-non-valido' };
   const browser = await getBrowser();
   const context = await browser.newContext({ userAgent: UA, locale: 'it-IT', viewport: { width: 1280, height: 900 } });
   try {
     const page = await context.newPage();
     const resp = await page.goto(u, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    if (resp && resp.status() >= 400) return { datiTecnici: {}, compatibilita: null };
+    if (resp && resp.status() >= 400) return { datiTecnici: {}, compatibilita: null, motivo: 'http-' + resp.status() };
     const extract = () => page.evaluate(() => {
       const norm = t => t.replace(/\s+/g, ' ').trim();
       const out = [];
@@ -224,6 +239,14 @@ async function fetchAutodocSpecs(url) {
     await page.waitForTimeout(2500);
     let rows = await extract();
     if (!rows.length) { await page.waitForTimeout(2500); rows = await extract(); }   // challenge CF ancora in corso → 1 retry
+    if (!rows.length) {
+      // Nessuna tabella nemmeno dopo il secondo giro: se siamo ancora sulla challenge, la
+      // pagina prodotto non l'abbiamo mai vista, e dirlo non costa niente.
+      const titolo = await page.title().catch(() => '');
+      if (/just a moment|attendere|un momento|verifica/i.test(titolo)) {
+        return { datiTecnici: {}, compatibilita: null, motivo: 'bloccato' };
+      }
+    }
     const COMPAT = /modelli di auto/i;
     const SKIP = /motori|numero.*parte oe|numero\/i di parte/i;   // fitment lunghi / OE (già in oeAlternativi)
     let compatibilita = null;
@@ -234,8 +257,8 @@ async function fetchAutodocSpecs(url) {
       if (k.length > 45 || v.length > 60) continue;   // via i blob (liste motori ecc.)
       if (!(k in datiTecnici) && Object.keys(datiTecnici).length < 10) datiTecnici[k] = v;
     }
-    return { datiTecnici, compatibilita };
-  } catch { return { datiTecnici: {}, compatibilita: null }; }
+    return { datiTecnici, compatibilita, motivo: rows.length ? 'ok' : 'senza-tabelle' };
+  } catch (e) { return { datiTecnici: {}, compatibilita: null, motivo: 'errore', errore: e && e.message }; }
   finally { await context.close().catch(() => {}); }
 }
 

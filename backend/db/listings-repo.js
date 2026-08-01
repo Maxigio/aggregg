@@ -190,6 +190,19 @@ async function markGone(target, seenUrls, opts = {}) {
   // riga → markGone diventa un no-op silenzioso. Filtra i null prima.
   const urls = (Array.isArray(seenUrls) ? seenUrls : []).filter(u => u != null);
   const fonte = opts.fonte || null;
+  // "Non ho visto niente" non e' "il piazzale e' vuoto". Con una lista vuota la condizione
+  // `url <> ALL('{}')` e' vera per OGNI riga: una sweep che non lancia ma non porta a casa
+  // nulla — payload della fonte cambiato, prima pagina 200 ma senza card, filtro andato a
+  // male — incrementa l'assenza su TUTTO il target, e alla seconda uguale marca venduto
+  // l'intero parco. E' la guardia che Moto.it ha gia' sul markup, qui sui numeri.
+  // ponytail: il prezzo di questa guardia e' che un target svuotato davvero non viene mai
+  // chiuso e le sue righe restano 'active'. Preferibile a dichiarare venduto cio' che non
+  // si e' guardato; per chiuderle servirebbe che la fonte dichiari zero con un parse sano,
+  // segnale che oggi nessun chiamante ha.
+  if (!urls.length) {
+    console.warn(`[listings-repo] markGone saltata su ${t.tipo}/${t.marca}/${t.modello}${fonte ? ' (' + fonte + ')' : ''}: vista vuota, niente da confrontare`);
+    return { missed: 0, gone: 0, saltata: 'vista-vuota' };
+  }
   // review: sweep AS24 splittata per anno → gli annunci senza data immatricolazione (anno=NULL,
   // km0/demo) NON compaiono in nessuna fetta (il filtro firstRegistration li esclude) → senza
   // questa guard verrebbero incrementati e marcati venduti pur vivi. onlyDated li lascia intatti

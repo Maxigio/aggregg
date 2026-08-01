@@ -44,14 +44,21 @@ test('nessuna entita residua: si controllano TUTTE le marche che ne hanno', asyn
     }
   }
   assert.ok(sporche.size > 0, 'se il catalogo diventa pulito questo test non serve piu');
-  let tot = 0, res = 0;
+  // I modelli SENZA versioni a catalogo si saltano: per quelli getModelBikes ripiega
+  // sull'API, e l'intestazione di questo file promette che qui la rete non si tocca.
+  // Erano 332 richieste vere a www.moto.it a ogni `npm test`, tutte inghiottite da un
+  // .catch(() => []), quindi il test passava lo stesso e nessuno le vedeva. Non tolgono
+  // niente al controllo: senza versioni a catalogo non c'e' nessun nome da ripulire.
+  let tot = 0, res = 0, saltati = 0;
   for (const slug of sporche) {
+    const modelli = CAT.marche[slug].modelli || {};
     for (const m of await mm.getBrandModels(slug)) {
       tot++; if (ENT.test(m.name)) res++;
+      if (!Object.keys((modelli[m.slug] || {}).versioni || {}).length) { saltati++; continue; }
       for (const v of await mm.getModelBikes(slug, m.slug)) { tot++; if (ENT.test(v.name)) res++; }
     }
   }
-  assert.equal(res, 0, tot + ' nomi controllati su ' + sporche.size + ' marche');
+  assert.equal(res, 0, tot + ' nomi controllati su ' + sporche.size + ' marche (' + saltati + ' modelli senza versioni a catalogo, saltati)');
 });
 
 test('marca fuori catalogo → non esplode (poi ripiega sull\'API)', async () => {
@@ -63,6 +70,8 @@ test('marca fuori catalogo → non esplode (poi ripiega sull\'API)', async () =>
 test('modello del catalogo senza versioni → lista vuota, non un\'invenzione', async () => {
   const senza = Object.entries(CAT.marche.yamaha.modelli).find(([, m]) => !Object.keys(m.versioni || {}).length);
   if (!senza) return;   // se un giorno il catalogo e' completo, il caso non esiste piu'
+  // L'UNICA chiamata del file che puo' uscire in rete: qui il ripiego sull'API e'
+  // esattamente cio' che si sta controllando, e una richiesta non e' una raffica.
   const v = await mm.getModelBikes('yamaha', senza[0]);
   assert.ok(Array.isArray(v));
 });

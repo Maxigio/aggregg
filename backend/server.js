@@ -217,8 +217,20 @@ function parseCookies(req) {
   return out;
 }
 
+const MSG_AUTH_ROTTA = 'Configurazione di accesso illeggibile: nessuno puo\' entrare finche\' auth.json non viene riparato.';
+
 function gateAuth(req, res, next) {
-  if (!auth.isEnabled()) return next();          // nessuna password → app locale aperta
+  const stato = auth.stato();
+  if (stato === 'assente') return next();         // nessuna password → app locale aperta
+  // Il file c'e' ma non si legge. Prima questo caso valeva "nessuna password" e apriva
+  // tutto; ora chiude tutto, ma va DETTO: rispondere 401 a chi la password ce l'ha
+  // giusta manda a cercare il guasto dalla parte sbagliata. /api/health resta viva,
+  // altrimenti il probe di avvio di Electron aspetta per sempre.
+  if (stato === 'illeggibile') {
+    if (req.path === '/api/health') return next();
+    if (req.path.startsWith('/api/')) return res.status(503).json({ error: MSG_AUTH_ROTTA });
+    return res.status(503).send(MSG_AUTH_ROTTA);
+  }
   if (AUTH_FREE.has(req.path)) return next();     // /login, /logout sempre raggiungibili
   const role = auth.checkToken(parseCookies(req).amr_auth);   // 'full' | 'demo' | null
   if (!role) {

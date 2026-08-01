@@ -266,9 +266,14 @@ async function risolviVetrina(urlRaw) {
  * Tutti i veicoli di una vetrina, auto e moto insieme.
  * @returns {Promise<{veicoli:Array, troncato:boolean}>}
  */
-async function parco(voce) {
+async function parco(voce, dip = {}) {
+  // Gli scraper si possono iniettare: senza, la regola "una passata caduta non e' il tetto"
+  // si potrebbe verificare solo uscendo in rete verso la fonte vera.
+  const as24 = dip.scrapeAs24 || scrapeAs24;
+  const subito = dip.scrapeSubito || scrapeSubito;
   const veicoli = [];
-  let troncato = false;
+  let troncato = false;        // il TETTO nostro (40 pagine): il parco e' piu' grande
+  const passateKo = [];        // passate cadute: non si sa quanto manca, e non e' un tetto
   let totaleFonte = null;      // quanti ne dichiara la FONTE, contro quanti ne abbiamo presi
   // Il totale dichiarato descrive TUTTE le passate che hanno portato veicoli? Se una
   // passata fallisce, o riesce con veicoli ma senza dichiarare il suo totale, la somma
@@ -297,14 +302,14 @@ async function parco(voce) {
       } catch (_) { /* lo storico e' un di piu': se non arriva, il parco resta */ }
     }
     // Moto.it la vetrina non dichiara un totale: si conta finche' le pagine finiscono.
-    return { veicoli: r.items.map(v => ({ ...v, tipo: 'moto' })), troncato: r.troncato, illeggibili: r.illeggibili || 0, totaleFonte: null, storico };
+    return { veicoli: r.items.map(v => ({ ...v, tipo: 'moto' })), troncato: r.troncato, passateKo: [], illeggibili: r.illeggibili || 0, totaleFonte: null, storico };
   }
 
   for (const tipo of ['auto', 'moto']) {
     const params = voce.fonte === 'autoscout'
       ? { tipo, as24Customer: voce.id }
       : { tipo, subitoUid: voce.id };
-    const scr = voce.fonte === 'autoscout' ? scrapeAs24 : scrapeSubito;
+    const scr = voce.fonte === 'autoscout' ? as24 : subito;
     let r;
     // La seconda passata che fallisce non deve buttare via la prima: un venditore di auto ha
     // zero moto, e un 429 su quella passata cancellava tutte le auto gia' scaricate e mostrava
@@ -313,9 +318,14 @@ async function parco(voce) {
     try { r = await scr(params, { maxPages: MAX_PAGINE, withMeta: true }); }
     catch (e) {
       if (!veicoli.length) throw new Error(`${voce.fonte}: ${e.message}`);
-      troncato = true;
+      // NON e' `troncato`. Le due cause finivano sotto la stessa bandiera e il pannello
+      // raccontava sempre la prima: "elenco troncato al tetto di sicurezza, questo parco e'
+      // piu' grande di quello mostrato". Con una passata caduta quella frase e' falsa due
+      // volte — nessun tetto e' stato toccato, e non si sa affatto se il parco sia piu'
+      // grande: si sa solo che la fonte non ha risposto.
+      passateKo.push({ tipo, motivo: e.message });
       totaleCopreTutto = false;   // una passata fallita rende qualunque somma parziale
-      console.warn(`[competitor] passata ${tipo} fallita (${e.message}) → parco parziale, dichiarato troncato`);
+      console.warn(`[competitor] passata ${tipo} fallita (${e.message}) → parco parziale`);
       continue;
     }
     const items = Array.isArray(r) ? r : (r.items || []);
@@ -331,7 +341,7 @@ async function parco(voce) {
     else if (items.length) totaleCopreTutto = false;
     for (const v of items) veicoli.push({ ...v, tipo });
   }
-  return { veicoli, troncato, illeggibili: 0, totaleFonte: totaleCopreTutto ? totaleFonte : null };
+  return { veicoli, troncato, passateKo, illeggibili: 0, totaleFonte: totaleCopreTutto ? totaleFonte : null };
 }
 
 /* ─── i numeri ────────────────────────────────────────────────────────────── */

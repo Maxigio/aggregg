@@ -114,8 +114,14 @@ function mount(app, deps = {}) {
       // fetchAutodocSpecs non lancia mai (CF block/HTTP>=400 → shape vuoto): un vuoto è spesso un
       // blocco transitorio → TTL breve (come RICAMBI_EMPTY_TTL), non congelarlo 1h.
       const vuoto = !data || ((!data.datiTecnici || !Object.keys(data.datiTecnici).length) && !(data.compatibilita && data.compatibilita.length));
-      autodocCache.set(url, { ts: Date.now(), ttl: vuoto ? RICAMBI_EMPTY_TTL : RICAMBI_TTL, data });
-      if (autodocCache.size > RICAMBI_CACHE_MAX) autodocCache.delete(autodocCache.keys().next().value);
+      // Un blocco o un errore di rete non si mettono in cache affatto: non dicono niente
+      // sull'articolo, e tenerli anche solo per il TTL corto significa ripetere all'utente
+      // una risposta che non abbiamo mai ottenuto.
+      const nonDaTenere = data && ['bloccato', 'errore'].includes(data.motivo);
+      if (!nonDaTenere) {
+        autodocCache.set(url, { ts: Date.now(), ttl: vuoto ? RICAMBI_EMPTY_TTL : RICAMBI_TTL, data });
+        if (autodocCache.size > RICAMBI_CACHE_MAX) autodocCache.delete(autodocCache.keys().next().value);
+      }
       res.json(data);
     } catch (e) {
       console.error('[ricambi] autodoc-specs', e.message);

@@ -232,6 +232,12 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
       // passeggeri, e una manutenzione momentanea di Moto.it faceva saltare la fonte per
       // sei ore su tutti i target. Qui si porta fuori lo stato e chi chiama decide.
       if (i === 0) return { pages: [], statoKo: status, truncated: false };
+      // Pagina >1 caduta: le pagine gia' prese si tengono, ma la vista NON e' completa.
+      // Senza dirlo, `truncated` restava falso (il calcolo sotto e' condizionato a
+      // `pages.length === urls.length`, mai vero dopo un break) e il crawler faceva
+      // markGone su una lista monca: tutto quello che stava dalla pagina caduta in giu'
+      // prendeva miss_count, e al secondo episodio passava a "venduto".
+      driftBreak = true;
       break;                                                               // pagina dopo non-200 = fine
     }
     if (i === 0) total = extractTotal(body);             // tetto dalla 1ª pagina (anche se 0 card)
@@ -321,10 +327,12 @@ async function scrapeMotoIt(params, opts = {}) {
   const { pages, statoKo, truncated, total } = await scrapeMotoViaHttp(urls, {
     pageDelayMs: ONSEARCH_DELAY_MS, httpTimeoutMs: ONSEARCH_TIMEOUT_MS, fetta: opts.fetta || 0,
   });
-  if (statoKo) {
-    console.warn(`[Moto.it] on-search: HTTP ${statoKo} sulla prima pagina → fonte vuota`);
-    return opts.withMeta ? { items: [], truncated: false } : [];
-  }
+  // Stessa condizione del ramo `deep`, stesso esito: prima qui si tornava una lista vuota,
+  // quindi `runSource` classificava 'empty', la pill diceva "Moto.it nessun risultato" in
+  // grigio come per un piazzale davvero vuoto, e `cacheable()` — che considera rotti solo
+  // 'error', 'needs_bootstrap' e 'timeout' — congelava per tre minuti una risposta a cui
+  // mancava una fonte intera. Una manutenzione di Moto.it non e' un mercato vuoto.
+  if (statoKo) throw fail(`Moto.it-HTTP ${statoKo}`, { status: statoKo, kind: kindForStatus(statoKo) });
   const risultati = filtraPerSlug(dedup(pages), params.motoitSlugAmmessi);
   console.log(`[Moto.it] on-search OK ${risultati.length} annunci (${pages.map(p => p.length).join('+')})${truncated ? ' [troncato]' : ''}`);
   return opts.withMeta ? { items: risultati, truncated, total } : risultati;

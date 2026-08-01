@@ -414,7 +414,12 @@ async function resolveScheda({ tipo, marca, modello: modelloGrezzo, anno, genSlu
   }
   // Fallback: la ricerca interna di auto-data.net risolve le sigle-motore/varianti che NON sono
   // modelli ("318"→trim Serie 3, "CT 200h"→trim Lexus CT). Delego il matching alla fonte, niente liste.
-  return (await searchScheda(brand, marca, modello, genSlug)) || { notFound: 'modello' };
+  const cercato = await searchScheda(brand, marca, modello, genSlug);
+  // Un 403, un 429 o un timeout della fonte NON sono "questa marca non ha questo modello".
+  // L'errore viaggia accanto al notFound invece di sparire dentro un catch: chi mostra la
+  // risposta deve poter scrivere "non raggiungibile ora" e non un fatto sul catalogo.
+  if (cercato && cercato.erroreFonte) return { notFound: 'modello', erroreFonte: cercato.erroreFonte };
+  return cercato || { notFound: 'modello' };
 }
 
 // modello risolto → generazioni (senza gen scelta) o trim della generazione scelta.
@@ -424,7 +429,13 @@ async function resolveModelPage(brand, model, genSlug) {
   const gens = vs.parseGenerationList(mp);
   // body senza generazioni = pagina transitoria/interstitial servita 200 → declassa il TTL a EMPTY_TTL
   // così si riprova tra pochi minuti invece di restare notFound per 12h.
-  if (!gens.length) { cacheSet(modelUrl, mp, EMPTY_TTL); return { notFound: 'generazione' }; }
+  // Una pagina servita 200 ma senza nemmeno una generazione e' quasi sempre l'interstitial
+  // anti-bot, non un modello senza storia: si dichiara il sospetto invece di lasciare che a
+  // valle diventi "il catalogo non ha questo modello".
+  if (!gens.length) {
+    cacheSet(modelUrl, mp, EMPTY_TTL);
+    return { notFound: 'generazione', erroreFonte: 'pagina del modello servita senza generazioni (probabile pagina di transizione della fonte)' };
+  }
   // nome-modello italiano dal <title> della pagina /it/ ("BMW Serie 3 | Scheda…"), altrimenti quello (EN) dall'indice
   const itTitle = (mp.match(/<title>([^<|]+)/i) || [])[1];
   const itName = itTitle ? itTitle.replace(/\s+/g, ' ').trim().replace(new RegExp('^' + brand.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '').trim() : '';
@@ -443,14 +454,23 @@ async function resolveModelPage(brand, model, genSlug) {
   // resta in cache 12 ore, e per mezza giornata quella generazione risponde "nessuna
   // motorizzazione". Declassando il TTL si riprova fra pochi minuti.
   if (!motorizzazioni.length) cacheSet(genUrl, gp, EMPTY_TTL);
-  return { ...base, gen: { name: gen.name, slug: gen.slug }, motorizzazioni };
+  return {
+    ...base, gen: { name: gen.name, slug: gen.slug }, motorizzazioni,
+    // Zero motorizzazioni su una pagina-generazione e' lo stesso sospetto della pagina-modello:
+    // chi conta le generazioni lette deve poterlo distinguere da "questa generazione non ha motori".
+    ...(motorizzazioni.length ? {} : { erroreFonte: 'pagina della generazione servita senza motorizzazioni (probabile pagina di transizione della fonte)' }),
+  };
 }
 
 // Ricerca interna auto-data.net (get-words.php): se indica un modello del nostro indice usa il flusso
 // generazioni; altrimenti "atterra sui trim" — le versioni trovate diventano le motorizzazioni.
 async function searchScheda(brand, marca, modello, genSlug) {
   const url = `${vs.HOST}/ajax/get-words.php?SEARCH_MORE_RESULTS=0&search=${encodeURIComponent(`${marca} ${modello}`)}`;
-  let body; try { body = await fetchCached(url, PAGE_TTL); } catch (_) { return null; }
+  // `null` qui significa "la fonte non conosce questo modello" e diventa notFound a valle:
+  // un errore di rete non puo' usare la stessa porta.
+  let body;
+  try { body = await fetchCached(url, PAGE_TTL); }
+  catch (e) { return { erroreFonte: (e && e.message) || 'ricerca interna non raggiungibile' }; }
   const bn = norm(brand.name);
   const items = vs.parseSearchWords(body).filter(x => norm(x.label).startsWith(bn));   // solo la marca cercata
   if (!items.length) return null;
@@ -549,7 +569,12 @@ function generazioneCompatibile(nome, carrozzeria) {
 async function schedaPerAnnuncio({ tipo, marca, modello: modelloGrezzo, anno, cv, carburante, cambio, carrozzeria, titolo, variante, cilindrata }) {
   const modello = senzaGenerazione(modelloGrezzo) || modelloGrezzo;
   const base = await resolveScheda({ tipo, marca, modello, anno });
-  if (!base || base.unsupported || base.notFound) return { ok: false, motivo: 'modello non a catalogo' };
+  if (!base || base.unsupported || base.notFound) {
+    // "Non a catalogo" e' un fatto sul catalogo, e va detto solo quando il catalogo ha
+    // risposto davvero. Se la fonte non si e' fatta leggere, si dice quello.
+    if (base && base.erroreFonte) return { ok: false, motivo: 'catalogo non raggiungibile ora — riprova tra poco', fonteKo: base.erroreFonte };
+    return { ok: false, motivo: 'modello non a catalogo' };
+  }
 
   /**
    * LE MOTO LE RISOLVE `risolvi-versione.js`, non i filtri qui sotto.
@@ -676,18 +701,31 @@ async function schedaPerAnnuncio({ tipo, marca, modello: modelloGrezzo, anno, cv
   }
   // Il tetto resta una richiesta per generazione: sei bastano; oltre, l'anno e la
   // carrozzeria non stanno restringendo niente e la scelta e' tua.
+  // Le generazioni che non si aprono si CONTANO. Prima sparivano in silenzio: le loro
+  // motorizzazioni non entravano nell'insieme, il filtro lavorava su meno candidate, e se ne
+  // restava una sola veniva dichiarata "unica del catalogo compatibile" — una certezza
+  // costruita su un elenco monco.
+  let genNonLette = 0;
   const apri = async (quali) => {
     const voci = (base.motorizzazioni || []).slice();
     for (const g of quali.slice(0, 6)) {
       try {
         const d = await resolveScheda({ tipo, marca, modello, genSlug: g.slug });
-        for (const m of (d && d.motorizzazioni) || []) voci.push({ ...m, gen: g.name, genSlug: g.slug });
-      } catch (_) { /* una generazione che non si apre non deve far cadere le altre */ }
+        const mot = (d && d.motorizzazioni) || [];
+        // Zero motorizzazioni con l'avviso della fonte = pagina di transizione, non una
+        // generazione senza motori.
+        if (!mot.length && d && d.erroreFonte) genNonLette++;
+        for (const m of mot) voci.push({ ...m, gen: g.name, genSlug: g.slug });
+      } catch (_) { genNonLette++; /* una generazione che non si apre non deve far cadere le altre */ }
     }
     return voci;
   };
   let voci = await apri(gens);
-  if (!voci.length) return { ok: false, motivo: 'nessuna motorizzazione a catalogo' };
+  if (!voci.length) {
+    return genNonLette
+      ? { ok: false, motivo: 'il catalogo non si e\' lasciato leggere — riprova tra poco', fonteKo: `${genNonLette} generazioni non lette` }
+      : { ok: false, motivo: 'nessuna motorizzazione a catalogo' };
+  }
 
   /**
    * POTENZA E CARBURANTE INSIEME, non uno dopo l'altro.
@@ -730,7 +768,10 @@ async function schedaPerAnnuncio({ tipo, marca, modello: modelloGrezzo, anno, cv
     const visti2 = new Set();
     vive = vive.filter(m => { const k = m.url; if (visti2.has(k)) return false; visti2.add(k); return true; });
   }
-  if (!vive.length) return { ok: false, motivo: 'nessuna motorizzazione del catalogo combacia con ' + (usati.join(' e ') || 'questo annuncio') };
+  if (!vive.length) {
+    return { ok: false, motivo: 'nessuna motorizzazione del catalogo combacia con ' + (usati.join(' e ') || 'questo annuncio')
+      + (genNonLette ? ` (ma ${genNonLette} ${genNonLette === 1 ? 'generazione non si e\' lasciata leggere' : 'generazioni non si sono lasciate leggere'})` : '') };
+  }
 
   /**
    * DUE VINCOLI IN PIU', E OGNUNO SI IGNORA SE SVUOTA.
@@ -828,9 +869,14 @@ async function schedaPerAnnuncio({ tipo, marca, modello: modelloGrezzo, anno, cv
     genUnica: gs.length === 1 ? gs[0] : null,
     scelta: vive.length === 1 ? vive[0] : null,
     candidate: vive.length === 1 ? [] : vive.slice(0, 40),
+    // Quante generazioni non si sono lasciate leggere: con almeno una, l'elenco delle
+    // candidate e' monco e "unica compatibile" smette di essere una certezza.
+    genNonLette,
     perche: vive.length === 1
       ? 'unica del catalogo compatibile con ' + (usati.join(' e ') || 'questo modello') + ' dichiarati nell\'annuncio'
-      : vive.length + ' motorizzazioni compatibili: scegli tu',
+        + (genNonLette ? ` — attenzione: ${genNonLette} ${genNonLette === 1 ? 'generazione non si e\' lasciata leggere' : 'generazioni non si sono lasciate leggere'}, l'elenco puo' essere incompleto` : '')
+      : vive.length + ' motorizzazioni compatibili: scegli tu'
+        + (genNonLette ? ` (${genNonLette} non lette)` : ''),
   };
 }
 
@@ -863,7 +909,9 @@ function mount(app, deps = {}) {
     try {
       const out = await resolveScheda({ tipo, marca, modello, anno, genSlug: gen });
       if (out.unsupported) return res.json({ ok: false, unsupported: true });
-      if (out.notFound) return res.json({ ok: false, notFound: out.notFound });
+      // `erroreFonte` viaggia con il notFound: senza, la distinzione fra "non a catalogo" e
+      // "non sono riuscito a leggere" moriva qui, a un passo dallo schermo.
+      if (out.notFound) return res.json({ ok: false, notFound: out.notFound, fonteKo: out.erroreFonte || null });
       res.json({ ok: true, ...out });
     } catch (_) { res.json({ ok: false, error: 'scheda non disponibile' }); }
   });

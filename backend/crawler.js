@@ -153,6 +153,10 @@ async function sweepTarget(target, stats, { refresh = false } = {}) {
       const countFn = (range) => scrapeAutoscoutGraphql.fetchTotalCount({ mmmv: as.mmmv, tipo: target.tipo, ...range });
       let total = null;
       try { total = await countFn({}); } catch (_) { /* count KO → sweep singola */ }
+      // Il tetto ignoto non e' un dettaglio: senza, non si spezza la query (quindi sui
+      // best-seller si spazzola col cap corto) e `marketSize.record` non scrive nessuna
+      // riga, cioe' la copertura smette di essere misurata. Va detto, non dedotto.
+      if (total == null) console.warn(`[crawler] AS24 ${target.marca} ${target.modello}: conteggio non disponibile → niente split e niente copertura per questo giro`);
       const buckets = (total != null && total > scrapeAutoscoutGraphql.SPLIT_OVER)
         ? await scrapeAutoscoutGraphql.planBuckets(countFn, {})
         : [{}];

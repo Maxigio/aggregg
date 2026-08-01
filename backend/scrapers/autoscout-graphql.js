@@ -533,15 +533,33 @@ function parseTotalCount(j) {
   return Number.isFinite(n) ? n : null;
 }
 
+// Questa query viaggia su una credenziale DIVERSA da quella della ricerca (client
+// `home-feed-js`). Se quella sola credenziale viene ruotata, o risponde 403, il conteggio
+// torna null mentre le ricerche continuano a funzionare: nessun badge diventa rosso e
+// nessuno si accorge che lo split M-K e la misura di copertura si sono spenti. Il null
+// resta — i chiamanti lo trattano gia' come "tetto ignoto", che e' il comportamento
+// prudente — ma smette di essere muto. Una riga al minuto, non una per chiamata: dentro
+// planBuckets questa funzione viene invocata decine di volte di seguito.
+let ultimoAvvisoConteggio = 0;
+function avvisaConteggio(motivo) {
+  const ora = Date.now();
+  if (ora - ultimoAvvisoConteggio < 60 * 1000) return;
+  ultimoAvvisoConteggio = ora;
+  console.warn(`[AS24-count] conteggio non disponibile (${motivo}): niente split per fette e niente misura di copertura finche' dura`);
+}
+
 // Ritorna il totale AS24 per (mmmv,tipo[,range anno/prezzo]) o null. Best-effort: mai throw.
 async function fetchTotalCount({ mmmv, tipo, annoMin, annoMax, prezzoMin, prezzoMax } = {}) {
   const qs = countQueryString(mmmv, tipo, { annoMin, annoMax, prezzoMin, prezzoMax });
   if (!qs) return null;
   try {
     const res = await httpPost(JSON.stringify({ query: COUNT_QUERY, variables: { queryString: qs, locale: 'it_IT' } }), COUNT_AUTH);
-    if (res.status !== 200) return null;
-    return parseTotalCount(JSON.parse(res.body));
-  } catch (_) {
+    if (res.status !== 200) { avvisaConteggio('HTTP ' + res.status); return null; }
+    const n = parseTotalCount(JSON.parse(res.body));
+    if (n == null) avvisaConteggio('risposta senza totalItems — forma della risposta cambiata');
+    return n;
+  } catch (e) {
+    avvisaConteggio(e && e.message ? e.message : 'errore di rete');
     return null;
   }
 }

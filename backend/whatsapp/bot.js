@@ -57,8 +57,24 @@ function baseTools() {
 }
 
 const label = p => [p.marca, p.modello].filter(Boolean).join(' ') || 'la ricerca';
-const srcCounts = (sources = {}) => ['subito', 'autoscout', 'moto']
-  .map(k => `${k}:${sources[k]?.count ?? 0}`).join(' ');
+// Lo STATO, non solo il conteggio. Prima leggeva `count` e ignorava `status`: una fonte che
+// aveva risposto captcha, 403 o timeout usciva "subito:0", cioe' esattamente come una fonte
+// che ha guardato e non ha trovato niente. Al telefono quella differenza e' tutto: la prima
+// dice "il mercato e' piu' grande di cosi'", la seconda "il mercato e' questo".
+const STATO_WA = {
+  empty: 'nessun annuncio', blocked: 'BLOCCATA', error: 'ERRORE', timeout: 'NON HA RISPOSTO',
+  skipped: 'non interrogata', needs_bootstrap: 'SESSIONE DA RIFARE',
+};
+const srcCounts = (sources = {}) => ['subito', 'autoscout', 'moto'].map(k => {
+  const s = sources[k];
+  if (!s) return `${k}: non interrogata`;
+  if (!s.status || s.status === 'ok') return `${k}:${s.count ?? 0}`;
+  return `${k}: ${STATO_WA[s.status] || s.status}`;
+}).join(' · ');
+// Le fonti che NON hanno risposto: se ce n'e' anche una, ogni statistica e' parziale e il
+// modello deve dirlo invece di presentare la mediana come il prezzo di mercato.
+const fontiRotte = (sources = {}) => ['subito', 'autoscout', 'moto']
+  .filter(k => sources[k] && sources[k].status && !['ok', 'empty'].includes(sources[k].status));
 
 function pdfName(p) {
   const slug = [p.marca, p.modello].filter(Boolean).join('-').toLowerCase().replace(/[^a-z0-9-]+/g, '') || 'report';
@@ -80,11 +96,21 @@ async function runCercaAuto(input, ctx) {
   const risultati = r.risultati || [];
   const stats = reportStats(risultati);
   if (!risultati.length) {
+    const ko = fontiRotte(r.sources);
+    // Zero annunci con le fonti a terra non e' "questo mercato e' vuoto": e' "non ho potuto
+    // guardare". Suggerire di allargare i filtri, li', manda l'utente a caccia del nulla.
+    if (ko.length) {
+      return `Nessun annuncio, ma ${ko.join(' e ')} non ${ko.length === 1 ? 'ha' : 'hanno'} risposto (fonti — ${srcCounts(r.sources)}). NON dire che non ci sono annunci: di' che le fonti non hanno risposto e che conviene riprovare tra poco.`;
+    }
     return `Nessun annuncio trovato per ${label(r.params)} (fonti — ${srcCounts(r.sources)}). Nessun PDF inviato: suggerisci di allargare i filtri (anni/km/regione).`;
   }
-  const buf = renderReportPdf(risultati, r.params);
+  const rotte = fontiRotte(r.sources);
+  // Lo stato delle fonti viaggia DENTRO il PDF: e' il foglio che resta in mano, ed e' proprio
+  // quello che non diceva su quante fonti fossero calcolate le sue statistiche.
+  const buf = renderReportPdf(risultati, r.params, r.sources);
   const fname = pdfName(r.params);
-  const caption = `${label(r.params)} · ${stats.totale} annunci · mediana ${eur(stats.mediana)}`;
+  const caption = `${label(r.params)} · ${stats.totale} annunci · mediana ${eur(stats.mediana)}`
+    + (rotte.length ? ` · ATTENZIONE: ${rotte.join(' e ')} non ${rotte.length === 1 ? 'ha' : 'hanno'} risposto` : '');
   if (waClient.configured()) {
     try {
       await waClient.sendPdf(ctx.from, buf, fname, caption);
@@ -96,7 +122,9 @@ async function runCercaAuto(input, ctx) {
     console.warn('[wa] client non configurato → PDF non inviato');
     return `Ricerca ok per ${label(r.params)}: totale ${stats.totale}, con prezzo ${stats.conPrezzo}, min ${eur(stats.min)}, mediana ${eur(stats.mediana)}, media ${eur(stats.media)}, max ${eur(stats.max)}. ATTENZIONE: l'invio del PDF NON è configurato → NON dire all'utente che hai inviato un PDF; dai i numeri chiave a voce.`;
   }
-  return `PDF inviato all'utente. Risultati ${label(r.params)}: totale ${stats.totale}, con prezzo ${stats.conPrezzo}, min ${eur(stats.min)}, mediana ${eur(stats.mediana)}, media ${eur(stats.media)}, max ${eur(stats.max)}. Fonti — ${srcCounts(r.sources)}. Commenta i numeri chiave in 1-2 frasi.`;
+  return `PDF inviato all'utente. Risultati ${label(r.params)}: totale ${stats.totale}, con prezzo ${stats.conPrezzo}, min ${eur(stats.min)}, mediana ${eur(stats.mediana)}, media ${eur(stats.media)}, max ${eur(stats.max)}. Fonti — ${srcCounts(r.sources)}.`
+    + (rotte.length ? ` ATTENZIONE: ${rotte.join(' e ')} non ${rotte.length === 1 ? 'ha' : 'hanno'} risposto, quindi questi numeri descrivono solo una PARTE del mercato: dillo esplicitamente all'utente prima di commentare i prezzi.` : '')
+    + ` Commenta i numeri chiave in 1-2 frasi.`;
 }
 
 // Handler del tool `oem_lookup`: codice OE/OEM/OEN → articoli su PIÙ fonti (Autodoc + Web + Subito)

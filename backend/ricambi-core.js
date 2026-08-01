@@ -62,6 +62,10 @@ async function runSource(promise, ms) {
     if (res.blocked) return { items: [], status: 'blocked', reason: res.error || 'bloccato', meta: res };
     if (res.error) return { items: [], status: 'error', reason: res.error, meta: res };
     const items = Array.isArray(res.articoli) ? res.articoli : [];
+    // Una fonte puo' tornare zero articoli SAPENDO di non averli letti davvero. In quel caso
+    // 'empty' sarebbe una bugia — a schermo diventerebbe "ricambio non presente nel catalogo" —
+    // e la sola differenza fra le due risposte e' questo campo.
+    if (!items.length && res.sospetto) return { items: [], status: 'error', reason: res.sospetto, meta: res };
     return { items, status: items.length ? 'ok' : 'empty', reason: null, meta: res };
   } catch (e) {
     const isTimeout = e.message === '__timeout__';

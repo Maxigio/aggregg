@@ -196,6 +196,9 @@ function mount(app, deps = {}) {
       voce,
       numeri: C.aggrega(p.veicoli),
       troncato: p.troncato,
+      // Le passate cadute viaggiano separate dal tetto: sono due avvisi diversi e finora
+      // uscivano con la stessa frase, quella sbagliata delle due.
+      passateKo: (p.passateKo && p.passateKo.length) ? p.passateKo : null,
       // Le card presenti che non si sono lasciate leggere: dirle e' l'unico modo perche' chi
       // guarda sappia che i numeri sono calcolati su meno mezzi di quelli in vetrina.
       illeggibili: p.illeggibili || 0,
@@ -304,7 +307,15 @@ function mount(app, deps = {}) {
     const veicoli = parti.flatMap(p => p.veicoli);
     res.json({
       ok: true, gruppo: g, errori,
-      parti: parti.map(p => ({ voce: p.voce, numeri: p.numeri, storico: p.storico, troncato: p.troncato, quando: p.quando, daCache: p.daCache })),
+      // `troncato`, le passate cadute e le card illeggibili viaggiano per PARTE: il pannello
+      // del gruppo scriveva una riga sola — "N annunci sulle X vetrine" — come se coprisse
+      // tutto, mentre queste tre cose il backend le sapeva gia' e non le spediva nemmeno.
+      parti: parti.map(p => ({
+        voce: p.voce, numeri: p.numeri, storico: p.storico, troncato: p.troncato,
+        passateKo: (p.passateKo && p.passateKo.length) ? p.passateKo : null,
+        illeggibili: p.illeggibili || 0,
+        quando: p.quando, daCache: p.daCache,
+      })),
       numeri: C.aggrega(veicoli),
       veicoli,
       scarichiRestanti: parcoRestanti(ip),

@@ -12,7 +12,7 @@ require('jspdf-autotable');   // patcha doc.autoTable sul prototype (verificato 
 // results: [{ fonte, titolo, prezzo, anno, km, carburante, provincia }]
 // params:  { marca, modello, regione, prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax }
 // → Buffer (PDF A4 landscape)
-function renderReportPdf(results, params = {}) {
+function renderReportPdf(results, params = {}, sources = null) {
   results = Array.isArray(results) ? results : [];
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const today = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -59,10 +59,42 @@ function renderReportPdf(results, params = {}) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK); doc.text(String(val), x + 4, stripY + 7);
   });
 
+  /**
+   * LO STATO DELLE FONTI, che e' l'unica cosa che permette di fidarsi dei numeri qui sopra.
+   * Il PDF e' l'artefatto che resta in mano, e finora era proprio quello che non lo diceva:
+   * una fonte bloccata e una fonte che davvero non ha quel modello uscivano identiche, cioe'
+   * non uscivano affatto, e MIN/MEDIANA/MEDIA/MAX venivano calcolati su un mercato monco
+   * presentato come intero.
+   */
+  const STATO_LABEL = {
+    empty: 'nessun annuncio', blocked: 'bloccata', error: 'errore', timeout: 'non ha risposto in tempo',
+    skipped: 'non interrogata', needs_bootstrap: 'sessione da rifare',
+  };
+  let tavolaY = stripY + 12;
+  if (sources && typeof sources === 'object' && Object.keys(sources).length) {
+    const voci = Object.entries(sources).map(([f, s]) => {
+      const nome = FONTE_LABEL_PDF[f] || f;
+      const st = s && s.status;
+      if (!st || st === 'ok') return `${nome} ${(s && s.count != null) ? s.count : '—'}`;
+      return `${nome}: ${STATO_LABEL[st] || st}`;
+    });
+    const rotte = Object.values(sources).filter(s => s && s.status && !['ok', 'empty'].includes(s.status));
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...SLATE);
+    doc.text('Fonti:   ' + voci.join('   ·   '), 14, tavolaY);
+    tavolaY += 4.5;
+    if (rotte.length) {
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(176, 60, 30);
+      doc.text('I numeri qui sopra sono calcolati su un mercato PARZIALE: ' + rotte.length
+        + (rotte.length === 1 ? ' fonte non ha risposto.' : ' fonti non hanno risposto.'), 14, tavolaY);
+      tavolaY += 4.5;
+    }
+    tavolaY += 2;
+  }
+
   // ── Tabella pulita + chip fonte
   const tableBody = results.map(r => [FONTE_LABEL_PDF[r.fonte] || r.fonte, r.titolo, r.prezzo != null ? fmtEur(r.prezzo) : '—', r.anno != null ? String(r.anno) : '—', r.km != null ? r.km.toLocaleString('it-IT') + ' km' : '—', r.carburante || '—', r.provincia || '—']);
   doc.autoTable({
-    startY: stripY + 12,
+    startY: tavolaY,
     head: [['Fonte', 'Veicolo', 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia']],
     body: tableBody,
     theme: 'plain',

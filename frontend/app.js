@@ -1481,10 +1481,18 @@ function rcVariantDetailHTML(v, s) {
     ? '<div class="rc-sch-sec"><div class="rc-det-loading"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Carico dati tecnici e compatibilità…</div></div>'
     : '';
   const compatBlock = loading ? '' : rcFitsTable(compat);
+  // Il vuoto ha due cause diverse: Autodoc non ha specifiche per questo articolo, oppure la
+  // pagina non si e' lasciata leggere (challenge Cloudflare, HTTP, timeout). Prima uscivano
+  // identiche — la sezione spariva e basta — e si leggeva come "questo articolo non ha
+  // specifiche", che e' un'affermazione sul catalogo che nessuno aveva verificato.
+  const motivoKo = (!loading && lazy && lazy.motivo && !['ok', 'senza-tabelle'].includes(lazy.motivo)) ? lazy.motivo : null;
+  const koBlock = (motivoKo && !dtBlock && !compatBlock)
+    ? `<div class="rc-sch-sec"><div class="rc-sch-emptymsg">Dati tecnici e compatibilità non letti da Autodoc (${escapeHtml(motivoKo === 'bloccato' ? 'pagina protetta' : motivoKo)}) — riprova tra poco.</div></div>`
+    : '';
   const oe = (s.oeAlternativi && s.oeAlternativi.length)
     ? `<div class="rc-sch-sec"><div class="rc-sch-sechd">Codici OE equivalenti</div><div class="rc-oechips">${s.oeAlternativi.slice(0, 14).map(c => `<button type="button" class="rc-oe" data-oe="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}</div></div>`
     : '';
-  return `<div class="rc-sch-main">${img}${buybox}</div><div class="rc-sch-secs">${dtBlock}${loadingBlock}${compatBlock}${oe}</div>`;
+  return `<div class="rc-sch-main">${img}${buybox}</div><div class="rc-sch-secs">${dtBlock}${loadingBlock}${compatBlock}${koBlock}${oe}</div>`;
 }
 function rcSchedaHTML(d) {
   const s = d.scheda;
@@ -1531,8 +1539,10 @@ async function rcFetchVariantSpecs(v) {
   rcVariantSpecs[v.articleId] = { loading: true };
   try {
     const r = await fetch(`/api/ricambi/autodoc-specs?url=${encodeURIComponent(v.url)}`);
-    rcVariantSpecs[v.articleId] = r.ok ? await r.json() : {};
-  } catch { rcVariantSpecs[v.articleId] = {}; }
+    // Anche il fallimento della NOSTRA rotta e' un motivo: senza, restava un oggetto vuoto
+    // indistinguibile da "Autodoc non ha specifiche per questo articolo".
+    rcVariantSpecs[v.articleId] = r.ok ? await r.json() : { motivo: 'errore' };
+  } catch { rcVariantSpecs[v.articleId] = { motivo: 'errore' }; }
   if (rcVariantSel.articleId === v.articleId) renderRicambiPanel();
 }
 
@@ -3556,6 +3566,12 @@ function renderRicerche() {
     const badge = novita > 0 ? `<span class="ric-badge">${novita}</span>` : '';
     const dig = Object.entries(s.digest || {}).map(([m, n]) => `${n} ${MOTIVO_LABEL[m] || m}`).join(' · ');
     const digestLine = dig ? `<div class="ric-digest">${dig}</div>` : '';
+    // Un controllo con una fonte muta veniva mostrato come un controllo qualunque: l'ora
+    // c'era, e "nessuna novita'" si leggeva come una risposta. Ora si dice chi non ha parlato,
+    // e quand'e' stata l'ultima volta che hanno risposto tutte.
+    const muteLine = (s.fontiMute && s.fontiMute.length)
+      ? ` · <span class="ric-mute">senza ${escapeHtml(s.fontiMute.map(f => FONTE_LABEL[f] || f).join(' e '))}${s.lastCheckedFull ? `, complete ${whenTxt(s.lastCheckedFull)}` : ''}</span>`
+      : '';
     const alertsHtml = (s.alerts || []).map(a => `
       <div class="ric-alert ric-${a.motivo}" data-url="${escapeHtml(a.url)}" title="Apri annuncio">
         <span class="ric-motivo">${MOTIVO_LABEL[a.motivo]?.slice(0, -1) || a.motivo}</span>
@@ -3565,7 +3581,7 @@ function renderRicerche() {
     return `<div class="ric-card${novita ? ' has-novita' : ''}" data-id="${escapeHtml(s.id)}">
       <div class="ric-head">
         <div class="ric-title">${escapeHtml(s.label)} ${badge}</div>
-        <div class="ric-sub">${escapeHtml(s.params?.tipo || '')} · controllata ${whenTxt(s.lastChecked)}</div>
+        <div class="ric-sub">${escapeHtml(s.params?.tipo || '')} · controllata ${whenTxt(s.lastChecked)}${muteLine}</div>
         ${digestLine}
       </div>
       <div class="ric-actions">
@@ -3774,7 +3790,15 @@ async function loadVehScheda(r, host) {
     const d = await res.json();
     if (my !== vehGen) return;   // una ricerca più recente ha già preso il posto → non toccare la scheda
     const hasData = d.ok && (((d.generations || []).length) || ((d.motorizzazioni || []).length));
-    if (!hasData) { vehFallita(`Il catalogo non ha ${marca} ${modello}.`); return; }
+    // "Il catalogo non ha questo modello" e' un'affermazione sul catalogo: si scrive solo se
+    // il catalogo ha risposto. Se non si e' lasciato leggere (403, 429, timeout, pagina di
+    // transizione) il server ora lo dice, e qui si dice a chi guarda.
+    if (!hasData) {
+      vehFallita(d.fonteKo
+        ? `Il catalogo non si e' lasciato leggere per ${marca} ${modello} — riprova tra poco.`
+        : `Il catalogo non ha ${marca} ${modello}.`);
+      return;
+    }
     // NIENTE auto-selezione per DEDUZIONE: l'utente sceglie generazione → motorizzazione.
     // UNICA eccezione: la versione Moto.it che l'utente ha scelto LUI nella ricerca. Non è
     // un'ipotesi nostra, è la sua scelta esplicita — e l'aggancio è esatto perché la scheda
@@ -3976,11 +4000,20 @@ function vehRichiamiHTML() {
   else if (st.loading) corpo = '<div class="veh-rich-att">Cerco nei due archivi…</div>';
   else if (st.ko) corpo = '<div class="veh-rich-att">Archivi non raggiungibili.</div>';
   else {
-    const nR = st.rdw && st.rdw.ok ? st.rdw.totale : null;
-    const nS = st.sg && st.sg.ok ? st.sg.totale : null;
+    // "Zero richiami" e "l'archivio non ha risposto" sono la stessa cosa solo per chi guarda
+    // il numero: qui si separano PER ARCHIVIO. Il ramo st.ko era irraggiungibile — le due
+    // fetch hanno gia' un .catch(() => null), quindi la Promise.all non rigetta mai — e
+    // l'unico ramo che restava scriveva "Nessuna allerta per questo modello" anche quando
+    // l'archivio non era stato costruito o la rotta era caduta. E' l'unico dato di sicurezza
+    // della scheda: dichiararlo assente senza averlo guardato e' il silenzio piu' caro.
+    const koR = !st.rdw || !st.rdw.ok;
+    const koS = !st.sg || !st.sg.ok;
+    const nR = koR ? null : st.rdw.totale;
+    const nS = koS ? null : st.sg.totale;
     // Nell'intestazione i due numeri restano DUE, separati: sommarli darebbe un totale
     // che non vuol dire niente, perche' i due archivi contano cose diverse.
-    meta = [nR != null ? `${nR} RDW` : null, nS != null ? `${nS} Safety Gate` : null].filter(Boolean).join(' · ');
+    meta = [nR != null ? `${nR} RDW` : (koR ? 'RDW muto' : null),
+            nS != null ? `${nS} Safety Gate` : (koS ? 'Safety Gate muto' : null)].filter(Boolean).join(' · ');
     /**
      * Ogni riga porta al richiamo VERO. Qui il testo del guasto non c'e' — l'RDW lo
      * scrive in olandese e non lo mettiamo a schermo — quindi il link non e' un di piu':
@@ -4042,12 +4075,16 @@ function vehRichiamiHTML() {
     const rigaSg = a => rigaHTML(a.scheda, a.prodotto || a.categoria || 'Veicolo',
       [a.anni ? `${a.anni.da}–${a.anni.a}` : a.anno, a.livello].filter(Boolean).join(' · '),
       omoHTML(a));
-    const bloccoR = nR
-      ? `<div class="veh-rich-b"><div class="veh-rich-h">Campagne RDW <b>${nR}</b></div>${(st.rdw.campagne || []).slice(0, 5).map(riga).join('')}</div>`
-      : '<div class="veh-rich-b"><div class="veh-rich-h">Campagne RDW <b>0</b></div><div class="veh-rich-att">Nessuna campagna per questo modello.</div></div>';
-    const bloccoS = nS
-      ? `<div class="veh-rich-b"><div class="veh-rich-h">Allerte Safety Gate <b>${nS}</b></div>${(st.sg.allerte || []).slice(0, 5).map(rigaSg).join('')}</div>`
-      : '<div class="veh-rich-b"><div class="veh-rich-h">Allerte Safety Gate <b>0</b></div><div class="veh-rich-att">Nessuna allerta per questo modello.</div></div>';
+    const bloccoR = koR
+      ? '<div class="veh-rich-b"><div class="veh-rich-h">Campagne RDW</div><div class="veh-rich-att">Archivio non raggiungibile: non si sa se ci sono campagne. Riprova tra poco.</div></div>'
+      : nR
+        ? `<div class="veh-rich-b"><div class="veh-rich-h">Campagne RDW <b>${nR}</b></div>${(st.rdw.campagne || []).slice(0, 5).map(riga).join('')}</div>`
+        : '<div class="veh-rich-b"><div class="veh-rich-h">Campagne RDW <b>0</b></div><div class="veh-rich-att">Nessuna campagna per questo modello.</div></div>';
+    const bloccoS = koS
+      ? '<div class="veh-rich-b"><div class="veh-rich-h">Allerte Safety Gate</div><div class="veh-rich-att">Archivio non raggiungibile: non si sa se ci sono allerte. Riprova tra poco.</div></div>'
+      : nS
+        ? `<div class="veh-rich-b"><div class="veh-rich-h">Allerte Safety Gate <b>${nS}</b></div>${(st.sg.allerte || []).slice(0, 5).map(rigaSg).join('')}</div>`
+        : '<div class="veh-rich-b"><div class="veh-rich-h">Allerte Safety Gate <b>0</b></div><div class="veh-rich-att">Nessuna allerta per questo modello.</div></div>';
     corpo = `<div class="veh-rich">${bloccoR}${bloccoS}</div>`;
   }
   return miniHTML('veh-rich', 'Richiami', escapeHtml(meta), corpo, { carica: 'richiami' });
@@ -5160,12 +5197,16 @@ const cpRiga = (k, v) => `<div class="cp-n"><span>${escapeHtml(k)}</span><b>${v}
  * ricavano — chi e' fermo da troppo, chi e' appena arrivato, quanto ha venduto in dieci
  * anni.
  */
-function cpNumeriChiave(n, storico, v, troncato, illeggibili, totaleFonte) {
+function cpNumeriChiave(n, storico, v, troncato, illeggibili, totaleFonte, passateKo) {
   if (!n) return '';
   const dich = v && v.annunciDichiarati;
-  // Tre avvisi, non tre statistiche: dicono che quello che stai guardando potrebbe non
-  // essere tutto, o non essere solo suo.
-  const avvisi = (troncato ? '<div class="cp-avviso">Elenco troncato al tetto di sicurezza: questo parco e\' piu\' grande di quello mostrato.</div>' : '')
+  // Quattro avvisi, non quattro statistiche: dicono che quello che stai guardando potrebbe
+  // non essere tutto, o non essere solo suo. Il tetto e la passata caduta sono due cose
+  // diverse e vanno dette diverse: la prima sa che manca dell'altro, la seconda no.
+  const avvisi = ((passateKo && passateKo.length)
+      ? `<div class="cp-avviso">La passata ${escapeHtml(passateKo.map(p => p.tipo).join(' e '))} non e\' riuscita (${escapeHtml(passateKo.map(p => p.motivo).join(' · ')).slice(0, 120)}): di quella parte del parco non si sa niente, e i numeri qui sotto non la comprendono.</div>`
+      : '')
+    + (troncato ? '<div class="cp-avviso">Elenco troncato al tetto di sicurezza: questo parco e\' piu\' grande di quello mostrato.</div>' : '')
     + (illeggibili ? `<div class="cp-avviso">${illeggibili} annunci della vetrina non si sono lasciati leggere: i numeri qui sotto sono calcolati senza di loro.</div>` : '')
     + (n.venditori && n.venditori.length > 1
         ? `<div class="cp-avviso">Attenzione: nella risposta compaiono ${n.venditori.length} venditori diversi (${escapeHtml(n.venditori.map(x => x.nome).join(', ')).slice(0, 90)}). Il filtro della fonte non ha tenuto.</div>` : '');
@@ -5205,7 +5246,7 @@ function cpSchedaHTML(v) {
   const corpo = !st ? '<div class="cp-att">Il parco non e\' ancora stato scaricato.</div>'
     : st.stato === 'carico' ? '<div class="cp-att">Scarico il parco… su un concessionario grande ci vuole un minuto.</div>'
     : st.stato === 'ko' ? `<div class="cp-att">Non riuscito: ${escapeHtml(st.errore || 'la fonte non risponde')}</div>`
-    : cpNumeriChiave(st.dati.numeri, st.dati.storico, v, st.dati.troncato, st.dati.illeggibili, st.dati.totaleFonte);
+    : cpNumeriChiave(st.dati.numeri, st.dati.storico, v, st.dati.troncato, st.dati.illeggibili, st.dati.totaleFonte, st.dati.passateKo);
   const quando = st && st.stato === 'ok' && st.dati.quando
     ? `<span class="cp-quando">dati del ${new Date(st.dati.quando).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${st.dati.daCache ? ' · dalla cache' : ''}</span>` : '';
   const aperto = cpApertoId === cpChiave(v);
@@ -5261,6 +5302,32 @@ function cpSchedaHTML(v) {
  * DAVVERO contro quanti annunci mostra. Misurato su un concessionario vero: 41 annunci
  * fra Autoscout, Subito e Moto.it, 16 veicoli.
  */
+/**
+ * I numeri del gruppo, con quello che MANCA scritto accanto.
+ *
+ * Prima era una riga sola — "N annunci sulle X vetrine" — e X erano le vetrine dell'elenco,
+ * non quelle che avevano davvero risposto. Il backend sapeva gia' per ogni parte se era
+ * troncata, se una passata era caduta e quante card non si erano lasciate leggere: nessuno di
+ * quei campi arrivava fin qui, quindi un totale monco si presentava come il parco intero.
+ */
+function cpGruppoNumeriHTML(dati, voci) {
+  const parti = dati.parti || [];
+  const errori = dati.errori || [];
+  const nomeDi = p => (p.voce && (p.voce.nome || p.voce.fonte)) || 'una vetrina';
+  const guai = [];
+  for (const p of parti) {
+    if (p.passateKo && p.passateKo.length) guai.push(`${nomeDi(p)}: la passata ${p.passateKo.map(x => x.tipo).join(' e ')} non e' riuscita`);
+    else if (p.troncato) guai.push(`${nomeDi(p)}: elenco troncato al tetto, ha piu' mezzi di quelli presi`);
+    if (p.illeggibili) guai.push(`${nomeDi(p)}: ${p.illeggibili} annunci non si sono lasciati leggere`);
+  }
+  const coperte = parti.length;
+  return '<div class="cp-numeri">'
+    + cpRiga('annunci in tutto', `${cpNum((dati.veicoli || []).length)} <em>su ${coperte} ${coperte === 1 ? 'vetrina' : 'vetrine'} di ${voci.length}</em>`)
+    + '</div>'
+    + (errori.length ? `<div class="cp-avviso">${errori.map(e => escapeHtml(`${e.nome}: ${e.error}`)).join(' · ')}</div>` : '')
+    + (guai.length ? `<div class="cp-avviso">Il totale qui sopra e' parziale — ${escapeHtml(guai.join(' · '))}.</div>` : '');
+}
+
 function cpGruppoHTML(g, voci) {
   const st = cpGruppi[g];
   const nome = (voci.find(v => v.nome) || {}).nome || 'Concessionario';
@@ -5268,11 +5335,7 @@ function cpGruppoHTML(g, voci) {
   const corpo = !st ? ''
     : st.stato === 'carico' ? '<div class="cp-att">Scarico le vetrine…</div>'
     : st.stato === 'ko' ? `<div class="cp-att">Non riuscito: ${escapeHtml(st.errore || 'la fonte non risponde')}</div>`
-    : '<div class="cp-numeri">'
-      + cpRiga('annunci in tutto', `${cpNum((st.dati.veicoli || []).length)} <em>sulle ${voci.length} vetrine</em>`)
-      + '</div>'
-      + (st.dati.errori && st.dati.errori.length
-          ? `<div class="cp-avviso">${st.dati.errori.map(e => escapeHtml(`${e.nome}: ${e.error}`)).join(' · ')}</div>` : '');
+    : cpGruppoNumeriHTML(st.dati, voci);
   return `<section class="cp-grp" data-gid="${escapeHtml(g)}">
     <header class="cp-grp-h">
       <span class="cp-grp-nome">${escapeHtml(nome)}</span>
