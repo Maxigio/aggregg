@@ -61,18 +61,9 @@ const SUBITO_KO = leggi('subito-modelli-da-rivedere.json', { auto: [], moto: [] 
 const OUT = path.join(RADICE, 'data', 'catalogo-livelli.json');
 
 /** La generazione che Subito appiccica in coda: "Fiesta 6ª serie" → "Fiesta". */
-function senzaGenerazione(nome) {
-  let s = String(nome || '').trim(), prima;
-  do {
-    prima = s;
-    s = s
-      .replace(/\s*\([^)]*\)\s*$/, '')
-      .replace(/\s*(\d+ª\s*[/-]\s*)*\d+ª\s*(serie|s\.?)?\s*$/i, '')
-      .replace(/\s*'?\d{2,4}\s*-+>?\s*'?\d{0,4}\s*$/, '')
-      .trim();
-  } while (s !== prima && s.length);
-  return s;
-}
+// Una sola implementazione, condivisa col runtime: prima questo script e quello gemello
+// ne avevano una a testa, e la copia che girava in produzione era la piu' debole delle tre.
+const { senzaGenerazione } = require('../backend/nomi-modello');
 
 /** Gli anni dichiarati dentro un'etichetta: "(2021 - 24)", "'13-'25", "01-08". Attributo, non livello. */
 function anniDa(nome) {

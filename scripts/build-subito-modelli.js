@@ -100,22 +100,9 @@ async function annunciDi(tipo, marca) {
  * La generazione che Subito appiccica in coda al nome del modello. Quattro forme, tutte
  * verificate sui dati veri; si tolgono solo quelle, niente di piu'.
  */
-function senzaGenerazione(nome) {
-  let s = String(nome || '').trim(), prima;
-  // Si ripete FINCHE' smette di cambiare: i suffissi si accumulano ("Jazz 1ª serie 01-08",
-  // "Cayenne 3ªs.'17-->") e un passaggio solo ne toglieva uno e lasciava l'altro.
-  do {
-    prima = s;
-    s = s
-      .replace(/\s*\([^)]*\)\s*$/, '')                                  // "Giulia (2016)" · "(E90/91)" · "(07-10)"
-      // La lista di generazioni va presa INTERA: "Porter 1ª/2ª serie" con la sola coda diventava
-      // "Porter 1ª/", cioe' spazzatura che non aggancia niente e non si legge nemmeno.
-      .replace(/\s*(\d+ª\s*[/-]\s*)*\d+ª\s*(serie|s\.?)?\s*$/i, '')     // "Golf 7ª serie" · "5ªs." · "1ª/2ª/3ª/4ª"
-      .replace(/\s*'?\d{2,4}\s*-+>?\s*'?\d{0,4}\s*$/, '')               // "Puma '19->" · "15-24" · "01-08"
-      .trim();
-  } while (s !== prima && s.length);
-  return s;
-}
+// Una sola implementazione, condivisa col runtime: prima questo script e quello gemello
+// ne avevano una a testa, e la copia che girava in produzione era la piu' debole delle tre.
+const { senzaGenerazione } = require('../backend/nomi-modello');
 
 /**
  * La marca ripetuta in testa al modello: Subito scrive "Mazda2", il nostro catalogo "2".

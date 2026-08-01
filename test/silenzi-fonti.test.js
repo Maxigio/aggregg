@@ -298,3 +298,34 @@ test('subito: sulle moto le famiglie si chiedono tutte, non solo la prima', asyn
     assert.strictEqual(r.items.length, 4, '3 propri + 1 comune');
   } finally { sub._setHttpGetJson(null); }
 });
+
+// ─── Una regola, un posto: il nome senza la generazione ──────────────────────
+test('nomi-modello: la regola unificata toglie le generazioni senza decapitare i modelli veri', () => {
+  const { senzaGenerazione } = require('../backend/nomi-modello');
+  // Le due cose che la copia in produzione non sapeva fare, e che gli script sapevano:
+  assert.strictEqual(senzaGenerazione('Fiesta 1ª/2ª serie'), 'Fiesta', 'la lista di generazioni va presa intera');
+  assert.strictEqual(senzaGenerazione('Jazz 1ª serie 01-08'), 'Jazz', 'i suffissi si accumulano: si ripete finche\' smette di cambiare');
+  // Quello che gli script sbagliavano e la copia in produzione no:
+  assert.strictEqual(senzaGenerazione('Serie 200-280(W123)'), 'Serie 200-280',
+    'tre cifre non sono un anno: "200-280" e\' un intervallo di MOTORI');
+  // E la trappola gia' morsa in passato: nomi veri che finiscono con cifre + S.
+  assert.strictEqual(senzaGenerazione('K 1200 S'), 'K 1200 S');
+  assert.strictEqual(senzaGenerazione('Monster 620 S'), 'Monster 620 S');
+  // La stessa funzione la usa la rotta scheda (e da li' fonti-route): un solo comportamento.
+  const { senzaGenerazione: dallaRotta } = require('../backend/scheda-veicolo-route');
+  for (const n of ['Golf 5ª serie', 'Macan 1ªs.', 'Serie 200-280(W123)', 'K 1200 S']) {
+    assert.strictEqual(dallaRotta(n), senzaGenerazione(n), n);
+  }
+});
+
+// ─── RDW: la marca combacia anche quando un nome e' piu' corto ───────────────
+test('rdw: "DS Automobiles" trova le campagne che l\'archivio scrive sotto "DS"', () => {
+  const rdw = require('../backend/scrapers/rdw-richiami');
+  const ds = rdw.cerca({ marca: 'DS Automobiles' });
+  if (!ds.ok) return;                       // archivio non costruito su questa macchina
+  assert.ok(ds.totale > 50, `con l'uguaglianza stretta erano 0, ora ${ds.totale}`);
+  assert.strictEqual(rdw.cerca({ marca: 'DS' }).totale, ds.totale, 'le due forme sono la stessa marca');
+  // E non si allarga a caso: due marche diverse restano diverse.
+  const volvo = rdw.cerca({ marca: 'Volvo' }), vw = rdw.cerca({ marca: 'Volkswagen' });
+  assert.notStrictEqual(volvo.totale, vw.totale);
+});

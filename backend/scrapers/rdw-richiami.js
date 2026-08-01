@@ -67,12 +67,31 @@ function combaciaModello(tipi, cercato) {
 }
 
 /** La marca combacia? Confronto normalizzato, nessun contenimento. */
+/**
+ * LA MARCA COMBACIA ANCHE QUANDO UNO DEI DUE NOMI E' PIU' CORTO.
+ *
+ * L'RDW scrive la marca come gliela dichiara il costruttore, e non sempre nella forma
+ * commerciale: noi cerchiamo "DS Automobiles", loro scrivono "DS", e con l'uguaglianza
+ * stretta la scheda di una DS 4 diceva «Campagne RDW 0 — Nessuna campagna per questo
+ * modello» mentre l'archivio ne conteneva 78.
+ *
+ * Si accetta quindi che uno sia il prefisso A PAROLE dell'altro — mai una sottostringa, che
+ * farebbe passare "r12" dentro "gsr125". Misurato sulle 232 marche dell'archivio e sulle 739
+ * del nostro catalogo: UNA sola ambiguita', "ford" che aggancia anche "ford cng technik", che
+ * e' Ford. Nessun'altra marca diventa confondibile.
+ */
 function combaciaMarca(marche, cercata) {
   const q = norm(cercata);
   if (!q) return false;
+  const paroleQ = q.split(' ').filter(Boolean);
   return (marche || []).some(m => {
     const n = norm(m);
-    return n === q || n.replace(/ /g, '') === q.replace(/ /g, '');
+    if (!n) return false;
+    if (n === q || n.replace(/ /g, '') === q.replace(/ /g, '')) return true;
+    const paroleN = n.split(' ').filter(Boolean);
+    const corto = paroleQ.length <= paroleN.length ? paroleQ : paroleN;
+    const lungo = paroleQ.length <= paroleN.length ? paroleN : paroleQ;
+    return corto.every((p, i) => p === lungo[i]);
   });
 }
 

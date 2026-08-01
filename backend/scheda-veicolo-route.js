@@ -290,21 +290,10 @@ function resolveMoto({ marca, modello, anno }) {
  * concessionario, la preselezione — e perche' la generazione, quando serve, si legge dal nome
  * grezzo prima di questa pulizia (vedi `schedaPerAnnuncio`).
  */
-const senzaGenerazione = m => String(m == null ? '' : m)
-  .replace(/\s*\(.*$/, '')                        // "Serie 3 (E90/91)"
-  .replace(/\s+\d+[ªa°]?\s*serie\b.*$/i, '')      // "Golf 5ª serie"
-  // Subito scrive la stessa cosa anche ABBREVIATA — "Macan 1ªs.", "Picanto 2ª s.",
-  // "C3 Aircross 1ª-2ª s." — e spesso con una coda di anni appresso ("14-18", "'17-->").
-  // Con il suffisso attaccato il nome non combacia con nessuna voce del catalogo tecnico e
-  // la scheda risponde "il catalogo non ha X": non una scheda incompleta, proprio niente.
-  // ATTENZIONE: ordinale e punto NON possono essere entrambi facoltativi. Con "\d+ s" nudo
-  // la regola decapitava nomi di catalogo VERI che finiscono in "<cifre> S" — "K 1200 S"
-  // diventava "K", "Monster 620 S" diventava "Monster" (misurato su data/models.json: 90
-  // nomi alterati, 28 famiglie Moto.it esatte perse). Serve almeno un segnale della serie
-  // abbreviata: l'ordinale attaccato alla cifra, oppure il punto dopo la s.
-  .replace(/\s+\d+(?:[ªa°](?:\s*-\s*\d+[ªa°]?)?\s*s\.?|(?:\s*-\s*\d+[ªa°]?)?\s*s\.)(?:\s|$).*$/i, '')
-  .replace(/\s+'?\d{2}\s*-+>?\s*'?\d{0,2}\s*$/, '')   // la coda di anni rimasta sola
-  .trim();
+// La regola vive in backend/nomi-modello.js: la usano anche i due script che costruiscono i
+// cataloghi, e prima erano tre copie divergenti — con la piu' debole proprio qui, in
+// produzione. Resta esportata da questo modulo perche' fonti-route la prende da qui.
+const { senzaGenerazione } = require('./nomi-modello');
 
 /**
  * LE PAROLE CHE DISTINGUONO LE GENERAZIONI FRA LORO, dette dal catalogo e non da una tabella.
