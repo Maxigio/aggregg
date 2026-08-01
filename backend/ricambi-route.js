@@ -34,7 +34,9 @@ function mount(app, deps = {}) {
   const normOen = deps.normOen || realOem.normOen;
   const fetchEbayItemDetails = deps.fetchEbayItemDetails || realEbay.fetchEbayItemDetails;
   const fetchAutodocSpecs = deps.fetchAutodocSpecs || realOem.fetchAutodocSpecs;
-  const clientIp = deps.clientIp || defaultClientIp;
+  // La chiave dei limiti: la PERSONA quando e' entrata, l'indirizzo quando no.
+  // La calcola server.js (`chiaveLimite`), che e' l'unico a sapere chi ha il cookie.
+  const chiaveLimite = deps.chiaveLimite || deps.clientIp || defaultClientIp;
 
   const hits = new Map();                    // ip → { windowStart, count } (ricerche)
   const ebayHits = new Map();                // ip → { windowStart, count } (enrich ⓘ, budget separato)
@@ -51,7 +53,7 @@ function mount(app, deps = {}) {
   const ebayRateOk = rateLimiter(ebayHits, EBAY_RATE_CAP);
 
   app.get('/api/ricambi', async (req, res) => {
-    if (!rateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
+    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
     const q = String(req.query.q || req.query.oen || '').trim();   // ?q= (nuovo) o ?oen= (retro-compat)
     const mode = ['nome', 'prodotto'].includes(req.query.mode) ? req.query.mode : 'oem';
     const veicolo = req.query.veicolo === 'moto' ? 'moto' : 'auto';
@@ -79,7 +81,7 @@ function mount(app, deps = {}) {
   // Enrich LAZY di un annuncio eBay (venditore/spedizione/quantità/marca) — chiamata all'apertura ⓘ.
   // Valida l'URL item (anti-SSRF: solo ebay.<tld>/itm/), cache per URL, stesso rate-limit.
   app.get('/api/ricambi/ebay-item', async (req, res) => {
-    if (!ebayRateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
+    if (!ebayRateOk(chiaveLimite(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
     const url = String(req.query.url || '').trim();
     if (!/^https:\/\/www\.ebay\.\w+\/itm\/\d+/.test(url)) return res.status(400).json({ error: 'URL eBay item non valido' });
     const hit = ebayCache.get(url);
@@ -101,7 +103,7 @@ function mount(app, deps = {}) {
   // Specs LAZY di una variante Autodoc (datiTecnici + compatibilità) — chiamata quando si seleziona
   // una variante nel selettore. Valida l'URL product-page (anti-SSRF: solo auto-doc.it), cache per URL.
   app.get('/api/ricambi/autodoc-specs', async (req, res) => {
-    if (!ebayRateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
+    if (!ebayRateOk(chiaveLimite(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
     const url = String(req.query.url || '').trim();
     if (!/^https?:\/\/(www\.)?auto-doc\.it\//i.test(url)) return res.status(400).json({ error: 'URL Autodoc non valido' });
     const hit = autodocCache.get(url);

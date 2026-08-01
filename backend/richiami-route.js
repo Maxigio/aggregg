@@ -170,7 +170,8 @@ function costruisciMarche() {
 }
 
 function mount(app, deps = {}) {
-  const clientIp = deps.clientIp || (req => req.ip || '');
+  // La chiave dei limiti: la PERSONA quando e' entrata, l'indirizzo quando no.
+  const chiaveLimite = deps.chiaveLimite || deps.clientIp || (req => req.ip || '');
   const hits = new Map();
   const rateOk = ip => {
     const now = Date.now();
@@ -184,7 +185,7 @@ function mount(app, deps = {}) {
   // attendere, `{ ...promise }` non spande niente e la risposta usciva vuota con ok:true
   // — il caso peggiore, perche' sembra funzionare.
   const via = (percorso, lavoro) => app.get(percorso, async (req, res) => {
-    if (!rateOk(clientIp(req))) return res.status(429).json({ ok: false, motivo: 'Troppe richieste.' });
+    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ ok: false, motivo: 'Troppe richieste.' });
     try {
       const out = await lavoro(req.query || {});
       res.set('Cache-Control', 'public, max-age=3600');

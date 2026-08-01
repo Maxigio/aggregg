@@ -73,7 +73,9 @@ test('login: i tentativi sbagliati in parallelo si contano uno per uno', async t
   const uno = () => {
     const res = resFinta();
     return srv._postLogin(
-      { method: 'POST', path: '/login', headers: { 'x-forwarded-for': ip }, ip, body: { password: 'sbagliata-di-sicuro' } },
+      // `socket` da loopback: e' cosi' che arriva una richiesta proxata dal Funnel, ed e'
+      // l'unico caso in cui X-Forwarded-For viene creduto (senza, l'header lo scrive il client).
+      { method: 'POST', path: '/login', headers: { 'x-forwarded-for': ip }, socket: { remoteAddress: '127.0.0.1' }, ip, body: { password: 'sbagliata-di-sicuro' } },
       res,
     ).then(() => res.redirectTo);
   };
@@ -98,7 +100,7 @@ test('login: i fallimenti decadono dopo mezz\'ora di quiete', async t => {
   srv._loginAttempts.set(ip, { fails: 7, until: 0, last: Date.now() - 60 * 60 * 1000 });
   const res = resFinta();
   await srv._postLogin(
-    { method: 'POST', path: '/login', headers: { 'x-forwarded-for': ip }, ip, body: { password: 'ancora-sbagliata' } },
+    { method: 'POST', path: '/login', headers: { 'x-forwarded-for': ip }, socket: { remoteAddress: '127.0.0.1' }, ip, body: { password: 'ancora-sbagliata' } },
     res,
   );
   assert.strictEqual(srv._loginAttempts.get(ip).fails, 1, 'i fallimenti vecchi di un\'ora devono essere decaduti');

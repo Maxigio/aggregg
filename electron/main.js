@@ -86,7 +86,19 @@ function authEnabled() {
 
 function enableFunnel() {
   if (!authEnabled()) {
-    console.log('[funnel] password non impostata o auth.json illeggibile → Funnel NON attivato (nessuna esposizione pubblica)');
+    /**
+     * NON ACCENDERLO NON BASTA: VA SPENTO.
+     *
+     * Il Funnel acceso con `--bg` e' stato persistente del demone Tailscale: sopravvive
+     * alla morte dell'app e al riavvio del Mac, e l'unico punto che lo azzerava era
+     * `before-quit`, che una chiusura non pulita non esegue. Quindi "password assente" e
+     * "Funnel spento" non erano affatto la stessa cosa, e qui venivano trattate come tali:
+     * bastava un blackout con la password impostata e un riavvio in cui auth.json non si
+     * legge (l'SSD montato altrove) perche' l'URL pubblico restasse raggiungibile senza
+     * login. Adesso, se la password non c'e', si spegne davvero.
+     */
+    console.log('[funnel] password non impostata o auth.json illeggibile → SPENGO l\'esposizione pubblica');
+    disableFunnel();
     return;
   }
   execFile(tailscaleBin(), ['funnel', '--bg', String(PORT)], { timeout: 15000 }, (err, _out, stderr) => {

@@ -255,7 +255,10 @@ function gateAuth(req, res, next) {
     return res.status(503).send(MSG_AUTH_ROTTA);
   }
   if (AUTH_FREE.has(req.path)) return next();     // /login, /logout sempre raggiungibili
-  const role = auth.checkToken(parseCookies(req).amr_auth);   // 'full' | 'demo' | null
+  // L'identita', non solo il ruolo: da qui in poi ogni limite e ogni riga di registro sanno
+  // CHI ha fatto la richiesta, e non piu' soltanto da quale indirizzo e' arrivata.
+  const ses = auth.checkSessione(parseCookies(req).amr_auth);   // { ruolo, id } | null
+  const role = ses ? ses.ruolo : null;
   if (!role) {
     if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'non autorizzato' });
     if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) {
@@ -264,6 +267,7 @@ function gateAuth(req, res, next) {
     return res.status(401).send('non autorizzato');
   }
   req.authRole = role;
+  req.authId = ses.id;
   // Gate DEMO (ospite read-only): solo GET; niente scritture, niente modo Valuta.
   // /login·/logout sono già esenti via AUTH_FREE. (Il pannello admin non esiste più →
   // l'owner-tool DB-puro lo sostituisce; nessuna route /admin da gateare qui.)
@@ -305,7 +309,8 @@ async function postLogin(req, res) {
   const rec = loginAttempts.get(ip);
   if (rec && rec.until > ora) return res.redirect(302, '/login?err=locked');   // lockout
 
-  const role = auth.verifyRole(req.body && req.body.password);   // 'full' | 'demo' | null
+  const utente = auth.verifica(req.body && req.body.password);   // { id, nome, ruolo } | null
+  const role = utente ? utente.ruolo : null;
   if (!role) {
     // SI CONTA PRIMA DI DORMIRE. Con l'attesa in mezzo, fra il `get` e il `set` c'era un await:
     // tutte le richieste arrivate nella stessa finestra leggevano lo stesso `rec` e scrivevano
@@ -321,8 +326,10 @@ async function postLogin(req, res) {
   }
 
   loginAttempts.delete(ip);
-  accessLog.record('login_ok', { role, ip, ua: req.headers['user-agent'] });   // best-effort
-  const token  = auth.makeToken(role);
+  // Nel registro finisce CHI e' entrato, non solo con che ruolo: con una password a testa
+  // "login_ok demo" non diceva piu' niente a nessuno.
+  accessLog.record('login_ok', { role, utente: utente.id, nome: utente.nome, ip, ua: req.headers['user-agent'] });
+  const token  = auth.makeToken(role, utente.id);
   const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
   res.setHeader('Set-Cookie', `amr_auth=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(auth.TTL_MS / 1000)}${secure}`);
   res.redirect(302, '/');
@@ -360,9 +367,34 @@ app.get('/api/logs', (req, res) => {
 // IP reale del client: dietro il Funnel Tailscale, l'ULTIMO hop di X-Forwarded-For
 // (il leftmost è spoofabile). Senza proxy (Electron locale) → remoteAddress.
 function clientIp(req) {
-  const xff = req.headers['x-forwarded-for'];
-  if (xff) { const p = String(xff).split(',').map(s => s.trim()).filter(Boolean); if (p.length) return p[p.length - 1]; }
-  return req.socket.remoteAddress || 'unknown';
+  /**
+   * L'HEADER LO SCRIVE IL CLIENT, e questo indirizzo regge il blocco dopo otto tentativi di
+   * login e ogni limite di richieste. Prima ci si fidava sempre: bastava cambiare
+   * `X-Forwarded-For` a ogni tentativo per non far scattare mai il lockout, e il server
+   * ascolta su tutte le interfacce — quindi dalla rete dell'ufficio o dal tailnet lo si
+   * raggiunge direttamente, saltando il Funnel.
+   *
+   * Il Funnel proxa a 127.0.0.1: l'header vale SOLO quando la connessione arriva da li'.
+   * Da qualunque altro indirizzo si usa quello vero del socket, che nessuno puo' riscrivere.
+   */
+  const remoto = (req.socket && req.socket.remoteAddress) || '';
+  const daFunnel = remoto === '127.0.0.1' || remoto === '::1' || remoto === '::ffff:127.0.0.1';
+  if (daFunnel) {
+    const xff = req.headers['x-forwarded-for'];
+    if (xff) { const p = String(xff).split(',').map(s => s.trim()).filter(Boolean); if (p.length) return p[p.length - 1]; }
+  }
+  return remoto || 'unknown';
+}
+
+/**
+ * LA CHIAVE DEI LIMITI: la PERSONA se e' entrata, l'indirizzo se non lo e'.
+ *
+ * I diciotto limiti dell'app erano tutti per indirizzo, e dietro il Funnel l'ufficio ne ha
+ * uno solo: il blocco di uno diventava il blocco di tutti. Con una password a testa ognuno
+ * ha la sua quota, e chi non e' autenticato resta contato per indirizzo com'era.
+ */
+function chiaveLimite(req) {
+  return req.authId ? 'u:' + req.authId : 'ip:' + clientIp(req);
 }
 
 // ─── Segnalazioni (bug-report) — anche l'utente demo ────────────────────────
@@ -381,7 +413,7 @@ function reportRateOk(ip) {
   rec.count++; return rec.count <= cap;
 }
 app.post('/api/report', express.json({ limit: '32kb' }), (req, res) => {
-  if (!reportRateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe segnalazioni, riprova tra qualche minuto.' });
+  if (!reportRateOk(chiaveLimite(req))) return res.status(429).json({ error: 'Troppe segnalazioni, riprova tra qualche minuto.' });
   const b = req.body || {};
   const type = b.type === 'search' ? 'search' : 'bug';
   const message = String(b.message == null ? '' : b.message).slice(0, 2000).trim();
@@ -1009,28 +1041,28 @@ app.get('/api/search', async (req, res) => {
 });
 
 // ─── Ricambi: codice OEM → articoli (auto-doc via stealth) — vedi ricambi-route.js ──
-require('./ricambi-route').mount(app, { clientIp });
+require('./ricambi-route').mount(app, { chiaveLimite });
 
 // ─── Scheda tecnica veicolo (auto-data.net) — vedi scheda-veicolo-route.js ──────────
-require('./scheda-veicolo-route').mount(app, { clientIp });
+require('./scheda-veicolo-route').mount(app, { chiaveLimite });
 
 // ─── Competitor: il parco di un concessionario, il tuo e quello degli altri ───
-require('./competitor-route').mount(app, { json: express.json({ limit: '8kb' }), clientIp });
+require('./competitor-route').mount(app, { json: express.json({ limit: '8kb' }), chiaveLimite });
 
 // ─── Richiami di sicurezza (Safety Gate UE) — vedi richiami-route.js ───────────
-require('./richiami-route').mount(app, { clientIp });
+require('./richiami-route').mount(app, { chiaveLimite });
 
 // ─── Verifica per targa: il CAPTCHA lo risolve una persona — vedi targa.js ─────
 // Una targa per gesto umano, niente archivio, niente targhe nei log.
 require('./targa').mount(app, { json: express.json({ limit: '2kb' }) });
 
 // ─── Fonti dati aperte (OSM, EPREL, bilstein, Wheel-Size) — vedi fonti-route.js ──
-require('./fonti-route').mount(app, { clientIp });
+require('./fonti-route').mount(app, { chiaveLimite });
 
 // ─── Le MISURE della redazione (auto.it, inSella) — vedi prove-route.js ────────
 // Dentro l'ADD ON della scheda tecnica: dicono quanto va davvero un mezzo contro quello che
 // il costruttore dichiara. Su richiesta, una fonte per tipo di veicolo.
-require('./prove-route').mount(app, { clientIp });
+require('./prove-route').mount(app, { chiaveLimite });
 
 // ─── Cache ricerche recenti (§17.4) ───────────────────────────────────────────
 // Stessa ricerca entro il TTL → risposta istantanea. NON cacha se una fonte è
@@ -1926,8 +1958,9 @@ app.delete('/api/saved/:id', (req, res) => {
   res.json({ ok: saved.removeSaved(req.params.id) });
 });
 
+// `?url=` segna QUELL'avviso; senza, segna tutta la coda (il bottone "segna tutti letti").
 app.post('/api/saved/:id/read', (req, res) => {
-  res.json({ ok: saved.markRead(req.params.id) });
+  res.json({ ok: saved.markRead(req.params.id, String(req.query.url || '') || null) });
 });
 
 // Controlla ora: una (?id=) o tutte. Restituisce gli esiti + la lista aggiornata.
@@ -2030,7 +2063,28 @@ if (WHATSAPP_ON) {
 // inizializzare il DB, compilare il bundle worker e scaldare due browser headless.
 // Produzione invariata: sia `node backend/server.js` sia il fork di Electron eseguono questo
 // file come principale, quindi require.main === module e' vero in entrambi i casi.
+/**
+ * SENZA PASSWORD NON SI PARTE.
+ *
+ * Finche' l'app era di uno solo, "nessuna password" voleva dire "app locale aperta". Da
+ * quando ci lavorano in piu' persone quella comodita' e' un buco: il server ascolta su tutte
+ * le interfacce, il Funnel puo' essere rimasto acceso nel demone da una chiusura non pulita,
+ * e in quello stato chiunque raggiunga la porta entra. Il controllo sta QUI dentro, nel ramo
+ * che parte solo quando questo file e' il programma avviato: i test che lo caricano come
+ * modulo non devono morire.
+ *
+ * La password si imposta da terminale, ed e' anche il posto dove si aggiungono le persone:
+ *     node scripts/set-password.js                 (il proprietario)
+ *     node scripts/set-password.js "Giulia Rossi"  (un collega, in sola lettura)
+ */
 const avviaAscolto = require.main === module;
+if (avviaAscolto && auth.stato() === 'assente') {
+  console.error('\n  AMR non parte: non c\'e\' nessuna password impostata.\n');
+  console.error('  Il server ascolta sulla rete e l\'esposizione pubblica puo\' essere rimasta accesa:');
+  console.error('  senza password chiunque arrivi alla porta entra. Impostala e riprova:\n');
+  console.error('      node scripts/set-password.js\n');
+  process.exit(1);
+}
 const server = !avviaAscolto ? null : app.listen(PORT, () => {
   console.log(`Server avviato su http://localhost:${PORT}`);
 
@@ -2100,4 +2154,7 @@ module.exports = { server, app, _lookupBrand: lookupBrand, _lookupModelGroup: lo
   // Superficie interna per i test: due gestori che senza questo non sarebbero raggiungibili
   // senza aprire una porta (supertest non e' fra le dipendenze).
   _gateAuth: gateAuth, _postLogin: postLogin, _loginAttempts: loginAttempts, _cacheable: cacheable,
+  // Chi si puo' credere e come si contano i limiti sono due decisioni di sicurezza:
+  // vanno provate, e senza aprire una porta.
+  _clientIp: clientIp, _chiaveLimite: chiaveLimite,
   _as24LivelloAllargamento: as24LivelloAllargamento };

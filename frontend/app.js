@@ -3661,17 +3661,33 @@ function onRicercheClick(e) {
   if (e.target.closest('.ric-check')) { checkRicerche(id); return; }
   if (e.target.closest('.ric-del')) { deleteRicerca(id); return; }
   const alertEl = e.target.closest('.ric-alert[data-url]');
-  if (alertEl) { markRicercaRead(id); openAd(alertEl.dataset.url); return; }
+  // Si segna letto SOLO l'avviso cliccato: prima il clic sul primo di dodici li faceva
+  // sparire tutti, e con piu' persone svuotava la coda del proprietario.
+  if (alertEl) { markRicercaRead(id, alertEl.dataset.url); openAd(alertEl.dataset.url); return; }
   if (e.target.closest('.ric-head')) card.classList.toggle('open');
 }
 async function deleteRicerca(id) {
   try { await fetch(`/api/saved/${encodeURIComponent(id)}`, { method: 'DELETE' }); await loadSavedSearches(); }
   catch (_) { showError('Eliminazione non riuscita.'); }
 }
-async function markRicercaRead(id) {
-  try { await fetch(`/api/saved/${encodeURIComponent(id)}/read`, { method: 'POST' }); } catch (_) {}
+async function markRicercaRead(id, url) {
+  // L'url dell'avviso: si segna letto QUELLO, non tutta la coda della ricerca. Senza,
+  // aprire il primo di dodici avvisi faceva sparire gli altri undici.
+  try {
+    const q = url ? `?url=${encodeURIComponent(url)}` : '';
+    await fetch(`/api/saved/${encodeURIComponent(id)}/read${q}`, { method: 'POST' });
+  } catch (_) {}
   const s = savedSearches.find(x => x.id === id);
-  if (s) { s.novita = 0; s.digest = {}; updateNovitaBadge(); }
+  if (s) {
+    if (url) {
+      // Uno solo in meno, non la coda intera: il conteggio deve dire la verita' anche
+      // prima del prossimo giro sul server.
+      s.alerts = (s.alerts || []).filter(a => a.url !== url);
+      s.novita = Math.max(0, (s.novita || 0) - 1);
+      s.digest = s.alerts.reduce((d, a) => { d[a.motivo] = (d[a.motivo] || 0) + 1; return d; }, {});
+    } else { s.novita = 0; s.digest = {}; s.alerts = []; }
+    updateNovitaBadge();
+  }
   const card = document.querySelector(`.ric-card[data-id="${CSS.escape(id)}"]`);
   if (card) { card.classList.remove('has-novita'); card.querySelector('.ric-badge')?.remove(); }
 }

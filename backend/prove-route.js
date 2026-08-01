@@ -42,7 +42,8 @@ function perModello(voci, modello, campo = 'nome') {
 }
 
 function mount(app, deps = {}) {
-  const clientIp = deps.clientIp || (req => req.ip || '');
+  // La chiave dei limiti: la PERSONA quando e' entrata, l'indirizzo quando no.
+  const chiaveLimite = deps.chiaveLimite || deps.clientIp || (req => req.ip || '');
 
   /**
    * AUTO — i rilevamenti di auto.it per un modello.
@@ -50,7 +51,7 @@ function mount(app, deps = {}) {
    * descrive questa macchina, e metterla in cima sarebbe suggerirla.
    */
   app.get('/api/prove/auto', async (req, res) => {
-    if (!rateOk(clientIp(req))) return res.status(429).json({ ok: false, error: 'Troppe richieste.' });
+    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ ok: false, error: 'Troppe richieste.' });
     const { marca, modello, anno } = req.query || {};
     if (!marca) return res.status(400).json({ ok: false, error: 'marca mancante' });
     const pausa = autoit.pausaFinoA();
@@ -72,7 +73,7 @@ function mount(app, deps = {}) {
 
   /** MOTO — le prove di inSella che possono essere di questo modello. Indice su disco. */
   app.get('/api/prove/moto', async (req, res) => {
-    if (!rateOk(clientIp(req))) return res.status(429).json({ ok: false, error: 'Troppe richieste.' });
+    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ ok: false, error: 'Troppe richieste.' });
     const { marca, modello } = req.query || {};
     if (!marca || !modello) return res.status(400).json({ ok: false, error: 'marca/modello mancanti' });
     // `indice()` e' una Promise e restituisce direttamente l'ELENCO delle prove (dal file su
@@ -93,7 +94,7 @@ function mount(app, deps = {}) {
 
   /** MOTO — la prova intera. Una richiesta, e solo quando la si apre. */
   app.get('/api/prove/moto/prova', async (req, res) => {
-    if (!rateOk(clientIp(req))) return res.status(429).json({ ok: false, error: 'Troppe richieste.' });
+    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ ok: false, error: 'Troppe richieste.' });
     const slug = String((req.query || {}).slug || '');
     if (!/^[a-z0-9-]{3,120}$/.test(slug)) return res.status(400).json({ ok: false, error: 'slug non valido' });
     const pausa = insella.pausaFinoA();

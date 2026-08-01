@@ -48,7 +48,8 @@ function parcoRestanti(ip) {
 
 function mount(app, deps = {}) {
   const C = deps.competitor || comp;
-  const clientIp = deps.clientIp || (req => req.ip || '');
+  // La chiave dei limiti: la PERSONA quando e' entrata, l'indirizzo quando no.
+  const chiaveLimite = deps.chiaveLimite || deps.clientIp || (req => req.ip || '');
   // Il body JSON si monta per-rotta in questa app, non globalmente: arriva da server.js.
   const json = deps.json || ((req, res, next) => next());
 
@@ -224,7 +225,7 @@ function mount(app, deps = {}) {
 
   app.get('/api/competitor/:id/parco', async (req, res) => {
     const forza = String(req.query.forza || '') === '1';
-    const ip = clientIp(req);
+    const ip = chiaveLimite(req);
     // La cache non conta come scarico: riaprire una scheda gia' letta non costa niente alle
     // fonti, e non deve consumare il budget. Il limite morde solo quando si va davvero in rete.
     const chiave = String(req.params.id);   // `fonte:id`
@@ -278,7 +279,7 @@ function mount(app, deps = {}) {
     const voci = C.leggi().filter(v => v.gruppo === g);
     if (!voci.length) return res.status(404).json({ ok: false, error: 'gruppo vuoto' });
     const forza = String(req.query.forza || '') === '1';
-    const ip = clientIp(req);
+    const ip = chiaveLimite(req);
     const parti = [], errori = [];
     // IL LIMITATORE VALE ANCHE QUI. Questa rotta scaricava N parchi reali senza mai passare
     // dal budget: un gruppo di 10 vetrine con un doppio clic (il secondo parte gia' con

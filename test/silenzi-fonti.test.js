@@ -329,3 +329,92 @@ test('rdw: "DS Automobiles" trova le campagne che l\'archivio scrive sotto "DS"'
   const volvo = rdw.cerca({ marca: 'Volvo' }), vw = rdw.cerca({ marca: 'Volkswagen' });
   assert.notStrictEqual(volvo.totale, vw.totale);
 });
+
+// ─── L'indirizzo su cui poggiano i limiti non lo scrive il client ────────────
+test('server: X-Forwarded-For vale solo se la richiesta arriva dal Funnel', () => {
+  const srv = require('../backend/server');
+  const conHeader = (remoteAddress) => srv._clientIp({
+    headers: { 'x-forwarded-for': '9.9.9.9' }, socket: { remoteAddress },
+  });
+  // Dal Funnel (proxa a 127.0.0.1) l'header e' l'unico modo di sapere chi c'e' davvero.
+  assert.strictEqual(conHeader('127.0.0.1'), '9.9.9.9');
+  assert.strictEqual(conHeader('::ffff:127.0.0.1'), '9.9.9.9');
+  // Da chiunque altro (rete dell'ufficio, tailnet) l'header e' scritto dal client: si ignora.
+  // Senza questa regola bastava cambiarlo a ogni tentativo per non far scattare mai il
+  // blocco dopo otto password sbagliate.
+  assert.strictEqual(conHeader('192.168.1.40'), '192.168.1.40');
+  assert.strictEqual(conHeader('100.64.0.3'), '100.64.0.3');
+});
+
+test('server: i limiti seguono la PERSONA quando c\'e\', l\'indirizzo quando no', () => {
+  const srv = require('../backend/server');
+  // Entrato: la sua quota e' sua, e il collega accanto non gliela consuma.
+  assert.strictEqual(srv._chiaveLimite({ authId: 'giulia-rossi', socket: { remoteAddress: '10.0.0.1' } }), 'u:giulia-rossi');
+  assert.strictEqual(srv._chiaveLimite({ authId: 'marco', socket: { remoteAddress: '10.0.0.1' } }), 'u:marco');
+  // Non entrato: si conta per indirizzo, come prima.
+  assert.strictEqual(srv._chiaveLimite({ socket: { remoteAddress: '10.0.0.1' }, headers: {} }), 'ip:10.0.0.1');
+});
+
+// ─── Ogni persona ha la sua chiave, e il cookie non si puo' riscrivere ───────
+test('auth: una password per persona, con l\'identita\' dentro la firma', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-persone-'));
+  const vecchio = process.env.USER_DATA_PATH;
+  process.env.USER_DATA_PATH = dir;
+  delete require.cache[require.resolve('../backend/auth')];
+  const auth = require('../backend/auth');
+  try {
+    auth.setPassword('passwordlungaproprietario');
+    auth.setPersona('Giulia Rossi', 'passwordlungadigiulia');
+    auth.setPersona('Marco', 'passwordlungadimarco', 'full');
+
+    // Chi entra si distingue: prima erano due password per tutti, e i limiti, la coda degli
+    // avvisi e il registro accessi non sapevano dire chi fosse chi.
+    assert.deepStrictEqual(auth.verifica('passwordlungadigiulia'),
+      { id: 'giulia-rossi', nome: 'Giulia Rossi', ruolo: 'demo' });
+    assert.strictEqual(auth.verifica('passwordlungadimarco').ruolo, 'full');
+    assert.strictEqual(auth.verifica('passwordlungaproprietario').id, 'owner');
+    assert.strictEqual(auth.verifica('non-e-la-password'), null);
+
+    // L'identita' sta DENTRO la firma: un ospite non puo' riscrivere il cookie per
+    // diventare un collega, ne' per farsi 'full'.
+    const t = auth.makeToken('demo', 'giulia-rossi');
+    assert.deepStrictEqual(auth.checkSessione(t), { ruolo: 'demo', id: 'giulia-rossi' });
+    const falso = t.replace('.demo.giulia-rossi.', '.full.marco.');
+    assert.strictEqual(auth.checkSessione(falso), null, 'firma non valida: si rifiuta');
+
+    // I cookie gia' emessi devono continuare a valere: le due forme vecchie restano lette.
+    const vecchioTok = auth.makeToken('full', 'owner').split('.');
+    assert.strictEqual(vecchioTok.length, 4);
+
+    assert.ok(auth.togliPersona('Giulia Rossi'));
+    assert.strictEqual(auth.verifica('passwordlungadigiulia'), null, 'tolta la persona, la sua password non vale piu\'');
+  } finally {
+    if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
+    delete require.cache[require.resolve('../backend/auth')];
+  }
+});
+
+test('saved: il clic segna letto SOLO quell\'avviso', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-letti-'));
+  const vecchio = process.env.USER_DATA_PATH;
+  process.env.USER_DATA_PATH = dir;
+  delete require.cache[require.resolve('../backend/saved')];
+  const saved = require('../backend/saved');
+  try {
+    const s = saved.addSaved({ label: 'Golf', params: { tipo: 'auto', marca: 'Volkswagen' } });
+    const ann = n => Array.from({ length: n }, (_, i) => ({ url: 'https://x/' + i, prezzo: 10000 + i, titolo: 'Golf ' + i }));
+    saved.recordCheck(s.id, ann(1), {});          // baseline
+    saved.recordCheck(s.id, ann(4), {});          // tre nuovi
+    assert.strictEqual(saved.listSaved().find(x => x.id === s.id).novita, 3);
+
+    saved.markRead(s.id, 'https://x/1');
+    assert.strictEqual(saved.listSaved().find(x => x.id === s.id).novita, 2,
+      'prima il clic su UNO faceva sparire tutta la coda');
+    // Il bottone "segna tutti letti" resta, ma e' un gesto diverso e esplicito.
+    saved.markRead(s.id);
+    assert.strictEqual(saved.listSaved().find(x => x.id === s.id).novita, 0);
+  } finally {
+    if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
+    delete require.cache[require.resolve('../backend/saved')];
+  }
+});

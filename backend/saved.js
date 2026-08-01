@@ -102,11 +102,31 @@ function removeSaved(id) {
 
 function getSaved(id) { return loadAll().find(s => s.id === id) || null; }
 
-function markRead(id) {
+/**
+ * SEGNA LETTO QUELLO SU CUI HAI CLICCATO, non tutti.
+ *
+ * `markRead` prendeva la RICERCA e metteva `letto = true` su ogni avviso della coda, mentre
+ * l'interfaccia la chiama al clic su UN avviso, prima di aprire l'annuncio. Siccome la lista
+ * espone solo i non letti, gli altri sparivano dalla scheda al primo ridisegno — non letti,
+ * marcati letti dal clic sul primo — e dopo trenta giorni la potatura li toglieva dal file.
+ * Con piu' persone il danno si moltiplicava: un collega che apriva un annuncio azzerava la
+ * coda del proprietario.
+ *
+ * @param {string} url  l'avviso da segnare. Senza, si segnano tutti: e' il bottone
+ *                      "segna tutti letti", un gesto esplicito e diverso dal clic su una riga.
+ */
+function markRead(id, url) {
   const list = loadAll();
   const s = list.find(x => x.id === id);
   if (!s) return false;
-  (s.alerts || []).forEach(a => { a.letto = true; });
+  const coda = s.alerts || [];
+  if (url) {
+    const a = coda.find(x => x.url === url && !x.letto);
+    if (!a) return false;
+    a.letto = true;
+  } else {
+    coda.forEach(a => { a.letto = true; });
+  }
   saveAll(list);
   return true;
 }

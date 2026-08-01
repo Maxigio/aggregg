@@ -870,10 +870,11 @@ async function schedaPerAnnuncio({ tipo, marca, modello: modelloGrezzo, anno, cv
 }
 
 function mount(app, deps = {}) {
-  const clientIp = deps.clientIp || (req => req.ip || '');
+  // La chiave dei limiti: la PERSONA quando e' entrata, l'indirizzo quando no.
+  const chiaveLimite = deps.chiaveLimite || deps.clientIp || (req => req.ip || '');
   // La scheda tecnica DI QUESTO ANNUNCIO — vedi schedaPerAnnuncio.
   app.get('/api/scheda-veicolo/annuncio', async (req, res) => {
-    if (!rateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste.' });
+    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ error: 'Troppe richieste.' });
     const { tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria } = req.query || {};
     // Il titolo dell'annuncio serve SOLO alle moto: e' da li' che si legge la variante
     // ("ABS", "Moto Cage", "Rally"), l'unica cosa che il periodo di produzione non separa.
@@ -892,7 +893,7 @@ function mount(app, deps = {}) {
     } catch (_) { res.json({ ok: false, motivo: 'scheda non disponibile' }); }
   });
   app.get('/api/scheda-veicolo', async (req, res) => {
-    if (!rateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste.' });
+    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ error: 'Troppe richieste.' });
     const { tipo, marca, modello, anno, gen } = req.query || {};
     if (!marca || !modello) return res.status(400).json({ error: 'marca/modello mancanti' });
     try {
@@ -905,7 +906,7 @@ function mount(app, deps = {}) {
     } catch (_) { res.json({ ok: false, error: 'scheda non disponibile' }); }
   });
   app.get('/api/scheda-veicolo/specs', async (req, res) => {
-    if (!rateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe richieste.' });
+    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ error: 'Troppe richieste.' });
     const url = String(req.query.url || '');
     const kind = specsHostKind(url);
     if (!kind) return res.status(400).json({ error: 'url non valido' });
