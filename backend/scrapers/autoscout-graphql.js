@@ -15,6 +15,10 @@ const https = require('https');
 
 const { kindForStatus, fail } = require('./utils');   // classificazione salute crawler (F1.5)
 const budget = require('../budget-richieste');        // conta le richieste, non le limita
+// L'UNICO risolutore di provincia del progetto: valida contro le 107 sigle vere e non
+// sceglie fra due indizi che si contraddicono. Lo usano entrambi i rami AS24.
+const { risolvi: risolviProvincia } = require('../province-sigla');
+const provinciaSigla = (testo, cap) => { const r = risolviProvincia(testo, cap); return r ? r.sigla : null; };
 
 const HOST = 'listing-search.api.autoscout24.com';
 const AUTH = 'Basic YXMyNC1zZWFyY2gtZnVubmVsOnZucmZiYkJqSTMyT2wxV2thNnVOSFJwM0VZbjRkag==';
@@ -340,7 +344,21 @@ function mapListing(node, opts = {}) {
       return (t && (t.formatted || t.raw)) || (f.fuelCategory && f.fuelCategory.formatted) || null;
     })(),
     // city AS24 spesso è "Comune - Provincia - PV" → tieni il comune (1° segmento)
-    provincia: (dt.location && dt.location.city ? String(dt.location.city).split(' - ')[0].trim() : null) || null,
+    /**
+     * LA PROVINCIA E' UNA SIGLA, e la ricava il risolutore condiviso.
+     *
+     * Qui si teneva il PRIMO segmento di `location.city` — che AS24 manda come
+     * "Gussago - Brescia - BS" — cioe' il comune; il gemello a browser teneva la CODA, cioe'
+     * la sigla. Stesso campo, stessa fonte, due significati: la colonna "Provincia" mescolava
+     * "Gussago" e "BS", il raggruppamento faceva un gruppo per comune, e nel CSV finivano
+     * perfino i CAP (misurato dal vivo: fra le "province" tornate c'erano `Agrigento`,
+     * `AciCatena – Catania – Ct` e `97100`).
+     *
+     * `province-sigla.risolvi` esisteva gia' ed e' piu' forte di entrambe: valida contro le
+     * 107 sigle vere, sa leggere sigla, parentesi, coda, nome di provincia, comune e CAP, e
+     * torna null quando gli indizi si contraddicono invece di sceglierne uno a caso.
+     */
+    provincia: (provinciaSigla(dt.location && dt.location.city, dt.location && dt.location.zip) || null),
     cambio: (v.engine && v.engine.transmissionType && v.engine.transmissionType.formatted) || null,
     cilindrata: ccm ? (parseInt(String(ccm).replace(/[^\d]/g, ''), 10) || null) : null,
     variante,

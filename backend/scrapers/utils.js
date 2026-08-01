@@ -97,6 +97,31 @@ const REGION_AS24 = {
   'veneto':               { label: "Veneto",               lat: 45.4408, lon: 12.3155, zipr: 120 },
 };
 
+/**
+ * IL CERCHIO REGIONE, uno solo per tutti e due i rami Autoscout.
+ *
+ * Il percorso principale partiva dal CAPOLUOGO con 100 km fissi, questo ramo dal centro
+ * geografico col raggio della tabella qui sopra: stesso filtro, due centri e due raggi.
+ * Misurato dal vivo sulla Golf in Sicilia:
+ *
+ *   Palermo + 100 km (quello che girava)      83 annunci — Catania, Messina e Siracusa fuori
+ *   Palermo + 280 km                         319 annunci, ma dei 100 letti 40 erano calabresi
+ *   centro isola + 150 km                    186 annunci, e tutti e 100 i letti siciliani
+ *   centro isola + 200 km (valore tabella)   234 annunci, dei 100 letti 25 calabresi
+ *
+ * Quindi conta piu' il CENTRO del raggio. Il valore della tabella resta — e' quello che
+ * l'interfaccia di AS24 usa per quella regione — perche' lo sbordo lo toglie il CAP che
+ * l'annuncio dichiara (server.js, `as24RegioneDaCap`): un cerchio piu' stretto rischierebbe
+ * di tagliare un angolo di regione, e quello il CAP non puo' recuperarlo.
+ *
+ * ponytail: una sola misura vera, sulla Sicilia. Se un giorno la finestra dei 100 risulta
+ * troppo diluita in qualche regione, il posto dove calibrare e' `zipr` qui sopra.
+ */
+function cerchioRegione(regione) {
+  const g = REGION_AS24[String(regione || '').trim().toLowerCase()];
+  return g ? { lat: g.lat, lng: g.lon, radius: g.zipr } : null;
+}
+
 // ─── Risoluzione eseguibile Chromium cross-platform ──────────────────────────
 // Playwright scarica Chromium in pw-browsers/chromium-<rev>/<arch-specific>/.
 // Il path dell'eseguibile cambia per OS/arch:
@@ -158,6 +183,6 @@ function resolveChromiumExecutable(pwBrowsersRoot) {
 }
 
 module.exports = {
-  HEADERS, toSlug, parseEuro, parseKm, extractNextData, toInt, REGION_AS24,
+  HEADERS, toSlug, parseEuro, parseKm, extractNextData, toInt, REGION_AS24, cerchioRegione,
   resolveChromiumExecutable, kindForStatus, fail,
 };

@@ -117,12 +117,24 @@ test('gli anni vengono dalle DATE: un modello di quattro cifre non e\' un anno',
 test('il confronto e a parola INTERA, non a sottostringa', () => {
   // Su un dato di sicurezza un falso positivo e' peggio di un buco: se "Golf" agganciasse
   // "Golfino", il concessionario vedrebbe richiami che non lo riguardano e smetterebbe di fidarsi.
-  assert.strictEqual(rica._combacia(['Golf A6', 'Cabrio'], 'Golf'), true);
+  // `combacia` ora dice anche COME ha combaciato: 'esatto' | 'parole' | false. Serve perche'
+  // le corrispondenze trovate per insieme di parole sono buone ma vanno dichiarate.
+  assert.strictEqual(rica._combacia(['Golf A6', 'Cabrio'], 'Golf'), 'esatto');
   assert.strictEqual(rica._combacia(['Golfino'], 'Golf'), false);
-  assert.strictEqual(rica._combacia(['Panda'], 'panda'), true, 'maiuscole irrilevanti');
+  assert.strictEqual(rica._combacia(['Panda'], 'panda'), 'esatto', 'maiuscole irrilevanti');
   assert.strictEqual(rica._combacia(['Plus'], 'Golf'), false);
   assert.strictEqual(rica._combacia([], 'Golf'), false);
   assert.strictEqual(rica._combacia(['Golf'], ''), false, 'una ricerca vuota non aggancia tutto');
+
+  // LE TRE REGOLE DEL GEMELLO RDW, che qui mancavano. Sull'archivio Safety Gate i nomi li
+  // scrivono le autorita' dei vari Stati: la Serie 3 c'e' come "3 series" e "3series", mai
+  // come "Serie 3", e cercandola uscivano 2 allerte su 5-7.
+  assert.strictEqual(rica._combacia(['3 Series'], 'Serie 3'), 'parole', 'ordine delle parole diverso');
+  assert.strictEqual(rica._combacia(['3series'], 'Serie 3'), 'parole', 'e attaccato: fra cifra e lettera c\'e\' un confine');
+  assert.strictEqual(rica._combacia(['3 Series'], 'Serie 5'), false, 'non si confondono due serie diverse');
+  assert.strictEqual(rica._combacia(['3 SERIES GRAN TURISMO'], 'Serie 3'), 'parole', 'le cercate dentro le dichiarate');
+  assert.strictEqual(rica._combacia(['Z900'], 'Z 900'), 'parole', 'spazi collassati: stessa moto');
+  assert.strictEqual(rica._combacia(['500X'], '500'), false, 'una parola sola resta un\'altra auto');
 });
 
 test('la sigla VW e il nome esteso pescano le stesse allerte', () => {

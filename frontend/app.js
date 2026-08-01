@@ -4264,8 +4264,12 @@ function vehRichiamiHTML() {
         + (st && st.nomi ? '' : `<button type="button" class="veh-omo-btn" data-omo="${escapeHtml(primo)}"${st === 'carico' ? ' disabled' : ''}>versioni</button>`)
         + `</div>${sotto}`;
     };
+    // `modelloPerParole`: l'allerta e' stata agganciata confrontando le PAROLE del modello,
+    // non la frase intera — l'archivio e' testo libero scritto dalle autorita' dei vari
+    // Stati, dove la Serie 3 e' "3 series" o "3series". Vale, ma si dice: su un dato di
+    // sicurezza chi guarda deve poter distinguere le certe dalle probabili.
     const rigaSg = a => rigaHTML(a.scheda, a.prodotto || a.categoria || 'Veicolo',
-      [a.anni ? `${a.anni.da}–${a.anni.a}` : a.anno, a.livello].filter(Boolean).join(' · '),
+      [a.anni ? `${a.anni.da}–${a.anni.a}` : a.anno, a.livello, a.modelloPerParole ? 'modello riconosciuto dalle parole' : null].filter(Boolean).join(' · '),
       omoHTML(a));
     const bloccoR = koR
       ? '<div class="veh-rich-b"><div class="veh-rich-h">Campagne RDW</div><div class="veh-rich-att">Archivio non raggiungibile: non si sa se ci sono campagne. Riprova tra poco.</div></div>'

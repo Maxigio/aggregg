@@ -16,7 +16,9 @@ const { chromium } = require('playwright');
 const path = require('path');
 const https = require('https');
 const { parseEuro, parseKm, REGION_AS24, resolveChromiumExecutable } = require('./utils');
-const PROVINCE = require('../../data/province.json');   // per validare le sigle, non fidarsi delle ultime 2 lettere
+// L'UNICO risolutore di provincia del progetto (valida contro le 107 sigle vere, legge
+// sigla/parentesi/coda/comune/CAP e tace quando due indizi si contraddicono).
+const { risolvi: risolviProvincia } = require('../province-sigla');
 
 const BASE = 'https://www.autoscout24.it';
 const NUM_PAGES = 3;   // §17.2: 5→3 (i più economici restano in cima per l'ordine prezzo)
@@ -170,16 +172,18 @@ function parseAnno(vehicleDetails) {
   return isNaN(year) ? null : year;
 }
 
-function parseProvincia(city) {
-  if (!city) return null;
-  // AS24 formati visti: "Venaria Reale - Torino - TO", "Marino- Rm", "Milano - MI".
-  // Le ultime due lettere sono una sigla SOLO se sono un pezzo a se': "Modena" finisce per
-  // "na" e prendere le ultime due lettere la trasformava in Napoli. Se la sigla non c'e' si
-  // torna la localita' INTERA: la traduzione in provincia la fa backend/province-sigla.js,
-  // che valida contro le 107 sigle vere e sa leggere anche comuni e nomi di provincia.
-  const coda = city.split(/\s*-\s*/).map(x => x.trim()).filter(Boolean).pop();
-  if (coda && /^[A-Za-z]{2}$/.test(coda) && PROVINCE[coda.toUpperCase()]) return coda.toUpperCase();
-  return city.trim() || null;
+/**
+ * Una SIGLA, sempre, e la ricava il risolutore condiviso.
+ *
+ * Questa era una terza implementazione della stessa regola: leggeva la coda e, quando la
+ * sigla non c'era, tornava la localita' intera — quindi il campo `provincia` conteneva a
+ * volte "TO" e a volte "Venaria Reale". Il gemello GraphQL faceva l'opposto (teneva sempre
+ * il comune). `province-sigla.risolvi` sa gia' fare tutto questo meglio, e in piu' usa il CAP
+ * per smentire un indizio sbagliato invece di fidarsi del primo che trova.
+ */
+function parseProvincia(city, cap) {
+  const r = risolviProvincia(city, cap);
+  return r ? r.sigla : null;
 }
 
 function parseListing(item) {
@@ -206,7 +210,7 @@ function parseListing(item) {
     km:         parseKm(detail(item.vehicleDetails, 'Chilometraggio')),
     anno:       parseAnno(item.vehicleDetails),
     carburante: detail(item.vehicleDetails, 'Carburante') || null,
-    provincia:  parseProvincia(item.location?.city),
+    provincia:  parseProvincia(item.location?.city, item.location?.zip),
     // §22 strutturati (mostrati istantanei nel pannello "Dettagli")
     cambio:     item.vehicle?.transmission || null,
     cilindrata,

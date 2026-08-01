@@ -44,7 +44,11 @@ test('mapListing: shape completa coerente con gli altri scraper', () => {
   assert.strictEqual(r.carburante, 'Diesel');
   assert.strictEqual(r.cambio, 'Manuale');
   assert.strictEqual(r.cilindrata, 1995);
-  assert.strictEqual(r.provincia, 'Milano');
+  // La provincia e' una SIGLA, non il comune: era il campo su cui i due rami AS24
+  // divergevano (GraphQL teneva il primo segmento di "Gussago - Brescia - BS", il ramo a
+  // browser la coda), e finivano nella stessa colonna, nello stesso CSV e nello stesso
+  // raggruppamento. Ora la ricava `province-sigla.risolvi` per entrambi.
+  assert.strictEqual(r.provincia, 'MI');
   assert.strictEqual(r.variante, '320d Attiva 150cv');
   assert.strictEqual(r.url, 'https://www.autoscout24.it/annunci/bmw-320d-x');
 });

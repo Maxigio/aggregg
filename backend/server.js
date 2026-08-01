@@ -47,6 +47,11 @@ const { versioniAs24 } = require('./scrapers/as24-tassonomia');   // il catalogo
 const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings, norm } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
 const regionCentroids = require('../data/region-centroids.json');  // capoluoghi regione {lat,lng} → raggio AS24 nativo
+// 12.575 CAP → regione. Autoscout il CAP lo manda con ogni annuncio: e' cio' che rende
+// preciso il cerchio, che da solo o sborda o taglia (vedi `as24RegioneDaCap`).
+const comuneRegione = require('../data/comune-regione.json');
+// Il raggio che copre davvero la regione: sta accanto alla tabella dei raggi AS24, non qui.
+const { cerchioRegione } = require('./scrapers/utils');
 const modelsData      = require('../data/models.json');
 
 const { SubitoBlockedError, keepAliveSubito } = scrapeSubito;
@@ -1429,12 +1434,39 @@ async function runSearchCore(params) {
       console.warn('[server] Moto.it versione non risolta: ' + e.message);   // la ricerca vale lo stesso
     }
   }
-  // Regione AS24 NATIVA (verificato live): centroide capoluogo + raggio (default 100km,
-  // come il sito ufficiale: position{lat,lng}+radius). Sostituisce il vecchio post-filtro
-  // comune→regione su una pesca di 100 nazionali (che azzerava i risultati in-regione).
+  /**
+   * LA REGIONE SU AUTOSCOUT: CERCHIO LARGO, POI IL CAP.
+   *
+   * Autoscout un filtro "regione" non ce l'ha. Misurato oggi sulla Golf in Sicilia:
+   *   nessun filtro                          6.411 annunci
+   *   cerchio 100 km da Palermo                 83
+   *   cerchio 250 km                           241
+   *   SOLO l'etichetta "Sicilia (italy)"      6.411  ← identico a nessun filtro
+   *   etichetta + cerchio 100                   83  ← identico al cerchio da solo
+   * L'etichetta che il codice sa gia' mandare e' inerte: resta il cerchio. E il cerchio da
+   * 100 km, in Sicilia, tagliava fuori Catania (166 km), Messina (192) e Siracusa (205):
+   * 83 annunci su 241.
+   *
+   * Quindi il cerchio si allarga fino a coprire la regione, e la precisione la da' il CAP
+   * che Autoscout manda con ogni annuncio: `data/comune-regione.json` ne mappa 12.575 alla
+   * loro regione. Non e' un post-filtro che nasconde — e' il filtro che hai chiesto,
+   * applicato su cio' che l'annuncio dichiara di se'.
+   */
   if (params.regione && asMakeId) {
-    const ctr = regionCentroids[String(params.regione).trim().toLowerCase()];
-    if (ctr) params.autoscoutGeo = { lat: ctr.lat, lng: ctr.lng, radius: params.raggio || 100 };
+    const reg = String(params.regione).trim().toLowerCase();
+    const cerchio = cerchioRegione(reg);
+    if (cerchio) {
+      // Il raggio scritto da te vince: li' stai chiedendo "entro N km", non "in regione", e
+      // in quel caso non si filtra nemmeno sul CAP (il cerchio E' la richiesta).
+      params.autoscoutGeo = params.raggio
+        ? { lat: cerchio.lat, lng: cerchio.lng, radius: params.raggio }
+        : cerchio;
+      if (!params.raggio) params.as24RegioneDaCap = reg;
+    } else {
+      // Regione fuori tabella: si resta sul capoluogo, come prima.
+      const ctr = regionCentroids[reg];
+      if (ctr) params.autoscoutGeo = { lat: ctr.lat, lng: ctr.lng, radius: params.raggio || 100 };
+    }
   }
 
   // ── Skip tollerante (P6) ──────────────────────────────────────────────────
@@ -1468,7 +1500,12 @@ async function runSearchCore(params) {
     runSubito(params, TIMEOUT_MS),
     skipAutoscout
       ? Promise.resolve({ items: [], status: 'skipped', reason: asSkipReason })
-      : runSource(scrapeAutoscoutUnion(params, { withMeta: true, fetta: params.fetta || 0 }), TIMEOUT_MS, 'Autoscout24'),
+      // UNA PAGINA IN PIU' QUANDO IL CAP FILTRA. Il cerchio regione sborda nelle regioni
+      // confinanti — misurato in Sicilia: dei 100 letti, 25 calabresi — e quelli il filtro
+      // sul CAP li toglie. Senza compensare, la regione mostrerebbe MENO annunci di prima
+      // pur pescando da un insieme piu' grande (75 contro 83). Costa una richiesta.
+      : runSource(scrapeAutoscoutUnion(params, { withMeta: true, fetta: params.fetta || 0,
+          ...(params.as24RegioneDaCap ? { maxPages: 3 } : {}) }), TIMEOUT_MS, 'Autoscout24'),
     skipMotoIt
       ? Promise.resolve({ items: [], status: 'skipped', reason: motoSkipReason })
       : runSource(scrapeMotoIt(params, { withMeta: true, fetta: params.fetta || 0 }), TIMEOUT_MS, 'Moto.it'),
@@ -1596,10 +1633,25 @@ async function runSearchCore(params) {
     if (params.annoMin   != null && r.anno   != null && r.anno   < params.annoMin)     return false;
     if (params.annoMax   != null && r.anno   != null && r.anno   > params.annoMax)     return false;
 
-    // 4. Regione: ora NATIVA su tutte e 3 le fonti (Subito `r=`, Moto.it `region=`,
-    //    AS24 `position`+`radius` dal capoluogo, vedi sopra `params.autoscoutGeo`).
-    //    Rimosso il vecchio post-filtro AS24 comune→regione: girava su una pesca di
-    //    100 annunci NAZIONALI → azzerava i risultati in-regione (bug). Verificato live.
+    /**
+     * 4. Regione. Su Subito (`r=`) e Moto.it (`region=`) e' un filtro nativo vero e qui non
+     * c'e' niente da fare. Su Autoscout no: il filtro e' un CERCHIO dal capoluogo, e
+     * l'etichetta di regione che la loro API accetta e' inerte (misurato: con e senza,
+     * 6.411 annunci identici). Il cerchio ora e' largo abbastanza da coprire la regione —
+     * senno' in Sicilia si vedevano 83 annunci su 241 — e la precisione la da' il CAP che
+     * l'annuncio dichiara.
+     *
+     * Non e' il vecchio post-filtro comune→regione, quello che girava su una pesca di 100
+     * annunci NAZIONALI e azzerava i risultati: qui la pesca e' gia' regionale, e questo
+     * toglie solo lo sbordo del cerchio nelle regioni confinanti.
+     *
+     * Un annuncio SENZA CAP non si butta: non si e' potuto verificare, e non verificabile
+     * non vuol dire fuori regione.
+     */
+    if (params.as24RegioneDaCap && r.fonte === 'autoscout' && /^\d{5}$/.test(String(r.zip || ''))) {
+      const reg = comuneRegione[String(r.zip)];
+      if (reg && reg !== params.as24RegioneDaCap) return false;
+    }
 
     return true;
   });

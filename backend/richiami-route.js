@@ -30,6 +30,21 @@ const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ
  * i nomi nell'archivio sono spezzoni di testo libero ("Plus", "CC", "Cabrio") e una sottostringa
  * qualsiasi farebbe scattare mezzo catalogo. La marca deve gia' combaciare a monte.
  */
+/**
+ * COME IL GEMELLO RDW, che le stesse tre regole le aveva gia'.
+ *
+ * Qui il confronto era la sola frase intera a parola intera, e su Safety Gate non basta:
+ * l'archivio e' testo libero scritto dalle autorita' dei vari Stati, dove la BMW Serie 3
+ * compare come "3 series", "3series", "3 Series" e mai come "Serie 3". Misurato: cercando
+ * "Serie 3" uscivano 2 allerte BMW su 5-7 presenti.
+ *
+ * Su un dato di SICUREZZA una campagna che non vedi e' peggio di un'allerta in piu' da
+ * scartare a occhio, quindi si adottano le due regole in piu' del gemello — spazi collassati
+ * ("Z900" = "Z 900") e insieme di parole ("Serie 3" ⊆ "3 series gran turismo") — e le
+ * corrispondenze che arrivano DA QUELLE si dichiarano, invece di passare per esatte.
+ *
+ * @returns {false|'esatto'|'parole'} come ha combaciato, non solo se ha combaciato.
+ */
 function combacia(modelli, cercato) {
   const q = norm(cercato);
   if (!q) return false;
@@ -37,12 +52,36 @@ function combacia(modelli, cercato) {
   // compilazioni per costruire l'elenco marche, cioe' quasi tutti i 296 ms di avvio del modulo.
   // Niente escape dei metacaratteri: norm() ha gia' ridotto la stringa a [a-z0-9 ].
   const re = new RegExp('(^| )' + q + '( |$)');   // "Golf A6" aggancia "Golf"; "Golfino" no.
+  /**
+   * "SERIES" E' "SERIE". Non e' un'intuizione: e' come l'archivio scrive davvero.
+   * Sulle 65 allerte BMW le forme presenti sono `3series`, `3 series`, `3 Series` — e
+   * `1 series`, `2series`, `5 series`, `7series`… — mentre noi (e il catalogo italiano)
+   * scriviamo "Serie 3". Senza questa equivalenza il confronto per insieme di parole non
+   * aggancia niente, perche' "serie" non e' "series".
+   */
+  // E "3series" attaccato e' "3 series": fra una cifra e una lettera c'e' un confine di
+  // parola anche quando lo spazio non c'e' — la stessa cosa che si fa gia' per "Z900".
+  const spezza = s => s.replace(/(\d)([a-z])/g, '$1 $2').replace(/([a-z])(\d)/g, '$1 $2').replace(/\s+/g, ' ').trim();
+  const inglese = s => spezza(s).replace(/\bseries\b/g, 'serie');
+  const qi = inglese(q);
+  const paroleQ = qi.split(' ').filter(Boolean);
+  let perParole = false;
   for (const m of modelli || []) {
-    const n = norm(m);
-    if (!n) continue;
-    if (n === q || re.test(n)) return true;
+    const n0 = norm(m);
+    if (!n0) continue;
+    if (n0 === q || re.test(n0)) return 'esatto';
+    const n = inglese(n0);
+    // "Z900" attaccato contro "Z 900" staccato: stessa moto. Uguaglianza, non contenimento —
+    // il contenimento farebbe passare "r12" dentro "gsr125". Vale anche per "3series".
+    if (n.replace(/ /g, '') === qi.replace(/ /g, '')) { perParole = true; continue; }
+    // Solo in questa direzione (cercate dentro dichiarate): "Serie 3" prende "3 SERIE GRAN
+    // TURISMO", mentre "500" non prende "500X", che resta una parola sola e un'altra auto.
+    if (paroleQ.length > 1) {
+      const paroleT = new Set(n.split(' ').filter(Boolean));
+      if (paroleQ.every(p => paroleT.has(p))) { perParole = true; continue; }
+    }
   }
-  return false;
+  return perParole ? 'parole' : false;
 }
 
 /**
@@ -70,7 +109,13 @@ function cerca({ marca, modello, anno } = {}) {
   // Il campo marca e' testo libero e puo' portarne piu' d'una ("Opel/Vauxhall", "MAN/Neoplan, Man"):
   // si confronta contro l'elenco spezzato, non contro la stringa intera.
   if (marca) a = a.filter(x => combaciaMarca(x.marche && x.marche.length ? x.marche : [x.marca], marca));
-  if (modello) a = a.filter(x => combacia(x.modelli, modello));
+  // Il COME si porta dietro: una corrispondenza trovata per insieme di parole ("Serie 3"
+  // dentro "3 series gran turismo") vale, ma chi guarda deve poter distinguere quelle
+  // certe dalle probabili — e' un dato di sicurezza, non un'etichetta di prodotto.
+  if (modello) {
+    a = a.map(x => { const c = combacia(x.modelli, modello); return c ? (c === 'esatto' ? x : { ...x, modelloPerParole: true }) : null; })
+         .filter(Boolean);
+  }
   if (anno) {
     const y = Number(anno);
     // Senza finestra di produzione non si esclude: l'assenza del dato non e' una prova d'innocenza.
