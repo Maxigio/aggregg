@@ -94,6 +94,15 @@ function featBool(ad, label) {
 const digits = s => { const m = String(s == null ? '' : s).replace(/\./g, '').match(/\d+/); return m ? parseInt(m[0], 10) : null; };
 const yearOf = s => { const y = parseInt(String(s || '').split('/').pop(), 10); return Number.isFinite(y) && y > 1900 ? y : null; };
 
+/** urn ("id:ad:<uuid>:list:651863039") → "subito:651863039". Ripiego sulla coda dell'URL. */
+function idSubito(ad) {
+  const m = String((ad && ad.urn) || '').match(/:list:(\d+)\b/);
+  if (m) return 'subito:' + m[1];
+  const u = (ad && ad.urls && (ad.urls.default || ad.urls.mobile)) || '';
+  const t = String(u).match(/-(\d+)\.htm(?:$|[?#])/);
+  return t ? 'subito:' + t[1] : null;
+}
+
 function mapAd(ad, opts = {}) {
   const url = ad.urls && (ad.urls.default || ad.urls.mobile);
   if (!url) return null;
@@ -135,6 +144,21 @@ function mapAd(ad, opts = {}) {
   const liv = livelliAnnuncio(ad);
   const out = {
     fonte: 'subito',
+    /**
+     * L'IDENTITA' DELL'ANNUNCIO, che non e' il suo indirizzo.
+     *
+     * L'URL di Subito contiene il TITOLO scritto dal venditore e la citta':
+     * ".../ford-kuga-2-0-tdci-150-cv-s-s-4wd-powershift-titan-cagliari-651863039.htm".
+     * Se il venditore ritocca il titolo — abbassa il prezzo e lo scrive, aggiunge
+     * "VENDUTA", corregge un dettaglio — l'URL cambia, e per chi lo usava come identita'
+     * quello diventava un ALTRO annuncio: falso "nuovo" negli avvisi, storico del prezzo
+     * perso, annuncio salvato che sparisce dai salvati.
+     *
+     * `urn` e' l'identita' che la fonte stessa dichiara: "id:ad:<uuid>:list:651863039".
+     * Si tiene il progressivo finale, che e' anche la coda del vecchio URL — ed e' cio' che
+     * permette di convertire i dati gia' su disco senza perderli (vedi backend/saved.js).
+     */
+    id: idSubito(ad),
     titolo: ad.subject || 'Annuncio senza titolo',
     prezzo: digits(feat(ad, 'Prezzo')),
     km,

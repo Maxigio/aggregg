@@ -121,7 +121,25 @@ function cerca({ marca, modello, anno } = {}) {
     // Senza finestra di produzione non si esclude: l'assenza del dato non e' una prova d'innocenza.
     a = a.filter(x => !x.anni || (y >= x.anni.da - 1 && y <= x.anni.a + 1));
   }
-  return { ok: true, allerte: a, totale: a.length };
+  // LE PIU' RECENTI PER PRIME. L'archivio arriva ordinato per numero di caso come STRINGA
+  // ("SR/04510/25"), e l'anno sta in fondo: cosi' tutto il 2025 precede tutto il 2026, e il
+  // progressivo riparte ogni anno. Misurato sull'archivio vero, 1.034 allerte: le 224 del
+  // 2026 cominciavano solo alla posizione 267, e su 27 marche con piu' di otto allerte 22
+  // mostravano le piu' vecchie. Su Mercedes-Benz tutte e otto quelle a schermo erano vecchie:
+  // a video una del 26/12/2025 mentre la piu' recente nascosta era del 24/07/2026.
+  // `dataReport` c'e' su tutte e 1.034 ed e' la data del bollettino: e' quella che conta.
+  return { ok: true, allerte: perData(a), totale: a.length };
+}
+
+/** dd/mm/yyyy → millisecondi. Senza data si finisce in fondo, non in cima. */
+function quando(x) {
+  const m = String((x && x.dataReport) || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) : 0;
+}
+/** Copia ordinata dalla piu' recente. A parita' di giorno vince il progressivo piu' alto. */
+function perData(a) {
+  const prog = x => { const m = String((x && x.caso) || '').match(/\/(\d+)\//); return m ? +m[1] : 0; };
+  return [...a].sort((x, y) => quando(y) - quando(x) || prog(y) - prog(x));
 }
 
 /**
@@ -233,10 +251,13 @@ function mount(app, deps = {}) {
   });
 
   // Le ultime allerte pubblicate: e' la vista che serve per tenere d'occhio la settimana.
+  // "Ultime" secondo la DATA del bollettino, non secondo l'ordine in cui l'archivio le
+  // elenca: quello mette il 2025 prima del 2026 (vedi `perData`), e questa rotta —
+  // che si chiama proprio "ultime" — restituiva le piu' vecchie.
   via('/api/richiami/ultime', q => {
     if (!D) return { allerte: [], motivo: 'archivio non costruito' };
     const n = Math.min(200, Math.max(1, Number(q.quante) || 50));
-    return { allerte: D.allerte.slice(0, n), totale: D.allerte.length };
+    return { allerte: perData(D.allerte).slice(0, n), totale: D.allerte.length };
   });
 
   /**

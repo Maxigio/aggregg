@@ -53,17 +53,20 @@ async function lookupCmsnl(oenRaw) {
       const codiceCmsnl = (bodyTxt.match(/CMSNL Numero di prodotto:\s*([A-Z0-9.\-]+)/i) || [])[1] || null;
       const spedizione = (bodyTxt.match(/spedizione stimat[oa]:\s*([^A-Z]{2,30}?giorn\w+)/i) || [])[1]?.trim() || null;
       // "Modelli di adattamento": link _model DENTRO la sezione fits (esclude la nav marche in header)
-      let fits = null;
+      let fits = null, fitsTotale = null;
       const fitsHead = [...document.querySelectorAll('h2,h3')].find(h => /modelli di adattamento|fits models/i.test(h.textContent || ''));
       if (fitsHead) {
         const scope = fitsHead.closest('section,div') || fitsHead.parentElement;
         const names = scope ? [...scope.querySelectorAll('a[href*="_model"]')]
           .map(a => a.textContent.replace(/\s+/g, ' ').trim()).filter(t => t.length > 3) : [];
-        if (names.length) fits = [...new Set(names)].slice(0, 20);
+        // QUANTI SONO IN TUTTO, oltre ai venti che si mandano. Senza, la scheda scriveva
+        // "Compatibilita' · 20 modelli" per un pezzo che ne copre sessanta, e la riga
+        // "+N altri" del frontend non poteva mai scattare perche' il tetto era lo stesso.
+        if (names.length) { const tutti = [...new Set(names)]; fits = tutti.slice(0, 20); fitsTotale = tutti.length; }
       }
       // immagine reale dalla galleria (il campo image del JSON-LD è spesso vuoto)
       const galImg = document.querySelector('main img[src*="cmsnl"], main img[src*="product"], [class*=gallery] img')?.getAttribute('src') || null;
-      return { prod, codiceCmsnl, spedizione, fits, galImg };
+      return { prod, codiceCmsnl, spedizione, fits, fitsTotale, galImg };
     });
     if (!p || !p.prod || !p.prod.name) return { oen, articoli: [], count: 0 };   // niente Product → non trovato
 
@@ -85,7 +88,7 @@ async function lookupCmsnl(oenRaw) {
       immagine: prod.image || p.galImg || null,
       url: prod.url || url,
     }];
-    return { oen, tipoPezzo: prod.name, veicoli: p.fits || null, articoli, count: 1 };   // array di fit (Marca modello anno) — il render fa la tabella
+    return { oen, tipoPezzo: prod.name, veicoli: p.fits || null, veicoliTotale: p.fitsTotale || null, articoli, count: 1 };   // array di fit (Marca modello anno) — il render fa la tabella
   } catch (e) {
     return { oen, articoli: [], count: 0, error: e.message };
   } finally {

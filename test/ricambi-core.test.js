@@ -198,23 +198,23 @@ test('relevantToQuery: tiene i pertinenti, scarta il rumore, stopword ignorate',
 // ─── v6: fonte eBay + scheda arricchita ────────────────────────────────────────
 const { parsePrezzoEur, isPlaceholder } = require('../backend/ebay-scrape');
 
-test('eBay: offerte in lista dopo Subito; scheda foto reale dal match + dati tecnici', async () => {
-  const specs = async () => ({ specs: { 'Marca': 'BMW', 'Numero ricambio OEM': '34218526568' }, immagine: 'https://i.ebayimg.com/hi/s-l1600.webp' });
+test('eBay: le offerte restano offerte, e la SCHEDA resta il catalogo', async () => {
+  // La scheda di un ricambio e' la sua identita' di catalogo: dati tecnici e prezzo del
+  // NUOVO. Prima si riempiva coi dati degli annunci — la foto da un'inserzione eBay o, se
+  // mancava, dal PRIMO annuncio USATO di Subito, e i dati tecnici da quella stessa
+  // inserzione. Un pezzo usato ammaccato poteva finire come immagine di catalogo del nuovo.
+  let specsChiamate = false;
+  const specs = async () => { specsChiamate = true; return { specs: { 'Marca': 'BMW' }, immagine: 'https://i.ebayimg.com/hi/s-l1600.webp' }; };
   const r = await searchRicambi('34218526568', { veicolo: 'moto', cmsnl: okCmsnl, subito: okSubito, ebay: okEbay, ebaySpecs: specs, web: okWeb });
+  // Gli annunci ci sono, e restano dove devono: nella lista delle offerte.
   assert.deepStrictEqual(r.articoli.map(a => a.fonte), ['subito', 'ebay']);
   assert.strictEqual(r.sources.ebay.status, 'ok');
-  // foto reale eBay hi-res a livello codice (fallback per la variante) + dati tecnici eBay
-  assert.strictEqual(r.scheda.fotoReale, 'https://i.ebayimg.com/hi/s-l1600.webp');
-  assert.deepStrictEqual(r.scheda.datiTecniciEbay, { 'Marca': 'BMW', 'Numero ricambio OEM': '34218526568' });
-});
-
-test('eBay: nessun match titolo-codice → niente specs fetch, scheda intatta', async () => {
-  let specsCalled = false;
-  const spySpecs = async () => { specsCalled = true; return { specs: {}, immagine: null }; };
-  const ebayNoMatch = async () => ({ articoli: [{ fonte: 'ebay', nome: 'Pezzo generico senza codice', prezzo: 10, url: 'https://www.ebay.it/itm/2' }] });
-  const r = await searchRicambi('34218526568', { veicolo: 'moto', cmsnl: okCmsnl, subito: emptySubito, ebay: ebayNoMatch, ebaySpecs: spySpecs, web: okWeb });
-  assert.strictEqual(specsCalled, false);
-  assert.ok(r.scheda);
+  // Ma NON entrano nella scheda, in nessuna forma.
+  assert.strictEqual(r.scheda.fotoReale, undefined, 'la foto della scheda non puo\' venire da un annuncio');
+  assert.strictEqual(r.scheda.datiTecniciEbay, undefined, 'i dati tecnici della scheda vengono dal catalogo');
+  assert.strictEqual(r.scheda.galleria, undefined);
+  // E nemmeno si va a chiederli: era una richiesta di rete per un dato che non si mostra piu'.
+  assert.strictEqual(specsChiamate, false, 'niente richiesta eBay per riempire la scheda');
 });
 
 test('parsePrezzoEur: formati IT', () => {

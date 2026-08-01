@@ -170,17 +170,28 @@ async function lookupOem(oenRaw) {
         .filter(x => x.nome || x.prezzo != null)
         .slice(0, cap);
 
-      // Numeri OE equivalenti (cross-reference). ⚠ SELETTORE NON VERIFICATO: nessun fixture
-      // salvato e non eseguo lo scraper live (vincolo). Strategia difensiva: raccolgo il testo
-      // SOLO da un blocco la cui intestazione matcha "Numeri/Codici OE"; il lato node filtra e
-      // deduplica (dedupeOe). Se il blocco non c'è → [] (nessun codice inventato).
-      let oeRaw = [];
-      const oeHead = [...document.querySelectorAll('h2,h3,h4,.title,.section-title,strong,dt,th,summary')]
-        .find(el => /\bnumeri?\s*oe\b|\bcodici?\s*oe\b|oe[-\s]?number|numeri di riferimento/i.test(el.textContent || ''));
-      if (oeHead) {
-        const scope = oeHead.closest('section,table,dl,ul,div') || oeHead.parentElement;
-        if (scope) oeRaw = (scope.textContent.match(/[A-Z0-9][A-Z0-9 .\-\/]{4,}/gi) || []).map(s => s.trim());
-      }
+      /**
+       * NUMERI OE EQUIVALENTI: SI LEGGE LA STRUTTURA, NON IL TESTO.
+       *
+       * Qui si cercava un'intestazione "Numeri/Codici OE" e poi si pescavano frammenti dal
+       * testo del blocco con un'espressione che accettava anche le minuscole. Due difetti in
+       * uno, misurati sulla pagina vera (sonda del 2026-08-01 su 1K0905851B):
+       *
+       *  - QUELL'INTESTAZIONE NON C'E'. L'unico titolo della pagina e' "Bloccasterzo,
+       *    Cilindro serratura OEM 1K0 905 851 B", quindi il blocco non veniva mai trovato e
+       *    i codici equivalenti non uscivano MAI. Su quella pagina ce ne sono dieci.
+       *  - E quando l'intestazione c'era, il testo produceva codici finti: "Garanzia 2 anni",
+       *    "Consegna in 24 - 48 ore" e "Adatto a Golf V 2003 - 2008" passano tutti il filtro
+       *    a valle (5-20 caratteri, almeno una cifra) e finivano a schermo come codici OE,
+       *    cliccabili. Un codice OE sbagliato fa ordinare il pezzo sbagliato.
+       *
+       * I codici sono LINK a un'altra pagina OEM (`/pezzi-di-ricambio/oem/<codice>`): e' la
+       * pagina stessa a dichiarare che quello e' un codice, e non c'e' euristica che tenga il
+       * confronto. Una frase non e' un link, quindi non puo' piu' entrare.
+       */
+      const oeRaw = [...document.querySelectorAll('a[href*="/pezzi-di-ricambio/oem/"]')]
+        .map(a => (a.textContent || '').replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
       // Quanti elementi di listino c'erano PRIMA del filtro sul codice. Zero articoli dopo il
       // filtro e zero elementi in pagina sono due cose diverse, e finora uscivano identiche.
       return { categoria, items, oeRaw, visti: document.querySelectorAll('.listing-item[data-product-item]').length };

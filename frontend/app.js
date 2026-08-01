@@ -906,14 +906,25 @@ function setupModelloAutocomplete() {
 }
 
 // ─── Raggruppamento ──────────────────────────────────────────────────────────
-function clusterModello(titolo) {
-  if (!titolo) return '?';
-  const norm = String(titolo).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  const tokens = norm.match(/[a-z0-9]+/g) || [];
-  if (!tokens.length) return '?';
-  const marca = tokens.find(t => /[a-z]/.test(t)) || tokens[0];
-  const modello = tokens.find(t => /\d/.test(t)) || tokens.filter(t => t !== marca)[0] || '';
-  return (marca + (modello ? ' ' + modello : '')).trim();
+/**
+ * IL MODELLO CHE L'ANNUNCIO DICHIARA — non uno indovinato dal titolo.
+ *
+ * Qui c'era `clusterModello(titolo)`: prendeva la prima parola con una lettera e la prima
+ * con una cifra. Misurato su 200 Volkswagen veri, ne usciva questo:
+ *   "volkswagen 1"    38 annunci — la Golf 1.2, la Golf 1.0 e la Passat 1.6 nello stesso mucchio
+ *   "volkswagen 5p"   32 annunci — le cinque porte
+ *   "volkswagen 2013"  6 annunci — l'anno
+ * Settanta gruppi con etichette che non esistono da nessuna parte, scritte in minuscolo e
+ * senza accenti perche' erano token, non nomi.
+ *
+ * Il modello lo dichiarano 198 annunci su 200, e sono gli stessi nomi che usa il resto
+ * dell'app (`modelloAnnuncio`, gia' regola per scheda, gomme e liquidita'). Le generazioni
+ * restano distinte — "Golf" e "Golf 7ª serie" sono due gruppi — perche' e' quello che la
+ * fonte dichiara, e unirle vorrebbe dire decidere noi al posto sua. Quarantasei gruppi, coi
+ * nomi veri. Chi non lo dichiara finisce in "Modello non dichiarato": due su duecento.
+ */
+function modelloGruppo(r) {
+  return modelloAnnuncio(r) || 'Modello non dichiarato';
 }
 function bucketKm(km) {
   if (km == null) return 'Km non indicati';
@@ -938,7 +949,7 @@ function groupKeyFn(dim) {
     case 'km':         return r => bucketKm(r.km);
     case 'anno':       return r => bucketAnno(r.anno);
     case 'provincia':  return r => r.provincia || 'Zona non indicata';
-    case 'modello':    return r => r._cluster || clusterModello(r.titolo);
+    case 'modello':    return modelloGruppo;
     default:           return null;
   }
 }
@@ -1445,7 +1456,7 @@ function rcParseFit(raw) {
   return { marca, modello, anno };
 }
 // Compatibilità → tabella Marca | Modello | Anno. Accetta array (reale) o stringa (retro-compat/web).
-function rcFitsTable(compat) {
+function rcFitsTable(compat, totale) {
   const list = Array.isArray(compat) ? compat : String(compat || '').split(',').map(s => s.trim()).filter(Boolean);
   if (!list.length) return '';
   const cap = 20;
@@ -1453,9 +1464,20 @@ function rcFitsTable(compat) {
     const p = rcParseFit(f);
     return `<tr><td>${escapeHtml(p.marca)}</td><td>${escapeHtml(p.modello)}</td><td>${escapeHtml(p.anno)}</td></tr>`;
   }).join('');
-  const more = list.length > cap ? `<div class="rc-fits-more">+${list.length - cap} altri</div>` : '';
+  /**
+   * QUANTI SONO IN TUTTO, non quanti me ne hanno passati.
+   *
+   * Il server manda al massimo venti modelli, e qui si scriveva `list.length`: un pezzo
+   * compatibile con sessanta modelli diceva "20 modelli". La riga "+N altri" esisteva gia'
+   * ma non poteva scattare, perche' il tetto qui era lo stesso di la'. Ora il totale vero
+   * viaggia col dato (`compatibilitaTotale`), e la riga dice quanti restano fuori.
+   */
+  const quanti = (Number.isFinite(totale) && totale > list.length) ? totale : list.length;
+  const nascosti = quanti - Math.min(list.length, cap);
+  const more = nascosti > 0
+    ? `<div class="rc-fits-more">+${nascosti} altri, ne vuoi di più? Parliamone!</div>` : '';
   // dropdown consultabile su interazione (chiuso di default) — pattern nativo <details>
-  return `<div class="rc-sch-sec"><details class="rc-fits"><summary class="rc-fits-sum">Compatibilità · ${list.length} ${list.length === 1 ? 'modello' : 'modelli'}</summary>` +
+  return `<div class="rc-sch-sec"><details class="rc-fits"><summary class="rc-fits-sum">Compatibilità · ${quanti} ${quanti === 1 ? 'modello' : 'modelli'}</summary>` +
     `<div class="rc-fits-wrap"><table class="rc-fits-tbl"><thead><tr><th>Marca</th><th>Modello</th><th>Anno</th></tr></thead><tbody>${rows}</tbody></table>${more}</div></details></div>`;
 }
 
@@ -1493,7 +1515,10 @@ function rcActiveTipoArticoli() {
 function rcSchedaImages() {
   const s = rcData && rcData.scheda; if (!s) return [];
   const v = rcSelectedVariant();
-  const imgs = [(v && v.immagine), s.fotoReale, ...(Array.isArray(s.galleria) ? s.galleria : [])].filter(Boolean);
+  // Solo le immagini del CATALOGO: `fotoReale` e `galleria` venivano da un'inserzione eBay o
+  // dal primo annuncio usato di Subito, e in una scheda di catalogo non ci stanno (vedi
+  // ricambi-core.js). Le foto degli annunci restano sugli annunci.
+  const imgs = [(v && v.immagine)].filter(Boolean);
   return [...new Set(imgs)].map(u => ({ full: u }));
 }
 // grid dati tecnici (codici copiabili + dropdown produttore/articolo) — riusata dalla variante scelta.
@@ -1525,7 +1550,7 @@ function rcVariantRowHTML(v) {
 }
 // riferimento nuovo della variante scelta: foto + prezzo + specs (cmsnl embedded / autodoc lazy) + OE
 function rcVariantDetailHTML(v, s) {
-  const foto = v.immagine || s.fotoReale;
+  const foto = v.immagine;   // del catalogo, non di un annuncio (vedi rcLightboxImgs)
   const img = foto ? `<img class="rc-sch-img" src="${escapeHtml(foto)}" alt="" referrerpolicy="no-referrer">` : '<div class="rc-sch-img rc-img-ph"></div>';
   const url = rcSafeUrl(v.url);
   const buybox = `<div class="rc-sch-buybox"><span class="rc-sch-price-lab">Prezzo nuovo${v.marca ? ' · ' + escapeHtml(v.marca) : ''}</span>` +
@@ -1535,14 +1560,15 @@ function rcVariantDetailHTML(v, s) {
   // loading SOLO se il fetch lazy può davvero partire (stessa guardia di rcFetchVariantSpecs):
   // variante senza url prodotto → nessun fetch → niente spinner eterno
   const loading = v.fonte === 'autodoc' && !!rcSafeUrl(v.url) && (!lazy || lazy.loading);
-  const datiTecnici = { ...(s.datiTecniciEbay || {}), ...(v.datiTecnici || {}), ...((lazy && !lazy.loading && lazy.datiTecnici) || {}) };
+  const datiTecnici = { ...(v.datiTecnici || {}), ...((lazy && !lazy.loading && lazy.datiTecnici) || {}) };   // solo catalogo
   const compat = v.compatibilita || (lazy && !lazy.loading && lazy.compatibilita) || null;
   const dtBlock = rcDtGridHTML(datiTecnici);
   // specs/compatibilità = chiamata lazy alla product-page → indicatore chiaro finché arriva
   const loadingBlock = loading
     ? '<div class="rc-sch-sec"><div class="rc-det-loading"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Carico dati tecnici e compatibilità…</div></div>'
     : '';
-  const compatBlock = loading ? '' : rcFitsTable(compat);
+  const compatTot = v.compatibilitaTotale || (lazy && !lazy.loading && lazy.compatibilitaTotale) || null;
+  const compatBlock = loading ? '' : rcFitsTable(compat, compatTot);
   // Il vuoto ha due cause diverse: Autodoc non ha specifiche per questo articolo, oppure la
   // pagina non si e' lasciata leggere (challenge Cloudflare, HTTP, timeout). Prima uscivano
   // identiche — la sezione spariva e basta — e si leggeva come "questo articolo non ha
@@ -1631,7 +1657,23 @@ function renderRicambiPanel() {
   const statusLine = badSrc.length
     ? `<div class="rc-srcline">${badSrc.map(([k, s]) => `<span class="rc-src rc-src-bad"${s.reason ? ` title="${escapeHtml(s.reason)}"` : ''}>${escapeHtml(RC_FONTE[k] || k)}: ${s.status === 'blocked' ? 'bloccato' : escapeHtml(s.status)}</span>`).join('')}</div>`
     : '';
-  const head = `<div class="rc-head">${rcSchedaHTML(d)}${statusLine}${budgetHTML(rcRestanti, 'ricerca', 'ricerche')}</div>`;
+  /**
+   * PAGINE TROVATE SUL WEB, non offerte.
+   *
+   * Quando la ricerca web non riesce a dire chi vende cosa, restano i link che il motore ha
+   * trovato cercando quel codice. Prima finivano nella lista delle offerte, col dominio al
+   * posto del venditore e il prezzo vuoto: in mezzo a Subito e eBay erano indistinguibili da
+   * un'offerta vera. Adesso stanno qui, con scritto cosa sono.
+   */
+  const pagine = Array.isArray(d.pagineWeb) ? d.pagineWeb : [];
+  const pagineLine = pagine.length
+    ? `<div class="rc-pagine"><div class="rc-pagine-h">Pagine trovate sul web — non sono offerte, sono risultati di ricerca su questo codice</div>`
+      + pagine.map(x => `<a class="rc-pagina" href="${escapeHtml(x.url)}" target="_blank" rel="noopener noreferrer">`
+          + `<span class="rc-pagina-t">${escapeHtml(String(x.nome || x.url).slice(0, 90))}</span>`
+          + `<span class="rc-pagina-d">${escapeHtml(x.dominio || '')}</span></a>`).join('')
+      + '</div>'
+    : '';
+  const head = `<div class="rc-head">${rcSchedaHTML(d)}${statusLine}${budgetHTML(rcRestanti, 'ricerca', 'ricerche')}${pagineLine}</div>`;
   // barra confronto (mirror auto: "Selezionati N · Apri confronto · Svuota") + sezione matrice separata
   const bar = confrontoRicambi.length ? rcCompareBarHTML() : '';
   const cmp = (rcCompareOpen && confrontoRicambi.length) ? rcCompareSection() : '';
@@ -2483,8 +2525,8 @@ function rowHTML(item, bestSet) {
   const fonteLabel = FONTE_LABEL[item.fonte] || item.fonte;
   const fonteTag = { subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[item.fonte] || '';
   const urlSafe = /^https?:\/\//i.test(item.url) ? escapeHtml(item.url) : '#';
-  const isSalvato = salvati.some(r => r.url === item.url);
-  const inConfronto = confronto.some(r => r.url === item.url);
+  const isSalvato = salvati.some(r => stessoAnnuncio(r, item));
+  const inConfronto = confronto.some(r => stessoAnnuncio(r, item));
   const isBest = bestSet && bestSet.has(item.url);
   const imgs = Array.isArray(item.immagini) ? item.immagini : [];
   // Foto: chi le ha → thumbnail (click=lightbox). Moto.it ha la cover dalla card, la
@@ -2582,8 +2624,8 @@ function cardHTML(item, bestSet) {
     vis.includes('carb') ? (item.carburante || null) : null,
     vis.includes('cv') && item.potenzaCv != null ? `${item.potenzaCv} CV` : null,
     ggV != null ? `in vendita da ${ggV} gg` : null].filter(Boolean).join(' · ');
-  const isSalvato = salvati.some(r => r.url === item.url);
-  const inConfronto = confronto.some(r => r.url === item.url);
+  const isSalvato = salvati.some(r => stessoAnnuncio(r, item));
+  const inConfronto = confronto.some(r => stessoAnnuncio(r, item));
   return `<article class="ann-card${bestSet && bestSet.has(item.url) ? ' best' : ''}${inConfronto ? ' selected' : ''}" data-url="${urlSafe}">
       <div class="ann-foto">${foto}</div>
       <div class="ann-corpo">
@@ -3287,7 +3329,7 @@ function renderDetailInto(panel, r) {
       : '';
     const openBtn = /^https?:\/\//i.test(r.url) ? `<a class="det-open" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">Apri annuncio ↗</a>` : '';
     // Hub azioni nel pannello (unico accesso su mobile dove la riga non ha bottoni).
-    const isSal = salvati.some(x => x.url === r.url), inConf = confronto.some(x => x.url === r.url);
+    const isSal = salvati.some(x => stessoAnnuncio(x, r)), inConf = confronto.some(x => stessoAnnuncio(x, r));
     const salBtn  = `<button type="button" class="det-act btn-salva${isSal ? ' attivo' : ''}">${icon(isSal ? 'bookmark-filled' : 'bookmark')}<span class="ra-txt">${isSal ? 'Salvato' : 'Salva'}</span></button>`;
     const confBtn = `<button type="button" class="det-act btn-confronta${inConf ? ' attivo' : ''}">${icon(inConf ? 'square-check' : 'square')}<span class="ra-txt">${inConf ? 'Nel confronto' : 'Confronta'}</span></button>`;
     panel.innerHTML = `<div class="det-inner">${gallery}<div class="det-specs">${detailSpecsHTML(r)}</div>`
@@ -3515,14 +3557,32 @@ function closeLightbox() {
 }
 
 // ─── Confronto / matrice ──────────────────────────────────────────────────────
+/**
+ * DUE OGGETTI SONO LO STESSO ANNUNCIO?
+ *
+ * Fino a ieri la risposta era "hanno lo stesso URL". Ma l'URL di Subito contiene il titolo
+ * scritto dal venditore: se lui lo ritocca, un annuncio SALVATO ieri oggi non si riconosce
+ * piu' — la stella sparisce dalla riga, e nei salvati resta una copia che punta a un
+ * indirizzo vecchio. Le fonti che un'identita' stabile la dichiarano la mettono in `id`
+ * (vedi backend/scrapers/subito-api.js); le altre restano sull'URL, che li' non porta il
+ * titolo dentro. Quando uno dei due lati l'id non ce l'ha, si ricade sull'URL: e' il caso
+ * di un salvato di ieri non ancora convertito.
+ */
+const stessoAnnuncio = (a, b) => {
+  if (!a || !b) return false;
+  if (a.id && b.id) return a.id === b.id;
+  return a.url === b.url;
+};
+/** L'annuncio con questo URL, fra quelli che l'app ha in mano adesso. */
 function trovaResult(url) {
   return currentResults.find(r => r.url === url) || salvati.find(r => r.url === url) || confronto.find(r => r.url === url) || null;
 }
 // Aggiorna SOLO i bottoni/stato di un URL (riga + pannello dettaglio) senza re-render
 // totale → non collassa il dettaglio aperto né perde lo scroll (flusso mobile).
 function refreshRowState(url) {
-  const isSal  = salvati.some(r => r.url === url);
-  const inConf = confronto.some(r => r.url === url);
+  const rif = trovaResult(url);
+  const isSal  = salvati.some(r => stessoAnnuncio(r, rif) || r.url === url);
+  const inConf = confronto.some(r => stessoAnnuncio(r, rif) || r.url === url);
   // Rimpiazza SOLO l'icona (.ico) e l'eventuale label (.ra-txt) → bottoni icona-soli (riga)
   // e icona+testo (pannello dettaglio) restano coerenti.
   const setBtn = (b, on, onIco, offIco, onTxt, offTxt) => {
@@ -3541,7 +3601,8 @@ function refreshRowState(url) {
 }
 function toggleConfronto(url) {
   const result = trovaResult(url); if (!result) return;
-  const idx = confronto.findIndex(r => r.url === url);
+  const rifC = trovaResult(url);
+  const idx = confronto.findIndex(r => stessoAnnuncio(r, rifC) || r.url === url);
   if (idx !== -1) confronto.splice(idx, 1);
   else if (confronto.length < COMPARE_CAP) confronto.push(result);
   else { toast(`Massimo ${COMPARE_CAP} annunci a confronto`); return; }
@@ -3559,7 +3620,8 @@ function openCompareMatrix() { matrixList = confronto.slice(); showMatrix(confro
 function closeMatrix() { cmatrixPanel.classList.add('d-none'); matrixList = []; }
 function removeMatrixCol(url) {
   matrixList = matrixList.filter(r => r.url !== url);
-  const i = confronto.findIndex(r => r.url === url);
+  const rifM = trovaResult(url);
+  const i = confronto.findIndex(r => stessoAnnuncio(r, rifM) || r.url === url);
   if (i !== -1) { confronto.splice(i, 1); refreshRowState(url); renderSalvati(); renderCompareBar(); }
   if (!matrixList.length) closeMatrix(); else renderMatrix();
 }
@@ -3672,7 +3734,8 @@ async function enrichMotoSpecs(list) {
 
 // ─── Annunci salvati ──────────────────────────────────────────────────────────
 function toggleSalva(url) {
-  const idx = salvati.findIndex(r => r.url === url);
+  const rifS = trovaResult(url);
+  const idx = salvati.findIndex(r => stessoAnnuncio(r, rifS) || r.url === url);
   if (idx !== -1) salvati.splice(idx, 1);
   else { const result = trovaResult(url); if (result) salvati.push(result); }
   persistSalvati(); aggiornaContatoreSalvati(); renderSalvati(); refreshRowState(url);
@@ -3683,6 +3746,17 @@ function persistSalvati() { try { localStorage.setItem(SALVATI_KEY, JSON.stringi
 function loadSalvati() {
   try { const raw = localStorage.getItem(SALVATI_KEY); const arr = raw ? JSON.parse(raw) : []; salvati = Array.isArray(arr) ? arr : []; }
   catch (_) { salvati = []; }
+  // I salvati di ieri non hanno l'id stabile: si ricava dalla coda del vecchio URL, che e'
+  // lo stesso progressivo che la fonte dichiara in `urn`. Senza, un annuncio salvato prima
+  // del passaggio smetteva di riconoscersi appena il venditore ritoccava il titolo.
+  let tocco = false;
+  for (const r of salvati) {
+    if (r && !r.id && typeof r.url === 'string' && /(^|\.)subito\.it\//i.test(r.url)) {
+      const m = r.url.match(/-(\d+)\.htm(?:$|[?#])/);
+      if (m) { r.id = 'subito:' + m[1]; tocco = true; }
+    }
+  }
+  if (tocco) persistSalvati();
   aggiornaContatoreSalvati(); renderSalvati();
 }
 // Badge topbar "Salvati" = annunci salvati + ricerche salvate (così salvare una
@@ -3703,7 +3777,7 @@ function renderSalvati() {
   const fmt = n => n != null ? `€ ${n.toLocaleString('it-IT')}` : '—';
   const fmtKm = n => n != null ? `${n.toLocaleString('it-IT')} km` : '—';
   container.innerHTML = salvati.map(r => {
-    const inConf = confronto.some(c => c.url === r.url);
+    const inConf = confronto.some(c => stessoAnnuncio(c, r));
     return `<div class="salvato-item" data-url="${escapeHtml(r.url)}">
       <div class="salvato-info">
         <div class="salvato-titolo">${escapeHtml(r.titolo)}</div>
@@ -4444,8 +4518,13 @@ function vehRichiamiHTML() {
     // non la frase intera — l'archivio e' testo libero scritto dalle autorita' dei vari
     // Stati, dove la Serie 3 e' "3 series" o "3series". Vale, ma si dice: su un dato di
     // sicurezza chi guarda deve poter distinguere le certe dalle probabili.
+    // LA DATA PER PRIMA, come la riga RDW qui sopra. Le allerte arrivano dalla piu' recente
+    // (il server le ordina per data del bollettino), ma senza la data a schermo non si
+    // distingue un'allerta di luglio da una di due anni fa — e su una campagna di sicurezza
+    // "quando" e' la prima cosa che si guarda. `dataReport` c'e' su tutte e 1.034.
     const rigaSg = a => rigaHTML(a.scheda, a.prodotto || a.categoria || 'Veicolo',
-      [a.anni ? `${a.anni.da}–${a.anni.a}` : a.anno, a.livello, a.modelloPerParole ? 'modello riconosciuto dalle parole' : null].filter(Boolean).join(' · '),
+      [a.dataReport || null, a.anni ? `${a.anni.da}–${a.anni.a}` : a.anno, a.livello,
+       a.modelloPerParole ? 'modello riconosciuto dalle parole' : null].filter(Boolean).join(' · '),
       omoHTML(a));
     const bloccoR = koR
       ? '<div class="veh-rich-b"><div class="veh-rich-h">Campagne RDW</div><div class="veh-rich-att">Archivio non raggiungibile: non si sa se ci sono campagne. Riprova tra poco.</div></div>'

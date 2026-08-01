@@ -34,7 +34,13 @@ function loadAll() {
   try {
     const raw = fs.readFileSync(filePath(), 'utf8');
     const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
+    if (!Array.isArray(arr)) return [];
+    // Conversione delle chiavi vecchie (URL → id stabile), una volta sola: si riscrive
+    // solo se qualcosa e' cambiato davvero. Vedi `migraChiavi`.
+    let tocco = false;
+    for (const s of arr) if (migraChiavi(s)) tocco = true;
+    if (tocco) { try { saveAll(arr); } catch (_) {} }
+    return arr;
   } catch (_) { return []; }
 }
 
@@ -190,13 +196,14 @@ function computeAlerts(search, results) {
     // contenuto da prezzo>0 + floor anti-scam + soglie di calo; un annuncio nuovo È nuovo.
     if (r.prezzo < floor) continue;                 // floor anti-scam (price-based)
 
-    const prev = seen[r.url];
+    const k = chiaveAnnuncio(r);
+    const prev = seen[k];
     let motivo = null, key = null;
     if (prev == null) {
       // Annuncio NUOVO (mai visto). §21: niente più 'affare' (rating rimosso).
-      motivo = 'nuovo'; key = `${r.url}|nuovo`;
+      motivo = 'nuovo'; key = `${k}|nuovo`;
     } else if (r.prezzo <= prev - Math.max(DROP_ABS, prev * DROP_PCT)) {
-      motivo = 'calo';  key = `${r.url}|calo|${r.prezzo}`;   // include prezzo → ulteriori cali ri-notificano
+      motivo = 'calo';  key = `${k}|calo|${r.prezzo}`;   // include prezzo → ulteriori cali ri-notificano
     }
 
     if (!motivo || alerted.has(key)) continue;
@@ -221,9 +228,65 @@ function capObject(obj, max) {
  * dei tracciati "profondi" ri-fetchati (two-tier). Ritorna i nuovi avvisi.
  */
 /** La fonte di un URL salvato, per capire quali `seen` non sono verificabili adesso. */
-const fonteDaUrl = u => /(^|\.)subito\.it\//i.test(u) ? 'subito'
+/**
+ * L'IDENTITA' DI UN ANNUNCIO, che non e' il suo indirizzo.
+ *
+ * `seen` e `alerted` erano indicizzati per URL. Ma l'URL di Subito contiene il TITOLO
+ * scritto dal venditore: se lui lo ritocca — abbassa il prezzo e lo scrive, aggiunge
+ * "VENDUTA", corregge un dettaglio — l'URL cambia, e da qui in poi quello e' un altro
+ * annuncio: arriva un avviso "nuovo" per un mezzo in lista da settimane, e lo storico del
+ * suo prezzo (cioe' la base per accorgersi di un calo) riparte da zero.
+ *
+ * Le fonti che un'identita' stabile la dichiarano la mettono in `id` (vedi subito-api.js).
+ * Le altre restano sull'URL, che li' non porta il titolo dentro.
+ */
+const chiaveAnnuncio = r => (r && r.id) || (r && r.url) || null;
+
+const fonteDaUrl = u => /^subito:/i.test(u) ? 'subito'
+  : /(^|\.)subito\.it\//i.test(u) ? 'subito'
   : /(^|\.)autoscout24\.[a-z]+\//i.test(u) ? 'autoscout'
   : /(^|\.)moto\.it\//i.test(u) ? 'moto' : null;
+
+/**
+ * IL PASSATO SI CONVERTE, NON SI BUTTA.
+ *
+ * Il giorno del passaggio, i visti e le chiavi anti-ripetizione gia' su disco sono
+ * indicizzati per URL: senza conversione il primo controllo vedrebbe OGNI annuncio come
+ * nuovo — una raffica di avvisi falsi su tutte le ricerche salvate insieme — e lo storico
+ * dei prezzi ripartirebbe da zero. Il progressivo di Subito sta anche in coda al vecchio
+ * URL (".../…-cagliari-651863039.htm"), quindi la conversione e' esatta e si fa una volta.
+ */
+const idDaUrlSubito = u => {
+  if (typeof u !== 'string' || /^subito:/.test(u)) return null;
+  if (!/(^|\.)subito\.it\//i.test(u)) return null;
+  const m = u.match(/-(\d+)\.htm(?:$|[?#])/);
+  return m ? 'subito:' + m[1] : null;
+};
+/** Ritorna true se ha cambiato qualcosa (allora la ricerca va riscritta su disco). */
+function migraChiavi(s) {
+  let tocco = false;
+  if (s.seen) {
+    const nuovo = {};
+    for (const [k, v] of Object.entries(s.seen)) {
+      const id = idDaUrlSubito(k);
+      if (id) tocco = true;
+      nuovo[id || k] = v;                      // l'ordine di inserimento resta quello, e conta (vedi capObject)
+    }
+    if (tocco) s.seen = nuovo;
+  }
+  if (Array.isArray(s.alerted)) {
+    const conv = s.alerted.map(k => {
+      const i = String(k).indexOf('|');
+      if (i < 0) return k;
+      const id = idDaUrlSubito(String(k).slice(0, i));
+      if (!id) return k;
+      tocco = true;
+      return id + String(k).slice(i);
+    });
+    if (tocco) s.alerted = conv;
+  }
+  return tocco;
+}
 
 /**
  * @param {string[]} [opts.fontiMute] fonti che in questo giro non hanno risposto: i loro
@@ -240,7 +303,7 @@ function recordCheck(id, results, { extraSeen = {}, removedUrls = [], fontiMute 
 
   // seen ← prezzi correnti (shallow) + ri-fetch profondi; rimuovi i 404 (venduti).
   const seen = s.seen || {};
-  for (const r of results) if (r.url && r.prezzo != null && r.prezzo > 0) seen[r.url] = r.prezzo;
+  for (const r of results) { const k = chiaveAnnuncio(r); if (k && r.prezzo != null && r.prezzo > 0) seen[k] = r.prezzo; }
   for (const [u, p] of Object.entries(extraSeen)) if (p != null && p > 0) seen[u] = p;
   for (const u of removedUrls) delete seen[u];
 
@@ -260,7 +323,7 @@ function recordCheck(id, results, { extraSeen = {}, removedUrls = [], fontiMute 
   const inCoda = u => {
     if (u && Object.prototype.hasOwnProperty.call(seen, u)) { const p = seen[u]; delete seen[u]; seen[u] = p; }
   };
-  for (const r of results) inCoda(r && r.url);
+  for (const r of results) inCoda(chiaveAnnuncio(r));
   // I "non verificabili" vanno IN FONDO, dopo i visti davvero: sono gli unici che un
   // controllo successivo non puo' recuperare da solo, quindi sono i piu' cari da tenere.
   // Messi prima, una fonte molto prolifica li avrebbe spinti fuori lo stesso.

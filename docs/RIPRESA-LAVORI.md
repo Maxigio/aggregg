@@ -155,22 +155,29 @@ proprietario: **via da tutte e otto**. È una riga sola in `cache-disco.js`, ed 
 proprio perché le tre di questa coda erano appena state portate lì. Chi chiama dichiara già
 il KO ("Fonte non raggiungibile", "Archivio non raggiungibile: non si sa se ci sono allerte").
 
-### Coda — casi singoli (~10 + 36 minori)
-I più grossi:
-- `backend/scrapers/subito-api.js:94` identità annuncio = URL (che contiene il titolo):
-  decisione presa → **passare a `ad.urn`**, senza conversione dei visti (uno scossone solo)
-- `backend/richiami-route.js:191` il pannello mostra le 5 allerte più **vecchie** (l'archivio
-  è ordinato per numero di caso come stringa e il progressivo riparte ogni anno)
-- `frontend/app.js:852` raggruppamento "Modello" per cilindrata → decisione presa
-- `backend/server.js:784` `/api/detail` senza freno → decisione presa: **dettagli al clic**
-- `backend/server.js:1975` avvisi salvati solo all'avvio e solo 5 → decisione presa:
-  **restano a mano**, ma il pannello deve dire da quando non controlla
-- `backend/ricambi-core.js:129` la scheda del pezzo assorbe foto e dati da un annuncio di
-  mercato e li mostra come dati di catalogo
-- `backend/oem-lookup.js:182` regex case-insensitive: "Garanzia 2 anni" diventa un codice OE
-- `backend/web-parts.js:94` risultati grezzi della ricerca spacciati per rivenditori
-- `frontend/app.js:3374` confronto affiancato: manca ancora la marcatura in alcune viste
-- `frontend/app.js:1380` "Compatibilità · N modelli" conta solo quelli passati dal server
+### Coda — **CHIUSA** (restano i 36 minori)
+Due erano già chiusi da campagne precedenti: la marcatura nel confronto affiancato (riga
+"Corrispondenza" + niente stella se misto) e «da quando non controlla» nel pannello avvisi.
+Gli altri otto, con le misure:
+
+- **richiami** ordinati per data del bollettino, con la data a schermo. L'archivio era
+  ordinato per numero di caso come stringa e l'anno sta in fondo: le 224 allerte del 2026
+  cominciavano alla posizione 267, e 22 marche su 27 vedevano le più vecchie.
+- **identità annuncio** = `subito:<progressivo>` da `urn`, e i visti già su disco si
+  convertono leggendo la coda del vecchio URL: nessun falso «nuovo», nessuno storico perso.
+- **raggruppamento "Modello"** sul modello dichiarato, generazioni separate: 200 VW passano
+  da 70 gruppi (`"volkswagen 1"`, `"volkswagen 5p"`) a 45 coi nomi veri.
+- **scheda ricambio**: solo catalogo. Niente foto dal primo annuncio usato di Subito, niente
+  dati tecnici da un'inserzione eBay — e quella richiesta a eBay non parte più.
+- **codici OE**: si leggono dai link a `/pezzi-di-ricambio/oem/`, non dal testo. Sonda del
+  2026-08-01: il blocco cercato per intestazione non esiste, e i dieci codici veri della
+  pagina non uscivano affatto.
+- **compatibilità**: il totale vero viaggia col dato, e la riga dice «+N altri, ne vuoi di
+  più? Parliamone!».
+- **ricerca web**: le citazioni escono come «pagine trovate sul web», non come offerte.
+- **`/api/detail`**: passa dal limitatore comune come le altre sette rotte.
+
+Il giro automatico all'avvio delle ricerche salvate **resta com'è** (decisione esplicita).
 
 ### Aree in pausa (non toccare senza dirlo)
 - `backend/crawler.js:60` e `:103`, `scripts/fill-moto-local.js:38`, `worker/worker.js:145`:

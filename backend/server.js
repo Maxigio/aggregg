@@ -828,7 +828,13 @@ app.get('/api/moto-versions', async (req, res) => {
 // cilindrata, proprietari, allestimento, revisione }. Anti-SSRF: host allowlist in
 // detail.js (https + dominio fonte, ri-validato per-redirect). Best-effort: ok:false
 // se la fonte non risponde (es. Subito bloccato).
+// I dettagli di un annuncio si chiedono APRENDOLO (l'arricchimento allo scorrimento e'
+// spento, vedi frontend/app.js): resta una rotta che va in rete su una fonte esterna, ed era
+// l'unica delle otto senza un freno. Stesso limitatore di tutte le altre.
+const limiteDettaglio = require('./limite-richieste').crea({ max: 30, cosa: 'aperture di annunci' });
 app.get('/api/detail', async (req, res) => {
+  const gDet = limiteDettaglio.consuma(chiaveLimite(req));
+  if (!gDet.ok) return res.status(429).json({ error: limiteDettaglio.messaggio(gDet), riprovaFra: gDet.attesa, restanti: 0 });
   const url = req.query.url;
   if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url obbligatorio' });
   try {

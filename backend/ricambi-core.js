@@ -127,27 +127,21 @@ async function searchRicambi(qRaw, opts = {}) {
     logger.info('[ricambi]', `scheda null "${term}" (${veicolo}): catalogo ${cat ? cat.status : 'assente'}${cat?.reason ? ' — ' + cat.reason : ''}`);
   }
 
-  // Arricchimento eBay CODE-LEVEL: foto reale + galleria + dati tecnici → fallback per la variante scelta.
-  // (Le specs Autodoc sono LAZY per-variante via /api/ricambi/autodoc-specs, non più upfront → ricerca più veloce.)
-  if (scheda && mode === 'oem') {
-    const match = (res.ebay?.items || []).find(i => normOen(i.nome).includes(term));
-    if (match) {
-      if (match.immagine) scheda.fotoReale = match.immagine;
-      let timer;
-      try {
-        const s = await Promise.race([
-          ebaySpecsFn(match.url),
-          new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('specs timeout')), 20000); }),
-        ]);
-        if (s?.immagine) scheda.fotoReale = s.immagine;
-        if (s?.galleria?.length) scheda.galleria = s.galleria;
-        if (s?.specs && Object.keys(s.specs).length) scheda.datiTecniciEbay = s.specs;
-      } catch (e) {
-        logger.warn('[ricambi]', `ebay specs "${term}": ${e.message}`);
-      } finally { clearTimeout(timer); }
-    }
-  }
-  if (scheda && !scheda.fotoReale) scheda.fotoReale = (res.subito?.items || [])[0]?.immagine || null;
+  /**
+   * LA SCHEDA E' IL CATALOGO, NON IL MERCATO.
+   *
+   * Qui la scheda del pezzo — che e' la sua identita' certa: dati tecnici e prezzo del NUOVO
+   * — si riempiva coi dati degli annunci. La foto arrivava da un'inserzione eBay e, se quella
+   * mancava, dal PRIMO annuncio USATO di Subito; i dati tecnici da quella stessa inserzione,
+   * mescolati a quelli di catalogo senza distinzione. Il risultato: un pezzo usato ammaccato
+   * poteva finire come immagine di catalogo del pezzo nuovo, e le misure di un venditore
+   * qualunque come specifiche del ricambio.
+   *
+   * Decisione del proprietario: nella scheda entra solo quello che dice il catalogo
+   * (Autodoc/CMSNL). Se la foto non c'e', si vede il segnaposto; se i dati tecnici non ci
+   * sono, quelle righe non ci sono. Gli annunci restano nella lista sotto, dove ognuno porta
+   * la SUA foto e i SUOI dati, attribuiti a chi li ha scritti.
+   */
 
   // Web search = FALLBACK-ONLY: parte solo se né la scheda né le offerte hanno trovato nulla.
   const offerteCount = ['subito', 'ebay'].reduce((n, k) => n + (res[k] ? res[k].items.length : 0), 0);
@@ -176,6 +170,10 @@ async function searchRicambi(qRaw, opts = {}) {
     sources,
     articoli,
     count: articoli.length,
+    // Le pagine che la ricerca web ha TROVATO, quando non ha saputo dire chi vende cosa.
+    // Non sono offerte e non stanno fra gli articoli: hanno una sezione loro (vedi
+    // web-parts.js). Assenti quasi sempre — la ricerca web parte solo come ultimo ripiego.
+    pagineWeb: (res.web?.meta?.pagine && res.web.meta.pagine.length) ? res.web.meta.pagine : null,
   };
 }
 
@@ -211,9 +209,9 @@ function schedaVeicoli(scheda) {
 function buildScheda(res, term) {
   const aItems = res.autodoc?.items || [];
   const cItems = res.cmsnl?.items || [];
-  let fonte, items, fits = null;
+  let fonte, items, fits = null, fitsTotale = null;
   if (aItems.length) { fonte = 'autodoc'; items = aItems; }
-  else if (cItems.length) { fonte = 'cmsnl'; items = cItems; fits = res.cmsnl.meta?.veicoli || null; }
+  else if (cItems.length) { fonte = 'cmsnl'; items = cItems; fits = res.cmsnl.meta?.veicoli || null; fitsTotale = res.cmsnl.meta?.veicoliTotale || null; }
   else return null;
 
   const byTipo = new Map();   // chiave UPPERCASE (raggruppamento case-insensitive), display = 1ª occorrenza
@@ -228,6 +226,9 @@ function buildScheda(res, term) {
       stelle: a.stelle ? Number(a.stelle) : null, recensioni: a.recensioni ? Number(a.recensioni) : null,
       disponibile: a.disponibile ?? null,
       compatibilita: fonte === 'cmsnl' ? fits : null,   // cmsnl porta i fits embedded; autodoc → specs LAZY
+      // Quanti sono IN TUTTO: la lista si ferma a venti, il numero no. Senza, la scheda
+      // scriveva "20 modelli" per un pezzo che ne copre sessanta.
+      compatibilitaTotale: fonte === 'cmsnl' ? fitsTotale : null,
       spedizione: a.spedizione || null, condizione: a.condizione || null,
     };
     const k = tipo.toUpperCase();

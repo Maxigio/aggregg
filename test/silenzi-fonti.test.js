@@ -754,3 +754,77 @@ test('cache: una copia SCADUTA non si serve al posto di una fonte caduta', async
     if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
   }
 });
+
+// ═══ LA CODA: casi singoli, stessa disciplina ═════════════════════════════════
+test('richiami: le allerte escono dalla piu\' recente, non dalla piu\' vecchia', () => {
+  const { cerca } = require('../backend/richiami-route.js');
+  const r = cerca({ marca: 'Mercedes-Benz' });
+  if (!r.ok) { assert.ok(/non costruito/.test(r.motivo), r.motivo); return; }   // archivio assente: niente da provare
+  const data = x => { const m = String(x.dataReport || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) : 0; };
+  const d = r.allerte.map(data);
+  for (let i = 1; i < d.length; i++) {
+    assert.ok(d[i - 1] >= d[i],
+      `allerta ${i} e' piu' recente di quella prima: l'archivio arriva ordinato per numero di caso come stringa, e l'anno sta in fondo`);
+  }
+  // Il pannello ne mostra otto: devono essere le otto piu' recenti che esistono per quella marca.
+  const piuRecente = Math.max(...r.allerte.map(data));
+  assert.strictEqual(data(r.allerte[0]), piuRecente,
+    'la prima a schermo deve essere la piu' + "'" + ' recente in assoluto per quella marca');
+});
+
+test('annuncio: l\'identita\' non e\' l\'indirizzo, e il passato si converte', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-id-'));
+  const vecchio = process.env.USER_DATA_PATH;
+  process.env.USER_DATA_PATH = dir;
+  delete require.cache[require.resolve('../backend/saved')];
+  const saved = require('../backend/saved');
+  try {
+    // L'URL di Subito porta dentro il titolo scritto dal venditore.
+    const urlPrima = 'https://www.subito.it/auto/ford-kuga-2-0-tdci-150-cv-titan-cagliari-651863039.htm';
+    const urlDopo  = 'https://www.subito.it/auto/ford-kuga-2-0-tdci-150cv-PREZZO-TRATTABILE-cagliari-651863039.htm';
+    const s = saved.addSaved({ label: 'Kuga', params: { tipo: 'auto', marca: 'Ford' } });
+    // Baseline scritta con le chiavi VECCHIE, com'e' il file di chi aggiorna oggi.
+    saved.recordCheck(s.id, [{ fonte: 'subito', url: urlPrima, titolo: 'Kuga', prezzo: 12000 }]);
+
+    // Il venditore ritocca il titolo: URL nuovo, stesso annuncio. Prima era un falso "nuovo".
+    const dopo = saved.recordCheck(s.id, [{ fonte: 'subito', id: 'subito:651863039', url: urlDopo, titolo: 'Kuga', prezzo: 12000 }]);
+    assert.deepStrictEqual(dopo, [], 'un titolo ritoccato non e\' un annuncio nuovo');
+
+    // E lo storico del prezzo e' sopravvissuto: un calo vero deve ancora suonare.
+    const calo = saved.recordCheck(s.id, [{ fonte: 'subito', id: 'subito:651863039', url: urlDopo, titolo: 'Kuga', prezzo: 10500 }]);
+    assert.strictEqual(calo.length, 1, 'il calo deve suonare: senza la conversione la base di confronto era persa');
+    assert.strictEqual(calo[0].motivo, 'calo');
+  } finally {
+    if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
+    delete require.cache[require.resolve('../backend/saved')];
+  }
+});
+
+test('ricambi: la scheda del pezzo non prende foto ne\' dati dagli annunci', () => {
+  const core = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ricambi-core.js'), 'utf8');
+  for (const forma of ['scheda.fotoReale', 'scheda.datiTecniciEbay', 'scheda.galleria']) {
+    assert.ok(!core.includes(forma + ' ='),
+      `${forma} viene di nuovo riempito da un annuncio: la scheda e' l'identita' di catalogo del pezzo`);
+  }
+  assert.ok(!/res\.subito\?\.items.*immagine/.test(core),
+    'la foto della scheda non puo\' venire dal primo annuncio usato di Subito');
+});
+
+test('ricambi: i codici OE si leggono dai link, non dal testo', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'backend', 'oem-lookup.js'), 'utf8');
+  assert.match(src, /a\[href\*="\/pezzi-di-ricambio\/oem\/"\]/,
+    'i codici OE devono venire dai link a un\'altra pagina OEM: e\' la pagina stessa a dichiarare che quello e\' un codice');
+  // La vecchia pesca nel testo accettava anche le minuscole, e frasi intere passavano il
+  // filtro a valle. Verificato sulle frasi vere della pagina.
+  assert.ok(!/textContent\.match\(\/\[A-Z0-9\]/.test(src),
+    'e\' tornata la pesca nel testo: "Garanzia 2 anni" diventerebbe di nuovo un codice OE');
+  const { dedupeOe } = require('../backend/oem-lookup.js');
+  // I dieci codici veri letti dalla pagina (sonda 2026-08-01) passano tutti.
+  const veri = ['1K0 905 841', '1K0905865A', '1K0905865', '1K0 905 851', '1K0905849B',
+                '6RA905865A', '6RA905865', '1K0905865B', '1K0 905 851D', '1K0905849A'];
+  assert.strictEqual(dedupeOe(veri, '1K0905851B').length, 10);
+  // E le frasi che prima passavano restano fuori solo perche' non sono link: il filtro a
+  // valle da solo non basta, ed e' esattamente perche' la lettura ora e' strutturale.
+  assert.ok(dedupeOe(['Garanzia 2 anni'], '1K0905851B').length === 1,
+    'il filtro a valle NON riconosce le frasi: se tornasse la pesca nel testo tornerebbero anche i falsi');
+});

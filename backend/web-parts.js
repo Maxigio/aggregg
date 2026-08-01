@@ -90,8 +90,23 @@ async function searchWebParts(queryRaw, opts = {}) {
       break;   // end_turn / max_tokens / tool_use non-submit → esci e prova il fallback citazioni
     }
     if (!submit) {
+      /**
+       * UNA PAGINA TROVATA NON E' UN'OFFERTA.
+       *
+       * Quando il modello non produce l'elenco strutturato, qui si prendevano le CITAZIONI
+       * grezze della ricerca web e si spedivano come `articoli`, col dominio al posto del
+       * venditore e il prezzo vuoto: a schermo finivano nella lista delle offerte, in mezzo
+       * a quelle vere di Subito e eBay, indistinguibili. Ma sono pagine che il motore ha
+       * trovato cercando quel codice — un forum, una scheda tecnica, un catalogo — non
+       * qualcuno che quel pezzo lo vende.
+       *
+       * Escono lo stesso, perche' spesso servono, ma per quello che sono: `pagine`, un campo
+       * a parte che il frontend mostra in una sezione sua. `articoli` resta vuoto, e la
+       * fonte web dichiara di non aver trovato offerte.
+       */
       const links = citationsFrom(lastResp ? lastResp.content : []);
-      if (links.length) return { oen, pezzo: { tipo: textFrom(lastResp.content) || null, veicoli: null }, articoli: links.slice(0, 8), count: Math.min(links.length, 8) };
+      if (links.length) return { oen, pezzo: { tipo: textFrom(lastResp.content) || null, veicoli: null },
+        articoli: [], count: 0, pagine: links.slice(0, 8).map(({ fonte, prezzo, valuta, venditore, ...r }) => ({ ...r, dominio: venditore })) };
       logger.warn('[web-parts]', `nessun risultato strutturato per "${q}" (${mode}), stop_reason=${lastResp && lastResp.stop_reason}`);
       return { oen, articoli: [], count: 0, error: 'nessun risultato strutturato dal modello' };
     }

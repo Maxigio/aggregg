@@ -1561,3 +1561,12 @@ select.cp-unisci { max-width: 190px; }
 /* Quante richieste restano prima della pausa. Compare solo quando sta per finire: un
    contatore sempre acceso e' rumore, e scoprire il tetto sbattendoci era la vecchia via. */
 .budget-avviso { font-size: 0.78rem; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin: 6px 0; }
+
+/* Pagine trovate dalla ricerca web: NON sono offerte, e non devono somigliare a una riga
+   della lista ricambi (vedi web-parts.js). */
+.rc-pagine { border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
+.rc-pagine-h { font-size: 0.74rem; color: var(--text-muted); margin-bottom: 6px; }
+.rc-pagina { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; text-decoration: none; color: inherit; }
+.rc-pagina:hover .rc-pagina-t { text-decoration: underline; }
+.rc-pagina-t { font-size: 0.82rem; }
+.rc-pagina-d { font-size: 0.72rem; color: var(--text-muted); margin-left: auto; white-space: nowrap; }
