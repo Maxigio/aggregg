@@ -723,3 +723,34 @@ test('cache: le otto cache su disco passano tutte dal modulo comune', () => {
       `${f} scrive ancora la cache da se', dentro la cartella dell'app`);
   }
 });
+
+test('cache: una copia SCADUTA non si serve al posto di una fonte caduta', async () => {
+  const cacheDisco = require('../backend/scrapers/cache-disco');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-scaduta-'));
+  const vecchio = process.env.USER_DATA_PATH;
+  process.env.USER_DATA_PATH = dir;
+  try {
+    const file = path.join(dir, 'prova-scaduta.json');
+    // Una voce buona ma VECCHIA: scritta oltre il TTL.
+    fs.mkdirSync(path.join(dir, 'cache'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'cache', 'prova-scaduta.json'),
+      JSON.stringify({ schema: 1, voci: { k: { t: Date.now() - 10 * 60 * 1000, d: 'dato di ieri' } } }));
+    const conCache = cacheDisco.crea(file, { tag: 'prova', schema: 1, ttl: 60 * 1000, max: 10 });
+
+    // La fonte cade. Prima usciva "dato di ieri" e nessuno poteva accorgersene: a schermo era
+    // indistinguibile da un dato appena preso. Ora l'errore arriva a chi chiama, che ha gia'
+    // il suo modo di dichiararlo ("archivio non raggiungibile").
+    await assert.rejects(
+      () => conCache('k', async () => { throw new Error('fonte KO'); }),
+      /fonte KO/,
+      'la copia scaduta non deve prendere il posto di una fonte che non ha risposto');
+
+    // E una copia ANCORA VALIDA si serve eccome, senza nemmeno chiamare la fonte.
+    fs.writeFileSync(path.join(dir, 'cache', 'prova-scaduta.json'),
+      JSON.stringify({ schema: 1, voci: { fresca: { t: Date.now(), d: 'dato di adesso' } } }));
+    const conCache2 = cacheDisco.crea(file, { tag: 'prova', schema: 1, ttl: 60 * 1000, max: 10 });
+    assert.strictEqual(await conCache2('fresca', async () => { throw new Error('non deve partire'); }), 'dato di adesso');
+  } finally {
+    if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
+  }
+});

@@ -148,12 +148,12 @@ fra quanto si riapre. Misurato: con una finestra di 2 s e tetto 5, un client che
 200 ms **prima non passava mai**, ora passa dopo 2,0 s. Il budget si vede quando sta per
 finire, nei Ricambi e nel Competitor.
 
-**Domanda aperta** (la mia era partita da un fatto sbagliato): tutte e otto le cache su disco
-servono la copia **scaduta** quando la fonte cade, e lo fanno in silenzio (solo un
-`console.warn`). Il proprietario ha detto «mai una copia scaduta», ma pensando che fosse una
-cosa che la migrazione *aggiungeva* alle tre — invece c'era già, e c'è anche nelle altre
-cinque. Va richiesto: toglierla a tutte e otto, o tenerla dichiarando a schermo che il dato
-è vecchio? Finché non è deciso, il comportamento è rimasto quello di prima.
+**Chiusa anche la copia scaduta**: tutte e otto le cache la servivano quando la fonte cade, in
+silenzio — un dato di sette giorni prima (di uno per i richiami) indistinguibile a schermo da
+uno appena preso. Era il difetto della campagna 1 nella sua forma più pura. Decisione del
+proprietario: **via da tutte e otto**. È una riga sola in `cache-disco.js`, ed è possibile
+proprio perché le tre di questa coda erano appena state portate lì. Chi chiama dichiara già
+il KO ("Fonte non raggiungibile", "Archivio non raggiungibile: non si sa se ci sono allerte").
 
 ### Coda — casi singoli (~10 + 36 minori)
 I più grossi:

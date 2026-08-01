@@ -100,7 +100,15 @@ function crea(file, opt = {}) {
         scrivi();
         return d;
       } catch (e) {
-        if (v) { console.warn('[' + tag + '] ' + chiave + ' KO (' + e.message + '): servo la cache vecchia'); return v.d; }
+        // SCADUTA E' SCADUTA. Qui la copia vecchia si serviva lo stesso quando la fonte
+        // cadeva, e in silenzio: un `console.warn` nei log, e a schermo un dato di sette
+        // giorni prima (di un giorno per i richiami) indistinguibile da uno appena preso.
+        // Era il difetto di questa bonifica nella sua forma piu' pura — il silenzio di una
+        // fonte che diventa un fatto — e ce l'avevano tutte e otto le cache.
+        // Decisione del proprietario: se la fonte non risponde si dice e basta. L'errore
+        // arriva al chiamante, che ha gia' il suo modo di dichiararlo ("archivio non
+        // raggiungibile", "fonte in pausa dopo un blocco", la pill della fonte).
+        if (v) console.warn('[' + tag + '] ' + chiave + ' KO (' + e.message + '): la copia in cache e\' scaduta, non la servo');
         throw e;
       } finally { inVolo.delete(chiave); }
     })();
