@@ -45,13 +45,7 @@ function cacheGet(key) { const h = cache.get(key); if (h && Date.now() - h.ts < 
 function cacheSet(key, data, ttl) { cache.set(key, { ts: Date.now(), data, ttl }); if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value); }
 async function fetchCached(url, ttl) { const hit = cacheGet(url); if (hit != null) return hit; const { body } = await vs.httpGetText(url); cacheSet(url, body, ttl); return body; }
 
-const hits = new Map();
-function rateOk(ip) {
-  const now = Date.now();
-  if (hits.size > 5000) hits.clear();   // ponytail: limita la crescita per-IP; finestra 60s → reset innocuo
-  const a = (hits.get(ip) || []).filter(t => now - t < 60000);
-  a.push(now); hits.set(ip, a); return a.length <= 40;
-}
+const limite = require('./limite-richieste').crea({ max: 40, cosa: 'richieste alla scheda' });
 
 const HOST_OK_AUTO = /^https?:\/\/(www\.)?auto-data\.net\//i;
 const HOST_OK_MOTO = /^https?:\/\/(www\.)?ultimatespecs\.com\//i;
@@ -874,7 +868,8 @@ function mount(app, deps = {}) {
   const chiaveLimite = deps.chiaveLimite || deps.clientIp || (req => req.ip || '');
   // La scheda tecnica DI QUESTO ANNUNCIO — vedi schedaPerAnnuncio.
   app.get('/api/scheda-veicolo/annuncio', async (req, res) => {
-    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ error: 'Troppe richieste.' });
+    const g = limite.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     const { tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria } = req.query || {};
     // Il titolo dell'annuncio serve SOLO alle moto: e' da li' che si legge la variante
     // ("ABS", "Moto Cage", "Rally"), l'unica cosa che il periodo di produzione non separa.
@@ -893,7 +888,8 @@ function mount(app, deps = {}) {
     } catch (_) { res.json({ ok: false, motivo: 'scheda non disponibile' }); }
   });
   app.get('/api/scheda-veicolo', async (req, res) => {
-    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ error: 'Troppe richieste.' });
+    const g = limite.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     const { tipo, marca, modello, anno, gen } = req.query || {};
     if (!marca || !modello) return res.status(400).json({ error: 'marca/modello mancanti' });
     try {
@@ -906,7 +902,8 @@ function mount(app, deps = {}) {
     } catch (_) { res.json({ ok: false, error: 'scheda non disponibile' }); }
   });
   app.get('/api/scheda-veicolo/specs', async (req, res) => {
-    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ error: 'Troppe richieste.' });
+    const g = limite.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     const url = String(req.query.url || '');
     const kind = specsHostKind(url);
     if (!kind) return res.status(400).json({ error: 'url non valido' });

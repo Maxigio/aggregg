@@ -32,13 +32,13 @@
  */
 const https = require('https');
 const zlib = require('zlib');
-const fs = require('fs');
 const path = require('path');
 
 const { kindForStatus, fail } = require('./utils');
 
 const HOST = 'ec.europa.eu';
 const BASE = '/safety-gate-alerts/api/download/weeklyReport';
+const cacheDisco = require('./cache-disco');
 const CACHE_FILE = path.join(__dirname, '..', '..', 'data', 'safety-gate-cache.json');
 const TTL_MS = 24 * 60 * 60 * 1000;       // l'elenco cambia una volta a settimana: un giorno basta
 const TIMEOUT_MS = 20000;
@@ -90,36 +90,15 @@ const pausaFinoA = () => (Date.now() < bloccatoFino ? bloccatoFino : 0);
 // e' successo aggiungendo i telai, che risultavano zero su 1.041 mentre erano nei dati.
 // Questo numero va alzato a ogni cambio della forma dei record.
 const SCHEMA = 3;   // 3: date di produzione separate anche quando la fonte le incolla
-let memo = null;
-const leggi = () => {
-  if (!memo) {
-    try { memo = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch (_) { memo = { schema: SCHEMA, voci: {} }; }
-    if (memo.schema !== SCHEMA) memo = { schema: SCHEMA, voci: {} };   // formato vecchio: si riparte
-    if (!memo.voci) memo.voci = {};
-  }
-  return memo;
-};
-const scrivi = () => { try { fs.writeFileSync(CACHE_FILE, JSON.stringify(leggi())); } catch (_) {} };
-const inVolo = new Map();
-async function conCache(chiave, produci, sospettoSe) {
-  const c = leggi();
-  const v = c.voci[chiave];
-  if (v && Date.now() - v.t < TTL_MS) return v.d;
-  if (inVolo.has(chiave)) return inVolo.get(chiave);
-  const p = (async () => {
-    try {
-      const d = await produci();
-      const sospetto = sospettoSe ? !!sospettoSe(d) : false;
-      c.voci[chiave] = { t: sospetto ? Date.now() - TTL_MS + 15 * 60 * 1000 : Date.now(), d };
-      scrivi(); return d;
-    } catch (e) {
-      if (v) { console.warn('[safety-gate] ' + chiave + ' KO (' + e.message + '): servo la cache vecchia'); return v.d; }
-      throw e;
-    } finally { inVolo.delete(chiave); }
-  })();
-  inVolo.set(chiave, p);
-  return p;
-}
+/**
+ * LA STESSA CACHE DI TUTTE LE ALTRE (vedi cache-disco.js). Il numero di schema qui c'era gia'
+ * — l'aveva insegnato proprio questo file, coi telai che risultavano zero su 1.041 mentre
+ * erano nei dati — ma mancavano il TETTO (le chiavi sono `r|<id campagna>`, e le campagne non
+ * finiscono mai) e la scrittura accanto ai dati utente, senza la quale nel pacchetto Electron
+ * la cache non sopravvive a un riavvio.
+ */
+const _cache = cacheDisco.crea(CACHE_FILE, { tag: 'safety-gate', schema: SCHEMA, ttl: TTL_MS, max: 800 });
+const conCache = (chiave, produci, sospettoSe) => _cache(chiave, produci, sospettoSe);
 
 // ─── Parsing XML ─────────────────────────────────────────────────────────────
 // Quasi tutti i valori arrivano dentro CDATA, perche' contengono HTML e caratteri speciali.

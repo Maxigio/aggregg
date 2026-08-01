@@ -663,3 +663,63 @@ test('IVA: si scorpora solo dove la fonte la dichiara, e altrove si dice perche\
   assert.match(notaIva(margine), /margine/, 'la riga deve dire perche\' l\'IVA non c\'e\'');
   assert.match(notaIva(muto), /non dichiarata/, '"non c\'e\'" e "non lo so" non sono la stessa cosa');
 });
+
+// ═══ IL LIMITATORE NON PUNISCE CHI INSISTE ════════════════════════════════════
+test('limite: una richiesta rifiutata NON si addebita', () => {
+  const lim = require('../backend/limite-richieste').crea({ max: 3, finestra: 60000, cosa: 'richieste' });
+  for (let i = 0; i < 3; i++) assert.strictEqual(lim.consuma('tizio').ok, true, `la richiesta ${i + 1} sta nel tetto`);
+  // Da qui in poi si insiste: erano proprio questi tentativi a gonfiare la finestra, e con
+  // un client che ritenta ogni secondo la sezione non si riapriva mai.
+  for (let i = 0; i < 50; i++) assert.strictEqual(lim.consuma('tizio').ok, false);
+  const s = lim.stato('tizio');
+  assert.strictEqual(s.restanti, 0);
+  assert.ok(s.attesa > 0 && s.attesa <= 60,
+    `l'attesa deve restare dentro la finestra anche dopo 50 tentativi, invece e' ${s.attesa}s`);
+});
+
+test('limite: il blocco di uno non tocca gli altri, e si dice quando riprovare', () => {
+  const lim = require('../backend/limite-richieste').crea({ max: 2, finestra: 60000, cosa: 'richieste' });
+  lim.consuma('anna'); lim.consuma('anna');
+  assert.strictEqual(lim.consuma('anna').ok, false, 'anna ha finito il suo budget');
+  // I limiti seguono la PERSONA (campagna 6): il tetto di anna non e' il tetto di bruno.
+  assert.strictEqual(lim.consuma('bruno').ok, true, 'bruno non c\'entra niente col blocco di anna');
+  assert.strictEqual(lim.stato('bruno').restanti, 1);
+  // E il 429 dice quando si puo' riprovare: prima lo faceva solo il competitor.
+  const msg = lim.messaggio(lim.stato('anna'));
+  assert.match(msg, /Riprova fra/, 'il messaggio deve dire quando riprovare');
+  assert.match(msg, /sono 2 ogni 60 secondi/, 'e quale sia il tetto');
+});
+
+test('limite: guardare non consuma, e la finestra che scade libera il posto', async () => {
+  const lim = require('../backend/limite-richieste').crea({ max: 1, finestra: 60000 });
+  // `stato` e' una domanda, non un prelievo: serve a MOSTRARE il budget senza spenderlo.
+  for (let i = 0; i < 10; i++) assert.strictEqual(lim.stato('tizio').restanti, 1);
+  assert.strictEqual(lim.consuma('tizio').ok, true);
+  assert.strictEqual(lim.stato('tizio').restanti, 0);
+  // Finestra brevissima: passata, il posto torna libero da solo. Serve un'attesa vera —
+  // dentro lo stesso millisecondo il timestamp e' ancora DENTRO la finestra, ed e' giusto.
+  const breve = require('../backend/limite-richieste').crea({ max: 1, finestra: 5 });
+  assert.strictEqual(breve.consuma('tizio').ok, true);
+  assert.strictEqual(breve.stato('tizio').restanti, 0, 'appena consumato il posto e\' occupato');
+  await new Promise(r => setTimeout(r, 20));
+  assert.strictEqual(breve.stato('tizio').restanti, 1, 'passata la finestra il budget torna pieno');
+  assert.strictEqual(breve.consuma('tizio').ok, true);
+});
+
+test('cache: le otto cache su disco passano tutte dal modulo comune', () => {
+  // Il modulo fa tre cose che ogni copia scritta a mano si dimenticava: numero di schema,
+  // tetto alle voci, e scrittura accanto ai dati utente (nel pacchetto Electron la cartella
+  // dell'app e' di sola lettura, e il `catch` vuoto ingoiava l'errore).
+  const dir = path.join(__dirname, '..', 'backend', 'scrapers');
+  const conCache = fs.readdirSync(dir).filter(f => f.endsWith('.js'))
+    .filter(f => /const CACHE_FILE\s*=/.test(fs.readFileSync(path.join(dir, f), 'utf8')));
+  assert.ok(conCache.length >= 8, `attese almeno 8 cache su disco, trovate ${conCache.length}`);
+  for (const f of conCache) {
+    const src = fs.readFileSync(path.join(dir, f), 'utf8');
+    assert.match(src, /cacheDisco\.crea\(/, `${f} ha una cache su disco che non passa dal modulo comune`);
+    assert.match(src, /schema:/, `${f} non dichiara il numero di schema: un cambio di parser servirebbe il formato vecchio per tutto il TTL`);
+    assert.match(src, /max:/, `${f} non ha un tetto: il file cresce senza fine e ogni miss lo riscrive intero`);
+    assert.ok(!/fs\.writeFileSync\(\s*CACHE_FILE/.test(src),
+      `${f} scrive ancora la cache da se', dentro la cartella dell'app`);
+  }
+});

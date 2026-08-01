@@ -172,20 +172,15 @@ function costruisciMarche() {
 function mount(app, deps = {}) {
   // La chiave dei limiti: la PERSONA quando e' entrata, l'indirizzo quando no.
   const chiaveLimite = deps.chiaveLimite || deps.clientIp || (req => req.ip || '');
-  const hits = new Map();
-  const rateOk = ip => {
-    const now = Date.now();
-    if (hits.size > 5000) hits.clear();
-    const v = (hits.get(ip) || []).filter(t => now - t < 60000);
-    v.push(now); hits.set(ip, v); return v.length <= 60;
-  };
+  const limite = require('./limite-richieste').crea({ max: 60, cosa: 'richieste agli archivi richiami' });
 
   // `await` anche sui lavori sincroni: quasi tutte queste rotte leggono un file gia' in
   // memoria e rispondono subito, ma quella delle omologazioni interroga l'RDW. Senza
   // attendere, `{ ...promise }` non spande niente e la risposta usciva vuota con ok:true
   // — il caso peggiore, perche' sembra funzionare.
   const via = (percorso, lavoro) => app.get(percorso, async (req, res) => {
-    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ ok: false, motivo: 'Troppe richieste.' });
+    const g = limite.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ ok: false, motivo: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     try {
       const out = await lavoro(req.query || {});
       res.set('Cache-Control', 'public, max-age=3600');

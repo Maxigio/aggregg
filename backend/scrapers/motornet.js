@@ -29,13 +29,13 @@
  *   GET /nuovo/auto/accessori?codice_eurotax=1149474&anno=2026&mese=7
  */
 const https = require('https');
-const fs = require('fs');
 const path = require('path');
 
 const { kindForStatus, fail } = require('./utils');   // classificazione salute crawler (F1.5)
 
 const HOST = 'webservice.motornet.it';
 const BASE = '/api/v2_0/rest/proxy';
+const cacheDisco = require('./cache-disco');
 const CACHE_FILE = path.join(__dirname, '..', '..', 'data', 'motornet-cache.json');
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;   // il listino e' mensile: una settimana di cache e' generosa
 const TIMEOUT_MS = 12000;
@@ -91,41 +91,21 @@ async function getJson(pathQ) {
 
 // ─── Cache su disco: e' il freno principale, non un'ottimizzazione ───────────
 let memo = null;
-function leggi() {
-  if (memo) return memo;
-  try { memo = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch (_) { memo = { voci: {} }; }
-  if (!memo.voci) memo.voci = {};
-  return memo;
-}
-function scrivi() {
-  try { fs.writeFileSync(CACHE_FILE, JSON.stringify(leggi())); } catch (_) {}
-}
-const inVolo = new Map();
-// Una chiave = una risposta. Scaduta ma presente: si serve comunque se la rete fallisce,
-// perche' un listino della settimana scorsa e' meglio di nessun listino.
-async function conCache(chiave, produci) {
-  const c = leggi();
-  const v = c.voci[chiave];
-  if (v && Date.now() - v.t < TTL_MS) return v.d;
-  if (inVolo.has(chiave)) return inVolo.get(chiave);
-  const p = (async () => {
-    try {
-      const d = await produci();
-      // Stesso ragionamento di autoit-rilevamenti.js: un elenco vuoto non e' un dato, e' un
-      // intoppo. Si serve lo stesso, ma scade fra 15 minuti invece che fra 7 giorni. Misurato:
-      // "modelli|JAG" era finito in cache vuoto e sarebbe rimasto tale fino al 1 agosto.
-      const vuoto = Array.isArray(d) ? !d.length : !d;
-      c.voci[chiave] = { t: vuoto ? Date.now() - TTL_MS + 15 * 60 * 1000 : Date.now(), d };
-      scrivi();
-      return d;
-    } catch (e) {
-      if (v) { console.warn('[motornet] ' + chiave + ' KO (' + e.message + '): servo la cache vecchia'); return v.d; }
-      throw e;
-    } finally { inVolo.delete(chiave); }
-  })();
-  inVolo.set(chiave, p);
-  return p;
-}
+/**
+ * LA STESSA CACHE DI TUTTE LE ALTRE (vedi cache-disco.js). Qui era scritta a mano e le
+ * mancavano il NUMERO DI SCHEMA (senza, un cambio di parser serve il formato vecchio per
+ * sette giorni), il TETTO — le chiavi sono `versioni|<id modello>`, cioe' quante ne vuole il
+ * catalogo, e il file da 247 KB si riscriveva INTERO a ogni miss — e la scrittura accanto ai
+ * dati utente: dentro il pacchetto Electron la cartella dell'app e' di sola lettura, quindi
+ * la cache non sopravviveva a un riavvio.
+ *
+ * Un elenco vuoto non e' un dato, e' un intoppo: si serve lo stesso, ma scade in 15 minuti
+ * invece che in 7 giorni. Misurato: "modelli|JAG" era finito in cache vuoto e sarebbe
+ * rimasto tale fino al 1 agosto.
+ */
+const VUOTO = d => (Array.isArray(d) ? !d.length : !d);
+const _cache = cacheDisco.crea(CACHE_FILE, { tag: 'motornet', schema: 1, ttl: TTL_MS, max: 800 });
+const conCache = (chiave, produci) => _cache(chiave, produci, VUOTO);
 
 const norm = s => String(s == null ? '' : s).toLowerCase()
   .normalize('NFD').replace(/[̀-ͯ]/g, '')

@@ -24,12 +24,12 @@
  */
 const https = require('https');
 const zlib = require('zlib');
-const fs = require('fs');
 const path = require('path');
 
 const { kindForStatus, fail } = require('./utils');
 
 const HOST = 'www.auto.it';
+const cacheDisco = require('./cache-disco');
 const CACHE_FILE = path.join(__dirname, '..', '..', 'data', 'autoit-rilevamenti-cache.json');
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;   // sono prove d'archivio: cambiano di rado
 const TIMEOUT_MS = 15000;
@@ -74,35 +74,25 @@ async function getHtml(percorso) {
 }
 
 // ─── Cache su disco: e' il freno principale ──────────────────────────────────
-let memo = null;
-const leggi = () => { if (!memo) { try { memo = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch (_) { memo = { voci: {} }; } if (!memo.voci) memo.voci = {}; } return memo; };
-const scrivi = () => { try { fs.writeFileSync(CACHE_FILE, JSON.stringify(leggi())); } catch (_) {} };
-const inVolo = new Map();
-async function conCache(chiave, produci) {
-  const c = leggi();
-  const v = c.voci[chiave];
-  if (v && Date.now() - v.t < TTL_MS) return v.d;
-  if (inVolo.has(chiave)) return inVolo.get(chiave);
-  const p = (async () => {
-    try {
-      const d = await produci();
-      // Un risultato vuoto o dichiarato incompleto non e' un dato: e' un intoppo. Si serve lo
-      // stesso (meglio di un errore), ma scade fra 15 minuti invece che fra 7 giorni, altrimenti
-      // un singolo 500 o un cambio di markup congela una marca per una settimana. Si retrodata
-      // `t` invece di aggiungere un campo: le cache gia' scritte restano leggibili.
-      const sospetto = Array.isArray(d) ? !d.length : !!(d && (d.completo === false || !(d.rilevamenti || []).length));
-      c.voci[chiave] = { t: sospetto ? Date.now() - TTL_MS + 15 * 60 * 1000 : Date.now(), d };
-      scrivi();
-      return d;
-    }
-    catch (e) {
-      if (v) { console.warn('[autoit] ' + chiave + ' KO (' + e.message + '): servo la cache vecchia'); return v.d; }
-      throw e;
-    } finally { inVolo.delete(chiave); }
-  })();
-  inVolo.set(chiave, p);
-  return p;
-}
+/**
+ * LA STESSA CACHE DI TUTTE LE ALTRE. Qui c'era una copia scritta a mano, e le mancavano le
+ * tre cose che il modulo comune fa da sempre:
+ *  - il NUMERO DI SCHEMA: la cache tiene gli oggetti gia' interpretati, quindi cambiare il
+ *    parser senza alzarlo significa servire il formato vecchio per sette giorni senza
+ *    accorgersene. E' successo davvero coi telai del Safety Gate;
+ *  - il TETTO: senza, il file cresce senza fine e ogni miss lo riscrive INTERO;
+ *  - DOVE SI SCRIVE: qui si scriveva dentro la cartella dell'app, che nel pacchetto Electron
+ *    e' di sola lettura. L'errore finiva in un `catch` vuoto, quindi la cache non
+ *    sopravviveva a un riavvio e a ogni avvio si ricrawlava tutto — proprio la raffica che
+ *    si becca il 403 che questa cache doveva evitare.
+ *
+ * Un risultato vuoto o dichiarato incompleto non e' un dato: e' un intoppo. Si serve lo
+ * stesso, ma scade in 15 minuti invece che in 7 giorni, altrimenti un singolo 500 o un
+ * cambio di markup congela una marca per una settimana.
+ */
+const SOSPETTO = d => (Array.isArray(d) ? !d.length : !!(d && (d.completo === false || !(d.rilevamenti || []).length)));
+const _cache = cacheDisco.crea(CACHE_FILE, { tag: 'autoit', schema: 1, ttl: TTL_MS, max: 200 });
+const conCache = (chiave, produci) => _cache(chiave, produci, SOSPETTO);
 
 // ─── Parsing ─────────────────────────────────────────────────────────────────
 // Il sito e' un Next.js con App Router: i dati non stanno nell'HTML ma nel payload RSC,

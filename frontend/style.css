@@ -1557,3 +1557,7 @@ select.cp-unisci { max-width: 190px; }
 /* Il chip "Solo IVA esposta" quando in questa ricerca non ce n'e' nessuno: si vede che c'e'
    ma si legge che non porterebbe niente. Non si nasconde — sapere che sono zero e' un dato. */
 .facet-chip-vuoto { opacity: .5; }
+
+/* Quante richieste restano prima della pausa. Compare solo quando sta per finire: un
+   contatore sempre acceso e' rumore, e scoprire il tetto sbattendoci era la vecchia via. */
+.budget-avviso { font-size: 0.78rem; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin: 6px 0; }

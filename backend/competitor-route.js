@@ -31,20 +31,15 @@ const cache = new Map();   // `${fonte}:${id}` → { ts, dati }
 const PARCO_MAX = 6;               // scarichi per finestra
 const PARCO_FINESTRA = 10 * 60 * 1000;
 const MSG_LIMITE = `Troppi scarichi di parco: sono ${PARCO_MAX} ogni ${PARCO_FINESTRA / 60000} minuti. Uno scarico costa fino a ottanta richieste alla fonte, e superare il limite significa farsi bloccare.`;
-const parcoHits = new Map();       // ip → [ts]
-function parcoOk(ip) {
-  const ora = Date.now();
-  if (parcoHits.size > 500) parcoHits.clear();
-  const a = (parcoHits.get(ip) || []).filter(t => ora - t < PARCO_FINESTRA);
-  a.push(ora); parcoHits.set(ip, a);
-  return a.length <= PARCO_MAX;
-}
+// Lo stesso limitatore di tutte le altre rotte. Qui c'era una copia che addebitava un
+// timestamp anche quando rifiutava — vedi il commento su `esaurito` piu' sotto, che nasceva
+// proprio per aggirarla su un gruppo di vetrine. Adesso non serve piu' aggirare niente.
+const limiteParco = require('./limite-richieste').crea({
+  max: PARCO_MAX, finestra: PARCO_FINESTRA, cosa: 'scarichi di parco', maxChiavi: 500,
+});
+const parcoOk = ip => limiteParco.consuma(ip).ok;
 /** Quanti scarichi restano, per dirlo invece di far sembrare rotta la sezione. */
-function parcoRestanti(ip) {
-  const ora = Date.now();
-  const a = (parcoHits.get(ip) || []).filter(t => ora - t < PARCO_FINESTRA);
-  return Math.max(0, PARCO_MAX - a.length);
-}
+const parcoRestanti = ip => limiteParco.stato(ip).restanti;
 
 function mount(app, deps = {}) {
   const C = deps.competitor || comp;
@@ -231,7 +226,8 @@ function mount(app, deps = {}) {
     const chiave = String(req.params.id);   // `fonte:id`
     const daCache = !forza && inCacheFresca(chiave);
     if (!daCache && !parcoOk(ip)) {
-      return res.status(429).json({ ok: false, error: MSG_LIMITE, riprovaFra: PARCO_FINESTRA / 60000 });
+      const st = limiteParco.stato(ip);
+      return res.status(429).json({ ok: false, error: limiteParco.messaggio(st, MSG_LIMITE), riprovaFra: st.attesa, restanti: 0 });
     }
     try {
       const d = await scaricaParco(chiave, forza);
@@ -285,9 +281,10 @@ function mount(app, deps = {}) {
     // dal budget: un gruppo di 10 vetrine con un doppio clic (il secondo parte gia' con
     // forza=1, il frontend valorizza lo stato PRIMA della fetch) erano fino a 1.600 pagine
     // di richieste alle fonti, e il contatore della rotta singola restava vergine. Le voci
-    // servite da cache non si addebitano, come sulla rotta singola. `esaurito` evita di
-    // richiamare parcoOk in loop: addebita un timestamp anche quando rifiuta, e su un
-    // gruppo grosso gonfierebbe la finestra piu' di quanto faccia la rotta singola.
+    // servite da cache non si addebitano, come sulla rotta singola. `esaurito` resta perche'
+    // risparmia N letture inutili una volta finito il budget, ma non e' piu' una toppa: il
+    // limitatore comune non addebita niente quando rifiuta, quindi chiamarlo in un ciclo non
+    // gonfia piu' la finestra.
     let esaurito = false;
     for (const v of voci) {
       const chiave = chiaveDi(v);
@@ -303,7 +300,8 @@ function mount(app, deps = {}) {
     // Tutto rifiutato per budget e niente da mostrare: un "ok con zero veicoli" sembrerebbe
     // un gruppo vuoto. Si risponde come la rotta singola, cosi' la UI dice il perche'.
     if (!parti.length && esaurito) {
-      return res.status(429).json({ ok: false, error: MSG_LIMITE, riprovaFra: PARCO_FINESTRA / 60000 });
+      const st = limiteParco.stato(ip);
+      return res.status(429).json({ ok: false, error: limiteParco.messaggio(st, MSG_LIMITE), riprovaFra: st.attesa, restanti: 0 });
     }
     const veicoli = parti.flatMap(p => p.veicoli);
     res.json({

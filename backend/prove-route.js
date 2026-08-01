@@ -25,13 +25,7 @@ const insella = require('./scrapers/insella-prove');
 const norm = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const tok = s => norm(s).split(/[^a-z0-9]+/).filter(Boolean);
 
-const hits = new Map();
-function rateOk(ip) {
-  const now = Date.now();
-  if (hits.size > 5000) hits.clear();
-  const a = (hits.get(ip) || []).filter(t => now - t < 60000);
-  a.push(now); hits.set(ip, a); return a.length <= 20;
-}
+const limite = require('./limite-richieste').crea({ max: 20, cosa: 'richieste alle prove' });
 
 /** Le voci il cui nome contiene TUTTI i token del modello. Nessuna scelta, solo il filtro. */
 function perModello(voci, modello, campo = 'nome') {
@@ -51,7 +45,8 @@ function mount(app, deps = {}) {
    * descrive questa macchina, e metterla in cima sarebbe suggerirla.
    */
   app.get('/api/prove/auto', async (req, res) => {
-    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ ok: false, error: 'Troppe richieste.' });
+    const g = limite.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ ok: false, error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     const { marca, modello, anno } = req.query || {};
     if (!marca) return res.status(400).json({ ok: false, error: 'marca mancante' });
     const pausa = autoit.pausaFinoA();
@@ -73,7 +68,8 @@ function mount(app, deps = {}) {
 
   /** MOTO — le prove di inSella che possono essere di questo modello. Indice su disco. */
   app.get('/api/prove/moto', async (req, res) => {
-    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ ok: false, error: 'Troppe richieste.' });
+    const g = limite.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ ok: false, error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     const { marca, modello } = req.query || {};
     if (!marca || !modello) return res.status(400).json({ ok: false, error: 'marca/modello mancanti' });
     // `indice()` e' una Promise e restituisce direttamente l'ELENCO delle prove (dal file su
@@ -94,7 +90,8 @@ function mount(app, deps = {}) {
 
   /** MOTO — la prova intera. Una richiesta, e solo quando la si apre. */
   app.get('/api/prove/moto/prova', async (req, res) => {
-    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ ok: false, error: 'Troppe richieste.' });
+    const g = limite.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ ok: false, error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     const slug = String((req.query || {}).slug || '');
     if (!/^[a-z0-9-]{3,120}$/.test(slug)) return res.status(400).json({ ok: false, error: 'slug non valido' });
     const pausa = insella.pausaFinoA();

@@ -405,15 +405,12 @@ function reportsFile() {
   const ud = process.env.USER_DATA_PATH;
   return (ud && fs.existsSync(ud)) ? path.join(ud, 'reports.jsonl') : path.join(__dirname, '..', 'data', 'reports.jsonl');
 }
-const reportHits = new Map();   // ip → { windowStart, count } — SEPARATO da loginAttempts
-function reportRateOk(ip) {
-  const now = Date.now(), w = 10 * 60 * 1000, cap = 5;
-  const rec = reportHits.get(ip);
-  if (!rec || now - rec.windowStart >= w) { reportHits.set(ip, { windowStart: now, count: 1 }); return true; }
-  rec.count++; return rec.count <= cap;
-}
+// SEPARATO dai tentativi di accesso, e dallo stesso stampo di tutte le altre rotte:
+// una segnalazione rifiutata non si addebita, e il 429 dice fra quanto si puo' riprovare.
+const limiteReport = require('./limite-richieste').crea({ max: 5, finestra: 10 * 60 * 1000, cosa: 'segnalazioni' });
 app.post('/api/report', express.json({ limit: '32kb' }), (req, res) => {
-  if (!reportRateOk(chiaveLimite(req))) return res.status(429).json({ error: 'Troppe segnalazioni, riprova tra qualche minuto.' });
+  const gRep = limiteReport.consuma(chiaveLimite(req));
+  if (!gRep.ok) return res.status(429).json({ error: limiteReport.messaggio(gRep), riprovaFra: gRep.attesa, restanti: 0 });
   const b = req.body || {};
   const type = b.type === 'search' ? 'search' : 'bug';
   const message = String(b.message == null ? '' : b.message).slice(0, 2000).trim();

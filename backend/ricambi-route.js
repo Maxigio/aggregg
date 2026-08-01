@@ -38,32 +38,30 @@ function mount(app, deps = {}) {
   // La calcola server.js (`chiaveLimite`), che e' l'unico a sapere chi ha il cookie.
   const chiaveLimite = deps.chiaveLimite || deps.clientIp || defaultClientIp;
 
-  const hits = new Map();                    // ip → { windowStart, count } (ricerche)
-  const ebayHits = new Map();                // ip → { windowStart, count } (enrich ⓘ, budget separato)
+
   const cache = new Map();                   // normOen → { ts, ttl, data }
   const ebayCache = new Map();               // itm url → { ts, data } (enrich lazy annunci eBay)
   const autodocCache = new Map();            // product url → { ts, data } (specs lazy variante Autodoc)
-  const rateLimiter = (map, cap) => (ip) => {
-    const now = Date.now();
-    const rec = map.get(ip);
-    if (!rec || now - rec.windowStart >= RATE_WINDOW) { map.set(ip, { windowStart: now, count: 1 }); return true; }
-    rec.count++; return rec.count <= cap;
-  };
-  const rateOk = rateLimiter(hits, RATE_CAP);
-  const ebayRateOk = rateLimiter(ebayHits, EBAY_RATE_CAP);
+  const crea = require('./limite-richieste').crea;
+  const limite = crea({ max: RATE_CAP, finestra: RATE_WINDOW, cosa: 'ricerche di ricambi' });
+  const limiteEbay = crea({ max: EBAY_RATE_CAP, finestra: RATE_WINDOW, cosa: 'aperture di schede eBay' });
 
   app.get('/api/ricambi', async (req, res) => {
-    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
     const q = String(req.query.q || req.query.oen || '').trim();   // ?q= (nuovo) o ?oen= (retro-compat)
     const mode = ['nome', 'prodotto'].includes(req.query.mode) ? req.query.mode : 'oem';
     const veicolo = req.query.veicolo === 'moto' ? 'moto' : 'auto';
     if (!q) return res.status(400).json({ error: 'codice/nome ricambio mancante' });
     const key = mode + ':' + veicolo + ':' + (mode === 'oem' ? normOen(q) : q.toLowerCase());
     const hit = cache.get(key);
+    // LA CACHE NON COSTA NIENTE ALLE FONTI, quindi non consuma il budget: e' la stessa regola
+    // che il competitor applica ai parchi gia' scaricati. Il limitatore sta qui per impedire
+    // che una raffica si faccia bloccare da Autodoc o eBay, non per contare i clic.
     if (hit && Date.now() - hit.ts < hit.ttl) {
       cache.delete(key); cache.set(key, hit);   // LRU touch
-      return res.json(hit.data);
+      return res.json({ ...hit.data, restanti: limite.stato(chiaveLimite(req)).restanti });
     }
+    const g = limite.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     try {
       const data = await searchRicambi(q, { mode, veicolo });
       if (cacheable(data)) {
@@ -71,7 +69,7 @@ function mount(app, deps = {}) {
         cache.set(key, { ts: Date.now(), ttl, data });
         if (cache.size > RICAMBI_CACHE_MAX) cache.delete(cache.keys().next().value);
       }
-      res.json(data);
+      res.json({ ...data, restanti: g.restanti });
     } catch (e) {
       console.error('[ricambi]', e.message);
       res.status(500).json({ error: 'Errore interno durante il lookup.' });
@@ -81,7 +79,8 @@ function mount(app, deps = {}) {
   // Enrich LAZY di un annuncio eBay (venditore/spedizione/quantità/marca) — chiamata all'apertura ⓘ.
   // Valida l'URL item (anti-SSRF: solo ebay.<tld>/itm/), cache per URL, stesso rate-limit.
   app.get('/api/ricambi/ebay-item', async (req, res) => {
-    if (!ebayRateOk(chiaveLimite(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
+    const g = limiteEbay.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ error: limiteEbay.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     const url = String(req.query.url || '').trim();
     if (!/^https:\/\/www\.ebay\.\w+\/itm\/\d+/.test(url)) return res.status(400).json({ error: 'URL eBay item non valido' });
     const hit = ebayCache.get(url);
@@ -103,7 +102,8 @@ function mount(app, deps = {}) {
   // Specs LAZY di una variante Autodoc (datiTecnici + compatibilità) — chiamata quando si seleziona
   // una variante nel selettore. Valida l'URL product-page (anti-SSRF: solo auto-doc.it), cache per URL.
   app.get('/api/ricambi/autodoc-specs', async (req, res) => {
-    if (!ebayRateOk(chiaveLimite(req))) return res.status(429).json({ error: 'Troppe richieste, attendi un momento.' });
+    const g = limiteEbay.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ error: limiteEbay.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     const url = String(req.query.url || '').trim();
     if (!/^https?:\/\/(www\.)?auto-doc\.it\//i.test(url)) return res.status(400).json({ error: 'URL Autodoc non valido' });
     const hit = autodocCache.get(url);

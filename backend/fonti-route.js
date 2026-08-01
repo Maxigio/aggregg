@@ -135,16 +135,11 @@ const pausaDi = f => (f && f.scraper && f.scraper.pausaFinoA ? f.scraper.pausaFi
 function mount(app, deps = {}) {
   // La chiave dei limiti: la PERSONA quando e' entrata, l'indirizzo quando no.
   const chiaveLimite = deps.chiaveLimite || deps.clientIp || (req => req.ip || '');
-  const hits = new Map();
-  const rateOk = ip => {
-    const now = Date.now();
-    if (hits.size > 5000) hits.clear();
-    const v = (hits.get(ip) || []).filter(t => now - t < 60000);
-    v.push(now); hits.set(ip, v); return v.length <= 40;
-  };
+  const limite = require('./limite-richieste').crea({ max: 40, cosa: 'richieste alle fonti' });
 
   const via = (percorso, fonte, lavoro) => app.get(percorso, async (req, res) => {
-    if (!rateOk(chiaveLimite(req))) return res.status(429).json({ ok: false, motivo: 'Troppe richieste.' });
+    const g = limite.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ ok: false, motivo: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     try {
       const out = await lavoro(req.query || {});
       res.set('Cache-Control', 'public, max-age=3600');

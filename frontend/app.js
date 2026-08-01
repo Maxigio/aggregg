@@ -1063,6 +1063,20 @@ const RC_GROUP_DIMS = [['', 'Nessuno'], ['fonte', 'Fonte'], ['marca', 'Marca'], 
 const RC_SALVATI_KEY = 'amr_salvati_ricambi', RC_SALVATI_CAP = 200, RC_COMPARE_CAP = 6;
 const RC_FAV_KEY = 'amr_oem_preferiti', RC_FAV_CAP = 30;   // codici OE/OEM/OEN preferiti (quick-launch)
 
+/**
+ * QUANTE RICERCHE RESTANO PRIMA DI ESSERE FERMATI.
+ *
+ * Il limitatore lo dice a ogni risposta (`restanti`), e prima non lo leggeva nessuno: si
+ * scopriva il tetto sbattendoci contro. Si mostra solo quando sta per finire — un contatore
+ * sempre acceso e' rumore, un avviso all'ultimo momento e' una sorpresa.
+ */
+let rcRestanti = null;        // null = non lo sappiamo ancora
+let cpRestanti = null;
+const budgetHTML = (restanti, sing, plur) => (restanti != null && restanti <= 3
+  ? `<div class="budget-avviso">${restanti === 0
+      ? 'Per ora basta'
+      : `${restanti === 1 ? 'Resta 1' : 'Restano ' + restanti} ${restanti === 1 ? sing : plur}`}: il limite serve a non farsi bloccare dalle fonti, e si riapre da solo.</div>`
+  : '');
 let rcData = null;            // ultimo envelope {articoli, sources, tipoPezzo, veicoli, oen, mode, veicolo, oeAlternativi}
 let ricambiMode = 'oem';
 let rcVeicolo = 'auto';       // 'auto' | 'moto' — un ricambio è per auto O per moto
@@ -1306,10 +1320,11 @@ async function doRicambi() {
     const res = await fetch(`/api/ricambi?q=${encodeURIComponent(q)}&mode=${ricambiMode}&veicolo=${rcVeicolo}`);
     const d = await res.json();
     if (myGen !== rcGen) return;   // ricerca superata da una più recente
-    if (!res.ok) { panel.innerHTML = `<div class="rc-wrap"><div class="rc-empty">${escapeHtml(d.error || 'Errore durante il lookup.')}</div></div>`; return; }
+    if (!res.ok) { rcRestanti = (d.restanti != null ? d.restanti : rcRestanti); panel.innerHTML = `<div class="rc-wrap"><div class="rc-empty">${escapeHtml(d.error || 'Errore durante il lookup.')}</div></div>`; return; }
     // id stabile per articolo (gli item web possono non avere url/articleId → il nome collide) → indice per unicità
     (d.articoli || []).forEach((a, i) => { if (!a._rk) a._rk = `${a.fonte}:${a.url || a.articleId || (a.nome + '#' + i)}`; });
     rcData = d; rcView = 'grid';
+    if (d.restanti != null) rcRestanti = d.restanti;
     rcCollapsed = new Set(); rcOpenDetails = new Set(); rcSchedaCollapsed = false;   // nuova ricerca → reset gruppi/dettagli/scheda
     rcVariantSpecs = {};
     const cat = d.scheda && d.scheda.catalogo;   // v7: selettore varianti — dominante pre-aperto, default variante se tipo singolo
@@ -1616,7 +1631,7 @@ function renderRicambiPanel() {
   const statusLine = badSrc.length
     ? `<div class="rc-srcline">${badSrc.map(([k, s]) => `<span class="rc-src rc-src-bad"${s.reason ? ` title="${escapeHtml(s.reason)}"` : ''}>${escapeHtml(RC_FONTE[k] || k)}: ${s.status === 'blocked' ? 'bloccato' : escapeHtml(s.status)}</span>`).join('')}</div>`
     : '';
-  const head = `<div class="rc-head">${rcSchedaHTML(d)}${statusLine}</div>`;
+  const head = `<div class="rc-head">${rcSchedaHTML(d)}${statusLine}${budgetHTML(rcRestanti, 'ricerca', 'ricerche')}</div>`;
   // barra confronto (mirror auto: "Selezionati N · Apri confronto · Svuota") + sezione matrice separata
   const bar = confrontoRicambi.length ? rcCompareBarHTML() : '';
   const cmp = (rcCompareOpen && confrontoRicambi.length) ? rcCompareSection() : '';
@@ -5776,6 +5791,7 @@ function cpRender() {
   el.innerHTML = `<div class="cp-wrap">
     ${cpErrore ? `<div class="cp-avviso">${escapeHtml(cpErrore)}</div>` : ''}
     ${!voci.length ? '<div class="cp-att">Nessun concessionario ancora. Incolla il link di una vetrina — anche la tua.</div>' : ''}
+    ${budgetHTML(cpRestanti, 'scarico', 'scarichi')}
     ${pezzi.join('')}
   </div>`;
 }
@@ -5850,6 +5866,8 @@ async function cpScarica(chiave, forza) {
   cpRender();
   try {
     const d = await fetch(`/api/competitor/${encodeURIComponent(chiave)}/parco${forza ? '?forza=1' : ''}`).then(r => r.json());
+    if (d.scarichiRestanti != null) cpRestanti = d.scarichiRestanti;
+    else if (d.restanti != null) cpRestanti = d.restanti;
     cpParchi[chiave] = d.ok ? { stato: 'ok', dati: d } : { stato: 'ko', errore: d.error };
     // L'anagrafica puo' essere stata riletta dal server (le vetrine vecchie non avevano
     // orari, telefoni, valutazione): si prende quella, altrimenti la scheda resta magra.

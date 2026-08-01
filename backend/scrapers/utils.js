@@ -67,7 +67,14 @@ function fail(msg, { status = null, kind = 'error' } = {}) {
 // AS24 non ha un filtro "regione amministrativa" in senso stretto: il path
 // /lst-*/<brand>/<model>/<Region>%20(Italy) è un alias SEO che attiva il
 // filtro lat/lon/zipr (raggio geografico dal centro regione). Serve a ridurre
-// il set da scansionare; poi zipToRegione() sul CAP fa il post-filter preciso.
+// il set da scansionare; poi il CAP dell'annuncio fa il taglio preciso.
+//
+// CHI LO FA, oggi: `as24RegioneDaCap` in backend/server.js, che legge la regione
+// del CAP su data/comune-regione.json e scarta le righe Autoscout di un'altra
+// regione. La funzione `zipToRegione()` che questo commento nominava non esiste
+// più da tempo, e per un periodo il taglio non c'è stato affatto: il cerchio
+// geografico sbordava e nessuno lo restringeva. Chi legge un commento su un
+// filtro geografico deve poter trovare il codice che lo esegue.
 //
 // lat/lon = centro amministrativo della regione (o capoluogo).
 // zipr = raggio in km replicato dall'UI AS24 stessa (es. Emilia-Romagna

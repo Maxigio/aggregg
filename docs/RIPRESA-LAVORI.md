@@ -110,13 +110,12 @@ Suite: **629 test, 620 pass, 0 fail, 9 skipped** (partiva da 576/567).
 
 ## 4. Cosa resta
 
-### Campagna 4 — coda (2 punti)
-- Tre cache fuori da `cache-disco`: `backend/scrapers/autoit-rilevamenti.js:78`,
-  `backend/scrapers/motornet.js`, `backend/scrapers/safety-gate.js`. Due senza numero di
-  schema e senza tetto: crescono senza fine e servono il formato vecchio per una settimana
-  dopo un cambio di parser.
-- `backend/scrapers/utils.js:70`: il commento prometteva un post-filtro sul CAP che non
-  esisteva più. Ora esiste di nuovo (`as24RegioneDaCap` in `server.js`): va riallineato.
+### Campagna 4 — coda — **CHIUSA**
+Le tre cache (`autoit-rilevamenti`, `motornet`, `safety-gate`) passano da `cache-disco`:
+numero di schema, tetto alle voci, e scrittura accanto ai dati utente — nel pacchetto
+Electron la cartella dell'app è di sola lettura e l'errore finiva in un `catch` vuoto, quindi
+la cache non sopravviveva a un riavvio. Il commento di `utils.js` nomina il codice che il
+taglio sul CAP lo esegue davvero.
 
 ### Campagna 5 — il contesto del frontend — **CHIUSA**
 Decisioni prese e applicate: al cambio contesto si azzerano **dati della ricerca**, **filtri
@@ -141,9 +140,20 @@ Due cose emerse misurando, da non riaprire a vuoto:
 - `m.autonomia` delle prove inSella (km, misurata) arriva dalla fonte e **non è mai stata
   mostrata**: è una voce da aggiungere, non un'unità da correggere.
 
-### Campagna 6 — resta un punto
-- `backend/prove-route.js:33` e gemelli: i limiti contano anche le richieste **già rifiutate**
-  (il timestamp si aggiunge prima del confronto), quindi insistere allunga il blocco.
+### Campagna 6 — **CHIUSA**
+I limitatori erano **sette copie** della stessa funzione, tutte con lo stesso difetto (il
+timestamp si segnava prima del confronto, quindi anche una richiesta già rifiutata contava).
+Ora c'è `backend/limite-richieste.js`, uno solo: chi è già fermo non paga, e ogni 429 dice
+fra quanto si riapre. Misurato: con una finestra di 2 s e tetto 5, un client che riprova ogni
+200 ms **prima non passava mai**, ora passa dopo 2,0 s. Il budget si vede quando sta per
+finire, nei Ricambi e nel Competitor.
+
+**Domanda aperta** (la mia era partita da un fatto sbagliato): tutte e otto le cache su disco
+servono la copia **scaduta** quando la fonte cade, e lo fanno in silenzio (solo un
+`console.warn`). Il proprietario ha detto «mai una copia scaduta», ma pensando che fosse una
+cosa che la migrazione *aggiungeva* alle tre — invece c'era già, e c'è anche nelle altre
+cinque. Va richiesto: toglierla a tutte e otto, o tenerla dichiarando a schermo che il dato
+è vecchio? Finché non è deciso, il comportamento è rimasto quello di prima.
 
 ### Coda — casi singoli (~10 + 36 minori)
 I più grossi:
