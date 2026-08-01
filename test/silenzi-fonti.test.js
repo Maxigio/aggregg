@@ -556,3 +556,110 @@ test('province: una preferenza per una domanda sola', () => {
   assert.ok(/if \(x\._pass && !x\._passProvAnnuncio\) delete x\._pass/.test(APP),
     'cambiando la tua provincia, i passaggi gia' + "'" + ' calcolati devono essere rifatti');
 });
+
+// ═══ IL VALORE VIAGGIA CON LA SUA UNITA' ══════════════════════════════════════
+// Qui non si cerca del testo: si ESEGUE il codice vero di frontend/app.js. Le funzioni
+// interessate sono pure (spec dentro, numero fuori), quindi si ritagliano dal sorgente e si
+// eseguono con i pochi globali che usano. Se qualcuno le riscrive in un altro file o cambia
+// nome, il ritaglio non trova piu' niente e il test lo dice.
+/** Ritaglia dal sorgente il blocco che va da `da` fino alla riga che comincia con `finoA`. */
+function ritaglia(src, da, finoA) {
+  const i = src.indexOf(da);
+  assert.ok(i > 0, `non trovo piu' \`${da}\` in frontend/app.js`);
+  const j = src.indexOf(finoA, i);
+  assert.ok(j > i, `non trovo piu' la fine del blocco (\`${finoA}\`) dopo \`${da}\``);
+  return src.slice(i, j);
+}
+/** Esegue i pezzi ritagliati in un contesto con i globali dati, e ne restituisce le funzioni. */
+function esegui(pezzi, globali, nomi) {
+  const chiavi = Object.keys(globali);
+  const corpo = pezzi.join('\n') + '\nreturn {' + nomi.join(',') + '};';
+  return new Function(...chiavi, corpo)(...chiavi.map(k => globali[k]));
+}
+
+test('carburante: il costo si calcola sul ciclo MISTO, non sulla prima riga', () => {
+  const { vehConsumo } = esegui([
+    ritaglia(APP, 'function vehConsumo(spec)', '\n// Aritmetica del costo'),
+  ], {}, ['vehConsumo', 'carbConsumoDa', 'carbFamigliaDa']);
+
+  // La scheda vera della Golf VII R 2.0 TSI: i tre cicli, nell'ordine in cui arrivano.
+  const spec = { groups: [{ rows: [
+    { k: 'Tipo carburante', v: 'Benzina' },
+    { k: 'Consumo nel ciclo urbano (NEDC, WLTP equivalente)', v: '8.6-8.9 l/100 km' },
+    { k: 'Consumo nel ciclo extraurbano (NEDC, WLTP equivalente)', v: '5.9-6.2 l/100 km' },
+    { k: 'Consumo nel ciclo misto (NEDC, WLTP equivalente)', v: '6.9-7.2 l/100 km' },
+  ] }] };
+  assert.strictEqual(vehConsumo(spec).consumo, 7.05,
+    'il conto deve partire dal ciclo misto (7,05), non dall\'urbano (8,75): a 15.000 km l\'anno sono ~446 € di differenza');
+  assert.strictEqual(vehConsumo(spec).famiglia, 'benzina');
+
+  // Fra due misti vince quello europeo: l'EPA e' lo standard americano e da' numeri diversi.
+  const conEpa = { groups: [{ rows: [
+    { k: 'Tipo carburante', v: 'Benzina' },
+    { k: 'Consumo nel ciclo misto (EPA)', v: '9 l/100 km' },
+    { k: 'Consumo nel ciclo misto (NEDC, WLTP equivalente)', v: '7 l/100 km' },
+  ] }] };
+  assert.strictEqual(vehConsumo(conEpa).consumo, 7, 'fra due cicli misti si prende quello europeo');
+
+  // Senza il misto si prende quello che c'e': meglio un ciclo dichiarato che nessun costo.
+  const senzaMisto = { groups: [{ rows: [
+    { k: 'Tipo carburante', v: 'Diesel' },
+    { k: 'Consumo nel ciclo urbano (NEDC)', v: '6 l/100 km' },
+  ] }] };
+  assert.strictEqual(vehConsumo(senzaMisto).consumo, 6);
+  assert.strictEqual(vehConsumo(senzaMisto).famiglia, 'gasolio');
+
+  // Nessuna riga di consumo: niente banda, mai una stima inventata.
+  assert.strictEqual(vehConsumo({ groups: [{ rows: [{ k: 'Tipo carburante', v: 'Benzina' }] }] }).consumo, null);
+});
+
+test('carburante: l\'etichetta dice da dove viene quel prezzo al litro', () => {
+  const { carbEtichettaPrezzi } = esegui([
+    ritaglia(APP, 'const carbEtichettaPrezzi = voce =>', '\nfunction vehCostoHTML'),
+  ], {}, ['carbEtichettaPrezzi']);
+  // Misurato sull'indice vero: benzina e gasolio sono self in tutte e 107 le province; GPL
+  // (107/107) e metano (99/99) no — 206 voci su 420 dove il prezzo e' self + servito.
+  assert.match(carbEtichettaPrezzi({ p: 1.75, n: 40, self: true }), /^Prezzi self$/);
+  assert.match(carbEtichettaPrezzi({ p: 0.72, n: 34, self: false }), /self e servito insieme/,
+    'dove il campione self e\' troppo magro il prezzo e\' una mediana mista: l\'etichetta lo deve dire');
+});
+
+test('unita\': il consumo di un rilevamento porta l\'unita\' che la FONTE dichiara', () => {
+  const { unitaCons, misNum } = esegui([
+    ritaglia(APP, 'const misNum = (v, u)', '\nfunction vehMisureHTML'),
+  ], {}, ['unitaCons', 'misNum']);
+  assert.strictEqual(unitaCons({ unitaConsumo: 'l/100km' }), 'l/100 km');
+  assert.strictEqual(unitaCons({ unitaConsumo: 'kWh/100km' }), 'kWh/100 km',
+    'su un\'elettrica il numero e\' in kWh: scrivergli accanto "l/100 km" lo trasforma in un altro dato');
+  assert.strictEqual(unitaCons(null), 'l/100 km');
+  assert.strictEqual(misNum(7.05, 'l/100 km'), '7,05 l/100 km');
+  assert.strictEqual(misNum(null, 'l/100 km'), null, 'un valore che non c\'e\' non diventa un\'unita\' sola');
+});
+
+test('IVA: si scorpora solo dove la fonte la dichiara, e altrove si dice perche\'', () => {
+  const { pricing, PRICE_DEFAULT } = require('../frontend/pricing.js');
+  const cfg = { ...PRICE_DEFAULT, iva: true };
+  const { vPricing, notaIva } = esegui([
+    ritaglia(APP, 'const ivaDichiarata = r =>', '\nconst rPricing = base'),
+  ], { pricing, priceCfgV: cfg }, ['vPricing', 'notaIva', 'ivaDichiarata', 'cfgPerRiga']);
+
+  // Misurato su una ricerca Golf 9-20k, 204 annunci: 5 dichiarano l'IVA esposta, 117
+  // dichiarano il regime del margine, 82 la fonte tace. Prima si scorporava a tutti e 204.
+  const dichiara = { prezzo: 12000, ivaEsposta: true };
+  const margine  = { prezzo: 12000, ivaEsposta: false };
+  const muto     = { prezzo: 12000 };
+
+  assert.ok(vPricing(dichiara.prezzo, null, dichiara).imponibile > 0, 'chi dichiara l\'IVA la scorpora');
+  assert.strictEqual(vPricing(margine.prezzo, null, margine).imponibile, null,
+    'in regime del margine non c\'e\' IVA da scorporare: la colonna resta vuota, non a zero');
+  assert.strictEqual(vPricing(muto.prezzo, null, muto).imponibile, null,
+    'dove la fonte tace non si inventa un imponibile');
+  // Il prezzo finale non dipende dall'IVA: deve restare identico per tutti e tre.
+  const f = r => vPricing(r.prezzo, null, r).finale;
+  assert.strictEqual(f(dichiara), f(margine));
+  assert.strictEqual(f(margine), f(muto));
+
+  assert.strictEqual(notaIva(dichiara), '', 'chi la dichiara non ha niente da spiegare');
+  assert.match(notaIva(margine), /margine/, 'la riga deve dire perche\' l\'IVA non c\'e\'');
+  assert.match(notaIva(muto), /non dichiarata/, '"non c\'e\'" e "non lo so" non sono la stessa cosa');
+});

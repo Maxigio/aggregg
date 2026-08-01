@@ -1135,6 +1135,9 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
 .pm-reset { align-self: flex-start; background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; font-size: 0.8rem; padding: 0; text-decoration: underline; }
 .row-riv, .row-iva { display: block; font-size: 0.7rem; font-weight: 600; color: var(--text-muted); line-height: 1.25; }
 .row-riv { color: var(--accent); }
+/* Perche' su questa riga l'IVA non c'e': non e' un importo, e' una spiegazione — quindi
+   non ha il peso di una cifra (vedi notaIva). */
+.row-iva-no { font-weight: 500; font-style: italic; opacity: 0.85; }
 
 /* ─── Responsive ─────────────────────────────────────────────────────────────── */
 @media (max-width: 860px) {
@@ -1526,6 +1529,9 @@ select.cp-unisci { max-width: 190px; }
 .veh-mis-d { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 3px; }
 .veh-mis-d span { font-size: 0.8rem; color: var(--text); font-family: var(--num); }
 .veh-mis-d em { font-style: normal; font-family: inherit; font-size: 0.72rem; color: var(--text-muted); margin-right: 4px; }
+/* Il numero come lo ha misurato la fonte, accanto a quello convertito: si legge se lo si
+   cerca, non compete con la cifra principale (vedi consumiHTML). */
+.veh-mis-alt { font-size: 0.72rem; color: var(--text-muted); }
 .veh-mis-fonte { font-size: 0.72rem; line-height: 1.45; color: var(--text-muted); border-top: 1px solid var(--line); margin-top: 8px; padding-top: 6px; }
 .veh-mis-fonte b { color: var(--text); font-weight: 600; }
 .veh-mis-lista { display: flex; flex-wrap: wrap; gap: 6px; }

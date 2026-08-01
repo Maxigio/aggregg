@@ -126,17 +126,19 @@ prendono **dall'annuncio**, la liquidità **solo all'apertura** del gruppo; il c
 chiedono **al clic** (misurato: una ricerca MT-07 faceva partire 39 richieste solo scorrendo,
 ora 0); **due preferenze provincia** separate, carburante e passaggio.
 
-### Campagna 7 — il valore con la sua unità (~8)
-- `backend/scrapers/autoit-rilevamenti.js:160` consumi delle elettriche in `l/100 km`
-  (il campo si chiama `l100Medio` e `unitaConsumo` dice la verità, ma nessuno lo legge)
-- `frontend/app.js:4161` consumi prove moto in km/l stampati nudi sotto un pannello che per
-  le auto scrive l/100 km
-- `frontend/app.js:4336` "Prezzi self" su 206 voci di 420 (tutto GPL e metano): decisione
-  presa → **l'etichetta dice il vero**, riga per riga, senza toccare i calcoli
-- `frontend/app.js:4307` costo carburante annuo calcolato sul primo consumo che capita, senza
-  guardare a quale ciclo appartiene
-- `frontend/pricing.js:23` scorporo IVA anche sugli annunci in regime del margine → decisione
-  presa: **solo dove la fonte dichiara l'IVA esposta**
+### Campagna 7 — il valore con la sua unità — **CHIUSA**
+Misurato e chiuso: costo carburante sul **ciclo misto** (era la prima riga, cioè l'urbano —
+sulla Golf R 7,05 invece di 8,75 l/100 km); consumi delle prove moto **in l/100 km** col km/l
+della fonte a fianco, e accelerazione/ripresa in `s`, frenata in `m`; **"Prezzi self"** dice
+il vero riga per riga (206 voci su 420 sono self+servito: tutto GPL e metano); **scorporo IVA
+solo dove la fonte lo dichiara**, altrove colonne vuote con la nota del perché.
+
+Due cose emerse misurando, da non riaprire a vuoto:
+- i **consumi delle elettriche in `l/100 km`** non si vedono: su 252 rilevamenti auto.it, 41
+  elettrici, 11 dichiarati in kWh, e **tutti col consumo a `null`** → la riga sparisce da sé.
+  L'etichetta ora legge `unitaConsumo`, così non mentirà il giorno che la fonte pubblica.
+- `m.autonomia` delle prove inSella (km, misurata) arriva dalla fonte e **non è mai stata
+  mostrata**: è una voce da aggiungere, non un'unità da correggere.
 
 ### Campagna 6 — resta un punto
 - `backend/prove-route.js:33` e gemelli: i limiti contano anche le richieste **già rifiutate**

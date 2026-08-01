@@ -134,7 +134,32 @@ let priceCfgR = loadPriceCfg('amr_price_r');   // ricambi
 // (Con un solo importo globale, righe con potenza e provincia diverse mostravano un utile
 // che non esisteva: fino a centinaia di euro di differenza tra Bolzano e Napoli.)
 const passDi = r => (r && r._pass && r._pass.d && r._pass.d.ok ? r._pass.d.totaleNoto : null);
-const vPricing = (base, pass) => pricing(base, pass == null ? priceCfgV : Object.assign({}, priceCfgV, { passaggio: pass }));
+/**
+ * LO SCORPORO IVA SOLO DOVE L'IVA C'E' DAVVERO.
+ *
+ * "Scorporo IVA 22%" e' un interruttore globale e si applicava a OGNI riga. Ma un'auto in
+ * regime del margine l'IVA esposta non ce l'ha: scorporarla vuol dire scrivere un imponibile
+ * e una quota IVA che non esistono. Misurato su una ricerca Golf 9-20k, 204 annunci: 5
+ * dichiarano l'IVA esposta, 117 dichiarano il MARGINE, 82 la fonte non dice niente (Subito,
+ * che il campo non lo manda). Sui 117 erano circa 1.651 € di IVA inventata per annuncio.
+ *
+ * Regola del proprietario: si scorpora solo dove la fonte DICHIARA l'IVA esposta. Dove tace,
+ * le colonne restano vuote — vuote, non zero: "non lo so" e "non c'e'" non sono la stessa cosa.
+ */
+const ivaDichiarata = r => !!(r && r.ivaEsposta === true);
+const cfgPerRiga = r => (priceCfgV.iva && !ivaDichiarata(r) ? Object.assign({}, priceCfgV, { iva: false }) : priceCfgV);
+// `r` assente (etichette del cursore prezzi, minimo di un gruppo): li' si legge solo `finale`,
+// che dall'IVA non dipende — ma lo scorporo si spegne lo stesso, per non dare mai un
+// imponibile a chi non ha passato un annuncio.
+const vPricing = (base, pass, r) => {
+  const cfg = cfgPerRiga(r);
+  return pricing(base, pass == null ? cfg : Object.assign({}, cfg, { passaggio: pass }));
+};
+/** Perche' le colonne IVA di questa riga sono vuote, quando l'interruttore e' acceso. */
+function notaIva(r) {
+  if (!priceCfgV.iva || ivaDichiarata(r)) return '';
+  return r && r.ivaEsposta === false ? 'regime del margine: niente IVA da scorporare' : 'IVA non dichiarata dalla fonte';
+}
 const rPricing = base => pricing(base, priceCfgR);
 const eurRound = n => '€ ' + Math.round(n).toLocaleString('it-IT');
 
@@ -186,7 +211,9 @@ function priceExtraValues(pr, cfg, conPass) {   // pr = pricing() | null ; ritor
   return v;
 }
 // Sotto-note riga: "→ riv. €X" e "imp. €Y + IVA €Z" (vuoto se non attivi). fmt = formatter €.
-function priceRowExtraHTML(pr, fmt) {
+// `nota` = perche' l'IVA non c'e' su questa riga, quando l'interruttore e' acceso: senza,
+// l'operatore vedeva la sotto-nota su una riga e non sull'altra senza sapere il motivo.
+function priceRowExtraHTML(pr, fmt, nota) {
   if (!pr) return '';
   fmt = fmt || eurRound;
   let s = '';
@@ -194,6 +221,7 @@ function priceRowExtraHTML(pr, fmt) {
   // Con il costo del passaggio impostato si mostra il margine NETTO: il lordo illude.
   if (pr.margineNetto != null && pr.passaggio) s += `<span class="row-marg">margine netto ${fmt(pr.margineNetto)}</span>`;
   if (pr.imponibile != null) s += `<span class="row-iva">imp. ${fmt(pr.imponibile)} + IVA ${fmt(pr.ivaQuota)}</span>`;
+  else if (nota) s += `<span class="row-iva row-iva-no">${escapeHtml(nota)}</span>`;
   return s;
 }
 // Menu prezzo veicoli (toolbar statica): render + wiring. Per i ricambi è dentro rcToolbarHTML.
@@ -2434,7 +2462,7 @@ function dichBadgeHTML(item) {
 }
 
 function rowHTML(item, bestSet) {
-  const pr = vPricing(item.prezzo, passDi(item));
+  const pr = vPricing(item.prezzo, passDi(item), item);
   // "su richiesta" non e' "n/d": il venditore il prezzo ce l'ha, ha scelto di non scriverlo.
   const prezzoStr = pr ? eurRound(pr.finale) : (item.prezzoSuRichiesta ? 'su richiesta' : 'n/d');
   const fonteLabel = FONTE_LABEL[item.fonte] || item.fonte;
@@ -2483,7 +2511,7 @@ function rowHTML(item, bestSet) {
       case 'km':     return `<div class="row-cell num muted">${item.km != null ? item.km.toLocaleString('it-IT') : '—'}</div>`;
       case 'carb':   return `<div class="row-cell muted">${item.carburante ? escapeHtml(item.carburante) : '—'}</div>`;
       case 'cv':     return `<div class="row-cell num muted">${item.potenzaCv != null ? item.potenzaCv : '—'}</div>`;
-      case 'prezzo': return `<div class="row-prezzo">${prezzoStr}<span class="row-extra">${priceRowExtraHTML(pr)}</span></div>`;
+      case 'prezzo': return `<div class="row-prezzo">${prezzoStr}<span class="row-extra">${priceRowExtraHTML(pr, null, notaIva(item))}</span></div>`;
       case 'fonte':  return `<div class="row-fonte"><span class="tag ${fonteTag}">${escapeHtml(fonteLabel)}</span></div>`;
       case 'azioni': return `<div class="row-actions">
           <button class="row-act btn-info" title="Dettagli e foto">${icon('info')}</button>
@@ -2515,7 +2543,7 @@ function vistaChipsRender() {
  * vista e' attiva — e non ci sono due strade da tenere allineate.
  */
 function cardHTML(item, bestSet) {
-  const pr = vPricing(item.prezzo, passDi(item));
+  const pr = vPricing(item.prezzo, passDi(item), item);
   const urlSafe = /^https?:\/\//i.test(item.url) ? escapeHtml(item.url) : '#';
   const imgs = Array.isArray(item.immagini) ? item.immagini : [];
   const foto = imgs.length     // vedi rowHTML: niente luccichio, la foto piena arriva al clic
@@ -2600,7 +2628,7 @@ function toggleDetail(rowEl) {
 }
 function detailSpecsHTML(r) {
   const base = [];
-  if (r.prezzo != null) { const _pr = vPricing(r.prezzo, passDi(r)); base.push(['Prezzo', _pr ? eurRound(_pr.finale) : `€ ${r.prezzo.toLocaleString('it-IT')}`]); }
+  if (r.prezzo != null) { const _pr = vPricing(r.prezzo, passDi(r), r); base.push(['Prezzo', _pr ? eurRound(_pr.finale) : `€ ${r.prezzo.toLocaleString('it-IT')}`]); }
   // Il MESE quando la fonte lo dice (Subito lo dice sempre): fra gennaio e dicembre
   // dello stesso anno ballano dodici mesi di eta'.
   if (r.anno != null)   base.push(['Immatricolazione', r.mese ? `${String(r.mese).padStart(2, '0')}/${r.anno}` : String(r.anno)]);
@@ -2936,10 +2964,10 @@ async function calcolaPassaggio(r, panel) {
 // pannello da cui e' stato chiesto il calcolo.
 function aggiornaNoteRiga(r) {
   if (!r || !r.url) return;
-  const pr = vPricing(r.prezzo, passDi(r));
+  const pr = vPricing(r.prezzo, passDi(r), r);
   resultsGrid.querySelectorAll(`[data-url="${CSS.escape(r.url)}"]`).forEach(el => {
     if (el.dataset.detail) return;
-    el.querySelectorAll('.row-extra').forEach(n => { n.innerHTML = priceRowExtraHTML(pr); });
+    el.querySelectorAll('.row-extra').forEach(n => { n.innerHTML = priceRowExtraHTML(pr, null, notaIva(r)); });
   });
 }
 
@@ -4464,6 +4492,8 @@ async function vehProvaCarica(slug) {
 }
 
 const misNum = (v, u) => (v == null || v === '' ? null : String(v).replace('.', ',') + (u ? ' ' + u : ''));
+/** L'unita' dei consumi di un rilevamento auto.it: la dichiara il record, non la scriviamo noi. */
+const unitaCons = v => (v && /kwh/i.test(String(v.unitaConsumo || '')) ? 'kWh/100 km' : 'l/100 km');
 
 function vehMisureHTML() {
   if (!vehData) return '';
@@ -4494,9 +4524,14 @@ function vehMisureHTML() {
           ['0-100', v.acc0_100 || null],
           ['ripresa 80-120', v.ripresa80_120 || null],
           ['frenata 100-0', misNum(v.frenata100_0, 'm')],
-          ['consumo medio', misNum(v.l100Medio, 'l/100 km')],
-          ['città', misNum(v.l100Citta, 'l/100 km')],
-          ['autostrada', misNum(v.l100Autostrada, 'l/100 km')],
+          // L'UNITA' LA DICHIARA LA FONTE. `unitaConsumo` viaggia dal 2026 accanto ai numeri
+          // (vale 'kWh/100km' sulle elettriche) e qui era scritta a mano: oggi non si vede,
+          // perche' i record elettrici arrivano tutti col consumo a null e la riga sparisce
+          // da sola — misurato su 252 rilevamenti, 41 elettrici, 11 dichiarati in kWh, zero
+          // con un numero. Basta che la fonte cominci a pubblicarlo e l'etichetta mentirebbe.
+          ['consumo medio', misNum(v.l100Medio, unitaCons(v))],
+          ['città', misNum(v.l100Citta, unitaCons(v))],
+          ['autostrada', misNum(v.l100Autostrada, unitaCons(v))],
         ].filter(([, x]) => x);
         return `<div class="veh-mis-r"><div class="veh-mis-h">${escapeHtml(v.nome || '')}`
           + `<span class="veh-mis-m">${[v.anno, v.prova].filter(Boolean).join(' · ')}</span></div>`
@@ -4519,12 +4554,39 @@ function vehProvaHTML() {
   const m = d.misure || {};
   const pr = m.potenzaRuota || {};
   const gruppi = [];
-  const coppie = o => Object.entries(o || {}).filter(([, v]) => v != null && v !== '')
-    .map(([k, v]) => `<span><em>${escapeHtml(k)}</em>${escapeHtml(String(v).replace('.', ','))}</span>`).join('');
+  /**
+   * UN NUMERO NON SI STAMPA SENZA LA SUA UNITA'.
+   *
+   * Qui usciva il numero nudo. Le etichette di inSella dicono la CONDIZIONE della misura
+   * ("Da 100 km/h", "A 120 km/h", "0-400 metri"), non cosa si sta misurando: "Da 100 km/h
+   * 39,6" sono metri di frenata, "A 120 km/h 198,9" sono chilometri di autonomia, "0-400
+   * metri 10,6" sono secondi. Tre grandezze diverse, affiancate, tutte senza unita'.
+   * L'unita' la dichiara la fonte nella riga-titolo della sezione ("Consumi | km/l"), che il
+   * parser scarta: finche' non la porta fuori, sta qui — una per sezione, verificata sui dati.
+   */
+  const coppie = (o, u) => Object.entries(o || {}).filter(([, v]) => v != null && v !== '')
+    .map(([k, v]) => `<span><em>${escapeHtml(k)}</em>${escapeHtml(misNum(v, u) || '')}</span>`).join('');
+  /**
+   * I CONSUMI COME LI SCRIVONO LE AUTO. inSella li misura in km/l, e il pannello del costo
+   * carburante — dieci centimetri piu' su, per un'auto — scrive l/100 km: sono grandezze
+   * INVERSE, e affiancate senza unita' un 16 sembrava peggio di un 6,25 quando e' meglio.
+   * La conversione il backend la calcola gia' (`consumiL100`) e non la mostrava nessuno.
+   * Il numero della fonte resta a fianco: e' quello che inSella ha misurato davvero.
+   */
+  const consumiHTML = () => Object.entries(m.consumi || {}).filter(([, v]) => v != null && v !== '')
+    .map(([k, v]) => {
+      const l = (m.consumiL100 || {})[k];
+      const corpo = l != null
+        ? `${escapeHtml(misNum(l, 'l/100 km'))} <small class="veh-mis-alt">(${escapeHtml(misNum(v, 'km/l'))})</small>`
+        : escapeHtml(misNum(v, 'km/l') || '');
+      return `<span><em>${escapeHtml(k)}</em>${corpo}</span>`;
+    }).join('');
   const misurate = [
     m.velocitaMax ? `<span><em>velocità max</em>${misNum(m.velocitaMax, 'km/h')}</span>` : '',
     pr.cv ? `<span><em>potenza alla ruota</em>${misNum(pr.cv, 'CV')}${pr.giri ? ' a ' + pr.giri + ' giri' : ''}</span>` : '',
-    coppie(m.acc), coppie(m.ripresa), coppie(m.frenata), coppie(m.consumi),
+    // `m.autonomia` (km, misurata) arriva dalla fonte e non e' mai stata mostrata: e' una voce
+    // da aggiungere, non un'unita' da correggere, e non si infila di straforo in questa passata.
+    coppie(m.acc, 's'), coppie(m.ripresa, 's'), coppie(m.frenata, 'm'), consumiHTML(),
   ].filter(Boolean).join('');
   if (misurate) gruppi.push(`<div class="veh-mis-b"><div class="veh-mis-bh">Misurato al banco e in pista</div><div class="veh-mis-d">${misurate}</div></div>`);
   if (d.dichiarati && Object.keys(d.dichiarati).length) {
@@ -4595,16 +4657,33 @@ async function loadCarburanti() {
   renderVehBody();
 }
 
-// spec → { consumo, famiglia } leggendo le righe GREZZE (auto-data.net e Moto.it insieme)
+/**
+ * spec → { consumo, famiglia } leggendo le righe GREZZE (auto-data.net e Moto.it insieme).
+ *
+ * IL CICLO MISTO, non la prima riga che capita. Le schede portano i tre cicli, e nell'ordine
+ * in cui arrivano il primo e' sempre l'URBANO: misurato su Golf VII, 4 schede su 6 hanno
+ * tutti e tre i cicli, e sulla R 2.0 TSI il conto partiva da 8,6-8,9 l/100 km invece dei
+ * 6,9-7,2 del misto. A 15.000 km l'anno sono circa 446 € di differenza, scritti sotto
+ * l'etichetta "consumo dichiarato".
+ *
+ * Fra due misti si preferisce quello europeo: certe schede portano anche il ciclo EPA, che e'
+ * lo standard americano e da' numeri piu' alti. Se il misto non c'e' si prende quello che
+ * c'e' — meglio un ciclo dichiarato che nessun costo.
+ */
 function vehConsumo(spec) {
   const righe = (spec.groups || []).flatMap(g => g.rows || []);
-  let consumo = null, alim = '';
+  let alim = '';
+  const cand = [];
   for (const r of righe) {
-    if (consumo == null && /consumo/i.test(r.k)) { const v = carbConsumoDa(r.v); if (v) consumo = v; }
     if (!alim && /tipo carburante|alimentazione/i.test(r.k)) alim = r.v;
+    if (!/consumo/i.test(r.k)) continue;
+    const v = carbConsumoDa(r.v);
+    if (!v) continue;
+    // "misto" (NEDC/WLTP italiano) e "combinato" (WLTP) sono lo stesso ciclo, due traduzioni.
+    cand.push({ v, rank: (/mist|combinat/i.test(r.k) ? 0 : 2) + (/epa/i.test(r.k) ? 1 : 0) });
   }
-  if (!alim && vehData && vehData.head) alim = '';
-  return { consumo, famiglia: carbFamigliaDa(alim) };
+  cand.sort((a, b) => a.rank - b.rank);   // stabile: a parita' vince chi arriva prima
+  return { consumo: cand.length ? cand[0].v : null, famiglia: carbFamigliaDa(alim) };
 }
 // stesse regole del backend (backend/carburanti.js): tenute uguali di proposito
 function carbConsumoDa(v) {
@@ -4663,6 +4742,11 @@ function vehCostoAggiorna() {
   const eur = n => n.toLocaleString('it-IT', { maximumFractionDigits: 0 });
   const det = box.querySelector('.veh-costo-det');
   if (det) det.innerHTML = carbDetHTML(per100, consumo, voce, kmSt);
+  // Anche l'etichetta dei prezzi segue la provincia: `self` e' una proprieta' della singola
+  // voce, non dell'indice. Aggiornando solo le cifre, la riga sotto poteva restare a
+  // descrivere il campione della provincia di prima.
+  const fonte = box.querySelector('.veh-costo-fonte');
+  if (fonte) fonte.innerHTML = `${carbEtichettaPrezzi(voce)} ${carbIdx.aggiornato ? 'del ' + carbIdx.aggiornato : ''} — ${escapeHtml(carbIdx.fonte)}. Stima: consumo dichiarato, non reale.`;
   /**
    * LA CIFRA GROSSA STA NELL'INTESTAZIONE DEL BLOCCO, non piu' dentro il corpo.
    *
@@ -4676,6 +4760,18 @@ function vehCostoAggiorna() {
   const meta = mini && mini.querySelector('.mini-meta');
   if (meta) meta.innerHTML = `${eur(anno)} €<em>all'anno</em>`;
 }
+
+/**
+ * DA DOVE VIENE QUEL PREZZO AL LITRO, riga per riga.
+ *
+ * La banda chiudeva con "Prezzi self" per tutti. Misurato sull'indice vero: 206 voci su 420
+ * non sono self, e sono esattamente tutto il GPL (107 province su 107) e tutto il metano
+ * (99 su 99) — li' gli impianti self sono troppo pochi perche' una mediana ci stia in piedi,
+ * e il backend usa self e servito insieme. Lo dichiara gia' (`voce.self`), non lo leggeva
+ * nessuno. I calcoli non cambiano: cambia cosa c'e' scritto sotto il numero.
+ */
+const carbEtichettaPrezzi = voce =>
+  (voce && voce.self === false) ? 'Prezzi self e servito insieme — pochi impianti self' : 'Prezzi self';
 
 function vehCostoHTML(spec) {
   const { consumo, famiglia } = vehConsumo(spec);
@@ -4699,7 +4795,7 @@ function vehCostoHTML(spec) {
       <select class="veh-carb-prov" aria-label="provincia per il prezzo del carburante">${provOpts}</select>
       <label class="veh-carb-kmw"><input type="number" class="veh-carb-km" value="${kmSt.difetto ? '' : km}" min="${KM_MIN}" max="${KM_MAX}" step="any" inputmode="numeric" aria-label="chilometri all'anno"><span>km/anno</span></label>
     </div>
-    <div class="veh-costo-fonte">Prezzi self ${carbIdx.aggiornato ? 'del ' + carbIdx.aggiornato : ''} — ${escapeHtml(carbIdx.fonte)}. Stima: consumo dichiarato, non reale.</div>
+    <div class="veh-costo-fonte">${carbEtichettaPrezzi(voce)} ${carbIdx.aggiornato ? 'del ' + carbIdx.aggiornato : ''} — ${escapeHtml(carbIdx.fonte)}. Stima: consumo dichiarato, non reale.</div>
   </div>`);
 }
 
@@ -5303,7 +5399,7 @@ function exportCsv(results) {
   // conto non ha modo di accorgersene. Qui non c'e' ingombro: e' una colonna in fondo.
   const cols = ['Fonte', 'Titolo', 'Prezzo (€)', 'Anno', 'KM', 'Carburante', 'Provincia', ...priceExtraHeaders(cfg, conPass), 'Corrispondenza', 'URL'];
   const rows = results.map(r => {
-    const pr = vPricing(r.prezzo, passDi(r));
+    const pr = vPricing(r.prezzo, passDi(r), r);
     const d = DICHIARAZIONE[r.dichiarazione];
     return [r.fonte, r.titolo, pr ? Math.round(pr.finale) : '', r.anno != null ? r.anno : '', r.km != null ? r.km : '', r.carburante || '', r.provincia || '', ...priceExtraValues(pr, cfg, conPass), d ? d.et : 'corrisponde', r.url].map(cell).join(',');
   });
@@ -5339,7 +5435,7 @@ function exportPdf(results) {
   const conConti = extraH.length > 0 || cfg.comm || cfg.spese || cfg.iva;
   const colonne = ['Fonte', 'Veicolo', conConti ? 'Prezzo finale' : 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia', ...extraH, 'Corrispondenza'];
   const righe = results.map(r => {
-    const pr = vPricing(r.prezzo, passDi(r));
+    const pr = vPricing(r.prezzo, passDi(r), r);
     const d = DICHIARAZIONE[r.dichiarazione];
     return [
       ' ',                                   // la cella della fonte la disegna il server (chip)
