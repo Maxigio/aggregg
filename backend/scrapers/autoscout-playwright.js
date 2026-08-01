@@ -310,16 +310,33 @@ async function scrapeAutoscout(params) {
   // Ma se l'esito sarebbe lo ZERO e almeno una pagina era un blocco, quello zero e' un
   // fantasma: si dichiara il blocco invece di spacciarlo per mercato vuoto.
   let sospetto = false;
+  let cadute = 0;
   const pages = await Promise.all(urls.map(u => fetchPage(browser, u).catch(err => {
     if (err instanceof As24BlockedError) sospetto = true;
+    cadute++;
     console.warn(`[AS24-PW] Errore pagina ${u}: ${err.message}`);
     return [];
   })));
 
   const risultati = dedup(pages);
   if (!risultati.length && sospetto) throw new As24BlockedError('soft_block');
-  console.log(`[AS24-PW] Totale: ${risultati.length} annunci (${pages.map(p => p.length).join('+')})`);
-  return risultati;
+  console.log(`[AS24-PW] Totale: ${risultati.length} annunci (${pages.map(p => p.length).join('+')})${cadute ? ` [${cadute}/${urls.length} pagine non lette]` : ''}`);
+  /**
+   * TENERE LE PAGINE SUPERSTITI E' GIUSTO, NON DIRLO NO.
+   *
+   * Con una pagina caduta su tre l'esito usciva come un array nudo: `sciogli` lo normalizzava
+   * con `parziale: null`, `runSource` lo marcava 'ok' e `cacheable()` — che il campo
+   * `parziale` lo legge apposta — non trovava niente da obiettare e congelava tre minuti una
+   * risposta a cui mancavano due terzi degli annunci. A schermo: pastiglia verde, nessun
+   * avviso. Il meccanismo per dichiararlo esisteva gia' nello stesso server, usato dalla
+   * union multi-grafia: qui bastava usarlo.
+   */
+  if (!cadute) return risultati;
+  return {
+    items: risultati,
+    total: null,
+    parziale: `${cadute} pagine su ${urls.length} non si sono lasciate leggere da Autoscout: l'elenco e' parziale`,
+  };
 }
 
 // Esposto per pre-warm al boot del server.

@@ -106,3 +106,41 @@ test('parco: card presenti ma nessuna leggibile → errore dichiarato, non parco
     await assert.rejects(() => v.parco('prova', { maxPagine: 2 }), /non si leggono/);
   } finally { motoit._get = orig; }
 });
+
+// ─── Una vetrina vista a meta' non e' una vetrina completa ────────────────────
+// Fino a ieri i due `break` dalla pagina 2 in poi — status non-200 e card illeggibili —
+// uscivano senza toccare `troncato`, che diventava vero solo raggiungendo il tetto delle 40
+// pagine. Il parco del concessionario tornava dimezzato e dichiarato completo, e il pannello
+// Competitor ci calcolava sopra prezzo minimo, mediana, giacenze e arrivi recenti.
+const cardOk = id => '<div class="dlr-card">' + `<a data-target="#annuncio_${id}"></a>`
+  + '<span class="dlr-card__info__title__brand">Yamaha</span>'
+  + '<span class="dlr-card__info__title__model">MT-07</span>'
+  + '<span class="dlr-card__extrainfo__price">5.000 €</span>'
+  + '<span class="dlr-card__meta">10.000 km del 2019</span></div>';
+const paginaPiena = base => `<html><body>${Array.from({ length: 12 }, (_, i) => cardOk(base + i)).join('')}</body></html>`;
+
+test('parco: una pagina non-200 a meta\' dichiara il parco TRONCATO', async () => {
+  const motoit = require('../backend/scrapers/motoit');
+  const orig = motoit._get;
+  motoit._get = async url => (/pagina-3/.test(url) ? { status: 503, body: '' } : { status: 200, body: paginaPiena(/pagina-2/.test(url) ? 2000 : 1000) });
+  try {
+    const r = await v.parco('prova', { maxPagine: 5 });
+    assert.strictEqual(r.items.length, 24, 'le due pagine buone si tengono');
+    assert.strictEqual(r.troncato, true, 'senza questo il parco esce dichiarato completo e le mediane si calcolano su meta\' piazzale');
+  } finally { motoit._get = orig; }
+});
+
+test('parco: card illeggibili a pagina >1 → troncato E contate', async () => {
+  const motoit = require('../backend/scrapers/motoit');
+  const orig = motoit._get;
+  // Pagina 2 piena di card che non espongono l'id: markup cambiato, non piazzale finito.
+  motoit._get = async url => (/pagina-2/.test(url)
+    ? { status: 200, body: '<html><body>' + '<div class="dlr-card"></div>'.repeat(12) + '</body></html>' }
+    : { status: 200, body: paginaPiena(1000) });
+  try {
+    const r = await v.parco('prova', { maxPagine: 5 });
+    assert.strictEqual(r.items.length, 12);
+    assert.strictEqual(r.troncato, true);
+    assert.strictEqual(r.illeggibili, 12, 'prima l\'uscita saltava anche la riga che le conta: sparivano due volte');
+  } finally { motoit._get = orig; }
+});

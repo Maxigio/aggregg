@@ -18,6 +18,9 @@ const ALLOWED = new Set([
   'www.moto.it', 'moto.it',
 ]);
 const TTL_MS    = 12 * 60 * 60 * 1000;
+// La vita breve per il risultato SOSPETTO: era l'unica cache del repo senza. Stesso valore
+// che usano motornet e autoit-rilevamenti, e stesso motivo di `ttlCorto` in cache-disco.
+const VUOTO_TTL_MS = 15 * 60 * 1000;
 const MAX_CACHE = 500;
 const cache    = new Map();   // url → { ts, data }
 const inflight = new Map();   // url → Promise
@@ -234,11 +237,15 @@ function fonteFromUrl(u) {
   return null;
 }
 
+// Il parser ha riconosciuto QUALCOSA? Un oggetto con tutti i campi nulli e le liste vuote
+// significa che la pagina non si e' lasciata leggere: non che l'annuncio non dichiari niente.
+const senzaNiente = d => !d || !Object.values(d).some(v => v != null && !(Array.isArray(v) && !v.length));
+
 /** Spec extra per un annuncio, o null se host non valido/parser assente. */
 async function getDetail(url) {
   if (!hostOk(url)) throw new Error('host not allowed');
   const hit = cache.get(url);
-  if (hit && Date.now() - hit.ts < TTL_MS) { cache.delete(url); cache.set(url, hit); return hit.data; }  // LRU touch
+  if (hit && Date.now() - hit.ts < (hit.ttl || TTL_MS)) { cache.delete(url); cache.set(url, hit); return hit.data; }  // LRU touch
   if (inflight.has(url)) return inflight.get(url);
 
   const p = (async () => {
@@ -247,7 +254,19 @@ async function getDetail(url) {
       if (!parser) return null;
       const html = await fetchText(url);
       const data = parser(html) || { ...EMPTY };
-      cache.set(url, { ts: Date.now(), data });
+      /**
+       * UNA PAGINA CHE NON DICE NIENTE NON E' UN ANNUNCIO SENZA DATI.
+       *
+       * I parser non lanciano mai: se il blocco "Tipo offerta" non c'e' — pagina di
+       * transizione, manutenzione, o il giorno in cui la fonte cambia impaginazione — tornano
+       * l'oggetto con tutti i campi a null, e nessuno guardava dentro. Quel vuoto finiva in
+       * cache per DODICI ORE, con il client che scriveva `_enriched = true`: da li' in poi,
+       * per mezza giornata, quell'annuncio risultava "gia' arricchito, non ha altro da dire".
+       * Ora il vuoto vale poco e si riprova presto, come fanno tutte le altre cache del repo.
+       */
+      const nulla = senzaNiente(data);
+      cache.set(url, { ts: Date.now(), data, ttl: nulla ? VUOTO_TTL_MS : TTL_MS });
+      if (nulla) console.warn(`[detail] ${String(url).slice(0, 70)}: pagina letta ma nessun campo riconosciuto (markup cambiato?) — cache breve`);
       if (cache.size > MAX_CACHE) cache.delete(cache.keys().next().value);  // evict oldest
       return data;
     } catch (e) {
@@ -261,4 +280,4 @@ async function getDetail(url) {
   return p;
 }
 
-module.exports = { getDetail, _hostOk: hostOk, _motoitImages: motoitImages, _parseMotoit: parseMotoit };
+module.exports = { getDetail, _hostOk: hostOk, _motoitImages: motoitImages, _parseMotoit: parseMotoit, _senzaNiente: senzaNiente, _VUOTO_TTL_MS: VUOTO_TTL_MS };

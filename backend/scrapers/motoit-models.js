@@ -157,8 +157,14 @@ async function getBrandModels(brandSlug) {
   }).catch(() => []);
 }
 
-/** Versioni di un modello: [{name, code}]. `code` (opaco) = il param `bike=`. */
-async function getModelBikes(brandSlug, modelSlug) {
+/**
+ * Versioni di un modello: [{name, code}]. `code` (opaco) = il param `bike=`.
+ *
+ * `opts.rilancia` serve a chi deve DISTINGUERE "questo modello non ha versioni a catalogo"
+ * da "non sono riuscito a chiederlo". Senza, le due cose arrivano nella stessa forma — un
+ * elenco vuoto — e a valle un timeout diventava "la versione che hai scritto non esiste".
+ */
+async function getModelBikes(brandSlug, modelSlug, opts = {}) {
   if (!brandSlug || !modelSlug) return [];
   // Dal catalogo, se quel modello ce l'ha con le versioni dentro. Gli anni non si
   // ricavano piu' dal nome a forza di espressioni regolari: il catalogo li ha gia'.
@@ -172,7 +178,7 @@ async function getModelBikes(brandSlug, modelSlug) {
     })).filter(x => x.name);
   }
   const key = `b:${brandSlug}|${modelSlug}`;
-  return cached(bikesCache, key, TTL_MS, async () => {
+  const p = cached(bikesCache, key, TTL_MS, async () => {
     try {
       const j = await fetchJson(`${API}/bikes/${encodeURIComponent(`${brandSlug}|${modelSlug}`)}/Used`);
       const data = (j && j.result === 'OK' && Array.isArray(j.data)) ? j.data : [];
@@ -185,7 +191,8 @@ async function getModelBikes(brandSlug, modelSlug) {
       console.warn(`[motoit-models] bikes ${brandSlug}|${modelSlug}: ${e.message}`);
       throw e;
     }
-  }).catch(() => []);
+  });
+  return opts.rilancia ? p : p.catch(() => []);
 }
 
 /**

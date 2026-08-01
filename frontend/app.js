@@ -1900,8 +1900,32 @@ async function caricaAltri() {
     if (!res.ok) { toast(data.error || 'Non riuscito'); return; }
     const visti = new Set(currentResults.map(r => r.url));
     const nuovi = (data.risultati || []).filter(r => r && r.url && !visti.has(r.url));
-    fettaPresa++;
-    if (!nuovi.length) { lastSources = fondiTotali(data.sources); toast('Non ci sono altri annunci'); return; }
+    /**
+     * CHI NON HA RISPOSTO IN QUESTA FETTA.
+     *
+     * Serve guardarlo QUI perche' `fondiTotali` tiene di proposito lo stato 'ok' della fetta
+     * precedente — senza, un timeout sulla fetta 2 cancellava la pill verde della fetta 1 e
+     * faceva sparire il bottone. Ma proprio per quella scelta, se non si legge adesso
+     * `data.sources`, la caduta non la vede piu' nessuno: restava un toast che diceva «Non ci
+     * sono altri annunci», cioe' una frase sul MERCATO, dopo aver chiesto e non ricevuto.
+     */
+    const cadute = ['subito', 'autoscout', 'moto'].filter(f => {
+      const s = (data.sources || {})[f];
+      return s && s.status && !['ok', 'empty', 'skipped'].includes(s.status);
+    });
+    const nomiCadute = cadute.map(f => FONTE_LABEL[f] || f).join(' e ');
+    // LA FETTA SI CONSUMA SOLO SE E' STATA CONSEGNATA. Con `fettaPresa++` incondizionato, la
+    // finestra che la fonte caduta non ha portato non veniva piu' chiesta: il clic dopo saltava
+    // direttamente a quella successiva, e quei ~100 annunci erano persi per tutta la sessione.
+    if (!cadute.length) fettaPresa++;
+    if (!nuovi.length) {
+      lastSources = fondiTotali(data.sources, cadute);
+      renderSourceStatus();          // mancava del tutto su questo ramo
+      toast(cadute.length
+        ? `${nomiCadute} non ${cadute.length === 1 ? 'ha' : 'hanno'} risposto — premi ancora per riprovare`
+        : 'Non ci sono altri annunci');
+      return;
+    }
     // IL CURSORE VA RIFATTO. Il suo BINARIO (non solo le maniglie) era calcolato sui prezzi
     // della PRIMA fetta soltanto, e renderResults filtra su quel binario: ogni annuncio nuovo
     // fuori da quella finestra spariva in silenzio, e l'utente non poteva nemmeno allargarlo.
@@ -1909,12 +1933,16 @@ async function caricaAltri() {
     // e' per costruzione tutta sopra il massimo: 100 annunci scaricati, uno solo a schermo.
     const stretta = manigliePrezzoStrette();
     currentResults = currentResults.concat(nuovi);
-    lastSources = fondiTotali(data.sources);
+    lastSources = fondiTotali(data.sources, cadute);
     renderSourceStatus();
     initPrezzoSlider(currentResults, stretta);
     if (!prezzoSliderInstance) renderResults(currentResults);   // niente cursore → disegna qui
     const fuori = stretta ? nuovi.filter(r => r.prezzo != null && (r.prezzo < stretta[0] || r.prezzo > stretta[1])).length : 0;
-    toast(fuori ? `Aggiunti ${nuovi.length} annunci · ${fuori} fuori dal filtro prezzo` : `Aggiunti ${nuovi.length} annunci`);
+    // Una fetta puo' portare annunci nuovi E avere una fonte caduta: si dicono tutte e due.
+    toast([`Aggiunti ${nuovi.length} annunci`,
+      fuori ? `${fuori} fuori dal filtro prezzo` : null,
+      cadute.length ? `${nomiCadute} non ${cadute.length === 1 ? 'ha' : 'hanno'} risposto` : null,
+    ].filter(Boolean).join(' · '));
   } catch (_) {
     toast('Impossibile contattare il server');
   } finally { caricandoAltri = false; renderAltriBtn(); }
@@ -1922,8 +1950,11 @@ async function caricaAltri() {
 
 // I conteggi per fonte devono contare TUTTE le fette, non l'ultima: il totale della
 // fonte invece resta quello che dichiara lei.
-function fondiTotali(nuove) {
+// `cadute`: le fonti che non hanno risposto in QUESTA fetta. Lo stato buono si conserva (vedi
+// sotto), quindi senza questa marcatura la caduta non arriverebbe da nessuna parte.
+function fondiTotali(nuove, cadute = []) {
   const out = {};
+  const eCaduta = f => cadute.includes(f);
   for (const f of ['subito', 'autoscout', 'moto']) {
     const vecchia = (lastSources || {})[f] || null;
     const n = (nuove || {})[f] || null;
@@ -1934,7 +1965,7 @@ function fondiTotali(nuove) {
     // "Carica altri" spariva (altriDisponibili pretende 'ok') senza modo di riprovare.
     // Il conteggio invece si aggiorna sempre: conta cio' che si vede.
     if (vecchia && vecchia.status === 'ok' && n && n.status !== 'ok') {
-      out[f] = { ...vecchia, count: presiDa(f) };
+      out[f] = { ...vecchia, count: presiDa(f), ultimaFettaKo: (n && n.status) || 'error' };
       continue;
     }
     out[f] = { ...(vecchia || {}), ...(n || {}), count: presiDa(f),
@@ -1942,7 +1973,9 @@ function fondiTotali(nuove) {
                // L'avviso di allargamento vale per gli annunci a schermo, non per l'ultima
                // fetta: se resta anche una riga allargata, l'avviso deve restare con lei.
                allargato: (n && n.allargato) || (vecchia && vecchia.allargato) || null,
-               reason: (n && n.reason) || (vecchia && vecchia.reason) || null };
+               reason: (n && n.reason) || (vecchia && vecchia.reason) || null,
+               // La caduta vale per l'ULTIMA fetta soltanto: appena una riesce, sparisce.
+               ultimaFettaKo: eCaduta(f) ? ((n && n.status) || 'error') : null };
   }
   return out;
 }
@@ -3234,10 +3267,39 @@ function renderSourceStatus() {
   if (as && as.allargato && as.reason) {
     fonteBreakdown.innerHTML += `<span class="src-avviso">${escapeHtml(as.reason)}</span>`;
   }
+  /**
+   * IL RISULTATO PARZIALE, che il server calcola e finora buttavamo qui.
+   *
+   * `parziale` nasce quando una fonte ha risposto solo in parte: su Autoscout perche' alcune
+   * grafie del modello sono cadute (succede sulle moto, dove `as24Spellings` ne prova piu'
+   * d'una), altrove perche' alcune pagine non si sono lasciate leggere. Il server lo mette in
+   * `reason`, ma questa funzione stampava `reason` solo per le fonti 'skipped' e per Autoscout
+   * solo insieme a `allargato`: con lo stato 'ok' e nessun allargamento, la frase non
+   * compariva mai. A schermo la fonte sembrava aver risposto per intero.
+   */
+  for (const f of order) {
+    const s = lastSources[f];
+    if (s && s.status === 'ok' && s.parziale && !(f === 'autoscout' && s.allargato)) {
+      fonteBreakdown.innerHTML += `<span class="src-avviso">${escapeHtml(String(s.parziale))}</span>`;
+    }
+  }
+  // Una fonte che non ha risposto all'ULTIMA fetta: la pastiglia resta verde di proposito
+  // (conserva lo stato buono della fetta precedente), quindi senza questa riga la caduta non
+  // avrebbe nessun posto dove comparire.
+  const kaputt = order.filter(f => lastSources[f] && lastSources[f].ultimaFettaKo);
+  if (kaputt.length) {
+    const nomi = kaputt.map(f => FONTE_LABEL[f] || f).join(' e ');
+    fonteBreakdown.innerHTML += `<span class="src-avviso">${escapeHtml(nomi)} non ${kaputt.length === 1 ? 'ha' : 'hanno'} risposto all'ultimo «Carica altri»: quella parte di mercato non è stata vista. Premi ancora per riprovare.</span>`;
+  }
   // Le parole della versione che Moto.it non conosce vengono ignorate di proposito — un filtro
   // che svuoterebbe l'insieme si scarta — ma finora quel "di proposito" restava in un log del
   // server: a schermo la colonna Moto.it si presentava filtrata come le altre.
   const mo = lastSources.moto;
+  // Il menu versioni di Moto.it che non ha risposto: il filtro non e' stato applicato (o lo e'
+  // stato su un elenco monco), e finora la colonna si presentava filtrata come le altre.
+  if (mo && mo.versioneElencoMonco) {
+    fonteBreakdown.innerHTML += `<span class="src-avviso">${escapeHtml(String(mo.versioneElencoMonco))}</span>`;
+  }
   if (mo && mo.versioneIgnorata && mo.versioneIgnorata.length) {
     const p = mo.versioneIgnorata;
     fonteBreakdown.innerHTML += `<span class="src-avviso">Moto.it non ha ${p.length === 1 ? 'la parola' : 'le parole'} “${escapeHtml(p.join('”, “'))}” nel suo catalogo versioni: quella parte del filtro non è stata applicata.</span>`;

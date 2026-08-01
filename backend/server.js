@@ -1345,7 +1345,26 @@ async function runSearchCore(params) {
         console.log(`[server] Moto.it: "${params.modello}" aggancia ${fam.length} famiglie (oltre ${TETTO_FAM}): niente filtro versione, si cerca largo`);
         throw new Error(`troppe famiglie (${fam.length}) per risolvere la versione`);
       }
-      const bikes = (await Promise.all(fam.map(s => getModelBikes(params.motoitBrandSlug, s).catch(() => [])))).flat();
+      /**
+       * IL MENU VERSIONI CHE NON RISPONDE NON E' UN CATALOGO SENZA QUELLA VERSIONE.
+       *
+       * `getModelBikes` chiudeva con un `.catch(() => [])`, quindi l'errore di rete e il
+       * modello che davvero non ha versioni arrivavano qui identici: un elenco vuoto. Con
+       * TUTTE le famiglie cadute si cercava senza filtro versione e non lo diceva nessuno —
+       * l'utente aveva scritto una versione, Subito e Autoscout la applicavano, la colonna
+       * Moto.it no. Con ALCUNE cadute era peggio: il filtro si stringeva su un elenco monco,
+       * cioe' poteva agganciare la versione sbagliata perche' quella giusta non era arrivata.
+       */
+      let famigliKo = 0;
+      const bikes = (await Promise.all(fam.map(s =>
+        getModelBikes(params.motoitBrandSlug, s, { rilancia: true }).catch(() => { famigliKo++; return []; })
+      ))).flat();
+      if (famigliKo) {
+        params.motoitVersioneElencoMonco = famigliKo >= fam.length
+          ? 'il menu versioni di Moto.it non ha risposto: il filtro versione non e\' stato applicato a questa fonte'
+          : `${famigliKo} famiglie su ${fam.length} non hanno risposto: l'elenco versioni di Moto.it e' incompleto`;
+        console.warn(`[server] Moto.it: ${params.motoitVersioneElencoMonco}`);
+      }
       const r = motoitVersione.risolvi(bikes, params.versione, { marca: params.marca, modello: params.modello });
       if (r.versioni.length === 1) {
         params.motoitBikeCode = r.versioni[0].code;
@@ -1711,6 +1730,7 @@ async function runSearchCore(params) {
       // FONTE per questa ricerca. Sono due popolazioni diverse e restano due numeri.
       subito:    { status: subitoRes.status, reason: subitoRes.reason || null, count: countBy('subito'),
                    totale: subitoRes.total ?? null,
+                   parziale: subitoRes.parziale || null,
                    come: params.subitoNodo ? (params.subitoNodo.come || 'id') : 'testo libero',
                    // Il filtro km di Subito lavora a FASCE, su ENTRAMBI i lati: chiedendo un
                    // massimo di 200.000 arrivano annunci fino a 249.999, e chiedendone un minimo
@@ -1730,12 +1750,18 @@ async function runSearchCore(params) {
                    parziale: asRes.parziale || null },
       moto:      { status: motoRes.status,   reason: motoRes.reason || null,   count: countBy('moto'),
                    totale: motoRes.total ?? null,
+                   // Anche qui, come per Autoscout: un elenco monco che non si dichiara e'
+                   // esattamente il difetto che questo campo chiude.
+                   parziale: motoRes.parziale || null,
                    // Le parole della versione che il catalogo Moto.it non conosce e che sono
                    // state ignorate ("se svuota, si ignora"). Finora finivano in un log del
                    // server, cioe' in nessun posto che l'utente possa guardare, mentre a
                    // schermo le righe si dichiaravano "esatto".
                    versioneIgnorata: (params.motoitVersioneScartate && params.motoitVersioneScartate.length)
-                     ? params.motoitVersioneScartate : null },
+                     ? params.motoitVersioneScartate : null,
+                   // Il menu versioni che non ha risposto: senza, un timeout della fonte
+                   // valeva "questa versione non esiste a catalogo".
+                   versioneElencoMonco: params.motoitVersioneElencoMonco || null },
     },
   };
 }

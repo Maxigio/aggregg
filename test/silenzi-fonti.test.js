@@ -176,3 +176,32 @@ test('competitor: la passata fallita si dichiara per quello che e\', non come tr
   assert.ok(p.passateKo && p.passateKo.length === 1, 'la passata caduta si dichiara a parte');
   assert.strictEqual(p.passateKo[0].tipo, 'moto');
 });
+
+// ─── Una pagina-annuncio che non dice niente non e' un annuncio senza dati ────
+test('detail: il parser che non riconosce nulla si distingue dall\'annuncio scarno', () => {
+  const d = require('../backend/scrapers/detail');
+  // Tutti i campi nulli: la pagina non si e' lasciata leggere (transizione, markup cambiato).
+  assert.strictEqual(d._senzaNiente({ cambio: null, potenzaCv: null, immagini: [] }), true);
+  // Basta UN campo riconosciuto perche' la lettura sia buona, anche se il resto manca.
+  assert.strictEqual(d._senzaNiente({ cambio: null, potenzaCv: 110, immagini: [] }), false);
+  assert.strictEqual(d._senzaNiente({ cambio: null, immagini: ['a.jpg'] }), false);
+  assert.strictEqual(d._senzaNiente(null), true);
+  // E il vuoto vale poco: si riprova presto invece di restare dodici ore.
+  assert.ok(d._VUOTO_TTL_MS < 60 * 60 * 1000,
+    'era l\'unica cache del repo senza vita breve per il risultato sospetto');
+});
+
+// ─── Il menu versioni di Moto.it che non risponde ─────────────────────────────
+test('motoit-models: con `rilancia` l\'errore di rete non si confonde col catalogo vuoto', async () => {
+  const mm = require('../backend/scrapers/motoit-models');
+  // Marca fuori catalogo e slug inventato: senza `rilancia` la risposta e' [] tanto se la
+  // rete cade quanto se il modello non ha versioni, ed e' proprio quella confusione che
+  // faceva passare un timeout per "questa versione non esiste".
+  assert.deepStrictEqual(await mm.getModelBikes('', 'x'), []);
+  assert.deepStrictEqual(await mm.getModelBikes('yamaha', ''), []);
+  // La firma accetta le opzioni senza cambiare il comportamento di chi non le passa.
+  const senza = await mm.getModelBikes('yamaha', 'mt-07');
+  const con = await mm.getModelBikes('yamaha', 'mt-07', { rilancia: true });
+  assert.deepStrictEqual(senza, con, 'sul catalogo locale le due strade danno lo stesso elenco');
+  assert.ok(senza.length >= 9);
+});

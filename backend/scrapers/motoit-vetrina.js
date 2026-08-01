@@ -205,13 +205,25 @@ async function parco(slug, opts = {}) {
     const { status, body } = await motoit._get(url);
     if (status !== 200) {
       if (p === 1) throw new Error(`la vetrina risponde ${status}`);
-      break;                                   // una pagina in fondo che sparisce non e' un errore
+      // NON e' "una pagina in fondo che sparisce": e' una pagina che non si e' lasciata
+      // leggere, e sotto ce ne possono essere altre cinque. Uscendo in silenzio il parco
+      // tornava con meta' dei veicoli e `troncato: false`, cioe' dichiarato completo — e il
+      // pannello Competitor calcolava prezzo minimo, mediana, giacenze e arrivi su quella
+      // meta'. Il gemello della ricerca (motoit.js) su questa stessa condizione alza la
+      // bandiera: qui mancava.
+      troncato = true;
+      break;
     }
     const { items: pagina, grezze } = leggiPagina(body, ctx);
     // CARD PRESENTI MA ILLEGGIBILI = il markup della fonte e' cambiato, non il piazzale e'
     // vuoto. Dichiararlo, invece di archiviare un parco vuoto come se fosse completo.
     if (grezze > 0 && !pagina.length) {
       if (p === 1) throw new Error('le card della vetrina non si leggono piu\': la pagina della fonte e\' cambiata');
+      // Dalla pagina 2 in poi si tiene quello che si e' preso, ma la vista non e' completa e
+      // le card che non si sono lette si contano: prima l'uscita saltava anche la riga che le
+      // conta (`illeggibili += ...` sta sotto), quindi sparivano due volte.
+      illeggibili += grezze;
+      troncato = true;
       break;
     }
     if (!grezze) break;                        // e' cosi' che finisce il parco, non col widget
