@@ -2232,6 +2232,9 @@ async function doSearch() {
 function showBootstrapBanner() { statusBox.classList.remove('d-none'); subitoBanner.classList.remove('d-none'); subitoBanner.classList.add('d-flex'); }
 function hideBootstrapBanner() { subitoBanner.classList.add('d-none'); subitoBanner.classList.remove('d-flex'); }
 async function runSubitoBootstrap() {
+  // La finestra col CAPTCHA si apre sull'iMac dove gira AMR, non su questo schermo: se non
+  // sei tu quello seduto li', premere non ti fa vedere niente. Il server lo dichiara
+  // (campo `dove`), e lo si dice PRIMA, mentre il bottone gira.
   bootstrapBtnText.textContent = 'Apertura finestra…';
   bootstrapBtnSpinner.classList.remove('d-none');
   btnBootstrap.disabled = true;
@@ -2244,9 +2247,13 @@ async function runSubitoBootstrap() {
       note.className = 'alert alert-success';
       const hours = data.expiresInHours ? ` (valida ~${data.expiresInHours} ore)` : '';
       note.textContent = `Sessione Subito aggiornata${hours}. Puoi rilanciare la ricerca.`;
+      if (data.dove === 'iMac') note.textContent += ' Il CAPTCHA è stato risolto sull\'iMac.';
       statusBox.appendChild(note);
       setTimeout(() => note.remove(), 6000);
     } else {
+      // `dove: 'iMac'` = la richiesta non e' arrivata dalla macchina che ospita AMR, quindi
+      // la finestra si e' aperta altrove: senza dirlo, da qui si vede solo un errore muto.
+      const altrove = data.dove === 'iMac' ? ' La finestra del CAPTCHA si apre sull\'iMac dove gira AMR: va risolta lì.' : '';
       const reasonMap = {
         window_closed: 'Hai chiuso la finestra Chrome prima del completamento.',
         timeout: 'Tempo scaduto (5 minuti): il CAPTCHA non è stato completato.',
@@ -2255,7 +2262,7 @@ async function runSubitoBootstrap() {
       };
       const reasonText = reasonMap[data.reason] || `Errore: ${data.reason || 'sconosciuto'}`;
       const hint = data.hint ? ` ${data.hint}` : '';
-      showError(`Bootstrap Subito fallito. ${reasonText}${hint}`);
+      showError(`Bootstrap Subito fallito. ${reasonText}${hint}${altrove}`);
     }
   } catch (err) {
     showError('Errore comunicazione con il server durante il bootstrap.');
@@ -3486,7 +3493,12 @@ function renderSourceStatus() {
      */
     if (s.status === 'ok') {
       txt = `${s.count}`;
-      if (s.totale != null && s.totale > s.count) txt += ` <em>di ${Number(s.totale).toLocaleString('it-IT')}</em>`;
+      // DI CHI E' QUEL TOTALE. Su Moto.it, quando lo slug del modello non c'e', la ricerca
+      // si allarga alla marca e il conteggio in pagina e' quello della marca: scriverlo
+      // nudo lo faceva sembrare il bacino del modello che hai chiesto.
+      if (s.totale != null && s.totale > s.count) {
+        txt += ` <em>di ${Number(s.totale).toLocaleString('it-IT')}${s.totaleLargo ? ' sulla marca' : ''}</em>`;
+      }
     }
     else if (s.status === 'skipped') txt = SKIP_REASON_TXT[s.reason] || s.reason || 'saltato';
     else txt = meta.txt || s.status;

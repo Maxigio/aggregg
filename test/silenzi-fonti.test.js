@@ -955,3 +955,61 @@ test('minori: uno schermo vuoto per un filtro non e\' un mercato vuoto', () => {
   assert.match(r, /Solo IVA esposta/);
   assert.match(r, /cursore dei prezzi/);
 });
+
+// ═══ L'ETICHETTA DESCRIVE L'ANNUNCIO, NON IL NOSTRO FILTRO ════════════════════
+test('moto.it: la versione si legge dall\'URL dell\'annuncio', () => {
+  const { varianteDaSlug, slugDaUrl } = require('../backend/scrapers/motoit-versione');
+  // Forme vere, prese da annunci veri (Honda CB 500, misurate il 2026-08-01).
+  assert.strictEqual(slugDaUrl('https://www.moto.it/moto-usate/honda/cb-500/cb-500-s-1997-04/10010484'), 'cb-500-s-1997-04');
+  assert.strictEqual(varianteDaSlug('cb-500-s-1997-04', 'cb-500'), 'S · 1997–2004');
+  assert.strictEqual(varianteDaSlug('cb-500-x-abs-travel-edition-2015-16', 'cb-500'), 'X ABS TRAVEL EDITION · 2015–2016');
+  assert.strictEqual(varianteDaSlug('cb-500-x-2021', 'cb-500'), 'X · 2021');
+  // Il periodo scavalca il secolo: "1993-04" e' 1993–2004, non 1993–1904.
+  assert.strictEqual(varianteDaSlug('cb-500-1993-04', 'cb-500'), '1993–2004');
+  assert.strictEqual(varianteDaSlug('', 'cb-500'), null);
+  // E lo scraper lo attacca all'annuncio, senno' l'etichetta non ha cosa leggere.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'motoit.js'), 'utf8');
+  assert.match(src, /variante:\s+varianteDaSlug\(slugDaUrl\(fullUrl\), opts\.modelSlug\)/);
+});
+
+test('moto.it: l\'etichetta segue la stessa regola delle altre due fonti', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
+  // Prima: senza `bike=` OGNI riga usciva 'senza-versione' — «il venditore non l'ha
+  // indicata» — anche quando l'URL la dichiarava. Misurato: 7 righe su 7 su Honda CB 500.
+  assert.match(srv, /else r\.dichiarazione = r\.variante \? 'esatto' : 'senza-versione';/,
+    'Moto.it deve usare la versione dichiarata dall\'annuncio, come Subito e Autoscout');
+  // E l'asimmetria: versione chiesta e non applicata → la stessa frase delle altre fonti,
+  // non quella che da' la colpa al venditore.
+  assert.match(srv, /else if \(versioneChiesta\) r\.dichiarazione = 'versione-non-verificata';/);
+});
+
+test('subito: se nessun annuncio porta un prezzo, e\' il parser — non il mercato', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'subito-api.js'), 'utf8');
+  // L'annuncio senza prezzo non sparisce piu': entra marcato (il campo lo usa gia' Autoscout).
+  assert.match(src, /m\.prezzoSuRichiesta = true/);
+  assert.ok(!/if \(m && m\.prezzo != null\) out\.push/.test(src),
+    'l\'annuncio senza prezzo torna a sparire, e il crawler lo archivia come venduto');
+  // E se sono TUTTI senza prezzo, la fonte lo dichiara: 'error', non 'empty'.
+  assert.match(src, /senzaPrezzo === out\.length/);
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
+  assert.match(srv, /if \(sospetto\) return \{ items, total, parziale, status: 'error'/,
+    'un sospetto dichiarato dalla fonte non puo\' uscire come "nessun annuncio"');
+});
+
+test('il totale della pill dice a quale ricerca appartiene', () => {
+  const moto = fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'motoit.js'), 'utf8');
+  assert.match(moto, /const totaleLargo = !params\.motoitModelSlug/,
+    'senza slug del modello la ricerca e\' sulla marca, e il totale va dichiarato per quello che e\'');
+  assert.match(APP, /s\.totaleLargo \? ' sulla marca' : ''/);
+});
+
+test('il DMG e\' staccato: niente aggiornamento automatico agganciato', () => {
+  const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
+  assert.ok(!/scheduleUpdateCheck/.test(main.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '')),
+    'l\'auto-update e\' tornato agganciato: interroga GitHub e offre un installatore che non si usa');
+  assert.ok(!fs.existsSync(path.join(__dirname, '..', 'electron', 'auto-update.js')),
+    'electron/auto-update.js e\' tornato: era li\' solo per il DMG');
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+  assert.ok(!pkg.build.dmg, 'il blocco dmg e\' tornato in package.json');
+  assert.ok(!(pkg.build.mac && pkg.build.mac.target), 'il target dmg e\' tornato fra i mac target');
+});

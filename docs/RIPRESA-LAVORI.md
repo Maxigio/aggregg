@@ -184,10 +184,21 @@ il pannello diceva «Nessun risultato trovato» — cioè dava la colpa al merca
 annunci c'erano tutti (misurato: 210, filtro «Solo IVA esposta»). Ora dice quanti sono e chi
 li nasconde.
 
-**Restano davvero**: le etichette Moto.it/Autoscout in `server.js` (4 voci, da verificare una
-per una); l'annuncio Subito senza prezzo; il DMG scelto senza guardare l'architettura del Mac
-(**decisione esplicita: si lascia**); i tre dell'area in pausa e le scritture dentro GET
-(**decisione esplicita: si lasciano**).
+**Terzo giro — fatti anche questi.** Su Moto.it l'etichetta legge la versione dall'URL
+dell'annuncio (`varianteDaSlug`): misurato su Honda CB 500, sette righe su sette passano da
+«il venditore non ha indicato la versione» a «esatto» con la versione vera («S · 1997–2004»),
+e `cb-500` e `cb-500-s` smettono di sembrare la stessa moto. Corretta anche l'asimmetria:
+versione chiesta e non applicata dà la stessa frase delle altre due fonti. La pill dice a
+quale ricerca appartiene il totale («39 di 5.273 sulla marca»). Su Subito l'annuncio senza
+prezzo non sparisce più — entra marcato «su richiesta» — e se NESSUN annuncio porta un prezzo
+la fonte lo dichiara come errore, perché è il parser, non il mercato. Il bottone del CAPTCHA
+dice che la finestra si apre sull'iMac. E il **DMG è staccato**: `electron/auto-update.js`
+tolto, target `dmg` fuori da `package.json`.
+
+**Restano**: «il titolo nomina il modello?» ha due risposte nel repo, una a parole intere e
+una a sottostringa (**decisione esplicita: si lasciano due**); il parziale di Autoscout che
+il controllo delle salvate tratta da completo (**non selezionato in intervista**); i sette
+dell'area in pausa e le due scritture dentro GET (**decisione esplicita: si lasciano**).
 
 ### Coda — **CHIUSA**
 Due erano già chiusi da campagne precedenti: la marcatura nel confronto affiancato (riga

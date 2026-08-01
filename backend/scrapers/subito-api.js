@@ -655,6 +655,7 @@ async function scrapeSubitoApi(params, opts = {}) {
   let truncated = false;
   let total = null;                          // F50 count_all (tetto), additivo
   let scartati = 0;
+  let senzaPrezzo = 0;   // quanti annunci il payload non quota: vedi il commento piu' sotto
   // "Carica altri": si riparte da dove si era arrivati. Il tetto di hades sta fra
   // start 9.850 e 10.000 (misurato per bisezione), quindi c'e' spazio per ~200 fette.
   const salta = Math.max(0, opts.fetta || 0) * maxPages * PAGE_SIZE;
@@ -672,7 +673,21 @@ async function scrapeSubitoApi(params, opts = {}) {
       const come = riconosci(ad, nodo, rico);
       if (!come) { scartati++; continue; }
       const m = conVersioneDedotta(mapAd(ad, opts), ad, tipo);
-      if (m && m.prezzo != null) out.push(come === 'testo-libero' ? m : { ...m, dichiarazione: come });
+      if (!m) continue;
+      /**
+       * L'ANNUNCIO SENZA PREZZO NON SPARISCE: SI MARCA.
+       *
+       * Qui c'era `m.prezzo != null`, e chi non aveva il prezzo veniva buttato via in
+       * silenzio — sparendo dallo schermo, e facendosi archiviare dal crawler come venduto
+       * (che confronta le liste). Sui veicoli il caso oggi non capita: misurato su 200
+       * annunci veri, zero senza prezzo. Ma il vero pericolo non e' l'annuncio raro: e'
+       * che basta un cambio dell'etichetta "Prezzo" nel payload perche' questo controllo
+       * scarti TUTTO in silenzio, e la fonte sembri un mercato vuoto invece di un parser
+       * rotto. Il campo `prezzoSuRichiesta` esiste gia' — lo usa Autoscout per lo stesso
+       * caso — e il frontend lo sa scrivere ("su richiesta").
+       */
+      if (m.prezzo == null) { m.prezzoSuRichiesta = true; senzaPrezzo++; }
+      out.push(come === 'testo-libero' ? m : { ...m, dichiarazione: come });
     }
     if (page.ads.length < PAGE_SIZE) break;  // lista esaurita = vista completa
     if (p === maxPages - 1) truncated = true; // ultima pagina piena al cap → forse altro
@@ -694,7 +709,9 @@ async function scrapeSubitoApi(params, opts = {}) {
         }
         if (riconosci(ad, nodo, rico) !== 'senza-modello') continue;
         const m = conVersioneDedotta(mapAd(ad, opts), ad, tipo);
-        if (m && m.prezzo != null && !visti.has(m.url)) { visti.add(m.url); out.push({ ...m, dichiarazione: 'senza-modello' }); }
+        if (!m || visti.has(m.url)) continue;
+        if (m.prezzo == null) { m.prezzoSuRichiesta = true; senzaPrezzo++; }   // vedi sopra
+        visti.add(m.url); out.push({ ...m, dichiarazione: 'senza-modello' });
       }
     } catch (e) {
       // Il recupero e' un di piu': se cade, la ricerca vale lo stesso.
@@ -702,7 +719,19 @@ async function scrapeSubitoApi(params, opts = {}) {
     }
   }
   if (nodo && scartati) console.log(`[subito] per id "${params.marca} ${params.modello || ''}": ${out.length} tenuti, ${scartati} scartati (altro modello)`);
-  return opts.withMeta ? { items: out, truncated, total } : out;
+  /**
+   * SE NON QUOTA PIU' NIENTE, E' IL PARSER, NON IL MERCATO.
+   *
+   * Un annuncio senza prezzo capita (raro, e si marca — vedi sopra). Ma se NESSUN annuncio
+   * della pagina ha un prezzo, non e' il mercato: e' l'etichetta "Prezzo" che nel payload
+   * si chiama in un altro modo. Senza questo, la ricerca uscirebbe con dei titoli e nessuna
+   * cifra, e nessuno saprebbe che il numero non c'e' perche' non lo sappiamo piu' leggere.
+   * Si dichiara `sospetto`, che `runSource` traduce in 'error' (non 'empty', non cachato).
+   */
+  const sospetto = (out.length && senzaPrezzo === out.length)
+    ? `nessuno dei ${out.length} annunci porta un prezzo leggibile: l'etichetta del payload puo' essere cambiata`
+    : null;
+  return opts.withMeta ? { items: out, truncated, total, sospetto } : out;
 }
 
 // Ricerca ACCESSORI/RICAMBI per keyword libera (OEM o nome pezzo) nelle categorie

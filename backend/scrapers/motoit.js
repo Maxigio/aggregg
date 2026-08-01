@@ -25,7 +25,7 @@ const annullo = require('../annullo');
 
 const { kindForStatus, fail } = require('./utils');   // salute crawler (come AS24/Subito)
 const budget = require('../budget-richieste');        // conta le richieste, non le limita
-const { slugDaUrl } = require('./motoit-versione');    // lo slug-versione che l'annuncio dichiara nell'URL
+const { slugDaUrl, varianteDaSlug } = require('./motoit-versione');  // la versione che l'annuncio dichiara nell'URL
 
 const BASE = 'https://www.moto.it';
 const MAX_PAGES = 3;                  // on-search: ~30 annunci (~10-13/pag), cheapest-first.
@@ -145,6 +145,14 @@ function mapCards(cards, opts = {}) {
       venditore:  c.venditore || null,   // label nativa card (privato/concessionario)
       immagini:   coverFromImg(c.cover) ? [coverFromImg(c.cover)] : [],  // cover dalla card → thumb immediata; galleria piena via /api/detail
       url:        fullUrl,
+      /**
+       * LA VERSIONE CHE L'ANNUNCIO DICHIARA, letta dal suo URL (vedi motoit-versione.js).
+       * La usavamo gia' per FILTRARE e la buttavamo via subito dopo: cosi' ogni riga
+       * Moto.it usciva "versione n.d.", cioe' «il venditore non l'ha indicata» — falso,
+       * e su moto come la CB 500 e la CB 500 S vuol dire non distinguere due mezzi diversi.
+       * Stesso campo che Subito e Autoscout riempiono con la versione nativa.
+       */
+      variante:   varianteDaSlug(slugDaUrl(fullUrl), opts.modelSlug) || null,
       // campi DB: Moto.it HTML non li espone puliti → null
       nuovo:      null,
       danni:      null,
@@ -244,7 +252,7 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
     }
     if (i === 0) total = extractTotal(body);             // tetto dalla 1ª pagina (anche se 0 card)
     const grezze = extractCardsHtml(body);
-    const items = mapCards(grezze, opts);
+    const items = mapCards(grezze, opts);   // `opts.modelSlug` arriva da scrapeMotoIt
     if (items.length === 0) {
       /**
        * ZERO CARD LEGGIBILI ≠ FINE GENUINA — la guardia che la vetrina gemella
@@ -313,20 +321,31 @@ async function scrapeMotoIt(params, opts = {}) {
   const urls = Array.from({ length: maxPages }, (_, i) => buildUrl(params, salta + i + 1));
 
   if (deep) {
-    const { pages, statoKo, truncated, total } = await scrapeMotoViaHttp(urls, { ...opts, httpTimeoutMs: HTTP_TIMEOUT_DEFAULT });
+    const { pages, statoKo, truncated, total } = await scrapeMotoViaHttp(urls, {
+    ...opts, modelSlug: params.motoitModelSlug, httpTimeoutMs: HTTP_TIMEOUT_DEFAULT });
     // L'etichetta la calcola `kindForStatus`: 5xx = passeggero, non blocco. E il messaggio
     // non dice piu' "pagina-1 vuota", che era un residuo di codice tolto tempo fa e mandava
     // a cercare un problema anti-bot inesistente.
     if (statoKo) throw fail(`Moto.it-HTTP ${statoKo}`, { status: statoKo, kind: kindForStatus(statoKo) });
     const risultati = filtraPerSlug(dedup(pages), params.motoitSlugAmmessi);
     console.log(`[Moto.it-HTTP] OK ${risultati.length} annunci (${pages.map(p => p.length).join('+')})${truncated ? ' [troncato]' : ''}`);
-    return opts.withMeta ? { items: risultati, truncated, total } : risultati;
+    /**
+   * IL TOTALE DI CHI? Senza lo slug del modello la ricerca si allarga alla MARCA, e il
+   * conteggio in pagina e' quello della marca — ma la pill scriveva "N di M" come se quel
+   * M fosse del modello chiesto. Misurato: cercando "CB 500 X Adventure Sports" uscivano
+   * "39 di 148", e 148 era il bacino della famiglia, non del modello.
+   * Il numero resta (dice quanto e' grande il bacino da cui peschiamo): smette di
+   * spacciarsi per tuo.
+   */
+  const totaleLargo = !params.motoitModelSlug || null;
+  return opts.withMeta ? { items: risultati, truncated, total, totaleLargo } : risultati;
   }
 
   // ON-SEARCH: HTTP sequenziale gentile (come il crawler). Niente browser, niente
   // fallback. Il ramo onora `withMeta` (totale F50 e "Carica altri" ne dipendono) e
   // `fetta`: senza, tornato vivo questo ramo, sarebbero regrediti entrambi.
   const { pages, statoKo, truncated, total } = await scrapeMotoViaHttp(urls, {
+    modelSlug: params.motoitModelSlug,   // per leggere la versione dallo slug dell'annuncio
     pageDelayMs: ONSEARCH_DELAY_MS, httpTimeoutMs: ONSEARCH_TIMEOUT_MS, fetta: opts.fetta || 0,
   });
   // Stessa condizione del ramo `deep`, stesso esito: prima qui si tornava una lista vuota,
@@ -337,7 +356,16 @@ async function scrapeMotoIt(params, opts = {}) {
   if (statoKo) throw fail(`Moto.it-HTTP ${statoKo}`, { status: statoKo, kind: kindForStatus(statoKo) });
   const risultati = filtraPerSlug(dedup(pages), params.motoitSlugAmmessi);
   console.log(`[Moto.it] on-search OK ${risultati.length} annunci (${pages.map(p => p.length).join('+')})${truncated ? ' [troncato]' : ''}`);
-  return opts.withMeta ? { items: risultati, truncated, total } : risultati;
+  /**
+   * IL TOTALE DI CHI? Senza lo slug del modello la ricerca si allarga alla MARCA, e il
+   * conteggio in pagina e' quello della marca — ma la pill scriveva "N di M" come se quel
+   * M fosse del modello chiesto. Misurato: cercando "CB 500 X Adventure Sports" uscivano
+   * "39 di 148", e 148 era il bacino della famiglia, non del modello.
+   * Il numero resta (dice quanto e' grande il bacino da cui peschiamo): smette di
+   * spacciarsi per tuo.
+   */
+  const totaleLargo = !params.motoitModelSlug || null;
+  return opts.withMeta ? { items: risultati, truncated, total, totaleLargo } : risultati;
 }
 
 module.exports = scrapeMotoIt;

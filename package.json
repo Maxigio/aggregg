@@ -55,18 +55,7 @@
       "icon": "electron/icon.icns",
       "identity": null,
       "gatekeeperAssess": false,
-      "hardenedRuntime": false,
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "dmg": {
-      "writeUpdateInfo": true
+      "hardenedRuntime": false
     },
     "win": {
       "target": [

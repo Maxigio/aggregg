@@ -57,6 +57,52 @@ function slugDaUrl(url) {
 }
 
 /**
+ * LA VERSIONE CHE L'ANNUNCIO DICHIARA, letta dal suo URL.
+ *
+ * Moto.it mette nell'URL `…/moto-usate/<marca>/<modello>/<versione>/<id>`, e la parte
+ * `<versione>` e' fatta cosi': il nome del modello, poi le parole della versione, poi il
+ * periodo. Forme vere, prese da annunci veri:
+ *   cb-500-1993-04                    → nessun nome di versione, periodo 1993–2004
+ *   cb-500-s-1997-04                  → "S", 1997–2004
+ *   cb-500-x-abs-travel-edition-2015-16 → "X ABS Travel Edition", 2015–2016
+ *   cb-500-x-2021                     → "X", 2021
+ *
+ * Serve perche' l'app scriveva "Il venditore non ha indicato la versione" su annunci che la
+ * versione la dichiarano eccome — e due di quelli, "cb-500" e "cb-500-s", sono due moto
+ * diverse. Il dato c'era gia' e lo usavamo per FILTRARE: era solo l'etichetta a ignorarlo.
+ *
+ * @param {string} slug         lo slug-versione (da `slugDaUrl`)
+ * @param {string} modelloSlug  lo slug del modello, che si toglie dal davanti
+ * @returns {string|null} es. "S · 1997–2004", "1993–2004", null se lo slug non si legge
+ */
+function varianteDaSlug(slug, modelloSlug) {
+  const s = String(slug || '').trim();
+  if (!s) return null;
+  // Il periodo in coda: quattro cifre, e facoltativamente altre due per l'anno di fine.
+  const m = s.match(/-(\d{4})(?:-(\d{2}))?$/);
+  const testa = m ? s.slice(0, m.index) : s;
+  // L'anno di fine e' a DUE cifre e puo' scavalcare il secolo: "1993-04" e' 1993–2004, non
+  // 1993–1904. Si prende il secolo dell'anno d'inizio e, se il conto viene all'indietro, si
+  // aggiungono cento anni.
+  let periodo = null;
+  if (m) {
+    if (!m[2]) periodo = m[1];
+    else {
+      const da = Number(m[1]);
+      let a = Math.floor(da / 100) * 100 + Number(m[2]);
+      if (a < da) a += 100;
+      periodo = `${da}–${a}`;
+    }
+  }
+  const mod = String(modelloSlug || '').trim();
+  let nome = testa;
+  if (mod && (testa === mod || testa.startsWith(mod + '-'))) nome = testa.slice(mod.length).replace(/^-+/, '');
+  const parole = nome ? nome.split('-').filter(Boolean).map(w => w.toUpperCase()).join(' ') : '';
+  if (parole && periodo) return `${parole} · ${periodo}`;
+  return parole || periodo || null;
+}
+
+/**
  * @param {Array}  bikes   [{name, code}] da motoit-models.getModelBikes
  * @param {string} testo   quello che l'utente ha scritto
  * @param {object} ctx     {marca, modello} — le loro parole escono dal confronto
@@ -85,4 +131,4 @@ function risolvi(bikes, testo, ctx = {}) {
   return out;
 }
 
-module.exports = { risolvi, slugVersione, slugDaUrl, _parole: parole };
+module.exports = { risolvi, slugVersione, slugDaUrl, varianteDaSlug, _parole: parole };

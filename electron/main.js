@@ -3,7 +3,6 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { fork, execFile, execFileSync } = require('child_process');
-const { scheduleUpdateCheck } = require('./auto-update');
 
 let mainWindow;
 let serverProcess;
@@ -233,7 +232,11 @@ app.whenReady().then(() => {
   // Non blocca l'uso dell'app; se rete assente, fallisce silente.
   // OFF in modalità portatile: l'updater scaricherebbe/installerebbe un DMG che
   // rompe il workflow da-SSD (l'app non è in /Applications).
-  if (app.isPackaged && !PORTABLE) scheduleUpdateCheck(mainWindow);
+  // L'AGGIORNAMENTO AUTOMATICO E' STACCATO. Serviva a offrire il DMG di una release nuova:
+  // il DMG non si distribuisce piu', quindi quel controllo interrogava GitHub a ogni avvio e
+  // poteva aprire una finestra che proponeva di scaricare un installatore che nessuno usa.
+  // Il modulo `electron/auto-update.js` e' stato tolto insieme al target `dmg` in
+  // package.json: se un giorno torna un canale di distribuzione, si riscrive per quello.
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

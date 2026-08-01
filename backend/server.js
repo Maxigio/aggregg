@@ -973,13 +973,19 @@ function parseSearchParams(query) {
  * qui le due forme diventano una sola, cosi' chi chiama non deve saperlo.
  */
 function sciogli(r) {
-  if (Array.isArray(r)) return { items: r, total: null, parziale: null };
+  if (Array.isArray(r)) return { items: r, total: null, parziale: null, sospetto: null };
   return {
     items: (r && r.items) || [],
     total: (r && Number.isFinite(r.total)) ? r.total : null,
     // Il risultato copre TUTTE le richieste fatte alla fonte? La union multi-grafia lo
     // dichiara quando una grafia e' caduta: gli item ci sono ma ne mancano altri.
     parziale: (r && r.parziale) || null,
+    // La fonte ha risposto, ma sa di non aver letto bene: e' successo davvero — una
+    // pagina in cui nessun annuncio porta un prezzo non e' un mercato senza prezzi, e'
+    // un'etichetta del payload che e' cambiata. Stessa convenzione dei Ricambi.
+    sospetto: (r && r.sospetto) || null,
+    // Il totale che la fonte dichiara descrive la ricerca che hai fatto, o una piu' larga?
+    totaleLargo: (r && r.totaleLargo) || null,
   };
 }
 
@@ -998,11 +1004,14 @@ async function runSource(lavoro, ms, nomeSito) {
   });
   const avviato = typeof lavoro === 'function' ? annullo.dentro(ctrl.signal, lavoro) : lavoro;
   try {
-    const { items, total, parziale } = sciogli(await Promise.race([avviato, timeout]));
+    const { items, total, parziale, sospetto, totaleLargo } = sciogli(await Promise.race([avviato, timeout]));
+    // Una fonte che DICHIARA di non aver letto bene non e' 'ok' e non e' 'empty': con
+    // 'empty' a schermo diventerebbe "nessun annuncio", cioe' un fatto sul mercato.
+    if (sospetto) return { items, total, parziale, status: 'error', reason: sospetto };
     // Un risultato parziale con item resta 'ok' (il flag sta ACCANTO allo status, mai al
     // posto suo — stessa regola di `allargato`), ma il perche' viaggia in `reason` e il
     // campo `parziale` arriva fino a `sources`, dove cacheable() lo legge.
-    return { items, total, parziale, status: items.length ? 'ok' : 'empty', reason: parziale || null };
+    return { items, total, parziale, totaleLargo, status: items.length ? 'ok' : 'empty', reason: parziale || null };
   } catch (err) {
     const isTimeout = err.message === '__timeout__';
     // Anche su un errore: se la fonte ha risposto male, quello che resta in volo non serve.
@@ -1024,7 +1033,9 @@ async function runSubito(params, ms) {
   });
   try {
     const avviato = annullo.dentro(ctrl.signal, () => scrapeSubitoSmart(params));
-    const { items, total } = sciogli(await Promise.race([avviato, timeout]));
+    const { items, total, sospetto } = sciogli(await Promise.race([avviato, timeout]));
+    // Come in runSource: una fonte che dichiara di non aver letto bene non e' 'empty'.
+    if (sospetto) return { items, total, status: 'error', reason: sospetto };
     return { items, total, status: items.length ? 'ok' : 'empty', reason: null };
   } catch (err) {
     ctrl.abort();
@@ -1790,7 +1801,26 @@ async function runSearchCore(params) {
       else if (params.motoitBikeCode || (params.motoitSlugAmmessi && params.motoitSlugAmmessi.size)) {
         r.dichiarazione = (params.motoitVersioneScartate && params.motoitVersioneScartate.length)
           ? 'versione-non-verificata' : 'esatto';
-      } else r.dichiarazione = 'senza-versione';
+      }
+      /**
+       * QUI L'ETICHETTA RACCONTAVA IL NOSTRO FILTRO, NON L'ANNUNCIO.
+       *
+       * Senza `bike=` e senza slug ammessi ogni riga usciva 'senza-versione', che a schermo
+       * diventa «Il venditore non ha indicato la versione» — e su Moto.it e' falso: la
+       * versione sta nell'URL dell'annuncio, e l'app quello slug lo sa leggere (lo usa gia'
+       * per filtrare). Misurato su una ricerca Honda CB 500: sette righe su sette dicevano
+       * «versione n.d.» mentre gli URL portavano `cb-500` e `cb-500-s`, due moto diverse.
+       *
+       * Adesso `r.variante` c'e' anche su Moto.it (vedi scrapers/motoit.js), quindi vale la
+       * STESSA riga che governa Subito e Autoscout: se la versione e' dichiarata si dice
+       * quella, se non c'e' si dice che non c'e'.
+       *
+       * E il caso «versione chiesta ma non applicata»: li' Subito riceve
+       * 'versione-non-verificata' e Moto.it riceveva 'senza-versione' — due frasi per la
+       * stessa situazione, e quella che dava la colpa al venditore era la sbagliata.
+       */
+      else if (versioneChiesta) r.dichiarazione = 'versione-non-verificata';
+      else r.dichiarazione = r.variante ? 'esatto' : 'senza-versione';
     }
 
     // SUBITO. Stessa regola di Autoscout, e la simmetria conta perche' e' lo stesso
@@ -1898,6 +1928,10 @@ async function runSearchCore(params) {
                    parziale: asRes.parziale || null },
       moto:      { status: motoRes.status,   reason: motoRes.reason || null,   count: countBy('moto'),
                    totale: motoRes.total ?? null,
+                   // Senza lo slug del modello la ricerca si allarga alla MARCA, e il totale
+                   // in pagina e' quello della marca: la pill scriveva "39 di 148" come se
+                   // quel 148 fosse del modello chiesto. Il numero resta, e dice di chi e'.
+                   totaleLargo: motoRes.totaleLargo || null,
                    // Anche qui, come per Autoscout: un elenco monco che non si dichiara e'
                    // esattamente il difetto che questo campo chiude.
                    parziale: motoRes.parziale || null,
@@ -2012,16 +2046,35 @@ app.post('/api/saved/check', express.json(), async (req, res) => {
 
 let bootstrapInFlight = null;  // promise in corso, evita lanci multipli concorrenti
 
+/**
+ * IL CAPTCHA SI RISOLVE DAVANTI ALLA MACCHINA, e chi preme da fuori deve saperlo.
+ *
+ * `runBootstrap` apre una finestra Chrome con la UI: quella finestra nasce sull'iMac dove
+ * gira il server, non sullo schermo di chi ha premuto. Un collega collegato dal Funnel
+ * premeva e non succedeva niente da lui — nessun errore, nessuna spiegazione, solo una
+ * richiesta che restava appesa finche' qualcuno non passava davanti all'iMac.
+ * La rotta continua a fare il suo lavoro; in piu' lo DICE.
+ */
+const DA_LOCALE = req => {
+  const r = (req.socket && req.socket.remoteAddress) || '';
+  return r === '127.0.0.1' || r === '::1' || r === '::ffff:127.0.0.1';
+};
 app.post('/api/subito/bootstrap', express.json(), async (req, res) => {
   if (bootstrapInFlight) {
     return res.status(409).json({ ok: false, reason: 'already_in_progress' });
   }
+  // Chi non e' seduto davanti all'iMac non vedra' mai quella finestra: glielo si dice
+  // subito, invece di lasciarlo aspettare. Il bootstrap parte lo stesso — se qualcuno
+  // passa di la' lo risolve — ma la risposta e' onesta su dove sta il CAPTCHA.
+  const daLontano = !DA_LOCALE(req);
   bootstrapInFlight = runBootstrap({
     onProgress: msg => console.log('[bootstrap] ' + msg),
   });
   try {
     const result = await bootstrapInFlight;
-    res.json(result);
+    res.json(daLontano
+      ? { ...result, dove: 'iMac', nota: 'La finestra del CAPTCHA si apre sull\'iMac dove gira AMR: va risolta li\'.' }
+      : result);
   } catch (err) {
     res.status(500).json({ ok: false, reason: 'exception', error: err.message });
   } finally {
