@@ -85,7 +85,7 @@ una fonte muta per un mercato vuoto, mostrare un numero che non corrisponde alla
   quando la stessa forma ricompare dove la regola non era arrivata.
 - **Crawler / DB / worker**: area in pausa, **non toccare** (decisione esplicita). Tre
   problemi gravi lì dentro restano aperti e vanno ripresi quando Postgres torna vivo.
-- **I 36 problemi minori**: si fanno **alla fine**, in un giro dedicato.
+- **I problemi minori** (43, non 36): primo giro fatto — vedi più sotto.
 
 ---
 
@@ -155,7 +155,32 @@ proprietario: **via da tutte e otto**. È una riga sola in `cache-disco.js`, ed 
 proprio perché le tre di questa coda erano appena state portate lì. Chi chiama dichiara già
 il KO ("Fonte non raggiungibile", "Archivio non raggiungibile: non si sa se ci sono allerte").
 
-### Coda — **CHIUSA** (restano i 36 minori)
+### Minori — primo giro fatto (erano **43**, non 36)
+Nove erano già caduti chiudendo le campagne. Fatti in questo giro: liquidità coi due numeri
+(netti 3,19 mln contro 5,6 totali), freno sulla verifica targa e targa svincolata dalla
+ricerca, tre cache di errori (richiami, `/api/models`, 403 eBay), `metodoDiMisura`, slot
+prenotato su Motornet, schema di Wheel-Size, consumo scritto all'italiana, «N pneumatici
+registrati» dall'archivio, «solo N impianti» che conta gli impianti, il conto delle richieste
+che comprende i ripieghi a browser, `RIFERIMENTO_SCRAPER.md` dichiarato storico e
+`backend/dealer.js` dichiarato sospeso.
+
+**Trovata una NONA cache** scritta a mano, in `backend/carburanti.js`: il test «tutte le cache
+passano dal modulo comune» guardava solo `backend/scrapers/`. Ora guarda tutto `backend/`.
+
+**Non spedito, e perché**: il raggruppamento «Cilindrata» sulle moto. Misurato su 239 annunci
+Yamaha MT-07 — Subito 0 su 100, Autoscout 40 su 100, Moto.it 0 su 39: farebbe un gruppo «non
+indicata» da 199. E il campo `tipo` non arriva da nessuna fonte (0 su 239). Prima viene il
+dato: la cilindrata sta nel titolo ("MT-07 689") e va letta lì — lavoro sugli scraper.
+
+**Restano** (verificati vivi, non toccati): il timeout che non ferma la richiesta abbandonata;
+la sessione Subito riscritta da tre percorsi concorrenti e riparabile solo da chi è davanti
+all'iMac; le etichette Moto.it/Autoscout in `server.js` (4 voci); l'annuncio Subito senza
+prezzo; le due sessioni eBay in parallelo; il kW cercato nel listino del nuovo; le due regole
+del carburante che i test provano ma non girano; l'auto-update che sceglie il DMG senza
+guardare l'architettura. Più i tre dell'area in pausa e le scritture dentro GET (decisione
+esplicita: si lasciano).
+
+### Coda — **CHIUSA**
 Due erano già chiusi da campagne precedenti: la marcatura nel confronto affiancato (riga
 "Corrispondenza" + niente stella se misto) e «da quando non controlla» nel pannello avvisi.
 Gli altri otto, con le misure:

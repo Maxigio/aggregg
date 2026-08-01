@@ -725,7 +725,11 @@ app.get('/api/liquidita', (req, res) => {
   for (const [k, m] of Object.entries(liquidita.dati.modelli)) {
     if (!k.startsWith(pref)) continue;
     const r = liquidita.ricambioUtile(m);   // niente percentuale dove il rapporto non e' misurabile
-    modelli.push({ modello: m.modello, parco: m.parco, trasferimenti: m.trasferimenti, ricambio: r });
+    // `trasferimentiTotali` viaggia anche qui: i netti escludono le minivolture, cioe' il
+    // passaggio al concessionario che poi rivende — sull'archivio ACI sono 2,4 milioni di
+    // formalita' su 5,6, e sono proprio quelle del giro commerciale.
+    modelli.push({ modello: m.modello, parco: m.parco, trasferimenti: m.trasferimenti,
+                   trasferimentiTotali: m.trasferimentiTotali, ricambio: r });
   }
   res.set('Cache-Control', 'public, max-age=86400');
   // voce del modello cercato: la sola che sa dire "questo e' il dato del modello base, non
@@ -1057,7 +1061,7 @@ require('./richiami-route').mount(app, { chiaveLimite });
 
 // ─── Verifica per targa: il CAPTCHA lo risolve una persona — vedi targa.js ─────
 // Una targa per gesto umano, niente archivio, niente targhe nei log.
-require('./targa').mount(app, { json: express.json({ limit: '2kb' }) });
+require('./targa').mount(app, { json: express.json({ limit: '2kb' }), chiaveLimite });
 
 // ─── Fonti dati aperte (OSM, EPREL, bilstein, Wheel-Size) — vedi fonti-route.js ──
 require('./fonti-route').mount(app, { chiaveLimite });

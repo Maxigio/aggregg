@@ -67,9 +67,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function getJson(pathQ) {
   if (!ATTIVO) throw fail('motornet spento (AMR_MOTORNET=1 per accenderlo)', { kind: 'error' });
   if (Date.now() < bloccatoFino) throw fail('in pausa dopo un blocco', { kind: 'blocked' });
-  const attesa = PAUSA_MS - (Date.now() - ultima);
+  // LO SLOT SI PRENOTA PRIMA DI DORMIRE. Segnando `ultima` DOPO il sonno, due chiamate
+  // partite insieme calcolavano la stessa attesa, dormivano lo stesso tempo e poi
+  // bussavano nello stesso istante: il freno anti-raffica non frenava proprio quando
+  // serviva. Le altre sette fonti lo facevano gia' cosi'; questa era rimasta indietro.
+  const mio = Math.max(Date.now(), ultima + PAUSA_MS);
+  ultima = mio;
+  const attesa = mio - Date.now();
   if (attesa > 0) await sleep(attesa);
-  ultima = Date.now();
 
   const { status, body } = await new Promise((resolve, reject) => {
     const req = https.get({ host: HOST, path: pathQ, headers: HEADERS }, res => {

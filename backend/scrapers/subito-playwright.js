@@ -24,6 +24,11 @@ const { chromium } = require('playwright-extra');
 const stealth     = require('puppeteer-extra-plugin-stealth')();
 const { toInt, resolveChromiumExecutable } = require('./utils');
 const session = require('./subito-session');
+// Il RIPIEGO A BROWSER e' proprio il ramo per cui il contatore esiste (vedi
+// backend/budget-richieste.js): una pagina aperta con Playwright costa piu' di una chiamata
+// all'API, e finora non entrava nel conto. Il numero nel log diceva "3 richieste" mentre le
+// vere erano il doppio, e la riga che doveva far vedere il costo del ripiego lo nascondeva.
+const budget = require('../budget-richieste');
 
 chromium.use(stealth);
 
@@ -160,6 +165,7 @@ function detectDataDomeChallenge(html, status) {
 async function fetchPage(context, url) {
   const page = await context.newPage();
   try {
+    budget.conta('subito', 'ripiego browser');
     const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
     const status = resp?.status();
 
@@ -302,6 +308,7 @@ async function keepAliveSubito() {
 
     // Una pagina lista light (poche risorse) — Subito serve __NEXT_DATA__ ovunque.
     const url = 'https://www.subito.it/annunci-italia/vendita/auto/?q=auto&order=priceasc';
+    budget.conta('subito', 'ripiego browser');
     const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
     const status = resp?.status();
     const html = await page.content();

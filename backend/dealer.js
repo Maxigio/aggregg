@@ -1,5 +1,17 @@
 'use strict';
 /**
+ * ⚠ SOSPESO — NESSUNO CHIAMA QUESTO MODULO (verificato 2026-08-01).
+ *
+ * Scrive il parco del concessionario nel database, e il database e' fermo: `require` non
+ * arriva da nessuna parte tranne il suo test (test/dealer-parse.test.js, che prova la sola
+ * funzione pura `parseDealerStock` su fixture). Il lavoro che faceva lo fa oggi la sezione
+ * Competitor, che vive su file e non su Postgres.
+ *
+ * Non si cancella perche' e' l'area in pausa: quando Postgres torna vivo, questo o si
+ * riaggancia o si butta con cognizione. Fino ad allora resta qui, dichiarato, cosi' chi lo
+ * legge non pensa che stia girando — e chi cerca "chi scrive il parco nel DB" trova la
+ * risposta invece di un modulo che sembra vivo.
+ *
  * F32 Fase 2 — Import del parco concessionario di papà dalla pagina AS24.
  *
  * Perché `__NEXT_DATA__` e non il GraphQL: il search-API AS24 filtra per

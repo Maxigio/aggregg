@@ -201,7 +201,12 @@ function mount(app, deps = {}) {
     if (!g.ok) return res.status(429).json({ ok: false, motivo: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     try {
       const out = await lavoro(req.query || {});
-      res.set('Cache-Control', 'public, max-age=3600');
+      // NON SI CACHA UN "NON LO SO". `lavoro()` puo' tornare `{ ok:false, motivo }` senza
+      // lanciare — per esempio quando l'archivio non e' stato costruito — e quella risposta
+      // usciva con un'ora di cache addosso: il browser la ripeteva per sessanta minuti anche
+      // dopo aver ricostruito l'archivio. L'intestazione si mette solo su una risposta vera.
+      if (out && out.ok !== false) res.set('Cache-Control', 'public, max-age=3600');
+      else res.set('Cache-Control', 'no-store');
       res.json({ ok: true, ...out });
     } catch (e) {
       console.warn('[richiami] ' + percorso + ' KO:', e.message);

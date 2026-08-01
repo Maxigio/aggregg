@@ -1,5 +1,17 @@
 # Riferimento scraper — il modello Subito come baseline
 
+> ⚠ **DOCUMENTO STORICO, non la descrizione del codice di oggi** (verificato 2026-08-01).
+> Descrive lo scraper Autoscout via Playwright e una forma del post-filtro che non esistono
+> più: Autoscout passa dal GraphQL (`backend/scrapers/autoscout-graphql.js`, con Playwright
+> solo come ripiego dichiarato), Subito dall'API di prima parte (`subito-api.js`, senza
+> ripiego), e i flag `slugAutoscout`/`slugMoto` citati più sotto si chiamano oggi
+> `mmmvAutoscout` e `motoitModelSlug`. Le regole di prodotto valgono ancora — è il "come"
+> che è cambiato.
+>
+> Chi cerca lo stato attuale legga `docs/RIPRESA-LAVORI.md` e i commenti dei singoli
+> scraper, che sono la fonte aggiornata.
+
+
 > **Scopo di questo documento**: fissare il risultato ideale raggiunto su Subito.it e usarlo come baseline per rivedere **Autoscout24** e **Moto.it**.
 > Ogni sito ha le sue peculiarità tecniche, ma l'obiettivo utente è lo stesso e non negoziabile.
 

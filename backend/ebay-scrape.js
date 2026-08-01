@@ -195,7 +195,14 @@ async function fetchEbayItemDetails(url) {
       };
     });
     return buildEbayDetails(raw);
-  } catch (e) { logger.warn('[ebay]', `item details "${u}": ${e.message}`); return {}; }
+  } catch (e) {
+    // UN 403 NON E' UNA SCHEDA VUOTA. Qui si tornava `{}`, e il chiamante lo metteva in
+    // cache per un'ora come se eBay avesse risposto "non ho altro da dire": il pannello
+    // mostrava una scheda spoglia, indistinguibile da un annuncio davvero senza dettagli,
+    // e per sessanta minuti non si riprovava. L'errore esce, e chi chiama lo dichiara.
+    logger.warn('[ebay]', `item details "${u}": ${e.message}`);
+    throw e;
+  }
   finally { await page.close().catch(() => {}); }
 }
 

@@ -281,9 +281,21 @@ async function verifica(id, { tipo, targa, captcha }) {
 
 function mount(app, deps = {}) {
   const json = deps.json || ((req, res, next) => next());
+  const chiaveLimite = deps.chiaveLimite || (req => req.ip || '');
+  /**
+   * IL FRENO CHE QUI MANCAVA, e serve piu' che altrove.
+   *
+   * Era l'unica rotta di rete senza limitatore, e va al Portale dell'Automobilista
+   * DALL'INDIRIZZO DI CASA: un ciclo impazzito o qualcuno che insiste sul bottone non fa
+   * arrabbiare un portale qualunque, fa bloccare l'unico posto dove una targa si verifica.
+   * Il tetto e' basso di proposito: una verifica e' un gesto umano, uno alla volta.
+   */
+  const limite = require('./limite-richieste').crea({ max: 10, cosa: 'verifiche di targa' });
 
   app.get('/api/targa/sfida', async (req, res) => {
     res.set('Cache-Control', 'no-store');
+    const g = limite.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ ok: false, error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     try { res.json({ ok: true, ...(await sfida()) }); }
     catch (e) { res.status(502).json({ ok: false, error: e.message }); }
   });

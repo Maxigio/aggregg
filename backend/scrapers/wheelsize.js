@@ -71,7 +71,11 @@ async function getHtml(percorso) {
 // SCHEMA: da alzare a ogni cambio della FORMA dei record, o la cache serve il vecchio formato
 // per tutto il TTL senza dirlo. Il resto (tetto, dato vecchio se la fonte cade, vita breve per
 // un risultato sospetto) sta in cache-disco.js, uguale per tutti gli scraper.
-const conCache = cacheDisco.crea(CACHE_FILE, { tag: 'wheelsize', schema: 1, ttl: TTL_MS, max: 800 });
+// schema 2: la `nota` sulla copertura e' stata tolta (ora vale null), e senza alzare il
+// numero le 17 voci gia' in cache continuavano a portarla — a schermo compariva una frase
+// che il codice non scrive piu', e che dichiarava indisponibili dati che nel frattempo
+// arrivano. E' esattamente il difetto per cui questo numero esiste.
+const conCache = cacheDisco.crea(CACHE_FILE, { tag: 'wheelsize', schema: 2, ttl: TTL_MS, max: 800 });
 
 // ─── Parsing ─────────────────────────────────────────────────────────────────
 const testo = s => String(s == null ? '' : s)

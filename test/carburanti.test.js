@@ -58,7 +58,34 @@ test('costruisciIndice: i carburanti premium NON gonfiano la famiglia base', () 
 
 test('costruisciIndice: il servito non entra dove il self è consistente', () => {
   const i = c.costruisciIndice(PREZZI, IMPIANTI);
-  assert.strictEqual(i.province.MI.benzina.n, 6);   // i 6 self, non i 7 totali
+  assert.strictEqual(i.province.MI.benzina.self, true, 'sei quotazioni self: sopra la soglia, si usa il self');
+  // `n` conta gli IMPIANTI dietro il prezzo, non le quotazioni. Qui le sei righe self
+  // vengono da DUE distributori soli (la fixture alterna gli impianti 1 e 2): scrivere "6"
+  // faceva sembrare largo un campione che è largo un terzo, e l'avviso "solo N impianti"
+  // — che esiste apposta per dire quando il prezzo è poco rappresentativo — non scattava.
+  assert.strictEqual(i.province.MI.benzina.n, 2);
+});
+
+test('costruisciIndice: n conta gli impianti del campione usato, non le quotazioni', () => {
+  // Un distributore che vende self E servito manda due righe per la stessa famiglia.
+  const impianti = [
+    'Estrazione del 2026-07-24',
+    'idImpianto|Gestore|Bandiera|Tipo Impianto|Nome Impianto|Indirizzo|Comune|Provincia|Latitudine|Longitudine',
+    '10|Tizio|Agip Eni|Stradale|Dieci|Via A|ROMA|RM|41.9|12.5',
+    '11|Caio|Q8|Stradale|Undici|Via B|ROMA|RM|41.8|12.4',
+  ].join('\n');
+  const prezzi = [
+    'Estrazione del 2026-07-24',
+    'idImpianto|descCarburante|prezzo|isSelf|dtComu',
+    // GPL: due impianti, quattro righe (ognuno self + servito). Il GPL usa TUTTI i prezzi.
+    '10|GPL|0.75|1|23/07/2026 19:30:00',
+    '10|GPL|0.80|0|23/07/2026 19:30:00',
+    '11|GPL|0.77|1|23/07/2026 19:30:00',
+    '11|GPL|0.82|0|23/07/2026 19:30:00',
+  ].join('\n');
+  const i = c.costruisciIndice(prezzi, impianti);
+  assert.strictEqual(i.province.RM.gpl.self, false, 'sul GPL i self sono pochi: si usano tutti i prezzi');
+  assert.strictEqual(i.province.RM.gpl.n, 2, 'due distributori, non quattro quotazioni');
 });
 
 test('costruisciIndice: GPL/metano usano tutti i prezzi (i self sono troppo pochi)', () => {

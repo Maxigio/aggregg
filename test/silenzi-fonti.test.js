@@ -706,21 +706,32 @@ test('limite: guardare non consuma, e la finestra che scade libera il posto', as
   assert.strictEqual(breve.consuma('tizio').ok, true);
 });
 
-test('cache: le otto cache su disco passano tutte dal modulo comune', () => {
+test('cache: TUTTE le cache su disco passano dal modulo comune', () => {
   // Il modulo fa tre cose che ogni copia scritta a mano si dimenticava: numero di schema,
   // tetto alle voci, e scrittura accanto ai dati utente (nel pacchetto Electron la cartella
   // dell'app e' di sola lettura, e il `catch` vuoto ingoiava l'errore).
-  const dir = path.join(__dirname, '..', 'backend', 'scrapers');
-  const conCache = fs.readdirSync(dir).filter(f => f.endsWith('.js'))
-    .filter(f => /const CACHE_FILE\s*=/.test(fs.readFileSync(path.join(dir, f), 'utf8')));
-  assert.ok(conCache.length >= 8, `attese almeno 8 cache su disco, trovate ${conCache.length}`);
-  for (const f of conCache) {
-    const src = fs.readFileSync(path.join(dir, f), 'utf8');
-    assert.match(src, /cacheDisco\.crea\(/, `${f} ha una cache su disco che non passa dal modulo comune`);
-    assert.match(src, /schema:/, `${f} non dichiara il numero di schema: un cambio di parser servirebbe il formato vecchio per tutto il TTL`);
-    assert.match(src, /max:/, `${f} non ha un tetto: il file cresce senza fine e ogni miss lo riscrive intero`);
+  // TUTTO backend/, non solo backend/scrapers/: la nona cache stava in backend/carburanti.js
+  // e questo test non la vedeva. Non l'ha trovata il test, l'ha trovata un numero che non
+  // cambiava — cambiare come si conta e non vederlo a schermo, perche' l'indice vecchio
+  // usciva da una cache senza numero di schema.
+  const base = path.join(__dirname, '..', 'backend');
+  const files = [];
+  for (const d of [base, path.join(base, 'scrapers')]) {
+    for (const f of fs.readdirSync(d)) {
+      if (!f.endsWith('.js')) continue;
+      const p = path.join(d, f);
+      if (fs.statSync(p).isDirectory()) continue;
+      if (/const CACHE_FILE\s*=/.test(fs.readFileSync(p, 'utf8'))) files.push(p);
+    }
+  }
+  assert.ok(files.length >= 9, `attese almeno 9 cache su disco, trovate ${files.length}`);
+  for (const f of files) {
+    const src = fs.readFileSync(f, 'utf8');
+    assert.match(src, /cacheDisco\.crea\(/, `${path.basename(f)} ha una cache su disco che non passa dal modulo comune`);
+    assert.match(src, /schema:/, `${path.basename(f)} non dichiara il numero di schema: un cambio di parser (o di conteggio) servirebbe il formato vecchio per tutto il TTL`);
+    assert.match(src, /max:/, `${path.basename(f)} non ha un tetto: il file cresce senza fine e ogni miss lo riscrive intero`);
     assert.ok(!/fs\.writeFileSync\(\s*CACHE_FILE/.test(src),
-      `${f} scrive ancora la cache da se', dentro la cartella dell'app`);
+      `${path.basename(f)} scrive ancora la cache da se', dentro la cartella dell'app`);
   }
 });
 
@@ -827,4 +838,52 @@ test('ricambi: i codici OE si leggono dai link, non dal testo', () => {
   // valle da solo non basta, ed e' esattamente perche' la lettura ora e' strutturale.
   assert.ok(dedupeOe(['Garanzia 2 anni'], '1K0905851B').length === 1,
     'il filtro a valle NON riconosce le frasi: se tornasse la pesca nel testo tornerebbero anche i falsi');
+});
+
+// ═══ I MINORI: stessa disciplina, casi piccoli ════════════════════════════════
+test('minori: un errore non si mette in cache', () => {
+  // Tre punti diversi, una regola sola: una risposta mancata non e' una risposta.
+  const richiami = fs.readFileSync(path.join(__dirname, '..', 'backend', 'richiami-route.js'), 'utf8');
+  assert.match(richiami, /out\.ok !== false\) res\.set\('Cache-Control'/,
+    'le rotte richiami rimettono un\'ora di cache su un "archivio non costruito"');
+  const ebay = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ebay-scrape.js'), 'utf8');
+  assert.ok(!/item details[\s\S]{0,80}return \{\}/.test(ebay),
+    'un 403 di eBay torna a diventare una scheda vuota, che il chiamante cacha per un\'ora');
+  assert.ok(!/catch \{ modelCache\[key\] = \[\]; \}/.test(APP),
+    'una risposta mancata di /api/models torna a spegnere la tendina per tutta la sessione');
+});
+
+test('minori: il conto delle richieste comprende i ripieghi a browser', () => {
+  // Il contatore esiste proprio per i rami che partono solo in certi casi, e i due ripieghi
+  // a browser — quelli piu' cari — non entravano nel conto.
+  for (const f of ['subito-playwright.js', 'autoscout-playwright.js']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', f), 'utf8');
+    assert.match(src, /budget\.conta\([^)]*ripiego browser/, `${f} non conta le sue aperture di pagina`);
+  }
+});
+
+test('minori: i numeri a schermo contano quello che dicono di contare', () => {
+  // «solo N impianti» contava le quotazioni: un distributore che vende self E servito
+  // mandava due righe, e il campione sembrava il doppio di quello che e'.
+  const carb = fs.readFileSync(path.join(__dirname, '..', 'backend', 'carburanti.js'), 'utf8');
+  assert.match(carb, /n: \(usaSelf \? v\.impSelf : v\.impTutti\)\.size/,
+    'il numero dietro il prezzo deve contare gli impianti del campione usato');
+  // «N pneumatici registrati» era il numero della pagina chiesta, non dell'archivio EPREL.
+  assert.match(APP, /st\.totale != null && st\.totale > p\.length/,
+    'il pannello pneumatici deve dire quanti ne esistono, non quanti ne ha scaricati');
+  // «Compatibilita' · N modelli» contava quelli passati dal server (venti al massimo).
+  assert.match(APP, /Number\.isFinite\(totale\) && totale > list\.length/,
+    'la compatibilita\' deve dire il totale vero');
+});
+
+test('minori: la verifica targa non dipende da una ricerca, e ha un freno', () => {
+  // La targa non filtra niente: e' del veicolo che hai davanti, e la verifica va al
+  // Portale dell'Automobilista. Legarla ai risultati obbligava a una ricerca inutile.
+  const sync = ritaglia(APP, 'targaBtnSync = () => {', '\n  };');
+  assert.ok(!/risultatiAVista/.test(sync),
+    'il bottone della targa torna a dipendere dagli annunci a schermo');
+  // Ed e' la rotta che va al portale ministeriale dall'indirizzo di casa: senza freno, un
+  // ciclo impazzito fa bloccare l'unico posto dove una targa si verifica.
+  const targa = fs.readFileSync(path.join(__dirname, '..', 'backend', 'targa.js'), 'utf8');
+  assert.match(targa, /limite-richieste/, 'la sfida targa deve passare dal limitatore comune');
 });

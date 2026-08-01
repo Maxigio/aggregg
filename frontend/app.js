@@ -694,10 +694,18 @@ async function init() {
   // Serve UNA TARGA E DEGLI ANNUNCI A SCHERMO: la verifica vive dentro la scheda tecnica
   // di un annuncio, quindi prima della ricerca non ha dove andare. Mostrarlo comunque
   // significava offrire un comando che risponde solo con un errore.
+  /**
+   * LA VERIFICA TARGA NON DIPENDE DALLA RICERCA.
+   *
+   * Il bottone compariva solo con annunci a schermo. Ma la targa non filtra niente: e' del
+   * veicolo che hai davanti — te l'ha data un cliente al telefono, l'hai letta su un
+   * parabrezza — e la verifica va al Portale dell'Automobilista, che con la ricerca non
+   * c'entra. Legarla ai risultati significava che per controllare una targa bisognava prima
+   * fare una ricerca di auto che non serviva a niente. Adesso basta scriverla.
+   */
   targaBtnSync = () => {
     const t = String(targaInput?.value || '').replace(/[^A-Za-z0-9]/g, '');
-    const ci = (risultatiAVista() || []).length > 0;
-    targaBtn?.classList.toggle('d-none', t.length < 5 || !ci);
+    targaBtn?.classList.toggle('d-none', t.length < 5);
   };
   targaInput?.addEventListener('input', targaBtnSync);
   targaBtnSync();
@@ -817,7 +825,14 @@ async function loadModels(tipo, marca) {
       const res = await fetch(`/api/models?tipo=${encodeURIComponent(tipo)}&marca=${encodeURIComponent(marca)}`);
       const data = await res.json();
       modelCache[key] = data.modelli || [];
-    } catch { modelCache[key] = []; }
+    } catch (_) {
+      // UNA RISPOSTA MANCATA NON E' "QUESTA MARCA NON HA MODELLI". Qui si scriveva `[]` in
+      // cache, e da li' in poi la tendina di quella marca restava vuota per TUTTA la
+      // sessione: un intoppo di rete di un secondo si trasformava in un catalogo assente
+      // fino al ricaricamento della pagina. Non si memorizza il fallimento: al tasto dopo
+      // si riprova.
+      return [];
+    }
   }
   return modelCache[key];
 }
@@ -966,6 +981,25 @@ function groupResults(results, dim) {
   return groups;
 }
 
+/**
+ * I RAGGRUPPAMENTI, gli stessi per auto e moto — e non e' una svista, e' una misura.
+ *
+ * "Carburante" sulle moto e' quasi morto (sono tutte benzina) e la CILINDRATA, che su una
+ * moto e' il primo dato che si guarda, qui non c'e'. La correzione sembrava ovvia: scambiare
+ * i due chip quando si guardano moto. Provata sui dati veri, non si puo' fare — misurato su
+ * una ricerca Yamaha MT-07, 239 annunci:
+ *
+ *   Subito     100 annunci → cilindrata dichiarata su   0
+ *   Autoscout  100 annunci → cilindrata dichiarata su  40
+ *   Moto.it     39 annunci → cilindrata dichiarata su   0
+ *
+ * Un chip "Cilindrata" farebbe un gruppo "non indicata" da 199 su 239: peggio del chip morto
+ * che sostituisce. E il campo `tipo` non arriva da NESSUNA fonte (0 su 239), quindi nemmeno
+ * si potrebbe decidere dai risultati se mostrarlo.
+ *
+ * Prima viene il dato: la cilindrata Subito e Moto.it la scrivono nel titolo ("MT-07 689"),
+ * e va letta li' — e' un lavoro sugli scraper, non sui chip. Fino ad allora questi restano.
+ */
 const FACET_DIMS = [
   ['', 'Nessuno'], ['modello', 'Modello'], ['fonte', 'Fonte'],
   ['carburante', 'Carburante'], ['anno', 'Anno'], ['km', 'Km'], ['provincia', 'Provincia'],
@@ -3231,7 +3265,16 @@ function gommePneuHTML(r, misura) {
   if (st.stato === 'ko') return '<div class="gom-pneu"><span class="gom-att">etichette non disponibili ora</span></div>';
   const p = st.d || [];
   if (!p.length) return '<div class="gom-pneu"><span class="gom-att">nessun pneumatico registrato con questa misura</span></div>';
-  return '<div class="gom-pneu"><div class="gom-pneu-h">' + p.length + ' pneumatici registrati · etichetta europea EPREL</div>'
+  /**
+   * IL NUMERO DELL'ARCHIVIO, non quello della pagina che abbiamo chiesto.
+   *
+   * Qui usciva `p.length`, cioe' quanti ne abbiamo scaricati: la fonte ne manda cento per
+   * volta, quindi una misura con quattromila pneumatici registrati diceva "100 pneumatici
+   * registrati". EPREL il totale lo dichiara (`totale`), e viaggiava gia' nella risposta.
+   */
+  const quanti = (st.totale != null && st.totale > p.length) ? st.totale : p.length;
+  return '<div class="gom-pneu"><div class="gom-pneu-h">' + quanti.toLocaleString('it-IT')
+    + ' pneumatici registrati · etichetta europea EPREL' + (quanti > p.length ? ' · ne mostro ' + Math.min(p.length, 8) : '') + '</div>'
     + p.slice(0, 8).map(x => `<div class="gom-pneu-r"><span class="gom-pneu-m">${escapeHtml([x.marca, x.modello].filter(Boolean).join(' ')).slice(0, 46)}</span>`
         + `<span class="gom-pneu-v">${escapeHtml(x.classeEfficienza || '—')}<em>consumo</em></span>`
         + `<span class="gom-pneu-v">${escapeHtml(x.classeBagnato || '—')}<em>bagnato</em></span>`
@@ -3304,7 +3347,7 @@ async function caricaPneumatico(r, misura, pannello) {
   pannello?._render?.();
   try {
     const d = await fetch('/api/fonti/pneumatici/cerca?misura=' + encodeURIComponent(misura)).then(x => x.json());
-    r._pneu[misura] = (d && d.ok !== false) ? { stato: 'ok', d: d.pneumatici || [] } : { stato: 'ko' };
+    r._pneu[misura] = (d && d.ok !== false) ? { stato: 'ok', d: d.pneumatici || [], totale: d.totale ?? null } : { stato: 'ko' };
   } catch (_) { r._pneu[misura] = { stato: 'ko' }; }
   pannello?._render?.();
 }
@@ -4691,7 +4734,10 @@ function vehProvaHTML() {
   }
   const link = d.url ? `<a class="veh-mis-link" href="${escapeHtml(d.url)}" target="_blank" rel="noopener noreferrer">leggi la prova ↗</a>` : '';
   return `<div class="veh-mis-prova"><div class="veh-mis-ph">${escapeHtml(d.titolo || '')}${link}</div>${gruppi.join('')}`
-    + (d.metodologia ? `<div class="veh-mis-fonte">${escapeHtml(String(d.metodologia).slice(0, 400))}</div>` : '')
+    // `metodoDiMisura`: e' il nome che usa la fonte (insella-prove.js). Qui si leggeva
+    // `metodologia`, che non esiste: la frase che spiega COME sono state prese le misure —
+    // cioe' quello che distingue un numero da una misura — non e' mai arrivata a schermo.
+    + (d.metodoDiMisura ? `<div class="veh-mis-fonte">${escapeHtml(String(d.metodoDiMisura).slice(0, 400))}</div>` : '')
     + '</div>';
 }
 
@@ -4783,7 +4829,11 @@ function vehConsumo(spec) {
 function carbConsumoDa(v) {
   const s = String(v || '');
   if (!/l\s*\/\s*100/i.test(s)) return null;             // kWh/100km → non quotabile qui
-  const n = (s.replace(',', '.').match(/\d+(?:\.\d+)?/g) || []).map(Number).filter(x => x > 0 && x < 60).slice(0, 2);
+  // TUTTE le virgole, non la prima: `replace(',', '.')` senza `g` ne cambia una sola, e su
+  // un intervallo scritto all'italiana ("6,9-7,2 l/100 km") la seconda restava virgola. La
+  // cifra dopo diventava un numero a se' — 6.9, poi 7, poi 2 — e la media usciva 6,95
+  // invece di 7,05: un consumo che la fonte non ha mai dichiarato.
+  const n = (s.replace(/,/g, '.').match(/\d+(?:\.\d+)?/g) || []).map(Number).filter(x => x > 0 && x < 60).slice(0, 2);
   return n.length ? +(n.reduce((a, b) => a + b, 0) / n.length).toFixed(2) : null;
 }
 function carbFamigliaDa(a) {
@@ -4947,7 +4997,8 @@ function liqBadgeHTML(item) {
   if (!m || m.ricambio == null) return '';
   // Il numero e basta. Niente frase e niente colore: anche il verde e' un giudizio, e
   // qui la fonte da' passaggi e parco circolante, non un parere sulla vendibilita'.
-  const tip = `${m.modello}: ${Number(m.trasferimenti).toLocaleString('it-IT')} passaggi di proprieta nel ${liqAnno}` +
+  const tip = `${m.modello}: ${Number(m.trasferimenti).toLocaleString('it-IT')} passaggi fra privati nel ${liqAnno}`
+    + (m.trasferimentiTotali > m.trasferimenti ? `, ${Number(m.trasferimentiTotali).toLocaleString('it-IT')} in tutto (minivolture incluse)` : '') +
     (m.parco ? ` su ${Number(m.parco).toLocaleString('it-IT')} in circolazione` : '') + '. Fonte ACI Autoritratto.';
   return `<span class="liq-badge" title="${escapeHtml(tip)}">&#8635; ${String(m.ricambio).replace('.', ',')}%</span>`;
 }
@@ -5008,9 +5059,23 @@ function liqCorpoHTML(r) {
   // in circolazione · ricambio 7%/anno" — dove per leggere il secondo bisognava contare i
   // punti. Sono grandezze diverse e stanno una accanto all'altra, ognuna con la sua unita'.
   const tile = (val, lab) => `<div class="pp-tile"><b>${val}</b><span>${lab}</span></div>`;
+  /**
+   * DUE NUMERI, PERCHE' SONO DUE COSE.
+   *
+   * Qui usciva un numero solo, quello dei trasferimenti NETTI, sotto l'etichetta "passaggi":
+   * i netti escludono le MINIVOLTURE, cioe' il passaggio al concessionario che poi rivende.
+   * Misurato sull'archivio ACI, 1.708 modelli: netti 3.189.416 contro 5.599.752 totali —
+   * mancavano all'appello 2.410.336 formalita', il 43%. E per un operatore quella meta'
+   * mancante e' esattamente il giro che lo riguarda: quanto di quel modello passa dal
+   * commercio invece che da privato a privato.
+   *
+   * `trasferimentiTotali` viaggiava gia' nel payload e non lo leggeva nessuno.
+   */
+  const conTotali = m.trasferimentiTotali != null && m.trasferimentiTotali > m.trasferimenti;
   return `<div class="veh-liq">
     <div class="pp-tiles">
-      ${tile(n(m.trasferimenti), `passaggi nel ${m.anno || liqAnno}`)}
+      ${tile(n(m.trasferimenti), `fra privati nel ${m.anno || liqAnno}`)}
+      ${conTotali ? tile(n(m.trasferimentiTotali), 'tutti i passaggi, minivolture incluse') : ''}
       ${m.parco ? tile(n(m.parco), 'in circolazione') : ''}
       ${tile(String(m.ricambio).replace('.', ',') + '%', 'ricambio all\'anno')}
     </div>

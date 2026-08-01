@@ -16,6 +16,9 @@ const { chromium } = require('playwright');
 const path = require('path');
 const https = require('https');
 const { parseEuro, parseKm, REGION_AS24, resolveChromiumExecutable } = require('./utils');
+// Vedi subito-playwright.js: il ripiego a browser entra nel conto delle richieste, senno'
+// il contatore misura tutto tranne il ramo piu' caro.
+const budget = require('../budget-richieste');
 // L'UNICO risolutore di provincia del progetto (valida contro le 107 sigle vere, legge
 // sigla/parentesi/coda/comune/CAP e tace quando due indizi si contraddicono).
 const { risolvi: risolviProvincia } = require('../province-sigla');
@@ -238,6 +241,7 @@ async function fetchPage(browser, url) {
   const page = await context.newPage();
 
   try {
+    budget.conta('as24', 'ripiego browser');
     const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
     // 404 sul modello moto (slug non presente nel catalogo AS24): no fallback, torna []
     if (resp && resp.status() === 404) {

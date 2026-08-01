@@ -31,6 +31,7 @@ const HOST = 'https://www.mimit.gov.it';
 const URL_PREZZI = `${HOST}/images/exportCSV/prezzo_alle_8.csv`;
 const URL_IMPIANTI = `${HOST}/images/exportCSV/anagrafica_impianti_attivi.csv`;
 const FONTE = 'MIMIT — Osservaprezzi Carburanti (IODL 2.0)';
+const cacheDisco = require('./scrapers/cache-disco');
 const CACHE_FILE = path.join(__dirname, '..', 'data', 'carburanti-cache.json');
 const TTL_MS = 12 * 60 * 60 * 1000;   // i prezzi valgono "alle 8" del giorno: due controlli al giorno bastano
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
@@ -132,10 +133,18 @@ function costruisciIndice(txtPrezzi, txtImpianti) {
     const pv = provDi.get(c[0].trim());
     if (!pv) continue;
     (perProv[pv] = perProv[pv] || {});
-    const slot = (perProv[pv][fam] = perProv[pv][fam] || { self: [], tutti: [] });
-    const nz = (perFam[fam] = perFam[fam] || { self: [], tutti: [] });
+    const vuoto = () => ({ self: [], tutti: [], impSelf: new Set(), impTutti: new Set() });
+    const slot = (perProv[pv][fam] = perProv[pv][fam] || vuoto());
+    const nz = (perFam[fam] = perFam[fam] || vuoto());
+    const imp = c[0].trim();
     slot.tutti.push(p); nz.tutti.push(p);
-    if (self) { slot.self.push(p); nz.self.push(p); }
+    // GLI IMPIANTI, non le quotazioni. Un distributore che vende self E servito manda DUE
+    // righe per la stessa famiglia, e contando le righe l'avviso "solo N impianti" diceva
+    // il doppio del vero — proprio su GPL e metano, dove il campione e' magro ed e' l'unico
+    // posto in cui quell'avviso serve. E si contano gli impianti del campione DAVVERO usato
+    // per la mediana (self o tutti), senno' il numero descrive un insieme diverso dal prezzo.
+    slot.impTutti.add(imp); nz.impTutti.add(imp);
+    if (self) { slot.self.push(p); nz.self.push(p); slot.impSelf.add(imp); nz.impSelf.add(imp); }
   }
 
   const riduci = m => {
@@ -145,7 +154,8 @@ function costruisciIndice(txtPrezzi, txtImpianti) {
       const usaSelf = !SENZA_SELF.has(fam) && v.self.length >= 5;
       const arr = usaSelf ? v.self : v.tutti;
       const med = mediana(arr);
-      if (med != null) o[fam] = { p: +med.toFixed(3), n: arr.length, self: usaSelf };
+      // `n` = quanti IMPIANTI stanno dietro QUESTO prezzo (vedi sopra), non quante quotazioni.
+      if (med != null) o[fam] = { p: +med.toFixed(3), n: (usaSelf ? v.impSelf : v.impTutti).size, self: usaSelf };
     }
     return o;
   };
@@ -158,41 +168,36 @@ function costruisciIndice(txtPrezzi, txtImpianti) {
   return { aggiornato: estrazione, scaricato: new Date().toISOString(), fonte: FONTE, italia: riduci(perFam), province };
 }
 
-let memo = null;
-function leggiCache() {
-  if (memo && Date.now() - Date.parse(memo.scaricato) < TTL_MS) return memo;
-  try {
-    const j = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
-    if (j && j.scaricato && Date.now() - Date.parse(j.scaricato) < TTL_MS) { memo = j; return j; }
-    if (j && j.province) memo = j;   // scaduta ma valida: si serve intanto che si aggiorna
-  } catch (_) {}
-  return null;
-}
-
-let inVolo = null;
 /**
- * Indice prezzi. Serve la cache se fresca; altrimenti riscarica (una sola volta in
- * parallelo). Se il download fallisce ma esiste una cache vecchia, torna quella: meglio
- * un prezzo di ieri che nessun prezzo.
+ * LA NONA CACHE. Le altre otto stanno in backend/scrapers/ e passano tutte da cache-disco;
+ * questa viveva qui, scritta a mano, e le mancavano le stesse tre cose:
+ *  - il NUMERO DI SCHEMA. Ed e' costato subito: cambiando `n` da "quante quotazioni" a
+ *    "quanti impianti" (vedi `riduci`), l'indice gia' su disco continuava a servire il
+ *    conteggio vecchio, e la correzione non si vedeva affatto;
+ *  - DOVE SI SCRIVE: dentro la cartella dell'app, che nel pacchetto Electron e' di sola
+ *    lettura, con l'errore ingoiato da un `catch` vuoto;
+ *  - e serviva la copia SCADUTA quando la fonte cadeva, in silenzio — la cosa che il
+ *    proprietario ha deciso di togliere a tutte.
+ * Il tetto qui non serve: la chiave e' una sola.
+ */
+const conCache = cacheDisco.crea(CACHE_FILE, { tag: 'carburanti', schema: 2, ttl: TTL_MS, max: 4 });
+
+/**
+ * Indice prezzi. Una chiave sola: cache-disco fa da se' la cache fresca, la richiesta
+ * unica quando due arrivano insieme, e il rifiuto di servire una copia scaduta.
  */
 async function indice() {
-  const c = leggiCache();
-  if (c && Date.now() - Date.parse(c.scaricato) < TTL_MS) return c;
-  if (inVolo) return inVolo;
-  inVolo = (async () => {
-    try {
+  try {
+    return await conCache('indice', async () => {
       const [p, i] = await Promise.all([scarica(URL_PREZZI), scarica(URL_IMPIANTI)]);
       const idx = costruisciIndice(p, i);
       if (!Object.keys(idx.province).length) throw new Error('indice vuoto');
-      try { fs.writeFileSync(CACHE_FILE, JSON.stringify(idx)); } catch (_) {}
-      memo = idx;
       return idx;
-    } catch (e) {
-      console.warn('[carburanti] aggiornamento KO:', e.message);
-      return memo || c || null;                     // ripiego sulla cache vecchia
-    } finally { inVolo = null; }
-  })();
-  return inVolo;
+    });
+  } catch (e) {
+    console.warn('[carburanti] aggiornamento KO:', e.message);
+    return null;                    // la fonte non ha risposto: si dice, non si inventa
+  }
 }
 
 // "Benzina"/"Gasolio"/"Diesel"/"Ibrida benzina"… → famiglia, o null se non quotabile
