@@ -102,8 +102,9 @@ una fonte muta per un mercato vuoto, mostrare un numero che non corrisponde alla
 | `bf3e150` | **Campagna 4/2** — una sola `senzaGenerazione`, marca RDW |
 | `03d66dc` | **Campagna 6** — una password a testa, limiti per persona |
 | `5362fda` | **Campagna 5** — un solo `resetContesto()`, e otto punti chiusi |
+| `07a040e` | **Campagna 7** — il valore con la sua unità, e l'IVA solo dove è dichiarata |
 
-Suite: **625 test, 616 pass, 0 fail, 9 skipped** (partiva da 576/567).
+Suite: **629 test, 620 pass, 0 fail, 9 skipped** (partiva da 576/567).
 
 ---
 
