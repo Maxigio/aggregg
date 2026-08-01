@@ -255,6 +255,10 @@ body:not(.has-results) .search {
 .veh-liq-cifra span { font-size: 0.8rem; color: var(--text); }
 .veh-liq-det { font-size: 0.76rem; color: var(--text-muted); font-family: var(--num); }
 .veh-liq-avviso { font-size: 0.74rem; color: var(--warn); }
+/* Annuncio senza modello dichiarato: si chiede invece di indovinare (vedi vehChiediModello). */
+.veh-chiedi { display: flex; flex-direction: column; gap: .6rem; padding: .9rem 1rem; }
+.veh-chiedi-msg { font-size: .82rem; line-height: 1.45; color: var(--muted); }
+.veh-chiedi-sel { max-width: 22rem; padding: .4rem .6rem; font: inherit; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); }
 .veh-liq-fonte { font-size: 0.68rem; color: var(--text-faint); }
 /* km/anno scritti a mano, accanto alla provincia */
 .veh-carb-kmw { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; color: var(--text-muted); }

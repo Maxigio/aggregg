@@ -2301,7 +2301,18 @@ function updateRowThumb(url) {
 }
 
 // Set di URL col prezzo più basso (1 per gruppo/lista) → evidenziazione "best".
+/**
+ * IL PIU' ECONOMICO SI DICE SOLO SE SI STA CONFRONTANDO LA STESSA COSA.
+ *
+ * Su una ricerca allargata alla marca in lista ci sono anche annunci di altri modelli: il
+ * piu' economico e' quasi sempre uno di quelli, perche' e' un veicolo piu' piccolo. La
+ * stella verde li' non segnala un affare, segnala un confronto senza senso — e con la
+ * pastiglia «altro modello» sulla stessa riga si contraddicono a vicenda. Con l'insieme
+ * misto non si assegna a nessuno: nessuna bugia, e la colonna prezzo resta ordinabile.
+ */
 function bestUrlSet(items) {
+  const misto = items.some(r => r && r.dichiarazione && r.dichiarazione !== 'esatto' && r.dichiarazione !== 'senza-versione');
+  if (misto) return new Set();
   let min = Infinity, url = null;
   for (const r of items) { if (r.prezzo != null && r.prezzo > 0 && r.prezzo < min) { min = r.prezzo; url = r.url; } }
   return new Set(url ? [url] : []);
@@ -3055,7 +3066,12 @@ function gommeChiave(r) {
   // quella dell'annuncio. Facendo vincere sempre l'annuncio si peggiorava la griglia normale,
   // dove `r.marca` e' il nome grezzo della fonte e non quello del catalogo.
   const marca = (cpApertoId ? '' : p.marca) || r.marca || '';
-  const modello = (cpApertoId ? '' : p.modello) || modelloAnnuncio(r) || '';
+  // Il MODELLO invece lo dice l'annuncio: chiedere a Wheel-Size le misure del modello CERCATO
+  // sotto un annuncio marcato "altro modello" significa mostrare cerchi, gomme e pressioni di
+  // un altro veicolo. Il modello della ricerca vale solo quando la fonte ha confermato che
+  // l'annuncio e' quello, ed e' la stessa regola che usa `loadVehScheda`.
+  const confermato = !r.dichiarazione || ['esatto', 'senza-versione', 'versione-non-verificata'].includes(r.dichiarazione);
+  const modello = modelloAnnuncio(r) || (confermato && !cpApertoId ? p.modello : '') || '';
   // 'Altro' e' il segnaposto di Subito quando il venditore la marca non l'ha scelta: non e'
   // una marca, e chiederla a Wheel-Size darebbe una risposta a caso o nessuna.
   if (!marca || marca === 'Altro' || !modello || !r.anno) return null;
@@ -3294,6 +3310,17 @@ function renderSourceStatus() {
   // Le parole della versione che Moto.it non conosce vengono ignorate di proposito — un filtro
   // che svuoterebbe l'insieme si scarta — ma finora quel "di proposito" restava in un log del
   // server: a schermo la colonna Moto.it si presentava filtrata come le altre.
+  /**
+   * SUBITO CERCATO A PAROLE. Quando il modello non sta nel catalogo di Subito la ricerca
+   * parte come testo libero, con una precisione misurata del 71% (e zero su nomi corti come
+   * "Audi 80", dove "80" pesca dentro "180 CV" e "80.000 km"). Il server lo dichiara da
+   * sempre in `come`, e questa funzione non lo leggeva: quella colonna si presentava precisa
+   * come le altre due. Niente pastiglia riga per riga — sarebbero tutte — ma una riga qui.
+   */
+  const sb = lastSources.subito;
+  if (sb && sb.come === 'testo libero' && sb.status === 'ok' && sb.count > 0) {
+    fonteBreakdown.innerHTML += '<span class="src-avviso">Ricerca pari alla ricerca a testo libero di Subito. Vuoi gestire le tue ricerche in modo diverso? Parliamone!</span>';
+  }
   const mo = lastSources.moto;
   // Il menu versioni di Moto.it che non ha risposto: il filtro non e' stato applicato (o lo e'
   // stato su un elenco monco), e finora la colonna si presentava filtrata come le altre.
@@ -3446,6 +3473,10 @@ const MATRIX_ROWS = [
   { key: 'venditore', label: 'Venditore', fmt: v => v || '—' },
   { key: 'provincia', label: 'Provincia', fmt: v => v || '—' },
   { key: 'variante', label: 'Versione', fmt: v => v || '—' },
+  // La corrispondenza sta nel confronto come sta nella lista e nel PDF: qui piu' che altrove,
+  // perche' e' il posto dove si mettono due annunci fianco a fianco per decidere, e finora
+  // niente diceva che uno dei due poteva essere un altro modello.
+  { key: 'dichiarazione', label: 'Corrispondenza', fmt: v => (DICHIARAZIONE[v] ? DICHIARAZIONE[v].et : 'corrisponde') },
 ];
 function showMatrix(title) {
   cmatrixTitle.textContent = `${title} (${matrixList.length})`;
@@ -3470,7 +3501,12 @@ function renderMatrix() {
   const fmtFonte = r => FONTE_LABEL[r.fonte] || r.fonte;
   const fonteTag = r => ({ subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[r.fonte] || '');
   // Indici del valore migliore del set per ogni spec (riusato da tabella e card).
-  const bestByRow = MATRIX_ROWS.map(cfg => cfg.best ? bestIndexes(list.map(r => r[cfg.key]), cfg.best) : new Set());
+  // Stessa regola della lista: se nel confronto e' finito anche un annuncio di un altro
+  // modello, il PREZZO migliore non si assegna — il piu' economico e' quasi sempre quello,
+  // perche' e' un altro veicolo. Le altre righe (anno, km, potenza) restano confrontabili.
+  const cmMisto = list.some(r => r && r.dichiarazione && r.dichiarazione !== 'esatto' && r.dichiarazione !== 'senza-versione');
+  const bestByRow = MATRIX_ROWS.map(cfg => (cfg.best && !(cmMisto && cfg.key === 'prezzo'))
+    ? bestIndexes(list.map(r => r[cfg.key]), cfg.best) : new Set());
 
   if (window.matchMedia('(max-width: 760px)').matches) {
     const cards = list.map((r, ci) => {
@@ -3845,7 +3881,39 @@ function vehFallita(motivo) {
  * quando ne resta una sola compatibile (backend/scheda-veicolo-route.js → schedaPerAnnuncio).
  * Altrimenti si apre la griglia come sempre e scegli tu.
  */
-async function loadVehScheda(r, host) {
+/**
+ * QUANDO L'ANNUNCIO NON DICE CHE MODELLO E'.
+ *
+ * La marca c'e' quasi sempre, il modello su Subito no. Indovinarlo dal titolo scritto dal
+ * venditore vorrebbe dire mostrare richiami e dati tecnici di un veicolo dedotto, e
+ * prendere quello CERCATO vorrebbe dire il difetto di prima. Quindi si chiede: l'elenco dei
+ * modelli di quella marca e' lo stesso che serve la ricerca, e sceglierlo e' un gesto solo.
+ */
+async function vehChiediModello(marca, tipo, r, host) {
+  const el = vehEl(); if (!el) return;
+  const my = vehGen;
+  el.innerHTML = `<div class="rc-group"><div class="rc-group-body">`
+    + `<div class="veh-chiedi"><div class="veh-chiedi-msg">Questo annuncio non dichiara il modello: la marca è <b>${escapeHtml(marca)}</b>, il resto lo scrive il venditore nel titolo. Scegli tu il modello, così la scheda è quella giusta e non una dedotta.</div>`
+    + `<select class="veh-chiedi-sel" disabled><option>Carico i modelli…</option></select></div>`
+    + `</div></div>`;
+  // `loadModels` e' lo stesso elenco (e la stessa cache) che serve la tendina della ricerca:
+  // nessun secondo modo di chiedere i modelli di una marca.
+  const modelli = await loadModels(tipo, marca);
+  if (my !== vehGen) return;                     // un'altra scheda ha preso il posto
+  const sel = el.querySelector('.veh-chiedi-sel');
+  if (!sel) return;
+  if (!modelli.length) {
+    sel.outerHTML = '<div class="veh-chiedi-msg">L\'elenco dei modelli non è arrivato: riprova fra poco.</div>';
+    return;
+  }
+  const nome = m => (typeof m === 'string' ? m : (m.nome || m.name || ''));
+  sel.disabled = false;
+  sel.innerHTML = '<option value="">Scegli il modello…</option>'
+    + modelli.map(m => `<option value="${escapeHtml(nome(m))}">${escapeHtml(nome(m))}</option>`).join('');
+  sel.addEventListener('change', () => { if (sel.value) loadVehScheda(r, host, sel.value); });
+}
+
+async function loadVehScheda(r, host, modelloScelto) {
   if (!host) return;
   vehHost = host; vehHostUrl = r ? r.url : null;
   const el = vehEl(); if (!el) return;
@@ -3862,8 +3930,27 @@ async function loadVehScheda(r, host) {
   // Nel parco di un concessionario la ricerca precedente non c'entra: se restasse a bordo,
   // aprendo un Transit si chiederebbe la scheda della Serie 3 cercata mezz'ora prima.
   const daRicerca = cpApertoId ? '' : (p.modello || (selectedModel && selectedModel.nome) || '');
-  const modello = daRicerca || modelloAnnuncio(r);
-  if (!marca || !modello) { vehFallita('Questo annuncio non dichiara marca e modello: senza quelli la scheda non si compone.'); return; }
+  /**
+   * IL MODELLO LO DECIDE L'ANNUNCIO, NON LA RICERCA.
+   *
+   * Prima l'ordine era il contrario (`daRicerca || modelloAnnuncio(r)`), e su una ricerca
+   * allargata alla marca — quella in cui arrivano annunci di altri modelli, marcati — la
+   * scheda si componeva sul modello CERCATO. Aprendo una Dorsoduro 750 marcata «altro
+   * modello» si leggevano motorizzazioni, consumi, costo carburante, misure gomme e
+   * soprattutto RICHIAMI della 1200: l'app sapeva riga per riga che quell'annuncio era un
+   * altro veicolo, e proprio li' mostrava i dati di quello cercato.
+   *
+   * Il modello cercato resta buono quando la fonte ha CONFERMATO che l'annuncio e' quello:
+   * sono i casi in cui il filtro e' passato per il catalogo della fonte. Fuori da quelli,
+   * comanda cio' che l'annuncio dichiara di se'.
+   */
+  const NEL_BERSAGLIO = ['esatto', 'senza-versione', 'versione-non-verificata'];
+  const confermato = !r || !r.dichiarazione || NEL_BERSAGLIO.includes(r.dichiarazione);
+  const modello = modelloScelto || modelloAnnuncio(r) || (confermato ? daRicerca : '');
+  if (!marca) { vehFallita('Questo annuncio non dichiara la marca: senza quella la scheda non si compone.'); return; }
+  // Marca si', modello no: non si indovina dal titolo e non si prende quello cercato. Si
+  // chiede, dicendo perche'.
+  if (!modello) { vehChiediModello(marca, tipo, r, host); return; }
   // L'anno dell'ANNUNCIO. Prima era `annoMin || annoMax` dei filtri: un numero che parla
   // della ricerca, non del veicolo, e su una ricerca senza filtri era vuoto.
   const anno = (r && r.anno) || p.annoMin || p.annoMax || '';
@@ -3923,7 +4010,12 @@ async function preselezionaDaAnnuncio(r, my) {
     marca: (r.marca || p.marca || ''),
     // GREZZO: "Golf 5ª serie" porta dentro la generazione, e il server la legge prima di
     // ripulire il nome. Ripulendolo qui, quell'informazione la buttavamo via.
-    modello: (cpApertoId ? '' : p.modello) || r.modello || r.modelloDichiarato || '',
+    // E GREZZO DELL'ANNUNCIO, non della ricerca: `vehModelloBase` e' il modello con cui la
+    // scheda e' stata composta (quello dichiarato dall'annuncio, o quello che hai scelto tu
+    // se l'annuncio taceva). Prendendo prima `p.modello` si incrociavano i vincoli di QUESTO
+    // annuncio — anno, potenza, carburante — col catalogo di un ALTRO modello, e la
+    // motorizzazione usciva preselezionata come se fosse la sua.
+    modello: (r.modello || r.modelloDichiarato || vehModelloBase || ''),
   });
   if (r.anno) qs.set('anno', r.anno);
   if (r.potenzaCv) qs.set('cv', r.potenzaCv);
@@ -4065,7 +4157,12 @@ async function vehRichiamiCarica() {
   // Stessa coppia con cui vehMisureCarica (riga ~3846) chiede le prove: vehData e' la scheda
   // aperta, vehModelloBase il nome-modello con cui e' stata risolta.
   const marca = (vehData && vehData.marca) || (cpApertoId ? '' : p.marca) || '';
-  const modello = vehModelloBase || (vehData && vehData.modello) || (cpApertoId ? '' : p.modello) || '';
+  // `p.modello` non e' piu' fra i ripieghi: `vehModelloBase` e' il modello con cui la scheda
+  // e' stata composta, e da oggi quello lo decide l'annuncio. Tenere la ricerca come rete
+  // significava, su una lista allargata alla marca, cercare i richiami del modello CERCATO
+  // dentro il pannello di un annuncio che e' un altro veicolo — ed e' l'unico dato di
+  // sicurezza della scheda.
+  const modello = vehModelloBase || (vehData && vehData.modello) || '';
   if (!marca || vehRichiami) return;
   vehRichiami = { loading: true };
   const my = vehGen;

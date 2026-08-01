@@ -150,6 +150,20 @@ function computeAlerts(search, results) {
 
   for (const r of results) {
     if (!r.url || r.prezzo == null || r.prezzo <= 0) continue;
+    /**
+     * UN ANNUNCIO DI UN ALTRO MODELLO NON SUONA.
+     *
+     * Una ricerca salvata su un modello che Autoscout non ha a catalogo si allarga alla
+     * marca: gli avvisi che arrivavano potevano essere di altri modelli, e nel pannello
+     * erano identici agli altri — «Nuovo · <titolo> · <prezzo>». Una ricerca salvata segue
+     * QUEL modello, non la marca.
+     *
+     * Non e' un post-filtro che nasconde: l'annuncio resta visibile quando la ricerca la
+     * fai, semplicemente non ti sveglia. E `recordCheck` lo registra comunque in `seen`,
+     * cosi' se domani la risoluzione del modello migliora non arriva come "nuovo" un mezzo
+     * che sta in lista da settimane.
+     */
+    if (r.dichiarazione && r.dichiarazione !== 'esatto' && r.dichiarazione !== 'senza-versione') continue;
     // review: NON gateare su anno/km null. recordCheck (sotto) registra COMUNQUE l'annuncio in
     // `seen` → col vecchio gate un annuncio nuovo con km=null (comune su Moto.it/Subito) non
     // avvisava MAI e restava soppresso per sempre (prev != null al giro dopo). Il rumore è già

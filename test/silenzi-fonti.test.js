@@ -205,3 +205,33 @@ test('motoit-models: con `rilancia` l\'errore di rete non si confonde col catalo
   assert.deepStrictEqual(senza, con, 'sul catalogo locale le due strade danno lo stesso elenco');
   assert.ok(senza.length >= 9);
 });
+
+// ─── La marcatura decide anche cosa NON fare ─────────────────────────────────
+test('saved: un annuncio di un altro modello non genera avviso, ma resta fra i visti', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-mark-'));
+  const vecchio = process.env.USER_DATA_PATH;
+  process.env.USER_DATA_PATH = dir;
+  delete require.cache[require.resolve('../backend/saved')];
+  const saved = require('../backend/saved');
+  try {
+    const s = saved.addSaved({ label: 'Beta R-12', params: { tipo: 'moto', marca: 'Beta', modello: 'R-12' } });
+    // Primo giro: baseline silenziosa, nessun avviso per nessuno.
+    saved.recordCheck(s.id, [{ url: 'https://x/1', prezzo: 6000, titolo: 'Beta R-12', dichiarazione: 'esatto' }], {});
+    // Secondo giro: due annunci nuovi, uno giusto e uno di un altro modello.
+    const alerts = saved.recordCheck(s.id, [
+      { url: 'https://x/1', prezzo: 6000, titolo: 'Beta R-12', dichiarazione: 'esatto' },
+      { url: 'https://x/2', prezzo: 5500, titolo: 'Beta RR 125', dichiarazione: 'altro-modello' },
+      { url: 'https://x/3', prezzo: 6200, titolo: 'Beta R-12 2023', dichiarazione: 'senza-versione' },
+    ], {});
+    const urls = alerts.map(a => a.url);
+    assert.ok(urls.includes('https://x/3'), 'il modello giusto senza versione dichiarata avvisa');
+    assert.ok(!urls.includes('https://x/2'), 'l\'altro modello non suona: la ricerca salvata segue QUEL modello');
+    // Ma e' stato visto: al giro dopo non deve arrivare come "nuovo".
+    const dopo = saved.getSaved(s.id);
+    assert.ok(Object.prototype.hasOwnProperty.call(dopo.seen, 'https://x/2'),
+      'non avvisare non vuol dire dimenticare');
+  } finally {
+    if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
+    delete require.cache[require.resolve('../backend/saved')];
+  }
+});
