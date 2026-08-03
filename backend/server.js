@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { buildWorkerBundle, OUTFILE: WORKER_BUNDLE } = require('../scripts/build-worker-bundle');   // F9
 const { buildFrontendSync } = require('../scripts/build-frontend');   // F39: minify (via commenti) app.js/style.css
+const { buildGuidaSync, mtimeGuida } = require('../scripts/build-guida');   // F41: la Guida, montata da docs/guida/*.md
 const auth = require('./auth');
 const db = require('./db');
 const crawler = require('./crawler');
@@ -531,6 +532,46 @@ app.get(['/', '/index.html'], (req, res, next) => {
       .replace(/(src|href)="(app\.js|style\.css|pricing\.js)"/g, `$1="$2?v=${v}"`);
     res.set('Cache-Control', 'no-cache').type('html').send(html);
   } catch (_) { next(); }
+});
+
+/**
+ * LA GUIDA — montata, non scritta a mano.
+ *
+ * Il testo sta in docs/guida/*.md; gli elenchi (modi, filtri, ordinamenti, fonti) e i pezzi
+ * mostrati escono da frontend/index.html e da fonti-route.js, cioe' dalle stesse sorgenti che
+ * l'app usa per funzionare. Vedi scripts/build-guida.js.
+ *
+ * Sta PRIMA dello static apposta: `frontend/guida.html` e' il modello con i segnaposti
+ * <!--INDICE--> e <!--CORPO--> dentro, e servito cosi' com'e' mostrerebbe una pagina vuota.
+ * Intercettare anche `/guida.html` chiude quella porta.
+ *
+ * Dietro il gate come tutto il resto (non e' in AUTH_FREE): e' la mappa completa di cosa sa
+ * fare l'app, e questo server e' pubblicato su internet.
+ */
+let guida = { html: null, ver: '', sezioni: 0 };
+let mtimeGuidaVisto = 0;
+try {
+  guida = buildGuidaSync();
+  mtimeGuidaVisto = mtimeGuida();
+  console.log(`[guida] montata v${guida.ver} (${guida.sezioni} sezioni)`);
+} catch (e) {
+  console.warn('[guida] build fallita → /guida risponde 503:', e.message);
+}
+
+app.get(['/guida', '/guida.html'], (req, res) => {
+  const t = mtimeGuida();
+  if (t !== mtimeGuidaVisto) {
+    // Il timbro si aggiorna anche quando la build fallisce: se no un markdown rotto farebbe
+    // ritentare il montaggio a OGNI richiesta, e la guida diventerebbe il pezzo piu' lento
+    // dell'app proprio mentre e' rotta. Si tiene l'ultima versione buona.
+    mtimeGuidaVisto = t;
+    try { guida = buildGuidaSync(); console.log(`[guida] sorgente cambiato → rimontata v${guida.ver}`); }
+    catch (e) { console.warn('[guida] rimontaggio fallito, tengo la versione precedente:', e.message); }
+  }
+  if (!guida.html) return res.status(503).type('text/plain').send('La guida non è disponibile: montaggio fallito.');
+  res.type('html').set('Cache-Control', 'no-cache').set('ETag', `"${guida.ver}"`);
+  if (req.headers['if-none-match'] === `"${guida.ver}"`) return res.status(304).end();
+  res.send(guida.html);
 });
 
 app.use(express.static(path.join(__dirname, '../frontend'), {

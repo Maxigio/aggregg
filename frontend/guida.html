@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Guida — Auto Moto Radar</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <!-- Stesso tema dell'app, letto prima del CSS: chi arriva qui dal '?' non deve vedere
+       la pagina lampeggiare di bianco perche' la guida non sa che tema usa. -->
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('amr_theme')||'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+  <link href="/vendor/bootstrap.min.css" rel="stylesheet" />
+  <!-- Il cursore del prezzo lo disegna la sua libreria: nel sorgente della pagina il suo posto
+       e' un div vuoto, e senza questa il riquadro della barra resterebbe con un buco. -->
+  <link href="/vendor/nouislider.min.css" rel="stylesheet" />
+  <!-- Lo STESSO foglio dell'app, non una copia: i pezzi estratti da index.html si vedono
+       qui esattamente come si vedono la', e cambiano insieme a quelli. -->
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body class="guida-body">
+
+  <div class="container">
+
+    <div class="topbar">
+      <a class="brand" href="/" title="Torna all'app">
+        <span class="brand-name">Auto Moto Radar</span>
+      </a>
+      <span class="brand-tagline">Guida</span>
+      <div class="topbar-actions">
+        <a class="theme-toggle" href="/" title="Torna all'app" aria-label="Torna all'app">←</a>
+        <button type="button" class="theme-toggle" id="guidaTema" title="Cambia tema" aria-label="Cambia tema">◐</button>
+      </div>
+    </div>
+
+    <div class="guida-wrap">
+      <nav class="guida-indice" aria-label="Indice della guida">
+        <div class="guida-indice-tit">In questa guida</div>
+        <ol><!--INDICE--></ol>
+      </nav>
+
+      <main class="guida-corpo">
+        <!--CORPO-->
+      </main>
+    </div>
+
+  </div>
+
+  <script src="/vendor/nouislider.min.js"></script>
+  <script>
+    // IL CURSORE DEL PREZZO, disegnato dalla libreria vera.
+    // Nell'app quel div lo riempie noUiSlider quando arrivano i risultati; qui non ci sono
+    // risultati, quindi resterebbe vuoto e la barra sembrerebbe rotta. Stessa libreria,
+    // valori d'esempio, e comunque inerte: `.guida-pezzo` blocca i click.
+    document.querySelectorAll('[data-era="prezzoSlider"]').forEach(function (el) {
+      if (!window.noUiSlider || el.noUiSlider) return;
+      try {
+        noUiSlider.create(el, {
+          start: [3500, 18000], connect: true, step: 100,
+          range: { min: 1000, max: 25000 },
+        });
+      } catch (e) { /* la barra si vede lo stesso, solo senza cursore */ }
+    });
+    var eur = function (n) { return '€ ' + n.toLocaleString('it-IT'); };
+    document.querySelectorAll('[data-era="sliderLabelMin"]').forEach(function (e) { e.textContent = eur(3500); });
+    document.querySelectorAll('[data-era="sliderLabelMax"]').forEach(function (e) { e.textContent = eur(18000); });
+  </script>
+  <script>
+    // Niente app.js qui: prende il DOM dell'app al caricamento e su questa pagina
+    // troverebbe solo null. Il tema e' l'unica cosa che serve, ed e' tre righe.
+    document.getElementById('guidaTema').addEventListener('click', function () {
+      var r = document.documentElement;
+      var t = r.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      r.setAttribute('data-theme', t);
+      try { localStorage.setItem('amr_theme', t); } catch (e) {}
+    });
+    // La voce dell'indice corrispondente a dove si sta leggendo.
+    var sezioni = document.querySelectorAll('.guida-sezione');
+    var voci = document.querySelectorAll('.guida-indice a');
+    if ('IntersectionObserver' in window && sezioni.length) {
+      var oss = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          voci.forEach(function (a) {
+            a.classList.toggle('attiva', a.getAttribute('href') === '#' + e.target.id);
+          });
+        });
+      }, { rootMargin: '-20% 0px -70% 0px' });
+      sezioni.forEach(function (s) { oss.observe(s); });
+    }
+  </script>
+
+</body>
+</html>
