@@ -276,16 +276,38 @@ function toast(msg) {
 }
 
 // ─── Modalità demo (ospite read-only) ───────────────────────────────────────
+/**
+ * SOLA LETTURA NON VUOL DIRE UNA STANZA SOLA.
+ *
+ * Qui dentro c'erano `modeToggle` e `setSearchMode('cerca')`: insieme toglievano all'ospite
+ * i quattro modi e lo inchiodavano alla ricerca Auto. Chi entrava con una password in sola
+ * lettura non vedeva Moto, Ricambi e Competitor e non aveva modo di sapere che esistessero
+ * — sembrava un'app rotta, non un'app limitata. Misurato sul gate del server (server.js,
+ * `role === 'demo'`): di quei quattro modi solo le SCRITTURE del Competitor sono negate
+ * (POST/DELETE su /api/competitor*). Auto, Moto, Ricambi e la lettura dei competitor sono
+ * tutte GET permesse. Quindi il selettore resta, e a sparire sono i bottoni che
+ * prenderebbero 403 — via CSS (`body.demo-mode`, in style.css), perche' il pannello
+ * competitor si ridisegna a ogni azione e una pulizia in JS andrebbe rifatta ogni volta.
+ *
+ * Via anche `setSearchMode('cerca')`: girava DOPO `ripristinaModo()` e riportava l'ospite
+ * su Auto a ogni ricaricamento, buttando via il modo in cui stava lavorando.
+ */
 function applyDemoMode() {
   document.body.classList.add('demo-mode');
-  ['btnSalvaRicerca', 'btnControllaTutte', 'modeToggle'].forEach(id => {
+  ['btnSalvaRicerca', 'btnControllaTutte'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
-  setSearchMode('cerca');
   if (!document.querySelector('.demo-banner')) {
     const bar = document.createElement('div');
     bar.className = 'demo-banner';
-    bar.textContent = 'Modalità demo — sola lettura: puoi cercare ed esplorare, i salvataggi sono disattivati.';
+    // La frase prometteva una guida e non ci portava: chi entra in sola lettura e' proprio
+    // chi ne ha piu' bisogno. Il link e' costruito qui e non scritto come HTML per non
+    // aprire una via a testo non fidato dentro innerHTML.
+    bar.append('Modalità demo — ');
+    const g = document.createElement('a');
+    g.href = '/guida'; g.target = '_blank'; g.rel = 'noopener';
+    g.textContent = 'Dubbi? Consulta la Guida!';
+    bar.append(g);
     document.body.prepend(bar);
   }
 }

@@ -17,7 +17,12 @@ const crypto = require('crypto');
 
 const FILE = 'auth.json';
 const TTL_MS = 30 * 24 * 60 * 60 * 1000;   // cookie valido 30 giorni
-const MIN_LEN = 10;
+// Otto, non dieci: deciso dal proprietario il 2026-08-03. Regge perche' il login non e'
+// esposto a tentativi illimitati — postLogin (server.js) conta i fallimenti per IP, dorme
+// 1s a ogni errore e dopo LOCK_MAX=8 chiude per LOCK_MS=10 minuti: ~1150 prove al giorno
+// per indirizzo, che su 8 caratteri non basta a esaurire niente. Se un giorno quel freno
+// sparisse, questo numero va rialzato insieme.
+const MIN_LEN = 8;
 const ROLES = new Set(['full', 'demo']);   // 'full' = papà; 'demo' = ospite read-only
 
 function filePath() {
@@ -99,6 +104,23 @@ function setDemoPassword(pw) {
   return p;
 }
 
+/**
+ * RITIRA la password demo condivisa. Si poteva impostare e non togliere: una password data
+ * in giro una volta restava valida per sempre, e l'unico modo di chiuderla era riscrivere
+ * auth.json a mano. Serve quando le persone hanno una password a testa (`persone`) e
+ * l'ospite anonimo non deve piu' esistere.
+ * @returns {boolean} true se c'era qualcosa da togliere.
+ */
+function togliDemoCondiviso() {
+  const cfg = load();
+  if (!leggibile(cfg)) return false;
+  if (!cfg.demoSalt && !cfg.demoHash) return false;
+  delete cfg.demoSalt;
+  delete cfg.demoHash;
+  scriviAtomico(filePath(), cfg);
+  return true;
+}
+
 // Confronto scrypt timing-safe contro una coppia salt/hash (null-safe: se la
 // credenziale non è impostata → false, niente scrypt su undefined).
 function matchHash(pw, salt, hash) {
@@ -141,6 +163,19 @@ function verifyRole(pw) { const u = verifica(pw); return u ? u.ruolo : null; }
  * quello che finisce nel cookie e nel registro accessi. Il ruolo di default e' 'demo': un
  * collega guarda, e chi deve scrivere lo si dice esplicitamente.
  */
+/**
+ * L'identificativo che si ricava da un nome: e' quello che finisce nel cookie e nel registro
+ * accessi. Esportato perche' chi prepara un elenco di persone (scripts/utenti-da-env.js) deve
+ * poter scoprire PRIMA di scrivere che due nomi diversi danno lo stesso id, o che un nome
+ * cade su una parola riservata — altrimenti se ne accorge a meta' scrittura, con qualcuno
+ * gia' dentro auth.json e qualcun altro no.
+ */
+function idDaNome(nome) {
+  return String(nome || '').trim().toLowerCase().normalize('NFD')
+    .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+const ID_RISERVATI = new Set(['owner', 'demo']);
+
 function setPersona(nome, pw, ruolo = 'demo') {
   const n = String(nome || '').trim();
   if (!n) throw new Error('Serve un nome.');
@@ -148,9 +183,9 @@ function setPersona(nome, pw, ruolo = 'demo') {
   const cfg = load();
   if (cfg === ILLEGGIBILE) throw new Error(`${filePath()} esiste ma non si legge: correggilo prima di riscriverlo.`);
   if (!cfg) throw new Error('Imposta prima la password principale (scripts/set-password.js).');
-  const id = n.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const id = idDaNome(n);
   if (!id) throw new Error('Il nome non produce un identificativo utilizzabile.');
-  if (id === 'owner' || id === 'demo') throw new Error(`"${id}" e' riservato: usa un altro nome.`);
+  if (ID_RISERVATI.has(id)) throw new Error(`"${id}" e' riservato: usa un altro nome.`);
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(String(pw), salt, 64).toString('hex');
   cfg.persone = (cfg.persone || []).filter(p => String(p.id) !== id);
@@ -230,6 +265,7 @@ function checkSessione(v) {
 function checkToken(v) { const s = checkSessione(v); return s ? s.ruolo : null; }
 
 module.exports = {
-  isEnabled, stato, setPassword, setDemoPassword, setPersona, togliPersona, persone,
-  verifica, verifyRole, makeToken, checkToken, checkSessione, MIN_LEN, TTL_MS,
+  isEnabled, stato, setPassword, setDemoPassword, togliDemoCondiviso, setPersona, togliPersona,
+  persone, verifica, verifyRole, makeToken, checkToken, checkSessione,
+  idDaNome, ID_RISERVATI, MIN_LEN, TTL_MS,
 };
