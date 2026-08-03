@@ -17,7 +17,7 @@ Il lavoro fatto finora su Windows:
 - ✅ Script `scripts/prepare-mac-chromium.js` per scaricare Chromium x64-Mac.
 - ✅ Script `scripts/make-mac-icon.sh` per generare `electron/icon.icns` da `electron/icon.svg`.
 - ✅ Modulo auto-update in `electron/auto-update.js` già integrato in `electron/main.js` (attivo solo se `app.isPackaged`).
-- ✅ Documenti: `docs/BUILD_MAC_GUIDE.md` (per l'utente), `docs/GUIDA_PAPA.md` (stampabile).
+- ✅ Documenti: `docs/BUILD_MAC_GUIDE.md` (per l'utente), `docs/APRIRE-AMR.md` (stampabile).
 
 **Tutto girava correttamente su Windows (smoke test passato dopo i fix cross-platform).**
 
