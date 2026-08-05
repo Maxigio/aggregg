@@ -25,6 +25,7 @@ const annullo = require('../annullo');        // il segnale che chiude le richie
 const { livelliAnnuncio, dichiarato } = require('./subito-nodo'); // cosa l'annuncio dichiara di se'
 const dedotta = require('./versione-dedotta');        // la versione che il venditore non ha scelto dal menu
 const { _perMarca } = require('./versioni-unificate');// il catalogo versioni, gia' in cache per marca
+const filtriAuto = require('../filtri-auto');         // filtri avanzati auto → parametri nativi hades
 
 const HOST = 'hades.subito.it';
 // Categorie hades (macro Motori=1). accessoriAuto/Moto scoperti live 2026-07-07 per la sezione Ricambi.
@@ -445,6 +446,15 @@ function buildPath(params, start) {
   // Ordinamento: solo se richiesto esplicitamente (on-search='priceasc'); il crawler
   // NON lo passa → ordine naturale invariato (vista profonda/truncated intatta).
   if (params._sort && SORT_VALIDI.has(params._sort)) qs.set('sort', params._sort);
+
+  /**
+   * I FILTRI AVANZATI DELLE AUTO, nativi. La traduzione (carrozzeria → `ct`, cambio → `gr`,
+   * …) sta in backend/filtri-auto.js, che porta anche i due tranelli di questa fonte: i CV
+   * sono CV davvero (`hps`/`hpe`), ma `ss`/`se` sono la CHIAVE del menu posti, non il numero.
+   * Piu' codici sullo stesso filtro viaggiano separati da virgola, in OR esatto.
+   */
+  for (const [k, v] of Object.entries(filtriAuto.perSubito(params.filtriAuto))) qs.set(k, v);
+
   return `/v1/search/items?${qs.toString()}`;
 }
 
@@ -576,7 +586,11 @@ async function paginaRecupero(params) {
     // ordinamento condividevano la stessa entry per dieci minuti.
     params.annoMin, params.annoMax, params.kmMin, params.kmMax, params._sort,
     params.subitoVersioneTesto, (params.subitoNodo && params.subitoNodo.testo) || '',
-    (params.subitoNodo && params.subitoNodo.testoDedotto) || ''].join('|');
+    (params.subitoNodo && params.subitoNodo.testoDedotto) || '',
+    // I filtri avanzati entrano nella richiesta, quindi entrano nella chiave. Senza,
+    // il recupero fatto senza filtri veniva riusato con i filtri: la fonte dichiarava
+    // 2 annunci e ne consegnava 13, berline col cambio manuale comprese.
+    filtriAuto.chiaveCache(params.filtriAuto)].join('|');
   const hit = recuperoCache.get(chiave);
   if (hit && Date.now() - hit.ts < RECUPERO_TTL) return hit.ads;
   const page = await fetchPage({ ...params, subitoSoloNonDichiarati: true }, 0);

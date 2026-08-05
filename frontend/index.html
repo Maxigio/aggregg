@@ -143,6 +143,14 @@
           <label class="adv-field"><span>Regione</span><select id="regione"><option value="">Tutta Italia</option></select></label>
           <label class="adv-field"><span>Raggio km (Autoscout)</span><input type="number" id="raggio" placeholder="100" min="1" /></label>
         </div>
+        <!-- I FILTRI AVANZATI DELLE AUTO. Le tendine le riempie app.js da /api/filtri-auto,
+             che le legge dalla stessa tabella con cui il server le traduce per le fonti:
+             scritte anche qui, il giorno che un codice cambia ne resterebbe una vecchia.
+             Solo auto: per le moto c'e' anche Moto.it, che questi filtri non li onora. -->
+        <div class="adv-grid adv-grid-auto d-none" id="filtriAutoGrid" data-solo="auto">
+          <label class="adv-field"><span>Potenza min (CV)</span><input type="number" id="cvMin" placeholder="90" min="1" max="1999" /></label>
+          <label class="adv-field"><span>Potenza max (CV)</span><input type="number" id="cvMax" placeholder="150" min="1" max="1999" /></label>
+        </div>
 
         <!-- Campi modalità RICAMBI: veicolo (auto|moto) + 3 tab con input DEDICATI (valori persistenti) -->
         <div class="ricambi-fields d-none" id="ricambiFields">

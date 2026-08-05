@@ -1,0 +1,114 @@
+{
+  "generatoIl": "2026-08-05",
+  "fonte": "misurato live: hades.subito.it (800 annunci campionati su 6 marche) + introspezione GraphQL Autoscout",
+  "nota": "I filtri avanzati comuni alle due fonti che servono le AUTO. Moto.it non entra: fa solo moto, e per le auto viene saltata. Ogni voce porta il codice della fonte, non il suo nome: i nomi cambiano, i codici no.",
+  "trappole": {
+    "potenza": "Subito usa i CV (hps/hpe), Autoscout i kW (power). Misurato: power 74-81 torna auto da 101-105 CV. Passare i CV ad Autoscout come fossero kW da' in silenzio auto molto piu' potenti di quelle chieste.",
+    "posti": "Subito ss/se lavorano sulla CHIAVE del menu, non sul numero di posti: ss=4&se=4 torna auto a CINQUE posti. Autoscout invece vuole il numero vero.",
+    "classeAmbientale": "Su Autoscout emissionClass e' CUMULATIVA (\"almeno Euro X\"): Euro4 24.176 contiene Euro5 23.427 che contiene Euro6 21.378. Su Subito i valori sono esatti, quindi \"almeno Euro 6\" si scrive elencandoli tutti. E vuole un valore SINGOLO: la forma a lista da' errore.",
+    "multiValore": "I filtri Subito accettano piu' valori separati da virgola, in OR esatto (verificato: ct=1 1.561 + ct=8 245 = ct=1,8 1.806). Cosi' una voce nostra puo' coprire piu' voci loro.",
+    "km0": "Autoscout non ha il chilometro zero: ha New/Used. Un Km0 li' e' Used, quindi quella voce allarga su Autoscout e va detto.",
+    "utilitaria": "Autoscout mette Utilitaria e City car nello stesso Compact: sono una voce sola anche da noi, altrimenti prometteremmo una distinzione che una fonte su due non fa."
+  },
+  "filtri": {
+    "carrozzeria": {
+      "etichetta": "Carrozzeria",
+      "subitoParam": "ct",
+      "as24Campo": "bodyType",
+      "as24Forma": "lista",
+      "voci": [
+        { "id": "utilitaria",   "etichetta": "Utilitaria / City car", "subito": [1, 8], "as24": ["Compact"] },
+        { "id": "berlina",      "etichetta": "Berlina",               "subito": [2],    "as24": ["Sedan"] },
+        { "id": "stationwagon", "etichetta": "Station wagon",         "subito": [3],    "as24": ["StationWagon"] },
+        { "id": "monovolume",   "etichetta": "Monovolume",            "subito": [4],    "as24": ["Van"] },
+        { "id": "suv",          "etichetta": "SUV / Fuoristrada",     "subito": [5],    "as24": ["SUV", "OffRoad"] },
+        { "id": "cabrio",       "etichetta": "Cabrio",                "subito": [6],    "as24": ["Convertible"] },
+        { "id": "coupe",        "etichetta": "Coupé",                 "subito": [7],    "as24": ["Coupe"] },
+        { "id": "altro",        "etichetta": "Altro",                 "subito": [10],   "as24": ["Other"] }
+      ]
+    },
+    "cambio": {
+      "etichetta": "Cambio",
+      "subitoParam": "gr",
+      "as24Campo": "transmissionType",
+      "as24Forma": "lista",
+      "voci": [
+        { "id": "manuale",     "etichetta": "Manuale",     "subito": [1], "as24": ["Manual"] },
+        { "id": "automatico",  "etichetta": "Automatico",  "subito": [2], "as24": ["Automatic"] },
+        { "id": "sequenziale", "etichetta": "Sequenziale", "subito": [3], "as24": ["Semiautomatic"] }
+      ]
+    },
+    "alimentazione": {
+      "etichetta": "Alimentazione",
+      "subitoParam": "fl",
+      "as24Campo": "fuel",
+      "as24Forma": "lista",
+      "voci": [
+        { "id": "benzina",   "etichetta": "Benzina",         "subito": [1],       "as24": ["Gasoline"] },
+        { "id": "diesel",    "etichetta": "Diesel",          "subito": [2],       "as24": ["Diesel"] },
+        { "id": "gpl",       "etichetta": "GPL",             "subito": [3],       "as24": ["LPG"] },
+        { "id": "metano",    "etichetta": "Metano",          "subito": [7],       "as24": ["CNG"] },
+        { "id": "elettrica", "etichetta": "Elettrica",       "subito": [4],       "as24": ["Electric"] },
+        { "id": "ibrida",    "etichetta": "Ibrida",          "subito": [6, 8, 10], "as24": ["HybridElectricGasoline", "HybridElectricDiesel"] },
+        { "id": "plugin",    "etichetta": "Ibrida plug-in",  "subito": [12],      "as24": [], "as24Phev": "Only" }
+      ]
+    },
+    "condizione": {
+      "etichetta": "Condizione",
+      "subitoParam": "cvs",
+      "as24Campo": "usageState",
+      "as24Forma": "lista",
+      "voci": [
+        { "id": "usato", "etichetta": "Usato",           "subito": [1], "as24": ["Used"] },
+        { "id": "km0",   "etichetta": "Chilometro zero", "subito": [2], "as24": ["Used"], "allargaSu": ["autoscout"] },
+        { "id": "nuovo", "etichetta": "Nuovo",           "subito": [3], "as24": ["New"] }
+      ]
+    },
+    "porte": {
+      "etichetta": "Porte",
+      "subitoParam": "dr",
+      "as24Campo": "numberOfDoors",
+      "as24Forma": "intervallo",
+      "voci": [
+        { "id": "2-3", "etichetta": "2 o 3", "subito": [1], "as24": { "from": 2, "to": 3 } },
+        { "id": "4-5", "etichetta": "4 o 5", "subito": [2], "as24": { "from": 4, "to": 5 } }
+      ]
+    },
+    "posti": {
+      "etichetta": "Posti",
+      "subitoParam": "ss/se",
+      "as24Campo": "numberOfSeats",
+      "as24Forma": "intervallo",
+      "nota": "il valore e' il numero di posti; su Subito si traduce nella chiave del suo menu",
+      "voci": [
+        { "id": "2", "etichetta": "2",         "subito": [1], "as24": { "from": 2, "to": 2 } },
+        { "id": "3", "etichetta": "3",         "subito": [2], "as24": { "from": 3, "to": 3 } },
+        { "id": "4", "etichetta": "4",         "subito": [3], "as24": { "from": 4, "to": 4 } },
+        { "id": "5", "etichetta": "5",         "subito": [4], "as24": { "from": 5, "to": 5 } },
+        { "id": "6", "etichetta": "6",         "subito": [5], "as24": { "from": 6, "to": 6 } },
+        { "id": "7", "etichetta": "7",         "subito": [6], "as24": { "from": 7, "to": 7 } },
+        { "id": "8+", "etichetta": "Più di 8", "subito": [8], "as24": { "from": 8, "to": 99 } }
+      ]
+    },
+    "classeAmbientale": {
+      "etichetta": "Classe ambientale",
+      "subitoParam": "pl",
+      "as24Campo": "emissionClass",
+      "as24Forma": "singolo",
+      "nota": "e' un \"almeno\": chi cerca Euro 6 vuole entrare in centro, non un Euro 6 esatto",
+      "voci": [
+        { "id": "euro4", "etichetta": "Almeno Euro 4", "subito": [5, 6, 7, 9, 11, 12, 13], "as24": "Euro4" },
+        { "id": "euro5", "etichetta": "Almeno Euro 5", "subito": [6, 7, 9, 11, 12, 13],    "as24": "Euro5" },
+        { "id": "euro6", "etichetta": "Almeno Euro 6", "subito": [7, 9, 11, 12, 13],       "as24": "Euro6" }
+      ]
+    }
+  },
+  "potenza": {
+    "etichetta": "Potenza (CV)",
+    "subitoParam": "hps/hpe",
+    "as24Campo": "power",
+    "as24Unita": "kW",
+    "cvPerKw": 1.35962,
+    "nota": "l'utente scrive CV. Subito li vuole cosi'; Autoscout vuole i kW, quindi si dividono."
+  }
+}

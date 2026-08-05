@@ -15,7 +15,8 @@ const https = require('https');
 const annullo = require('../annullo');
 
 const { kindForStatus, fail } = require('./utils');   // classificazione salute crawler (F1.5)
-const budget = require('../budget-richieste');        // conta le richieste, non le limita
+const budget = require('../budget-richieste');  // conta le richieste, non le limita
+const filtriAuto = require('../filtri-auto');   // filtri avanzati auto → campi Vehicle_
 // L'UNICO risolutore di provincia del progetto: valida contro le 107 sigle vere e non
 // sceglie fra due indizi che si contraddicono. Lo usano entrambi i rami AS24.
 const { risolvi: risolviProvincia } = require('../province-sigla');
@@ -227,6 +228,13 @@ function finisci(v, params, page, opts) {
       to:   (params.annoMax || 2100) * 10000 + 1231,
     };
   }
+
+  /**
+   * I FILTRI AVANZATI DELLE AUTO. La traduzione sta in backend/filtri-auto.js, dove sono
+   * scritte anche le trappole di questa fonte: `power` e' in kW (non CV) ed `emissionClass`
+   * vuole un valore SINGOLO e vale come "almeno".
+   */
+  Object.assign(v, filtriAuto.perAutoscout(params.filtriAuto));
 
   const vars = { v, loc, m };
   if (params.as24Customer) vars.cu = { id: parseInt(params.as24Customer, 10) };

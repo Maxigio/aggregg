@@ -275,6 +275,71 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
+// ─── Filtri avanzati delle auto ─────────────────────────────────────────────
+/**
+ * LE TENDINE SE LE RIEMPIE IL SERVER, non l'HTML.
+ *
+ * Le voci (carrozzeria, cambio, alimentazione, …) vengono da /api/filtri-auto, che le legge
+ * dalla STESSA tabella con cui il server le traduce nel dialetto di Subito e Autoscout.
+ * Scriverle anche qui vorrebbe dire due elenchi da tenere allineati a mano, e il giorno che
+ * una fonte cambia un codice non si vedrebbe niente: solo una ricerca che torna storta.
+ *
+ * Solo AUTO. Le moto hanno anche Moto.it, che questi filtri non li onora: mostrarli anche li'
+ * sarebbe un filtro che una fonte su tre ignora in silenzio.
+ */
+let filtriAutoNomi = [];
+async function caricaFiltriAuto() {
+  const griglia = document.getElementById('filtriAutoGrid');
+  if (!griglia) return;
+  let d = null;
+  try { d = await fetch('/api/filtri-auto').then(r => (r.ok ? r.json() : null)); } catch (_) { d = null; }
+  if (!d || !Array.isArray(d.filtri)) return;   // senza elenco niente tendine: meglio di tendine vuote
+  filtriAutoNomi = d.filtri.map(f => f.nome);
+  const prima = griglia.firstElementChild;      // i due campi CV restano in coda
+  for (const f of d.filtri) {
+    const lab = document.createElement('label');
+    lab.className = 'adv-field';
+    const sp = document.createElement('span');
+    sp.textContent = f.etichetta;
+    const sel = document.createElement('select');
+    sel.id = 'fa_' + f.nome;
+    sel.dataset.filtro = f.nome;
+    const vuota = document.createElement('option');
+    vuota.value = ''; vuota.textContent = 'Tutte';
+    sel.appendChild(vuota);
+    for (const v of f.voci) {
+      const o = document.createElement('option');
+      o.value = v.id;
+      // Le voci che su una fonte allargano invece di restringere lo dicono qui, non dopo:
+      // il chilometro zero su Autoscout non esiste, e chi sceglie deve saperlo prima.
+      o.textContent = v.etichetta + (v.allargaSu ? ` (su ${v.allargaSu.join(' e ')} allarga)` : '');
+      sel.appendChild(o);
+    }
+    lab.append(sp, sel);
+    griglia.insertBefore(lab, prima);
+  }
+}
+
+/** Quello che l'utente ha scelto, pronto per la query. Vuoto = non impostato. */
+function filtriAutoScelti() {
+  const out = {};
+  for (const n of filtriAutoNomi) {
+    const v = (document.getElementById('fa_' + n) || {}).value;
+    if (v) out[n] = v;
+  }
+  for (const k of ['cvMin', 'cvMax']) {
+    const v = (document.getElementById(k) || {}).value;
+    if (v) out[k] = v;
+  }
+  return out;
+}
+
+/** La griglia si vede solo in Auto: `data-solo` dice a chi appartiene. */
+function sincronizzaFiltriAuto(tipo) {
+  const g = document.getElementById('filtriAutoGrid');
+  if (g) g.classList.toggle('d-none', tipo !== 'auto');
+}
+
 // ─── Modalità demo (ospite read-only) ───────────────────────────────────────
 /**
  * SOLA LETTURA NON VUOL DIRE UNA STANZA SOLA.
@@ -328,8 +393,10 @@ async function init() {
   // giusto. `ripristinaModo()` piu' sotto fa il resto (pannelli, aree) ed e' idempotente.
   preImpostaModo();
   document.body.dataset.tipo = currentTipo();
+  sincronizzaFiltriAuto(currentTipo());
 
   populateRegione();
+  caricaFiltriAuto();
   renderFacetChips();
   await populateMarca(currentTipo());
   setupMarcaAutocomplete();
@@ -343,6 +410,7 @@ async function init() {
   // "Cerca" spento, e l'unico modo di uscirne era passare da Auto e tornare indietro.
   tipoInputs.forEach(input => input.addEventListener('change', async () => {
     document.body.dataset.tipo = input.value;
+    sincronizzaFiltriAuto(input.value);
     await populateMarca(input.value);
     marcaSelect.value = '';
     document.getElementById('modello').value = '';
@@ -2197,6 +2265,10 @@ async function doSearch() {
     const vt = (versioneInput?.value || '').trim();
     if (vt) params.versione = vt.slice(0, 80);
   }
+  // I filtri avanzati delle auto: il server li ignora sulle moto, ma non glieli mandiamo
+  // nemmeno — un parametro che viaggia e non fa niente e' un parametro che un giorno
+  // qualcuno legge e crede applicato.
+  if (tipo === 'auto') Object.assign(params, filtriAutoScelti());
   Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });
   closeMatrix();   // le spunte restano (attraversano i contesti), il pannello aperto no
   // `has-results` NON si mette qui: quattro righe piu' sotto `hideResults()` la toglie —

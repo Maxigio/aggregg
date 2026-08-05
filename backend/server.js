@@ -13,6 +13,7 @@ const { execFile } = require('child_process');
 const { buildWorkerBundle, OUTFILE: WORKER_BUNDLE } = require('../scripts/build-worker-bundle');   // F9
 const { buildFrontendSync } = require('../scripts/build-frontend');   // F39: minify (via commenti) app.js/style.css
 const { buildGuidaSync, mtimeGuida } = require('../scripts/build-guida');   // F41: la Guida, montata da docs/guida/*.md
+const filtriAuto = require('./filtri-auto');            // filtri avanzati auto → dialetto di ogni fonte
 const auth = require('./auth');
 const db = require('./db');
 const crawler = require('./crawler');
@@ -535,6 +536,25 @@ app.get(['/', '/index.html'], (req, res, next) => {
 });
 
 /**
+ * I FILTRI AVANZATI DELLE AUTO, per chi deve disegnarli.
+ *
+ * Le voci non si riscrivono nell'HTML: vengono da data/filtri-auto.json, che e' la stessa
+ * tabella con cui il server le traduce nel dialetto delle fonti. Scritte in due posti,
+ * il giorno che una fonte cambia un codice ne resterebbe uno vecchio — e a schermo non
+ * si vedrebbe niente, solo una ricerca che torna storta.
+ */
+app.get('/api/filtri-auto', (req, res) => {
+  res.set('Cache-Control', 'no-cache').json({
+    filtri: filtriAuto.NOMI.map(n => ({
+      nome: n,
+      etichetta: filtriAuto.TAB.filtri[n].etichetta,
+      voci: filtriAuto.voci(n),
+    })),
+    potenza: { etichetta: filtriAuto.TAB.potenza.etichetta },
+  });
+});
+
+/**
  * LA GUIDA — montata, non scritta a mano.
  *
  * Il testo sta in docs/guida/*.md; gli elenchi (modi, filtri, ordinamenti, fonti) e i pezzi
@@ -995,6 +1015,16 @@ function parseSearchParams(query) {
        * 80 caratteri: oltre non e' piu' una versione, e' una frase.
        */
       versione:         versione ? String(versione).trim().slice(0, 80) : null,
+      /**
+       * I FILTRI AVANZATI, SOLO SULLE AUTO.
+       *
+       * Le auto le servono Subito e Autoscout, e carrozzeria/cambio/alimentazione/porte/
+       * posti/potenza/classe/condizione li hanno tutti e due nativi: nessuna fonte cieca.
+       * Le moto invece hanno anche Moto.it, che questi filtri non li onora — misurato con
+       * un controllo che funziona (`price_t` muove il totale, `cc_f` e `type` no). Metterli
+       * anche li' vorrebbe dire un filtro che una fonte su tre ignora in silenzio.
+       */
+      filtriAuto:       tipo.trim() === 'auto' ? filtriAuto.leggiDaQuery(query) : {},
     }
   };
 }
@@ -1161,10 +1191,14 @@ function searchCacheKey(p) {
   // versione GTI e poi con GTD la seconda riceveva i risultati della prima per tre minuti.
   // Visto succedere: "Golf GTD" tornava sessanta GTI, con le etichette tutte "esatto".
   // Chi aggiunge un parametro che cambia i RISULTATI deve aggiungerlo anche qui.
+  // I filtri avanzati sono un OGGETTO, quindi non basta interpolarlo: `[object Object]`
+  // sarebbe identico per carrozzeria=suv e carrozzeria=berlina, cioe' lo stesso morso una
+  // terza volta. Si srotolano in coppie ordinate, cosi' due scelte diverse danno chiavi diverse.
+  const avanzati = filtriAuto.chiaveCache(p.filtriAuto);
   return ['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax',
           'regione', 'raggio', 'mmmvAutoscout', 'motoitBrandSlug', 'motoitModelSlug', 'motoitBikeCode',
           'versione', 'fetta']
-    .map(f => `${f}=${p[f] ?? ''}`).join('&').toLowerCase();
+    .map(f => `${f}=${p[f] ?? ''}`).concat(`avanzati=${avanzati}`).join('&').toLowerCase();
 }
 function cacheable(data) {
   // 'timeout' e' uno stato-rotto come gli altri, e mancava: se AS24 o Moto.it scadevano mentre
