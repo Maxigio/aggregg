@@ -55,7 +55,10 @@
       "icon": "electron/icon.icns",
       "identity": null,
       "gatekeeperAssess": false,
-      "hardenedRuntime": false
+      "hardenedRuntime": false,
+      "target": [
+        "zip"
+      ]
     },
     "win": {
       "target": [
@@ -84,6 +87,8 @@
       "electron/**",
       "backend/**",
       "frontend/**",
+      "scripts/**",
+      "docs/guida/**",
       "node_modules/**",
       "!node_modules/electron",
       "!node_modules/electron-builder",
@@ -91,6 +96,16 @@
       "!node_modules/nouislider",
       "!node_modules/tom-select",
       "data/**",
+      "!data/auth.json*",
+      "!data/.subito-session.json",
+      "!data/chrome-profile/**",
+      "!data/logs/**",
+      "!data/*.log",
+      "!data/*.bak",
+      "!data/*-cache.json",
+      "!data/competitor.json",
+      "!data/saved-searches.json",
+      "!data/reports.jsonl",
       "!pw-browsers/**"
     ]
   },

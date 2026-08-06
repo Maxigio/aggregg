@@ -12,11 +12,14 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const esbuild = require('esbuild');
 
 const FE = path.join(__dirname, '../frontend');
 
 function buildFrontendSync() {
+  // Dentro la funzione, come build-worker-bundle: esbuild e' una devDependency e nel
+  // pacchetto Electron NON c'e'. A livello di modulo questo require ammazzava il boot
+  // a server.js:14, PRIMA del try/catch che dichiara "minify fallita → servo i sorgenti".
+  const esbuild = require('esbuild');
   const jsSrc  = fs.readFileSync(path.join(FE, 'app.js'), 'utf8');
   const cssSrc = fs.readFileSync(path.join(FE, 'style.css'), 'utf8');
   const js = esbuild.transformSync(jsSrc, {

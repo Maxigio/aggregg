@@ -1011,5 +1011,11 @@ test('il DMG e\' staccato: niente aggiornamento automatico agganciato', () => {
     'electron/auto-update.js e\' tornato: era li\' solo per il DMG');
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
   assert.ok(!pkg.build.dmg, 'il blocco dmg e\' tornato in package.json');
-  assert.ok(!(pkg.build.mac && pkg.build.mac.target), 'il target dmg e\' tornato fra i mac target');
+  // La prima forma di questa guardia pretendeva NESSUN mac.target, convinta che bastasse a
+  // non fare DMG. E' il contrario: senza target electron-builder usa il default ["zip","dmg"]
+  // e il DMG "staccato" rinasceva per omissione. La regola vera: un target ESPLICITO, senza dmg.
+  const macTarget = pkg.build.mac && pkg.build.mac.target;
+  assert.ok(Array.isArray(macTarget) && macTarget.length,
+    'build.mac.target deve essere esplicito: senza, il default di electron-builder rifa\' il DMG');
+  assert.ok(!JSON.stringify(macTarget).includes('dmg'), 'il target dmg e\' tornato fra i mac target');
 });

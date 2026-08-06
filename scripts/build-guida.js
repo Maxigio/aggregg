@@ -328,7 +328,9 @@ function buildGuidaSync() {
 
 /** Il momento piu' recente fra i sorgenti: serve a rifare la build solo quando serve. */
 function mtimeGuida() {
-  const files = [...fileSezioni(), INDEX_HTML, MODELLO];
+  // app.js e' un sorgente VERO della Guida (priceMenuHTML, elenchi): senza di lui nel
+  // timbro, cambiare il frontend lasciava in giro la pagina vecchia — pure con un 304.
+  const files = [...fileSezioni(), INDEX_HTML, MODELLO, path.join(RADICE, 'frontend', 'app.js')];
   let piu = 0;
   for (const f of files) {
     try { piu = Math.max(piu, fs.statSync(f).mtimeMs); } catch (_) { /* sparito: la build lo dira' */ }

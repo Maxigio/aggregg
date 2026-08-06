@@ -129,3 +129,63 @@ test('richiedere server.js resta senza effetti collaterali', () => {
   assert.strictEqual(srv.server, null,
     'server.js si e\' rimesso in ascolto al require: rimetti la guardia require.main === module');
 });
+
+// ─── Il pacchetto e' il programma che gira ─────────────────────────────────────────────
+//
+// `build.files` e' un elenco scritto a mano, e un elenco scritto a mano diverge dal grafo
+// delle dipendenze reale: e' GIA' successo nei due sensi. Le build di giugno imbarcavano
+// data/.subito-session.json (cookie DataDome) e data/chrome-profile/ interi; e i require
+// di ../scripts/ in cima a server.js avrebbero ucciso al boot la build successiva, perche'
+// scripts/ non era nell'elenco. Queste guardie sono statiche (niente build dentro i test):
+// difendono l'ELENCO, la prova sull'artefatto resta un gesto da fare alla build.
+
+test('pacchetto: ogni segreto di .gitignore ha la sua negazione in build.files', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(RADICE, 'package.json'), 'utf8'));
+  const files = pkg.build.files;
+  // Un glob di electron-builder → regex: ** attraversa le cartelle, * no.
+  const daGlob = g => new RegExp('^' + g
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*\*/g, '\u0001').replace(/\*/g, '[^/]*').replace(/\u0001/g, '.*') + '$');
+  const negazioni = files.filter(f => f.startsWith('!')).map(f => daGlob(f.slice(1)));
+  const righe = fs.readFileSync(path.join(RADICE, '.gitignore'), 'utf8').split('\n')
+    .map(r => r.trim()).filter(r => r.startsWith('data/'));
+  assert.ok(righe.length >= 15, `attese molte righe data/ in .gitignore, trovate ${righe.length}`);
+  const scoperte = righe.filter(r => {
+    // Una cartella ignorata si rappresenta con un file dentro di lei.
+    const rappresentante = r.endsWith('/') ? r + 'x' : r;
+    return !negazioni.some(re => re.test(rappresentante));
+  });
+  assert.deepStrictEqual(scoperte, [],
+    'righe data/ di .gitignore che "data/**" imbarcherebbe nel pacchetto: aggiungi la negazione in build.files');
+});
+
+test('pacchetto: quello che il boot richiede e\' nell\'elenco', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(RADICE, 'package.json'), 'utf8'));
+  const files = pkg.build.files;
+  // I require di primo livello verso ../scripts/ in server.js: ognuno pretende scripts/**.
+  const srv = fs.readFileSync(path.join(RADICE, 'backend', 'server.js'), 'utf8');
+  const daScripts = [...srv.matchAll(/^const .+= require\('\.\.\/scripts\/[^']+'\)/gm)];
+  if (daScripts.length) {
+    assert.ok(files.includes('scripts/**'),
+      `server.js richiede ${daScripts.length} moduli da ../scripts/ al boot: senza "scripts/**" in build.files l'app impacchettata non parte`);
+    // E la Guida legge i markdown: senza docs/guida/** parte e serve una Guida vuota.
+    assert.ok(files.includes('docs/guida/**'),
+      'build-guida legge docs/guida/*.md a runtime: serve "docs/guida/**" in build.files');
+  }
+  // Nessuna devDependency puo' essere richiesta A LIVELLO DI MODULO da un file che il boot
+  // carica: nel pacchetto le devDependencies non ci sono, e il require top-level scavalca
+  // ogni try/catch dichiarato piu' a valle (e' successo con esbuild in build-frontend.js).
+  const devDeps = Object.keys(pkg.devDependencies || {});
+  const alBoot = [...srv.matchAll(/require\('\.\.\/scripts\/([^']+)'\)/g)].map(m => m[1]);
+  const ko = [];
+  for (const s of alBoot) {
+    const testo = fs.readFileSync(path.join(RADICE, 'scripts', s + '.js'), 'utf8')
+      .replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');   // i commenti possono nominare il pacchetto
+    for (const dep of devDeps) {
+      if (new RegExp(`^const .+= require\\('${dep}'\\)`, 'm').test(testo)) {
+        ko.push(`scripts/${s}.js richiede '${dep}' (devDependency) a livello di modulo`);
+      }
+    }
+  }
+  assert.deepStrictEqual(ko, [], 'require top-level di devDependencies in moduli caricati al boot');
+});
