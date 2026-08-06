@@ -505,6 +505,15 @@ test('saved: il clic segna letto SOLO quell\'avviso', () => {
 // pezzo diverso, e il pezzo dimenticato descriveva un'altra ricerca.
 const APP = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
 const INDEX = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
+/**
+ * Sorgente a COMMENTI TOLTI. Un match POSITIVO soddisfatto dalla prosa non prova niente —
+ * e' successo: `renameSync` stava anche nel JSDoc, e la guardia era verde leggendo il
+ * commento. E un match NEGATIVO su un commento fa rosso un comportamento giusto. Le
+ * letture che fanno da CONFINE a `ritaglia`/`corpoDi` usano i commenti come delimitatori:
+ * li' questo helper NON si applica.
+ */
+const codice = src => src.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
+
 /** il corpo di `function nome(` fino alla parentesi graffa di chiusura in colonna 0 */
 function corpoDi(src, firma) {
   const i = src.indexOf(firma);
@@ -630,7 +639,7 @@ test('versione: il campo e\' spento esattamente quando la ricerca non la userebb
 });
 
 test('foto: niente richieste allo scorrimento, e la miniatura si aggiorna nelle due viste', () => {
-  assert.ok(!/new IntersectionObserver/.test(APP),
+  assert.ok(!/new IntersectionObserver/.test(codice(APP)),
     'e\' tornato l\'arricchimento allo scorrimento: i dettagli si chiedono al clic sull\'annuncio');
   const u = corpoDi(APP, 'function updateRowThumb(');
   assert.ok(u.includes('.result-row[data-url=') && u.includes('.ann-card[data-url='),
@@ -829,7 +838,7 @@ test('cache: TUTTE le cache su disco passano dal modulo comune', () => {
     assert.match(src, /cacheDisco\.crea\(/, `${path.basename(f)} ha una cache su disco che non passa dal modulo comune`);
     assert.match(src, /schema:/, `${path.basename(f)} non dichiara il numero di schema: un cambio di parser (o di conteggio) servirebbe il formato vecchio per tutto il TTL`);
     assert.match(src, /max:/, `${path.basename(f)} non ha un tetto: il file cresce senza fine e ogni miss lo riscrive intero`);
-    assert.ok(!/fs\.writeFileSync\(\s*CACHE_FILE/.test(src),
+    assert.ok(!/fs\.writeFileSync\(\s*CACHE_FILE/.test(codice(src)),
       `${path.basename(f)} scrive ancora la cache da se', dentro la cartella dell'app`);
   }
 });
@@ -926,7 +935,7 @@ test('ricambi: i codici OE si leggono dai link, non dal testo', () => {
     'i codici OE devono venire dai link a un\'altra pagina OEM: e\' la pagina stessa a dichiarare che quello e\' un codice');
   // La vecchia pesca nel testo accettava anche le minuscole, e frasi intere passavano il
   // filtro a valle. Verificato sulle frasi vere della pagina.
-  assert.ok(!/textContent\.match\(\/\[A-Z0-9\]/.test(src),
+  assert.ok(!/textContent\.match\(\/\[A-Z0-9\]/.test(codice(src)),
     'e\' tornata la pesca nel testo: "Garanzia 2 anni" diventerebbe di nuovo un codice OE');
   const { dedupeOe } = require('../backend/oem-lookup.js');
   // I dieci codici veri letti dalla pagina (sonda 2026-08-01) passano tutti.
@@ -946,9 +955,9 @@ test('minori: un errore non si mette in cache', () => {
   assert.match(richiami, /out\.ok !== false\) res\.set\('Cache-Control'/,
     'le rotte richiami rimettono un\'ora di cache su un "archivio non costruito"');
   const ebay = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ebay-scrape.js'), 'utf8');
-  assert.ok(!/item details[\s\S]{0,80}return \{\}/.test(ebay),
+  assert.ok(!/item details[\s\S]{0,80}return \{\}/.test(codice(ebay)),
     'un 403 di eBay torna a diventare una scheda vuota, che il chiamante cacha per un\'ora');
-  assert.ok(!/catch \{ modelCache\[key\] = \[\]; \}/.test(APP),
+  assert.ok(!/catch \{ modelCache\[key\] = \[\]; \}/.test(codice(APP)),
     'una risposta mancata di /api/models torna a spegnere la tendina per tutta la sessione');
 });
 
@@ -1043,7 +1052,10 @@ test('minori: una sessione sola, e il file si scrive intero o niente', () => {
   assert.match(ebay, /_ctxInVolo/,
     'due richieste eBay partite insieme tornano ad aprire due sessioni di Chromium');
   const sess = fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'subito-session.js'), 'utf8');
-  assert.match(sess, /renameSync/,
+  // La CHIAMATA, a commenti tolti: `renameSync` compare anche nel JSDoc dello stesso file,
+  // e questa guardia era verde leggendo la prosa — la regola poteva morire nel codice
+  // senza che nessuno se ne accorgesse.
+  assert.match(codice(sess), /fs\.renameSync\(tmp, file\)/,
     'la sessione Subito torna a scriversi sul posto: un lettore puo\' trovarla a meta\'');
 });
 
@@ -1082,18 +1094,27 @@ test('moto.it: l\'etichetta segue la stessa regola delle altre due fonti', () =>
   assert.match(srv, /else if \(versioneChiesta\) r\.dichiarazione = 'versione-non-verificata';/);
 });
 
-test('subito: se nessun annuncio porta un prezzo, e\' il parser — non il mercato', () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'subito-api.js'), 'utf8');
-  // L'annuncio senza prezzo non sparisce piu': entra marcato (il campo lo usa gia' Autoscout).
-  assert.match(src, /m\.prezzoSuRichiesta = true/);
-  assert.ok(!/if \(m && m\.prezzo != null\) out\.push/.test(src),
-    'l\'annuncio senza prezzo torna a sparire, e il crawler lo archivia come venduto');
-  // E se sono TUTTI senza prezzo, la fonte lo dichiara: 'error', non 'empty'.
-  assert.match(src, /senzaPrezzo === out\.length/);
-  // La quarta asserzione di questo test cercava nel sorgente la stringa
-  // `if (sospetto) return { items, total, parziale, status: 'error'` — e combaciava con
-  // runSource, NON con runSubito, che il campo lo buttava: verde guardando l'altra copia.
-  // Ora la regola si prova ESEGUENDO i wrapper, nel test qui sotto.
+test('subito: l\'annuncio senza prezzo entra marcato — eseguito, non letto', async () => {
+  // Prima erano quattro asserzioni di GRAFIA: bastava un `if (m.prezzo == null) continue;`
+  // due righe sopra il punto guardato per far tornare a sparire gli annunci con tutte le
+  // asserzioni verdi. Qui il percorso si ESEGUE con lo stub HTTP: uno con prezzo e uno
+  // senza, tutti e due in lista, il muto marcato «su richiesta».
+  const sub = require('../backend/scrapers/subito-api');
+  const conPrezzo = { urn: 'a', urls: { default: 'https://www.subito.it/x/a.htm' }, subject: 'Golf A',
+    features: [{ label: 'Prezzo', uri: '/price', values: [{ key: '9000', value: '9.000 €' }] }] };
+  const senza = { urn: 'b', urls: { default: 'https://www.subito.it/x/b.htm' }, subject: 'Golf B', features: [] };
+  sub._setHttpGetJson(async () => ({ status: 200, body: JSON.stringify({ count_all: 2, ads: [conPrezzo, senza] }) }));
+  try {
+    const r = await sub({ tipo: 'auto', marca: 'Volkswagen' }, { withMeta: true, pageDelayMs: 0 });
+    assert.strictEqual(r.items.length, 2, 'l\'annuncio senza prezzo NON sparisce dalla lista');
+    const muto = r.items.find(x => /b\.htm$/.test(x.url));
+    assert.strictEqual(muto.prezzo, null);
+    assert.strictEqual(muto.prezzoSuRichiesta, true,
+      'entra MARCATO: il venditore il prezzo ce l\'ha, ha scelto di non scriverlo');
+    assert.strictEqual(r.sospetto, null, 'UNO senza prezzo non e\' un parser rotto');
+  } finally { sub._setHttpGetJson(null); }
+  // Il caso «TUTTI senza prezzo → errore dichiarato, non mercato vuoto» e' provato — sempre
+  // eseguendo — dal test dei wrapper («parziale e sospetto ATTRAVERSANO runSubito»).
 });
 
 test('subito: parziale e sospetto ATTRAVERSANO runSubito — eseguito, non letto', async () => {
@@ -1152,7 +1173,7 @@ test('il totale della pill dice a quale ricerca appartiene', () => {
 
 test('il DMG e\' staccato: niente aggiornamento automatico agganciato', () => {
   const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
-  assert.ok(!/scheduleUpdateCheck/.test(main.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '')),
+  assert.ok(!/scheduleUpdateCheck/.test(codice(main)),
     'l\'auto-update e\' tornato agganciato: interroga GitHub e offre un installatore che non si usa');
   assert.ok(!fs.existsSync(path.join(__dirname, '..', 'electron', 'auto-update.js')),
     'electron/auto-update.js e\' tornato: era li\' solo per il DMG');

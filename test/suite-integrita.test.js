@@ -130,6 +130,19 @@ test('richiedere server.js resta senza effetti collaterali', () => {
     'server.js si e\' rimesso in ascolto al require: rimetti la guardia require.main === module');
 });
 
+test('le guardie di testo hanno l\'antidoto ai commenti', () => {
+  // Un test che fa readFileSync + assert.match non prova che una regola sia viva: prova
+  // che una STRINGA e' ancora scritta — e `renameSync` era verde leggendo il JSDoc.
+  // L'antidoto e' l'helper codice() (sorgente a commenti tolti): qui si blinda che esista
+  // e che le guardie lo usino davvero, senza pretendere che OGNI lettura ci passi (i
+  // confini di ritaglia/corpoDi usano i commenti come delimitatori, e devono vederli).
+  const sf = fs.readFileSync(path.join(__dirname, 'silenzi-fonti.test.js'), 'utf8');
+  assert.ok(/const codice = src =>/.test(sf),
+    'l\'helper codice() e\' sparito da silenzi-fonti: le guardie di testo tornano ingannabili dalla prosa');
+  const usi = (sf.match(/codice\(/g) || []).length - 1;   // meno la definizione
+  assert.ok(usi >= 6, `codice() ha ${usi} usi: le guardie di testo stanno tornando a leggere i commenti`);
+});
+
 // ─── Il pacchetto e' il programma che gira ─────────────────────────────────────────────
 //
 // `build.files` e' un elenco scritto a mano, e un elenco scritto a mano diverge dal grafo
