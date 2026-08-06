@@ -527,6 +527,22 @@ test('contesto: ogni punto che riempie la griglia passa dall\'azzeramento', () =
     'doSearch non passa piu\' da hideResults: il contesto precedente non verrebbe azzerato');
 });
 
+test('contesto: ogni porta d\'ingresso sincronizza i filtri auto con la funzione unica', () => {
+  // Le porte sono quattro — init, il change del tipo (registrato dentro init),
+  // applyUrlParams e setSearchMode — e la visibilita' delle otto tendine la decide UNA
+  // funzione. Con una copia inline del toggle le due regole sarebbero tornate a divergere;
+  // con una porta che non chiama, le tendine di un altro contesto restano a schermo e la
+  // scelta si perde in silenzio (filtriAutoScelti si legge solo nel ramo tipo==='auto').
+  for (const f of ['async function applyUrlParams(', 'function setSearchMode(']) {
+    assert.ok(/sincronizzaFiltriAuto\(/.test(corpoDi(APP, f)),
+      `${f}...) non chiama sincronizzaFiltriAuto: quella porta lascia i filtri del contesto di prima`);
+  }
+  assert.ok(!/classList\.toggle\('d-none', [^)]*!== 'auto'\)/.test(APP.replace(corpoDi(APP, 'function sincronizzaFiltriAuto('), '')),
+    'il toggle dei filtri auto e\' stato copiato fuori dalla funzione unica');
+  const chiamate = (APP.match(/sincronizzaFiltriAuto\(/g) || []).length - 1;   // meno la definizione
+  assert.ok(chiamate >= 4, `le porte del contesto sono quattro, le chiamate trovate ${chiamate}`);
+});
+
 test('contesto: lo stato della ricerca si azzera SOLO dentro resetContesto', () => {
   const reset = corpoDi(APP, 'function resetContesto()');
   // Ognuno di questi descrive la ricerca, non il modo di guardare. Se ricompare un secondo
@@ -538,6 +554,11 @@ test('contesto: lo stato della ricerca si azzera SOLO dentro resetContesto', () 
     "groupDim = ''": /(?<!let )groupDim = ''/g,
     'liqMarca = null': /(?<!let )liqMarca = null/g,
     'liqAnn = null': /(?<!let )liqAnn = null/g,
+    // Il toggle «mostrali» delle smentite: fuori dal reset condizionava la ricerca dopo.
+    'mostraVersioniSmentite = false': /(?<!let )mostraVersioniSmentite = false/g,
+    // La lista stessa: era azzerata in DUE punti fuori dal reset, il gemello strutturale
+    // del difetto che questo test blinda per le altre variabili.
+    'currentResults = []': /(?<!let )currentResults = \[\]/g,
   };
   for (const [nome, re] of Object.entries(soloLi)) {
     assert.ok(reset.match(re), `resetContesto non azzera piu' ${nome}`);

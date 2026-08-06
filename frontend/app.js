@@ -427,7 +427,7 @@ async function init() {
     document.getElementById('modello').value = '';
     resetModelloVersione();
     validateMarca();
-    currentResults = []; hideResults();
+    hideResults();   // l'azzeramento di currentResults sta dentro resetContesto, un posto solo
   }));
 
   const daUrl = await applyUrlParams();
@@ -1175,7 +1175,7 @@ function setSearchMode(mode) {
   // Stanno PRIMA del ramo con return perche' quello le saltava: da Ricambi a Catalogo
   // la lista ricambi restava a schermo, e stando prima nel DOM finiva sopra la griglia marche.
   if (!ricambi) document.getElementById('ricambiPanel').classList.add('d-none');
-  if (ricambi || prev === 'ricambi') { rcData = null; currentResults = []; hideResults(); }   // ingresso/uscita ricambi → pulizia piena
+  if (ricambi || prev === 'ricambi') { rcData = null; hideResults(); }   // ingresso/uscita ricambi → pulizia piena (currentResults lo azzera resetContesto)
   if (area(prev) && prev !== searchMode) area(prev).chiudi();
   // Competitor e' l'unica area che tiene la barra: ha una riga di campi sua.
   document.getElementById('competitorFields').classList.toggle('d-none', searchMode !== 'competitor');
@@ -1193,6 +1193,12 @@ function setSearchMode(mode) {
   document.getElementById('marca').required = !ricambi;
   document.getElementById('advancedToggle').classList.toggle('d-none', ricambi);   // i filtri-ricerca non servono per i ricambi
   if (ricambi) document.getElementById('advancedFilters').classList.add('d-none');
+  // La FUNZIONE UNICA della visibilita' dei filtri auto, non una seconda copia del toggle:
+  // in Ricambi le otto tendine restavano a schermo e la scelta si perdeva in silenzio
+  // (filtriAutoScelti si legge solo nel ramo tipo==='auto'). 'ricambi' non e' 'auto' →
+  // nasconde; al rientro in 'cerca' mostra solo se il tipo corrente e' auto — anche
+  // quando il radio non cambia e il change non parte.
+  sincronizzaFiltriAuto(ricambi ? 'ricambi' : currentTipo());
   btnCerca.textContent = 'Cerca';
   document.getElementById('modello').placeholder =
     currentTipo() === 'moto' ? 'Modello — es. MT-07 (opzionale)' : 'Modello — es. 318d (opzionale)';
@@ -3863,6 +3869,9 @@ function removeMatrixCol(url) {
   const rifM = trovaResult(url);
   const i = confronto.findIndex(r => stessoAnnuncio(r, rifM) || r.url === url);
   if (i !== -1) { confronto.splice(i, 1); refreshRowState(url); renderSalvati(); renderCompareBar(); }
+  // Chi cambia la lista riscrive l'intestazione che la conta: il titolo lo scriveva solo
+  // showMatrix, e «Selezionati: 3» restava accanto a «Confronto annunci (4)».
+  cmatrixTitle.textContent = cmatrixTitle.textContent.replace(/\(\d+\)\s*$/, `(${matrixList.length})`);
   if (!matrixList.length) closeMatrix(); else renderMatrix();
 }
 
@@ -4266,6 +4275,13 @@ function resetContesto() {
   fettaPresa = 0;
   ultimiVisti = null;
   soloIva = false;
+  // Il toggle «mostrali» delle versioni smentite descrive LA ricerca, non il modo di
+  // guardare: lasciato acceso, condizionava la ricerca successiva senza che nessuno
+  // l'avesse chiesto in quel contesto.
+  mostraVersioniSmentite = false;
+  // La lista stessa: era azzerata in due punti fuori di qui, contro la regola scritta
+  // qui sotto («un posto solo»). Chi riempie riassegna subito dopo, quindi e' innocuo.
+  currentResults = [];
   groupDim = '';
   colsToccate = false;
   visibleCols = colsDefault(null);
@@ -4283,6 +4299,10 @@ function hideResults() {
   document.body.classList.remove('has-results');   // torna allo stato iniziale → sfondo + search centrata
   resultsSection.classList.add('d-none'); noResults.classList.add('d-none'); resultsToolbar.classList.add('d-none');
   fonteBreakdown.innerHTML = ''; resultsGrid.innerHTML = ''; compareBar.classList.add('d-none'); closeMatrix();
+  // L'avviso «Nascosti N annunci...» e' FRATELLO di fonteBreakdown, fuori da
+  // resultsSection: svuotare i risultati non lo raggiungeva, e restava a schermo un
+  // conteggio che non descriveva piu' nessuna lista, con un bottone che non faceva niente.
+  rigaVersione(0);
   renderCompareBar();   // le spunte restano: la barra torna se ci sono ancora annunci a confronto
 }
 
@@ -5836,6 +5856,9 @@ async function applyUrlParams() {
     // restava evidenziato. Stessa riga di selectPrimary, che qui non viene chiamato.
     document.querySelectorAll('#modeToggle .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === tipo));
   }
+  // La porta dall'URL non passa dal change del radio: arrivando da ?tipo=moto le otto
+  // tendine auto restavano a schermo, e la ricerca le buttava in silenzio.
+  sincronizzaFiltriAuto(tipo);
   await populateMarca(tipo);   // brand cache del tipo (serve al force-select per il replay)
   const marca = p.get('marca') || '';
   if (marca) marcaSelect.value = marca;
