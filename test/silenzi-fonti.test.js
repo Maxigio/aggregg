@@ -247,6 +247,12 @@ test('motoit: l\'ultima spiaggia non salda le cifre ("CRF 1100" non e\' la CRF 1
   assert.strictEqual(await mm.famiglieMotoit('honda', 'CRF 110'), 'crf-110');
   assert.strictEqual(await mm.famiglieMotoit('yamaha', 'MT-07'), 'mt-07');
   assert.strictEqual(await mm.famiglieMotoit('aprilia', 'Scarabeo 500'), 'scarabeo-500');
+  // Il taglio sul CONFINE DI TOKEN e' una parentela legittima: la guardia piu' severa
+  // della regola buttava 57 famiglie vere e 'MP3 500' finiva a livello marca — la
+  // finestra dei piu' economici di tutta Piaggio, con gli MP3 fuori.
+  assert.strictEqual(await mm.famiglieMotoit('piaggio', 'MP3 500'), 'mp3',
+    '"MP3 500" → famiglia MP3: mp3|500 e\' un confine di token, non un numero spezzato');
+  assert.strictEqual(await mm.famiglieMotoit('aprilia', 'Tuono V4 1100'), 'tuono-v4');
   const scarabeo = await mm.famiglieMotoit('aprilia', 'Scarabeo');
   assert.ok(scarabeo.split(',').length >= 8, 'il nome largo continua a prendere tutte le famiglie');
   const r1200 = await mm.famiglieMotoit('bmw', 'R 1200');

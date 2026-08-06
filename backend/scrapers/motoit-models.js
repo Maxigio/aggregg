@@ -13,7 +13,7 @@
  * Cache in-memory 12h per chiave + dedup richieste concorrenti.
  */
 const https = require('https');
-const { makeModelResolver } = require('./brand-match');
+const { makeModelResolver, confiniDi } = require('./brand-match');
 const budget = require('../budget-richieste');        // conta le richieste, non le limita
 
 const BASE = 'https://www.moto.it';
@@ -258,7 +258,15 @@ async function famiglieMotoit(brandSlug, modelloText) {
     // il taglio cade in mezzo a un numero ("crf110" contro "crf1100").
     return /\d/.test(lungo.charAt(corto.length)) && /\d/.test(corto.charAt(corto.length - 1));
   };
-  if (confineDentroUnNumero(nq.replace(/ /g, ''), qq.replace(/ /g, ''))) {
+  // Il taglio su un CONFINE DI TOKEN del nome lungo e' una parentela legittima (la regola
+  // di brand-match/82e4d15): 'MP3 500' → famiglia 'MP3' e' il padre giusto, e questa
+  // guardia — piu' severa della regola — buttava 57 famiglie vere (le 10 MP3, Tuono V4
+  // 1100, R 60/5), mandando la ricerca a livello marca: finestra dei piu' economici della
+  // marca, e gli MP3 fuori. 'CRF 1100' → 'crf110' resta bloccato: il taglio non cade sul
+  // confine crf|1100.
+  const nqS = nq.replace(/ /g, ''), qqS = qq.replace(/ /g, '');
+  const [corto, lungoRaw] = nqS.length <= qqS.length ? [nqS, modelloText] : [qqS, nome];
+  if (confineDentroUnNumero(nqS, qqS) && !confiniDi(lungoRaw).has(corto)) {
     console.warn(`[motoit-models] "${modelloText}" → "${nome}" scartato: il confronto spezza un numero`);
     return null;
   }

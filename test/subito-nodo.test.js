@@ -182,3 +182,22 @@ test('testoDedotto: si pretende il confine di parola, e niente resti minuscoli',
   assert.strictEqual(rn('auto', 'Mercedes-Benz', 'CLA').testoDedotto, undefined);
   assert.strictEqual(rn('auto', 'Volkswagen', 'Golf').testoDedotto, undefined);
 });
+
+test('moto: un prefisso che spezza un numero non aggancia la famiglia', () => {
+  // 'Pegaso 500' agganciava la famiglia 'Pegaso 50' e i cinquantini passavano da risultati
+  // normali: sulle moto la 'generazione' E' la famiglia stessa, quindi `riconosci` li
+  // accettava — veicolo sbagliato senza dirlo. Meglio la marca dichiarata del secchio falso.
+  const ix = { moto: { Aprilia: { id: '000105', famiglie: [
+    { id: '002055', nome: 'Pegaso 50', gen: [{ id: '002055', nome: 'Pegaso 50' }] },
+    { id: '002056', nome: 'Pegaso 650', gen: [{ id: '002056', nome: 'Pegaso 650' }] },
+    { id: '002057', nome: 'RSV4', gen: [{ id: '002057', nome: 'RSV4' }] },
+  ] } } };
+  const n = risolviNodo('moto', 'Aprilia', 'Pegaso 500', { indice: ix });
+  assert.equal(n.come, 'marca', 'Pegaso 500 non e\' un Pegaso 50: si cerca la marca e lo si dichiara');
+  assert.equal(n.famigliaIds ? n.famigliaIds.length : 0, 0);
+  // Il confine di token resta una parentela legittima: 'RSV4 1100' → famiglia RSV4.
+  const tok = risolviNodo('moto', 'Aprilia', 'RSV4 1100 Factory', { indice: ix });
+  assert.equal(tok.famigliaNome, 'RSV4');
+  // E il figlio legittimo pure: 'Pegaso 650' e' la sua famiglia, esatta.
+  assert.equal(risolviNodo('moto', 'Aprilia', 'Pegaso 650', { indice: ix }).come, 'famiglia');
+});

@@ -25,7 +25,7 @@
  * sarebbe un secondo modo di sbagliare.
  */
 const path = require('path');
-const { makeResolver, makeModelResolver, loadAliasMap, norm } = require('./brand-match');
+const { makeResolver, makeModelResolver, loadAliasMap, norm, taglioValido } = require('./brand-match');
 
 const FILE = path.join(__dirname, '..', '..', 'data', 'subito-indice.json');
 
@@ -138,7 +138,19 @@ function risolviNodo(tipo, marca, modello, opts = {}) {
   // Serie 1, 2, 3, 5…: sceglierne una vorrebbe dire cercare un settimo di quello che
   // l'utente ha chiesto senza dirglielo. Si portano tutte e chi interroga lo dichiara.
   if (cercato.length >= 3) {
-    const pref = fam.filter(f => { const n = norm(f.nome); return n.length >= 3 && (n.startsWith(cercato) || cercato.startsWith(n)); });
+    // COL CONFINE di brand-match (82e4d15) — la stessa funzione, non una copia. Senza,
+    // 'Pegaso 500' agganciava la famiglia 'Pegaso 50' e i cinquantini passavano da
+    // risultati normali: sulle moto la 'generazione' E' la famiglia stessa (4.605 su
+    // 4.605 fotocopia), quindi `riconosci` li ACCETTAVA — veicolo sbagliato senza dirlo.
+    // I rinominati storici (VN 15/VN 1500, ZR 750/ZR 7) che questo confine sacrifica
+    // sono materia da ponte curato, non da prefisso: due numeri diversi restano due moto.
+    const pref = fam.filter(f => {
+      const n = norm(f.nome);
+      if (n.length < 3) return false;
+      if (n.startsWith(cercato)) return taglioValido(f.nome, n, cercato);
+      if (cercato.startsWith(n)) return taglioValido(modello, cercato, n);
+      return false;
+    });
     if (pref.length) {
       const n = { ...perFamiglie(pref), come: pref.length > 1 ? 'prefisso (' + pref.length + ' famiglie)' : 'prefisso' };
       /**

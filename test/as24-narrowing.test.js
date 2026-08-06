@@ -148,3 +148,20 @@ test('un prefisso che spezza un numero non e\' una parentela', () => {
   const HONDA = [{ nome: 'CRF 250', mmmvAutoscout: '29|5||' }, { nome: 'CRF 250R' }];
   assert.strictEqual(resolveAs24Narrowing(HONDA, 'CRF 250R', 29).padre, 'CRF 250');
 });
+
+test('il confine vive nella RADICE: makeModelResolver non salda le cifre', () => {
+  // 82e4d15 aveva messo il confine solo in resolveAs24Narrowing: 'CRF 500R' digitato a
+  // mano risolveva la minimoto 'CRF 50' — con mmmv E slug Moto.it sbagliati — perche'
+  // il ramo prefisso della radice accettava il taglio 'crf50'|'0r'. Misurato sul catalogo:
+  // 0 diff sulle 14.155 query da menu (l'esatto assorbe), cambiano solo i padri falsi.
+  const { makeModelResolver } = require('../backend/scrapers/brand-match');
+  const honda = [
+    { nome: 'CRF 50' }, { nome: 'CRF 250' }, { nome: 'CB 100' },
+  ].map(m => ({ name: m.nome, value: m.nome }));
+  const r = makeModelResolver(honda);
+  assert.strictEqual(r('CRF 500R'), null, 'CRF 500R non e\' figlia della CRF 50: meglio i ripieghi dichiarati');
+  assert.strictEqual(r('CRF 500'), null);
+  assert.strictEqual(r('CB 100 Special'), 'CB 100', 'il confine di token resta una parentela');
+  assert.strictEqual(r('CRF 250R'), 'CRF 250', 'le lettere si estendono');
+  assert.strictEqual(r('CRF 50'), 'CRF 50', 'l\'esatto resta esatto');
+});

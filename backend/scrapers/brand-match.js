@@ -88,17 +88,41 @@ function makeResolver(candidates, opts = {}) {
 }
 
 /**
- * Resolver MODELLO: esatto → prefix bidirezionale (min 3 char). candidates: [{name, value}].
+ * IL CONFINE DEI PREFISSI (82e4d15), nella RADICE e non piu' solo in un chiamante: il
+ * taglio di un prefisso dentro un nome piu' lungo e' una parentela legittima se cade su
+ * un confine di token del nome lungo, oppure se non spezza un numero. "AF 1" ⊂ "AF1 125"
+ * e "CRF 250" ⊂ "CRF 250R" restano; "crf50" dentro "crf500r" no — due numeri diversi non
+ * sono padre e figlio, e 'CRF 500R' digitato a mano risolveva la minimoto CRF 50 con
+ * mmmv E slug Moto.it sbagliati. Esportati: subito-nodo e motoit-models applicano LA
+ * STESSA funzione, non una copia che poi diverge.
+ */
+const confiniDi = s => {
+  const toks = String(s == null ? '' : s).toLowerCase().normalize('NFD').split(/[^a-z0-9]+/).filter(Boolean);
+  const set = new Set(); let acc = '';
+  for (let i = 0; i < toks.length - 1; i++) { acc += toks[i]; set.add(acc); }
+  return set;
+};
+/** `lungoRaw` = il nome NON normalizzato del piu' lungo (porta i token veri). */
+const taglioValido = (lungoRaw, lungoNorm, cortoNorm) =>
+  confiniDi(lungoRaw).has(cortoNorm) || !(/\d$/.test(cortoNorm) && /^\d/.test(lungoNorm.slice(cortoNorm.length)));
+
+/**
+ * Resolver MODELLO: esatto → prefix bidirezionale (min 3 char), col confine. candidates: [{name, value}].
  */
 function makeModelResolver(candidates) {
-  const items = candidates.map(c => ({ n: norm(c.name), value: c.value })).filter(c => c.n);
+  const items = candidates.map(c => ({ raw: String(c.name == null ? '' : c.name), n: norm(c.name), value: c.value })).filter(c => c.n);
   const exact = new Map(items.map(c => [c.n, c.value]));
   return function resolve(query) {
     const q = norm(query);
     if (!q) return null;
     if (exact.has(q)) return exact.get(q);
     if (q.length >= 3) {
-      const cont = items.filter(c => c.n.length >= 3 && (c.n.startsWith(q) || q.startsWith(c.n)));
+      const cont = items.filter(c => {
+        if (c.n.length < 3) return false;
+        if (c.n.startsWith(q)) return taglioValido(c.raw, c.n, q);   // la query dentro il candidato
+        if (q.startsWith(c.n)) return taglioValido(query, q, c.n);   // il candidato dentro la query
+        return false;
+      });
       if (cont.length) {
         // A parita' di distanza serve un criterio STABILE, altrimenti decide l'ordine in cui
         // il catalogo e' arrivato: con [320d,320i] la query "320" dava 320d, invertendo la
@@ -145,15 +169,12 @@ function resolveAs24Narrowing(models, modello, makeId) {
   // oppure estende delle lettere ("800mt" ⊂ "800mtx", "CRF 250" ⊂ "CRF 250R").
   // Misurato sui 1.768 modelli moto senza codice: cambiano SOLO i due padri falsi
   // (Rev 3 → "Rev 300", FZ6 → "FZ 600"), nessun padre vero si perde.
-  const toks = String(modello || '').toLowerCase().normalize('NFD').split(/[^a-z0-9]+/).filter(Boolean);
-  const confini = new Set();
-  for (let i = 0, acc = ''; i < toks.length - 1; i++) { acc += toks[i]; confini.add(acc); }
-  const taglioValido = n => confini.has(n) || !(/\d$/.test(n) && /^\d/.test(q.slice(n.length)));
+  // La regola ora vive in `taglioValido`, in cima al file: qui la si USA, non la si copia.
   let padre = null, padreLen = 0;
   for (const m of (models || [])) {
     if (!m || !m.mmmvAutoscout) continue;         // il padre deve avere il codice, altrimenti non aiuta
     const n = norm(m.nome);
-    if (n.length < 3 || !q.startsWith(n) || n === q || !taglioValido(n)) continue;   // prefisso STRETTO: "800mt" ⊂ "800mtx"
+    if (n.length < 3 || !q.startsWith(n) || n === q || !taglioValido(modello, q, n)) continue;   // prefisso STRETTO: "800mt" ⊂ "800mtx"
     if (n.length > padreLen) { padre = m; padreLen = n.length; }  // il più specifico vince
   }
   return {
@@ -197,4 +218,4 @@ function as24Spellings(modello) {
   return out.slice(0, 4);                   // tetto: max 4 richieste per ricerca
 }
 
-module.exports = { norm, makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings };
+module.exports = { norm, makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings, confiniDi, taglioValido };
