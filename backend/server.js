@@ -239,7 +239,22 @@ async function scrapeAutoscoutUnion(params, opts = {}) {
  */
 const USE_SUBITO_API = process.env.USE_SUBITO_API !== '0';
 async function scrapeSubitoSmart(params) {
-  if (!USE_SUBITO_API) return scrapeSubito(params);   // interruttore di servizio, non un ripiego
+  if (!USE_SUBITO_API) {
+    /**
+     * L'INTERRUTTORE DI SERVIZIO CERCA IN UN ALTRO MODO, e lo deve dire — la stessa regola
+     * applicata ad Autoscout (`vincoloNonTraducibile`): `buildUrl` dello scraper a browser
+     * manda solo `q=marca modello` e ignora gli id di catalogo, i filtri avanzati e la
+     * fetta. Con quei vincoli attivi una ricerca a parole verrebbe spacciata per una
+     * ricerca per catalogo — il difetto che il commento qui sopra racconta gia'.
+     */
+    const cosa = filtriAuto.attivi(params.filtriAuto) ? 'i filtri avanzati non passano'
+      : params.versione ? 'la versione non passa'
+      : null;
+    if (cosa) throw new Error(`${cosa} dallo scraper a browser di Subito (USE_SUBITO_API=0)`);
+    // E la ricerca resta a PAROLE: chi etichetta a valle non deve crederla per catalogo.
+    params.subitoTestoLibero = true;
+    return scrapeSubito(params);   // interruttore di servizio, non un ripiego
+  }
   // on-search: economici in cima (sort nativo). Regione/prezzo/anno nativi via buildPath.
   return scrapeSubitoApi(params, { sort: 'priceasc', withMeta: true, fetta: params.fetta || 0 });
 }
@@ -2060,7 +2075,11 @@ async function runSearchCore(params) {
       subito:    { status: subitoRes.status, reason: subitoRes.reason || null, count: countBy('subito'),
                    totale: subitoRes.total ?? null,
                    parziale: subitoRes.parziale || null,
-                   come: params.subitoNodo ? (params.subitoNodo.come || 'id') : 'testo libero',
+                   // Con l'interruttore di servizio la ricerca E' a parole, anche quando il
+                   // nodo di catalogo era stato risolto: dirla 'id' la spaccerebbe per una
+                   // ricerca precisa che non e'.
+                   come: params.subitoTestoLibero ? 'testo libero'
+                     : (params.subitoNodo ? (params.subitoNodo.come || 'id') : 'testo libero'),
                    // Il filtro km di Subito lavora a FASCE, su ENTRAMBI i lati: chiedendo un
                    // massimo di 200.000 arrivano annunci fino a 249.999, e chiedendone un minimo
                    // di 22.000 arrivano da 20.000. Finora non si notava perche' mostravamo il

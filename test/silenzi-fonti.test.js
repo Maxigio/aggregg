@@ -1302,3 +1302,38 @@ test('inSella: i dichiarati della casa non passano dal formattatore dei numeri',
   assert.ok(/Dichiarato dalla casa[\s\S]{0,120}coppieTesto\(d\.dichiarati\)/.test(corpo),
     'i dichiarati sono tornati a passare da misNum');
 });
+
+// ─── Il ripiego dichiara le sue regole, o non parte ──────────────────────────
+test('subito: con l\'interruttore di servizio la ricerca a parole si dichiara', () => {
+  // Lo scraper a browser manda solo `q=marca modello`: ignora gli id di catalogo, i filtri
+  // avanzati e la versione. Il commento del file lo racconta gia' (Audi 80 → zero giusti),
+  // ma il codice partiva lo stesso e lo stato diceva `come:'id'`. Stessa regola di
+  // Autoscout (`vincoloNonTraducibile`): quel che non sa tradurre non parte, e cio' che
+  // resta a parole si dichiara.
+  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8'));
+  const smart = srv.slice(srv.indexOf('async function scrapeSubitoSmart'), srv.indexOf('// ─── Auth'));
+  assert.ok(/filtriAuto\.attivi\(params\.filtriAuto\)/.test(smart) && /throw new Error/.test(smart),
+    'coi filtri avanzati il ripiego a browser di Subito deve rifiutarsi, non cercare a parole');
+  assert.ok(/params\.versione \?/.test(smart), 'la versione e\' un vincolo che quel percorso non porta');
+  assert.ok(/params\.subitoTestoLibero = true/.test(smart), 'la ricerca a parole non si dichiara');
+  assert.ok(/params\.subitoTestoLibero \? 'testo libero'/.test(srv),
+    'lo stato della fonte continua a dire \'id\' per una ricerca che id non ne ha usati');
+});
+
+test('ebay: una serp senza risultati esatti non e\' un elenco di offerte', () => {
+  // In modo OEM il filtro di pertinenza e' escluso di proposito (l'OEN quasi mai sta nel
+  // titolo): senza guardia, i SUGGERITI di eBay entravano come offerte del codice cercato.
+  const src = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'ebay-scrape.js'), 'utf8'));
+  assert.ok(/srp-save-null-search/.test(src), 'la guardia sulla serp nulla e\' sparita');
+  assert.ok(/if \(nulla\) return \[\]/.test(src), 'con zero risultati esatti la lista deve essere vuota');
+  // La regola dell'intestazione, ESEGUITA: senza confine, «1.230 risultati» conterrebbe
+  // «0 risultati» e una serp piena verrebbe azzerata.
+  const re = /nessun risultato esatto|non ha prodotto risultati|(^|[^\d])0\s+risultati/i;
+  assert.ok(src.includes(String(re.source)), 'la regex del test non e\' piu\' quella del codice');
+  for (const piena of ['1.230 risultati', '10 risultati', '4.507 risultati per ricambio']) {
+    assert.ok(!re.test(piena), `"${piena}" e' una serp PIENA e non va azzerata`);
+  }
+  for (const vuota of ['0 risultati', 'Nessun risultato esatto trovato']) {
+    assert.ok(re.test(vuota), `"${vuota}" e' una serp nulla`);
+  }
+});

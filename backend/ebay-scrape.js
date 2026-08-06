@@ -228,7 +228,26 @@ async function searchEbay(query) {
     if (resp && resp.status() === 403) { _warm = false; throw new Error('eBay 403 (serp)'); }
     await page.waitForTimeout(2000);
     const raw = await page.evaluate(() => {
-      return [...document.querySelectorAll('.s-item, li.s-card, [data-viewport] .s-card')].slice(0, 25).map(it => {
+      /**
+       * LA SERP SENZA RISULTATI ESATTI E' UN FATTO, non un elenco di offerte.
+       *
+       * Quando eBay non ha il codice mostra «0 risultati» e poi i SUGGERITI: card
+       * identiche alle vere, che passavano il filtro e finivano fra le offerte del pezzo
+       * cercato. In modo OEM il filtro di pertinenza e' escluso di proposito (l'OEN quasi
+       * mai sta nel titolo), quindi non c'era nessuna rete di sicurezza: `sources.ebay`
+       * usciva 'ok' con un conteggio che non corrispondeva a nessuna offerta vera.
+       * Si prendono SOLO le card che precedono il punto in cui eBay dichiara il ripiego.
+       */
+      const rottura = document.querySelector(
+        '.srp-save-null-search, .srp-river-answer--REWRITE_START, .srp-controls__count-heading + .s-answer-region');
+      // `\b0` e non `0`: senza il confine, «1.230 risultati» conterrebbe «0 risultati» e
+      // una serp piena verrebbe azzerata. La trappola e' reale, non teorica.
+      const intestazione = document.querySelector('.srp-controls__count-heading, .srp-save-null-search')?.textContent || '';
+      const nulla = /nessun risultato esatto|non ha prodotto risultati|(^|[^\d])0\s+risultati/i.test(intestazione);
+      if (nulla) return [];               // zero risultati esatti: quel che segue e' suggerito
+      const prima = el => !rottura || (el.compareDocumentPosition(rottura) & Node.DOCUMENT_POSITION_FOLLOWING);
+      const card = [...document.querySelectorAll('.s-item, li.s-card, [data-viewport] .s-card')].filter(prima);
+      return card.slice(0, 25).map(it => {
         const t = it.querySelector('.s-item__title, .s-card__title')?.textContent?.replace(/\s+/g, ' ').trim() || null;
         const p = it.querySelector('.s-item__price, .s-card__price')?.textContent?.trim() || null;
         const u = it.querySelector('a[href*="/itm/"]')?.href?.split('?')[0] || null;
