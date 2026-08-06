@@ -162,6 +162,17 @@ function notaIva(r) {
 }
 const rPricing = base => pricing(base, priceCfgR);
 const eurRound = n => '€ ' + Math.round(n).toLocaleString('it-IT');
+/**
+ * L'ETICHETTA del prezzo per chi ne mostra UNO solo (confronto, salvati, avvisi): il
+ * finale rettificato della riga, con lo stesso motore delle colonne (vPricing). Questi
+ * punti stampavano `r.prezzo` grezzo, e lo stesso annuncio aveva DUE prezzi a schermo —
+ * il rettificato in griglia e il grezzo nel confronto — contro la regola «mai due prezzi».
+ */
+const prezzoEtichetta = r => {
+  if (!r || r.prezzo == null) return r && r.prezzoSuRichiesta ? 'su richiesta' : '—';
+  const pr = vPricing(r.prezzo, passDi(r), r);
+  return pr ? eurRound(pr.finale) : '—';
+};
 
 // Dropdown "Prezzo €" (riusa lo stile .tb-cols di "Colonne"). ns = 'v' | 'r'.
 function priceMenuHTML(cfg, ns) {
@@ -1820,7 +1831,11 @@ function renderRicambiPanel() {
       const gkey = String(g.key);
       const collapsed = rcCollapsed.has(gkey);
       const prezzi = g.items.map(i => i.prezzo).filter(n => typeof n === 'number');
-      const meta = `${g.items.length} ricambi${prezzi.length ? ' · da ' + rcEur(Math.min(...prezzi)) : ''}`;
+      // La testata dice il RETTIFICATO come le righe che riassume: il minimo si sceglie sul
+      // grezzo (finale = base + aggiunte − spese, stessa monotonia: il vincitore non cambia)
+      // ma la cifra stampata sopra righe rettificate non puo' essere di un'altra scala.
+      const daMin = prezzi.length ? (rPricing(Math.min(...prezzi)) || {}).finale : null;
+      const meta = `${g.items.length} ricambi${daMin != null ? ' · da ' + rcEur(daMin) : ''}`;
       return `<div class="rc-group${collapsed ? ' collapsed' : ''}" data-gkey="${escapeHtml(gkey)}">
         <button type="button" class="rc-group-head"><span class="rc-gcaret">${icon('chevron')}</span><span class="rc-group-title">${escapeHtml(gkey)}</span><span class="rc-group-meta">${meta}</span></button>
         <div class="rc-group-body"><div class="rc-list">${g.items.map(a => rcRowHTML(a, bestKey)).join('')}</div></div>
@@ -2607,8 +2622,18 @@ function updateRowThumb(url) {
  * pastiglia «altro modello» sulla stessa riga si contraddicono a vicenda. Con l'insieme
  * misto non si assegna a nessuno: nessuna bugia, e la colonna prezzo resta ordinabile.
  */
+/**
+ * FUORI BERSAGLIO = una delle DUE marcature, non una sola: quella degli scraper
+ * (`dichiarazione`: un altro modello) e quella della verifica versioni (`versioneEsito`:
+ * l'annuncio dichiara un'altra versione). Ogni cancello ne conosceva una — e la stella
+ * verde finiva sulla Golf 1.6 base che l'app aveva appena marcato «non e' quella
+ * versione». Una funzione sola; backend/saved.js ha la riga GEMELLA per gli avvisi, e il
+ * test blinda che diano lo stesso verdetto sugli stessi ingressi.
+ */
+const fuoriBersaglio = r => !!r && ((r.dichiarazione && r.dichiarazione !== 'esatto' && r.dichiarazione !== 'senza-versione')
+  || r.versioneEsito === 'smentita');
 function bestUrlSet(items) {
-  const misto = items.some(r => r && r.dichiarazione && r.dichiarazione !== 'esatto' && r.dichiarazione !== 'senza-versione');
+  const misto = items.some(fuoriBersaglio);
   if (misto) return new Set();
   let min = Infinity, url = null;
   for (const r of items) { if (r.prezzo != null && r.prezzo > 0 && r.prezzo < min) { min = r.prezzo; url = r.url; } }
@@ -3842,7 +3867,10 @@ function removeMatrixCol(url) {
 }
 
 const MATRIX_ROWS = [
-  { key: 'prezzo', label: 'Prezzo', best: 'min', fmt: v => v != null ? `€ ${v.toLocaleString('it-IT')}` : '—' },
+  // Il prezzo del confronto e' il RETTIFICATO, come in griglia e negli export: `fmt`
+  // riceve anche la riga intera proprio per questo. La stella del migliore resta sul
+  // grezzo (stessa monotonia: finale = base + aggiunte − spese, il vincitore non cambia).
+  { key: 'prezzo', label: 'Prezzo', best: 'min', fmt: (v, r) => prezzoEtichetta(r) },
   { key: 'anno', label: 'Anno', best: 'max', fmt: v => v != null ? v : '—' },
   { key: 'km', label: 'Km', best: 'min', fmt: v => v != null ? `${v.toLocaleString('it-IT')} km` : '—' },
   { key: 'carburante', label: 'Carburante', fmt: v => v || '—' },
@@ -3857,7 +3885,10 @@ const MATRIX_ROWS = [
   // La corrispondenza sta nel confronto come sta nella lista e nel PDF: qui piu' che altrove,
   // perche' e' il posto dove si mettono due annunci fianco a fianco per decidere, e finora
   // niente diceva che uno dei due poteva essere un altro modello.
-  { key: 'dichiarazione', label: 'Corrispondenza', fmt: v => (DICHIARAZIONE[v] ? DICHIARAZIONE[v].et : 'corrisponde') },
+  // «Corrispondenza» legge TUTTI E DUE i canali del fuori-bersaglio: senza il secondo,
+  // una riga che l'app aveva marcato «smentita» qui usciva «corrisponde».
+  { key: 'dichiarazione', label: 'Corrispondenza', fmt: (v, r) => (r && r.versioneEsito === 'smentita')
+    ? 'non e\' quella versione' : (DICHIARAZIONE[v] ? DICHIARAZIONE[v].et : 'corrisponde') },
 ];
 function showMatrix(title) {
   cmatrixTitle.textContent = `${title} (${matrixList.length})`;
@@ -3885,7 +3916,7 @@ function renderMatrix() {
   // Stessa regola della lista: se nel confronto e' finito anche un annuncio di un altro
   // modello, il PREZZO migliore non si assegna — il piu' economico e' quasi sempre quello,
   // perche' e' un altro veicolo. Le altre righe (anno, km, potenza) restano confrontabili.
-  const cmMisto = list.some(r => r && r.dichiarazione && r.dichiarazione !== 'esatto' && r.dichiarazione !== 'senza-versione');
+  const cmMisto = list.some(fuoriBersaglio);
   const bestByRow = MATRIX_ROWS.map(cfg => (cfg.best && !(cmMisto && cfg.key === 'prezzo'))
     ? bestIndexes(list.map(r => r[cfg.key]), cfg.best) : new Set());
 
@@ -3896,10 +3927,10 @@ function renderMatrix() {
         : `<div class="cm-card-img cm-card-noimg">—</div>`;
       const openBtn = /^https?:\/\//i.test(r.url) ? `<a class="cm-open" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">Apri ↗</a>` : '';
       const priceBest = bestByRow[0].has(ci);   // MATRIX_ROWS[0] = prezzo
-      const price = r.prezzo != null ? `€ ${r.prezzo.toLocaleString('it-IT')}` : 'n/d';
+      const price = prezzoEtichetta(r);
       const specs = MATRIX_ROWS.map((cfg, ri) => ({ cfg, ri })).filter(x => x.cfg.key !== 'prezzo').map(({ cfg, ri }) => {
         const best = bestByRow[ri].has(ci);
-        return `<div class="cm-card-spec"><span class="cm-card-k">${cfg.label}</span><span class="cm-card-v${best ? ' cm-best' : ''}">${escapeHtml(String(cfg.fmt(r[cfg.key])))}${best ? ' <span class="cm-star">★</span>' : ''}</span></div>`;
+        return `<div class="cm-card-spec"><span class="cm-card-k">${cfg.label}</span><span class="cm-card-v${best ? ' cm-best' : ''}">${escapeHtml(String(cfg.fmt(r[cfg.key], r)))}${best ? ' <span class="cm-star">★</span>' : ''}</span></div>`;
       }).join('');
       return `<div class="cm-card">
         <div class="cm-card-head">${thumb}<div class="cm-card-tt">
@@ -3923,7 +3954,7 @@ function renderMatrix() {
     return `<th><div class="cm-colhead">${thumb}<div class="cm-tt"><div class="cm-coltitle">${escapeHtml(r.titolo || '')}</div><div class="cm-colactions">${openBtn}<button class="cm-rm" data-url="${escapeHtml(r.url)}" title="Rimuovi">✕</button></div></div></div></th>`;
   }).join('')}</tr></thead>`;
   const rows = MATRIX_ROWS.map((cfg, ri) => {
-    const vals = list.map(r => String(cfg.fmt(r[cfg.key])));
+    const vals = list.map(r => String(cfg.fmt(r[cfg.key], r)));
     const differ = new Set(vals).size > 1;
     const bestIdx = bestByRow[ri];
     const cells = list.map((_, i) => `<td class="cm-val${bestIdx.has(i) ? ' cm-best' : ''}">${escapeHtml(vals[i])}</td>`).join('');
@@ -3989,14 +4020,13 @@ function updateSavedButton() {
 function renderSalvati() {
   const container = document.getElementById('salvatiList');
   if (salvati.length === 0) { container.innerHTML = '<p class="text-muted text-center py-4">Nessun annuncio salvato.</p>'; return; }
-  const fmt = n => n != null ? `€ ${n.toLocaleString('it-IT')}` : '—';
   const fmtKm = n => n != null ? `${n.toLocaleString('it-IT')} km` : '—';
   container.innerHTML = salvati.map(r => {
     const inConf = confronto.some(c => stessoAnnuncio(c, r));
     return `<div class="salvato-item" data-url="${escapeHtml(r.url)}">
       <div class="salvato-info">
         <div class="salvato-titolo">${escapeHtml(r.titolo)}</div>
-        <div class="salvato-dettagli">${fmt(r.prezzo)} · ${fmtKm(r.km)} · ${r.anno || '—'}</div>
+        <div class="salvato-dettagli">${prezzoEtichetta(r)} · ${fmtKm(r.km)} · ${r.anno || '—'}</div>
       </div>
       <div class="salvato-actions">
         <button class="btn-confronta-salvato${inConf ? ' attivo' : ''}" title="Confronta">${icon(inConf ? 'square-check' : 'square')}</button>
@@ -4100,7 +4130,6 @@ function renderRicerche() {
     const h = Math.round(min / 60);
     return h < 24 ? `${h}h fa` : `${Math.round(h / 24)}g fa`;
   };
-  const fmt = n => n != null ? `€ ${n.toLocaleString('it-IT')}` : '—';
   c.innerHTML = savedSearches.map(s => {
     const novita = s.novita || 0;
     const badge = novita > 0 ? `<span class="ric-badge">${novita}</span>` : '';
@@ -4116,7 +4145,7 @@ function renderRicerche() {
       <div class="ric-alert ric-${a.motivo}" data-url="${escapeHtml(a.url)}" title="Apri annuncio">
         <span class="ric-motivo">${MOTIVO_LABEL[a.motivo]?.slice(0, -1) || a.motivo}</span>
         <span class="ric-alert-tit">${escapeHtml(a.titolo || 'Annuncio')}</span>
-        <span class="ric-alert-prezzo">${fmt(a.prezzo)}</span>
+        <span class="ric-alert-prezzo">${prezzoEtichetta(a)}</span>
       </div>`).join('');
     return `<div class="ric-card${novita ? ' has-novita' : ''}" data-id="${escapeHtml(s.id)}">
       <div class="ric-head">
@@ -5732,7 +5761,10 @@ function exportCsv(results) {
   const rows = results.map(r => {
     const pr = vPricing(r.prezzo, passDi(r), r);
     const d = DICHIARAZIONE[r.dichiarazione];
-    return [r.fonte, r.titolo, pr ? Math.round(pr.finale) : '', r.anno != null ? r.anno : '', r.km != null ? r.km : '', r.carburante || '', r.provincia || '', ...priceExtraValues(pr, cfg, conPass), d ? d.et : 'corrisponde', r.url].map(cell).join(',');
+    // L'export non porta con se' il contesto dello schermo («li stai vedendo»): una riga
+    // smentita che esce «corrisponde» in un foglio di calcolo e' una certificazione falsa.
+    const corr = r.versioneEsito === 'smentita' ? 'non e\' quella versione' : (d ? d.et : 'corrisponde');
+    return [r.fonte, r.titolo, pr ? Math.round(pr.finale) : '', r.anno != null ? r.anno : '', r.km != null ? r.km : '', r.carburante || '', r.provincia || '', ...priceExtraValues(pr, cfg, conPass), corr, r.url].map(cell).join(',');
   });
   const csv = [cols.join(','), ...rows].join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -5777,7 +5809,8 @@ function exportPdf(results) {
       r.carburante || '\u2014',
       r.provincia || '\u2014',
       ...priceExtraValues(pr, cfg, conPass).map(x => x === '' ? '\u2014' : fmtEur(x)),
-      d ? d.et : 'corrisponde',
+      // Come nel CSV: il PDF viaggia da solo, e una smentita non puo' uscire \u00abcorrisponde\u00bb.
+      r.versioneEsito === 'smentita' ? 'non e\' quella versione' : (d ? d.et : 'corrisponde'),
     ];
   });
   scaricaPdf({

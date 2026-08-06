@@ -299,6 +299,46 @@ test('subito: sulle moto le famiglie si chiedono tutte, non solo la prima', asyn
   } finally { sub._setHttpGetJson(null); }
 });
 
+// ─── Fuori bersaglio: due canali, un verdetto, browser e avvisi d'accordo ────
+test('fuori bersaglio: browser e avvisi danno lo stesso verdetto sugli stessi ingressi', () => {
+  // La regola del proprietario: «regole scritte due volte (browser + server): si accetta la
+  // copia, ma un test blinda che diano lo stesso risultato sugli stessi ingressi». Qui i
+  // canali sono DUE (dichiarazione degli scraper, versioneEsito della verifica) e prima
+  // ogni consumatore ne conosceva uno: la stella finiva su un annuncio marcato «smentita»
+  // e l'avviso suonava per un annuncio che lo schermo nasconde.
+  const { fuoriBersaglio } = esegui([
+    ritaglia(APP, 'const fuoriBersaglio', '\nfunction bestUrlSet'),
+  ], {}, ['fuoriBersaglio']);
+  const saved = require('../backend/saved');
+
+  // Il cancello degli avvisi, ESEGUITO: un solo annuncio, sopra il floor, gia' visto a un
+  // prezzo piu' alto → senza marcature suona, con una qualunque delle due tace.
+  const suona = extra => {
+    const r = { url: 'https://x/1', titolo: 'Golf', prezzo: 9000, fonte: 'subito', ...extra };
+    // `seen` mappa chiave → PREZZO (un numero): un calo da 12.000 a 9.000 suona sempre.
+    const search = { seen: { [r.url]: 12000 }, alerted: [] };
+    return saved.computeAlerts(search, [r]).alerts.length > 0;
+  };
+
+  const casi = [
+    [{}, false],
+    [{ dichiarazione: 'esatto' }, false],
+    [{ dichiarazione: 'senza-versione' }, false],
+    [{ dichiarazione: 'altro-modello' }, true],
+    [{ dichiarazione: 'esatto', versioneEsito: 'smentita' }, true],   // il caso che divergeva
+    [{ versioneEsito: 'smentita' }, true],
+    [{ versioneEsito: 'confermata' }, false],
+    [{ versioneEsito: 'ignota' }, false],                             // «non lo so» non e' «non e' quella»
+  ];
+  for (const [extra, fuori] of casi) {
+    assert.strictEqual(fuoriBersaglio({ prezzo: 9000, ...extra }), fuori,
+      `browser, ${JSON.stringify(extra)}: atteso fuoriBersaglio=${fuori}`);
+    assert.strictEqual(suona(extra), !fuori,
+      `avvisi, ${JSON.stringify(extra)}: un fuori bersaglio non suona, un annuncio buono si'`);
+  }
+  assert.strictEqual(fuoriBersaglio(null), false, 'null non esplode: la lista puo' + "'" + ' portare buchi');
+});
+
 // ─── Una regola, un posto: il nome senza la generazione ──────────────────────
 test('archivi: il modello CON la generazione risponde quanto quello senza — rotte eseguite', async () => {
   // La regola: il nome che arriva da una fonte passa da senzaGenerazione PRIMA di ogni

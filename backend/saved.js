@@ -189,7 +189,13 @@ function computeAlerts(search, results) {
      * cosi' se domani la risoluzione del modello migliora non arriva come "nuovo" un mezzo
      * che sta in lista da settimane.
      */
-    if (r.dichiarazione && r.dichiarazione !== 'esatto' && r.dichiarazione !== 'senza-versione') continue;
+    // RIGA GEMELLA di `fuoriBersaglio()` in frontend/app.js: browser e avvisi devono dare
+    // lo stesso verdetto sugli stessi ingressi (il test lo blinda). Il secondo canale —
+    // `versioneEsito`, la verifica versioni del server — qui mancava, e l'avviso suonava
+    // per un annuncio che lo schermo della stessa ricerca nasconde come «non e' quella
+    // versione»: la coppia peggiore, suona ED e' invisibile.
+    if ((r.dichiarazione && r.dichiarazione !== 'esatto' && r.dichiarazione !== 'senza-versione')
+      || r.versioneEsito === 'smentita') continue;
     // review: NON gateare su anno/km null. recordCheck (sotto) registra COMUNQUE l'annuncio in
     // `seen` → col vecchio gate un annuncio nuovo con km=null (comune su Moto.it/Subito) non
     // avvisava MAI e restava soppresso per sempre (prev != null al giro dopo). Il rumore è già
