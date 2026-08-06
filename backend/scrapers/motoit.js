@@ -296,6 +296,17 @@ async function throttle() {
   lastSearchAt = Date.now();
 }
 
+/**
+ * SE NESSUNA CARD PORTA UN PREZZO, E' IL MARKUP, NON IL MERCATO — la regola di
+ * subito-api:745, che qui mancava. `priceRaw` si legge da [class*="price"]: una classe
+ * rinominata azzera il prezzo di TUTTE le card senza fare rumore, e le righe uscivano
+ * con pastiglia verde e nessuna cifra. Il gate a 3 evita il falso allarme su una lista
+ * piccola davvero tutta «T.RISERVATA» (che parsePrezzo traduce in null di proposito).
+ */
+const sospettoPrezzi = r => (r.length >= 3 && r.every(x => x.prezzo == null))
+  ? `nessuno dei ${r.length} annunci porta un prezzo leggibile: l'etichetta del markup puo' essere cambiata`
+  : null;
+
 // ─── Scraper principale ──────────────────────────────────────────────────────
 async function scrapeMotoIt(params, opts = {}) {
   // Solo moto (già garantito dal server, ma difesa in profondità)
@@ -338,7 +349,7 @@ async function scrapeMotoIt(params, opts = {}) {
    * spacciarsi per tuo.
    */
   const totaleLargo = !params.motoitModelSlug || null;
-  return opts.withMeta ? { items: risultati, truncated, total, totaleLargo } : risultati;
+  return opts.withMeta ? { items: risultati, truncated, total, totaleLargo, sospetto: sospettoPrezzi(risultati) } : risultati;
   }
 
   // ON-SEARCH: HTTP sequenziale gentile (come il crawler). Niente browser, niente
@@ -365,7 +376,7 @@ async function scrapeMotoIt(params, opts = {}) {
    * spacciarsi per tuo.
    */
   const totaleLargo = !params.motoitModelSlug || null;
-  return opts.withMeta ? { items: risultati, truncated, total, totaleLargo } : risultati;
+  return opts.withMeta ? { items: risultati, truncated, total, totaleLargo, sospetto: sospettoPrezzi(risultati) } : risultati;
 }
 
 module.exports = scrapeMotoIt;

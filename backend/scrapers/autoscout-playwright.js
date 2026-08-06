@@ -19,6 +19,11 @@ const { parseEuro, parseKm, REGION_AS24, resolveChromiumExecutable } = require('
 // Vedi subito-playwright.js: il ripiego a browser entra nel conto delle richieste, senno'
 // il contatore misura tutto tranne il ramo piu' caro.
 const budget = require('../budget-richieste');
+// Una ricerca abbandonata non paga piu' niente: la presa si chiude (come motoit.js:45) e
+// il browser non si apre. Le due cose vanno INSIEME: il solo signal, da solo, manderebbe
+// il GET abortito nel ramo "blocco sospetto" e aprirebbe Chromium proprio per la ricerca
+// che nessuno sta piu' guardando.
+const annullo = require('../annullo');
 // L'UNICO risolutore di provincia del progetto (valida contro le 107 sigle vere, legge
 // sigla/parentesi/coda/comune/CAP e tace quando due indizi si contraddicono).
 const { risolvi: risolviProvincia } = require('../province-sigla');
@@ -35,7 +40,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 function httpGetText(url, hops = 0) {
   return new Promise((resolve, reject) => {
     if (hops > 5) return reject(new Error('too many redirects'));
-    const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'it-IT,it;q=0.9' } }, res => {
+    const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'it-IT,it;q=0.9' },
+      signal: annullo.segnale() }, res => {   // ricerca abbandonata → la presa si chiude
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
         const next = res.headers.location.startsWith('http') ? res.headers.location : new URL(res.headers.location, url).href;
@@ -280,7 +286,7 @@ async function throttle() {
 }
 
 // ─── Scraper principale ──────────────────────────────────────────────────────
-async function scrapeAutoscout(params) {
+async function scrapeAutoscout(params, fetta = 0) {
   await throttle();
 
   const first = buildUrl(params, 1);
@@ -289,7 +295,10 @@ async function scrapeAutoscout(params) {
     return [];
   }
 
-  const urls = Array.from({ length: NUM_PAGES }, (_, i) => buildUrl(params, i + 1).url);
+  // La fetta e' la stessa di tutte le fonti: la 0 e' la prima schermata, la 1 la successiva.
+  // Senza offset, "Carica altri" col ripiego attivo rileggeva per sempre le pagine 1-3.
+  const base = Math.max(0, fetta) * NUM_PAGES;
+  const urls = Array.from({ length: NUM_PAGES }, (_, i) => buildUrl(params, base + i + 1).url);
   const dedup = pages => {
     const visti = new Set();
     return pages.flat().filter(r => { if (visti.has(r.url)) return false; visti.add(r.url); return true; });
@@ -311,6 +320,9 @@ async function scrapeAutoscout(params) {
     }
   }
 
+  // Il GET e' caduto per abbandono, non per un blocco: aprire Chromium adesso sarebbe
+  // pagare il ramo piu' caro per una risposta che nessuno leggera'.
+  if (annullo.annullata()) throw new Error('ricerca annullata prima del ripiego a browser');
   const browser = await getBrowser();
   console.log(`[AS24-PW] Fetching ${NUM_PAGES} pagine (browser): ${urls[0]}`);
   // Una pagina bloccata NON butta via le altre: se qualche pagina ha portato annunci si

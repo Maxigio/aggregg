@@ -512,13 +512,26 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
   // successiva. Ogni fonte la traduce nella SUA paginazione, perche' le pagine hanno
   // dimensioni diverse — qui 50 per pagina, due pagine per fetta.
   const salta = Math.max(0, opts.fetta || 0) * maxPages;
+  let rawTot = 0;                   // annunci grezzi visti: se mappati 0, e' il parser
   for (let p = 1 + salta; p <= salta + maxPages; p++) {
     if (p > 1 + salta && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
     const { items, raw, total: tot } = await fetchPage(params, p, opts);
     if (p === 1 + salta) total = tot;   // uguale su tutte le pagine: si prende la prima
+    rawTot += raw;
     out.push(...items);
     if (raw < PAGE_SIZE) break;       // lista esaurita (conteggio GREZZO) = vista completa
     if (p === salta + maxPages) truncated = true;   // ultima pagina piena al cap → forse altro
+  }
+  /**
+   * SE NON MAPPA PIU' NIENTE, E' IL PARSER, NON IL MERCATO — la regola di subito-api:745,
+   * che qui mancava del tutto. mapListing scarta il nodo senza prezzo ne' onRequestOnly:
+   * se `prices.public.amountInEUR` cambia nome, OGNI nodo esce null e la ricerca usciva
+   * come «Autoscout 0 di 6.485» — pastiglia grigia, mercato dichiarato vuoto, e in cache.
+   * Il throw e non un campo: il ramo union chiama senza withMeta e un campo si perderebbe,
+   * mentre l'errore finisce in `errori[]` e diventa un `parziale` dichiarato.
+   */
+  if (rawTot > 0 && out.length === 0) {
+    throw new Error(`Autoscout: ${rawTot} annunci grezzi e nessuno leggibile — lo schema del payload puo' essere cambiato`);
   }
   return opts.withMeta ? { items: out, truncated, total } : out;
 }

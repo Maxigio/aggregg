@@ -991,9 +991,57 @@ test('subito: se nessun annuncio porta un prezzo, e\' il parser — non il merca
     'l\'annuncio senza prezzo torna a sparire, e il crawler lo archivia come venduto');
   // E se sono TUTTI senza prezzo, la fonte lo dichiara: 'error', non 'empty'.
   assert.match(src, /senzaPrezzo === out\.length/);
-  const srv = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
-  assert.match(srv, /if \(sospetto\) return \{ items, total, parziale, status: 'error'/,
-    'un sospetto dichiarato dalla fonte non puo\' uscire come "nessun annuncio"');
+  // La quarta asserzione di questo test cercava nel sorgente la stringa
+  // `if (sospetto) return { items, total, parziale, status: 'error'` — e combaciava con
+  // runSource, NON con runSubito, che il campo lo buttava: verde guardando l'altra copia.
+  // Ora la regola si prova ESEGUENDO i wrapper, nel test qui sotto.
+});
+
+test('subito: parziale e sospetto ATTRAVERSANO runSubito — eseguito, non letto', async () => {
+  // La regola difesa: nessun wrapper puo' restituire meno campi-dichiarazione di quanti ne
+  // riceve. runSubito destrutturava {items,total,sospetto} e perdeva `parziale`: la ricerca
+  // moto a meta' (una famiglia caduta) entrava in cache per tre minuti senza dire niente,
+  // e ripremere Cerca non faceva ripartire nulla.
+  const srv = require('../backend/server');
+  const sub = require('../backend/scrapers/subito-api');
+  const annuncio = (id, prezzo) => ({
+    urn: id, urls: { default: `https://www.subito.it/x/${id}` }, subject: 'Moto ' + id,
+    features: prezzo != null
+      ? [{ label: 'Prezzo', uri: '/price', values: [{ key: String(prezzo), value: `${prezzo} €` }] }]
+      : [],
+  });
+  const params = base => ({
+    tipo: 'moto', marca: 'Ducati', modello: 'Monster',
+    subitoNodo: { marcaId: '000123', famigliaIds: ['111', '222', '333'] }, ...base,
+  });
+
+  // (a) una famiglia su tre risponde 500 → il PARZIALE esce dal wrapper e blocca la cache.
+  sub._setHttpGetJson(async p => {
+    const bm = (p.match(/[?&]bm=([^&]+)/) || [])[1];
+    if (bm === '222') return { status: 500, body: 'KO' };
+    return { status: 200, body: JSON.stringify({ count_all: 10, ads: [annuncio(bm, 5000)] }) };
+  });
+  try {
+    const r = await srv._runSubito(params(), 30000);
+    assert.strictEqual(r.status, 'ok', 'le famiglie superstiti restano: parziale sta ACCANTO allo status');
+    assert.match(String(r.parziale), /non hanno risposto/,
+      'il parziale dell\'unione deve USCIRE da runSubito, non morire nella destrutturazione');
+    assert.match(String(r.reason), /non hanno risposto/, 'il perche\' viaggia anche in reason, per la pastiglia');
+    const sources = { subito: r, autoscout: { status: 'ok' }, moto: { status: 'ok' } };
+    assert.strictEqual(srv._cacheable({ sources, totale: r.items.length }), false,
+      'una ricerca a meta\' non si congela: ripremere Cerca deve far ripartire le fonti');
+  } finally { sub._setHttpGetJson(null); }
+
+  // (b) nessun annuncio porta un prezzo → il SOSPETTO della singola famiglia risale
+  // dall'unione e runSubito lo traduce in 'error', non in "nessun annuncio".
+  sub._setHttpGetJson(async () => ({
+    status: 200, body: JSON.stringify({ count_all: 4, ads: [annuncio('a', null), annuncio('b', null)] }),
+  }));
+  try {
+    const r = await srv._runSubito(params(), 30000);
+    assert.strictEqual(r.status, 'error', 'il parser rotto e\' un errore della fonte, non un mercato vuoto');
+    assert.match(String(r.reason), /prezzo/, 'e il perche\' nomina il prezzo');
+  } finally { sub._setHttpGetJson(null); }
 });
 
 test('il totale della pill dice a quale ricerca appartiene', () => {

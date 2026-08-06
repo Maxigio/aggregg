@@ -128,20 +128,47 @@ const TIMEOUT_MS = 45000;
 // Playwright. Spegnibile con USE_AS24_GRAPHQL=0. Il post-filter titolo (§12) e i
 // filtri numerici lato server restano validi anche sui risultati GraphQL.
 const USE_AS24_GRAPHQL = process.env.USE_AS24_GRAPHQL !== '0';
+// I vincoli che il ramo a browser NON sa dire alla fonte. Un ripiego che li ignorasse
+// riempirebbe la colonna di annunci piu' larghi della domanda, marcati come giusti.
+const vincoloNonTraducibile = p =>
+  filtriAuto.attivi(p.filtriAuto) ? 'i filtri avanzati non passano'
+  : p.raggio ? 'il raggio in km non passa'
+  : null;
 async function scrapeAutoscoutSmart(params, opts = {}) {
   if (USE_AS24_GRAPHQL) {
     // Anno/km ora NATIVI (buildVariables: firstRegistration + mileageInKm) → pagina 1
     // già in-range, niente più hack sort-by-date/maxPages (prima serviva perché il
     // post-filter su una pesca cheapest-first azzerava `annoMin`).
     try { return await scrapeAutoscoutGraphql(params, opts); }
-    catch (e) { console.warn(`[AS24] GraphQL fallito (${e.message}) → fallback Playwright`); }
+    catch (e) {
+      // La ricerca e' gia' stata abbandonata (timeout/annullo): un ripiego adesso spende
+      // 1 POST + 3 GET e magari un Chromium per un risultato che nessuno leggera' — e li
+      // spende FUORI dalla finestra in cui budget-richieste scrive la sua riga, quindi il
+      // conto delle richieste sottostimerebbe proprio i casi peggiori.
+      if (annullo.annullata()) throw e;
+      // Decisione del proprietario: un ripiego che non sa tradurre un vincolo NON parte.
+      // buildFilters legge solo prezzo/anno/km — gli otto filtri avanzati non partirebbero
+      // e la colonna si riempirebbe di annunci piu' larghi della domanda, marcati 'esatto'.
+      // E il raggio in km e' lo stesso caso: buildUrl legge la TABELLA della regione (zipr
+      // fisso), non il tuo cerchio — "entro 30 km" diventava "in tutta la regione".
+      const cosa = vincoloNonTraducibile(params);
+      if (cosa) throw new Error(`Autoscout24 non raggiungibile, e ${cosa} dal ripiego a browser (${e.message})`);
+      console.warn(`[AS24] GraphQL fallito (${e.message}) → fallback Playwright`);
+    }
+  } else {
+    // Stessa regola quando il GraphQL e' spento dall'interruttore di servizio: lo scraper
+    // a browser quei vincoli non li sa dire, e ignorarli in silenzio e' peggio.
+    const cosa = vincoloNonTraducibile(params);
+    if (cosa) throw new Error(`${cosa} dallo scraper a browser di Autoscout`);
   }
   // Il ripiego Playwright NON legge autoscoutVersionText (buildFilters non lo usa): la versione
   // scritta non parte. Chi etichetta piu' sotto leggeva `params.autoscoutVersionText` — cioe'
   // l'INTENZIONE — e concludeva che la fonte l'avesse confrontata, marcando 'esatto' righe di
   // qualunque allestimento. Qui lo si dichiara, e l'etichetta torna onesta.
   if (params.autoscoutVersionText) params.as24VersioneNonInviata = true;
-  return scrapeAutoscout(params);   // il ripiego Playwright non conta: totale null
+  // La fetta e' paginazione, non un vincolo: si inoltra. Senza, "Carica altri" col ripiego
+  // attivo rifaceva per sempre le pagine 1-3 e non portava mai un annuncio nuovo.
+  return scrapeAutoscout(params, opts.fetta || 0);   // il ripiego Playwright non conta: totale null
 }
 
 // F50 fase 1b — UNIONE MULTI-GRAFIA. AS24 filtra per parola intera e non ha OR: una
@@ -164,7 +191,11 @@ async function scrapeAutoscoutUnion(params, opts = {}) {
   // cachato), o 'empty' che innescava un riallargamento su un errore transitorio.
   const errori = [];
   const liste = await Promise.all(grafie.map(async g => {
-    try { return await scrapeAutoscoutGraphql({ ...params, autoscoutVersionText: conVersione(g) }, { fetta: opts.fetta || 0 }); }
+    // `maxPages` viaggia con la fetta: e' la compensazione misurata per il taglio sul CAP
+    // (regione senza raggio, riga ~1657) e perderla qui voleva dire leggere 100 annunci per
+    // grafia invece di 150 prima del post-filtro. NON si inoltra tutto `opts`: `withMeta`
+    // cambierebbe la forma del ritorno e il ciclo di unione qui sotto legge un array.
+    try { return await scrapeAutoscoutGraphql({ ...params, autoscoutVersionText: conVersione(g) }, { fetta: opts.fetta || 0, ...(opts.maxPages ? { maxPages: opts.maxPages } : {}) }); }
     catch (e) { errori.push(e); return []; }
   }));
   // Tutte le grafie cadute: si riprova una volta sola per la via classica. NON si toglie qui il
@@ -1076,14 +1107,18 @@ async function runSource(lavoro, ms, nomeSito) {
   });
   const avviato = typeof lavoro === 'function' ? annullo.dentro(ctrl.signal, lavoro) : lavoro;
   try {
-    const { items, total, parziale, sospetto, totaleLargo } = sciogli(await Promise.race([avviato, timeout]));
+    // Lo SPREAD, non una destrutturazione scelta a mano: sciogli() e' il punto unico che
+    // elenca i campi-dichiarazione, e chi ritorna li ripassa TUTTI per costruzione. La
+    // destrutturazione era il punto esatto in cui `parziale` moriva nel wrapper gemello
+    // (runSubito): il campo era spedito, normalizzato, e poi perso nel passaggio di consegne.
+    const s = sciogli(await Promise.race([avviato, timeout]));
     // Una fonte che DICHIARA di non aver letto bene non e' 'ok' e non e' 'empty': con
     // 'empty' a schermo diventerebbe "nessun annuncio", cioe' un fatto sul mercato.
-    if (sospetto) return { items, total, parziale, status: 'error', reason: sospetto };
+    if (s.sospetto) return { ...s, status: 'error', reason: s.sospetto };
     // Un risultato parziale con item resta 'ok' (il flag sta ACCANTO allo status, mai al
     // posto suo — stessa regola di `allargato`), ma il perche' viaggia in `reason` e il
     // campo `parziale` arriva fino a `sources`, dove cacheable() lo legge.
-    return { items, total, parziale, totaleLargo, status: items.length ? 'ok' : 'empty', reason: parziale || null };
+    return { ...s, status: s.items.length ? 'ok' : 'empty', reason: s.parziale || null };
   } catch (err) {
     const isTimeout = err.message === '__timeout__';
     // Anche su un errore: se la fonte ha risposto male, quello che resta in volo non serve.
@@ -1105,10 +1140,15 @@ async function runSubito(params, ms) {
   });
   try {
     const avviato = annullo.dentro(ctrl.signal, () => scrapeSubitoSmart(params));
-    const { items, total, sospetto } = sciogli(await Promise.race([avviato, timeout]));
+    // Stesso stampo di runSource: lo spread di sciogli(), MAI una destrutturazione a mano.
+    // Qui `{ items, total, sospetto }` buttava `parziale`: la ricerca moto a meta' (una
+    // famiglia caduta, o le famiglie oltre il tetto di 8) usciva senza dichiarazione,
+    // cacheable() non aveva niente da leggere e congelava tre minuti una risposta monca —
+    // ripremere Cerca non faceva ripartire nulla. E «Subito N di M» usciva senza segno.
+    const s = sciogli(await Promise.race([avviato, timeout]));
     // Come in runSource: una fonte che dichiara di non aver letto bene non e' 'empty'.
-    if (sospetto) return { items, total, status: 'error', reason: sospetto };
-    return { items, total, status: items.length ? 'ok' : 'empty', reason: null };
+    if (s.sospetto) return { ...s, status: 'error', reason: s.sospetto };
+    return { ...s, status: s.items.length ? 'ok' : 'empty', reason: s.parziale || null };
   } catch (err) {
     ctrl.abort();
     if (err instanceof SubitoBlockedError) {
@@ -2331,4 +2371,9 @@ module.exports = { server, app, _lookupBrand: lookupBrand, _lookupModelGroup: lo
   // Chi si puo' credere e come si contano i limiti sono due decisioni di sicurezza:
   // vanno provate, e senza aprire una porta.
   _clientIp: clientIp, _chiaveLimite: chiaveLimite,
+  // I due wrapper delle fonti: la regola «parziale e sospetto attraversano il wrapper» si
+  // prova ESEGUENDOLI (con lo stub HTTP di subito-api), non leggendo il sorgente — la
+  // guardia a parole era verde mentre runSubito buttava il campo, perche' combaciava con
+  // la copia gemella di runSource.
+  _runSource: runSource, _runSubito: runSubito,
   _as24LivelloAllargamento: as24LivelloAllargamento };

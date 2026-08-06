@@ -618,6 +618,7 @@ async function unioneFamiglieMoto(params, opts) {
   const chieste = tutte.slice(0, MAX_FAMIGLIE_MOTO);
   const perUrl = new Map();
   let truncated = false, total = null, errori = 0;
+  const sospetti = [];
   for (let i = 0; i < chieste.length; i++) {
     if (i > 0) await sleep(opts.pageDelayMs || 400);      // mai raffica verso la stessa fonte
     const uno = { ...params, subitoNodo: { ...nodo, famigliaIds: [chieste[i]] } };
@@ -625,6 +626,10 @@ async function unioneFamiglieMoto(params, opts) {
       const r = await scrapeSubitoApi(uno, { ...opts, withMeta: true });
       for (const x of r.items) if (x && x.url && !perUrl.has(x.url)) perUrl.set(x.url, x);
       if (r.truncated) truncated = true;
+      // «Il parser del prezzo e' rotto» lo dichiara la singola passata: l'unione lo
+      // buttava, e la stessa rottura dava pastiglia rossa su un'auto e verde su cento
+      // moto — la fonte mentiva solo nel ramo scritto per i casi difficili.
+      if (r.sospetto) sospetti.push(r.sospetto);
       // I totali si sommano: sono famiglie DISGIUNTE del catalogo, non insiemi che si
       // sovrappongono (e' la stessa somma che l'API fa da sola sulle auto con la virgola).
       if (Number.isFinite(r.total)) total = (total || 0) + r.total;
@@ -643,7 +648,7 @@ async function unioneFamiglieMoto(params, opts) {
   if (parziale) console.warn(`[subito] moto "${params.marca} ${params.modello || ''}": ${parziale}`);
   const items = [...perUrl.values()];
   console.log(`[subito] moto "${params.marca} ${params.modello || ''}": ${chieste.length} famiglie → ${items.length} annunci`);
-  return opts.withMeta ? { items, truncated, total, parziale } : items;
+  return opts.withMeta ? { items, truncated, total, parziale, sospetto: sospetti[0] || null } : items;
 }
 
 async function scrapeSubitoApi(params, opts = {}) {
