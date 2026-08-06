@@ -160,7 +160,14 @@ function notaIva(r) {
   if (!priceCfgV.iva || ivaDichiarata(r)) return '';
   return r && r.ivaEsposta === false ? 'regime del margine: niente IVA da scorporare' : 'IVA non dichiarata dalla fonte';
 }
-const rPricing = base => pricing(base, priceCfgR);
+/**
+ * SUI RICAMBI L'IVA NON SI SCORPORA. Nessuna fonte ricambi dichiara `ivaEsposta`
+ * (verificato: il campo vive solo nella pipeline veicoli), quindi lo scorporo sarebbe un
+ * numero inventato su ogni riga — comprese le parti usate di privati su Subito. Decisione
+ * del proprietario: la funzione non serve. Lo spegnimento sta QUI e non solo nel menu,
+ * perche' chi aveva gia' la spunta accesa se la porta dietro nel localStorage.
+ */
+const rPricing = base => pricing(base, priceCfgR.iva ? Object.assign({}, priceCfgR, { iva: false }) : priceCfgR);
 const eurRound = n => '€ ' + Math.round(n).toLocaleString('it-IT');
 /**
  * L'ETICHETTA del prezzo per chi ne mostra UNO solo (confronto, salvati, avvisi): il
@@ -185,7 +192,7 @@ function priceMenuHTML(cfg, ns) {
       <label class="pm-row"><span>Spese</span><span class="pm-inp"><input type="number" inputmode="numeric" min="0" step="10" id="pmSpese_${ns}" value="${num(cfg.spese)}" placeholder="0"><span class="pm-unit-static">€</span></span></label>
       <label class="pm-row"><span>Margine rivendita</span><span class="pm-inp"><input type="number" inputmode="numeric" min="0" step="1" id="pmMarg_${ns}" value="${num(cfg.margine)}" placeholder="0"><span class="pm-unit-static">%</span></span></label>
       ${ns === 'v' ? `<label class="pm-row" title="Costo della pratica: si sottrae al margine, non al prezzo"><span>Passaggio</span><span class="pm-inp"><input type="number" inputmode="numeric" min="0" step="10" id="pmPass_${ns}" value="${num(cfg.passaggio)}" placeholder="0"><span class="pm-unit-static">€</span></span></label>` : ''}
-      <label class="pm-check"><input type="checkbox" id="pmIva_${ns}"${cfg.iva ? ' checked' : ''}> Scorporo IVA 22%</label>
+      ${ns === 'v' ? `<label class="pm-check"><input type="checkbox" id="pmIva_${ns}"${cfg.iva ? ' checked' : ''}> Scorporo IVA 22%</label>` : ''}
       <button type="button" class="pm-reset" id="pmReset_${ns}">Azzera</button>
     </div>
   </details>`;
@@ -196,7 +203,12 @@ function readPriceMenu(ns, prev) {
   const n = el => Math.max(0, Number(el && el.value) || 0);
   const pass = g('pmPass');
   return { comm: n(g('pmComm')), commUnit: prev.commUnit, spese: n(g('pmSpese')), margine: n(g('pmMarg')),
-    iva: !!(g('pmIva') && g('pmIva').checked),
+    // Il comando esiste solo per i veicoli: sui Ricambi nessuna fonte dichiara l'IVA
+    // esposta (verificato: `ivaEsposta` vive solo nella pipeline veicoli), quindi scorporarla
+    // sarebbe un numero inventato. Senza il campo si tiene il valore di prima, che li' e'
+    // sempre falso: leggendo `g('pmIva')` inesistente si sarebbe azzerato anche per i veicoli
+    // se un domani i due menu condividessero il codice di lettura.
+    iva: g('pmIva') ? !!g('pmIva').checked : !!prev.iva,
     passaggio: pass ? n(pass) : (prev.passaggio || 0) };   // il campo esiste solo per i veicoli
 }
 // Colonne/celle extra prezzo per export (rivendita/imponibile/IVA) in base a cfg.
@@ -2407,7 +2419,21 @@ async function fetchSubitoStatus() {
     const res = await fetch('/api/subito/status');
     const data = await res.json();
     subitoBlocked = (data.health === 'blocked' || data.health === 'never_configured');
-    if (subitoBlocked) showBootstrapBanner(); else hideBootstrapBanner();
+    /**
+     * IL BANNER COMPARE SOLO QUANDO DICE IL VERO.
+     *
+     * Col percorso API (il default) le ricerche non usano MAI la sessione browser: e'
+     * una riserva. Il banner pero' guardava il solo `health`, che senza bootstrap vale
+     * 'never_configured' per sempre — restava acceso a promettere che «le ricerche
+     * torneranno a funzionare» mentre funzionavano, e chiedeva un CAPTCHA che in quel
+     * momento non serviva a nessuna funzione. Ora lo si mostra quando la sessione serve
+     * davvero (interruttore di servizio acceso) oppure dopo un blocco vero, che e'
+     * l'unico caso in cui una ricerca l'ha incontrata.
+     * Il pannello resta raggiungibile: la riserva si mantiene quando vuoi, non quando
+     * te lo chiede una riga rossa.
+     */
+    const serve = data.ricercheUsanoSessione !== false || data.blocked === true;
+    if (subitoBlocked && serve) showBootstrapBanner(); else hideBootstrapBanner();
     return data;
   } catch (_) { return null; }
 }

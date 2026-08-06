@@ -1,0 +1,136 @@
+{
+  "_note": "Gruppi di nomi che sono LO STESSO brand reale (curati a mano dall'audit). Primo = nome canonico (entry più ricca). Esclusi i falsi-alias: Ariel Motor (auto, Atom) ≠ Ariel Motorcycles (moto); Benda Scooter (makeId AS24 diverso) ≠ Benda. Ogni gruppo va VERIFICATO sui modelli, non sul nome: Enfield è entrata solo dopo aver visto che il catalogo elenca Bullet-350, Classic-350, Himalayan e Interceptor-650.",
+  "auto": [
+    [
+      "Alpina",
+      "ALPINA-BMW"
+    ],
+    [
+      "Ariel Motor",
+      "ARIEL"
+    ],
+    [
+      "Austin",
+      "AUSTIN ROVER"
+    ],
+    [
+      "DR Automobiles",
+      "DR"
+    ],
+    [
+      "DS Automobiles",
+      "DS"
+    ],
+    [
+      "GAZ",
+      "GAZ AUTOMOBILE"
+    ],
+    [
+      "Great Wall",
+      "GREAT WALL MOTOR"
+    ],
+    [
+      "Mercedes-Benz",
+      "MERCEDES"
+    ],
+    [
+      "Micro",
+      "MICROLINO"
+    ],
+    [
+      "Nissan",
+      "NISSAN SPAGNA"
+    ],
+    [
+      "Panther Westwinds",
+      "PANTHER"
+    ]
+  ],
+  "moto": [
+    [
+      "Benda",
+      "Benda Motorcycles"
+    ],
+    [
+      "Beta",
+      "Betamotor"
+    ],
+    [
+      "Brixton",
+      "Brixton Motorcycles"
+    ],
+    [
+      "Can-Am",
+      "Can-Am Brp"
+    ],
+    [
+      "Fantic",
+      "Fantic Motor"
+    ],
+    [
+      "Italjet",
+      "Italjet Moto"
+    ],
+    [
+      "Keeway",
+      "Keeway Motor"
+    ],
+    [
+      "KL Motors",
+      "KL"
+    ],
+    [
+      "Mash",
+      "Mash Italia"
+    ],
+    [
+      "Mondial",
+      "FB Mondial"
+    ],
+    [
+      "Mutt Motorcycles",
+      "Mutt"
+    ],
+    [
+      "Over Bikes",
+      "Over"
+    ],
+    [
+      "Royal Enfield",
+      "Enfield"
+    ],
+    [
+      "Sachs/SFM",
+      "Sachs"
+    ],
+    [
+      "Talaria",
+      "Talaria Moto"
+    ],
+    [
+      "TM",
+      "Tm Moto",
+      "TM Racing"
+    ],
+    [
+      "TVS",
+      "TVS Motor"
+    ],
+    [
+      "UM",
+      "um-italia"
+    ],
+    [
+      "VOR Vertemati",
+      "Vor"
+    ],
+    [
+      "WRM",
+      "WRM Motorcycles"
+    ],
+    [
+      "Zero",
+      "Zero Motorcycles"
+    ]
+  ]
+}

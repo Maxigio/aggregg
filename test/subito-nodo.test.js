@@ -201,3 +201,28 @@ test('moto: un prefisso che spezza un numero non aggancia la famiglia', () => {
   // E il figlio legittimo pure: 'Pegaso 650' e' la sua famiglia, esatta.
   assert.equal(risolviNodo('moto', 'Aprilia', 'Pegaso 650', { indice: ix }).come, 'famiglia');
 });
+
+test('il ponte dei rinominati recupera i due nomi della stessa moto, e non riapre il difetto', () => {
+  // Il confine sui numeri (0db52fe) e' giusto — «CRF 110» non e' l'Africa Twin CRF1100L —
+  // ma separa anche i modelli che hanno DUE NOMI. Quelle equivalenze non si deducono: si
+  // dichiarano una per una in data/ponte-rinominati.json, col perche' accanto.
+  const { risolviNodo } = require('../backend/scrapers/subito-nodo');
+  const ponte = require('../data/ponte-rinominati.json');
+  // Ogni voce del ponte deve funzionare davvero sull'indice vero: una riga scritta a mano
+  // che non aggancia niente e' peggio di nessuna riga, perche' sembra fatta.
+  for (const [marca, voci] of Object.entries(ponte.moto || {})) {
+    for (const v of voci) {
+      const r = risolviNodo('moto', marca, v.cercato);
+      assert.ok(r && r.come === 'ponte (nome rinominato)',
+        `il ponte non aggancia ${marca} "${v.cercato}": la voce e' scritta ma non serve a niente`);
+      assert.ok(r.famigliaIds && r.famigliaIds.length, `${marca} "${v.cercato}" senza famiglia`);
+    }
+  }
+  // E il difetto che il confine chiude NON si riapre: due numeri diversi restano due moto.
+  for (const [ma, mo] of [['Honda', 'CRF 110'], ['Honda', 'CB 1'], ['BMW', 'R 11'],
+    ['Yamaha', 'FZ 600'], ['Aprilia', 'Pegaso 500'], ['Husqvarna', 'CR 500']]) {
+    const r = risolviNodo('moto', ma, mo);
+    assert.strictEqual(r && r.come, 'marca',
+      `${ma} "${mo}" e' tornato ad agganciare una famiglia spezzando un numero`);
+  }
+});

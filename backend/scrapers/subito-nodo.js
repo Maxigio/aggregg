@@ -27,6 +27,31 @@
 const path = require('path');
 const { makeResolver, makeModelResolver, loadAliasMap, norm, taglioValido } = require('./brand-match');
 
+/**
+ * Le equivalenze scritte a mano fra due nomi della stessa moto (data/ponte-rinominati.json).
+ * File NUOVO: i cataloghi sorgente non si toccano. Se manca o e' illeggibile il ponte
+ * semplicemente non c'e' — nessuna equivalenza inventata, nessun boot rotto.
+ */
+let PONTE = null;
+function ponte() {
+  if (PONTE) return PONTE;
+  PONTE = new Map();
+  try {
+    const j = require('../../data/ponte-rinominati.json');
+    for (const [tipo, marche] of Object.entries(j)) {
+      if (tipo.startsWith('_')) continue;                 // le chiavi di documentazione
+      for (const [marca, voci] of Object.entries(marche || {})) {
+        for (const v of voci || []) {
+          if (!v || !v.cercato || !v.famiglia) continue;
+          PONTE.set(`${tipo}|${norm(marca)}|${norm(v.cercato)}`, norm(v.famiglia));
+        }
+      }
+    }
+  } catch (e) { console.warn('[subito-nodo] ponte dei rinominati non letto: ' + e.message); }
+  return PONTE;
+}
+const pontePer = (tipo, marcaNome, cercato) => ponte().get(`${tipo}|${norm(marcaNome)}|${cercato}`) || null;
+
 const FILE = path.join(__dirname, '..', '..', 'data', 'subito-indice.json');
 
 let CACHE = null;
@@ -130,6 +155,22 @@ function risolviNodo(tipo, marca, modello, opts = {}) {
     if (perParola.length === 1) return perFamiglie(perParola);
     const genParola = gen.filter(x => parole(x.g.nome).includes(cercato));
     if (genParola.length === 1) return perGenerazione(genParola[0]);
+  }
+
+  /**
+   * IL PONTE DEI RINOMINATI, prima del prefisso e dopo tutto cio' che e' esatto.
+   *
+   * Il confine sui numeri e' giusto («CRF 110» non e' l'Africa Twin CRF1100L) ma separa
+   * anche i modelli che hanno DUE NOMI per la stessa moto: «VN 15»/«VN 1500»,
+   * «ZR 750»/«ZR 7», le Aprilia con la cilindrata scritta in litri («4.5» = 450 cc).
+   * Quelle equivalenze non si deducono, si dichiarano: stanno in data/ponte-rinominati.json,
+   * una per una, ognuna col suo perche'. Sta QUI perche' e' una risposta precisa, e le
+   * risposte precise vengono prima di quelle larghe.
+   */
+  const eq = pontePer(t, m.nome, cercato);
+  if (eq) {
+    const famPonte = fam.filter(f => norm(f.nome) === eq);
+    if (famPonte.length) return { ...perFamiglie(famPonte), come: 'ponte (nome rinominato)' };
   }
 
   // Solo ora il matching largo: prefisso bidirezionale, minimo 3 caratteri — la stessa

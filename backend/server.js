@@ -1323,6 +1323,17 @@ function cacheable(data) {
 }
 
 // Wrapper con cache attorno al core.
+/**
+ * LA STESSA RICERCA GIA' IN VOLO NON SI RIFA': la seconda si attacca alla prima.
+ *
+ * La cache copre le risposte GIA' ARRIVATE; fra la partenza e l'arrivo non c'era niente,
+ * e due schede aperte (o un doppio clic su Cerca) facevano due giri completi verso Subito,
+ * Autoscout e Moto.it per la stessa identica domanda — doppio costo verso le fonti proprio
+ * nel momento in cui e' piu' facile farsi bloccare. La mappa e' lo stampo di detail.js:26
+ * e motoit-models: chiave uguale a quella della cache, quindi due ricerche diverse restano
+ * due ricerche.
+ */
+const searchInFlight = new Map();   // chiave cache → Promise
 async function runSearch(params) {
   const key = searchCacheKey(params);
   const hit = searchCache.get(key);
@@ -1330,15 +1341,23 @@ async function runSearch(params) {
     searchCache.delete(key); searchCache.set(key, hit);   // LRU touch
     return hit.data;
   }
+  if (searchInFlight.has(key)) return searchInFlight.get(key);
   // Il conto delle richieste si apre QUI, non attorno a runSearch: una risposta servita
   // dalla cache non costa richieste, e contarla come "0" annacquerebbe la misura.
   const etichetta = [params.tipo, params.marca, params.modello].filter(Boolean).join(' ');
-  const data = await budget.perRicerca(etichetta || 'ricerca', () => runSearchCore(params));
-  if (cacheable(data)) {
-    searchCache.set(key, { ts: Date.now(), data });
-    if (searchCache.size > SEARCH_CACHE_MAX) searchCache.delete(searchCache.keys().next().value);
-  }
-  return data;
+  const p = (async () => {
+    const data = await budget.perRicerca(etichetta || 'ricerca', () => runSearchCore(params));
+    if (cacheable(data)) {
+      searchCache.set(key, { ts: Date.now(), data });
+      if (searchCache.size > SEARCH_CACHE_MAX) searchCache.delete(searchCache.keys().next().value);
+    }
+    return data;
+  })();
+  // `finally` PRIMA del return: se la ricerca fallisce la chiave si libera comunque, senno'
+  // un errore transitorio incollerebbe tutte le richieste successive a una Promise gia'
+  // rifiutata. Chi era attaccato riceve lo stesso errore, che e' la verita' per tutti.
+  searchInFlight.set(key, p);
+  try { return await p; } finally { searchInFlight.delete(key); }
 }
 
 /**
@@ -2304,6 +2323,7 @@ app.get('/api/subito/status', (req, res) => {
   // stato "ok" così il frontend non mostra il banner-errore a vuoto ogni 60s.
   if (process.env.HIDE_SUBITO_BOOTSTRAP) {
     return res.json({ health: 'ok', blocked: false, hasSession: true, hasDataDome: true,
+      ricercheUsanoSessione: false,
       expiresIn: null, bootstrapping: false, lastRefresh: null, lastRefreshOk: true });
   }
   const state = subitoSession.loadStorageState();
@@ -2311,6 +2331,18 @@ app.get('/api/subito/status', (req, res) => {
   const last  = subitoSession.getLastRefresh();
   res.json({
     health:        subitoSession.getSessionHealth(),  // 'ok' | 'expiring_soon' | 'blocked' | 'never_configured'
+    /**
+     * LE RICERCHE USANO DAVVERO QUESTA SESSIONE?
+     *
+     * Col percorso API (il default) la sessione browser e' solo una RISERVA: `scrapeSubito`
+     * non viene mai chiamato, `SubitoBlockedError` lo lancia solo subito-playwright.js, e
+     * quindi una ricerca non puo' nemmeno produrre 'needs_bootstrap'. Il banner pero'
+     * guardava il solo `health`, che su un'installazione senza bootstrap vale
+     * 'never_configured' per sempre: restava acceso a promettere che «le ricerche
+     * torneranno a funzionare» mentre funzionavano gia'. Con questo campo il browser puo'
+     * chiedere il CAPTCHA solo quando serve davvero.
+     */
+    ricercheUsanoSessione: !USE_SUBITO_API,
     blocked:       subitoSession.isSubitoBlocked(),
     hasSession:    Boolean(state),
     hasDataDome:   info.hasDataDome,

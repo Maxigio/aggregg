@@ -1,0 +1,32 @@
+{
+  "_perche": "IL PONTE DEI NOMI RINOMINATI — scritto a mano, non dedotto. Il confine sui prefissi (commit 0db52fe) vieta i tagli che spezzano un numero, perche' due numeri diversi non sono padre e figlio: e' la regola che impedisce a 'CRF 110' di agganciare l'Africa Twin CRF1100L e a 'FZ 600' di finire nel secchio della FZ6. Ma alcuni modelli hanno DUE NOMI per la stessa moto, e quella regola li separa: qui si dichiarano uno per uno. NON e' un catalogo sorgente: i cataloghi in data/ non si modificano, questo e' il file nuovo dove vivono le correzioni. Ogni voce porta il PERCHE', cosi' chi rilegge puo' dare torto a chi l'ha scritta.",
+  "_come": "Consultato da backend/scrapers/subito-nodo.js PRIMA del confronto per prefisso. `cercato` e `famiglia` si confrontano normalizzati (brand-match.norm): spazi e punteggiatura non contano.",
+  "_misura": "Sui cataloghi del 2026-08-06, il confine faceva cadere a livello marca 29 nomi del menu. Di quei 29, 17 erano il difetto che il confine esiste per chiudere (CRF 110 vs CRF1100L, CB 1 che agganciava sei famiglie, R 11 che ne agganciava dieci): restano cosi'. I 12 qui sotto sono equivalenze vere.",
+  "_dubbi": "ESCLUSI di proposito, da decidere: Yamaha 'FZ-10' verso 'FZ1' (sono due moto diverse, non una rinominata) e Royal Alloy 'GT2' verso 'GT 200' (equivalenza plausibile ma non verificata sulla fonte).",
+  "moto": {
+    "aprilia": [
+      { "cercato": "MXV 450", "famiglia": "MXV 4.5", "perche": "stessa moto: il catalogo Subito scrive la cilindrata in litri (4.5 = 450 cc)" },
+      { "cercato": "RXV 450", "famiglia": "RXV 4.5", "perche": "stessa moto: 4.5 = 450 cc" },
+      { "cercato": "RXV 550", "famiglia": "RXV 5.5", "perche": "stessa moto: 5.5 = 550 cc" },
+      { "cercato": "SXV 450", "famiglia": "SXV 4.5", "perche": "stessa moto: 4.5 = 450 cc" },
+      { "cercato": "SXV 550", "famiglia": "SXV 5.5", "perche": "stessa moto: 5.5 = 550 cc" }
+    ],
+    "kawasaki": [
+      { "cercato": "VN 15", "famiglia": "VN 1500", "perche": "stessa moto: VN 15 e' l'abbreviazione della VN 1500" },
+      { "cercato": "ZR 750", "famiglia": "ZR 7", "perche": "stessa moto: la ZR-7 e' una 750, i due cataloghi la chiamano in due modi" }
+    ],
+    "yamaha": [
+      { "cercato": "XVZ 12", "famiglia": "XVZ 1200", "perche": "stessa moto: nome troncato alla cilindrata in centinaia" },
+      { "cercato": "XVZ 13", "famiglia": "XVZ 1300", "perche": "stessa moto: nome troncato alla cilindrata in centinaia" }
+    ],
+    "moto guzzi": [
+      { "cercato": "V 850", "famiglia": "V85", "perche": "stessa moto: la V85 e' una 850" }
+    ],
+    "hyosung": [
+      { "cercato": "ST 700i", "famiglia": "ST 7", "perche": "stessa moto: ST7 e' l'abbreviazione della ST 700i" }
+    ],
+    "mv agusta": [
+      { "cercato": "F4 100", "famiglia": "F4 1000", "perche": "'F4 100' non e' un modello esistente: e' la F4 1000 col nome troncato in un catalogo" }
+    ]
+  }
+}

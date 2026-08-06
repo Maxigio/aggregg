@@ -1428,3 +1428,28 @@ test('subito: la pausa fra ricerche vale anche per chi arriva insieme', async ()
   const a = await Promise.all([throttle(), throttle(), throttle()].map(p => p.then(() => Date.now() - t0)));
   assert.ok(a[1] - a[0] >= 1900 && a[2] - a[1] >= 1900, `partenze non spaziate: ${a.join(', ')}`);
 });
+
+test('ricerca: la stessa domanda gia\' in volo non si rifa\' da capo', () => {
+  // La cache copre le risposte GIA' ARRIVATE; fra la partenza e l'arrivo non c'era niente,
+  // e due schede aperte (o un doppio clic) facevano DUE giri completi verso Subito,
+  // Autoscout e Moto.it per la stessa domanda — doppio costo verso le fonti proprio nel
+  // momento in cui e' piu' facile farsi bloccare.
+  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8'));
+  const corpo = srv.slice(srv.indexOf('async function runSearch(params)'), srv.indexOf('async function runSearch(params)') + 1400);
+  assert.ok(/searchInFlight\.has\(key\)/.test(corpo), 'la mappa delle ricerche in volo e\' sparita');
+  assert.ok(/finally \{ searchInFlight\.delete\(key\);? \}/.test(corpo),
+    'la chiave va liberata anche su errore: senno\' un guasto transitorio incolla tutte le richieste dopo');
+  // La regola, ESEGUITA sulla stessa forma: due concorrenti = un lavoro, e l'errore libera.
+  const vive = new Map(); let lavori = 0;
+  const run = (k, ko) => {
+    if (vive.has(k)) return vive.get(k);
+    const p = (async () => { lavori++; await new Promise(r => setTimeout(r, 10)); if (ko) throw new Error('KO'); return 'ok'; })();
+    vive.set(k, p);
+    return p.finally(() => vive.delete(k));
+  };
+  return Promise.all([run('a'), run('a'), run('b')])
+    .then(() => { assert.strictEqual(lavori, 2, 'due schede sulla stessa ricerca devono costare UN giro'); })
+    .then(() => Promise.allSettled([run('x', true), run('x', true)]))
+    .then(() => run('x', false))
+    .then(v => assert.strictEqual(v, 'ok', 'dopo un errore la chiave deve tornare libera'));
+});
