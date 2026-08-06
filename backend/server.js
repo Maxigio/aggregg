@@ -885,7 +885,18 @@ app.get('/api/passaggio', async (req, res) => {
     ivaEsposta: ivaEsposta === '1', storico: st,
   });
   r.localita = { testo: String(provincia || '').slice(0, 60), sigla: loc.sigla, via: loc.via };
-  if (kwStimati != null) r.potenzaStimata = { cv: cvN, kw: kwStimati };
+  /**
+   * LA STIMA SI DICHIARA. `potenzaStimata` viaggiava nella risposta e nessuno a schermo la
+   * leggeva (rg su frontend/: zero): l'importo dell'IPT usciva identico a quello calcolato
+   * su kW veri, mentre nasce da una conversione dai CV dichiarati — su 73 CV sono 53,7 kW
+   * e ~49 euro di scarto sull'importo. `avvisi` e' il canale gia' montato a schermo
+   * (passAvvisiHTML, ramo di successo compreso): la stima passa di li'.
+   */
+  if (kwStimati != null) {
+    r.potenzaStimata = { cv: cvN, kw: kwStimati };
+    r.avvisi = [`Potenza non dichiarata dall'annuncio: i ${kwStimati} kW sono STIMATI dai ${cvN} CV, e l'importo con loro.`,
+      ...(r.avvisi || [])];
+  }
   // `!(kwN >= 1)`, non `kwN < 1`: senza il parametro kw questo e' NaN, e NaN < 1 e' FALSO —
   // la provenienza non sarebbe mai uscita proprio nel caso per cui esiste. Stessa forma della
   // riga 564, che con NaN sceglie appunto i kW di listino.

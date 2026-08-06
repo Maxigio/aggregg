@@ -4961,6 +4961,14 @@ function vehProvaHTML() {
   const coppie = (o, u) => Object.entries(o || {}).filter(([, v]) => v != null && v !== '')
     .map(([k, v]) => `<span><em>${escapeHtml(k)}</em>${escapeHtml(misNum(v, u) || '')}</span>`).join('');
   /**
+   * I DICHIARATI DELLA CASA SONO GIA' TESTO ITALIANO, non numeri da formattare. `misNum`
+   * scambia il punto per un separatore decimale all'inglese, e sui dichiarati — che sono
+   * stringhe come «170(125,1)/9750» o «8.750» giri — trasformava le MIGLIAIA in decimali:
+   * 8.750 giri diventavano «8,750». Qui si stampa quello che la fonte ha scritto.
+   */
+  const coppieTesto = o => Object.entries(o || {}).filter(([, v]) => v != null && v !== '')
+    .map(([k, v]) => `<span><em>${escapeHtml(k)}</em>${escapeHtml(String(v))}</span>`).join('');
+  /**
    * I CONSUMI COME LI SCRIVONO LE AUTO. inSella li misura in km/l, e il pannello del costo
    * carburante — dieci centimetri piu' su, per un'auto — scrive l/100 km: sono grandezze
    * INVERSE, e affiancate senza unita' un 16 sembrava peggio di un 6,25 quando e' meglio.
@@ -4984,7 +4992,7 @@ function vehProvaHTML() {
   ].filter(Boolean).join('');
   if (misurate) gruppi.push(`<div class="veh-mis-b"><div class="veh-mis-bh">Misurato al banco e in pista</div><div class="veh-mis-d">${misurate}</div></div>`);
   if (d.dichiarati && Object.keys(d.dichiarati).length) {
-    gruppi.push(`<div class="veh-mis-b"><div class="veh-mis-bh">Dichiarato dalla casa</div><div class="veh-mis-d">${coppie(d.dichiarati)}</div></div>`);
+    gruppi.push(`<div class="veh-mis-b"><div class="veh-mis-bh">Dichiarato dalla casa</div><div class="veh-mis-d">${coppieTesto(d.dichiarati)}</div></div>`);
   }
   if (d.voti && Object.keys(d.voti).length) {
     gruppi.push(`<div class="veh-mis-b"><div class="veh-mis-bh">Voti della redazione</div><div class="veh-mis-d">${coppie(d.voti)}</div></div>`);
@@ -5254,7 +5262,10 @@ function liqBadgeHTML(item) {
   if (!m || m.ricambio == null) return '';
   // Il numero e basta. Niente frase e niente colore: anche il verde e' un giudizio, e
   // qui la fonte da' passaggi e parco circolante, non un parere sulla vendibilita'.
-  const tip = `${m.modello}: ${Number(m.trasferimenti).toLocaleString('it-IT')} passaggi fra privati nel ${liqAnno}`
+  // «fra privati» era sbagliato: i NETTI escludono le minivolture (il passaggio al
+  // concessionario), non le vendite dei concessionari — che nei netti ci sono. La
+  // formulazione giusta e' quella che il server usa gia' (server.js:828).
+  const tip = `${m.modello}: ${Number(m.trasferimenti).toLocaleString('it-IT')} passaggi netti nel ${liqAnno} (minivolture escluse)`
     + (m.trasferimentiTotali > m.trasferimenti ? `, ${Number(m.trasferimentiTotali).toLocaleString('it-IT')} in tutto (minivolture incluse)` : '') +
     (m.parco ? ` su ${Number(m.parco).toLocaleString('it-IT')} in circolazione` : '') + '. Fonte ACI Autoritratto.';
   return `<span class="liq-badge" title="${escapeHtml(tip)}">&#8635; ${String(m.ricambio).replace('.', ',')}%</span>`;
@@ -5310,7 +5321,14 @@ function liqCorpoHTML(r) {
   // "Zero passaggi" e "l'archivio non ha risposto" non sono la stessa cosa: si separano.
   if (liqAnn.stato === 'ko') return '<div class="veh-liq veh-liq-attesa">Archivio ACI non raggiungibile.</div>';
   const m = liqAnn.voce;
-  if (!m || m.ricambio == null) return '<div class="veh-liq veh-liq-attesa">L\'archivio ACI non ha una voce per questo modello.</div>';
+  /**
+   * «NON HA UNA VOCE» E' UN FATTO SULL'ARCHIVIO, e si dice solo quando la voce manca
+   * davvero. Il tasso di ricambio e' UN campo della voce, non la voce: pretendendolo,
+   * 669 modelli su 1.997 con dati veri (380 coi passaggi, 289 col parco) uscivano come
+   * «l'archivio non ha una voce» — un'affermazione falsa su cio' che ACI pubblica.
+   * Ora si mostra quello che c'e' e si omette solo il riquadro che manca.
+   */
+  if (!m) return '<div class="veh-liq veh-liq-attesa">L\'archivio ACI non ha una voce per questo modello.</div>';
   const n = x => Number(x).toLocaleString('it-IT');
   // Tre numeri, tre riquadri. Erano una riga sola separata da puntini — "GOLF · 1.037.466
   // in circolazione · ricambio 7%/anno" — dove per leggere il secondo bisognava contare i
@@ -5331,10 +5349,10 @@ function liqCorpoHTML(r) {
   const conTotali = m.trasferimentiTotali != null && m.trasferimentiTotali > m.trasferimenti;
   return `<div class="veh-liq">
     <div class="pp-tiles">
-      ${tile(n(m.trasferimenti), `fra privati nel ${m.anno || liqAnno}`)}
+      ${m.trasferimenti != null ? tile(n(m.trasferimenti), `passaggi netti nel ${m.anno || liqAnno} (minivolture escluse)`) : ''}
       ${conTotali ? tile(n(m.trasferimentiTotali), 'tutti i passaggi, minivolture incluse') : ''}
       ${m.parco ? tile(n(m.parco), 'in circolazione') : ''}
-      ${tile(String(m.ricambio).replace('.', ',') + '%', 'ricambio all\'anno')}
+      ${m.ricambio != null ? tile(String(m.ricambio).replace('.', ',') + '%', 'ricambio all\'anno') : ''}
     </div>
     ${m.viaPadre ? `<div class="veh-liq-avviso">Dato del modello base &laquo;${escapeHtml(m.viaPadre)}&raquo;, non della variante cercata.</div>` : ''}
     <div class="veh-liq-fonte">${escapeHtml(m.modello)} — ${escapeHtml(m.fonte || ('ACI Autoritratto ' + liqAnno))}. ${escapeHtml(m.nota || 'Dato aggregato sul modello, non sulla singola versione.')}</div>

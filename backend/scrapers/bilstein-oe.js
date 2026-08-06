@@ -165,6 +165,11 @@ async function equivalenti(codice, tipo) {
   return {
     cercato: codice,
     trovatoIn: r.articoli.length,
+    // IL TAGLIO SI DICHIARA. `perCodice` non chiede pagine oltre la prima e il totale
+    // dell'API lo sa (`meta.page.totalElements`): /cerca lo mostrava, qui moriva nel
+    // passaggio di consegne e un elenco costruito su una pagina usciva come l'intero.
+    totale: r.totale,
+    parziale: r.totale != null && r.totale > r.articoli.length,
     equivalenti: [...fuori.values()].map(v => ({ codice: v.codice, costruttori: [...v.costruttori] })),
   };
 }

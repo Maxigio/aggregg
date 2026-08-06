@@ -133,6 +133,10 @@ function getSessionHealth() {
   if (blockedFlag) return 'blocked';
   const info = inspectSession(state);
   if (!info.hasDataDome) return 'never_configured';
+  // GIA' SCADUTO NON E' «STA PER SCADERE»: con expiresIn negativo si usciva
+  // 'expiring_soon', uno stato che promette una sessione ancora buona per poco mentre il
+  // cookie e' morto — e 'blocked', che il frontend sa gia' trattare, non veniva mai detto.
+  if (info.expiresIn != null && info.expiresIn <= 0) return 'blocked';
   if (info.expiresIn != null && info.expiresIn < 30 * 60) return 'expiring_soon';
   return 'ok';
 }

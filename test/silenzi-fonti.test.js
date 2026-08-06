@@ -1262,3 +1262,43 @@ test('contesto: anche i Ricambi invalidano la generazione alla porta, e l\'error
   assert.ok(bump > 0 && azzera > bump,
     'doRicambi deve azzerare rcData dopo aver preso la sua generazione: senza, l\'errore mostra la lista di prima');
 });
+
+// ─── Quel che il dato sa di se' arriva a schermo ─────────────────────────────
+test('passaggio: i kW STIMATI dai CV si dichiarano, non si spacciano per misurati', () => {
+  // `potenzaStimata` viaggiava nella risposta e a schermo non la leggeva nessuno (rg su
+  // frontend/: zero): l'importo IPT usciva identico a quello calcolato su kW veri, mentre
+  // nasce da una conversione. `avvisi` e' il canale gia' montato (passAvvisiHTML, ramo di
+  // successo compreso), quindi la stima passa di li' senza inventare una riga nuova.
+  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8'));
+  const blocco = srv.slice(srv.indexOf('const kwStimati'), srv.indexOf('if (r.ok) res.set'));
+  assert.ok(/r\.potenzaStimata = /.test(blocco), 'la stima non viaggia piu\' nella risposta');
+  assert.ok(/r\.avvisi = \[/.test(blocco) && /STIMATI/.test(blocco),
+    'la stima non entra negli avvisi: a schermo l\'importo torna indistinguibile da uno su kW veri');
+  assert.ok(/passAvvisiHTML\(d\)/.test(APP), 'il canale degli avvisi non e\' piu\' reso a schermo');
+});
+
+test('liquidita: una voce parziale non e\' una voce assente', () => {
+  // Misurato su data/liquidita-modelli.json: 669 modelli su 1.997 hanno `ricambio` null ma
+  // dati veri (380 coi passaggi, 289 col parco). Pretendendo il ricambio, uscivano tutti
+  // come «l'archivio ACI non ha una voce» — un'affermazione falsa su cio' che ACI pubblica.
+  const dati = require('../data/liquidita-modelli.json').modelli;
+  const parziali = Object.values(dati).filter(m => m.ricambio == null && (m.parco != null || m.trasferimenti != null));
+  assert.ok(parziali.length > 100, `attese molte voci parziali, trovate ${parziali.length}`);
+  const corpo = corpoDi(APP, 'function liqCorpoHTML(');
+  assert.ok(/if \(!m\) return/.test(corpo),
+    'la frase «non ha una voce» va detta solo quando la voce manca DAVVERO');
+  assert.ok(/m\.ricambio != null \? tile/.test(corpo), 'il riquadro del ricambio si omette da solo');
+  assert.ok(/m\.trasferimenti != null \? tile/.test(corpo), 'e quello dei passaggi pure');
+  // E le parole di ACI: i netti escludono le MINIVOLTURE, non le vendite dei concessionari.
+  assert.ok(!/fra privati/.test(codice(APP)), '«fra privati» descrive male i trasferimenti netti ACI');
+});
+
+test('inSella: i dichiarati della casa non passano dal formattatore dei numeri', () => {
+  // `misNum` scambia il punto per separatore decimale all'inglese: sui dichiarati — che
+  // sono stringhe italiane come «73,4 (54)/8.750» — trasformava le MIGLIAIA in decimali,
+  // e 8.750 giri diventavano «8,750». Misurato sulla cache vera: 1 valore su 28 alterato.
+  const corpo = corpoDi(APP, 'function vehProvaHTML(');
+  assert.ok(/const coppieTesto = o =>/.test(corpo), 'i dichiarati non hanno piu\' il loro renderer');
+  assert.ok(/Dichiarato dalla casa[\s\S]{0,120}coppieTesto\(d\.dichiarati\)/.test(corpo),
+    'i dichiarati sono tornati a passare da misNum');
+});
