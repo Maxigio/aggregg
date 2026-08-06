@@ -173,10 +173,19 @@ function mount(app, deps = {}) {
     if (!voce.schedaLetta && voce.url) {
       try {
         const fresca = await C.risolviVetrina(voce.url);
-        voce = { ...voce, ...fresca, id: voce.id, mio: voce.mio, aggiunto: voce.aggiunto, gruppo: voce.gruppo, schedaLetta: true };
         // Rilettura: si rimappa per chiave composta, e MAI sopra un elenco illeggibile —
         // a file corrotto leggi() torna [] e la map scriverebbe un elenco di una voce sola.
         const tutte = C.leggi();
+        /**
+         * CHI HA OSSERVATO PRIMA NON DECIDE DOPO. `voce` e' stata letta PRIMA dell'await
+         * qui sopra: in quei secondi un'altra richiesta puo' aver assegnato il gruppo alla
+         * stessa vetrina, e ricopiando `gruppo: voce.gruppo` dalla copia stantia lo si
+         * cancellava. L'invariante e' gia' scritta in competitor.js — «il controllo va
+         * fatto SUBITO dopo leggi(), nello stesso tick, mai dopo un await» — e qui non era
+         * rispettata. I campi di identita' si prendono dal record FRESCO appena riletto.
+         */
+        const attuale = tutte.find(v => chiaveDi(v) === String(chiave)) || voce;
+        voce = { ...voce, ...fresca, id: attuale.id, mio: attuale.mio, aggiunto: attuale.aggiunto, gruppo: attuale.gruppo, schedaLetta: true };
         if (!C.leggi.ultimoErrore) C.scrivi(tutte.map(v => (chiaveDi(v) === String(chiave) ? voce : v)));
       } catch (_) { /* la vetrina non risponde: si va avanti con quello che c'e' */ }
     }

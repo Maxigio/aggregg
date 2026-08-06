@@ -1373,3 +1373,58 @@ test('tendina: la normalizzazione dei nomi e\' quella condivisa, e le marche pos
   assert.ok(/tipo === 'moto'/.test(srv) && /raggiunte\.has\(slug\)/.test(srv),
     `/api/brands non fa piu' l'unione col catalogo: ${orfane.length} marche possedute resterebbero irraggiungibili`);
 });
+
+// ─── Chi ha osservato prima non decide dopo ──────────────────────────────────
+test('subito-session: un blocco visto nell\'epoca vecchia non rimette in blocco la sessione nuova', () => {
+  // Una ricerca partita PRIMA del bootstrap puo' finire DOPO: trovando il CAPTCHA della
+  // sessione VECCHIA chiamava markSubitoBlocked() dopo il clear, rimettendo il blocco su
+  // una sessione appena rinnovata e valida — e l'utente rifaceva il CAPTCHA per niente.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-epoca-'));
+  const vecchio = process.env.USER_DATA_PATH;
+  process.env.USER_DATA_PATH = dir;
+  delete require.cache[require.resolve('../backend/scrapers/subito-session')];
+  const s = require('../backend/scrapers/subito-session');
+  try {
+    const prima = s.epocaSessione();
+    s.saveStorageState({ cookies: [], origins: [] });          // bootstrap riuscito
+    assert.notStrictEqual(s.epocaSessione(), prima, 'un salvataggio riuscito deve cambiare epoca');
+    assert.strictEqual(s.markSubitoBlocked(prima), false, 'l\'osservazione stantia si scarta');
+    assert.strictEqual(s.isSubitoBlocked(), false, 'la sessione nuova resta buona');
+    assert.strictEqual(s.markSubitoBlocked(s.epocaSessione()), true, 'un blocco visto ORA vale');
+    assert.strictEqual(s.isSubitoBlocked(), true);
+    // Senza argomento resta il comportamento di prima: marca e basta.
+    s.clearSubitoBlocked();
+    s.markSubitoBlocked();
+    assert.strictEqual(s.isSubitoBlocked(), true);
+  } finally {
+    if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
+    delete require.cache[require.resolve('../backend/scrapers/subito-session')];
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('subito: la pausa fra ricerche vale anche per chi arriva insieme', async () => {
+  // Era un read-modify-write attraverso un await: tre chiamate concorrenti leggevano lo
+  // STESSO lastSearchAt, calcolavano la stessa attesa e ripartivano nello stesso istante —
+  // la pausa che esiste per non farsi bloccare valeva solo in fila indiana.
+  const src = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'subito-playwright.js'), 'utf8'));
+  assert.ok(/prossimoSlot = quando \+ 2000/.test(src),
+    'lo slot non si prenota piu\' nello stesso tick: le concorrenti tornano a partire insieme');
+  assert.ok(/coda = run\.then/.test(src), 'le partenze non sono piu\' incatenate');
+  // E la regola, ESEGUITA sulla stessa forma: tre concorrenti si spaziano di 2 s.
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let prossimoSlot = 0, coda = Promise.resolve();
+  const throttle = () => {
+    const attesa = () => {
+      const ora = Date.now(), quando = Math.max(ora, prossimoSlot);
+      prossimoSlot = quando + 2000;
+      return quando > ora ? sleep(quando - ora) : Promise.resolve();
+    };
+    const run = coda.then(attesa, attesa);
+    coda = run.then(() => {}, () => {});
+    return run;
+  };
+  const t0 = Date.now();
+  const a = await Promise.all([throttle(), throttle(), throttle()].map(p => p.then(() => Date.now() - t0)));
+  assert.ok(a[1] - a[0] >= 1900 && a[2] - a[1] >= 1900, `partenze non spaziate: ${a.join(', ')}`);
+});

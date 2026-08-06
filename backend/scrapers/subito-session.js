@@ -69,6 +69,7 @@ function saveStorageState(state) {
       const tmp = file + '.tmp';
       fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
       fs.renameSync(tmp, file);            // atomica: chi legge vede il vecchio o il nuovo, mai meta'
+      epoca++;                             // sessione nuova: le osservazioni di prima non valgono piu'
       return true;
     } catch (err) {
       console.warn('[subito-session] save failed: ' + err.message);
@@ -113,8 +114,26 @@ function clearSession() {
 let blockedFlag    = false;
 let lastRefreshAt  = null;  // timestamp ms dell'ultimo refresh riuscito
 let lastRefreshOk  = null;  // bool: ultimo tentativo di refresh
+/**
+ * L'EPOCA DELLA SESSIONE: cresce a ogni salvataggio riuscito.
+ *
+ * Una ricerca partita PRIMA del bootstrap poteva finire DOPO e, trovando il CAPTCHA della
+ * sessione VECCHIA, chiamare markSubitoBlocked() dopo il clear — rimettendo il blocco su
+ * una sessione appena rinnovata e valida. E' la forma di `searchGen`: chi ha osservato in
+ * un'altra epoca non decide per questa. Chi marca dichiara l'epoca in cui ha visto il
+ * blocco; senza argomento resta il comportamento di prima (marca e basta).
+ */
+let epoca = 0;
+function epocaSessione()      { return epoca; }
 function isSubitoBlocked()    { return blockedFlag; }
-function markSubitoBlocked()  { blockedFlag = true; }
+function markSubitoBlocked(vista) {
+  if (vista != null && vista !== epoca) {
+    console.warn(`[subito-session] blocco visto nell'epoca ${vista}, ora siamo alla ${epoca}: scartato`);
+    return false;
+  }
+  blockedFlag = true;
+  return true;
+}
 function clearSubitoBlocked() { blockedFlag = false; }
 function getLastRefresh()     { return { at: lastRefreshAt, ok: lastRefreshOk }; }
 function recordRefresh(ok)    { lastRefreshAt = Date.now(); lastRefreshOk = ok; }
@@ -149,6 +168,7 @@ module.exports = {
   clearSession,
   isSubitoBlocked,
   markSubitoBlocked,
+  epocaSessione,
   clearSubitoBlocked,
   getLastRefresh,
   recordRefresh,

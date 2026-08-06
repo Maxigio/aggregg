@@ -202,12 +202,27 @@ async function fetchPage(context, url) {
   }
 }
 
-// ─── Rate limiting: minimo 2s tra ricerche ───────────────────────────────────
-let lastSearchAt = 0;
-async function throttle() {
-  const wait = 2000 - (Date.now() - lastSearchAt);
-  if (wait > 0) await sleep(wait);
-  lastSearchAt = Date.now();
+/**
+ * RATE LIMITING: minimo 2 s tra ricerche — E VALE ANCHE PER CHI ARRIVA INSIEME.
+ *
+ * Era un read-modify-write attraverso un await: tre chiamate concorrenti leggevano lo
+ * STESSO `lastSearchAt`, calcolavano la stessa attesa e ripartivano tutte nello stesso
+ * istante — la pausa che esiste per non farsi bloccare da Subito valeva solo in fila
+ * indiana. Ora le partenze si incatenano come `withSavedLock` in server.js: ognuna
+ * prenota il proprio slot prima di dormirci sopra.
+ */
+let prossimoSlot = 0;
+let coda = Promise.resolve();
+function throttle() {
+  const attesa = () => {
+    const ora = Date.now();
+    const quando = Math.max(ora, prossimoSlot);
+    prossimoSlot = quando + 2000;          // lo slot si prenota SUBITO, nello stesso tick
+    return quando > ora ? sleep(quando - ora) : Promise.resolve();
+  };
+  const run = coda.then(attesa, attesa);
+  coda = run.then(() => {}, () => {});
+  return run;
 }
 
 const MAX_PAGES = 3;   // §17.2: 5→3 (ordine prezzo → i più economici restano in cima; taglia il tempo Subito)
@@ -225,6 +240,7 @@ async function scrapeSubito(params) {
 
   // Carica storageState esistente se disponibile — il cookie DataDome è qui.
   const storageState = session.loadStorageState();
+  const epocaVista = session.epocaSessione();   // il blocco che vedremo vale per QUESTA sessione
   const ctxOpts = {
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     locale:    'it-IT',
@@ -265,7 +281,7 @@ async function scrapeSubito(params) {
   } catch (err) {
     if (err instanceof SubitoBlockedError) {
       console.warn('[Subito-PW] Bloccato (' + err.reason + ') — serve bootstrap utente');
-      session.markSubitoBlocked();
+      session.markSubitoBlocked(epocaVista);
     }
     throw err;
   } finally {
@@ -290,6 +306,7 @@ scrapeSubito.warmup = async () => { await getBrowser(); };
  */
 async function keepAliveSubito() {
   const storageState = session.loadStorageState();
+  const epocaVista = session.epocaSessione();   // il blocco che vedremo vale per QUESTA sessione
   if (!storageState) {
     return { ok: false, reason: 'no_session' };
   }
@@ -315,7 +332,7 @@ async function keepAliveSubito() {
     const blocked = detectDataDomeChallenge(html, status);
 
     if (blocked) {
-      session.markSubitoBlocked();
+      session.markSubitoBlocked(epocaVista);
       session.recordRefresh(false);
       console.warn('[Subito-PW] Keep-alive bloccato (' + blocked + ')');
       return { ok: false, reason: blocked };
