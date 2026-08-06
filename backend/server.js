@@ -756,15 +756,34 @@ app.get('/api/brands', (req, res) => {
       nome,
       sites:     b.sites || [],
       autoscout: b.autoscout || null,
-    }))
-    .sort((a, b) => a.nome.localeCompare(b.nome, 'it', { sensitivity: 'base' }));
+    }));
+  /**
+   * L'UNIONE COL CATALOGO LOCALE, la stessa gia' applicata al resolver degli slug
+   * (motoit-brands.js): tre marche che l'app HA su disco — cyclone (7 modelli), tvs-motor
+   * (8), um-italia (20) — non comparivano in tendina, e la force-select disabilita Cerca
+   * su una marca fuori elenco: 35 modelli posseduti e irraggiungibili, senza altra via.
+   * /api/models per quelle marche funziona gia'.
+   */
+  if (tipo === 'moto') {
+    const raggiunte = new Set(lista.map(b => resolveMotoitSlug(b.nome)).filter(Boolean));
+    let cat = null;
+    try { cat = require('../data/motoit-catalogo.json'); } catch (_) { cat = null; }
+    for (const [slug, m] of Object.entries((cat && (cat.marche || cat)) || {})) {
+      if (raggiunte.has(slug) || !m || !Object.keys(m.modelli || {}).length) continue;
+      lista.push({ nome: m.nome || slug, sites: ['motoit'], autoscout: null });
+    }
+  }
+  lista.sort((a, b) => a.nome.localeCompare(b.nome, 'it', { sensitivity: 'base' }));
   res.json({ brands: lista });
 });
 
-// Endpoint modelli per marca (alimenta il dropdown modello nel frontend)
-// Normalizzazione per match esatto-normalizzato fra cataloghi (NON testo utente).
-const normName = s => String(s || '').toLowerCase().normalize('NFD')
-  .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+// Endpoint modelli per marca (alimenta il dropdown modello nel frontend).
+// La normalizzazione per confrontare i nomi fra cataloghi e' UNA, ed e' `norm` di
+// brand-match — che lo dichiara nel suo commento: «chi confronta marche o modelli importa
+// questa». `normName` era la copia divergente che quella regola vieta: conservava gli spazi
+// mentre `norm` li toglie, e il merge Moto.it aggiungeva 94 doppioni della stessa moto in
+// tendina (CL500/CL 500, NX500/NX 500, CRF 300L/CRF 300 L, MH 900e/MH 900 e) — in una
+// force-select il cui contratto e' che l'utente SCEGLIE un modello reale.
 
 app.get('/api/models', async (req, res) => {
   const { tipo, marca } = req.query;
@@ -799,13 +818,13 @@ app.get('/api/models', async (req, res) => {
         // 200 — chi sceglie da un elenco monco non ha modo di accorgersene. Il KO ora si
         // dichiara nella risposta (`fonteMotoitKo`), i modelli base restano.
         const apiModels = await getBrandModels(brandSlug, { rilancia: true });   // [{name, slug}]
-        const byName = new Map(modelli.map(m => [normName(m.nome), m]));
+        const byName = new Map(modelli.map(m => [norm(m.nome), m]));
         for (const am of apiModels) {
-          const hit = byName.get(normName(am.name));
+          const hit = byName.get(norm(am.name));
           if (hit) { if (!hit.slugMotoIt) hit.slugMotoIt = am.slug; }
           else {
             const nm = { nome: am.name, sites: ['motoit'], mmmvAutoscout: '', kindAS: '', slugMotoIt: am.slug };
-            modelli.push(nm); byName.set(normName(am.name), nm);
+            modelli.push(nm); byName.set(norm(am.name), nm);
           }
         }
         modelli.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
@@ -882,7 +901,11 @@ app.get('/api/passaggio', async (req, res) => {
   // stima dai CV puo' far scavalcare la soglia a un'utilitaria (73 CV → 53,7 kW stimati, ma il
   // libretto puo' dire 53 → 49 € di differenza). Il listino li ha; se non li ha, si stima e si dice.
   let kwListino = null;
-  if (motornet.ATTIVO && marca && modello && cvN >= 1) {
+  // `tipo !== 'moto'`, simmetrico al guard sull'anno gia' dentro motornet: gli endpoint del
+  // listino sono solo /nuovo/auto/, e per le moto il kW e' inutile in OGNI ramo di ipt.js
+  // (non-storico: ok:false a prescindere; storico: importo fisso che i kW non li guarda).
+  // Erano fino a 3 richieste con pause da 1,5 s — e un 403 mette la fonte in pausa 30 minuti.
+  if (motornet.ATTIVO && tipo !== 'moto' && marca && modello && cvN >= 1) {
     // L'anno dell'annuncio arriva fin qui: su un'auto vecchia la richiesta al listino del
     // NUOVO non parte proprio (vedi motornet.js) e si va dritti alla stima dai CV, che e'
     // dichiarata. Prima si spendeva una richiesta a una fonte con un freno anti-raffica per

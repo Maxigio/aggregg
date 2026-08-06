@@ -1337,3 +1337,39 @@ test('ebay: una serp senza risultati esatti non e\' un elenco di offerte', () =>
     assert.ok(re.test(vuota), `"${vuota}" e' una serp nulla`);
   }
 });
+
+// ─── Una regola scritta una volta, e la leggono tutti ────────────────────────
+test('tendina: la normalizzazione dei nomi e\' quella condivisa, e le marche possedute ci sono', () => {
+  // `normName` era una copia divergente di `brand-match.norm` (conservava gli spazi): il
+  // merge Moto.it aggiungeva 94 doppioni della stessa moto — CL500/CL 500, NX500/NX 500,
+  // CRF 300L/CRF 300 L — in una force-select il cui contratto e' «scegli un modello reale».
+  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8'));
+  assert.ok(!/normName\(/.test(srv), 'la copia divergente normName e\' tornata');
+
+  const { norm } = require('../backend/scrapers/brand-match');
+  const { resolveMotoitSlug } = require('../backend/scrapers/motoit-brands');
+  const models = require('../data/models.json').moto;
+  const marche = require('../data/motoit-catalogo.json').marche || require('../data/motoit-catalogo.json');
+  let doppioni = 0;
+  for (const [marca, v] of Object.entries(models)) {
+    const slug = (v.motoit && v.motoit.brandSlug) || resolveMotoitSlug(marca);
+    const m = slug && marche[slug];
+    if (!m) continue;
+    const visti = new Set((v.models || []).map(x => norm(x.nome)).filter(Boolean));
+    for (const a of Object.values(m.modelli || {})) {
+      if (!a.nome) continue;
+      if (visti.has(norm(a.nome))) continue;   // aggancia la voce esistente: nessun doppione
+      visti.add(norm(a.nome));
+    }
+  }
+  assert.strictEqual(doppioni, 0);
+
+  // E ogni marca che il catalogo possiede dev'essere raggiungibile dalla tendina: la
+  // force-select disabilita Cerca su una marca fuori elenco, quindi «non in tendina» vuol
+  // dire «i suoi annunci non esistono per l'app».
+  const raggiunte = new Set(Object.keys(models).map(n => resolveMotoitSlug(n)).filter(Boolean));
+  const conModelli = Object.entries(marche).filter(([, m]) => Object.keys((m && m.modelli) || {}).length);
+  const orfane = conModelli.filter(([s]) => !raggiunte.has(s)).map(([s]) => s);
+  assert.ok(/tipo === 'moto'/.test(srv) && /raggiunte\.has\(slug\)/.test(srv),
+    `/api/brands non fa piu' l'unione col catalogo: ${orfane.length} marche possedute resterebbero irraggiungibili`);
+});

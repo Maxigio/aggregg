@@ -15,8 +15,18 @@ const threshold = () => LEVELS[(process.env.LOG_LEVEL || (process.env.DEBUG === 
 // variabile si sposta il solo log — che era il problema: i test requirono server.js, che
 // installa il tee, e ogni run appendeva al registro operativo vero (373 boot fantasma
 // contati, piu' righe ERROR che un operatore avrebbe letto come guasti dell'app).
-const LOG_DIR = process.env.AMR_LOG_DIR
-  || path.join(process.env.USER_DATA_PATH || path.join(__dirname, '..', 'data'), 'logs');
+/**
+ * LA STESSA FORMULA DELLE ALTRE SETTE COPIE. Qui `USER_DATA_PATH` era creduto sulla parola
+ * mentre auth/saved/competitor/cache-disco controllano `existsSync` prima di fidarsi: con
+ * una variabile che punta a una cartella inesistente il logger la CREAVA al boot (ensureStream
+ * fa mkdir ricorsivo), e da quel momento le altre sette — che prima ripiegavano su data/ —
+ * la trovavano esistente e ci migravano dentro. Un log poteva spostare i dati dell'utente.
+ */
+const basePersistente = () => {
+  const ud = process.env.USER_DATA_PATH;
+  return (ud && fs.existsSync(ud)) ? ud : path.join(__dirname, '..', 'data');
+};
+const LOG_DIR = process.env.AMR_LOG_DIR || path.join(basePersistente(), 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'amr.log');
 const MAX_BYTES = 5 * 1024 * 1024;   // ruota amr.log → amr.log.1 oltre i 5MB
 const RING_MAX = 500;
