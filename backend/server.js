@@ -389,10 +389,13 @@ app.get('/api/me', (req, res) => {
 // probe gira prima del login. Nessun dato sensibile.
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-// Log applicativi — SOLO owner (full): le ultime righe del ring-buffer (segreti redatti dal logger).
+// Log applicativi — SOLO owner: le ultime righe del ring-buffer (segreti redatti dal logger).
 // ?n=200 righe, ?level=error filtra. Utile per diagnosticare errori-fonte (es. "Web error") senza SSH.
+// Il gate e' sull'IDENTITA', non sul ruolo: «solo owner» confrontato col ruolo faceva entrare
+// qualunque collega con l'accesso pieno — e qui dentro ci sono le ricerche, gli IP e le
+// tracce d'errore di tutti. req.authId ce l'ha solo questo handler fra i gate del backend.
 app.get('/api/logs', (req, res) => {
-  if (auth.isEnabled() && req.authRole !== 'full') return res.status(403).json({ error: 'solo owner' });
+  if (auth.isEnabled() && req.authId !== 'owner') return res.status(403).json({ error: 'solo owner' });
   const n = Math.min(parseInt(req.query.n, 10) || 200, 500);
   let lines = logger.tail(n);
   if (req.query.level) { const L = String(req.query.level).toUpperCase(); lines = lines.filter(l => l.includes(' ' + L + ' ')); }
@@ -1004,6 +1007,10 @@ function parseSearchParams(query) {
   const errors = [];
   if (!tipo || !['auto', 'moto'].includes(tipo)) errors.push('tipo deve essere "auto" o "moto"');
   if (!marca || typeof marca !== 'string' || marca.trim().length === 0) errors.push('marca obbligatoria');
+  // `?modello=a&modello=b` arriva come ARRAY: senza questo, il `.trim()` piu' sotto
+  // esplodeva in un 500 HTML del finalizzatore di Express, res.json() del browser moriva
+  // e il messaggio dava la colpa alla rete. Un 400 col perche', come per marca.
+  if (modello != null && typeof modello !== 'string') errors.push('modello deve essere una stringa sola');
   if (regione && !canonRegione(regione)) errors.push(`regione non valida: ${regione}`);
   if (errors.length) return { errors };
 
@@ -1162,17 +1169,14 @@ async function runSubito(params, ms) {
   } finally { clearTimeout(scattato); }
 }
 
-// Rate-limit generoso per-IP (seatbelt anti-abuso; un umano non lo tocca, uno script sì).
-// Per-IP è sensato: dietro il Funnel usiamo l'IP reale (clientIp). Mappa separata.
-const searchHits = new Map();
-function searchRateOk(ip) {
-  const now = Date.now(), w = 60 * 1000, cap = 60;
-  const rec = searchHits.get(ip);
-  if (!rec || now - rec.windowStart >= w) { searchHits.set(ip, { windowStart: now, count: 1 }); return true; }
-  rec.count++; return rec.count <= cap;
-}
+// L'ULTIMA copia del limitatore scritta a mano: le altre rotte passano dal modulo comune
+// dalla campagna dei limiti, questa contava per indirizzo — e dietro il Funnel l'ufficio
+// ha UN indirizzo: il blocco di uno era il blocco di tutti, senza dire fra quanto
+// riprovare, e la mappa non si potava mai. Stessi numeri di prima: 60 per 60 secondi.
+const limiteRicerche = require('./limite-richieste').crea({ max: 60, cosa: 'ricerche' });
 app.get('/api/search', async (req, res) => {
-  if (!searchRateOk(clientIp(req))) return res.status(429).json({ error: 'Troppe ricerche, attendi un momento.' });
+  const gRic = limiteRicerche.consuma(chiaveLimite(req));
+  if (!gRic.ok) return res.status(429).json({ error: limiteRicerche.messaggio(gRic), riprovaFra: gRic.attesa, restanti: 0 });
   const parsed = parseSearchParams(req.query);
   if (parsed.errors) {
     return res.status(400).json({ error: parsed.errors.join(', ') });

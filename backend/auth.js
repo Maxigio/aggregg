@@ -188,8 +188,15 @@ function setPersona(nome, pw, ruolo = 'demo') {
   if (ID_RISERVATI.has(id)) throw new Error(`"${id}" e' riservato: usa un altro nome.`);
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(String(pw), salt, 64).toString('hex');
+  const esisteva = (cfg.persone || []).some(p => String(p.id) === id);
   cfg.persone = (cfg.persone || []).filter(p => String(p.id) !== id);
   cfg.persone.push({ id, nome: n, salt, hash, ruolo: ruolo === 'full' ? 'full' : 'demo' });
+  // Cambiare la password di una persona che C'ERA GIA' invalida anche la sua vecchia
+  // sessione: il cookie e' firmato col secret, e il ricontrollo su id+ruolo non basta
+  // (id e ruolo restano uguali). Prezzo: tutti rifanno il login, lo stesso che il giro
+  // completo di utenti-da-env dichiara gia' normale. Una persona nuova non ha sessioni
+  // da uccidere, e aggiungerla non butta fuori nessuno.
+  if (esisteva) cfg.secret = crypto.randomBytes(32).toString('hex');
   scriviAtomico(filePath(), cfg);
   return { id, nome: n, ruolo: ruolo === 'full' ? 'full' : 'demo' };
 }
@@ -258,6 +265,16 @@ function checkSessione(v) {
   const a = Buffer.from(sig);
   const b = Buffer.from(expect);
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  // LA REVOCA REVOCA. Il ruolo firmato nel cookie e' una copia congelata di un permesso:
+  // qui — l'unico punto da cui passa ogni richiesta — la si riconfronta con l'elenco vivo.
+  // Senza, togliere una persona lasciava il suo cookie buono fino a 30 giorni, e un
+  // declassamento full→demo restava full fino a scadenza, mentre due punti del repo
+  // promettevano il contrario per iscritto. Costo: zero letture in piu' (il cfg e' quello
+  // gia' caricato qui sopra). 'owner' e 'demo' non stanno in cfg.persone e restano fuori.
+  if (id !== 'owner' && id !== 'demo') {
+    const p = (cfg.persone || []).find(x => String(x.id) === String(id));
+    if (!p || (p.ruolo === 'full' ? 'full' : 'demo') !== role) return null;
+  }
   return { ruolo: role, id: String(id || 'owner') };
 }
 

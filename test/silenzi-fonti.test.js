@@ -388,6 +388,22 @@ test('auth: una password per persona, con l\'identita\' dentro la firma', () => 
 
     assert.ok(auth.togliPersona('Giulia Rossi'));
     assert.strictEqual(auth.verifica('passwordlungadigiulia'), null, 'tolta la persona, la sua password non vale piu\'');
+    // LA REVOCA REVOCA. Prima questo controllo mancava e il difetto era invisibile: la
+    // password moriva, ma il COOKIE gia' emesso valeva altri 30 giorni — mentre due punti
+    // del repo promettevano «smette di valere subito». Il token va ripassato a
+    // checkSessione, non basta provare verifica().
+    assert.strictEqual(auth.checkSessione(t), null, 'tolta la persona, il suo cookie muore al primo controllo');
+
+    // E il resto della famiglia «revoca che non revoca»:
+    const tMarco = auth.makeToken('full', 'marco');
+    assert.deepStrictEqual(auth.checkSessione(tMarco), { ruolo: 'full', id: 'marco' });
+    // (1) cambiare la password rigenera il secret: la vecchia sessione muore per firma;
+    auth.setPersona('Marco', 'passwordnuovadimarco', 'demo');
+    assert.strictEqual(auth.checkSessione(tMarco), null, 'cambiata la password, la vecchia sessione non vale piu\'');
+    // (2) il declassamento declassa: anche un cookie 'full' firmato col secret NUOVO non
+    // passa, perche' il ruolo che conta e' quello nell'elenco, non quello congelato nel token.
+    assert.strictEqual(auth.checkSessione(auth.makeToken('full', 'marco')), null, 'declassato: il ruolo firmato non basta piu\'');
+    assert.deepStrictEqual(auth.checkSessione(auth.makeToken('demo', 'marco')), { ruolo: 'demo', id: 'marco' });
   } finally {
     if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
     delete require.cache[require.resolve('../backend/auth')];
