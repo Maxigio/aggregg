@@ -29,8 +29,12 @@ const REGOLE = [
   [/\s*\(.*$/, ''],
   // "Golf 5ª serie", "Golf 7a serie"
   [/\s+\d+[ªa°]?\s*serie\b.*$/i, ''],
-  // La LISTA di generazioni: "Porter 1ª/2ª serie", "1ª-2ª s.", "1ª/2ª/3ª/4ª"
-  [/\s*(\d+[ªa°]\s*[/-]\s*)*\d+[ªa°]\s*(serie|s\.?)?\s*$/i, ''],
+  // La LISTA di generazioni: "Porter 1ª/2ª serie", "1ª-2ª s.", "1ª/2ª/3ª/4ª".
+  // SENZA "serie/s." il segnale deve essere l'ordinale TIPOGRAFICO (ª/°), mai la 'a' nuda:
+  // e' la stessa lettera dei nomi veri, e "XVS 1300A" diventava "XVS" — l'annuncio di una
+  // XVS 1300 apriva la scheda di un'altra moto. Misurato sui cataloghi: col vincolo tornano
+  // interi 8 nomi (XVS 1300A/1900A, Hunter XT…A, YCF 50A) e nessun altro cambia.
+  [/\s*(?:\d+[ªa°]\s*[/-]\s*)*\d+(?:[ª°]|[ªa°]\s*(?:serie|s\.?))\s*$/i, ''],
   // La forma ABBREVIATA con l'ordinale o il punto: "Macan 1ªs.", "Picanto 2ª s.",
   // "C3 Aircross 1ª-2ª s." — mai "K 1200 S", che di segnali non ne ha nessuno.
   [/\s+\d+(?:[ªa°](?:\s*-\s*\d+[ªa°]?)?\s*s\.?|(?:\s*-\s*\d+[ªa°]?)?\s*s\.)(?:\s|$).*$/i, ''],
@@ -74,6 +78,12 @@ if (require.main === module) {
     // NON si toccano: nomi veri che finiscono con cifre + S
     ['K 1200 S', 'K 1200 S'],
     ['Monster 620 S', 'Monster 620 S'],
+    // ...ne' quelli che finiscono con cifre + A: la 'a' nuda non e' un ordinale.
+    ['XVS 1300A', 'XVS 1300A'],
+    ['YCF 50A', 'YCF 50A'],
+    ['50A (2024 - 26)', '50A'],
+    // E la lista nuda si toglie ancora, ma solo con l'ordinale tipografico.
+    ['Ibiza 1ª/2ª/3ª/4ª', 'Ibiza'],
     ['Golf', 'Golf'],
     // Tre cifre NON sono un anno: "200-280" e' un intervallo di motori, non di anni.
     ['Serie 200-280(W123)', 'Serie 200-280'],

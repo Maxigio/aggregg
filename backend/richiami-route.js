@@ -18,6 +18,12 @@
 const path = require('path');
 const rdw = require('./scrapers/rdw-richiami');   // seconda fonte: campagne RDW per marca+modello
 const omo = require('./scrapers/rdw-omologazioni'); // da un'omologazione alle sue versioni
+// Il modello arriva come l'annuncio lo dichiara, e su Subito e' il nome di catalogo CON la
+// generazione ("Golf 5ª serie"): cercato cosi', l'archivio risponde zero — misurato: 0
+// allerte contro 7 Safety Gate + 32 RDW con "Golf" — e il pannello scriveva «Nessuna
+// campagna per questo modello» su un dato di sicurezza, nella direzione opposta alla
+// dottrina («confronto largo, meglio un'allerta in piu' da scartare»).
+const { senzaGenerazione } = require('./nomi-modello');
 
 let D = null;
 try { D = require(path.join(__dirname, '..', 'data', 'safety-gate.json')); } catch (_) { D = null; }
@@ -249,7 +255,7 @@ function mount(app, deps = {}) {
   // intero — misurato: 1.034 allerte, 1,9 MB — e il limite di 60 al minuto per IP lo moltiplicava
   // per sessanta. `totale` resta il conto vero, cosi' si sa quanto e' rimasto fuori.
   via('/api/richiami/cerca', q => {
-    const r = cerca({ marca: q.marca, modello: q.modello, anno: q.anno });
+    const r = cerca({ marca: q.marca, modello: senzaGenerazione(String(q.modello || '')) || q.modello, anno: q.anno });
     if (!r.ok) return r;
     const n = Math.min(200, Math.max(1, Number(q.quante) || 200));
     return { ...r, allerte: r.allerte.slice(0, n), mostrate: Math.min(r.totale, n) };
@@ -299,7 +305,7 @@ function mount(app, deps = {}) {
   });
 
   via('/api/richiami/rdw/cerca', q => {
-    const r = rdw.cerca({ marca: q.marca, modello: q.modello, anno: q.anno });
+    const r = rdw.cerca({ marca: q.marca, modello: senzaGenerazione(String(q.modello || '')) || q.modello, anno: q.anno });
     if (!r.ok) return r;
     const n = Math.min(200, Math.max(1, Number(q.quante) || 200));
     return { ...r, campagne: r.campagne.slice(0, n), mostrate: Math.min(r.totale, n) };

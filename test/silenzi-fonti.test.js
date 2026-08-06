@@ -300,6 +300,28 @@ test('subito: sulle moto le famiglie si chiedono tutte, non solo la prima', asyn
 });
 
 // ─── Una regola, un posto: il nome senza la generazione ──────────────────────
+test('archivi: il modello CON la generazione risponde quanto quello senza — rotte eseguite', async () => {
+  // La regola: il nome che arriva da una fonte passa da senzaGenerazione PRIMA di ogni
+  // confronto con un archivio. Due chiamanti non lo facevano, e «Golf 5ª serie» — che e'
+  // il nome che l'annuncio Subito dichiara — rispondeva ZERO su un dato di sicurezza
+  // (misurato: 0 contro 7 Safety Gate e 32 RDW). Qui si eseguono le ROTTE vere, coi dati
+  // su disco e zero rete: se un chiamante futuro salta la pulizia, questo diventa rosso.
+  const rr = require('../backend/richiami-route');
+  const handlers = new Map();
+  rr.mount({ get: (p, h) => handlers.set(p, h) }, { chiaveLimite: () => 'u:test-generazione' });
+  const chiama = (p, query) => new Promise(done => {
+    const res = { status: () => res, json: x => done(x), set: () => res };
+    handlers.get(p)({ query }, res);
+  });
+  for (const rotta of ['/api/richiami/cerca', '/api/richiami/rdw/cerca']) {
+    const conGen = await chiama(rotta, { marca: 'Volkswagen', modello: 'Golf 5ª serie' });
+    const senza = await chiama(rotta, { marca: 'Volkswagen', modello: 'Golf' });
+    assert.ok(senza.totale > 0, `${rotta}: l'archivio deve avere allerte Golf, o il test non prova niente`);
+    assert.strictEqual(conGen.totale, senza.totale,
+      `${rotta}: la generazione nel nome non puo' azzerare un archivio di sicurezza`);
+  }
+});
+
 test('nomi-modello: la regola unificata toglie le generazioni senza decapitare i modelli veri', () => {
   const { senzaGenerazione } = require('../backend/nomi-modello');
   // Le due cose che la copia in produzione non sapeva fare, e che gli script sapevano:

@@ -21,6 +21,10 @@
  */
 const autoit = require('./scrapers/autoit-rilevamenti');
 const insella = require('./scrapers/insella-prove');
+// Come per i richiami: il modello dell'annuncio Subito porta la generazione ("Golf 5ª
+// serie") e confrontato cosi' con l'archivio risponde zero — misurato: 13 rilevamenti
+// Golf che non uscivano. La pulizia sta all'INGRESSO, non affidata alla fortuna del matcher.
+const { senzaGenerazione } = require('./nomi-modello');
 
 const norm = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const tok = s => norm(s).split(/[^a-z0-9]+/).filter(Boolean);
@@ -57,7 +61,7 @@ function mount(app, deps = {}) {
       const voce = (marche || []).find(x => m.every(w => tok(x.nome).includes(w)));
       if (!voce) return res.json({ ok: true, voci: [], motivo: 'auto.it non ha prove di questa marca' });
       const d = await autoit.rilevamenti(voce.acronimo);
-      let voci = perModello((d && d.rilevamenti) || [], modello);
+      let voci = perModello((d && d.rilevamenti) || [], senzaGenerazione(String(modello || '')) || modello);
       const y = parseInt(anno, 10) || null;
       if (y) voci = voci.slice().sort((a, b) => Math.abs((a.anno || 0) - y) - Math.abs((b.anno || 0) - y));
       res.json({ ok: true, marca: voce.nome, voci: voci.slice(0, 8), quante: voci.length, fonte: d && d.fonte });
@@ -76,7 +80,7 @@ function mount(app, deps = {}) {
     // disco, senza rete). Trattandola come oggetto sincrono le candidate erano sempre zero.
     let prove = [];
     try { prove = await insella.indice() || []; } catch (e) { return res.json({ ok: false, error: e.message }); }
-    const m = tok(marca), q = tok(modello);
+    const m = tok(marca), q = tok(senzaGenerazione(String(modello || '')) || modello);
     const cand = prove.filter(p => {
       const s = tok(p.slug + ' ' + p.titolo);
       return m.every(w => s.includes(w)) && q.every(w => s.includes(w));

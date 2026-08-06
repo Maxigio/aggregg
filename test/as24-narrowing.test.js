@@ -129,3 +129,22 @@ test('livello riallargamento: bucket del padre → "padre", non "versione"', () 
   // Nessun riallargamento: null.
   assert.strictEqual(livello(fase1, {}, false), null);
 });
+
+test('un prefisso che spezza un numero non e\' una parentela', () => {
+  // "fz6" dentro "fz600" metteva la FZ 600 (1986) nel secchio della FZ6 (2004), e la
+  // fascia di stato stampava una genealogia falsa. Due numeri diversi non sono padre e
+  // figlio. Misurato sui 1.768 modelli moto senza codice: con questo confine cambiano
+  // SOLO i due padri falsi (FZ6→"FZ 600", Rev 3→"Rev 300").
+  const YAMAHA = [
+    { nome: 'FZ6', mmmvAutoscout: '54|60321||' },
+    { nome: 'FZ 600' },                                  // orfana: il prefisso la agganciava
+  ];
+  assert.strictEqual(resolveAs24Narrowing(YAMAHA, 'FZ 600', 54).padre, null,
+    'FZ 600 non e\' figlia della FZ6: meglio la marca intera del secchio sbagliato');
+  // Ma il taglio resta legittimo su un confine di token ("AF 1" ⊂ "AF1 125")...
+  const APRILIA = [{ nome: 'AF 1', mmmvAutoscout: '9|1||' }, { nome: 'AF1 125' }];
+  assert.strictEqual(resolveAs24Narrowing(APRILIA, 'AF1 125', 9).padre, 'AF 1');
+  // ...e quando estende delle lettere ("CRF 250" ⊂ "CRF 250R").
+  const HONDA = [{ nome: 'CRF 250', mmmvAutoscout: '29|5||' }, { nome: 'CRF 250R' }];
+  assert.strictEqual(resolveAs24Narrowing(HONDA, 'CRF 250R', 29).padre, 'CRF 250');
+});

@@ -59,6 +59,12 @@
 
 const norm = s => String(s == null ? '' : s).toLowerCase()
   .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  // La virgola decimale italiana diventa punto PRIMA della pulizia: "1,9 TDI" usciva
+  // "1 9 tdi" e i rami [.,] scritti apposta per accoglierla erano codice morto — la
+  // deduzione scendeva da «esatta» ad «allestimento», affermando una compatibilita'
+  // falsa («3 versioni compatibili», fra cui una 1.6 e una 2.0) su una cilindrata
+  // che l'annuncio dichiarava.
+  .replace(/(\d),(\d)/g, '$1.$2')
   .replace(/[^a-z0-9.&+]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 /**

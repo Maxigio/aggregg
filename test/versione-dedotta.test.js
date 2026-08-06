@@ -215,3 +215,13 @@ test('la sigla si dichiara come motorizzazione, non come allestimento', () => {
   assert.equal(trim.cosa, 'allestimento');
   assert.match(trim.allestimento, /futura/i);
 });
+
+test('la virgola decimale del venditore vale quanto il punto', () => {
+  // "1,9 TDI" e' l'italiano di meta' dei titoli veri: la norm la buttava ("1 9 tdi"),
+  // i quattro rami [.,] scritti per accoglierla erano codice morto, e il nome INTERO
+  // scritto con la virgola scendeva da 'esatta' ad 'allestimento'.
+  const conVirgola = deduci(GOLF, ann({ titolo: 'Golf 2,0 TDI 150 CV DSG SCR Style', cambio: 'Automatico' }));
+  const conPunto   = deduci(GOLF, ann({ titolo: 'Golf 2.0 TDI 150 CV DSG SCR Style', cambio: 'Automatico' }));
+  assert.strictEqual(conVirgola.esito, 'esatta');
+  assert.strictEqual(conVirgola.versione, conPunto.versione, 'virgola e punto sono la stessa cilindrata');
+});

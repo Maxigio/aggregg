@@ -138,11 +138,22 @@ function resolveAs24Narrowing(models, modello, makeId) {
   const brandOnly = makeId ? `${makeId}|||` : '';
   const q = norm(modello);
   if (!q) return { mmmv: brandOnly, versionText: '', padre: null };
+  // Un prefisso che SPEZZA UN NUMERO non e' una parentela: "fz6" dentro "fz600" metteva la
+  // FZ 600 (1986) nel secchio della FZ6 (2004), e la fascia di stato stampava una genealogia
+  // falsa. Due numeri diversi non sono padre e figlio. Ma il taglio e' LEGITTIMO in due casi:
+  // cade su un confine di token del nome cercato ("AF 1" ⊂ "AF1 125", "RSV4" ⊂ "RSV4 1100"),
+  // oppure estende delle lettere ("800mt" ⊂ "800mtx", "CRF 250" ⊂ "CRF 250R").
+  // Misurato sui 1.768 modelli moto senza codice: cambiano SOLO i due padri falsi
+  // (Rev 3 → "Rev 300", FZ6 → "FZ 600"), nessun padre vero si perde.
+  const toks = String(modello || '').toLowerCase().normalize('NFD').split(/[^a-z0-9]+/).filter(Boolean);
+  const confini = new Set();
+  for (let i = 0, acc = ''; i < toks.length - 1; i++) { acc += toks[i]; confini.add(acc); }
+  const taglioValido = n => confini.has(n) || !(/\d$/.test(n) && /^\d/.test(q.slice(n.length)));
   let padre = null, padreLen = 0;
   for (const m of (models || [])) {
     if (!m || !m.mmmvAutoscout) continue;         // il padre deve avere il codice, altrimenti non aiuta
     const n = norm(m.nome);
-    if (n.length < 3 || !q.startsWith(n) || n === q) continue;   // prefisso STRETTO: "800mt" ⊂ "800mtx"
+    if (n.length < 3 || !q.startsWith(n) || n === q || !taglioValido(n)) continue;   // prefisso STRETTO: "800mt" ⊂ "800mtx"
     if (n.length > padreLen) { padre = m; padreLen = n.length; }  // il più specifico vince
   }
   return {
