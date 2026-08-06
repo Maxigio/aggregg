@@ -52,6 +52,56 @@ function ponte() {
 }
 const pontePer = (tipo, marcaNome, cercato) => ponte().get(`${tipo}|${norm(marcaNome)}|${cercato}`) || null;
 
+/**
+ * Il catalogo a TRE livelli di Subito (marca → modello → versione), letto una volta e
+ * indicizzato: per ogni marca, i token dei nomi-versione con il modello a cui appartengono.
+ * E' la fonte che dichiara la parentela fra un allestimento e la sua famiglia; qui non si
+ * deduce niente, si legge. File assente o illeggibile → nessun aggancio, come prima.
+ */
+const tokDi = s => String(s == null ? '' : s).toLowerCase().normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter(Boolean);
+let CATALOGO = null;
+function catalogo() {
+  if (CATALOGO) return CATALOGO;
+  CATALOGO = { auto: new Map(), moto: new Map() };
+  try {
+    const j = require('../../data/subito-catalogo.json');
+    for (const tipo of ['auto', 'moto']) {
+      for (const m of Object.values(j[tipo] || {})) {
+        const versioni = [];
+        for (const mod of Object.values(m.modelli || {})) {
+          for (const vn of Object.values(mod.versioni || {})) versioni.push({ t: tokDi(vn), fam: mod.nome });
+        }
+        if (versioni.length) CATALOGO[tipo].set(norm(m.nome), versioni);
+      }
+    }
+  } catch (e) { console.warn('[subito-nodo] catalogo a tre livelli non letto: ' + e.message); }
+  return CATALOGO;
+}
+
+/** La famiglia di cui il nome cercato e' un allestimento, o null se non e' UNA sola. */
+function allestimentoDi(tipo, marcaNome, modello, fam) {
+  const t = tokDi(modello);
+  // Sotto i tre caratteri il nome non distingue: «e» aggancerebbe ogni versione che
+  // comincia per «e». E almeno una lettera: un numero nudo e' quasi sempre una cilindrata
+  // dentro il nome-versione («1100 45 CV» di una Panda), non un modello.
+  if (!t.length || norm(modello).length < 3 || !t.some(x => /[a-z]/.test(x))) return null;
+  const versioni = catalogo()[tipo].get(norm(marcaNome));
+  if (!versioni) return null;
+  const padri = new Set();
+  for (const v of versioni) {
+    if (v.t.length <= t.length) continue;
+    if (t.every((x, i) => v.t[i] === x)) { padri.add(v.fam); if (padri.size > 1) return null; }
+  }
+  if (padri.size !== 1) return null;
+  const nomePadre = norm([...padri][0]);
+  // Il modello del catalogo puo' portare la generazione («A3 2ª serie»): l'indice di
+  // ricerca la tiene sotto la famiglia, quindi si cerca prima esatto e poi senza.
+  return fam.find(f => norm(f.nome) === nomePadre)
+      || fam.find(f => (f.gen || []).some(g => norm(g.nome) === nomePadre))
+      || null;
+}
+
 const FILE = path.join(__dirname, '..', '..', 'data', 'subito-indice.json');
 
 let CACHE = null;
@@ -241,6 +291,30 @@ function risolviNodo(tipo, marca, modello, opts = {}) {
     const hg = makeModelResolver(gen.map(x => ({ name: x.g.nome, value: x })))(modello);
     if (hg) return perGenerazione(hg);
   }
+
+  /**
+   * L'ALLESTIMENTO TROVA LA SUA FAMIGLIA — ultima spiaggia prima della marca sola.
+   *
+   * Il nostro catalogo scende piu' in basso di quello di Subito: «Mercedes A 190» e' un
+   * allestimento della «Classe A», «Audi RS3» una versione della «A3», «Iron 883» una
+   * Sportster. Nessuno dei rami sopra li aggancia — non sono esatti, non sono prefissi,
+   * non sono rinominati — e finivano a cercare TUTTA la marca: misurato, 130 nomi del
+   * menu, di cui 76 Mercedes e 22 Audi sportive.
+   *
+   * La parentela NON si indovina: la dichiara Subito stessa. Il suo catalogo ha tre
+   * livelli (marca → modello → versione) e i nomi-versione cominciano col nome
+   * dell'allestimento: se «RS3 2.5 TFSI...» sta sotto il modello «A3 2ª serie», e' Subito
+   * a dire che la RS3 e' una A3. Si pretende che i token del nome cercato siano i PRIMI
+   * della versione e che il padre sia UNO SOLO: due padri sono un'ambiguita', non una
+   * risposta, e si resta sulla marca.
+   *
+   * Il nome cercato viaggia INTERO come testo (`testo`, non `testoDedotto`): non e' un
+   * resto tolto dalla famiglia, e' proprio l'allestimento, e serve a restringere.
+   * `come: 'allestimento'` lo dichiara a schermo: chi guarda sa che la famiglia non e'
+   * quella che ha scritto.
+   */
+  const allest = allestimentoDi(t, m.nome, modello, fam);
+  if (allest) return { ...perFamiglie([allest]), come: 'allestimento', testo: String(modello).trim() };
 
   return base;   // marca sola: meglio della marca sbagliata, e chi chiama lo sa
 }

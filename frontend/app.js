@@ -3756,6 +3756,16 @@ function renderSourceStatus() {
   if (sb && sb.come === 'testo libero' && sb.status === 'ok' && sb.count > 0) {
     fonteBreakdown.innerHTML += '<span class="src-avviso">Ricerca pari alla ricerca a testo libero di Subito. Vuoi gestire le tue ricerche in modo diverso? Parliamone!</span>';
   }
+  /**
+   * L'ALLESTIMENTO CERCATO DENTRO LA SUA FAMIGLIA, e chi guarda deve saperlo. Il catalogo
+   * di Subito si ferma alla famiglia: una «Mercedes A 190» la si chiede come «Classe A»
+   * col nome scritto per restringere. E' molto meglio di cercare tutta la Mercedes — che
+   * e' quel che succedeva — ma non e' la stessa cosa di un id esatto, e presentarla come
+   * tale sarebbe far passare per precisa una ricerca che precisa non e'.
+   */
+  if (sb && sb.come === 'allestimento' && sb.status === 'ok' && sb.count > 0) {
+    fonteBreakdown.innerHTML += `<span class="src-avviso">Su Subito questo modello e&#39; un allestimento: la ricerca parte dalla famiglia${sb.famigliaNome ? ' &laquo;' + escapeHtml(sb.famigliaNome) + '&raquo;' : ''} e si restringe col nome.</span>`;
+  }
   const mo = lastSources.moto;
   // Il menu versioni di Moto.it che non ha risposto: il filtro non e' stato applicato (o lo e'
   // stato su un elenco monco), e finora la colonna si presentava filtrata come le altre.

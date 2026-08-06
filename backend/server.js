@@ -2130,6 +2130,9 @@ async function runSearchCore(params) {
                    // ricerca precisa che non e'.
                    come: params.subitoTestoLibero ? 'testo libero'
                      : (params.subitoNodo ? (params.subitoNodo.come || 'id') : 'testo libero'),
+                   // La famiglia da cui e' partita la ricerca: serve all'avviso
+                   // dell'allestimento, che senza il nome direbbe meta' della verita'.
+                   famigliaNome: (params.subitoNodo && params.subitoNodo.famigliaNome) || null,
                    // Il filtro km di Subito lavora a FASCE, su ENTRAMBI i lati: chiedendo un
                    // massimo di 200.000 arrivano annunci fino a 249.999, e chiedendone un minimo
                    // di 22.000 arrivano da 20.000. Finora non si notava perche' mostravamo il

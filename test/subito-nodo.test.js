@@ -264,3 +264,35 @@ test('le famiglie Subito dal nome corto tornano raggiungibili, senza agganci den
       `"${q}" non deve agganciare una famiglia tagliando dentro una parola`);
   }
 });
+
+test('l\'allestimento trova la sua famiglia, e la fonte lo dichiara', () => {
+  // Il nostro catalogo scende piu' in basso di quello di Subito: «Mercedes A 190» e' un
+  // allestimento della «Classe A», «Audi RS3» una versione della «A3». Nessun ramo lo
+  // agganciava — non esatto, non prefisso, non rinominato — e finivano a cercare TUTTA la
+  // marca. Misurato: 129 nomi del menu, di cui 76 Mercedes e 22 Audi sportive.
+  // La parentela NON si indovina: la dichiara Subito nel suo catalogo a tre livelli.
+  const { risolviNodo } = require('../backend/scrapers/subito-nodo');
+  const casi = [
+    ['auto', 'Mercedes-Benz', 'A 190', 'Classe A'],
+    ['auto', 'Mercedes-Benz', 'ML 270', 'Classe M'],
+    ['auto', 'Audi', 'RS3', 'A3'],
+    ['auto', 'Nissan', '350Z', 'Z'],
+    ['moto', 'Harley-Davidson', 'Iron 883', 'Sportster 883'],
+  ];
+  for (const [t, ma, q, atteso] of casi) {
+    const r = risolviNodo(t, ma, q);
+    assert.strictEqual(r && r.come, 'allestimento', `${ma} "${q}" doveva agganciare come allestimento`);
+    assert.strictEqual(r.famigliaNome, atteso, `${ma} "${q}" → famiglia sbagliata`);
+    assert.strictEqual(r.testo, q, 'il nome cercato deve viaggiare INTERO per restringere: e\' l\'allestimento');
+  }
+  // I nomi troppo corti non agganciano: «e» prenderebbe ogni versione che comincia per «e».
+  assert.strictEqual(risolviNodo('auto', 'Honda', 'e').come, 'marca');
+  // E niente scavalca i rami precisi: chi ha una famiglia sua se la tiene.
+  assert.strictEqual(risolviNodo('auto', 'Audi', 'A3').come, 'famiglia');
+  assert.strictEqual(risolviNodo('auto', 'Volkswagen', 'Golf').come, 'famiglia');
+  assert.strictEqual(risolviNodo('auto', 'BMW', 'X5 M').come, 'prefisso');
+  // E i difetti chiusi restano chiusi: due numeri diversi non diventano parenti.
+  for (const [ma, q] of [['Aprilia', 'Pegaso 500'], ['Yamaha', 'FZ 600']]) {
+    assert.strictEqual(risolviNodo('moto', ma, q).come, 'marca', `${ma} "${q}" e' tornato ad agganciare`);
+  }
+});
