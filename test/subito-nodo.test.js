@@ -241,3 +241,26 @@ test('il ponte dei rinominati recupera i due nomi della stessa moto, e non riapr
       `${ma} "${mo}" e' tornato ad agganciare una famiglia spezzando un numero`);
   }
 });
+
+test('le famiglie Subito dal nome corto tornano raggiungibili, senza agganci dentro le parole', () => {
+  // 141 famiglie auto e 26 moto hanno il nome normalizzato di due caratteri (X5, IS, SL,
+  // V7, X9) e il taglio a tre le rendeva invisibili al prefisso: 94 nomi del menu auto e 13
+  // moto cercavano TUTTA la marca. «Lexus IS 250» pescava in tutta la Lexus.
+  const ix = {
+    auto: { BMW: { id: '1', famiglie: [
+      { id: 'a', nome: 'X5', gen: [{ id: 'a', nome: 'X5' }] },
+      { id: 'b', nome: 'Serie 3', gen: [{ id: 'b', nome: 'Serie 3' }] },
+    ] }, 'Citroen': { id: '2', famiglie: [
+      { id: 'c', nome: 'AX', gen: [{ id: 'c', nome: 'AX' }] },
+      { id: 'd', nome: 'C1', gen: [{ id: 'd', nome: 'C1' }] },
+    ] } },
+    moto: {},
+  };
+  assert.strictEqual(risolviNodo('auto', 'BMW', 'X5 M', { indice: ix }).famigliaNome, 'X5',
+    '«X5 | M» cade su un confine di token: e\' la famiglia giusta');
+  // E i tagli dentro una parola restano fuori: l'Axel non e' la AX, la C15 non e' la C1.
+  for (const q of ['Axel', 'C15']) {
+    assert.strictEqual(risolviNodo('auto', 'Citroen', q, { indice: ix }).come, 'marca',
+      `"${q}" non deve agganciare una famiglia tagliando dentro una parola`);
+  }
+});

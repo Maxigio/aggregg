@@ -165,3 +165,23 @@ test('il confine vive nella RADICE: makeModelResolver non salda le cifre', () =>
   assert.strictEqual(r('CRF 250R'), 'CRF 250', 'le lettere si estendono');
   assert.strictEqual(r('CRF 50'), 'CRF 50', 'l\'esatto resta esatto');
 });
+
+test('le famiglie dal nome corto non sono irraggiungibili, ma il taglio cade su un confine', () => {
+  // Il vecchio taglio a tre caratteri era un modo grezzo di dire «non agganciare troppo
+  // facilmente», scritto quando il confine non esisteva: buttava via ogni candidato il cui
+  // nome normalizzato ne ha due (X5, IS, TT, V7, SL) e con loro 94 nomi auto e 13 moto del
+  // menu, che finivano a cercare TUTTA la marca. Ora il lavoro lo fa il confine, preteso su
+  // entrambi i fronti. Misurato: 0 differenze sulle 14.155 query da menu, 0 scambi fra due
+  // modelli, 0 perdite.
+  const { makeModelResolver } = require('../backend/scrapers/brand-match');
+  const bmw = ['X5', 'X5 M Competition', 'Serie 3'].map(n => ({ name: n, value: n }));
+  const r = makeModelResolver(bmw);
+  assert.strictEqual(r('X5 M'), 'X5', 'il taglio «X5 | M» cade su un confine: e\' una parentela');
+  assert.strictEqual(r('X5'), 'X5', 'l\'esatto resta esatto');
+  // E i tagli DENTRO una parola restano rifiutati: sono i falsi.
+  const alfa = [{ name: 'GT', value: 'GT' }, { name: 'Giulia', value: 'Giulia' }];
+  assert.strictEqual(makeModelResolver(alfa)('GTV'), null, 'la GTV non e\' la GT: «GT|V» taglia dentro una parola');
+  const citroen = [{ name: 'AX', value: 'AX' }, { name: 'C1', value: 'C1' }];
+  assert.strictEqual(makeModelResolver(citroen)('Axel'), null, 'l\'Axel non e\' la AX');
+  assert.strictEqual(makeModelResolver(citroen)('C15'), null, 'la C15 non e\' la C1');
+});

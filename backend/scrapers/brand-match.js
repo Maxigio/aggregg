@@ -118,7 +118,13 @@ function makeModelResolver(candidates) {
     if (exact.has(q)) return exact.get(q);
     if (q.length >= 3) {
       const cont = items.filter(c => {
-        if (c.n.length < 3) return false;
+        if (c.n.length < 2) return false;
+        // Un candidato dal nome corto (X5, IS, TT, V7) non e' irraggiungibile: si pretende
+        // che il taglio cada su un CONFINE DI TOKEN della query, che e' il lavoro che il
+        // vecchio taglio a tre caratteri faceva alla cieca. Misurato sul catalogo: 0
+        // differenze sulle 14.155 query da menu (l'esatto assorbe), 0 scambi fra due
+        // modelli, 0 perdite — solo query che prima cadevano a marca e ora trovano casa.
+        if (c.n.length < 3 && !confiniDi(query).has(c.n)) return false;
         if (c.n.startsWith(q)) return taglioValido(c.raw, c.n, q);   // la query dentro il candidato
         if (q.startsWith(c.n)) return taglioValido(query, q, c.n);   // il candidato dentro la query
         return false;

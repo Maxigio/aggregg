@@ -25,7 +25,7 @@
  * sarebbe un secondo modo di sbagliare.
  */
 const path = require('path');
-const { makeResolver, makeModelResolver, loadAliasMap, norm, taglioValido } = require('./brand-match');
+const { makeResolver, makeModelResolver, loadAliasMap, norm, taglioValido, confiniDi } = require('./brand-match');
 
 /**
  * Le equivalenze scritte a mano fra due nomi della stessa moto (data/ponte-rinominati.json).
@@ -187,7 +187,23 @@ function risolviNodo(tipo, marca, modello, opts = {}) {
     // sono materia da ponte curato, non da prefisso: due numeri diversi restano due moto.
     const pref = fam.filter(f => {
       const n = norm(f.nome);
-      if (n.length < 3) return false;
+      if (n.length < 2) return false;
+      /**
+       * LE FAMIGLIE DAL NOME CORTO NON SONO IRRAGGIUNGIBILI. Il taglio a tre caratteri era
+       * un modo grezzo di dire «non agganciare troppo facilmente», scritto quando il
+       * confine non esisteva: ma buttava via 141 famiglie auto e 26 moto il cui nome
+       * normalizzato ne ha due — X5, IS, RX, SL, V7, X9 — e con loro 94 nomi del menu auto
+       * e 13 moto, che finivano a cercare TUTTA la marca. «Lexus IS 250» pescava in tutta
+       * la Lexus, «BMW X5 M» in tutta la BMW.
+       *
+       * Il lavoro che quel taglio faceva alla cieca lo fa ora il CONFINE, e per i nomi
+       * corti si pretende su entrambi i fronti: il taglio deve cadere su un confine di
+       * token del nome cercato. «X5 | M», «IS | 250», «C4 | Picasso» passano; «GT|V»,
+       * «AX|el», «C1|5», «TT|S» no — e sono proprio i falsi (Alfa GTV non e' la GT,
+       * l'Axel non e' la AX, la C15 non e' la C1). Misurato: 118 nomi recuperati, zero
+       * agganci che tagliano dentro una parola.
+       */
+      if (n.length < 3 && !confiniDi(modello).has(n)) return false;
       if (n.startsWith(cercato)) return taglioValido(f.nome, n, cercato);
       if (cercato.startsWith(n)) return taglioValido(modello, cercato, n);
       return false;
