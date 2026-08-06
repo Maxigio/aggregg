@@ -167,13 +167,21 @@ const calzate = (marca, modello, anno) => {
     const html = await getHtml(p);
     const righe = calzateDa(html);
     const conMisura = righe.filter(r => r.misura).length;
+    const gen = generazioniDa(html);
     return {
       marca, modello, anno: Number(anno) || null,
       url: 'https://' + HOST + p,
-      generazioni: generazioniDa(html),
+      generazioni: gen,
       calzate: righe,
       totale: righe.length,
       conMisura,
+      // PAGINA 200 CON I PANNELLI E ZERO RIGHE = il markup e' cambiato, non il veicolo che
+      // non ha calzate. Un modello che Wheel-Size non ha risponde 404 (e getHtml lancia):
+      // qui il vuoto e' quasi sempre il parser, e senza questo campo usciva identico a
+      // «nessuna calzata a catalogo». Le classi lette sono `data-(tire|rim|...)`.
+      sospetto: (!righe.length && gen.length)
+        ? 'la pagina ha le generazioni ma nessuna riga leggibile: le colonne di Wheel-Size possono essere cambiate'
+        : null,
       // La nota che spiegava la copertura ("in chiaro su N righe su M... distanza fori,
       // centraggio e coppia di serraggio non disponibili") e' stata tolta: raccontava i
       // limiti della fonte a chi voleva solo le misure. `conMisura` e `totale` restano nel

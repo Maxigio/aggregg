@@ -924,6 +924,11 @@ async function loadModels(tipo, marca) {
   if (!modelCache[key]) {
     try {
       const res = await fetch(`/api/models?tipo=${encodeURIComponent(tipo)}&marca=${encodeURIComponent(marca)}`);
+      // Stessa regola del catch qui sotto, e per lo stesso motivo: un 401 (sessione
+      // scaduta), un 429 o un 503 rispondono un JSON SENZA `modelli`, e il `|| []`
+      // cacheava «questa marca non ha modelli» per tutta la sessione. Non e' un catalogo
+      // vuoto: e' una risposta che non abbiamo ottenuto. Stesso guard di populateMarca.
+      if (!res.ok) return [];
       const data = await res.json();
       modelCache[key] = data.modelli || [];
     } catch (_) {
@@ -2592,12 +2597,17 @@ async function enrichMotoRow(url) {
   try {
     const j = await fetch(`/api/detail?url=${encodeURIComponent(url)}`).then(x => x.json());
     if (j.ok && j.detail) {
+      // QUANTI CAMPI HA PORTATO DAVVERO. `{ok:true, detail:{...tutto null}}` e' la risposta
+      // che il parser da' su una pagina che non ha detto niente: marcandola comunque
+      // «arricchita», l'annuncio non veniva PIU' richiesto — nemmeno quando la fonte fosse
+      // tornata a rispondere, e il TTL breve del dettaglio diventava inutile.
+      let portati = 0;
       Object.keys(j.detail).forEach(k => {
         const v = j.detail[k]; if (v == null) return;
-        if (k === 'immagini') { if (Array.isArray(v) && v.length) r.immagini = v; }  // galleria piena rimpiazza la cover
-        else if (r[k] == null) r[k] = v;
+        if (k === 'immagini') { if (Array.isArray(v) && v.length) { r.immagini = v; portati++; } }  // galleria piena rimpiazza la cover
+        else if (r[k] == null) { r[k] = v; portati++; }
       });
-      r._enriched = true;   // solo a merge riuscito: un fetch fallito resta ri-tentabile dall'apertura dettaglio
+      if (portati) r._enriched = true;   // solo a merge riuscito: un fetch fallito resta ri-tentabile
     }
   } catch (_) {}
   updateRowThumb(url);

@@ -30,18 +30,43 @@ function filePath() {
   return path.join(__dirname, '..', 'data', FILE);
 }
 
+/**
+ * UN FILE ILLEGGIBILE NON E' UN FILE ASSENTE — la regola gia' scritta in competitor.js:50,
+ * che qui mancava. Rispondendo `[]` a entrambi, il pannello scriveva «Nessuna ricerca
+ * salvata» su un elenco che c'era, e il gesto istintivo — risalvare la ricerca — chiamava
+ * saveAll con quella sola voce: il file si riscriveva DA SOLO e le altre ricerche, con
+ * tutto il loro storico (`seen`, `alerted`, avvisi), sparivano per sempre.
+ *
+ * Ora l'elenco resta vuoto (non si inventa niente) ma il guasto ha un nome, e chi SCRIVE
+ * si ferma invece di sovrascrivere cio' che non e' riuscito a leggere.
+ */
 function loadAll() {
+  const p = filePath();
+  if (!fs.existsSync(p)) { loadAll.ultimoErrore = null; return []; }
   try {
-    const raw = fs.readFileSync(filePath(), 'utf8');
+    const raw = fs.readFileSync(p, 'utf8');
     const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return [];
+    if (!Array.isArray(arr)) throw new Error('il file non contiene un elenco');
+    loadAll.ultimoErrore = null;
     // Conversione delle chiavi vecchie (URL → id stabile), una volta sola: si riscrive
     // solo se qualcosa e' cambiato davvero. Vedi `migraChiavi`.
     let tocco = false;
     for (const s of arr) if (migraChiavi(s)) tocco = true;
     if (tocco) { try { saveAll(arr); } catch (_) {} }
     return arr;
-  } catch (_) { return []; }
+  } catch (e) {
+    loadAll.ultimoErrore = e.message;
+    console.error(`[saved] elenco illeggibile (${e.message}) — NON si sovrascrive da solo: ${p}`);
+    return [];
+  }
+}
+/** Chi sta per SCRIVERE lo chiama prima: su un elenco illeggibile si rifiuta di riscrivere. */
+function esigiLeggibile() {
+  if (loadAll.ultimoErrore) {
+    const e = new Error(`elenco delle ricerche salvate illeggibile (${loadAll.ultimoErrore}): non lo sovrascrivo`);
+    e.code = 'ELENCO_ILLEGGIBILE';
+    throw e;
+  }
 }
 
 function saveAll(list) {
@@ -82,6 +107,7 @@ function listSaved() {
 
 function addSaved({ label, params }) {
   const list = loadAll();
+  esigiLeggibile();   // mai riscrivere un elenco che non si e' riusciti a leggere
   const s = {
     id: newId(),
     label: (label && String(label).trim()) || defaultLabel(params),
@@ -100,6 +126,7 @@ function addSaved({ label, params }) {
 
 function removeSaved(id) {
   const list = loadAll();
+  esigiLeggibile();
   const next = list.filter(s => s.id !== id);
   if (next.length === list.length) return false;
   saveAll(next);
@@ -123,6 +150,7 @@ function getSaved(id) { return loadAll().find(s => s.id === id) || null; }
  */
 function markRead(id, url) {
   const list = loadAll();
+  esigiLeggibile();
   const s = list.find(x => x.id === id);
   if (!s) return false;
   const coda = s.alerts || [];
@@ -302,6 +330,7 @@ function migraChiavi(s) {
  */
 function recordCheck(id, results, { extraSeen = {}, removedUrls = [], fontiMute = [] } = {}) {
   const list = loadAll();
+  esigiLeggibile();
   const s = list.find(x => x.id === id);
   if (!s) return [];
 
@@ -352,8 +381,11 @@ function recordCheck(id, results, { extraSeen = {}, removedUrls = [], fontiMute 
   return alerts;
 }
 
+/** Il perche' l'elenco non si e' letto (null se sta bene): la rotta lo porta a schermo. */
+const ultimoErroreElenco = () => loadAll.ultimoErrore || null;
+
 module.exports = {
-  listSaved, addSaved, removeSaved, getSaved, markRead,
+  listSaved, addSaved, removeSaved, getSaved, markRead, ultimoErroreElenco,
   computeAlerts, recordCheck, fingerprint,
   _const: { FLOOR_ABS, FLOOR_PCT, DROP_ABS, DROP_PCT },
 };

@@ -21,16 +21,29 @@ async function lookupCmsnl(oenRaw) {
     const page = await context.newPage();
     const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     const status = resp ? resp.status() : 0;
+    let vistaChallenge = false;     // vedi oem-lookup: le challenge JS viaggiano su 403
     for (let i = 0; i < 8; i++) {   // challenge CF non-interattiva → si risolve da sola
       const t = await page.title().catch(() => '');
       if (!/just a moment|attention required|attendere|un momento|verifica/i.test(t)) break;
+      vistaChallenge = true;
       await page.waitForTimeout(2000);
     }
     const title = await page.title().catch(() => '');
-    if (/just a moment|attention required|attendere|un momento|verifica/i.test(title) || status === 403) {
+    const ancoraChallenge = /just a moment|attention required|attendere|un momento|verifica/i.test(title);
+    if (ancoraChallenge || (status === 403 && !vistaChallenge)) {
       return { oen, articoli: [], count: 0, blocked: true, error: 'Cloudflare ha bloccato la pagina' };
     }
     if (status === 404) return { oen, articoli: [], count: 0 };   // codice non a catalogo
+    /**
+     * UN GUASTO NON E' UN CODICE NON A CATALOGO. Prima 500/503/429 non agganciavano nessun
+     * ramo: si proseguiva, il Product JSON-LD non c'era, e si tornava il vuoto pulito —
+     * che la scheda legge come «il catalogo non ha il pezzo» e che, con anche un solo
+     * annuncio Subito/eBay accanto, restava in cache un'ora. La guardia gemella esisteva
+     * gia' in Autodoc (`visti`/`sospetto`) e in bilstein: CMSNL era l'unica senza.
+     */
+    if (status && status !== 200) {
+      return { oen, articoli: [], count: 0, error: `CMSNL ha risposto HTTP ${status}` };
+    }
 
     // attesa idratazione: la sezione "Modelli di adattamento" e la galleria arrivano dal
     // gateway GraphQL dopo il domcontentloaded (verificato col probe). I fits si caricano
@@ -68,7 +81,13 @@ async function lookupCmsnl(oenRaw) {
       const galImg = document.querySelector('main img[src*="cmsnl"], main img[src*="product"], [class*=gallery] img')?.getAttribute('src') || null;
       return { prod, codiceCmsnl, spedizione, fits, fitsTotale, galImg };
     });
-    if (!p || !p.prod || !p.prod.name) return { oen, articoli: [], count: 0 };   // niente Product → non trovato
+    // Pagina 200 SENZA Product JSON-LD: puo' essere un codice non a catalogo, ma anche il
+    // markup cambiato. Non si puo' dire, e dirlo comunque significherebbe far passare una
+    // fonte rotta per un catalogo che non ha il pezzo: si dichiara il dubbio, come Autodoc.
+    if (!p || !p.prod || !p.prod.name) {
+      return { oen, articoli: [], count: 0,
+        sospetto: 'pagina servita senza Product JSON-LD: prima di dire "non a catalogo" va guardato il markup di CMSNL' };
+    }
 
     const prod = p.prod;
     const prezzo = (prod.offers && typeof prod.offers.price === 'number') ? prod.offers.price

@@ -139,7 +139,16 @@ async function runBootstrap(opts = {}) {
         const info  = session.inspectSession(fresh);
         const hours = info.expiresIn != null ? Math.floor(info.expiresIn / 3600) : '?';
         log(`Cookie DataDome valido per ~${hours}h.`);
-        session.saveStorageState(fresh);
+        // SALVATO DAVVERO? `saveStorageState` il suo esito lo dice (torna false su disco
+        // pieno, cartella di sola lettura, volume smontato) e qui non lo guardava nessuno:
+        // il pannello scriveva «Sessione aggiornata» e si toglieva il blocco per una
+        // sessione che su disco non c'era — il CAPTCHA appena risolto buttato, e la
+        // prossima ricerca di nuovo bloccata senza che l'utente capisse perche'.
+        if (!session.saveStorageState(fresh)) {
+          log('SALVATAGGIO FALLITO: la sessione non e\' finita su disco, il blocco resta.');
+          result = { ok: false, reason: 'save_failed', timeMs: Date.now() - t0 };
+          break;
+        }
         session.clearSubitoBlocked();
         result = { ok: true, timeMs: Date.now() - t0, expiresInHours: hours };
         break;

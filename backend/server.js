@@ -775,11 +775,15 @@ app.get('/api/models', async (req, res) => {
   // (`models/<brand>/Used`, cache 12h) col catalogo: riempie lo slug mancante per
   // match esatto-normalizzato (catalogo↔API, NON testo utente) e aggiunge i modelli
   // assenti dal catalogo. Così la force-select copre tutto Moto.it con slug reali.
+  let motoitKo = null;
   if (tipo === 'moto') {
     const brandSlug = (entry && entry.motoit && entry.motoit.brandSlug) || resolveMotoitSlug(marca.trim()) || null;
     if (brandSlug) {
       try {
-        const apiModels = await getBrandModels(brandSlug);   // [{name, slug}]
+        // `rilancia`: senza, un KO di rete tornava [] e la tendina usciva PIU' CORTA con un
+        // 200 — chi sceglie da un elenco monco non ha modo di accorgersene. Il KO ora si
+        // dichiara nella risposta (`fonteMotoitKo`), i modelli base restano.
+        const apiModels = await getBrandModels(brandSlug, { rilancia: true });   // [{name, slug}]
         const byName = new Map(modelli.map(m => [normName(m.nome), m]));
         for (const am of apiModels) {
           const hit = byName.get(normName(am.name));
@@ -790,11 +794,12 @@ app.get('/api/models', async (req, res) => {
           }
         }
         modelli.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
-      } catch (e) { console.warn('[api/models] merge Moto.it KO:', e.message); }
+      } catch (e) { console.warn('[api/models] merge Moto.it KO:', e.message); motoitKo = e.message || 'moto.it non raggiungibile'; }
     }
   }
 
-  res.json({ modelli, sites: (entry && entry.sites) || (tipo === 'moto' ? ['motoit'] : []) });
+  res.json({ modelli, sites: (entry && entry.sites) || (tipo === 'moto' ? ['motoit'] : []),
+    ...(motoitKo ? { fonteMotoitKo: motoitKo } : {}) });
 });
 
 // F43 — Versioni (allestimenti) Moto.it di un modello: per la 2ª force-select (solo moto).
@@ -2143,23 +2148,39 @@ const checkSaved    = (id)   => withSavedLock(() => _checkSavedOne(saved.getSave
 const checkAllSaved = (opts) => withSavedLock(() => _checkAll(opts));
 
 // CRUD
-app.get('/api/saved', (req, res) => res.json({ saved: saved.listSaved() }));
+/**
+ * Un elenco ILLEGGIBILE non e' un elenco vuoto: le scritture si rifiutano (503) invece di
+ * riscrivere il file con la sola voce nuova, e la lettura dichiara il guasto — senza,
+ * «Nessuna ricerca salvata» era un'affermazione sui dati fatta su un file rotto, e il
+ * gesto istintivo (risalvare) rendeva la perdita definitiva.
+ */
+const saved503 = (res, e) => {
+  if (e && e.code === 'ELENCO_ILLEGGIBILE') { res.status(503).json({ error: e.message }); return true; }
+  return false;
+};
+app.get('/api/saved', (req, res) => {
+  const lista = saved.listSaved();
+  res.json({ saved: lista, erroreElenco: saved.ultimoErroreElenco() || null });
+});
 
 app.post('/api/saved', express.json(), (req, res) => {
   const { label, params } = req.body || {};
   if (!params || !params.tipo || !params.marca) {
     return res.status(400).json({ error: 'params con tipo+marca obbligatori' });
   }
-  res.json({ saved: saved.addSaved({ label, params }) });
+  try { res.json({ saved: saved.addSaved({ label, params }) }); }
+  catch (e) { if (!saved503(res, e)) throw e; }
 });
 
 app.delete('/api/saved/:id', (req, res) => {
-  res.json({ ok: saved.removeSaved(req.params.id) });
+  try { res.json({ ok: saved.removeSaved(req.params.id) }); }
+  catch (e) { if (!saved503(res, e)) throw e; }
 });
 
 // `?url=` segna QUELL'avviso; senza, segna tutta la coda (il bottone "segna tutti letti").
 app.post('/api/saved/:id/read', (req, res) => {
-  res.json({ ok: saved.markRead(req.params.id, String(req.query.url || '') || null) });
+  try { res.json({ ok: saved.markRead(req.params.id, String(req.query.url || '') || null) }); }
+  catch (e) { if (!saved503(res, e)) throw e; }
 });
 
 // Controlla ora: una (?id=) o tutte. Restituisce gli esiti + la lista aggiornata.

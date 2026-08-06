@@ -1193,3 +1193,57 @@ test('il DMG e\' staccato: niente aggiornamento automatico agganciato', () => {
     'build.mac.target deve essere esplicito: senza, il default di electron-builder rifa\' il DMG');
   assert.ok(!JSON.stringify(macTarget).includes('dmg'), 'il target dmg e\' tornato fra i mac target');
 });
+
+// ─── Un guasto tiene il suo nome anche nelle zone che nessuno aveva guardato ──
+test('saved: un elenco illeggibile non e\' un elenco vuoto, e non si riscrive da solo', () => {
+  // La forma gia' scritta in competitor.js:50, che qui mancava: rispondendo [] a entrambi,
+  // il pannello diceva «Nessuna ricerca salvata» su un file che c'era, e il gesto istintivo
+  // — risalvare — chiamava saveAll con quella sola voce. Le altre ricerche, con tutto il
+  // loro storico (seen, alerted, avvisi), sparivano per sempre.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-saved-ko-'));
+  const vecchio = process.env.USER_DATA_PATH;
+  process.env.USER_DATA_PATH = dir;
+  delete require.cache[require.resolve('../backend/saved')];
+  const saved = require('../backend/saved');
+  const file = path.join(dir, 'saved-searches.json');
+  try {
+    saved.addSaved({ label: 'Golf', params: { tipo: 'auto', marca: 'Volkswagen' } });
+    saved.addSaved({ label: 'Panda', params: { tipo: 'auto', marca: 'Fiat' } });
+    assert.strictEqual(saved.listSaved().length, 2);
+    assert.strictEqual(saved.ultimoErroreElenco(), null);
+
+    fs.writeFileSync(file, '{ non e" json ');
+    const prima = fs.readFileSync(file);
+    assert.deepStrictEqual(saved.listSaved(), [], 'non si inventa niente: l\'elenco resta vuoto');
+    assert.ok(saved.ultimoErroreElenco(), 'ma il guasto ha un nome, e la rotta lo porta a schermo');
+    for (const scrivi of [
+      () => saved.addSaved({ label: 'X', params: { tipo: 'auto', marca: 'Audi' } }),
+      () => saved.removeSaved('qualunque'),
+      () => saved.markRead('qualunque'),
+    ]) {
+      assert.throws(scrivi, e => e.code === 'ELENCO_ILLEGGIBILE', 'chi scrive deve rifiutarsi');
+    }
+    assert.strictEqual(Buffer.compare(prima, fs.readFileSync(file)), 0, 'il file non e\' stato toccato');
+
+    // Risanato: si riprende come prima, senza residui.
+    fs.writeFileSync(file, JSON.stringify([{ id: 'a', label: 'Golf', params: {}, alerts: [] }], null, 2));
+    assert.strictEqual(saved.listSaved().length, 1);
+    assert.strictEqual(saved.ultimoErroreElenco(), null);
+    saved.addSaved({ label: 'Y', params: { tipo: 'auto', marca: 'BMW' } });
+    assert.strictEqual(saved.listSaved().length, 2);
+  } finally {
+    if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
+    delete require.cache[require.resolve('../backend/saved')];
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('l\'arricchimento che non porta niente non marca l\'annuncio come arricchito', () => {
+  // `{ok:true, detail:{...tutto null}}` e' cio' che il parser da' su una pagina che non ha
+  // detto niente: marcandola «arricchita», l'annuncio non veniva PIU' richiesto nemmeno
+  // quando la fonte tornava a rispondere, e il TTL breve del dettaglio diventava inutile.
+  const corpo = corpoDi(APP, 'async function enrichMotoRow(');
+  assert.ok(/let portati = 0/.test(corpo), 'il merge non conta piu\' i campi portati');
+  assert.ok(/if \(portati\) r\._enriched = true/.test(corpo),
+    '_enriched si mette solo se qualcosa e\' arrivato davvero');
+});

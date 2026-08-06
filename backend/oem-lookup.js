@@ -91,13 +91,21 @@ async function lookupOem(oenRaw) {
     const status = resp ? resp.status() : 0;
 
     // attesa Cloudflare (challenge JS non-interattiva → si risolve da sola con stealth)
+    // `vistaChallenge` serve al controllo qui sotto: le challenge JS viaggiano su HTTP 403,
+    // e `status` e' la fotografia della PRIMA risposta — quella della challenge stessa, mai
+    // riletta. Con `|| status === 403` nudo, i sedici secondi di attesa esistevano per un
+    // esito che il controllo poi buttava via: challenge risolta, listing nel DOM, e la fonte
+    // dichiarata 'blocked' lo stesso.
+    let vistaChallenge = false;
     for (let i = 0; i < 8; i++) {
       const t = await page.title().catch(() => '');
       if (!/just a moment|attendere|un momento|verifica/i.test(t)) break;
+      vistaChallenge = true;
       await page.waitForTimeout(2000);
     }
     const title = await page.title().catch(() => '');
-    if (/just a moment|attendere|un momento|verifica/i.test(title) || status === 403) {   // stessa regex del wait-loop
+    const ancoraChallenge = /just a moment|attendere|un momento|verifica/i.test(title);   // stessa regex del wait-loop
+    if (ancoraChallenge || (status === 403 && !vistaChallenge)) {
       return { oen, articoli: [], count: 0, blocked: true, error: 'Cloudflare ha bloccato la pagina' };
     }
 
