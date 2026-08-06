@@ -2,7 +2,7 @@
   "_perche": "IL PONTE DEI NOMI RINOMINATI — scritto a mano, non dedotto. Il confine sui prefissi (commit 0db52fe) vieta i tagli che spezzano un numero, perche' due numeri diversi non sono padre e figlio: e' la regola che impedisce a 'CRF 110' di agganciare l'Africa Twin CRF1100L e a 'FZ 600' di finire nel secchio della FZ6. Ma alcuni modelli hanno DUE NOMI per la stessa moto, e quella regola li separa: qui si dichiarano uno per uno. NON e' un catalogo sorgente: i cataloghi in data/ non si modificano, questo e' il file nuovo dove vivono le correzioni. Ogni voce porta il PERCHE', cosi' chi rilegge puo' dare torto a chi l'ha scritta.",
   "_come": "Consultato da backend/scrapers/subito-nodo.js PRIMA del confronto per prefisso. `cercato` e `famiglia` si confrontano normalizzati (brand-match.norm): spazi e punteggiatura non contano.",
   "_misura": "Sui cataloghi del 2026-08-06, il confine faceva cadere a livello marca 29 nomi del menu. Di quei 29, 17 erano il difetto che il confine esiste per chiudere (CRF 110 vs CRF1100L, CB 1 che agganciava sei famiglie, R 11 che ne agganciava dieci): restano cosi'. I 12 qui sotto sono equivalenze vere.",
-  "_dubbi": "ESCLUSI di proposito, da decidere: Yamaha 'FZ-10' verso 'FZ1' (sono due moto diverse, non una rinominata) e Royal Alloy 'GT2' verso 'GT 200' (equivalenza plausibile ma non verificata sulla fonte).",
+  "_dubbi": "I due casi lasciati in sospeso sono stati verificati sulle fonti il 2026-08-06, e hanno dato due risposte opposte. (1) Yamaha 'FZ-10': NON e' la FZ1 — la FZ1 e' del 2001-2015, la MT-10 l'ha SOSTITUITA nel 2016 — quindi il vecchio aggancio per prefisso era proprio il difetto. Ma FZ-10 e' il nome nordamericano della MT-10: Yamaha USA ha adottato la nomenclatura europea dal model year 2018, e FZ-10/FZ-09/FZ-07 sono diventate MT-10/MT-09/MT-07. Subito quelle famiglie le ha, quindi le tre equivalenze sono nel ponte qui sotto (fonti: Cycle World e Roadracing World, novembre 2017). (2) Royal Alloy 'GT2': NON e' la 'GT 200'. GT2 e' una serie a se' (il costruttore elenca 'GT Series' e 'GT2 Series' separate) e la GT2 125 monta 278 cc: mapparla sulla GT 200 avrebbe mostrato un altro scooter. Resta a livello marca, che e' la risposta onesta.",
   "moto": {
     "aprilia": [
       { "cercato": "MXV 450", "famiglia": "MXV 4.5", "perche": "stessa moto: il catalogo Subito scrive la cilindrata in litri (4.5 = 450 cc)" },
@@ -17,7 +17,10 @@
     ],
     "yamaha": [
       { "cercato": "XVZ 12", "famiglia": "XVZ 1200", "perche": "stessa moto: nome troncato alla cilindrata in centinaia" },
-      { "cercato": "XVZ 13", "famiglia": "XVZ 1300", "perche": "stessa moto: nome troncato alla cilindrata in centinaia" }
+      { "cercato": "XVZ 13", "famiglia": "XVZ 1300", "perche": "stessa moto: nome troncato alla cilindrata in centinaia" },
+      { "cercato": "FZ-07", "famiglia": "MT-07", "perche": "stessa moto: Yamaha USA ha adottato la nomenclatura europea dal model year 2018, FZ-07 → MT-07 (verificato 2026-08-06)" },
+      { "cercato": "FZ-09", "famiglia": "MT-09", "perche": "stessa moto: rinomina FZ→MT del 2018 (verificato 2026-08-06)" },
+      { "cercato": "FZ-10", "famiglia": "MT-10", "perche": "stessa moto: FZ-10 e' il nome nordamericano della MT-10, rinominata nel 2018. NON e' la FZ1, che e' un'altra moto (2001-2015) e che il vecchio prefisso agganciava per sbaglio (verificato 2026-08-06)" }
     ],
     "moto guzzi": [
       { "cercato": "V 850", "famiglia": "V85", "perche": "stessa moto: la V85 e' una 850" }

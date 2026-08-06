@@ -218,9 +218,24 @@ test('il ponte dei rinominati recupera i due nomi della stessa moto, e non riapr
       assert.ok(r.famigliaIds && r.famigliaIds.length, `${marca} "${v.cercato}" senza famiglia`);
     }
   }
+  // Le tre Yamaha rinominate FZ→MT (2018) devono agganciare la famiglia MT, non la FZ1:
+  // «FZ-10» e' il nome nordamericano della MT-10, mentre la FZ1 e' un'altra moto
+  // (2001-2015) che il vecchio prefisso agganciava per sbaglio. Verificato sulle fonti.
+  for (const [q, atteso] of [['FZ-07', 'MT-07'], ['FZ-09', 'MT-09'], ['FZ-10', 'MT-10']]) {
+    const r = risolviNodo('moto', 'Yamaha', q);
+    assert.strictEqual(r && r.famigliaNome, atteso, `Yamaha "${q}" deve agganciare ${atteso}`);
+  }
+  // E le FZ vere restano loro stesse.
+  assert.strictEqual(risolviNodo('moto', 'Yamaha', 'FZ1').famigliaNome, 'FZ1');
+  assert.strictEqual(risolviNodo('moto', 'Yamaha', 'FZ6').famigliaNome, 'FZ6');
+
   // E il difetto che il confine chiude NON si riapre: due numeri diversi restano due moto.
   for (const [ma, mo] of [['Honda', 'CRF 110'], ['Honda', 'CB 1'], ['BMW', 'R 11'],
-    ['Yamaha', 'FZ 600'], ['Aprilia', 'Pegaso 500'], ['Husqvarna', 'CR 500']]) {
+    ['Yamaha', 'FZ 600'], ['Aprilia', 'Pegaso 500'], ['Husqvarna', 'CR 500'],
+    // Royal Alloy GT2 e' una SERIE a se' (il costruttore elenca «GT Series» e «GT2 Series»
+    // separate, e la GT2 125 monta 278 cc): mapparla su «GT 200» mostrerebbe un altro
+    // scooter. Verificato sulle fonti: resta a livello marca, che e' la risposta onesta.
+    ['Royal Alloy', 'GT2']]) {
     const r = risolviNodo('moto', ma, mo);
     assert.strictEqual(r && r.come, 'marca',
       `${ma} "${mo}" e' tornato ad agganciare una famiglia spezzando un numero`);
