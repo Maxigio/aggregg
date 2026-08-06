@@ -356,6 +356,14 @@ async function postLogin(req, res) {
   // dietro Funnel ogni utente è 127.0.0.1 → lockout globale.
   const ip = clientIp(req);
   const ora = Date.now();
+  // La mappa si pota da se', come fa il limitatore comune: una voce il cui blocco e'
+  // finito E i cui fallimenti sono decaduti non dice piu' niente, e tenerla e' solo
+  // memoria che cresce a ogni indirizzo che sbaglia una password.
+  if (loginAttempts.size > 500) {
+    for (const [k, v] of loginAttempts) {
+      if (v.until <= ora && ora - (v.last || 0) >= LOCK_DECAY_MS) loginAttempts.delete(k);
+    }
+  }
   const rec = loginAttempts.get(ip);
   if (rec && rec.until > ora) return res.redirect(302, '/login?err=locked');   // lockout
 

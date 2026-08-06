@@ -9,6 +9,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { _leggiRisultato } = require('../backend/targa');
+const fs = require('node:fs');
+const path = require('node:path');
 
 test('legge le coppie da una tabella', () => {
   const html = `<table><tr><th>Targa</th><td>AB123CD</td></tr>
@@ -80,4 +82,21 @@ test('una tabella di sola impaginazione non diventa dati', () => {
   const { tabelle, coppie } = _leggiRisultato('<table><tr><td>a</td><td>b</td><td>c</td></tr><tr><td>x</td><td>y</td></tr></table>');
   assert.strictEqual(tabelle.length, 0);
   assert.deepStrictEqual(coppie, [['x', 'y']]);
+});
+
+test('la sfida si consuma PRIMA di partire: due invii insieme non bussano due volte al portale', async () => {
+  // Il portale rigenera il CAPTCHA a ogni invio, quindi la sfida vale una volta sola — e
+  // la cancellazione stava DOPO l'await: due invii concorrenti (doppio clic su «Verifica»)
+  // passavano entrambi il `sfide.get(id)` e mandavano DUE richieste ad ACI con lo stesso
+  // CAPTCHA. La seconda non poteva che fallire, e intanto si bussava due volte per una
+  // verifica sola. E' la stessa forma di `throttle` e della sessione: chi ha osservato
+  // prima non decide dopo.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'backend', 'targa.js'), 'utf8')
+    .replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
+  const corpo = src.slice(src.indexOf('async function verifica('));
+  const consuma = corpo.indexOf('sfide.delete(id)');
+  const parte = corpo.indexOf('await chiamata(s.azione');
+  assert.ok(consuma > 0 && parte > 0, 'verifica() non ha piu\' la forma attesa');
+  assert.ok(consuma < parte,
+    'la sfida va consumata PRIMA della chiamata al portale: dopo, due invii concorrenti passano entrambi');
 });

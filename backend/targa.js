@@ -257,10 +257,19 @@ async function verifica(id, { tipo, targa, captcha }) {
     tipoVeicolo: v, targa: t, captcha: c, ricercaUltimaRevisioneEffettuata: 'Ricerca',
   }).toString();
 
-  let r = await chiamata(s.azione, { metodo: 'POST', cookie: s.cookie, corpo, referer: `https://${HOST}${PAGINA}` });
-  // La sfida vale una volta sola: il portale rigenera il CAPTCHA a ogni invio, e tenerla
-  // aperta darebbe l'illusione di poter ritentare con gli stessi caratteri.
+  /**
+   * LA SFIDA SI CONSUMA PRIMA DI PARTIRE, non dopo.
+   *
+   * Il portale rigenera il CAPTCHA a ogni invio, quindi la sfida vale una volta sola — e
+   * la cancellazione stava DOPO l'await: due invii concorrenti (un doppio clic su
+   * "Verifica", o l'invio del form mentre il bottone e' ancora premuto) passavano
+   * entrambi il `sfide.get(id)` e mandavano DUE richieste al portale ACI con lo stesso
+   * CAPTCHA. La seconda non poteva che fallire, e intanto si bussava due volte a un
+   * portale pubblico per una sola verifica chiesta. Consumandola qui, il secondo trova
+   * "sfida scaduta" senza toccare la rete.
+   */
   sfide.delete(id);
+  let r = await chiamata(s.azione, { metodo: 'POST', cookie: s.cookie, corpo, referer: `https://${HOST}${PAGINA}` });
   // IL 302 VA SEGUITO. Il portale risponde spesso con un redirect alla pagina-risultato:
   // accettarlo come esito e leggere il corpo del 302 (vuoto, o "Redirecting...") faceva
   // uscire "non c'era niente da leggere" DOPO aver bruciato il CAPTCHA che l'utente aveva
