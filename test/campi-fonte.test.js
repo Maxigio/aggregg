@@ -12,6 +12,7 @@ const assert = require('node:assert');
 const { _mapAd } = require('../backend/scrapers/subito-api');
 const { _parseMotoit } = require('../backend/scrapers/detail');
 const { _testoPulito, _mapListing } = require('../backend/scrapers/autoscout-graphql');
+const { _mapCards } = require('../backend/scrapers/motoit');
 
 // ─── Subito ───────────────────────────────────────────────────────────────────
 const adSubito = (features, extra = {}) => ({
@@ -167,4 +168,27 @@ test('moto.it: le bandierine si leggono SOLO nel blocco della scheda', () => {
 
 test('moto.it: il cambio e\' UNA parola (leggeva "automatico Y")', () => {
   assert.strictEqual(_parseMotoit(PAGINA_MOTO).cambio, 'automatico');
+});
+
+// ─── La provincia e' UNA sigla, su tutte e tre le fonti ────────────────────────
+test('provincia: sigla di due maiuscole (o null) da tutti e tre i mapper', () => {
+  // E' una CHIAVE di raggruppamento: «Cagliari» contro «CA» faceva due gruppi per la
+  // stessa provincia — in griglia, nel CSV e nel PDF. La forma si blinda sui MAPPER,
+  // che sono l'unico punto in cui le tre fonti diventano una colonna sola.
+  const sigla = /^[A-Z]{2}$/;
+  // Subito: la sigla nativa quando c'e' (geo.city.short_name)...
+  const conSigla = _mapAd(adSubito([], { geo: { city: { value: 'Cagliari', short_name: 'CA' } } }));
+  assert.strictEqual(conSigla.provincia, 'CA');
+  // ...e il risolutore unico quando manca: la fixture base porta solo «Brescia».
+  const daNome = _mapAd(adSubito([]));
+  assert.strictEqual(daNome.provincia, 'BS');
+  // Autoscout: location.city passa gia' dal risolutore unico.
+  const as = _mapListing(nodoAs24({ top: { location: { city: 'Milano (MI)', zip: '20121' } } }));
+  assert.strictEqual(as.provincia, 'MI');
+  // Moto.it: la card di ricerca legge la sigla fra parentesi, e la porta com'e'.
+  const card = _mapCards([{ titolo: 'Yamaha MT-07', priceRaw: '€ 5.000', href: '/x', provincia: 'TN' }])[0];
+  assert.strictEqual(card.provincia, 'TN');
+  for (const p of [conSigla.provincia, daNome.provincia, as.provincia, card.provincia]) {
+    assert.ok(p === null || sigla.test(p), `provincia "${p}" non e' una sigla di due maiuscole`);
+  }
 });

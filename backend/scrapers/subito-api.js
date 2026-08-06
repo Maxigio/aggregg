@@ -26,6 +26,7 @@ const { livelliAnnuncio, dichiarato } = require('./subito-nodo'); // cosa l'annu
 const dedotta = require('./versione-dedotta');        // la versione che il venditore non ha scelto dal menu
 const { _perMarca } = require('./versioni-unificate');// il catalogo versioni, gia' in cache per marca
 const filtriAuto = require('../filtri-auto');         // filtri avanzati auto → parametri nativi hades
+const { risolvi: risolviProvincia } = require('../province-sigla'); // il risolutore unico: la provincia e' una sigla
 
 const HOST = 'hades.subito.it';
 // Categorie hades (macro Motori=1). accessoriAuto/Moto scoperti live 2026-07-07 per la sezione Ricambi.
@@ -169,7 +170,11 @@ function mapAd(ad, opts = {}) {
     km,
     anno: yearOf(feat(ad, 'Immatricolazione') || feat(ad, 'Anno di immatricolazione')),
     carburante: feat(ad, 'Carburante'),
-    provincia: (ad.geo && ad.geo.city && ad.geo.city.value) || null,
+    // LA PROVINCIA E' UNA SIGLA, su tutte e tre le fonti: e' una chiave di raggruppamento,
+    // e «Cagliari» contro «CA» faceva due gruppi per la stessa provincia (anche nel CSV e
+    // nel PDF). La sigla sta NELLO STESSO oggetto (geo.city.short_name); se un giorno
+    // mancasse, il risolutore unico del progetto traduce il nome esteso.
+    provincia: (ad.geo && ad.geo.city && (ad.geo.city.short_name || (risolviProvincia(ad.geo.city.value) || {}).sigla)) || null,
     regione: (ad.geo && ad.geo.region && ad.geo.region.friendly_name) || null,   // nativa (slug già giusto)
     cambio: feat(ad, 'Cambio'),
     cilindrata: digits(feat(ad, 'Cilindrata')),

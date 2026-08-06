@@ -29,7 +29,10 @@ test('mapAd: shape coerente con gli altri scraper', () => {
   assert.strictEqual(r.anno, 2013);        // da "05/2013"
   assert.strictEqual(r.carburante, 'Diesel');
   assert.strictEqual(r.cambio, 'Automatico');
-  assert.strictEqual(r.provincia, 'Roma');
+  // La provincia e' una SIGLA su tutte e tre le fonti: e' una chiave di raggruppamento, e
+  // «Roma» contro «RM» faceva due gruppi per la stessa provincia. Questa asserzione
+  // pretendeva il nome esteso: difendeva il difetto.
+  assert.strictEqual(r.provincia, 'RM');
   assert.strictEqual(r.url, 'https://www.subito.it/auto/bmw-320d-roma-123.htm');
 });
 

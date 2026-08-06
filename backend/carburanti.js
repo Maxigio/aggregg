@@ -266,7 +266,12 @@ async function impianti() {
       return d;
     } catch (e) {
       console.warn('[carburanti] impianti KO:', e.message);
-      return impiantiMemo ? impiantiMemo.d : null;       // meglio i prezzi di ieri che nessuno
+      // NIENTE COPIA SCADUTA: era la nona cache — in RAM, senza tetto d'eta' — sfuggita
+      // alla decisione «via da tutte e otto». «I prezzi di ieri» qui si presentavano come
+      // «il prezzo di oggi», indistinguibili a schermo da un dato appena preso, mentre il
+      // chiamante (fonti-route) il KO lo sa gia' dichiarare. Il memo NEL TTL resta: quella
+      // e' una cache viva, non un ripiego.
+      return null;
     } finally { impiantiVolo = null; }
   })();
   return impiantiVolo;

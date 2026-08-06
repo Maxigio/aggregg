@@ -125,8 +125,14 @@ function catalogo() {
 }
 const marcaCat = slug => (catalogo().marche || {})[String(slug || '').toLowerCase()] || null;
 
-/** Modelli (famiglie) di una marca: [{name, slug}]. `slug` = parte dopo `<brand>|`. */
-async function getBrandModels(brandSlug) {
+/**
+ * Modelli (famiglie) di una marca: [{name, slug}]. `slug` = parte dopo `<brand>|`.
+ * `opts.rilancia` — lo specchio esatto di getModelBikes: chi deve DISTINGUERE «questa
+ * marca non ha modelli» da «non sono riuscito a chiederlo» lo passa, e il KO gli arriva
+ * come errore invece che come elenco vuoto. Senza, la scheda diceva «il catalogo non ha
+ * questo modello» anche su un timeout.
+ */
+async function getBrandModels(brandSlug, opts = {}) {
   if (!brandSlug) return [];
   const locale = marcaCat(brandSlug);
   if (locale && Object.keys(locale.modelli || {}).length) {
@@ -134,7 +140,7 @@ async function getBrandModels(brandSlug) {
       .map(([slug, m]) => ({ name: decodifica(m.nome).trim(), slug }))
       .filter(x => x.name && x.slug);
   }
-  return cached(modelsCache, `m:${brandSlug}`, TTL_MS, async () => {
+  const p = cached(modelsCache, `m:${brandSlug}`, TTL_MS, async () => {
     try {
       const j = await fetchJson(`${API}/models/${encodeURIComponent(brandSlug)}/Used`);
       const data = (j && j.result === 'OK' && Array.isArray(j.data)) ? j.data : [];
@@ -154,7 +160,8 @@ async function getBrandModels(brandSlug) {
       console.warn(`[motoit-models] models ${brandSlug}: ${e.message}`);
       throw e;
     }
-  }).catch(() => []);
+  });
+  return opts.rilancia ? p : p.catch(() => []);
 }
 
 /**

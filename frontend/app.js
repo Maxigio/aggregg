@@ -4046,9 +4046,20 @@ function renderSalvati() {
 }
 
 // ─── Ricerche salvate + avvisi ──────────────────────────────────────────────
+/**
+ * Perche' l'elenco non si e' letto: senza, un 403 (demo) o un 401 (sessione scaduta)
+ * scendevano come lista vuota e il pannello diceva «Nessuna ricerca salvata» — cioe'
+ * un'affermazione sui DATI fatta su un permesso negato. E' anche lo stampo per le altre
+ * fetch: `!r.ok` non si appiattisce mai su «non c'e' niente».
+ */
+let savedSearchesKo = null;   // null | 'demo' | 'sessione' | 'rete'
 async function loadSavedSearches() {
-  try { const r = await fetch('/api/saved'); const j = await r.json(); savedSearches = j.saved || []; }
-  catch (_) { savedSearches = []; }
+  savedSearchesKo = null;
+  try {
+    const r = await fetch('/api/saved');
+    if (!r.ok) { savedSearches = []; savedSearchesKo = r.status === 403 ? 'demo' : r.status === 401 ? 'sessione' : 'rete'; }
+    else { const j = await r.json(); savedSearches = j.saved || []; }
+  } catch (_) { savedSearches = []; savedSearchesKo = 'rete'; }
   renderRicerche(); updateNovitaBadge();
 }
 function totalNovita() { return savedSearches.reduce((a, s) => a + (s.novita || 0), 0); }
@@ -4127,7 +4138,15 @@ const MOTIVO_LABEL = { nuovo: 'nuovi', calo: 'cali' };
 function renderRicerche() {
   const c = document.getElementById('ricercheList');
   if (!savedSearches.length) {
-    c.innerHTML = '<p class="text-muted text-center py-4">Nessuna ricerca salvata.<br><small>Fai una ricerca e premi "Salva ricerca".</small></p>';
+    // La frase segue il PERCHE': «nessuna ricerca» e' un fatto sui dati e si dice solo
+    // quando i dati si sono letti davvero. Il messaggio demo non invita a premere un
+    // bottone che applyDemoMode ha appena nascosto.
+    const vuoto = {
+      demo: 'Le ricerche salvate sono del proprietario.<br><small>In modalita\' demo non si leggono.</small>',
+      sessione: 'Sessione scaduta.<br><small>Rientra dalla pagina di accesso per rivedere le tue ricerche.</small>',
+      rete: 'Ricerche salvate non raggiungibili ora.<br><small>Riprova fra poco.</small>',
+    }[savedSearchesKo] || 'Nessuna ricerca salvata.<br><small>Fai una ricerca e premi "Salva ricerca".</small>';
+    c.innerHTML = `<p class="text-muted text-center py-4">${vuoto}</p>`;
     return;
   }
   const isDemo = document.body.classList.contains('demo-mode');

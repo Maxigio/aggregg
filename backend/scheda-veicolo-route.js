@@ -187,7 +187,12 @@ async function resolveMotoit({ marca, modello, anno }) {
   const brandSlug = (brandEntry && brandEntry.motoit && brandEntry.motoit.brandSlug) || resolveMotoitSlug(marca) || null;
   if (!brandSlug) return null;
   let modelli = [];
-  try { modelli = await getBrandModels(brandSlug); } catch (_) { return null; }
+  // `rilancia`: il KO di rete deve restare distinguibile da «la marca non ha modelli».
+  // Con il `catch(() => [])` di prima, un timeout scendeva come elenco vuoto e la scheda
+  // diceva «Il catalogo non ha {marca} {modello}» — la colpa al catalogo per un guasto
+  // della rete, su 471 modelli misurati (piu' il caso catalogo locale assente).
+  try { modelli = await getBrandModels(brandSlug, { rilancia: true }); }
+  catch (e) { return { erroreFonte: (e && e.message) || 'moto.it non raggiungibile' }; }
   if (!modelli.length) return null;
   // UN SOLO CANDIDATO O NIENTE — la stessa regola che `matchModel` applica gia' al catalogo
   // auto (righe 80-91). Qui non c'era: fra piu' famiglie si teneva la PIU' CORTA, e a parita'
@@ -199,7 +204,10 @@ async function resolveMotoit({ marca, modello, anno }) {
   const hit = famigliaMotoit(modelli, modello);
   if (!hit) return null;
   let versioni = [];
-  try { versioni = await getModelBikes(brandSlug, hit.slug); } catch (_) { return null; }
+  // Stessa distinzione del blocco sopra: il canale `rilancia` esisteva gia' qui, ma questo
+  // chiamante non lo passava — e il catch muto lo spegneva comunque.
+  try { versioni = await getModelBikes(brandSlug, hit.slug, { rilancia: true }); }
+  catch (e) { return { erroreFonte: (e && e.message) || 'moto.it non raggiungibile' }; }
   if (!versioni.length) return null;
   // Foto + prezzo per versione dalla pagina-modello: UNA richiesta cachata 12h per tutte,
   // così la griglia moto ha le immagini come quella auto. Se salta, si procede senza foto.
@@ -376,7 +384,18 @@ const sigleMotore = t => [...new Set((String(t == null ? '' : t).toLowerCase().m
 
 async function resolveScheda({ tipo, marca, modello: modelloGrezzo, anno, genSlug }) {
   const modello = senzaGenerazione(modelloGrezzo) || modelloGrezzo;
-  if (tipo === 'moto') return (await resolveMotoit({ marca, modello, anno })) || resolveMoto({ marca, modello, anno });
+  if (tipo === 'moto') {
+    const mi = await resolveMotoit({ marca, modello, anno });
+    // Moto.it caduto: si prova comunque il ripiego locale (ultimatespecs), ma se nemmeno
+    // quello copre, il KO viaggia fino a fonteKo — la frase a schermo diventa «il catalogo
+    // non si e' lasciato leggere, riprova» invece di «il catalogo non ha questo modello»,
+    // che era un'affermazione sulla fonte fatta senza averla sentita.
+    if (mi && mi.erroreFonte) {
+      const rip = resolveMoto({ marca, modello, anno });
+      return (rip && !rip.notFound) ? rip : { ...(rip || {}), erroreFonte: mi.erroreFonte };
+    }
+    return mi || resolveMoto({ marca, modello, anno });
+  }
   if (tipo && tipo !== 'auto') return { unsupported: true };
   const idx = loadIndex();
   const brand = idx.brands[brandKey(marca)];
