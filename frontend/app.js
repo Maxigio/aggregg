@@ -1180,7 +1180,10 @@ function setSearchMode(mode) {
   // Stanno PRIMA del ramo con return perche' quello le saltava: da Ricambi a Catalogo
   // la lista ricambi restava a schermo, e stando prima nel DOM finiva sopra la griglia marche.
   if (!ricambi) document.getElementById('ricambiPanel').classList.add('d-none');
-  if (ricambi || prev === 'ricambi') { rcData = null; hideResults(); }   // ingresso/uscita ricambi → pulizia piena (currentResults lo azzera resetContesto)
+  // `rcGen++` come il searchGen++ di resetContesto (508ea84): uscendo dai Ricambi una
+  // risposta ancora in volo aveva myGen === rcGen, atterrava e RESUSCITAVA rcData appena
+  // azzerato — la lista di prima ridipinta in un contesto che non e' piu' il suo.
+  if (ricambi || prev === 'ricambi') { rcGen++; rcData = null; hideResults(); }   // ingresso/uscita ricambi → pulizia piena (currentResults lo azzera resetContesto)
   if (area(prev) && prev !== searchMode) area(prev).chiudi();
   // Competitor e' l'unica area che tiene la barra: ha una riga di campi sua.
   document.getElementById('competitorFields').classList.toggle('d-none', searchMode !== 'competitor');
@@ -1472,6 +1475,10 @@ async function doRicambi() {
   panel.innerHTML = '<div class="rc-wrap">' + loadingBlockHTML('Cerco il ricambio su più fonti…') + '</div>';
   startLoadingTips(panel);
   const myGen = ++rcGen;   // due ricerche in volo → vince l'ultima lanciata, la vecchia si scarta
+  // I DATI DI PRIMA ESCONO SUBITO. Restando, una ricerca fallita lasciava rcData della
+  // ricerca PRECEDENTE: l'errore andava a schermo, ma la porta del pannello
+  // (`if (rcData) renderRicambiPanel()`) ridipingeva la lista vecchia sotto il codice nuovo.
+  rcData = null;
   rcOe = { codice: null, stato: 'idle', articoli: [], motivo: null };   // nuova ricerca, nuova scheda
   try {
     const res = await fetch(`/api/ricambi?q=${encodeURIComponent(q)}&mode=${ricambiMode}&veicolo=${rcVeicolo}`);

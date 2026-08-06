@@ -1247,3 +1247,18 @@ test('l\'arricchimento che non porta niente non marca l\'annuncio come arricchit
   assert.ok(/if \(portati\) r\._enriched = true/.test(corpo),
     '_enriched si mette solo se qualcosa e\' arrivato davvero');
 });
+
+test('contesto: anche i Ricambi invalidano la generazione alla porta, e l\'errore non ridipinge la lista vecchia', () => {
+  // `rcGen` e' dichiarato «mirror searchGen», ma il fix delle porte (508ea84) era arrivato
+  // solo alla copia veicoli: uscendo dai Ricambi una risposta in volo aveva ancora
+  // myGen === rcGen, atterrava e resuscitava rcData appena azzerato. E una ricerca
+  // FALLITA lasciava i dati della precedente, che la porta del pannello ridipingeva.
+  const sm = corpoDi(APP, 'function setSearchMode(');
+  assert.ok(/rcGen\+\+/.test(sm),
+    'la porta d\'uscita dai Ricambi non invalida la generazione: la risposta in ritardo torna a atterrare');
+  const dr = corpoDi(APP, 'async function doRicambi(');
+  const bump = dr.indexOf('++rcGen');
+  const azzera = dr.indexOf('rcData = null');
+  assert.ok(bump > 0 && azzera > bump,
+    'doRicambi deve azzerare rcData dopo aver preso la sua generazione: senza, l\'errore mostra la lista di prima');
+});
