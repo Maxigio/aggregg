@@ -141,6 +141,12 @@ test('le guardie di testo hanno l\'antidoto ai commenti', () => {
     'l\'helper codice() e\' sparito da silenzi-fonti: le guardie di testo tornano ingannabili dalla prosa');
   const usi = (sf.match(/codice\(/g) || []).length - 1;   // meno la definizione
   assert.ok(usi >= 6, `codice() ha ${usi} usi: le guardie di testo stanno tornando a leggere i commenti`);
+  // E la regola vale per OGNI file di test che legge un sorgente con le regex, anche quelli
+  // nati dopo: versione-verifica e' nato il giorno stesso della lezione e non la usava —
+  // `/mostrali/` era gia' soddisfatto da un commento di resetContesto.
+  const vv = fs.readFileSync(path.join(__dirname, 'versione-verifica.test.js'), 'utf8');
+  assert.ok(/replace\(\/\\\/\\\/\[\^\\n\]\*\|/.test(vv) || /codice\(/.test(vv),
+    'versione-verifica.test.js regexa il sorgente senza togliere i commenti: guardia ingannabile dalla prosa');
 });
 
 // ─── Il pacchetto e' il programma che gira ─────────────────────────────────────────────

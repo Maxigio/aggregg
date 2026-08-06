@@ -80,10 +80,14 @@ test('marca() conta per fonte e non toglie niente', () => {
 });
 
 test('il browser toglie solo gli smentiti, e lo dice', () => {
-  const app = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  // A COMMENTI TOLTI, come le guardie di silenzi-fonti (lezione 34941e8): `mostrali` sta
+  // anche in un commento di resetContesto, e questa guardia era gia' oggi soddisfatta
+  // dalla prosa — la regola poteva morire nel codice con l'asserzione verde.
+  const grezzo = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const app = grezzo.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
   assert.ok(/versioneEsito === 'smentita'/.test(app), 'il filtro lato browser non guarda l\'esito');
   assert.ok(/versioneEsito !== 'smentita'/.test(app), 'gli ignoti devono restare: "non lo so" non e\' "non e\' quella"');
   assert.ok(/Nascosti \$\{tolti\}/.test(app) || /Nascosti \$/.test(app),
     'quanti ne sono stati tolti deve essere scritto: nascondere in silenzio e\' l\'unica cosa che qui non si fa');
-  assert.ok(/mostrali/.test(app), 'devono potersi rivedere');
+  assert.ok(/'mostrali'/.test(app), 'devono potersi rivedere: la stringa del bottone, non una parola qualunque');
 });
