@@ -14,6 +14,7 @@ const { buildWorkerBundle, OUTFILE: WORKER_BUNDLE } = require('../scripts/build-
 const { buildFrontendSync } = require('../scripts/build-frontend');   // F39: minify (via commenti) app.js/style.css
 const { buildGuidaSync, mtimeGuida } = require('../scripts/build-guida');   // F41: la Guida, montata da docs/guida/*.md
 const filtriAuto = require('./filtri-auto');            // filtri avanzati auto → dialetto di ogni fonte
+const versioneVerifica = require('./versione-verifica');  // la versione, verificata da noi su tutte le fonti
 const auth = require('./auth');
 const db = require('./db');
 const crawler = require('./crawler');
@@ -1969,9 +1970,24 @@ async function runSearchCore(params) {
       .catch(e => console.warn('[db] on-search write KO:', e.message));
   }
 
+  /**
+   * LA VERSIONE, VERIFICATA DA NOI E UGUALE PER TUTTE E TRE LE COLONNE.
+   *
+   * Ogni fonte applicava la versione a un dato diverso: Autoscout al campo (100% di
+   * precisione su 16 casi), Subito al titolo scritto dal venditore (mediana 82%, mai 100%),
+   * Moto.it a un codice o a niente (100% oppure 0%). La stessa richiesta significava tre cose.
+   * Qui si marca soltanto — togliere e' compito del browser, cosi' il totale resta onesto e la
+   * riga "mostrali" ha ancora cosa mostrare. Vedi backend/versione-verifica.js.
+   */
+  const versioneConto = params.versione ? versioneVerifica.marca(risultati, params.versione) : null;
+
   return {
     risultati,
     totale:       risultati.length,
+    // Quanti non dichiarano la versione chiesta: il browser li tiene fuori e lo scrive.
+    versioneChiesta: params.versione || null,
+    versioneConto:   versioneConto ? versioneConto.conto : null,
+    versionePerFonte: versioneConto ? versioneConto.perFonte : null,
     subitoStatus: subitoRes.status,           // 'ok' | 'empty' | 'needs_bootstrap' | 'error'
     subitoReason: subitoRes.reason || null,   // 'captcha' | '403' | 'no_data' | timeout msg
     // Stato per-fonte: la UI distingue saltato / vuoto / errore / ok.

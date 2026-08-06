@@ -2432,6 +2432,39 @@ function sortResults(results) {
 }
 
 // ─── Rendering ──────────────────────────────────────────────────────────────
+/**
+ * LA VERSIONE E' UN FILTRO, e chi non la porta esce dalla lista.
+ *
+ * Il server MARCA e non toglie: cosi' il totale resta onesto e questi annunci si possono
+ * rimettere con un clic. Qui si tolgono, si contano, e si scrive quanti sono — nascondere
+ * senza dirlo sarebbe il post-filtro muto che in questa app non si fa.
+ *
+ * 'ignota' resta dentro: vuol dire che l'annuncio non dichiara niente e il titolo non aiuta,
+ * cioe' non lo sappiamo. Toglierlo sarebbe far passare "non lo so" per "non e' quella".
+ */
+let mostraVersioniSmentite = false;
+
+function rigaVersione(tolti) {
+  let el = document.getElementById('avvisoVersione');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'avvisoVersione';
+    el.className = 'avviso-versione d-none';
+    fonteBreakdown?.parentNode?.insertBefore(el, fonteBreakdown);
+  }
+  if (!tolti) { el.classList.add('d-none'); el.innerHTML = ''; return; }
+  el.classList.remove('d-none');
+  el.textContent = mostraVersioniSmentite
+    ? `${tolti} annunci non dichiarano questa versione: li stai vedendo. `
+    : `Nascosti ${tolti} annunci che non dichiarano questa versione. `;
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'avviso-versione-btn';
+  b.textContent = mostraVersioniSmentite ? 'nascondili' : 'mostrali';
+  b.addEventListener('click', () => { mostraVersioniSmentite = !mostraVersioniSmentite; renderResults(currentResults); });
+  el.appendChild(b);
+}
+
 function renderResults(results) {
   // Nessuna ricerca attiva (es. renderResults chiamato da toggleSalva dopo un reload):
   // niente toolbar/risultati. La toolbar appare solo dopo una ricerca vera.
@@ -2441,6 +2474,10 @@ function renderResults(results) {
     return;
   }
   let filtered = results.slice();
+  // La versione chiesta: chi la smentisce esce, e sotto il conteggio si scrive quanti sono.
+  const smentiti = filtered.filter(r => r.versioneEsito === 'smentita').length;
+  if (smentiti && !mostraVersioniSmentite) filtered = filtered.filter(r => r.versioneEsito !== 'smentita');
+  rigaVersione(smentiti);
   // `ivaEsposta` e' a tre stati: true, false, e null quando la fonte non lo dice. Il filtro
   // tiene SOLO i true — un annuncio che non lo dichiara non e' un annuncio con IVA esposta,
   // e tenerlo dentro renderebbe il filtro una speranza invece di un filtro.
