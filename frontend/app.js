@@ -360,7 +360,17 @@ function filtriAutoScelti() {
 /** La griglia si vede solo in Auto: `data-solo` dice a chi appartiene. */
 function sincronizzaFiltriAuto(tipo) {
   const g = document.getElementById('filtriAutoGrid');
-  if (g) g.classList.toggle('d-none', tipo !== 'auto');
+  if (!g) return;
+  /**
+   * DUE CANCELLI, UNA REGOLA. La griglia (Carrozzeria, Cambio, …) si vede solo se il
+   * pannello dei filtri e' APERTO e il tipo e' auto. Prima qui si guardava solo il tipo:
+   * il `d-none` di partenza nell'HTML non lo toglieva nessuno finche' non CAMBIAVI tipo
+   * — chi stava su Auto dalla partenza non vedeva quelle tendine MAI, e sembravano
+   * «filtri esclusi dal pannello». Il toggle del pannello chiama questa stessa funzione:
+   * la regola sta scritta una volta.
+   */
+  const pannelloAperto = advancedFilters && !advancedFilters.classList.contains('d-none');
+  g.classList.toggle('d-none', tipo !== 'auto' || !pannelloAperto);
 }
 
 // ─── Modalità demo (ospite read-only) ───────────────────────────────────────
@@ -799,6 +809,8 @@ async function init() {
     // di un secondo diventava un pannello monco per sempre. Stessa regola di loadModels:
     // il fallimento non si memorizza, all'apertura si riprova.
     if (!open && !filtriAutoNomi.length) caricaFiltriAuto();
+    // e la griglia auto segue il pannello: aperto+auto = visibile (la regola sta la')
+    sincronizzaFiltriAuto(currentTipo());
   });
 
   // Logo → RICARICA. Prima apriva un QR per aprire l'app dal telefono: da dentro l'app non

@@ -57,7 +57,9 @@ function allestimentoDaVersione(v) {
     const ultimo = m[m.length - 1];
     s = s.slice(ultimo.index + ultimo[0].length).trim();
   }
-  s = s.replace(/^\d\s*p\.?\s+/i, '').trim();            // «5p. GTD …» → «GTD …»
+  // le porte non sono un allestimento, in nessuna delle due grafie: «5p. GTD» e
+  // «5 porte Titanium» devono dare «GTD» e «Titanium»
+  s = s.replace(/^(?:\d\s*(?:p\.?|porte)\s+)+/i, '').replace(/^\d\s*(?:p\.?|porte)$/i, '').trim();
   return s;
 }
 
@@ -73,7 +75,8 @@ function versioniDi(tipo, marca, modello) {
   const m = catalogo()[t].get(String(nodo.marcaId));
   if (!m) return [];
   const famIds = new Set((nodo.famigliaIds || [nodo.famigliaId]).map(String));
-  const conta = new Map();   // norm(allestimento) → { nome, n }
+  const conta = new Map();        // norm(allestimento) → { nome, n }
+  const intere = new Map();       // il RIPIEGO: versioni intere (senza testa-modello)
   for (const [modId, mod] of Object.entries(m.modelli || {})) {
     // AUTO: il catalogo scende alla generazione, che porta `famigliaId`; MOTO: il modello
     // E' la famiglia (fotocopia misurata 4.605/4.605), quindi si confronta l'id stesso.
@@ -85,16 +88,28 @@ function versioniDi(tipo, marca, modello) {
       if (vid === '000000') continue;                    // «Altro allestimento»
       let v = String(vnome).trim();
       const sv = spazi(v);
-      // via la testa che ripete il modello (o la famiglia): resta la parte che si digita
+      // via la testa che ripete il modello (o la famiglia): resta la parte che si digita.
+      // Il taglio cammina sulle PAROLE VERE consumando i token normalizzati: «X-Bow» e'
+      // UNA parola che vale DUE token (x, bow) — contando le parole normalizzate si
+      // mangiava anche l'allestimento («X-Bow GT-XR» perdeva pure GT-XR).
       for (const testa of [testaMod, testaFam]) {
-        if (testa && sv.startsWith(testa + ' ')) {
-          // il taglio va fatto sul testo VERO, non sulla forma normalizzata: si contano
-          // le parole della testa e si tolgono altrettante parole dal nome originale
-          const nParole = testa.split(' ').length;
-          v = v.split(/\s+/).slice(nParole).join(' ').trim();
-          break;
+        if (!testa || !sv.startsWith(testa + ' ')) continue;
+        const parole = v.split(/\s+/);
+        let daConsumare = testa.split(' ');
+        let consumate = 0;
+        for (const w of parole) {
+          const tw = spazi(w).split(' ').filter(Boolean);
+          if (!tw.length || tw.length > daConsumare.length || !tw.every((x, i) => x === daConsumare[i])) break;
+          daConsumare = daConsumare.slice(tw.length);
+          consumate++;
+          if (!daConsumare.length) break;
         }
+        if (!daConsumare.length) { v = parole.slice(consumate).join(' ').trim(); break; }
       }
+      // il ripiego si raccoglie SEMPRE: se nessun allestimento sopravvive, meglio le
+      // versioni intere che una tendina vuota
+      const kIntera = norm(v);
+      if (v && kIntera && !intere.has(kIntera)) intere.set(kIntera, { nome: v, n: 1 });
       const a = allestimentoDaVersione(v);
       if (!a) continue;
       const k = norm(a);
@@ -104,7 +119,14 @@ function versioniDi(tipo, marca, modello) {
       else conta.set(k, { nome: a, n: 1 });
     }
   }
-  return [...conta.values()]
+  /**
+   * IL RIPIEGO DELLE FAMIGLIE SOLO-MOTORE. La potatura del «motore-e-basta» svuotava la
+   * tendina per il 23,5% delle famiglie risolte (misurato: 598 su 2.549 — X-Bow, i-MiEV,
+   * 125 STX…), e una tendina sparita e' peggio di una verbosa: se non resta nessun
+   * allestimento si suggeriscono le versioni intere, che si digitano comunque.
+   */
+  const fonte = conta.size ? conta : intere;
+  return [...fonte.values()]
     .sort((x, y) => y.n - x.n || x.nome.localeCompare(y.nome, 'it'))
     .map(x => x.nome);
 }
