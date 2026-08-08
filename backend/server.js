@@ -33,7 +33,7 @@ const { renderReportPdf } = require('./report-pdf');   // un solo layout: lo usa
 const subitoSession   = require('./scrapers/subito-session');
 const { runBootstrap } = require('./scrapers/subito-bootstrap');
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
-const { famiglieMotoit, getBrandModels, getModelBikes, resolveMotoitVersionEntry } = require('./scrapers/motoit-models');
+const { famiglieMotoit, getBrandModels, getModelBikes, resolveMotoitVersionEntry, correggiModelSlug } = require('./scrapers/motoit-models');
 const motoitVersione = require('./scrapers/motoit-versione');   // testo libero → codice/slug versione Moto.it
 const { getDetail } = require('./scrapers/detail');
 const liquidita      = require('./liquidita');    // liquidita modello (ACI Autoritratto)
@@ -812,7 +812,9 @@ app.get('/api/models', async (req, res) => {
     sites:          m.sites || [],
     mmmvAutoscout:  m.mmmvAutoscout  || '',
     kindAS:         m.kindAS         || '',
-    slugMotoIt:     m.slugMotoIt     || '',
+    // gli slug rotti del catalogo (kx-250 dove Moto.it dice kx250) si correggono QUI,
+    // dove il menu esce: cosi' ricerca, versioni e schede ricevono gia' quello vero
+    slugMotoIt:     correggiModelSlug(m.slugMotoIt || ''),
   }));
 
   /**
@@ -999,7 +1001,7 @@ app.get('/api/versioni', (req, res) => {
 
 app.get('/api/moto-versions', async (req, res) => {
   const marca = (req.query.marca || '').trim();
-  const modelSlug = (req.query.modelSlug || '').trim();
+  const modelSlug = correggiModelSlug((req.query.modelSlug || '').trim());
   const modelNome = (req.query.modelNome || '').trim();
   if (!marca || (!modelSlug && !modelNome)) return res.json({ versioni: [], familySlug: null });
   const entry = modelsData.moto && modelsData.moto[marca];
@@ -1129,7 +1131,9 @@ function parseSearchParams(query) {
       fetta:            Math.min(50, Math.max(0, toInt(fetta) || 0)),
       mmmvAutoscout:    mmmvAutoscout    || null,
       motoitBrandSlug:  motoitBrandSlug  || null,
-      motoitModelSlug:  motoitModelSlug  || null,
+      // la correzione vale anche per chi arriva con lo slug vecchio in tasca (menu in
+      // cache del browser, ricerche salvate): kx-250 rispondeva 404 per sempre
+      motoitModelSlug:  correggiModelSlug(motoitModelSlug || '') || null,
       motoitBikeCode:   motoitBikeCode   || null,   // versione/allestimento Moto.it (param `bike=`)
       /**
        * LA VERSIONE, scritta libera. Una sola, e ogni fonte la riceve come puo':
@@ -1668,6 +1672,17 @@ async function runSearchCore(params) {
   if (params.versione && params.subitoNodo) {
     params.subitoVersioneTesto = params.versione;
     console.log(`[server] Subito: q="${params.versione}" sopra gli id di marca/modello`);
+  } else if (params.versione) {
+    /**
+     * SENZA NODO la ricerca Subito e' gia' testo libero (q = marca+modello) — e la
+     * versione scritta ci si ACCODA invece di sparire. Misurato (campagna E): il 56,9%
+     * dei nomi del menu non risolve un nodo, e per tutti quelli la versione digitata
+     * non partiva MAI verso Subito, in silenzio: si chiedeva «Golf GTD» e si riceveva
+     * ogni Golf, presentata come risposta alla domanda intera. Il testo resta testo
+     * (niente id quasi giusti): restringe come restringono le altre parole di q.
+     */
+    params.subitoVersioneTesto = params.versione;
+    console.log(`[server] Subito: versione "${params.versione}" accodata al testo libero`);
   }
 
   /**
@@ -2412,16 +2427,22 @@ const amrSearchFn = async (input) => {
 };
 
 /**
- * WEBHOOK WHATSAPP — SPENTA, e spenta vuol dire che la rotta NON ESISTE.
+ * WEBHOOK WHATSAPP — spenta per difetto: senza interruttore la rotta NON ESISTE.
  *
- * Il bot e' un sistema che conversa con una persona, e dal 2 agosto 2026 il proprietario non
- * vuole tenerlo acceso finche' non e' pronto sul fronte AI Act. Spegnerlo con un 503 avrebbe
- * lasciato in piedi un endpoint pubblico che risponde: qui non viene proprio montato, quindi
- * `/api/whatsapp/webhook` da' 404 come qualunque percorso inesistente.
+ * Il bot e' un sistema che conversa con una persona; era stato spento il 2 agosto 2026 in
+ * attesa della messa a norma AI Act. Gli adempimenti sono ORA implementati nel canale
+ * (backend/whatsapp/webhook.js):
+ *   - disclosure Art. 50: a ogni NUOVA sessione (prima interazione o TTL 30 min scaduto) il
+ *     primo messaggio dichiara che si sta parlando con un sistema AI. Testo di default in
+ *     codice, riformulabile via WA_DISCLOSURE_TEXT ma MAI disattivabile (vuota = default);
+ *   - identificazione mittenti: il numero WhatsApp risale a una persona di auth.json
+ *     (auth.personaDaTelefono, gestita con scripts/set-telefono.js) e il nome arriva al bot;
+ *     in mancanza vale il solo fallback legacy WHATSAPP_ALLOWED_SENDERS (senza identita'),
+ *     e chi non e' in nessuna delle due riceve UNA risposta cortese e il bot non parte.
  *
- * Il codice e i test restano dove sono: si riaccende mettendo AMR_WHATSAPP=1 nell'ambiente,
- * scelta esplicita e mai per difetto. Anche la deroga all'autenticazione segue l'interruttore:
- * spenta la rotta, quel percorso non ha piu' motivo di stare fra i liberi.
+ * Il canale si abilita mettendo AMR_WHATSAPP=1 nell'ambiente: scelta esplicita e mai per
+ * difetto. Spenta, la rotta non viene proprio montata — `/api/whatsapp/webhook` da' 404 come
+ * qualunque percorso inesistente — e anche la deroga all'autenticazione segue l'interruttore.
  */
 if (WHATSAPP_ON) {
   require('./whatsapp/webhook').mount(app, { searchFn: amrSearchFn });

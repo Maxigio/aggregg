@@ -126,6 +126,28 @@ function catalogo() {
 const marcaCat = slug => (catalogo().marche || {})[String(slug || '').toLowerCase()] || null;
 
 /**
+ * LE CORREZIONI DEGLI SLUG-MODELLO (data/motoit-slug-correzioni.json). Il menu porta
+ * slug che Moto.it non conosce — 10 Kawasaki coi trattini che il listino non usa
+ * (menu kx-250, Moto.it kx250) e la CMX 500 che li' si chiama cmx-500-rebel — e la
+ * ricerca rispondeva 404 PER SEMPRE, il menu versioni un corpo nullo scambiato per
+ * «modello senza versioni». Misurato in campagna E su tutti i 2.044 slug, verificato
+ * dal vivo. La correzione si applica dove lo slug ENTRA (menu servito e parametri di
+ * ricerca): i cataloghi in data/ non si toccano. File assente → nessuna correzione.
+ */
+let SLUG_FIX = null;
+function correggiModelSlug(slug) {
+  if (!slug) return slug;
+  if (!SLUG_FIX) {
+    SLUG_FIX = new Map();
+    try {
+      const j = require('../../data/motoit-slug-correzioni.json');
+      for (const v of (j.voci || [])) if (v && v.da && v.a) SLUG_FIX.set(String(v.da), String(v.a));
+    } catch (e) { console.warn('[motoit-models] correzioni slug non lette: ' + e.message); }
+  }
+  return SLUG_FIX.get(String(slug)) || slug;
+}
+
+/**
  * Modelli (famiglie) di una marca: [{name, slug}]. `slug` = parte dopo `<brand>|`.
  * `opts.rilancia` — lo specchio esatto di getModelBikes: chi deve DISTINGUERE «questa
  * marca non ha modelli» da «non sono riuscito a chiederlo» lo passa, e il KO gli arriva
@@ -143,6 +165,11 @@ async function getBrandModels(brandSlug, opts = {}) {
   const p = cached(modelsCache, `m:${brandSlug}`, TTL_MS, async () => {
     try {
       const j = await fetchJson(`${API}/models/${encodeURIComponent(brandSlug)}/Used`);
+      // HTTP 200 col corpo letteralmente `null` = slug che Moto.it non conosce. NON e'
+      // «zero risultati» (quello arriva come result OK e lista vuota, misurato dal vivo):
+      // e' un KO col dato marcio, e si dichiara come gli altri KO — senno' lo slug rotto
+      // passava per «questa marca non ha modelli», muto proprio nel caso malato.
+      if (j === null) throw new Error('risposta nulla: slug sconosciuto a Moto.it');
       const data = (j && j.result === 'OK' && Array.isArray(j.data)) ? j.data : [];
       return data
         .map(d => {
@@ -188,6 +215,8 @@ async function getModelBikes(brandSlug, modelSlug, opts = {}) {
   const p = cached(bikesCache, key, TTL_MS, async () => {
     try {
       const j = await fetchJson(`${API}/bikes/${encodeURIComponent(`${brandSlug}|${modelSlug}`)}/Used`);
+      // Stessa regola di `models`: corpo `null` = slug sconosciuto, non «senza versioni».
+      if (j === null) throw new Error('risposta nulla: slug sconosciuto a Moto.it');
       const data = (j && j.result === 'OK' && Array.isArray(j.data)) ? j.data : [];
       return data
         .map(d => { if (!d.value) return null; const name = String(d.text || '').trim(); return { name, code: String(d.value), ...parseYears(name) }; })
@@ -347,5 +376,5 @@ async function resolveMotoitVersionEntry(brandSlug, entryName) {
 // versionBase e parseYears sono pure e contengono le regole piu' delicate del confine
 // famiglia/versione: esposte per poterle sorvegliare con dei test (prefisso _ = interne).
 module.exports = { resolveMotoitModelSlug, famiglieMotoit, getBrandModels, getModelBikes, resolveMotoitVersionEntry,
-  decodifica,
+  decodifica, correggiModelSlug,
   _versionBase: versionBase, _parseYears: parseYears };

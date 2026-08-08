@@ -434,7 +434,10 @@ function buildPath(params, start) {
      * giorno qualcuno riaccende senza sapere perche' era spento.
      */
   } else {
-    const q = [params.marca, params.modello].filter(Boolean).join(' ').trim();
+    // Anche qui la versione viaggia: il ramo senza nodo E' il testo libero, e la versione
+    // scritta e' testo come il resto — buttarla faceva rispondere a una domanda piu'
+    // larga di quella fatta, senza dirlo (56,9% del menu, misurato in campagna E).
+    const q = [params.marca, params.modello, params.subitoVersioneTesto].filter(Boolean).join(' ').trim();
     if (q) qs.set('q', q);
   }
   // Regione nativa (se mappabile; altrimenti resta il post-filtro client difensivo).

@@ -117,6 +117,27 @@ test('cio\' che sites dichiara deve essere raggiungibile — il test che avrebbe
     }
   }
   assert.deepStrictEqual(orfani, [], 'modelli dichiarati autoscout senza alcun id: ' + orfani.join(', '));
+
+  // E gli SLUG-MODELLO: ogni slugMotoIt del menu, DOPO le correzioni curate, deve
+  // esistere nel catalogo locale della sua marca — kx-250 rispondeva HTTP 404 per
+  // sempre mentre il catalogo aveva kx250 (10 Kawasaki + la CMX 500, campagna E).
+  // Si controllano solo le marche che il catalogo copre: per le altre non c'e' un
+  // elenco su disco contro cui pretendere.
+  const { correggiModelSlug } = require('../backend/scrapers/motoit-models');
+  const cat = require('../data/motoit-catalogo.json');
+  const marcheCat = cat.marche || {};
+  const slugRotti = [];
+  for (const [marca, v] of Object.entries(models.moto)) {
+    const brandSlug = resolveMotoitSlug(marca);
+    const mc = brandSlug && marcheCat[brandSlug];
+    if (!mc || !Object.keys(mc.modelli || {}).length) continue;
+    for (const m of (v.models || [])) {
+      if (!m.slugMotoIt) continue;
+      const s = correggiModelSlug(m.slugMotoIt);
+      if (!mc.modelli[s]) slugRotti.push(`${marca} ${m.nome} (${m.slugMotoIt}→${s})`);
+    }
+  }
+  assert.deepStrictEqual(slugRotti, [], 'slug del menu che il catalogo non conosce: ' + slugRotti.slice(0, 12).join(', '));
 });
 
 /**

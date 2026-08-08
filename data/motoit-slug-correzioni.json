@@ -1,0 +1,17 @@
+{
+  "_perche": "Slug-modello di data/models.json che Moto.it NON conosce: la ricerca rispondeva HTTP 404 per sempre, e il menu versioni un corpo nullo che passava per 'modello senza versioni'. Trovati in campagna E misurando TUTTI i 2.044 slug del menu contro il catalogo: 10 Kawasaki hanno i trattini che Moto.it non usa (il listino scrive kx250, il menu kx-250) e la Honda CMX 500 su Moto.it si chiama cmx-500-rebel. Verificato dal vivo: model=kawasaki|kx-250 → 404, kawasaki|kx250 → 200 con annunci; honda|cmx-500 → 404, honda|cmx-500-rebel → 200.",
+  "_come": "correggiModelSlug (backend/scrapers/motoit-models.js): la correzione si applica dove lo slug entra — il menu servito da /api/models e i parametri di ricerca. I cataloghi in data/ non si toccano: la correzione sta qui.",
+  "voci": [
+    { "da": "kx-250", "a": "kx250", "marca": "kawasaki" },
+    { "da": "kx-250-f", "a": "kx250f", "marca": "kawasaki" },
+    { "da": "kx-250-x", "a": "kx250x", "marca": "kawasaki" },
+    { "da": "kx-300-x", "a": "kx300x", "marca": "kawasaki" },
+    { "da": "kx-450", "a": "kx450", "marca": "kawasaki" },
+    { "da": "kx-450-f", "a": "kx450f", "marca": "kawasaki" },
+    { "da": "kx-450-x", "a": "kx450x", "marca": "kawasaki" },
+    { "da": "kx-65", "a": "kx65", "marca": "kawasaki" },
+    { "da": "kx-85", "a": "kx85", "marca": "kawasaki" },
+    { "da": "kxe-250", "a": "kxe250", "marca": "kawasaki" },
+    { "da": "cmx-500", "a": "cmx-500-rebel", "marca": "honda" }
+  ]
+}
