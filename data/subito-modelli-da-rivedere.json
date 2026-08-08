@@ -3,348 +3,6 @@
  "nota": "Id Subito senza una voce corrispondente, ordinati per annunci: si lavora dai piu' pesanti in giu'. Per deciderne uno, aggiungilo a data/subito-modelli.json con via:\"mano\" — le riesecuzioni non lo toccano.",
  "auto": [
   {
-   "id": "005097",
-   "nome": "Seal U DM-i",
-   "marca": "BYD",
-   "annunci": 54,
-   "versioni": {
-    "152755": {
-     "nome": "Seal U DM-i 1.5 218 CV PHEV Boost",
-     "annunci": 15
-    },
-    "152756": {
-     "nome": "Seal U DM-i 1.5 T 324 CV PHEV Design",
-     "annunci": 9
-    },
-    "154904": {
-     "nome": "Seal U DM-i 1.5 218 CV PHEV Comfort",
-     "annunci": 21
-    }
-   },
-   "nudo": "Seal U DM-i"
-  },
-  {
-   "id": "003167",
-   "nome": "X-Type X400/6/7/8/9",
-   "marca": "Jaguar",
-   "annunci": 47,
-   "versioni": {
-    "053299": {
-     "nome": "X-Type 2 litri V6 24V cat",
-     "annunci": 4
-    },
-    "053300": {
-     "nome": "X-Type 2 litri V6 24V cat Executive",
-     "annunci": 5
-    },
-    "059618": {
-     "nome": "X-Type 2.0D cat Classic EU3",
-     "annunci": 8
-    },
-    "064954": {
-     "nome": "X-Type 2.0D cat Wagon Classic",
-     "annunci": 2
-    },
-    "064951": {
-     "nome": "X-Type 2.0D cat Classic",
-     "annunci": 2
-    },
-    "066489": {
-     "nome": "X-Type 2.2D cat Executive",
-     "annunci": 3
-    },
-    "064952": {
-     "nome": "X-Type 2.0D cat Executive",
-     "annunci": 3
-    },
-    "066488": {
-     "nome": "X-Type 2.2D cat Classic",
-     "annunci": 2
-    },
-    "061255": {
-     "nome": "X-Type 2.0D cat Wagon Executive EU3",
-     "annunci": 2
-    },
-    "077106": {
-     "nome": "X-Type 2.2D cat aut. Luxury cDPF",
-     "annunci": 1
-    },
-    "077108": {
-     "nome": "X-Type 2.2D cat aut. Premium Luxury cDPF",
-     "annunci": 1
-    },
-    "077111": {
-     "nome": "X-Type 3.0 V6 24V cat Premium Luxury",
-     "annunci": 1
-    },
-    "069034": {
-     "nome": "X-Type 2.2D cat Executive cDPF",
-     "annunci": 2
-    },
-    "049877": {
-     "nome": "X-Type 2.5 V6 24V cat",
-     "annunci": 2
-    },
-    "064955": {
-     "nome": "X-Type 2.0D cat Wagon Executive",
-     "annunci": 1
-    },
-    "059703": {
-     "nome": "X-Type 2.0D cat Sport EU3",
-     "annunci": 2
-    },
-    "060073": {
-     "nome": "X-Type 2.5 V6 24V cat Wagon Classic",
-     "annunci": 1
-    },
-    "066492": {
-     "nome": "X-Type 2.2D cat Wagon Executive",
-     "annunci": 1
-    },
-    "077104": {
-     "nome": "X-Type 2.0D cat Luxury",
-     "annunci": 1
-    },
-    "049896": {
-     "nome": "X-Type 2.5 V6 24V cat Executive",
-     "annunci": 1
-    },
-    "059706": {
-     "nome": "X-Type 2 litri V6 24V cat Classic",
-     "annunci": 1
-    },
-    "049878": {
-     "nome": "X-Type 3.0 V6 24V cat Sport",
-     "annunci": 1
-    }
-   },
-   "nudo": "X-Type X400/6/7/8/9"
-  },
-  {
-   "id": "000491",
-   "nome": "Biturbo e derivati",
-   "marca": "Maserati",
-   "annunci": 37,
-   "versioni": {
-    "002357": {
-     "nome": "420",
-     "annunci": 8
-    },
-    "015267": {
-     "nome": "2.24v",
-     "annunci": 2
-    },
-    "002352": {
-     "nome": "Biturbo 2.0",
-     "annunci": 13
-    },
-    "002359": {
-     "nome": "420i",
-     "annunci": 1
-    },
-    "002524": {
-     "nome": "Biturbo 425",
-     "annunci": 2
-    },
-    "002356": {
-     "nome": "Biturbo 2.0 Si",
-     "annunci": 1
-    },
-    "002355": {
-     "nome": "Biturbo 2.0i",
-     "annunci": 1
-    },
-    "010911": {
-     "nome": "430",
-     "annunci": 1
-    },
-    "013158": {
-     "nome": "422",
-     "annunci": 1
-    },
-    "012728": {
-     "nome": "222",
-     "annunci": 2
-    },
-    "004192": {
-     "nome": "420 Si",
-     "annunci": 2
-    },
-    "013347": {
-     "nome": "Spider 2.0",
-     "annunci": 1
-    },
-    "002353": {
-     "nome": "Biturbo 2.0 S",
-     "annunci": 1
-    }
-   },
-   "nudo": "Biturbo e derivati"
-  },
-  {
-   "id": "003314",
-   "nome": "Rexton/Rexton II",
-   "marca": "SsangYong",
-   "annunci": 33,
-   "versioni": {
-    "074892": {
-     "nome": "Rexton II 2.7 XDi TOD Comfort",
-     "annunci": 2
-    },
-    "065567": {
-     "nome": "Rexton 2.7 XDi cat Plus 1",
-     "annunci": 4
-    },
-    "069808": {
-     "nome": "Rexton II 2.7 XDi TOD Premium 2",
-     "annunci": 2
-    },
-    "062910": {
-     "nome": "Rexton 2.7 XDi cat Premium",
-     "annunci": 6
-    },
-    "079187": {
-     "nome": "Rexton II 2.7 XDi TOD Deluxe",
-     "annunci": 3
-    },
-    "065570": {
-     "nome": "Rexton 2.7 XDi cat Premium 3 TOD",
-     "annunci": 2
-    },
-    "065568": {
-     "nome": "Rexton 2.7 XDi cat Plus 2",
-     "annunci": 1
-    },
-    "062909": {
-     "nome": "Rexton 2.7 XDi cat Plus",
-     "annunci": 2
-    },
-    "079185": {
-     "nome": "Rexton II 2.7 XDi TOD Classic",
-     "annunci": 2
-    },
-    "072410": {
-     "nome": "Rexton II 2.7 XDi TOD Plus 1",
-     "annunci": 1
-    },
-    "072412": {
-     "nome": "Rexton II 2.7 XDi TOD Premium",
-     "annunci": 2
-    },
-    "069807": {
-     "nome": "Rexton II 2.7 XDi 4WD Plus 2",
-     "annunci": 1
-    },
-    "079189": {
-     "nome": "Rexton II 2.7 XVT AWD A/T Energy Sun",
-     "annunci": 1
-    },
-    "057176": {
-     "nome": "Rexton 290 TD cat Autocarro",
-     "annunci": 1
-    }
-   },
-   "nudo": "Rexton/Rexton II"
-  },
-  {
-   "id": "003633",
-   "nome": "Kyron/New Kyron",
-   "marca": "SsangYong",
-   "annunci": 32,
-   "versioni": {
-    "079180": {
-     "nome": "New Kyron 2.0 XVT 4WD Comfort",
-     "annunci": 6
-    },
-    "067317": {
-     "nome": "Kyron 2.0 XDi Premium",
-     "annunci": 6
-    },
-    "067316": {
-     "nome": "Kyron 2.0 XDi Plus",
-     "annunci": 10
-    },
-    "075896": {
-     "nome": "New Kyron 2.0 XVT 4WD Sport",
-     "annunci": 2
-    },
-    "079181": {
-     "nome": "New Kyron 2.0 XVT 4WD Style",
-     "annunci": 3
-    },
-    "075897": {
-     "nome": "New Kyron 2.0 XVT 4WD Luxury",
-     "annunci": 2
-    }
-   },
-   "nudo": "Kyron/New Kyron"
-  },
-  {
-   "id": "003028",
-   "nome": "city coupé/cabrio",
-   "marca": "Smart",
-   "annunci": 31,
-   "versioni": {
-    "046688": {
-     "nome": "600 smart & pulse",
-     "annunci": 2
-    },
-    "049967": {
-     "nome": "600 smart & passion (40 kW)",
-     "annunci": 2
-    },
-    "046692": {
-     "nome": "600 smart & passion",
-     "annunci": 5
-    },
-    "049971": {
-     "nome": "600 smart cabrio & pulse (45 kW)",
-     "annunci": 2
-    },
-    "049963": {
-     "nome": "600 smart & pure (40 kW)",
-     "annunci": 4
-    },
-    "049970": {
-     "nome": "800 smart cabrio & pure cdi (30 kW)",
-     "annunci": 1
-    },
-    "049964": {
-     "nome": "800 smart & pure cdi (30 kW)",
-     "annunci": 3
-    },
-    "057990": {
-     "nome": "700 smart city-coupé pure (45 kW)",
-     "annunci": 4
-    },
-    "058001": {
-     "nome": "700 smart cabrio passion",
-     "annunci": 1
-    },
-    "057991": {
-     "nome": "800 smart city-coupé pure cdi",
-     "annunci": 1
-    },
-    "046689": {
-     "nome": "600 smart & pure",
-     "annunci": 1
-    },
-    "049973": {
-     "nome": "600 smart cabrio & passion (40 kW)",
-     "annunci": 1
-    },
-    "049965": {
-     "nome": "600 smart & pulse (45 kW)",
-     "annunci": 2
-    },
-    "048544": {
-     "nome": "800 smart cdi",
-     "annunci": 1
-    }
-   },
-   "nudo": "city coupé/cabrio"
-  },
-  {
    "id": "003197",
    "nome": "Mini 2ª serie",
    "marca": "Mini",
@@ -439,75 +97,6 @@
    "nudo": "Mini"
   },
   {
-   "id": "004597",
-   "nome": "RR Evoque 2ª serie",
-   "marca": "Land Rover",
-   "annunci": 25,
-   "versioni": {
-    "127926": {
-     "nome": "Range Rover Evoque 2.0D I4-L.Flw 150 CV S",
-     "annunci": 1
-    },
-    "127927": {
-     "nome": "Range Rover Evoque 2.0D I4-L.Flw 150 CV R-Dynamic",
-     "annunci": 1
-    },
-    "127930": {
-     "nome": "Range Rover Evoque 2.0D I4-L.Flw 150 CV AWD Auto S",
-     "annunci": 1
-    },
-    "127933": {
-     "nome": "Range Rover Evoque 2.0D I4-L.Flw 150 CV AWD Auto R-Dynamic",
-     "annunci": 1
-    },
-    "127936": {
-     "nome": "Range Rover Evoque 2.0D I4-L.Flw 150CV AWD Aut R-Dynamic HSE",
-     "annunci": 2
-    },
-    "127941": {
-     "nome": "Range Rover Evoque 2.0D I4 180 CV AWD Auto R-Dynamic",
-     "annunci": 2
-    },
-    "127942": {
-     "nome": "Range Rover Evoque 2.0D I4 180 CV AWD Auto R-Dynamic S",
-     "annunci": 1
-    },
-    "127943": {
-     "nome": "Range Rover Evoque 2.0D I4 180 CV AWD Auto R-Dynamic SE",
-     "annunci": 4
-    },
-    "127958": {
-     "nome": "Range Rover Evoque 2.0 I4 200 CV AWD Auto R-Dynamic",
-     "annunci": 1
-    },
-    "135793": {
-     "nome": "Range Rover Evoque 1.5 I3 PHEV 300 CV AWD Auto",
-     "annunci": 1
-    },
-    "136826": {
-     "nome": "Range Rover Evoque 2.0D I4 163 CV AWD Auto",
-     "annunci": 1
-    },
-    "136827": {
-     "nome": "Range Rover Evoque 2.0D I4 163 CV AWD Auto S",
-     "annunci": 2
-    },
-    "136849": {
-     "nome": "Range Rover Evoque 1.5 I3 160 CV Auto R-Dynamic",
-     "annunci": 1
-    },
-    "149376": {
-     "nome": "Range Rover Evoque 2.0D I4 204 CV AWD Auto Dynamic SE",
-     "annunci": 3
-    },
-    "152345": {
-     "nome": "Range Rover Evoque 1.5 I3 PHEV 269 CV AWD Auto S",
-     "annunci": 1
-    }
-   },
-   "nudo": "RR Evoque"
-  },
-  {
    "id": "003634",
    "nome": "A.721",
    "marca": "Aixam",
@@ -531,105 +120,6 @@
     }
    },
    "nudo": "A.721"
-  },
-  {
-   "id": "003006",
-   "nome": "300/400",
-   "marca": "Aixam",
-   "annunci": 17,
-   "versioni": {
-    "047382": {
-     "nome": "400 Standard",
-     "annunci": 7
-    },
-    "047425": {
-     "nome": "300 Eco",
-     "annunci": 1
-    },
-    "047381": {
-     "nome": "400 Eco",
-     "annunci": 2
-    },
-    "057628": {
-     "nome": "400.4 L",
-     "annunci": 1
-    },
-    "047383": {
-     "nome": "400 Luxe",
-     "annunci": 2
-    },
-    "047863": {
-     "nome": "400 Mac",
-     "annunci": 1
-    }
-   },
-   "nudo": "300/400"
-  },
-  {
-   "id": "003729",
-   "nome": "Actyon/Actyon Sport",
-   "marca": "SsangYong",
-   "annunci": 15,
-   "versioni": {
-    "079177": {
-     "nome": "Actyon 2.0 XDi 4WD Style",
-     "annunci": 4
-    },
-    "072131": {
-     "nome": "Actyon 2.0 XDi 4WD Plus",
-     "annunci": 3
-    },
-    "079176": {
-     "nome": "Actyon 2.0 XDi 4WD Comfort",
-     "annunci": 3
-    },
-    "079175": {
-     "nome": "Actyon 2.0 XDi 2WD Comfort",
-     "annunci": 3
-    },
-    "079173": {
-     "nome": "Actyon Sports 2.0 XDi 4WD Comf. Pick-up",
-     "annunci": 1
-    }
-   },
-   "nudo": "Actyon/Actyon Sport"
-  },
-  {
-   "id": "004042",
-   "nome": "RR Evoque 1ª serie",
-   "marca": "Land Rover",
-   "annunci": 15,
-   "versioni": {
-    "108069": {
-     "nome": "Range Rover Evoque 2.0 TD4 180 CV 5p. SE Dynamic",
-     "annunci": 2
-    },
-    "108071": {
-     "nome": "Range Rover Evoque 2.0 TD4 180 CV 5p. HSE Dynamic",
-     "annunci": 1
-    },
-    "108072": {
-     "nome": "Range Rover Evoque 2.0 TD4 150 CV 5p. Pure",
-     "annunci": 1
-    },
-    "108073": {
-     "nome": "Range Rover Evoque 2.0 TD4 150 CV 5p. SE",
-     "annunci": 2
-    },
-    "108074": {
-     "nome": "Range Rover Evoque 2.0 TD4 150 CV 5p. SE Dynamic",
-     "annunci": 1
-    },
-    "108076": {
-     "nome": "Range Rover Evoque 2.0 TD4 150 CV 5p. HSE Dynamic",
-     "annunci": 6
-    },
-    "089637": {
-     "nome": "Range Rover Evoque 2.2 TD4 5p. Dynamic",
-     "annunci": 1
-    }
-   },
-   "nudo": "RR Evoque"
   },
   {
    "id": "003641",
@@ -708,47 +198,6 @@
     }
    },
    "nudo": "RX"
-  },
-  {
-   "id": "004098",
-   "nome": "208 1° serie",
-   "marca": "Peugeot",
-   "annunci": 12,
-   "versioni": {
-    "101122": {
-     "nome": "1.4 VTi 95 CV 5p. GPL Allure",
-     "annunci": 1
-    },
-    "108815": {
-     "nome": "BlueHDi 75 5 porte Active",
-     "annunci": 1
-    },
-    "113263": {
-     "nome": "BlueHDi 100 5 porte Allure",
-     "annunci": 1
-    },
-    "094109": {
-     "nome": "1.2 VTi 82 CV 5 porte Allure",
-     "annunci": 1
-    },
-    "094107": {
-     "nome": "1.6 e-HDi 115 CV Stop&Start 5 porte Allure",
-     "annunci": 1
-    },
-    "094108": {
-     "nome": "1.4 HDi 68 CV 5 porte Business",
-     "annunci": 1
-    },
-    "094097": {
-     "nome": "1.4 HDi 68 CV 5 porte Active",
-     "annunci": 1
-    },
-    "094088": {
-     "nome": "1.2 VTi 82 CV 3 porte Allure",
-     "annunci": 1
-    }
-   },
-   "nudo": "208 1° serie"
   },
   {
    "id": "003979",
@@ -879,189 +328,6 @@
    "nudo": "UX"
   },
   {
-   "id": "005274",
-   "nome": "Atto 2 DM-i",
-   "marca": "BYD",
-   "annunci": 11,
-   "versioni": {
-    "156725": {
-     "nome": "Atto 2 DM-i 1.5 165 CV PHEV Active",
-     "annunci": 2
-    },
-    "156726": {
-     "nome": "Atto 2 DM-i 1.5 212 CV PHEV Boost",
-     "annunci": 9
-    }
-   },
-   "nudo": "Atto 2 DM-i"
-  },
-  {
-   "id": "003711",
-   "nome": "X-Too Max",
-   "marca": "Ligier",
-   "annunci": 11,
-   "versioni": {
-    "071413": {
-     "nome": "X-Too Max Pack",
-     "annunci": 3
-    },
-    "071416": {
-     "nome": "X-Too Max Titanium Sport",
-     "annunci": 4
-    }
-   },
-   "nudo": "X-Too Max"
-  },
-  {
-   "id": "004626",
-   "nome": "Cayenne Coupé",
-   "marca": "Porsche",
-   "annunci": 11,
-   "versioni": {
-    "129964": {
-     "nome": "Cayenne Coupé 3.0 V6",
-     "annunci": 4
-    },
-    "136527": {
-     "nome": "Cayenne Coupé 4.0 GTS",
-     "annunci": 1
-    },
-    "144532": {
-     "nome": "Cayenne Coupé 3.0 V6 Platinum Edition",
-     "annunci": 1
-    },
-    "148929": {
-     "nome": "Cayenne Coupé 4.0 V8 S",
-     "annunci": 2
-    }
-   },
-   "nudo": "Cayenne Coupé"
-  },
-  {
-   "id": "004204",
-   "nome": "RR Sport 2ª serie",
-   "marca": "Land Rover",
-   "annunci": 10,
-   "versioni": {
-    "125151": {
-     "nome": "Range Rover Sport 3.0 SDV6 249 CV HSE",
-     "annunci": 1
-    },
-    "125152": {
-     "nome": "Range Rover Sport 3.0 SDV6 249 CV HSE Dynamic",
-     "annunci": 1
-    },
-    "136493": {
-     "nome": "Range Rover Sport 3.0D l6 249 CV HSE",
-     "annunci": 1
-    },
-    "136496": {
-     "nome": "Range Rover Sport 3.0D l6 249 CV HSE Dynamic Stealth",
-     "annunci": 2
-    },
-    "099531": {
-     "nome": "Range Rover Sport 3.0 TDV6 HSE Dynamic",
-     "annunci": 2
-    },
-    "099526": {
-     "nome": "Range Rover Sport 3.0 TDV6 SE",
-     "annunci": 1
-    }
-   },
-   "nudo": "RR Sport"
-  },
-  {
-   "id": "000573",
-   "nome": "Civic 3ª-4ª-5ª ser.",
-   "marca": "Honda",
-   "annunci": 10,
-   "versioni": {
-    "046198": {
-     "nome": "Civic 1.4i 16V cat Aerodeck SR",
-     "annunci": 2
-    },
-    "046197": {
-     "nome": "Civic 1.4i 16V cat Aerodeck S",
-     "annunci": 2
-    },
-    "038377": {
-     "nome": "Civic 1.4i 16V cat 5 porte",
-     "annunci": 3
-    },
-    "008077": {
-     "nome": "Civic 1.4 16V 3 porte GL",
-     "annunci": 1
-    },
-    "020985": {
-     "nome": "Civic 1.6i 16V V-TEC cat 3 porte",
-     "annunci": 1
-    },
-    "043709": {
-     "nome": "Civic 1.4i 16V cat 5 porte Silk",
-     "annunci": 1
-    }
-   },
-   "nudo": "Civic 3ª-4ª-5ª ser."
-  },
-  {
-   "id": "003072",
-   "nome": "IS 1ª serie",
-   "marca": "Lexus",
-   "annunci": 10,
-   "versioni": {
-    "047581": {
-     "nome": "IS 200i 24V cat",
-     "annunci": 8
-    },
-    "056786": {
-     "nome": "IS 200i 24V cat Wagon",
-     "annunci": 1
-    },
-    "049961": {
-     "nome": "IS 200i 24V cat Silver",
-     "annunci": 1
-    }
-   },
-   "nudo": "IS"
-  },
-  {
-   "id": "002198",
-   "nome": "Gr.Cherokee 1ª-2ªs.",
-   "marca": "Jeep",
-   "annunci": 10,
-   "versioni": {
-    "031004": {
-     "nome": "Grand Cherokee 4.0 (EU) 4WD aut. Quadra-Trac Limited",
-     "annunci": 1
-    },
-    "052999": {
-     "nome": "Grand Cherokee 2.7 CRD cat Limited",
-     "annunci": 2
-    },
-    "046056": {
-     "nome": "Grand Cherokee 2.5 TD 4WD Quadra-Trac TSI",
-     "annunci": 1
-    },
-    "047359": {
-     "nome": "Grand Cherokee 3.1 TD cat Limited",
-     "annunci": 2
-    },
-    "057174": {
-     "nome": "Grand Cherokee 2.7 CRD cat Overland",
-     "annunci": 2
-    },
-    "052997": {
-     "nome": "Grand Cherokee 2.7 CRD cat Laredo",
-     "annunci": 1
-    },
-    "041325": {
-     "nome": "Grand Cherokee 2.5 TD 4WD Selec-Trac Limited",
-     "annunci": 1
-    }
-   },
-   "nudo": "Gr.Cherokee"
-  },
-  {
    "id": "002897",
    "nome": "Mini 1ª serie",
    "marca": "Mini",
@@ -1073,27 +339,6 @@
     }
    },
    "nudo": "Mini"
-  },
-  {
-   "id": "005143",
-   "nome": "Jaecoo 7",
-   "marca": "Jaecoo",
-   "annunci": 9,
-   "versioni": {
-    "153833": {
-     "nome": "Jaecoo 7 1.6 TGDI 147 CV aut. Premium",
-     "annunci": 1
-    },
-    "153834": {
-     "nome": "Jaecoo 7 1.6 TGDI 147 CV aut. 4WD Exclusive",
-     "annunci": 4
-    },
-    "156597": {
-     "nome": "Jaecoo 7 1.6 TGDI aut. Pure",
-     "annunci": 1
-    }
-   },
-   "nudo": "Jaecoo 7"
   },
   {
    "id": "000559",
@@ -1152,39 +397,6 @@
     }
    },
    "nudo": "Mini Countrym."
-  },
-  {
-   "id": "003579",
-   "nome": "RR Sport 1ª serie",
-   "marca": "Land Rover",
-   "annunci": 8,
-   "versioni": {
-    "065244": {
-     "nome": "Range Rover Sport 2.7 TDV6 HSE",
-     "annunci": 2
-    },
-    "081863": {
-     "nome": "Range Rover Sport 3.0 SDV6 SE",
-     "annunci": 2
-    },
-    "087026": {
-     "nome": "Range Rover Sport 3.0 SDV6 Autobiography",
-     "annunci": 1
-    },
-    "081864": {
-     "nome": "Range Rover Sport 3.0 SDV6 HSE",
-     "annunci": 1
-    },
-    "065243": {
-     "nome": "Range Rover Sport 2.7 TDV6 SE",
-     "annunci": 1
-    },
-    "065242": {
-     "nome": "Range Rover Sport 2.7 TDV6 S",
-     "annunci": 1
-    }
-   },
-   "nudo": "RR Sport"
   },
   {
    "id": "004230",
@@ -1340,147 +552,6 @@
    "nudo": "GLC Coupé"
   },
   {
-   "id": "003420",
-   "nome": "Focus 2/Focus C-Max",
-   "marca": "Ford",
-   "annunci": 7,
-   "versioni": {
-    "065373": {
-     "nome": "Focus C-Max 1.6 TDCi (90CV) Ghia",
-     "annunci": 1
-    },
-    "065353": {
-     "nome": "Focus 1.6 TDCi (90CV) S.W.",
-     "annunci": 1
-    },
-    "065762": {
-     "nome": "Focus 1.8 TDCi (115CV) S.W.",
-     "annunci": 2
-    },
-    "065352": {
-     "nome": "Focus 1.6 TDCi (90CV) 5p.",
-     "annunci": 1
-    },
-    "063730": {
-     "nome": "Focus C-Max 1.6 VCT (115CV) 16V Ghia",
-     "annunci": 1
-    },
-    "074213": {
-     "nome": "Focu+ 1.6 TDCi (110CV) 5p. DPF",
-     "annunci": 1
-    }
-   },
-   "nudo": "Focus 2/Focus C-Max"
-  },
-  {
-   "id": "003921",
-   "nome": "Ecodaily (2009-11)",
-   "marca": "Iveco",
-   "annunci": 7,
-   "versioni": {
-    "082707": {
-     "nome": "35S13 2.3 Hpi PM Midicab",
-     "annunci": 2
-    },
-    "082693": {
-     "nome": "29L10 2.3 Hpi PM Minicab",
-     "annunci": 1
-    },
-    "082695": {
-     "nome": "29L12 2.3 Hpi PM Minicab",
-     "annunci": 1
-    },
-    "082698": {
-     "nome": "29L14 2.3 Hpt PM Minicab",
-     "annunci": 2
-    },
-    "083572": {
-     "nome": "35C17V EEV BarTor 3.0 Hpt PL-TA-RG Fur.",
-     "annunci": 1
-    }
-   },
-   "nudo": "Ecodaily"
-  },
-  {
-   "id": "002949",
-   "nome": "Forester 1ª-2ª ser.",
-   "marca": "Subaru",
-   "annunci": 7,
-   "versioni": {
-    "075942": {
-     "nome": "Forester 2.0 16V cat X CLGP Bi-Fuel",
-     "annunci": 1
-    },
-    "056305": {
-     "nome": "Forester 2.0 16V cat X VR",
-     "annunci": 1
-    },
-    "070020": {
-     "nome": "Forester 2.0 16V cat X ZM",
-     "annunci": 1
-    },
-    "045702": {
-     "nome": "Forester 2.0 16V cat 4WD WZ",
-     "annunci": 2
-    },
-    "045700": {
-     "nome": "Forester 2.0 16V cat BX",
-     "annunci": 1
-    },
-    "063465": {
-     "nome": "Forester 2.0 16V cat X JTG MQ Bi-Fuel",
-     "annunci": 1
-    }
-   },
-   "nudo": "Forester 1ª-2ª ser."
-  },
-  {
-   "id": "005152",
-   "nome": "Sportequipe 6 GT",
-   "marca": "Sportequipe",
-   "annunci": 7,
-   "versioni": {
-    "153996": {
-     "nome": "Sportequipe 6 GT 1.5 Turbo DCT",
-     "annunci": 1
-    },
-    "153997": {
-     "nome": "Sportequipe 6 GT 1.6 T-GDI DCT",
-     "annunci": 4
-    },
-    "154458": {
-     "nome": "Sportequipe 6 GT 1.6 T-GDI DCT GPL",
-     "annunci": 1
-    }
-   },
-   "nudo": "Sportequipe 6 GT"
-  },
-  {
-   "id": "001532",
-   "nome": "Vitara/Sidekick",
-   "marca": "Suzuki",
-   "annunci": 7,
-   "versioni": {
-    "038227": {
-     "nome": "Vitara 1.6i 16V cat JX",
-     "annunci": 2
-    },
-    "014632": {
-     "nome": "Vitara 1.6 JLX",
-     "annunci": 2
-    },
-    "025558": {
-     "nome": "Vitara 1.6i 16V cat 5 porte JLX P.Pack",
-     "annunci": 1
-    },
-    "014631": {
-     "nome": "Vitara 1.6 JX",
-     "annunci": 1
-    }
-   },
-   "nudo": "Vitara/Sidekick"
-  },
-  {
    "id": "002779",
    "nome": "Mégane/Scénic 1ª s.",
    "marca": "Renault",
@@ -1508,101 +579,6 @@
     }
    },
    "nudo": "Mégane/Scénic"
-  },
-  {
-   "id": "003749",
-   "nome": "cee'd 1ª serie",
-   "marca": "Kia",
-   "annunci": 6,
-   "versioni": {
-    "078947": {
-     "nome": "cee'd Sp. Wag. 1.4 109CV LX Bi-Fuel",
-     "annunci": 2
-    },
-    "078944": {
-     "nome": "cee'd 1.4 109CV 5p. EX Bi-Fuel",
-     "annunci": 1
-    },
-    "075501": {
-     "nome": "cee'd Sp. Wag. 1.6 CRDi VGT 115CV EX",
-     "annunci": 1
-    },
-    "075500": {
-     "nome": "cee'd Sp. Wag. 1.6 CRDi VGT 90CV LX",
-     "annunci": 1
-    },
-    "073097": {
-     "nome": "cee'd 1.4 109CV 5p. EX",
-     "annunci": 1
-    }
-   },
-   "nudo": "cee'd"
-  },
-  {
-   "id": "004586",
-   "nome": "Ceed",
-   "marca": "Kia",
-   "annunci": 6,
-   "versioni": {
-    "126911": {
-     "nome": "Ceed 1.4 T-GDi 5p. Evolution",
-     "annunci": 1
-    },
-    "126914": {
-     "nome": "Ceed 1.6 CRDi 115 CV 5p. Pure",
-     "annunci": 1
-    },
-    "126923": {
-     "nome": "Ceed 1.4 T-GDi DCT SW Business Class",
-     "annunci": 1
-    },
-    "126925": {
-     "nome": "Ceed 1.6 CRDi 115 CV SW Pure",
-     "annunci": 1
-    },
-    "126926": {
-     "nome": "Ceed 1.6 CRDi 115 CV SW Business Class",
-     "annunci": 1
-    },
-    "128562": {
-     "nome": "Ceed 1.4 MPi GPL 5p. Pure",
-     "annunci": 1
-    }
-   },
-   "nudo": "Ceed"
-  },
-  {
-   "id": "002883",
-   "nome": "Octavia/4&4",
-   "marca": "Skoda",
-   "annunci": 6,
-   "versioni": {
-    "060991": {
-     "nome": "4&4 1.9 TDI/101 CV cat",
-     "annunci": 1
-    },
-    "047868": {
-     "nome": "Octavia 1.9 TDI cat Wagon 4WD SLX",
-     "annunci": 1
-    },
-    "049196": {
-     "nome": "Octavia 1.9 TDI/90 CV cat Wag. Classic",
-     "annunci": 1
-    },
-    "049198": {
-     "nome": "Octavia 1.9 TDI/110 CV cat Wag. Amb.e",
-     "annunci": 1
-    },
-    "043383": {
-     "nome": "Octavia 1.8 cat SLX",
-     "annunci": 1
-    },
-    "049187": {
-     "nome": "Octavia 1.9 TDI/110 CV cat Elegance",
-     "annunci": 1
-    }
-   },
-   "nudo": "Octavia/4&4"
   },
   {
    "id": "003321",
@@ -1647,65 +623,6 @@
    "nudo": "CT"
   },
   {
-   "id": "003632",
-   "nome": "Scouty",
-   "marca": "Aixam",
-   "annunci": 6,
-   "versioni": {
-    "069613": {
-     "nome": "Scouty R",
-     "annunci": 2
-    },
-    "067313": {
-     "nome": "Scouty",
-     "annunci": 3
-    }
-   },
-   "nudo": "Scouty"
-  },
-  {
-   "id": "001107",
-   "nome": "SJ400/Samurai",
-   "marca": "Suzuki",
-   "annunci": 6,
-   "versioni": {
-    "014439": {
-     "nome": "Samurai 1.3 Cabriolet De Luxe",
-     "annunci": 1
-    },
-    "007217": {
-     "nome": "SJ410 Cabriolet De Luxe",
-     "annunci": 1
-    },
-    "021198": {
-     "nome": "Samurai 1.0 Berlina",
-     "annunci": 1
-    },
-    "014441": {
-     "nome": "Samurai 1.3 Berlina De Luxe (tetto alto)",
-     "annunci": 1
-    },
-    "007213": {
-     "nome": "SJ410 Berlina De Luxe",
-     "annunci": 1
-    }
-   },
-   "nudo": "SJ400/Samurai"
-  },
-  {
-   "id": "004313",
-   "nome": "Panda Cross",
-   "marca": "Fiat",
-   "annunci": 5,
-   "versioni": {
-    "105827": {
-     "nome": "Panda Cross 0.9 TwinAir Turbo S&S 4x4",
-     "annunci": 2
-    }
-   },
-   "nudo": "Panda Cross"
-  },
-  {
    "id": "002753",
    "nome": "Bravo/Brava",
    "marca": "Fiat",
@@ -1729,44 +646,6 @@
     }
    },
    "nudo": "Bravo/Brava"
-  },
-  {
-   "id": "002888",
-   "nome": "Ka 1ª serie",
-   "marca": "Ford",
-   "annunci": 5,
-   "versioni": {
-    "043522": {
-     "nome": "Ka 1.3",
-     "annunci": 4
-    },
-    "046625": {
-     "nome": "Ka 1.3 University",
-     "annunci": 1
-    }
-   },
-   "nudo": "Ka"
-  },
-  {
-   "id": "004020",
-   "nome": "Gr.Cherokee 4ª s.",
-   "marca": "Jeep",
-   "annunci": 5,
-   "versioni": {
-    "108174": {
-     "nome": "Grand Cherokee 3.0 V6 CRD 250 CV MJT II Summit Platinum Ed.",
-     "annunci": 1
-    },
-    "089721": {
-     "nome": "Grand Cherokee 3.0 CRD 241 CV Overland",
-     "annunci": 1
-    },
-    "099904": {
-     "nome": "Grand Cherokee 3.0 V6 CRD 250 CV Multijet II Overland",
-     "annunci": 2
-    }
-   },
-   "nudo": "Gr.Cherokee"
   },
   {
    "id": "003597",
@@ -1836,48 +715,6 @@
    "nudo": "NX"
   },
   {
-   "id": "005245",
-   "nome": "Seal 6 DM-i",
-   "marca": "BYD",
-   "annunci": 5,
-   "versioni": {
-    "156386": {
-     "nome": "Seal 6 DM-i 1.5 212 CV PHEV Touring Comfort Lite",
-     "annunci": 3
-    },
-    "156387": {
-     "nome": "Seal 6 DM-i 1.5 212 CV PHEV Touring Comfort",
-     "annunci": 2
-    }
-   },
-   "nudo": "Seal 6 DM-i"
-  },
-  {
-   "id": "004764",
-   "nome": "Porter NP6",
-   "marca": "Piaggio",
-   "annunci": 5,
-   "versioni": {
-    "145240": {
-     "nome": "Porter NP6 1.5 PC Long Range LPG Cabinato Pro",
-     "annunci": 1
-    },
-    "145247": {
-     "nome": "Porter NP6 1.5 PC Short Range LPG Cassonato Standard Pro",
-     "annunci": 1
-    },
-    "145253": {
-     "nome": "Porter NP6 1.5 PL Long Range LPG Cabinato Pro",
-     "annunci": 1
-    },
-    "145255": {
-     "nome": "Porter NP6 1.5 PL Long Range LPG Cassonato Standard Pro",
-     "annunci": 1
-    }
-   },
-   "nudo": "Porter NP6"
-  },
-  {
    "id": "004285",
    "nome": "Mini 5 porte (F55)",
    "marca": "Mini",
@@ -1905,27 +742,6 @@
     }
    },
    "nudo": "Mini 5 porte"
-  },
-  {
-   "id": "004190",
-   "nome": "2008 1° serie",
-   "marca": "Peugeot",
-   "annunci": 5,
-   "versioni": {
-    "102456": {
-     "nome": "1.2 e-VTi 82 CV Start&Stop ETG5 Active",
-     "annunci": 1
-    },
-    "109274": {
-     "nome": "BlueHDi 100 S&S Black Matt",
-     "annunci": 1
-    },
-    "124960": {
-     "nome": "PureTech 82 S&S Active",
-     "annunci": 1
-    }
-   },
-   "nudo": "2008 1° serie"
   },
   {
    "id": "003968",
@@ -1978,23 +794,6 @@
    "nudo": "GLC Coupé"
   },
   {
-   "id": "004878",
-   "nome": "RR Sport 3ª serie",
-   "marca": "Land Rover",
-   "annunci": 4,
-   "versioni": {
-    "145121": {
-     "nome": "Range Rover Sport 3.0D l6 249 CV SE",
-     "annunci": 2
-    },
-    "145122": {
-     "nome": "Range Rover Sport 3.0D l6 249 CV Dynamic SE",
-     "annunci": 1
-    }
-   },
-   "nudo": "RR Sport"
-  },
-  {
    "id": "002992",
    "nome": "XJ-Sovereign-Daiml.",
    "marca": "Jaguar",
@@ -2039,27 +838,6 @@
     }
    },
    "nudo": "XJ/Sover/Daim"
-  },
-  {
-   "id": "004846",
-   "nome": "Mazda2 Hybrid",
-   "marca": "Mazda",
-   "annunci": 4,
-   "versioni": {
-    "143763": {
-     "nome": "Mazda2 Hybrid 1.5 VVT e-CVT Full Hybrid Electric Agile",
-     "annunci": 1
-    },
-    "151220": {
-     "nome": "Mazda2 Hybrid 1.5 VVT e-CVT Full Hybrid Electric Homura",
-     "annunci": 1
-    },
-    "151221": {
-     "nome": "Mazda2 Hybrid 1.5 VVT e-CVT Full Hybrid Electric Homura Plus",
-     "annunci": 2
-    }
-   },
-   "nudo": "Mazda2 Hybrid"
   },
   {
    "id": "004389",
@@ -2186,83 +964,6 @@
    "annunci": 3,
    "versioni": {},
    "nudo": "901/911/912"
-  },
-  {
-   "id": "002464",
-   "nome": "323 F 4a serie/Lan.",
-   "marca": "Mazda",
-   "annunci": 3,
-   "versioni": {
-    "038361": {
-     "nome": "323 F Lantis 1.8i 16V cat 5 porte GLX",
-     "annunci": 2
-    },
-    "042382": {
-     "nome": "323 F Lantis 1.5i 16V cat 5 porte",
-     "annunci": 1
-    }
-   },
-   "nudo": "323 F 4a serie/Lan."
-  },
-  {
-   "id": "000574",
-   "nome": "Colt 2-3-4ª s. 3p.",
-   "marca": "Mitsubishi",
-   "annunci": 3,
-   "versioni": {
-    "002831": {
-     "nome": "Colt 1.2 GL",
-     "annunci": 2
-    }
-   },
-   "nudo": "Colt 2-3-4ª s. 3p."
-  },
-  {
-   "id": "005215",
-   "nome": "Omoda 9 SHS",
-   "marca": "Omoda",
-   "annunci": 3,
-   "versioni": {
-    "155651": {
-     "nome": "Omoda 9 1.5 TGDI 537 CV Super Hybrid System i-AWD Premium",
-     "annunci": 2
-    }
-   },
-   "nudo": "Omoda 9 SHS"
-  },
-  {
-   "id": "005256",
-   "nome": "Omoda 5 SHS",
-   "marca": "Omoda",
-   "annunci": 3,
-   "versioni": {
-    "156486": {
-     "nome": "Omoda 5 1.5 TGDi Super Hybrid System 224 CV Pure",
-     "annunci": 1
-    },
-    "156487": {
-     "nome": "Omoda 5 1.5 TGDi Super Hybrid System 224 CV Premium",
-     "annunci": 1
-    }
-   },
-   "nudo": "Omoda 5 SHS"
-  },
-  {
-   "id": "005265",
-   "nome": "Sportequipe 8 GT",
-   "marca": "Sportequipe",
-   "annunci": 3,
-   "versioni": {
-    "156599": {
-     "nome": "Sportequipe 8 GT 1.6 T-GDI DCT",
-     "annunci": 2
-    },
-    "156600": {
-     "nome": "Sportequipe 8 GT 1.6 T-GDI DCT GPL",
-     "annunci": 1
-    }
-   },
-   "nudo": "Sportequipe 8 GT"
   },
   {
    "id": "003318",
@@ -2426,109 +1127,6 @@
    "nudo": "Serie 2 Cpé"
   },
   {
-   "id": "004070",
-   "nome": "Focus 3ª serie Bs",
-   "marca": "Ford",
-   "annunci": 2,
-   "versioni": {
-    "092532": {
-     "nome": "Focus 1.6 105CV SW Business",
-     "annunci": 1
-    },
-    "092522": {
-     "nome": "Focus 1.6 TDCi 115CV 5p. Business",
-     "annunci": 1
-    }
-   },
-   "nudo": "Focus 3ª serie Bs"
-  },
-  {
-   "id": "004437",
-   "nome": "Ka+",
-   "marca": "Ford",
-   "annunci": 2,
-   "versioni": {
-    "116448": {
-     "nome": "1.2 Ti-VCT 85CV Ultimate",
-     "annunci": 1
-    },
-    "125790": {
-     "nome": "1.2 85 CV Start&Stop Ultimate",
-     "annunci": 1
-    }
-   },
-   "nudo": "Ka+"
-  },
-  {
-   "id": "003879",
-   "nome": "Ka 2ª serie",
-   "marca": "Ford",
-   "annunci": 2,
-   "versioni": {
-    "079570": {
-     "nome": "Ka+ 1.2 8V 69CV",
-     "annunci": 1
-    }
-   },
-   "nudo": "Ka"
-  },
-  {
-   "id": "001508",
-   "nome": "19",
-   "marca": "Renault",
-   "annunci": 2,
-   "versioni": {
-    "020680": {
-     "nome": "Chamade 1.8i 16V",
-     "annunci": 1
-    },
-    "013536": {
-     "nome": "1.4 5 porte GTS",
-     "annunci": 1
-    }
-   },
-   "nudo": "19"
-  },
-  {
-   "id": "000098",
-   "nome": "5",
-   "marca": "Renault",
-   "annunci": 2,
-   "versioni": {
-    "000293": {
-     "nome": "1.4 turbo GT",
-     "annunci": 1
-    }
-   },
-   "nudo": "5"
-  },
-  {
-   "id": "000100",
-   "nome": "11",
-   "marca": "Renault",
-   "annunci": 2,
-   "versioni": {
-    "000319": {
-     "nome": "1.1 3 porte TC",
-     "annunci": 2
-    }
-   },
-   "nudo": "11"
-  },
-  {
-   "id": "003599",
-   "nome": "Gr.Cherokee 3ª s.",
-   "marca": "Jeep",
-   "annunci": 2,
-   "versioni": {
-    "078069": {
-     "nome": "Grand Cherokee 3.0 CRD DPF Limited",
-     "annunci": 1
-    }
-   },
-   "nudo": "Gr.Cherokee"
-  },
-  {
    "id": "002646",
    "nome": "Gtv/Spider",
    "marca": "Alfa Romeo",
@@ -2550,19 +1148,6 @@
    "nudo": "Mini"
   },
   {
-   "id": "002390",
-   "nome": "Terrano II",
-   "marca": "Nissan",
-   "annunci": 2,
-   "versioni": {
-    "058130": {
-     "nome": "Terrano 2.7 Tdi 3 porte Hard Top",
-     "annunci": 1
-    }
-   },
-   "nudo": "Terrano II"
-  },
-  {
    "id": "003109",
    "nome": "Almera 2ª s./Tino",
    "marca": "Nissan",
@@ -2574,53 +1159,6 @@
     }
    },
    "nudo": "Almera 2ª s./Tino"
-  },
-  {
-   "id": "002011",
-   "nome": "Lantra/Elantra",
-   "marca": "Hyundai",
-   "annunci": 2,
-   "versioni": {
-    "040976": {
-     "nome": "Lantra 1.6i 16V cat GL",
-     "annunci": 1
-    },
-    "044453": {
-     "nome": "Lantra 1.5i 12V cat S.W. GL Air",
-     "annunci": 1
-    }
-   },
-   "nudo": "Lantra/Elantra"
-  },
-  {
-   "id": "004466",
-   "nome": "V90 CC (2016-2024)",
-   "marca": "Volvo",
-   "annunci": 2,
-   "versioni": {
-    "118524": {
-     "nome": "V90 Cross Country D4 AWD Pro",
-     "annunci": 1
-    }
-   },
-   "nudo": "V90 CC"
-  },
-  {
-   "id": "004159",
-   "nome": "V40 CC (2012-2020)",
-   "marca": "Volvo",
-   "annunci": 2,
-   "versioni": {
-    "120149": {
-     "nome": "V40 Cross Country D2",
-     "annunci": 1
-    },
-    "099094": {
-     "nome": "V40 Cross Country T4 AWD Geartronic Kinetic",
-     "annunci": 1
-    }
-   },
-   "nudo": "V40 CC"
   },
   {
    "id": "001509",
@@ -2638,57 +1176,6 @@
     }
    },
    "nudo": "Serie 400"
-  },
-  {
-   "id": "004343",
-   "nome": "V60 CC (2015-2018)",
-   "marca": "Volvo",
-   "annunci": 2,
-   "versioni": {
-    "108687": {
-     "nome": "V60 Cross Country D3 Momentum",
-     "annunci": 1
-    },
-    "120701": {
-     "nome": "V60 Cross Country D3",
-     "annunci": 1
-    }
-   },
-   "nudo": "V60 CC"
-  },
-  {
-   "id": "004591",
-   "nome": "V60 CC (2018-2024)",
-   "marca": "Volvo",
-   "annunci": 2,
-   "versioni": {
-    "143835": {
-     "nome": "V60 Cross Country B4 (d) AWD automatico Core",
-     "annunci": 1
-    },
-    "143837": {
-     "nome": "V60 Cross Country B4 (d) AWD automatico Ultimate",
-     "annunci": 1
-    }
-   },
-   "nudo": "V60 CC"
-  },
-  {
-   "id": "002089",
-   "nome": "Serie 800",
-   "marca": "Volvo",
-   "annunci": 2,
-   "versioni": {
-    "026664": {
-     "nome": "850 2.0i 20V cat GLT",
-     "annunci": 1
-    },
-    "040626": {
-     "nome": "850 2.5 TDI",
-     "annunci": 1
-    }
-   },
-   "nudo": "Serie 800"
   },
   {
    "id": "005263",
@@ -2712,32 +1199,6 @@
    "nudo": "XK/XKR"
   },
   {
-   "id": "001028",
-   "nome": "323 F 2ª-3ª serie",
-   "marca": "Mazda",
-   "annunci": 2,
-   "versioni": {
-    "008538": {
-     "nome": "323 1.6 16V 4 porte GLX",
-     "annunci": 1
-    }
-   },
-   "nudo": "323 F"
-  },
-  {
-   "id": "003041",
-   "nome": "GT",
-   "marca": "Maserati",
-   "annunci": 2,
-   "versioni": {
-    "046941": {
-     "nome": "3200 GT",
-     "annunci": 1
-    }
-   },
-   "nudo": "GT"
-  },
-  {
    "id": "004206",
    "nome": "IS 3ª serie",
    "marca": "Lexus",
@@ -2751,19 +1212,6 @@
    "nudo": "IS"
   },
   {
-   "id": "003146",
-   "nome": "RX 1ª serie",
-   "marca": "Lexus",
-   "annunci": 2,
-   "versioni": {
-    "049434": {
-     "nome": "RX 300",
-     "annunci": 2
-    }
-   },
-   "nudo": "RX"
-  },
-  {
    "id": "003635",
    "nome": "A.741",
    "marca": "Aixam",
@@ -2775,36 +1223,6 @@
     }
    },
    "nudo": "A.741"
-  },
-  {
-   "id": "004180",
-   "nome": "Rexton W",
-   "marca": "SsangYong",
-   "annunci": 2,
-   "versioni": {
-    "101007": {
-     "nome": "2.0 Xdi 4WD A/T Top",
-     "annunci": 1
-    },
-    "098608": {
-     "nome": "2.0 Xdi 4WD A/T Classy",
-     "annunci": 1
-    }
-   },
-   "nudo": "Rexton W"
-  },
-  {
-   "id": "005153",
-   "nome": "Sportequipe 7 GTW",
-   "marca": "Sportequipe",
-   "annunci": 2,
-   "versioni": {
-    "153999": {
-     "nome": "Sportequipe 7 GTW 1.6 T-GDI DCT",
-     "annunci": 2
-    }
-   },
-   "nudo": "Sportequipe 7 GTW"
   },
   {
    "id": "004202",
@@ -2822,39 +1240,6 @@
     }
    },
    "nudo": "Mini Clubman"
-  },
-  {
-   "id": "004210",
-   "nome": "500L Living",
-   "marca": "Fiat",
-   "annunci": 1,
-   "versioni": {
-    "101461": {
-     "nome": "500L Living 1.6 Multijet 120 CV Business",
-     "annunci": 1
-    }
-   },
-   "nudo": "500L Living"
-  },
-  {
-   "id": "004212",
-   "nome": "500L Pro",
-   "marca": "Fiat",
-   "annunci": 1,
-   "versioni": {
-    "117739": {
-     "nome": "500L Pro 1.6 MJT 120CV Pop Star 4 posti (N1)",
-     "annunci": 1
-    }
-   },
-   "nudo": "500L Pro"
-  },
-  {
-   "id": "004452",
-   "nome": "A3 Sportback e-tron",
-   "marca": "Audi",
-   "annunci": 1,
-   "nudo": "A3 Sportback e-tron"
   },
   {
    "id": "004373",
@@ -2904,19 +1289,6 @@
    "nudo": "Classe CLS"
   },
   {
-   "id": "004319",
-   "nome": "GT (C/R190)",
-   "marca": "Mercedes-Benz",
-   "annunci": 1,
-   "versioni": {
-    "118666": {
-     "nome": "GT AMG R",
-     "annunci": 1
-    }
-   },
-   "nudo": "GT"
-  },
-  {
    "id": "002321",
    "nome": "Serie SL (R107)",
    "marca": "Mercedes-Benz",
@@ -2962,14 +1334,6 @@
     }
    },
    "nudo": "Classe CL"
-  },
-  {
-   "id": "004986",
-   "nome": "eCitan",
-   "marca": "Mercedes-Benz",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "eCitan"
   },
   {
    "id": "003323",
@@ -3032,66 +1396,6 @@
    "nudo": "E-Transit Custom"
   },
   {
-   "id": "004074",
-   "nome": "Ka 2ª serie Bs",
-   "marca": "Ford",
-   "annunci": 1,
-   "versioni": {
-    "092730": {
-     "nome": "Ka+ 1.2 8V 69CV Business",
-     "annunci": 1
-    }
-   },
-   "nudo": "Ka 2ª serie Bs"
-  },
-  {
-   "id": "004246",
-   "nome": "Transit 2014",
-   "marca": "Ford",
-   "annunci": 1,
-   "versioni": {
-    "131804": {
-     "nome": "Transit 310 2.0TDCi EcoBlue 130CV aut. PM-TM Combi Titanium",
-     "annunci": 1
-    }
-   },
-   "nudo": "Transit 2014"
-  },
-  {
-   "id": "004727",
-   "nome": "Twingo El.(2020-23)",
-   "marca": "Renault",
-   "annunci": 1,
-   "versioni": {
-    "143151": {
-     "nome": "Twingo Electric Urban Night",
-     "annunci": 1
-    }
-   },
-   "nudo": "Twingo El."
-  },
-  {
-   "id": "000462",
-   "nome": "4",
-   "marca": "Renault",
-   "annunci": 1,
-   "versioni": {
-    "001988": {
-     "nome": "950",
-     "annunci": 1
-    }
-   },
-   "nudo": "4"
-  },
-  {
-   "id": "004107",
-   "nome": "Combo Tour",
-   "marca": "Opel",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "Combo Tour"
-  },
-  {
    "id": "000043",
    "nome": "Alfetta GT/GTV",
    "marca": "Alfa Romeo",
@@ -3123,45 +1427,6 @@
    "marca": "Mini",
    "annunci": 1,
    "nudo": "Mini Cabrio"
-  },
-  {
-   "id": "003009",
-   "nome": "Patrol GR 2ª serie",
-   "marca": "Nissan",
-   "annunci": 1,
-   "versioni": {
-    "048830": {
-     "nome": "Patrol GR 3.0 TD Di 3 porte Luxury Hard Top",
-     "annunci": 1
-    }
-   },
-   "nudo": "Patrol GR"
-  },
-  {
-   "id": "000543",
-   "nome": "Patrol/Safari 1ª s.",
-   "marca": "Nissan",
-   "annunci": 1,
-   "versioni": {
-    "011764": {
-     "nome": "Patrol TRL 3.3 diesel Hard-Top autocarro",
-     "annunci": 1
-    }
-   },
-   "nudo": "Patrol/Safari"
-  },
-  {
-   "id": "001639",
-   "nome": "Beta Berlina",
-   "marca": "Lancia",
-   "annunci": 1,
-   "versioni": {
-    "028691": {
-     "nome": "Beta 1.6",
-     "annunci": 1
-    }
-   },
-   "nudo": "Beta Berlina"
   },
   {
    "id": "002900",
@@ -3197,104 +1462,12 @@
    "nudo": "XK8/XKR"
   },
   {
-   "id": "003201",
-   "nome": "B-2500",
-   "marca": "Mazda",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "B-2500"
-  },
-  {
-   "id": "005109",
-   "nome": "dr 6.0 PHEV",
-   "marca": "DR Automobiles",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "dr 6.0 PHEV"
-  },
-  {
    "id": "004674",
    "nome": "SF90",
    "marca": "Ferrari",
    "annunci": 1,
    "versioni": {},
    "nudo": "SF90"
-  },
-  {
-   "id": "002704",
-   "nome": "Dino 208 GT/4",
-   "marca": "Ferrari",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "Dino 208 GT/4"
-  },
-  {
-   "id": "002709",
-   "nome": "512 BB",
-   "marca": "Ferrari",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "512 BB"
-  },
-  {
-   "id": "004328",
-   "nome": "L200 2B Free",
-   "marca": "Mitsubishi",
-   "annunci": 1,
-   "versioni": {
-    "107127": {
-     "nome": "L200 2.5 DI-D Double Cab Intense",
-     "annunci": 1
-    }
-   },
-   "nudo": "L200 2B Free"
-  },
-  {
-   "id": "002120",
-   "nome": "Colt 5 porte1980/86",
-   "marca": "Mitsubishi",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "Colt 5 porte1980/86"
-  },
-  {
-   "id": "002908",
-   "nome": "Corvette C5",
-   "marca": "Chevrolet",
-   "annunci": 1,
-   "versioni": {
-    "043968": {
-     "nome": "Corvette C5 5.7 V8 Coupé",
-     "annunci": 1
-    }
-   },
-   "nudo": "Corvette C5"
-  },
-  {
-   "id": "002508",
-   "nome": "S-Blazer 2ª serie",
-   "marca": "Chevrolet",
-   "annunci": 1,
-   "versioni": {
-    "036361": {
-     "nome": "Blazer 4.3 V6 5 porte 4WD (EU)",
-     "annunci": 1
-    }
-   },
-   "nudo": "S-Blazer"
-  },
-  {
-   "id": "004247",
-   "nome": "Corvette Stingray",
-   "marca": "Chevrolet",
-   "annunci": 1,
-   "versioni": {
-    "102854": {
-     "nome": "Corvette Stingray 6.2 V8 Coupé",
-     "annunci": 1
-    }
-   },
-   "nudo": "Corvette Stingray"
   },
   {
    "id": "000530",
@@ -3334,45 +1507,6 @@
     }
    },
    "nudo": "UX Full Electric"
-  },
-  {
-   "id": "002460",
-   "nome": "GS 1ª serie",
-   "marca": "Lexus",
-   "annunci": 1,
-   "versioni": {
-    "035074": {
-     "nome": "GS 300i 24V cat",
-     "annunci": 1
-    }
-   },
-   "nudo": "GS"
-  },
-  {
-   "id": "005284",
-   "nome": "Omoda 7 SHS",
-   "marca": "Omoda",
-   "annunci": 1,
-   "versioni": {
-    "156923": {
-     "nome": "Omoda 7 1.5 TGDi Super Hybrid System 279 CV Premium",
-     "annunci": 1
-    }
-   },
-   "nudo": "Omoda 7 SHS"
-  },
-  {
-   "id": "005189",
-   "nome": "Jaecoo 7 Super Hyb.",
-   "marca": "Jaecoo",
-   "annunci": 1,
-   "versioni": {
-    "154597": {
-     "nome": "Jaecoo 7 1.5 TGDI PHEV Exclusive",
-     "annunci": 1
-    }
-   },
-   "nudo": "Jaecoo 7 Super Hyb."
   },
   {
    "id": "005064",
@@ -3450,27 +1584,6 @@
    "nudo": "ZT 125 G"
   },
   {
-   "id": "005717",
-   "nome": "Sfida SR1 125",
-   "marca": "Voge",
-   "annunci": 17,
-   "versioni": {
-    "017866": {
-     "nome": "ADV",
-     "annunci": 3
-    }
-   },
-   "nudo": "Sfida SR1 125"
-  },
-  {
-   "id": "006454",
-   "nome": "Sfida SR16 125",
-   "marca": "Voge",
-   "annunci": 15,
-   "versioni": {},
-   "nudo": "Sfida SR16 125"
-  },
-  {
    "id": "002900",
    "nome": "ZT 125",
    "marca": "Zontes",
@@ -3514,126 +1627,6 @@
    "nudo": "TXM 125"
   },
   {
-   "id": "005305",
-   "nome": "Valico 525",
-   "marca": "Voge",
-   "annunci": 11,
-   "versioni": {
-    "015113": {
-     "nome": "DSX",
-     "annunci": 5
-    }
-   },
-   "nudo": "Valico 525"
-  },
-  {
-   "id": "001186",
-   "nome": "F-act 50",
-   "marca": "Keeway",
-   "annunci": 11,
-   "versioni": {
-    "006782": {
-     "nome": "Evo 4T",
-     "annunci": 4
-    },
-    "003815": {
-     "nome": "Evo",
-     "annunci": 6
-    },
-    "004345": {
-     "nome": "Evo Sport",
-     "annunci": 1
-    }
-   },
-   "nudo": "F-act 50"
-  },
-  {
-   "id": "005911",
-   "nome": "Valico 900",
-   "marca": "Voge",
-   "annunci": 11,
-   "versioni": {
-    "017867": {
-     "nome": "DSX",
-     "annunci": 5
-    }
-   },
-   "nudo": "Valico 900"
-  },
-  {
-   "id": "003174",
-   "nome": "Trofeo 300",
-   "marca": "Voge",
-   "annunci": 10,
-   "versioni": {
-    "007449": {
-     "nome": "AC",
-     "annunci": 6
-    },
-    "007919": {
-     "nome": "ACX Scrambler",
-     "annunci": 3
-    }
-   },
-   "nudo": "Trofeo 300"
-  },
-  {
-   "id": "006491",
-   "nome": "Valico 625",
-   "marca": "Voge",
-   "annunci": 9,
-   "versioni": {
-    "020208": {
-     "nome": "DSX",
-     "annunci": 2
-    }
-   },
-   "nudo": "Valico 625"
-  },
-  {
-   "id": "003172",
-   "nome": "Brivido 300",
-   "marca": "Voge",
-   "annunci": 8,
-   "versioni": {
-    "007706": {
-     "nome": "RR",
-     "annunci": 1
-    },
-    "007447": {
-     "nome": "R",
-     "annunci": 5
-    }
-   },
-   "nudo": "Brivido 300"
-  },
-  {
-   "id": "006552",
-   "nome": "SRT 600",
-   "marca": "QJ Motor",
-   "annunci": 7,
-   "versioni": {
-    "020497": {
-     "nome": "SX",
-     "annunci": 1
-    }
-   },
-   "nudo": "SRT 600"
-  },
-  {
-   "id": "006478",
-   "nome": "XDV 125 EVO",
-   "marca": "Keeway",
-   "annunci": 7,
-   "versioni": {
-    "020184": {
-     "nome": "PRO",
-     "annunci": 2
-    }
-   },
-   "nudo": "XDV 125 EVO"
-  },
-  {
    "id": "003176",
    "nome": "Valico 500",
    "marca": "Voge",
@@ -3651,30 +1644,6 @@
    "nudo": "Valico 500"
   },
   {
-   "id": "006841",
-   "nome": "Valico 800",
-   "marca": "Voge",
-   "annunci": 5,
-   "versioni": {},
-   "nudo": "Valico 800"
-  },
-  {
-   "id": "005084",
-   "nome": "Sfida SR4 400",
-   "marca": "Voge",
-   "annunci": 5,
-   "versioni": {},
-   "nudo": "Sfida SR4 400"
-  },
-  {
-   "id": "006126",
-   "nome": "Sfida SR3 300",
-   "marca": "Voge",
-   "annunci": 5,
-   "versioni": {},
-   "nudo": "Sfida SR3 300"
-  },
-  {
    "id": "004787",
    "nome": "Kanguro 350",
    "marca": "Moto Morini",
@@ -3686,19 +1655,6 @@
     }
    },
    "nudo": "Kanguro 350"
-  },
-  {
-   "id": "006784",
-   "nome": "SRT 900",
-   "marca": "QJ Motor",
-   "annunci": 4,
-   "versioni": {
-    "021225": {
-     "nome": "SX",
-     "annunci": 1
-    }
-   },
-   "nudo": "SRT 900"
   },
   {
    "id": "001190",
@@ -3735,271 +1691,12 @@
    "nudo": "ZT 350 T"
   },
   {
-   "id": "005086",
-   "nome": "Trofeo 350",
-   "marca": "Voge",
-   "annunci": 3,
-   "versioni": {
-    "014277": {
-     "nome": "AC",
-     "annunci": 1
-    }
-   },
-   "nudo": "Trofeo 350"
-  },
-  {
    "id": "004855",
    "nome": "Tresette 175",
    "marca": "Moto Morini",
    "annunci": 3,
    "versioni": {},
    "nudo": "Tresette 175"
-  },
-  {
-   "id": "005881",
-   "nome": "SRV 600",
-   "marca": "QJ Motor",
-   "annunci": 3,
-   "versioni": {},
-   "nudo": "SRV 600"
-  },
-  {
-   "id": "004886",
-   "nome": "V302",
-   "marca": "Keeway",
-   "annunci": 3,
-   "versioni": {
-    "013878": {
-     "nome": "C",
-     "annunci": 1
-    }
-   },
-   "nudo": "V302"
-  },
-  {
-   "id": "002578",
-   "nome": "TX 125",
-   "marca": "Keeway",
-   "annunci": 3,
-   "versioni": {
-    "005586": {
-     "nome": "Motard",
-     "annunci": 3
-    }
-   },
-   "nudo": "TX 125"
-  },
-  {
-   "id": "001087",
-   "nome": "Hurricane 50",
-   "marca": "Keeway",
-   "annunci": 3,
-   "versioni": {},
-   "nudo": "Hurricane 50"
-  },
-  {
-   "id": "002466",
-   "nome": "Logik 150",
-   "marca": "Keeway",
-   "annunci": 3,
-   "versioni": {},
-   "nudo": "Logik 150"
-  },
-  {
-   "id": "002465",
-   "nome": "Logik 125",
-   "marca": "Keeway",
-   "annunci": 3,
-   "versioni": {},
-   "nudo": "Logik 125"
-  },
-  {
-   "id": "003513",
-   "nome": "Rally 300",
-   "marca": "Voge",
-   "annunci": 2,
-   "versioni": {},
-   "nudo": "Rally 300"
-  },
-  {
-   "id": "003173",
-   "nome": "Brivido 500",
-   "marca": "Voge",
-   "annunci": 2,
-   "versioni": {
-    "007448": {
-     "nome": "R",
-     "annunci": 1
-    }
-   },
-   "nudo": "Brivido 500"
-  },
-  {
-   "id": "003322",
-   "nome": "Trofeo 500",
-   "marca": "Voge",
-   "annunci": 2,
-   "versioni": {
-    "007920": {
-     "nome": "AC",
-     "annunci": 1
-    }
-   },
-   "nudo": "Trofeo 500"
-  },
-  {
-   "id": "001092",
-   "nome": "Matrix 125",
-   "marca": "Keeway",
-   "annunci": 2,
-   "versioni": {},
-   "nudo": "Matrix 125"
-  },
-  {
-   "id": "002197",
-   "nome": "Agorà 50",
-   "marca": "Keeway",
-   "annunci": 2,
-   "versioni": {
-    "004347": {
-     "nome": "Vintage",
-     "annunci": 2
-    }
-   },
-   "nudo": "Agorà 50"
-  },
-  {
-   "id": "002901",
-   "nome": "ZT 250",
-   "marca": "Zontes",
-   "annunci": 2,
-   "versioni": {
-    "006583": {
-     "nome": "R",
-     "annunci": 2
-    }
-   },
-   "nudo": "ZT 250"
-  },
-  {
-   "id": "005087",
-   "nome": "Trofeo 525",
-   "marca": "Voge",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "Trofeo 525"
-  },
-  {
-   "id": "001606",
-   "nome": "Scrambler",
-   "marca": "Moto Morini",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "Scrambler"
-  },
-  {
-   "id": "004755",
-   "nome": "3œ",
-   "marca": "Moto Morini",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "3œ"
-  },
-  {
-   "id": "004774",
-   "nome": "Excalibur 350",
-   "marca": "Moto Morini",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "Excalibur 350"
-  },
-  {
-   "id": "004830",
-   "nome": "Excalibur 501",
-   "marca": "Moto Morini",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "Excalibur 501"
-  },
-  {
-   "id": "005883",
-   "nome": "SRK 800",
-   "marca": "QJ Motor",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "SRK 800"
-  },
-  {
-   "id": "005877",
-   "nome": "SRT 550",
-   "marca": "QJ Motor",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "SRT 550"
-  },
-  {
-   "id": "004918",
-   "nome": "V-Cruise 125",
-   "marca": "Keeway",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "V-Cruise 125"
-  },
-  {
-   "id": "001094",
-   "nome": "Arn 125",
-   "marca": "Keeway",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "Arn 125"
-  },
-  {
-   "id": "006477",
-   "nome": "Terrafina 350i",
-   "marca": "Keeway",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "Terrafina 350i"
-  },
-  {
-   "id": "005544",
-   "nome": "Sixties 300i",
-   "marca": "Keeway",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "Sixties 300i"
-  },
-  {
-   "id": "001097",
-   "nome": "Super Light 150",
-   "marca": "Keeway",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "Super Light 150"
-  },
-  {
-   "id": "001091",
-   "nome": "Focus 150",
-   "marca": "Keeway",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "Focus 150"
-  },
-  {
-   "id": "001089",
-   "nome": "Matrix 50",
-   "marca": "Keeway",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "Matrix 50"
-  },
-  {
-   "id": "001095",
-   "nome": "Arn 150",
-   "marca": "Keeway",
-   "annunci": 1,
-   "versioni": {},
-   "nudo": "Arn 150"
   },
   {
    "id": "002956",
