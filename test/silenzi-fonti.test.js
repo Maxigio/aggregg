@@ -1453,3 +1453,26 @@ test('ricerca: la stessa domanda gia\' in volo non si rifa\' da capo', () => {
     .then(() => run('x', false))
     .then(v => assert.strictEqual(v, 'ok', 'dopo un errore la chiave deve tornare libera'));
 });
+
+/**
+ * MOTO.IT: LA VERSIONE CHE NON FILTRA VA DETTA A SCHERMO (campagna E4, 2026-08-08).
+ * Due silenzi misurati: (1) 2.074 voci moto (19,3% del menu) hanno la marca su Moto.it ma
+ * nessuno slug-modello — il filtro versione non si tentava e nessun banner lo diceva;
+ * (2) il tetto famiglie>12 prometteva «e lo si dice» ma finiva solo nel log del server.
+ * Entrambi ora passano dal canale gia' vivo `motoitVersioneElencoMonco` → banner.
+ */
+test('moto.it: versione senza slug-modello e tetto famiglie arrivano al banner, non solo al log', () => {
+  const SRV = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
+  // il ramo senza slug: dichiara sul canale del banner e nomina la versione scritta
+  const senzaSlug = SRV.match(/else if \(params\.versione && params\.tipo === 'moto' && params\.motoitBrandSlug && !params\.motoitModelSlug[\s\S]{0,900}?\n  \}/);
+  assert.ok(senzaSlug, 'manca il ramo dichiarato per versione+marca senza slug-modello');
+  assert.ok(/motoitVersioneElencoMonco = /.test(senzaSlug[0]), 'il ramo senza-slug deve riempire il canale del banner');
+  assert.ok(/\$\{params\.versione\}/.test(senzaSlug[0]), 'il banner deve NOMINARE la versione scritta');
+  // il tetto famiglie: il campo si riempie PRIMA del throw
+  const tetto = SRV.match(/fam\.length > TETTO_FAM\) \{[\s\S]{0,700}?throw new Error/);
+  assert.ok(tetto, 'blocco del tetto famiglie non trovato');
+  assert.ok(/motoitVersioneElencoMonco = /.test(tetto[0]), 'oltre il tetto il banner va riempito prima del throw');
+  // e il canale arriva davvero a schermo
+  assert.ok(/versioneElencoMonco: params\.motoitVersioneElencoMonco/.test(SRV), 'il campo deve viaggiare nella risposta');
+  assert.ok(/mo && mo\.versioneElencoMonco/.test(APP), 'il banner frontend deve leggerlo');
+});

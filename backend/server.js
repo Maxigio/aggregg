@@ -49,7 +49,7 @@ const { unisciGemelli, marcheNascoste, sinonimiTendina } = require('./menu-gemel
 const { versioniDi } = require('./versioni-menu');     // le versioni suggeribili, dal catalogo su disco
 const { agganciaSubito } = require('./scrapers/ponte-buchi'); // i modelli che il ponte non copriva
 const { codiciAs24, unisciCodici, famigliaSubito, famiglieSubito } = require('./scrapers/as24-modelli');   // traduzione di livello, nei due versi
-const { versioniAs24 } = require('./scrapers/as24-tassonomia');   // il catalogo versioni di AS24 (la sua tendina)
+// (campagna E6: l'import di as24-tassonomia era morto — nessun uso oltre la require)
 const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings, norm } = require('./scrapers/brand-match');
 const province        = require('../data/province.json');
 const regionCentroids = require('../data/region-centroids.json');  // capoluoghi regione {lat,lng} → raggio AS24 nativo
@@ -820,7 +820,8 @@ app.get('/api/models', async (req, res) => {
     nome:           m.nome,
     sites:          m.sites || [],
     mmmvAutoscout:  m.mmmvAutoscout  || '',
-    kindAS:         m.kindAS         || '',
+    // kindAS non si spedisce piu': campo a valore unico ('model' ovunque), nessun
+    // lettore runtime — misurato in campagna E, tolto in E6. Nei DATI resta com'e'.
     // gli slug rotti del catalogo (kx-250 dove Moto.it dice kx250) si correggono QUI,
     // dove il menu esce: cosi' ricerca, versioni e schede ricevono gia' quello vero
     slugMotoIt:     correggiModelSlug(m.slugMotoIt || ''),
@@ -854,7 +855,7 @@ app.get('/api/models', async (req, res) => {
           const hit = byName.get(norm(am.name));
           if (hit) { if (!hit.slugMotoIt) hit.slugMotoIt = am.slug; }
           else {
-            const nm = { nome: am.name, sites: ['motoit'], mmmvAutoscout: '', kindAS: '', slugMotoIt: am.slug };
+            const nm = { nome: am.name, sites: ['motoit'], mmmvAutoscout: '', slugMotoIt: am.slug };
             modelli.push(nm); byName.set(norm(am.name), nm);
           }
         }
@@ -1008,26 +1009,9 @@ app.get('/api/versioni', (req, res) => {
   res.json({ versioni: versioniDi(tipo, marca, modello) });
 });
 
-app.get('/api/moto-versions', async (req, res) => {
-  const marca = (req.query.marca || '').trim();
-  const modelSlug = correggiModelSlug((req.query.modelSlug || '').trim());
-  const modelNome = (req.query.modelNome || '').trim();
-  if (!marca || (!modelSlug && !modelNome)) return res.json({ versioni: [], familySlug: null });
-  const entry = modelsData.moto && modelsData.moto[marca];
-  const brandSlug = (entry && entry.motoit && entry.motoit.brandSlug) || resolveMotoitSlug(marca) || null;
-  if (!brandSlug) return res.json({ versioni: [], familySlug: null });
-  try {
-    if (modelSlug) {
-      const bikes = await getModelBikes(brandSlug, modelSlug);   // [{name, code, annoMin, annoMax}]
-      return res.json({ familySlug: modelSlug, versioni: bikes.map(b => ({ nome: b.name, code: b.code, annoMin: b.annoMin, annoMax: b.annoMax })) });
-    }
-    const r = await resolveMotoitVersionEntry(brandSlug, modelNome);
-    return res.json(r ? { familySlug: r.familySlug, versioni: r.versions } : { versioni: [], familySlug: null });
-  } catch (e) {
-    console.warn('[api/moto-versions] KO:', e.message);
-    res.json({ versioni: [], familySlug: null });
-  }
-});
+// (campagna E6: la rotta /api/moto-versions e' stata tolta — zero chiamanti misurati
+// in frontend e crawler; le versioni della tendina passano da /api/versioni qui sopra,
+// e la traduzione Moto.it della versione avviene dentro runSearch.)
 
 // §15 — Arricchimento spec ON-CLICK: fetch pagina-dettaglio → { cambio, potenzaCv,
 // cilindrata, proprietari, allestimento, revisione }. Anti-SSRF: host allowlist in
@@ -1706,7 +1690,11 @@ async function runSearchCore(params) {
       const fam = String(params.motoitModelSlug).split(',').map(s => s.trim()).filter(Boolean);
       const TETTO_FAM = 12;
       if (fam.length > TETTO_FAM) {
-        console.log(`[server] Moto.it: "${params.modello}" aggancia ${fam.length} famiglie (oltre ${TETTO_FAM}): niente filtro versione, si cerca largo`);
+        // «e lo si dice» significa A SCHERMO: il solo console.log lasciava le righe
+        // 'versione-non-verificata' senza spiegazione (misurato in campagna E: oggi la
+        // categoria e' vuota, ma il contratto del commento era gia' falso).
+        params.motoitVersioneElencoMonco = `"${params.modello}" aggancia ${fam.length} famiglie su Moto.it (oltre ${TETTO_FAM}): il filtro versione non si applica a questa fonte, si cerca largo`;
+        console.log(`[server] Moto.it: ${params.motoitVersioneElencoMonco}`);
         throw new Error(`troppe famiglie (${fam.length}) per risolvere la versione`);
       }
       /**
@@ -1758,6 +1746,16 @@ async function runSearchCore(params) {
     } catch (e) {
       console.warn('[server] Moto.it versione non risolta: ' + e.message);   // la ricerca vale lo stesso
     }
+  } else if (params.versione && params.tipo === 'moto' && params.motoitBrandSlug && !params.motoitModelSlug && !params.motoitBikeCode) {
+    /**
+     * SENZA SLUG-MODELLO LA VERSIONE NON SI TENTA NEMMENO — E VA DETTO. Misurato in
+     * campagna E: 2.074 voci moto del menu (19,3%) hanno la marca su Moto.it ma nessuno
+     * slug-modello; la condizione qui sopra era falsa, il filtro versione non partiva e a
+     * schermo la chip «da verificare» parlava del MODELLO, mai della versione scritta.
+     * Stesso canale del banner gia' esistente: si dichiara, non si tappa.
+     */
+    params.motoitVersioneElencoMonco = `il modello non ha un codice su Moto.it: la ricerca su questa fonte e' larga e la versione "${params.versione}" non la filtra (righe da verificare)`;
+    console.log(`[server] Moto.it: ${params.motoitVersioneElencoMonco}`);
   }
   /**
    * LA REGIONE SU AUTOSCOUT: CERCHIO LARGO, POI IL CAP.
