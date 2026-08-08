@@ -3766,6 +3766,15 @@ function renderSourceStatus() {
   if (sb && sb.come === 'allestimento' && sb.status === 'ok' && sb.count > 0) {
     fonteBreakdown.innerHTML += `<span class="src-avviso">Su Subito questo modello e&#39; un allestimento: la ricerca parte dalla famiglia${sb.famigliaNome ? ' &laquo;' + escapeHtml(sb.famigliaNome) + '&raquo;' : ''} e si restringe col nome.</span>`;
   }
+  /**
+   * LA MARCA OSPITE, e chi guarda deve saperlo. Su Subito «Vespa» non esiste come marca:
+   * le sue famiglie vivono sotto PIAGGIO, e il ponte degli ospiti (subito-nodo) ce le fa
+   * trovare per id. E' la ricerca giusta — prima era testo libero puro — ma la marca a
+   * schermo non e' quella digitata, e tacerlo farebbe passare il passaggio per magia.
+   */
+  if (sb && /^ospite \(/.test(String(sb.come || '')) && sb.status === 'ok' && sb.count > 0) {
+    fonteBreakdown.innerHTML += `<span class="src-avviso">Su Subito questa marca vive sotto un&#39;altra (${escapeHtml(String(sb.come).slice(8, -1))})${sb.famigliaNome ? ': si cerca la famiglia &laquo;' + escapeHtml(sb.famigliaNome) + '&raquo;' : ''}.</span>`;
+  }
   const mo = lastSources.moto;
   // Il menu versioni di Moto.it che non ha risposto: il filtro non e' stato applicato (o lo e'
   // stato su un elenco monco), e finora la colonna si presentava filtrata come le altre.

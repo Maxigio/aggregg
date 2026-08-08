@@ -1,0 +1,2287 @@
+{
+ "_perche": "Il verdetto di OGNI marca del menu che su Subito non risolve nemmeno la marca (i 4.093 nomi del difetto Vespa). Deciso dal proprietario il 2026-08-08: verificarle 1 a 1, non liquidarle con una regola. Ogni voce porta la prova; le voci 'ospite' rimandano a data/ponte-marche-ospiti.json che le fa funzionare a runtime.",
+ "_come": "Verifica in tre passate: (1) segnali sull'indice Subito (prefissi, forma inversa, quasi-omonimi), ogni caso LETTO prima di crederci; (2) identita' via web a lotti (13 agenti orientati a refutare, fonte obbligatoria per ogni claim); (3) riverifica MIA sull'indice di ogni rinomina/rebadge proposta — le sonde sbagliano. I verdetti: ospite (veicoli sotto un'altra marca Subito, nel ponte), rinominata/assorbita/rebadge (nome nuovo noto ma modelli che non combaciano: testo libero), pseudo (categoria, non marca: Subito non interrogata per decisione del proprietario), assente (marca vera che su Subito non c'e': testo libero dichiarato), ignota (identita' non stabilita con fonti affidabili).",
+ "_presidio": "test/verdetti-marche.test.js: una marca nuova nel menu senza verdetto e senza risoluzione = test rosso.",
+ "generatoIl": "2026-08-08",
+ "conta": {
+  "assente": 363,
+  "rebadge": 14,
+  "rinominata": 10,
+  "assorbita": 4,
+  "ignota": 18,
+  "pseudo": 8,
+  "ospite": 10
+ },
+ "auto": {
+  "9ff": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Tuner tedesco di Porsche; insolvenza 2013, prosegue in piccola scala, nicchia estrema",
+   "quando": "2026-08-08"
+  },
+  "Acura": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio premium Honda per Nord America e Cina, mai venduto in Italia",
+   "quando": "2026-08-08"
+  },
+  "Aerfal": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Startup restomod: tributo Porsche 904 ancora in fase prototipo, nessuna produzione",
+   "quando": "2026-08-08",
+   "fonte": "https://hiconsumption.com/motors/aerfal-automotive-ae94-porsche/"
+  },
+  "Alba Mobility": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Golf cart e veicoli elettrici leggeri, nicchia commerciale, non mercato usato auto",
+   "quando": "2026-08-08"
+  },
+  "Amphicar": {
+   "verdetto": "assente",
+   "prova": "cessata: Anfibia tedesca, prodotta solo 1961-1968",
+   "quando": "2026-08-08"
+  },
+  "Angelelli Automobili": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Piccolo costruttore italiano di hypercar/restomod annunciati, produzione pressoché inesistente",
+   "quando": "2026-08-08"
+  },
+  "Artega": {
+   "verdetto": "assente",
+   "prova": "cessata: Sportive tedesche; insolvente nel 2012, rilanci Scalo e Karo falliti",
+   "quando": "2026-08-08"
+  },
+  "Aspark": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Hypercar elettrica giapponese Owl, attiva, tiratura limitatissima",
+   "quando": "2026-08-08"
+  },
+  "Aspid": {
+   "verdetto": "assente",
+   "prova": "cessata: Sportive spagnole IFR Automotive; nessuna attività nota da metà anni 2010",
+   "quando": "2026-08-08"
+  },
+  "Aurus": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio di lusso statale russo, attivo, assente dal mercato italiano",
+   "quando": "2026-08-08"
+  },
+  "Austin-Healey": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio sportivo britannico dismesso nel 1972",
+   "quando": "2026-08-08"
+  },
+  "BAIC": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Colosso statale cinese attivo; presenza italiana recente e marginale",
+   "quando": "2026-08-08"
+  },
+  "Bestune": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio FAW attivo in Cina, assente dal mercato italiano",
+   "quando": "2026-08-08"
+  },
+  "Boldmen": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Piccola serie tedesca su base BMW Z4, attiva, nicchia estrema",
+   "quando": "2026-08-08"
+  },
+  "Bolloré": {
+   "verdetto": "assente",
+   "prova": "cessata: Bluecar legata ad Autolib; produzione finita dopo chiusura del servizio (2018)",
+   "quando": "2026-08-08"
+  },
+  "Borgward": {
+   "verdetto": "assente",
+   "prova": "cessata: Fallita nel 1961; rilancio cinese terminato in fallimento nel 2022",
+   "quando": "2026-08-08"
+  },
+  "Brilliance": {
+   "verdetto": "assente",
+   "prova": "cessata: Gruppo cinese in bancarotta nel 2020; marchio proprio dismesso",
+   "quando": "2026-08-08"
+  },
+  "Bristol": {
+   "verdetto": "assente",
+   "prova": "cessata: Bristol Cars liquidata nel 2020",
+   "quando": "2026-08-08"
+  },
+  "Brute": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Trasformazioni artigianali di Jeep Wrangler (olandesi/AEV), non rebadge: nicchia attiva",
+   "quando": "2026-08-08",
+   "fonte": "https://www.brutejeeps.com/"
+  },
+  "Caravans-Wohnm": {
+   "verdetto": "pseudo",
+   "prova": "categoria Autoscout (camper): 124 \"modelli\" che sono marche di camper. Stessa decisione di Oldtimer.",
+   "quando": "2026-08-08"
+  },
+  "Carver": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Triciclo elettrico basculante olandese, attivo, diffusione italiana minima",
+   "quando": "2026-08-08"
+  },
+  "Chamonix": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Repliche brasiliane di Porsche Spyder/Speedster, nicchia artigianale",
+   "quando": "2026-08-08"
+  },
+  "Changhe": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio cinese di BAIC; produzione ferma e ristrutturazione fallimentare anni 2020",
+   "quando": "2026-08-08"
+  },
+  "Chery": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Colosso cinese attivissimo; in Italia opera tramite Omoda e Jaecoo",
+   "quando": "2026-08-08"
+  },
+  "CityEL": {
+   "verdetto": "assente",
+   "prova": "cessata: Microvettura elettrica danese-tedesca; produzione cessata nei primi anni 2010",
+   "quando": "2026-08-08"
+  },
+  "Dangel": {
+   "verdetto": "assente",
+   "prova": "trasformatore 4x4 di veicoli ALTRUI (Berlingo→Citroen, Boxer→Peugeot, Ducato→Fiat): un ospite solo non esiste, e mappare per modello mostrerebbe i furgoni di serie. Resta testo libero.",
+   "quando": "2026-08-08"
+  },
+  "Delorean": {
+   "verdetto": "assente",
+   "prova": "cessata: DMC fallita nel 1982 dopo la sola DMC-12",
+   "quando": "2026-08-08"
+  },
+  "Denza": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio premium BYD, lancio europeo recente, ancora rarissimo in Italia",
+   "quando": "2026-08-08"
+  },
+  "Devinci Cars": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Elettriche neo-retro francesi artigianali, nicchia attiva",
+   "quando": "2026-08-08"
+  },
+  "DFM": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Sigla di Dongfeng Motor: attiva, importazione italiana Forthing marginale",
+   "quando": "2026-08-08"
+  },
+  "Dutton": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Kit car inglesi; boom finito nel 1989, oggi solo anfibi artigianali",
+   "quando": "2026-08-08"
+  },
+  "e.GO": {
+   "verdetto": "assente",
+   "prova": "cessata: Startup elettrica di Aquisgrana, insolvente nel 2024",
+   "quando": "2026-08-08"
+  },
+  "Ebro": {
+   "verdetto": "rebadge",
+   "prova": "Marchio spagnolo rilanciato da EV Motors: S700/S800 sono Chery prodotte a Barcellona. [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Chery",
+   "fonte": "https://www.quattroruote.it/news/nuovi-modelli/2024/05/23/ebro_e_chery_s700_e_s800_motori_cavalli_interni_uscita_.html"
+  },
+  "Econelo": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Econelo GmbH tedesca, scooter cabinati elettrici 45 km/h, nicchia senza mercato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Edran": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Microcostruttore artigianale belga di supercar, produzione sporadica e minima.",
+   "quando": "2026-08-08"
+  },
+  "Elaris": {
+   "verdetto": "rebadge",
+   "prova": "Tedesca che rimarchia EV cinesi (Skywell, Dorcen, Zhidou); insolvenza a gennaio 2025. [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Skywell (e altri costruttori cinesi)",
+   "fonte": "https://en.wikipedia.org/wiki/Elaris"
+  },
+  "Embuggy": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio buggy stradali di EVA Motors Ltd (UK), veicoli ricreativi di nicchia.",
+   "quando": "2026-08-08"
+  },
+  "Evetta": {
+   "verdetto": "assente",
+   "prova": "cessata: ElectricBrands insolvente nel 2024; la microcar Evetta mai arrivata in produzione.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.electrive.com/2024/02/02/electricbrands-files-for-insolvency-under-self-administration/"
+  },
+  "Farizon": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio di veicoli commerciali elettrici del gruppo Geely, attivo, appena arrivato in Europa.",
+   "quando": "2026-08-08"
+  },
+  "firefly": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio di citycar elettriche di NIO, lanciato nel 2025, presenza italiana minima.",
+   "quando": "2026-08-08"
+  },
+  "Galloper": {
+   "verdetto": "ospite",
+   "ospite": "Hyundai",
+   "prova": "ospite: vedi data/ponte-marche-ospiti.json (misura e perche' li').",
+   "quando": "2026-08-08"
+  },
+  "Gappy": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Olandese di tricicli elettrici leggeri (Triple Dutch), attiva solo nei Paesi Bassi.",
+   "quando": "2026-08-08"
+  },
+  "GEMBALLA": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Tuner tedesco di Porsche, attivo, non costruttore: esemplari rarissimi.",
+   "quando": "2026-08-08"
+  },
+  "Genesis": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio premium di Hyundai, attivo, non commercializzato ufficialmente in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Giana": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Microcar elettrica L6e venduta nei Paesi Bassi, costruttore effettivo non documentato.",
+   "quando": "2026-08-08"
+  },
+  "Gillet": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Artigiano belga della Vertigo, produzione minima ma marchio reale.",
+   "quando": "2026-08-08"
+  },
+  "GMC": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio truck/SUV di General Motors, attivo negli USA, mai venduto in Italia.",
+   "quando": "2026-08-08"
+  },
+  "GTA": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Spania GTA di Valencia, hypercar Spano in pochi esemplari, azienda ancora operativa.",
+   "quando": "2026-08-08"
+  },
+  "GWM": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Great Wall Motor, cinese attiva, sbarcata in Italia solo di recente: usato scarso.",
+   "quando": "2026-08-08"
+  },
+  "Haima": {
+   "verdetto": "assente",
+   "prova": "cinese attiva, assente da Subito; il quasi-omonimo AIMA (e-scooter) e' un'altra azienda: refutato.",
+   "quando": "2026-08-08"
+  },
+  "Hamann": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Tuner tedesco (BMW e altri), non costruttore; presenza nell'usato marginale.",
+   "quando": "2026-08-08"
+  },
+  "Hiphi": {
+   "verdetto": "assente",
+   "prova": "cessata: Produzione ferma da febbraio 2024, casa madre Human Horizons in procedura fallimentare.",
+   "quando": "2026-08-08"
+  },
+  "Holden": {
+   "verdetto": "assente",
+   "prova": "cessata: GM ha ritirato il marchio australiano a fine 2020.",
+   "quando": "2026-08-08"
+  },
+  "Hongqi": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio di lusso di FAW, attivo in Cina e Nord Europa, raro in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Hurtan": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Artigiano spagnolo di Granada, auto neoclassiche, tuttora attivo in piccola serie.",
+   "quando": "2026-08-08"
+  },
+  "Invicta": {
+   "verdetto": "rebadge",
+   "prova": "Invicta Electric spagnola: la D2S è una Zhidou D2S cinese rimarchiata. [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Zhidou",
+   "fonte": "https://en.actualidadmotor.com/invicta-electric-d2s-electrico-urbano-menos-9000-euros/"
+  },
+  "Iso Rivolta": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica milanese, produzione cessata nel 1974; solo revival sporadici firmati Zagato.",
+   "quando": "2026-08-08"
+  },
+  "IZH": {
+   "verdetto": "assente",
+   "prova": "cessata: Russa di Izhevsk: produzione dei modelli propri cessata a metà anni 2000.",
+   "quando": "2026-08-08"
+  },
+  "JAC": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore cinese attivo, importato in Italia in numeri molto piccoli.",
+   "quando": "2026-08-08"
+  },
+  "Jensen": {
+   "verdetto": "assente",
+   "prova": "cessata: Britannica, chiusa nel 1976; revival S-V8 fallito nei primi anni 2000.",
+   "quando": "2026-08-08"
+  },
+  "Karma": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Americana del gruppo Wanxiang (ex asset Fisker), attiva con volumi minimi.",
+   "quando": "2026-08-08"
+  },
+  "Koenigsegg": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Svedese di hypercar, pienamente attiva, esemplari rarissimi sul mercato.",
+   "quando": "2026-08-08"
+  },
+  "LDV": {
+   "verdetto": "rinominata",
+   "prova": "Dopo l'acquisizione SAIC, in Europa il marchio LDV è diventato Maxus (2020). [il nome nuovo ESISTE su Subito ma i nomi-modello non combaciano: riverificato sull'indice, 0 famiglie — resta testo libero]",
+   "quando": "2026-08-08",
+   "altroNome": "Maxus",
+   "fonte": "https://www.whatvan.co.uk/news/ldv-rebrands-as-maxus/"
+  },
+  "Lee Group": {
+   "verdetto": "rebadge",
+   "prova": "La Komi è la Jiayuan cinese, importata e rimarchiata dal gruppo europeo Leeh. [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Jiayuan",
+   "fonte": "https://insideevs.it/news/789846/jeeh-komi-auto-elettrica-compatta-prezzo/"
+  },
+  "LEVC": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore inglese di taxi e van elettrici (gruppo Geely), attivo ma di nicchia",
+   "quando": "2026-08-08"
+  },
+  "Li": {
+   "verdetto": "assente",
+   "prova": "Li Auto, cinese attiva (L6-L9), non presente su Subito ne' nel mercato usato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Lifan": {
+   "verdetto": "assorbita",
+   "prova": "Fallita nel 2020; attività auto confluita nel 2022 in Livan, joint venture Geely [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Livan",
+   "fonte": "https://en.wikipedia.org/wiki/Livan_Automotive"
+  },
+  "Lincoln": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio di lusso Ford attivo in Nordamerica; non venduto in Europa",
+   "quando": "2026-08-08"
+  },
+  "Linzda": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Quadricicli elettrici cinesi con importatore in Campania; marca reale di nicchia",
+   "quando": "2026-08-08",
+   "fonte": "https://www.linzdaitalia.it/linzda-m3-l6e/"
+  },
+  "Livan": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marca nata nel 2022 da Geely e Lifan, attiva in Cina; rara in Italia",
+   "quando": "2026-08-08"
+  },
+  "Lorinser": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Preparatore tedesco di Mercedes tuttora attivo; vetture elaborate di nicchia",
+   "quando": "2026-08-08",
+   "fonte": "https://sportservice.lorinser.com/"
+  },
+  "Lucid": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore EV americano attivo; presenza europea minima, assente dal mercato italiano",
+   "quando": "2026-08-08"
+  },
+  "M-Ero": {
+   "verdetto": "ignota",
+   "prova": "Nessuna marca reale trovata; il Microlino è di Micro Mobility Systems, probabile storpiatura",
+   "quando": "2026-08-08"
+  },
+  "Mansory": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Preparatore tedesco di lusso attivo; elabora vetture di altre case, nicchia",
+   "quando": "2026-08-08"
+  },
+  "Martin": {
+   "verdetto": "assente",
+   "prova": "kit-car (Cobra, Roadster); \"Martin Motors\" su Subito e' un importatore cinese SENZA famiglie: nessun aggancio.",
+   "quando": "2026-08-08"
+  },
+  "Matra": {
+   "verdetto": "assente",
+   "prova": "cessata: Produzione auto cessata nel 2003 dopo il flop della Renault Avantime",
+   "quando": "2026-08-08"
+  },
+  "Mercury": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio Ford dismesso nel 2011",
+   "quando": "2026-08-08"
+  },
+  "Minari": {
+   "verdetto": "assente",
+   "prova": "cessata: Kit car inglese su base Alfasud/33; produzione originale cessata nel 2000",
+   "quando": "2026-08-08",
+   "fonte": "https://en.wikipedia.org/wiki/Minari_Engineering"
+  },
+  "Mitsuoka": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore giapponese di nicchia attivo; non importato ufficialmente in Italia",
+   "quando": "2026-08-08"
+  },
+  "Moskvich": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Storica sovietica cessata 2002, rilanciata 2022 in Russia; assente dal mercato italiano",
+   "quando": "2026-08-08"
+  },
+  "MP Lafer": {
+   "verdetto": "assente",
+   "prova": "cessata: Costruttore brasiliano di repliche MG TD; produzione cessata nel 1990",
+   "quando": "2026-08-08"
+  },
+  "NIO": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore cinese di EV attivo in alcuni mercati UE; non venduto in Italia",
+   "quando": "2026-08-08"
+  },
+  "NSU": {
+   "verdetto": "assente",
+   "prova": "cessata: Confluita in Audi/Auto Union nel 1969; marchio dismesso nel 1977",
+   "quando": "2026-08-08"
+  },
+  "Oldsmobile": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio GM dismesso nel 2004",
+   "quando": "2026-08-08"
+  },
+  "Oldtimer": {
+   "verdetto": "pseudo",
+   "prova": "categoria Autoscout (auto d'epoca): i suoi 275 \"modelli\" sono nomi di marca. Decisione del proprietario 2026-08-08: Subito non interrogata, dichiarato.",
+   "quando": "2026-08-08"
+  },
+  "Ora": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio EV di Great Wall Motor, attivo; presenza italiana recente e marginale",
+   "quando": "2026-08-08"
+  },
+  "Plymouth": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio Chrysler dismesso nel 2001",
+   "quando": "2026-08-08"
+  },
+  "Proton": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore malese attivo (partecipato Geely); ritirato dai mercati europei",
+   "quando": "2026-08-08"
+  },
+  "Puch": {
+   "verdetto": "assente",
+   "prova": "Steyr-Puch austriaca (G, Haflinger, Pinzgauer): su Subito non esiste ne' come Puch ne' come Steyr (verificato); la G e' venduta come Mercedes. Testo libero.",
+   "quando": "2026-08-08"
+  },
+  "RAM": {
+   "verdetto": "assente",
+   "prova": "marca reale (gruppo Stellantis, ex Dodge RAM) senza marca su Subito; Dodge esiste ma senza famiglie RAM (verificato); il segnale MILITEM \"RAM 1500 RX\" e' un allestitore, refutato.",
+   "quando": "2026-08-08"
+  },
+  "Reliant": {
+   "verdetto": "assente",
+   "prova": "cessata: Costruttore inglese di tricicli e utilitarie; produzione cessata nel 2002",
+   "quando": "2026-08-08"
+  },
+  "Rimac": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore croato di hypercar elettriche, attivo; volumi minimi",
+   "quando": "2026-08-08"
+  },
+  "Rivian": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore EV americano attivo; non commercializzato in Italia",
+   "quando": "2026-08-08"
+  },
+  "Ruf": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore tedesco riconosciuto su base Porsche, attivo; produzione di nicchia",
+   "quando": "2026-08-08"
+  },
+  "Segway": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Segway Powersports attiva: UTV e side-by-side fuoristrada, nicchia in Italia",
+   "quando": "2026-08-08"
+  },
+  "Selvo": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Microvetture elettriche vendute nei Paesi Bassi (Green World Mobility); assente in Italia",
+   "quando": "2026-08-08",
+   "fonte": "https://www.autovink.nl/green-world-mobility-selvo-2p45-dc/"
+  },
+  "SGS": {
+   "verdetto": "assente",
+   "prova": "cessata: Styling Garage Hamburg, conversioni Mercedes anni '80; fallita a metà anni Ottanta",
+   "quando": "2026-08-08"
+  },
+  "Shelby": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Shelby American attiva; elaborazioni Ford di nicchia, rare in Italia",
+   "quando": "2026-08-08"
+  },
+  "Simplici": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marca francese della rete Simplicicar: microcar elettrica di produzione cinese, assente dall'Italia.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.lasimplici.com/content/4-simplici-motors"
+  },
+  "Singer": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica marca inglese, dismessa dal gruppo Rootes nel 1970.",
+   "quando": "2026-08-08"
+  },
+  "Skywell": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio EV cinese attivo, presente in pochi mercati europei, marginale in Italia.",
+   "quando": "2026-08-08"
+  },
+  "SpeedArt": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Tuner tedesco di Porsche, attivo dopo l'insolvenza 2013; nicchia estrema.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.carscoops.com/2014/06/speedart-is-back-after-legal-battle/"
+  },
+  "Spyker": {
+   "verdetto": "assente",
+   "prova": "cessata: Casa olandese di sportive, dichiarata fallita nel 2021.",
+   "quando": "2026-08-08"
+  },
+  "Stormborn": {
+   "verdetto": "rebadge",
+   "prova": "Importatore tedesco che rivende minicar elettriche BAW col proprio marchio. [il nome nuovo ESISTE su Subito ma i nomi-modello non combaciano: riverificato sull'indice, 0 famiglie — resta testo libero]",
+   "quando": "2026-08-08",
+   "altroNome": "BAW",
+   "fonte": "https://www.stormborn.eu/STORMBORN-City-Pony"
+  },
+  "StreetScooter": {
+   "verdetto": "assorbita",
+   "prova": "Ceduta da Deutsche Post nel 2022 a Odin Automotive, oggi B-ON, stessi furgoni. [il nome nuovo ESISTE su Subito ma i nomi-modello non combaciano: riverificato sull'indice, 0 famiglie — resta testo libero]",
+   "quando": "2026-08-08",
+   "altroNome": "B-ON",
+   "fonte": "https://www.electrive.com/2022/05/22/odin-automotive-named-b-on-partners-with-hitachi/"
+  },
+  "Studebaker": {
+   "verdetto": "assente",
+   "prova": "cessata: Casa americana, produzione auto cessata nel 1966.",
+   "quando": "2026-08-08"
+  },
+  "TECHART": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Tuner tedesco di Porsche tuttora attivo; presenza marginale nell'usato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Togg": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Casa turca di EV attiva dal 2022, non commercializzata in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Trabant": {
+   "verdetto": "assente",
+   "prova": "cessata: Marca della DDR, produzione terminata nel 1991.",
+   "quando": "2026-08-08"
+  },
+  "Trailer-Anhänger": {
+   "verdetto": "pseudo",
+   "prova": "«Anhänger» è tedesco per rimorchio: etichetta di categoria, non una marca.",
+   "quando": "2026-08-08",
+   "fonte": "https://en.wiktionary.org/wiki/Anh%C3%A4nger"
+  },
+  "Triumph": {
+   "verdetto": "assente",
+   "prova": "cessata: Marca auto britannica dismessa nel 1984; diritti oggi in mano BMW.",
+   "quando": "2026-08-08"
+  },
+  "Trucks-Lkw": {
+   "verdetto": "pseudo",
+   "prova": "categoria Autoscout (camion): 36 \"modelli\" che sono marche di veicoli industriali. Stessa decisione di Oldtimer.",
+   "quando": "2026-08-08"
+  },
+  "TYN-e": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore tedesco di furgoni elettrici (prodotti in Cina), attivo, di nicchia.",
+   "quando": "2026-08-08",
+   "fonte": "https://de.wikipedia.org/wiki/TYN-e"
+  },
+  "Vanden Plas": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio di lusso britannico, abbandonato definitivamente negli anni 2000.",
+   "quando": "2026-08-08"
+  },
+  "Vanderhall": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore USA di tricicli, attivo, praticamente assente dal mercato italiano.",
+   "quando": "2026-08-08"
+  },
+  "VAZ": {
+   "verdetto": "assorbita",
+   "altroNome": "Lada",
+   "prova": "VAZ e' il costruttore di Lada; Subito ha LADA ma i nostri nomi VAZ sono codici numerici interni (2101, 1111) che non combaciano con Niva/Samara: 0 famiglie, resta testo libero.",
+   "quando": "2026-08-08"
+  },
+  "VinFast": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Casa vietnamita attiva, presente in alcuni mercati UE ma non in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Wartburg": {
+   "verdetto": "assente",
+   "prova": "cessata: Marca della DDR, produzione cessata nel 1991.",
+   "quando": "2026-08-08"
+  },
+  "Weltmeister": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio di WM Motor, in procedura fallimentare dal 2023, produzione ferma.",
+   "quando": "2026-08-08"
+  },
+  "Wenckstern": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Piccolo costruttore tedesco di quad stile hot rod, attivo, nicchia estrema.",
+   "quando": "2026-08-08",
+   "fonte": "https://de.wikipedia.org/wiki/Wenckstern_(Automarke)"
+  },
+  "Westfield": {
+   "verdetto": "assente",
+   "prova": "cessata: Kit-car inglese, in amministrazione controllata dal 2022, produzione ferma.",
+   "quando": "2026-08-08"
+  },
+  "Wey": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio premium di Great Wall Motor, attivo, appena presente in Europa.",
+   "quando": "2026-08-08"
+  },
+  "Wiesmann": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Casa tedesca rilanciata dopo l'insolvenza 2014; produzione artigianale di nicchia.",
+   "quando": "2026-08-08"
+  },
+  "XBus": {
+   "verdetto": "assente",
+   "prova": "cessata: Progetto ElectricBrands, insolvente nel 2024 senza vera produzione di serie.",
+   "quando": "2026-08-08"
+  },
+  "Xiaomi": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Attivissima in Cina con la SU7, non venduta ufficialmente in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Zastava": {
+   "verdetto": "assente",
+   "prova": "cessata: Casa serba, produzione auto cessata nel 2008 con la cessione a Fiat.",
+   "quando": "2026-08-08"
+  },
+  "Zeekr": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio EV di Geely, attivo, presente solo in pochi mercati europei.",
+   "quando": "2026-08-08"
+  },
+  "Zhidou": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Minicar elettriche cinesi, marchio rilanciato nel 2023, oggi assente dall'Italia.",
+   "quando": "2026-08-08"
+  },
+  "Zotye": {
+   "verdetto": "assente",
+   "prova": "cessata: Casa cinese in ristrutturazione fallimentare, produzione di fatto ferma dal 2021.",
+   "quando": "2026-08-08"
+  }
+ },
+ "moto": {
+  " eSchwalbe": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Scooter elettrico di Govecs, seconda generazione nel 2025; nicchia assente dall'Italia.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.electrive.net/2025/05/09/govecs-bringt-die-eschwalbe-mit-90km-h-zurueck/"
+  },
+  "A.T.U": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio scooter della catena tedesca di ricambi A.T.U, importazioni cinesi; vendita cessata da anni",
+   "quando": "2026-08-08",
+   "fonte": "https://www.motorroller.de/ersatzteile/motorroller/atu/"
+  },
+  "Access": {
+   "verdetto": "assente",
+   "prova": "quad taiwanesi, assenti; \"TE→Husqvarna/Husaberg\" omonimia e ospite ambiguo: refutato.",
+   "quando": "2026-08-08"
+  },
+  "Adler": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica casa tedesca di Francoforte; produzione moto terminata nel 1957",
+   "quando": "2026-08-08"
+  },
+  "Adly": {
+   "verdetto": "assente",
+   "prova": "taiwanese (Her Chee) attiva, assente da Subito; \"Jet→Sym\" e' omonimia di modello: refutato.",
+   "quando": "2026-08-08"
+  },
+  "Aermacchi": {
+   "verdetto": "assente",
+   "prova": "cessata: Reparto moto ceduto a Harley-Davidson, poi a Cagiva nel 1978; marchio estinto",
+   "quando": "2026-08-08"
+  },
+  "AGM": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio olandese di scooter economici d'importazione cinese; diffuso nei Paesi Bassi, assente in Italia",
+   "quando": "2026-08-08"
+  },
+  "Aiyumo": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio spagnolo (Rentería) di scooter cinesi anni 2000-2010; non più attivo",
+   "quando": "2026-08-08",
+   "fonte": "https://moto.fandom.com/es/wiki/Aiyumo"
+  },
+  "AJS": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Storico marchio inglese; oggi vende piccole cilindrate d'origine cinese, assente dal mercato italiano",
+   "quando": "2026-08-08"
+  },
+  "Alfa Scooters": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio belga di scooter d'importazione, attivo; assente dal mercato italiano",
+   "quando": "2026-08-08",
+   "fonte": "https://www.alfascooters.be/mistral-50.html"
+  },
+  "Alisze": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Concessionario-importatore tedesco di Düsseldorf che marchia scooter economici; attivo, irrilevante in Italia",
+   "quando": "2026-08-08",
+   "fonte": "https://alisze.de/"
+  },
+  "Alpha": {
+   "verdetto": "ignota",
+   "prova": "Un solo modello; nessuna attribuzione affidabile, omonimie multiple (AlphaSports/Hyosung, storica spagnola)",
+   "quando": "2026-08-08"
+  },
+  "AMC Est 1902": {
+   "verdetto": "ignota",
+   "prova": "Nessuna fonte affidabile; probabile micro-marchio custom di chopper 250 d'importazione",
+   "quando": "2026-08-08"
+  },
+  "APEX": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio USA di mini-quad e cross per ragazzi, attivo; assente in Italia",
+   "quando": "2026-08-08",
+   "fonte": "https://www.apexatv.com/models"
+  },
+  "APG Moto": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Piccolo assemblatore belga di Wevelgem, attivo; non distribuito in Italia",
+   "quando": "2026-08-08",
+   "fonte": "https://www.apgmoto.eu/"
+  },
+  "Arc": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Startup britannica di moto elettriche (Vector); produzione limitatissima, assente in Italia",
+   "quando": "2026-08-08"
+  },
+  "Arctic Cat": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore USA di quad e motoslitte (gruppo Textron); marginale nel mercato italiano",
+   "quando": "2026-08-08"
+  },
+  "Ardie": {
+   "verdetto": "assente",
+   "prova": "cessata: Casa tedesca di Norimberga; produzione cessata nel 1958",
+   "quando": "2026-08-08"
+  },
+  "Ariel Motor": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Ariel Motor Company (UK) produce la moto Ace in piccolissima serie; nicchia estrema",
+   "quando": "2026-08-08"
+  },
+  "Ariel Motorcycles": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica casa inglese; produzione moto cessata a fine anni '60 nel gruppo BSA",
+   "quando": "2026-08-08"
+  },
+  "Atala": {
+   "verdetto": "assente",
+   "prova": "cessata: Storico marchio italiano; produzione ciclomotori cessata, sopravvive solo nelle biciclette",
+   "quando": "2026-08-08"
+  },
+  "ATK": {
+   "verdetto": "ospite",
+   "ospite": "Hyosung",
+   "prova": "ospite: vedi data/ponte-marche-ospiti.json (misura e perche' li').",
+   "quando": "2026-08-08"
+  },
+  "AWO": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio DDR prodotto da Simson; le 425 uscirono di produzione nel 1961",
+   "quando": "2026-08-08"
+  },
+  "Baotian": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Grande costruttore cinese di scooter economici, attivo; presenza marginale nel mercato italiano",
+   "quando": "2026-08-08"
+  },
+  "Barossa": {
+   "verdetto": "assente",
+   "prova": "quad; \"Ossa\" e' un'altra marca (trial spagnola): refutato il quasi-omonimo.",
+   "quando": "2026-08-08"
+  },
+  "Bashan": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore cinese di Chongqing (quad e moto), attivo; distribuzione italiana marginale",
+   "quando": "2026-08-08"
+  },
+  "Beeline": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio dell'importatore austriaco Leeb per scooter cinesi; attivo in area tedesca, assente in Italia",
+   "quando": "2026-08-08",
+   "fonte": "https://www.beeline-motor.de/"
+  },
+  "Benda Scooter": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio belga di scooter (Benson, Coolmax) dal 2014, attivo; assente in Italia",
+   "quando": "2026-08-08",
+   "fonte": "https://www.scooter-system.fr/catalog/modele-1291-benda-benson-50.html"
+  },
+  "Benzhou": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Grande OEM cinese di scooter (gruppo Znen), attivo; venduto perlopiù sotto altri marchi",
+   "quando": "2026-08-08"
+  },
+  "BFG": {
+   "verdetto": "assente",
+   "prova": "cessata: Moto francese con motore Citroën; prodotta solo dal 1982 al 1988",
+   "quando": "2026-08-08"
+  },
+  "Big Dog": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Chopper USA di Wichita; fallita nel 2011, rilanciata in piccolo nel 2016, mai importata",
+   "quando": "2026-08-08",
+   "fonte": "https://en.wikipedia.org/wiki/Big_Dog_Motorcycles"
+  },
+  "Black Tea": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Startup tedesca (Monaco) di moto elettriche leggere; nicchia, assente dal mercato italiano",
+   "quando": "2026-08-08"
+  },
+  "Blata": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore ceco di minimoto e pit bike, ancora attivo a Blansko; nicchia minima",
+   "quando": "2026-08-08",
+   "fonte": "https://www.blata.cz/en/"
+  },
+  "Bombardier": {
+   "verdetto": "rinominata",
+   "prova": "Linea quad BRP ribattezzata Can-Am nel maggio 2006; stessi modelli (Outlander, DS) [il nome nuovo ESISTE su Subito ma i nomi-modello non combaciano: riverificato sull'indice, 0 famiglie — resta testo libero] [Can-Am ESISTE su Subito ma nessuno dei 9 nomi Bombardier combacia con le sue famiglie: 0/9 riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Can-Am (BRP)",
+   "fonte": "https://powersportsbusiness.com/features/2006/05/15/brp%E2%80%99s-atv-line-receives-a-new-name-with-a-history-may-15-2006/"
+  },
+  "Boom Trike": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Boom Trikes, costruttore tedesco di trike, attivo; diffusione italiana minima",
+   "quando": "2026-08-08"
+  },
+  "Borossi": {
+   "verdetto": "assente",
+   "prova": "cessata: Azienda tedesca di quad e moto diesel anni 2000, da tempo non più attiva.",
+   "quando": "2026-08-08"
+  },
+  "Brammo": {
+   "verdetto": "assente",
+   "prova": "cessata: Produzione moto cessata nel 2015 dopo la cessione degli asset a Polaris.",
+   "quando": "2026-08-08"
+  },
+  "Britten": {
+   "verdetto": "assente",
+   "prova": "cessata: Costruttore artigianale neozelandese; attività finita dopo la morte di John Britten (1995).",
+   "quando": "2026-08-08"
+  },
+  "Brough Superior": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio storico inglese rilanciato nel 2013 a Tolosa; produzione artigianale di nicchia.",
+   "quando": "2026-08-08"
+  },
+  "Bücker": {
+   "verdetto": "assente",
+   "prova": "cessata: Costruttore tedesco storico (motori Bark, Columbus, JAP); produzione cessata a fine anni '50.",
+   "quando": "2026-08-08"
+  },
+  "Bull": {
+   "verdetto": "assente",
+   "prova": "i segnali \"Bullet\" (Royal Enfield/Nox) sono prefissi casuali: refutati.",
+   "quando": "2026-08-08"
+  },
+  "Bullit": {
+   "verdetto": "ospite",
+   "ospite": "Bluroc",
+   "prova": "ospite: vedi data/ponte-marche-ospiti.json (misura e perche' li').",
+   "quando": "2026-08-08"
+  },
+  "Burelli": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio di quad anni 2000 legato a SMC/Triton, scomparso dal mercato.",
+   "quando": "2026-08-08"
+  },
+  "Buyang": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Gruppo cinese produttore di quad, presenza trascurabile nel mercato usato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Calthorpe": {
+   "verdetto": "assente",
+   "prova": "cessata: Costruttore britannico di Birmingham (serie Ivory), cessato alla fine degli anni '30.",
+   "quando": "2026-08-08"
+  },
+  "Cannondale": {
+   "verdetto": "assente",
+   "prova": "cessata: Divisione moto/ATV fallita nel 2003; l'azienda produce solo biciclette.",
+   "quando": "2026-08-08"
+  },
+  "CCS": {
+   "verdetto": "ignota",
+   "prova": "Nessuna traccia affidabile di una marca CCS con modello Thunderwing.",
+   "quando": "2026-08-08"
+  },
+  "Cectek": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore taiwanese di quad (gruppo Yulon), quasi assente dal mercato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Chang - Jiang": {
+   "verdetto": "assente",
+   "prova": "cessata: Storico produttore cinese di sidecar 750 derivati BMW; produzione cessata.",
+   "quando": "2026-08-08"
+  },
+  "Chinabike": {
+   "verdetto": "pseudo",
+   "prova": "Etichetta di catalogo per moto cinesi generiche, non un costruttore reale.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.1000ps.at/gebrauchte-motorraeder/marke/Chinabike"
+  },
+  "Christini": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore USA di moto a trazione integrale, attivo, nicchia assente in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Cleveland": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Cleveland CycleWerks: produzione minima dopo pausa e cambio proprietà, assente in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Cobra": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore USA di minicross per bambini, attivo, raro nel mercato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Condor": {
+   "verdetto": "assente",
+   "prova": "cessata: Costruttore svizzero (forniture militari); produzione moto cessata alla fine degli anni '70.",
+   "quando": "2026-08-08"
+  },
+  "Confederate": {
+   "verdetto": "rinominata",
+   "prova": "Rinominata Curtiss Motorcycles nel 2018; i design a benzina proseguiti da Combat Motors. [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Curtiss",
+   "fonte": "https://en.wikipedia.org/wiki/Curtiss_Motorcycles"
+  },
+  "Coopop": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio sudcoreano di ciclomotori elettrici, attivo in Europa, marginale in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Cotton": {
+   "verdetto": "assente",
+   "prova": "cessata: Costruttore britannico storico di Gloucester, attività cessata nel 1980.",
+   "quando": "2026-08-08"
+  },
+  "Csepel": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio ungherese storico; moto a proprio nome solo fino agli anni '50.",
+   "quando": "2026-08-08"
+  },
+  "CSR": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio spagnolo di scooter anni 2000; bloccato da Honda, scomparso dal mercato.",
+   "quando": "2026-08-08"
+  },
+  "CZ": {
+   "verdetto": "assente",
+   "prova": "ceca storica (Česká zbrojovka), moto cessate anni 90: assente.",
+   "quando": "2026-08-08"
+  },
+  "D-RAD": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio berlinese anni '20, cessato nel 1933 con l'assorbimento in NSU.",
+   "quando": "2026-08-08"
+  },
+  "Di Blasi": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Azienda siciliana di ciclomotori pieghevoli, tuttora attiva, produzione di nicchia.",
+   "quando": "2026-08-08"
+  },
+  "Dinli": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore taiwanese di quad tuttora attivo, poco diffuso in Italia.",
+   "quando": "2026-08-08"
+  },
+  "DKW": {
+   "verdetto": "assente",
+   "prova": "cessata: Storico marchio tedesco; produzione moto cessata a metà anni '60.",
+   "quando": "2026-08-08"
+  },
+  "Dnepr": {
+   "verdetto": "assente",
+   "prova": "cessata: Fabbrica KMZ di Kiev; produzione di serie cessata nei primi anni 2000.",
+   "quando": "2026-08-08"
+  },
+  "Donghai": {
+   "verdetto": "assente",
+   "prova": "cessata: Storico marchio di Shanghai (moto pesanti 750), produzione cessata da decenni.",
+   "quando": "2026-08-08"
+  },
+  "Dorton": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio spagnolo di 125 economiche anni '90, scomparso dal mercato da tempo.",
+   "quando": "2026-08-08"
+  },
+  "Douglas": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica casa inglese di Bristol; produzione moto cessata nel 1957 dopo la Dragonfly.",
+   "quando": "2026-08-08"
+  },
+  "Dreems": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Tedesca di Amburgo, insolvente; il marchio prosegue nel gruppo emco, nicchia in Italia.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.emco-eroller.com/pages/dreems-infos"
+  },
+  "Dürkopp": {
+   "verdetto": "assente",
+   "prova": "cessata: Tedesca di Bielefeld; moto e scooter Diana, produzione cessata nei primi anni '60.",
+   "quando": "2026-08-08"
+  },
+  "E-Sprit": {
+   "verdetto": "assente",
+   "prova": "cessata: Piccolo costruttore austriaco (Kufstein) di scooter elettrici; insolvente nei primi anni 2010.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.testberichte.de/p/e-sprit-tests/silenzio-45-testbericht.html"
+  },
+  "E-Ton": {
+   "verdetto": "assente",
+   "prova": "cessata: Taiwanese del gruppo Ji-EE: ATV e scooter; produzione finita verso il 2015.",
+   "quando": "2026-08-08"
+  },
+  "E.-ATV": {
+   "verdetto": "assente",
+   "prova": "quad artigianali coi motori KTM: i suoi \"modelli\" portano il nome del motore donatore (690 Enduro, 990 Adventure) — mappare su KTM mostrerebbe le moto, non i quad: refutato.",
+   "quando": "2026-08-08"
+  },
+  "EBR": {
+   "verdetto": "assente",
+   "prova": "cessata: Erik Buell Racing, USA; chiusa definitivamente nel 2017 dopo il fallimento.",
+   "quando": "2026-08-08"
+  },
+  "Ecomobile": {
+   "verdetto": "ignota",
+   "prova": "Solo un annuncio mobile.de; nessun costruttore affidabile identificabile con questo nome.",
+   "quando": "2026-08-08"
+  },
+  "Econelo": {
+   "verdetto": "assente",
+   "prova": "cessata: Tedesca di Leingarten, tricicli e scooter elettrici; insolvente maggio 2025, in liquidazione.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.stimme.de/wirtschaft/baden-wuerttemberg/econelo-insolvent-betrieb-sichern-verwalter-elektro-roller-fahrzeuge-mitarbeiter-art-5056652"
+  },
+  "Edrive": {
+   "verdetto": "ignota",
+   "prova": "Nessuna fonte affidabile sul marchio; Miku Max è modello Sunra, legame non provato.",
+   "quando": "2026-08-08"
+  },
+  "Efun": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore-esportatore cinese di scooter elettrici, venduti in Europa tramite distributori; irrilevante in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Egli": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Storico telaista svizzero (Egli-Vincent); special su base altrui, produzione minima, nicchia da collezione.",
+   "quando": "2026-08-08"
+  },
+  "EH Line": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio austriaco di MECO World (Mauthausen); e-scooter ES01 primi anni 2010, poi scomparso.",
+   "quando": "2026-08-08"
+  },
+  "Electrack": {
+   "verdetto": "ignota",
+   "prova": "Compare solo in listini annunci; modelli omonimi di iO Scooter, legame non provato.",
+   "quando": "2026-08-08"
+  },
+  "Elektra EV": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio belga di moto e scooter elettrici (Ohmega, Jackal); attivo, assente dall'usato italiano.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.elektra-ev.com/fr/decouvrez/par-type/scooter/"
+  },
+  "Elmoto": {
+   "verdetto": "assente",
+   "prova": "cessata: Tedesca (ID-Bike): moto elettrica leggera HR-2 anni 2010; marchio poi a Govecs, sparito.",
+   "quando": "2026-08-08"
+  },
+  "Emco": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Tedesca di Lingen, e-scooter; attiva, ha rilevato Unu nel 2024; rara in Italia.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.electrive.net/2024/04/30/emco-uebernimmt-insolvente-unu/"
+  },
+  "EMW": {
+   "verdetto": "assente",
+   "prova": "cessata: Eisenacher Motorenwerk (DDR), R35 derivata BMW; produzione moto cessata negli anni '50.",
+   "quando": "2026-08-08"
+  },
+  "Energy": {
+   "verdetto": "assente",
+   "prova": "\"Energy 125/250\" di GiPuma e' un MODELLO omonimo, non la marca: refutato.",
+   "quando": "2026-08-08"
+  },
+  "Epella": {
+   "verdetto": "assente",
+   "prova": "cessata: Eppella, marchio della tedesca Friedrich-Epple per scooter cinesi (TB 50); fuori mercato.",
+   "quando": "2026-08-08"
+  },
+  "Erider": {
+   "verdetto": "rebadge",
+   "prova": "Distributore belga: E2Go e Lipo sono scooter costruiti dalla cinese Efun. [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Efun",
+   "fonte": "https://www.elektroroller-forum.de/viewtopic.php?t=10069"
+  },
+  "Ering": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio tedesco d'importazione di scooter cinesi anni 2000 (Thunderbike); restano solo ricambi.",
+   "quando": "2026-08-08"
+  },
+  "Excalibur": {
+   "verdetto": "assente",
+   "prova": "\"Excalibur 350/501\" di Moto Morini e' un modello omonimo: refutato.",
+   "quando": "2026-08-08"
+  },
+  "Exeet": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Tedesca di Euskirchen (KFZ-Jornitz): quad artigianali con motori moto; attiva, nicchia estrema.",
+   "quando": "2026-08-08",
+   "fonte": "https://exeet.de/fahrzeuge/"
+  },
+  "Explorer": {
+   "verdetto": "ospite",
+   "ospite": "Generic",
+   "prova": "ospite: vedi data/ponte-marche-ospiti.json (misura e perche' li').",
+   "quando": "2026-08-08"
+  },
+  "Express": {
+   "verdetto": "assente",
+   "prova": "tedesca storica (Radex), confluita in Zweirad Union nel 1958; \"Express 50/125\" di TGB e' un modello omonimo: refutato.",
+   "quando": "2026-08-08"
+  },
+  "Fecht Trike": {
+   "verdetto": "assente",
+   "prova": "cessata: Trike tedeschi di Dietrich Fecht su base Maggiolino; MF1 prodotto 1979-1990.",
+   "quando": "2026-08-08"
+  },
+  "FN": {
+   "verdetto": "assente",
+   "prova": "belga storica (Fabrique Nationale), moto cessate nel 1965: assente.",
+   "quando": "2026-08-08"
+  },
+  "Frischauf": {
+   "verdetto": "assente",
+   "prova": "cessata: Cooperativa tedesca di Offenbach; cicli e moto leggere anni '50, poi scomparsa.",
+   "quando": "2026-08-08"
+  },
+  "Futura": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio commerciale tedesco online di e-scooter cinesi (Hawk); irrilevante nell'usato italiano.",
+   "quando": "2026-08-08",
+   "fonte": "https://elektroroller-futura.de/shop/elektroroller/elektroroller-hawk-blei-gel-akku"
+  },
+  "Genata": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore-esportatore cinese di Chongqing (moto, quad, generatori); presenza italiana trascurabile.",
+   "quando": "2026-08-08"
+  },
+  "GG": {
+   "verdetto": "assente",
+   "prova": "svizzera (Grüter+Gut, quad Taurus): nicchia assente.",
+   "quando": "2026-08-08"
+  },
+  "Giantco": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore cinese di scooter economici distribuiti nel Nord Europa; marginale nell'usato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Gillet Herstal": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica casa belga di Herstal, fondata 1919; produzione moto cessata verso il 1960.",
+   "quando": "2026-08-08"
+  },
+  "Gnome et Rhône": {
+   "verdetto": "assente",
+   "prova": "cessata: Francese: moto dal 1919 al 1959; società poi confluita nell'aeronautica SNECMA.",
+   "quando": "2026-08-08"
+  },
+  "Goes": {
+   "verdetto": "rebadge",
+   "prova": "Marchio europeo di quad costruiti su base CFMoto; acquisito da CFMoto nel 2024. [il nome nuovo ESISTE su Subito ma i nomi-modello non combaciano: riverificato sull'indice, 0 famiglie — resta testo libero]",
+   "quando": "2026-08-08",
+   "altroNome": "CFMoto",
+   "fonte": "https://www.cfmoto.com/global/media-center/news/news/cfmoto-completes-acquisition-of-the-european-off-road-brand-goes.html"
+  },
+  "Goggo": {
+   "verdetto": "assente",
+   "prova": "cessata: Scooter tedeschi di Hans Glas, prodotti 1951-1956; poi l'azienda passò alla Goggomobil.",
+   "quando": "2026-08-08"
+  },
+  "Grace": {
+   "verdetto": "assente",
+   "prova": "cessata: Produttore tedesco di e-bike One e Pro; sparito dopo l'acquisizione Mifa del 2012.",
+   "quando": "2026-08-08"
+  },
+  "Gritzner-Kayser": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica fabbrica tedesca di Durlach; ciclomotori cessati dopo la fusione con Pfaff (1957).",
+   "quando": "2026-08-08"
+  },
+  "GTS Benelux": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Importatore olandese-belga di scooter a proprio marchio; attivo, assente dal mercato italiano.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.gts-scooters.com/"
+  },
+  "GUF": {
+   "verdetto": "assente",
+   "prova": "cessata: GUF GmbH di Schelklingen, e-scooter Geco dal 2005; azienda scomparsa, sito defunto.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.openpr.de/news/309583/Elektroroller-aus-deutscher-Produktion-bietet-Qualitaet-Made-in-Germany.html"
+  },
+  "Hecker": {
+   "verdetto": "assente",
+   "prova": "cessata: Costruttore tedesco di Norimberga, attivo dal 1922 al 1957.",
+   "quando": "2026-08-08"
+  },
+  "Heinkel": {
+   "verdetto": "assente",
+   "prova": "cessata: Scooter Tourist del costruttore aeronautico tedesco; produzione due ruote cessata nel 1965.",
+   "quando": "2026-08-08"
+  },
+  "Henderson": {
+   "verdetto": "assente",
+   "prova": "cessata: Storiche quattro cilindri americane; produzione cessata nel 1931.",
+   "quando": "2026-08-08"
+  },
+  "Hercules": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica marca di Norimberga; moto cessate nel 1996, il marchio resta solo per biciclette.",
+   "quando": "2026-08-08"
+  },
+  "Herk": {
+   "verdetto": "ignota",
+   "prova": "Nessun riscontro affidabile; nome forse confuso con Hercules o Herkules.",
+   "quando": "2026-08-08"
+  },
+  "Herkules": {
+   "verdetto": "rebadge",
+   "prova": "Herkules Motor vende in Germania quad del taiwanese Her Chee (Adly) col proprio marchio. [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Adly (Her Chee)",
+   "fonte": "https://www.hahn66.de/Quad-Zubehoer-Ersatzteile-Herkules-/-Adly-/-Her-Chee-/-Epella-/-50-100-ccm_s7"
+  },
+  "Hesketh": {
+   "verdetto": "assente",
+   "prova": "cessata: Britannica anni '80 (V1000, Vampire); produzione originaria cessata nel 1984, rinascite episodiche.",
+   "quando": "2026-08-08"
+  },
+  "Highland": {
+   "verdetto": "assente",
+   "prova": "cessata: Piccolo costruttore svedese di bicilindriche; attività cessata intorno al 2013.",
+   "quando": "2026-08-08"
+  },
+  "Hisun": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore cinese di quad e UTV tuttora attivo; marginale nell'usato italiano.",
+   "quando": "2026-08-08"
+  },
+  "HMW": {
+   "verdetto": "assente",
+   "prova": "cessata: Halleiner Motorenwerke, ciclomotori austriaci; produzione cessata nel 1964.",
+   "quando": "2026-08-08"
+  },
+  "Hoffmann": {
+   "verdetto": "assente",
+   "prova": "cessata: Costruttore tedesco licenziatario Vespa; produzione moto cessata nel 1954.",
+   "quando": "2026-08-08"
+  },
+  "Horex": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Storica tedesca rilanciata nel 2010 con la VR6; produzione attuale minima, assente dall'usato italiano.",
+   "quando": "2026-08-08"
+  },
+  "HRD": {
+   "verdetto": "assente",
+   "prova": "cessata: La britannica confluì in Vincent (1949); anche l'omonima italiana è cessata da decenni.",
+   "quando": "2026-08-08"
+  },
+  "Hummel": {
+   "verdetto": "assente",
+   "prova": "cessata: Costruttore tedesco di Sittensen (scooter Sitta); produzione cessata nel 1958.",
+   "quando": "2026-08-08"
+  },
+  "Huoniao": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore cinese di piccole cilindrate; attivo, assente dal mercato usato italiano.",
+   "quando": "2026-08-08"
+  },
+  "IFA": {
+   "verdetto": "rinominata",
+   "prova": "Le moto IFA di Zschopau (RT 125, BK 350) divennero MZ nel 1956. [il nome nuovo ESISTE su Subito ma i nomi-modello non combaciano: riverificato sull'indice, 0 famiglie — resta testo libero] [MZ ha una famiglia \"RT 125\" ma e' la MODERNA quattro tempi, non la IFA del 1950: omonimia fra epoche, niente ponte]",
+   "quando": "2026-08-08",
+   "altroNome": "MZ",
+   "fonte": "https://en.wikipedia.org/wiki/MZ_Motorrad-_und_Zweiradwerk"
+  },
+  "IMG": {
+   "verdetto": "ignota",
+   "prova": "Nessun riscontro affidabile sul marchio IMG (Shoppy 50).",
+   "quando": "2026-08-08"
+  },
+  "Imme": {
+   "verdetto": "assente",
+   "prova": "cessata: L'Imme R100 di Norbert Riedel; produzione cessata nel 1951.",
+   "quando": "2026-08-08"
+  },
+  "Imperia": {
+   "verdetto": "assente",
+   "prova": "tedesca storica cessata (1935); \"Imperiale\" di Benelli e' un prefisso casuale: refutato.",
+   "quando": "2026-08-08"
+  },
+  "Innoscooter": {
+   "verdetto": "assente",
+   "prova": "cessata: Marca tedesca di scooter elettrici anni 2000; da tempo scomparsa dal mercato.",
+   "quando": "2026-08-08"
+  },
+  "IO": {
+   "verdetto": "assente",
+   "prova": "cessata: Marca di scooter elettrici anni 2010 (Vienna, Florenz, King Kong); scomparsa dal mercato.",
+   "quando": "2026-08-08"
+  },
+  "IWL": {
+   "verdetto": "assente",
+   "prova": "cessata: Scooter della DDR (Pitty, Berlin, Troll); produzione cessata nel 1965.",
+   "quando": "2026-08-08"
+  },
+  "Jack Fox": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio commerciale tedesco su scooter cinesi (Benzhou, Baotian, CPI); insolvenza nel 2010.",
+   "quando": "2026-08-08",
+   "fonte": "http://www.motorroller.org/motorroller/jack-fox/"
+  },
+  "Jianshe": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Storico costruttore cinese, oggi Jianshe Vehicle System; moto residuali, assente dall'Italia.",
+   "quando": "2026-08-08"
+  },
+  "Jincheng": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Gruppo cinese di Nanchino, partner storico Suzuki; attivo, marginale nell'usato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Jinling": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore cinese di quad, scooter e minimoto; marginale nel mercato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Jinlun": {
+   "verdetto": "assente",
+   "prova": "cessata: Marca cinese importata in Europa negli anni 2000, da tempo scomparsa dal mercato.",
+   "quando": "2026-08-08"
+  },
+  "Jmstar": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore cinese di scooter (Jiangsu), esportati in Europa; assente dal mercato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Jotagas": {
+   "verdetto": "assente",
+   "prova": "cessata: Casa spagnola di moto da trial, fallita nel 2016; seguirono tentativi di rilancio.",
+   "quando": "2026-08-08",
+   "fonte": "https://tmxnews.co.uk/news/trials/jotagas-goes-bust"
+  },
+  "Junak": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Storico marchio polacco, oggi attivo con moto di produzione cinese; raro in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Kamax": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio cinese di Chongqing Diyang (2008), attivo; quasi assente in Italia.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.motoplanete.us/manufacturer/brand/8514/kamax.html"
+  },
+  "Kinroad": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore cinese di buggy, kart e scooter; marginale nel mercato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Kumpan Electric": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Tedesca di scooter elettrici; insolvente 2023, rilevata da Lohia, produzione proseguita.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.electrive.net/2023/02/21/kumpan-electric-e-roller-hersteller-e-bility-insolvent/"
+  },
+  "KVN": {
+   "verdetto": "assente",
+   "prova": "cessata: Marca di quad anni 2000 (Yak 500), fuori produzione da molto tempo.",
+   "quando": "2026-08-08",
+   "fonte": "http://databikes.com/infophoto/other/kvn_yak_500-2005.html"
+  },
+  "Kwang Yang": {
+   "verdetto": "rinominata",
+   "prova": "Kwang Yang Motor è la ragione sociale di Kymco: stessi scooter, stesso costruttore. [il nome nuovo ESISTE su Subito ma i nomi-modello non combaciano: riverificato sull'indice, 0 famiglie — resta testo libero]",
+   "quando": "2026-08-08",
+   "altroNome": "Kymco",
+   "fonte": "https://en.wikipedia.org/wiki/Kymco"
+  },
+  "Lauge Jensen": {
+   "verdetto": "assente",
+   "prova": "cessata: Artigiana danese di custom di lusso; società dissolta nel 2015.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.motormagasinet.dk/article/view/228258/lauge_jensen_motorcykler_lukker_ned"
+  },
+  "Leike": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore cinese (Zhejiang Leike) di scooter 50-150; assente dal mercato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Lightning Motorcycles": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Californiana di moto elettriche ad alte prestazioni; produzione minima, assente in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Lohner": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica casa austriaca di scooter (Sissy, L125); produzione cessata a fine anni '50.",
+   "quando": "2026-08-08"
+  },
+  "Loncin": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Colosso cinese attivo, motori anche per BMW; in Europa vende come Voge.",
+   "quando": "2026-08-08"
+  },
+  "Longjia": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore cinese di scooter attivo; marginale nel mercato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Luxxon": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio tedesco di scooter di produzione cinese; venduto in Germania, assente in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Mabeco": {
+   "verdetto": "assente",
+   "prova": "cessata: Casa berlinese anni '20, copie su licenza delle Indian; chiuse nel 1927.",
+   "quando": "2026-08-08"
+  },
+  "Mars": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica casa tedesca di Norimberga; produzione moto cessata a fine anni '50.",
+   "quando": "2026-08-08"
+  },
+  "Marshal Moto": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore cinese di Jiangmen, cruiser Hanyang 800; attivo, assente in Italia.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.hanyangmoto.com/"
+  },
+  "Masai": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio francese di quad e moto d'importazione cinese; poco diffuso in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Masini": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio di scooter elettrici venduto in Germania; assente dal mercato italiano.",
+   "quando": "2026-08-08",
+   "fonte": "http://www.my-e-mobil.de/selfsite.php?aktion=Masini_Classico"
+  },
+  "Matchless": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica casa britannica; produzione cessata negli anni '60 col crollo del gruppo AMC.",
+   "quando": "2026-08-08"
+  },
+  "Mc Motors": {
+   "verdetto": "ignota",
+   "prova": "Nessuna fonte affidabile trovata; costruttore non identificabile.",
+   "quando": "2026-08-08"
+  },
+  "Megelli": {
+   "verdetto": "assente",
+   "prova": "cessata: Marca britannica di moto costruite in Cina; scomparsa negli anni 2010.",
+   "quando": "2026-08-08"
+  },
+  "Miele": {
+   "verdetto": "assente",
+   "prova": "cessata: La tedesca degli elettrodomestici produsse cicli e ciclomotori fino al 1960 circa.",
+   "quando": "2026-08-08"
+  },
+  "Minimoto": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio tedesco (HH Trading, Amburgo) di scooter retro Kolibri; assente in Italia.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.minimoto.me/products/kolibri"
+  },
+  "Moto Parilla": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica casa milanese, chiusa nel 1967; il nome oggi rivive su e-bike.",
+   "quando": "2026-08-08"
+  },
+  "Motobecane": {
+   "verdetto": "rinominata",
+   "prova": "Dal 1984, dopo l'acquisizione Yamaha, il marchio è diventato MBK. [il nome nuovo ESISTE su Subito ma i nomi-modello non combaciano: riverificato sull'indice, 0 famiglie — resta testo libero]",
+   "quando": "2026-08-08",
+   "altroNome": "MBK",
+   "fonte": "https://en.wikipedia.org/wiki/Motob%C3%A9cane"
+  },
+  "Motorhispania": {
+   "verdetto": "assente",
+   "prova": "cessata: Casa sivigliana di ciclomotori sportivi (Furia, RYZ); da anni fuori produzione.",
+   "quando": "2026-08-08"
+  },
+  "Motosacoche": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica casa ginevrina (motori MAG); produzione moto cessata a metà anni '50.",
+   "quando": "2026-08-08"
+  },
+  "Motowell": {
+   "verdetto": "assente",
+   "prova": "cessata: Marca ungherese di scooter (Budapest); attività cessata nel 2021.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.1000ps.com/en-us/brand/291/motowell"
+  },
+  "MTR": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marca spagnola di Siviglia (Malcor Iberica), scooter economici; assente dal mercato italiano.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.mtrmotos.com/"
+  },
+  "Münch": {
+   "verdetto": "assente",
+   "prova": "cessata: Casa tedesca di Friedel Münch; ultima piccola serie Mammut 2000 conclusa nel 2002.",
+   "quando": "2026-08-08"
+  },
+  "Naxeon": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio cinese di moto elettriche fondato nel 2021; presenza italiana minima.",
+   "quando": "2026-08-08",
+   "fonte": "https://naxeon.co.uk/"
+  },
+  "NCR": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Officina bolognese di special artigianali su base Ducati; produzione minima di nicchia.",
+   "quando": "2026-08-08"
+  },
+  "Neco": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marca belga di scooter (Wielsbeke), diffusa in Benelux e UK; rara in Italia.",
+   "quando": "2026-08-08",
+   "fonte": "https://neco.be/scooter-neco-alexone-125/"
+  },
+  "Nero": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Tricicli elettrici da carico venduti in Austria; non moto tradizionali, assente in Italia.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.nero-direkt.at/de/produkt/elektro-lastendreirad-nero-thunder/"
+  },
+  "New Hudson": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica marca di Birmingham; produzione cessata definitivamente negli anni '50 sotto BSA.",
+   "quando": "2026-08-08"
+  },
+  "New Imperial": {
+   "verdetto": "assente",
+   "prova": "cessata: Casa inglese di Birmingham; produzione cessata nel 1939.",
+   "quando": "2026-08-08"
+  },
+  "Nimbus": {
+   "verdetto": "assente",
+   "prova": "cessata: Casa danese Fisker & Nielsen; produzione cessata nel 1960.",
+   "quando": "2026-08-08"
+  },
+  "Ninebot": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Gruppo cinese Segway-Ninebot, attivo; in Italia noto per monopattini, non per moto.",
+   "quando": "2026-08-08"
+  },
+  "Nitro Motors": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Rivenditore tedesco online di mini-quad e pit bike cinesi economici; assente in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Nova Motors": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Distributore tedesco online di scooter di produzione cinese; assente dal mercato italiano.",
+   "quando": "2026-08-08"
+  },
+  "NSU": {
+   "verdetto": "assente",
+   "prova": "cessata: Produzione moto cessata a metà anni '60; l'azienda confluì in Audi nel 1969.",
+   "quando": "2026-08-08"
+  },
+  "Online": {
+   "verdetto": "rebadge",
+   "prova": "Puro marchio commerciale: i quad provengono dall'azienda Leeb, eredi dei Beeline Bestia. [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Leeb",
+   "fonte": "https://www.dasquadforum.de/forum/thread/46388-hintergrund-der-marke-online-erfahrung-mit-der-marke-online/"
+  },
+  "Opel": {
+   "verdetto": "assente",
+   "prova": "cessata: Opel produsse motociclette solo fino al 1930; da allora solo automobili.",
+   "quando": "2026-08-08"
+  },
+  "Oset": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marca inglese di trial elettriche per bambini, acquisita da Triumph nel 2024; nicchia.",
+   "quando": "2026-08-08"
+  },
+  "Palmo": {
+   "verdetto": "assente",
+   "prova": "cessata: Scooter cabinato a tre ruote d'importazione tedesca (circa 2011); marchio scomparso dal mercato.",
+   "quando": "2026-08-08",
+   "fonte": "https://autogazette.de/scooter/palmo/motorrad/ein-scooter-fuer-autofahrer-46468.html"
+  },
+  "Panther": {
+   "verdetto": "assente",
+   "prova": "due Panther storiche (P&M inglese, Panther-Werke tedesca), entrambe cessate; i nostri nomi non combaciano con \"Panther C/S\" di Phelon&Moore ne' coi modelli Garelli: refutati.",
+   "quando": "2026-08-08"
+  },
+  "Pegasus": {
+   "verdetto": "ospite",
+   "ospite": "TGB",
+   "prova": "rebadge: scooter costruiti da TGB (marchio ZEG); sull'indice il solo R 50 X combacia (TGB R50X). Voce nel ponte degli ospiti.",
+   "fonte": "https://blog.racing-planet.de/2026/pegasus-ultimativer-guide/",
+   "quando": "2026-08-08"
+  },
+  "Peraves": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore svizzero-ceco di moto cabinate (MonoTracer); produzione artigianale minima.",
+   "quando": "2026-08-08"
+  },
+  "PIT Racing": {
+   "verdetto": "ignota",
+   "prova": "Nessun costruttore rintracciabile; probabile denominazione generica di pit bike cinesi.",
+   "quando": "2026-08-08"
+  },
+  "Pocket Bike": {
+   "verdetto": "pseudo",
+   "prova": "Categoria di minimoto, non una marca; voci distinte solo per omologazione stradale.",
+   "quando": "2026-08-08",
+   "fonte": "https://de.wikipedia.org/wiki/Pocketbike"
+  },
+  "Polaris": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Colosso USA di quad e side-by-side, attivo; segmento di nicchia in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Puch": {
+   "verdetto": "assente",
+   "prova": "austriaca storica (assorbita da Piaggio nel 1987, marchio dismesso per le moto); nessuna famiglia Puch sotto Piaggio sull'indice; i segnali Gas Gas/Beta/Gilera sono omonimi: refutati.",
+   "quando": "2026-08-08"
+  },
+  "Qingqi": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Grande costruttore cinese (Jinan Qingqi), attivo come OEM; marchio proprio assente in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Quadix": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Importatore tedesco di Bamberg che rimarchia quad e buggy cinesi (es. Xingjue); nicchia.",
+   "quando": "2026-08-08",
+   "fonte": "https://atv-quad-magazin.com/2011/04/quadix-xingjue-buggy-800/"
+  },
+  "Rabeneick": {
+   "verdetto": "assente",
+   "prova": "tedesca storica cessata (anni 60); \"SM→4 marche diverse\" e' la sigla generica supermotard: refutato.",
+   "quando": "2026-08-08"
+  },
+  "Razory": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio tedesco di scooter retrò economici di produzione cinese; assente dal mercato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Real": {
+   "verdetto": "assente",
+   "prova": "cessata: Marca tedesca di mofa ed endurini anni '70-'80; scomparsa da decenni.",
+   "quando": "2026-08-08"
+  },
+  "Rechenberg": {
+   "verdetto": "ignota",
+   "prova": "Nessuna informazione affidabile reperita sul marchio o sul modello P5PS.",
+   "quando": "2026-08-08"
+  },
+  "Regal-Raptor": {
+   "verdetto": "ospite",
+   "ospite": "Leonart",
+   "prova": "ospite: vedi data/ponte-marche-ospiti.json (misura e perche' li').",
+   "quando": "2026-08-08"
+  },
+  "Rewaco": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore tedesco di trike (Lindlar), attivo; praticamente assente dal mercato italiano.",
+   "quando": "2026-08-08"
+  },
+  "REX": {
+   "verdetto": "assente",
+   "prova": "scooter economici tedeschi (gruppo Jawa/后 KSR); il segnale \"RS 125→Aprilia\" e' un omonimo (scooter vs sportiva): refutato.",
+   "quando": "2026-08-08"
+  },
+  "RGNT": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Elettriche svedesi; due fallimenti (2023, 2026) ma attività ripresa; assente in Italia",
+   "quando": "2026-08-08",
+   "fonte": "https://thepack.news/rgnt-returns-following-asset-acquisition-street-classic-production-to-resume/"
+  },
+  "Rickman": {
+   "verdetto": "assente",
+   "prova": "cessata: Telaista inglese (Metisse) anni '60-'70; produzione moto cessata da decenni",
+   "quando": "2026-08-08"
+  },
+  "Ride": {
+   "verdetto": "assente",
+   "prova": "scooter economici; \"Classic→Aprilia/KSR\" omonimia generica su due ospiti: refutato.",
+   "quando": "2026-08-08"
+  },
+  "Rivero": {
+   "verdetto": "rebadge",
+   "prova": "Marchio tedesco (Demharter): scooter del cinese Wangye rivenduti come Rivero [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Wangye",
+   "fonte": "https://de.wikipedia.org/wiki/Zhejiang_Taizhou_Wangye_Power_Group"
+  },
+  "Rixe": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica tedesca di Bielefeld; fallita nel 1985, moto e ciclomotori non più prodotti",
+   "quando": "2026-08-08"
+  },
+  "RM": {
+   "verdetto": "assente",
+   "prova": "quad/UTV (800 Duo): sigla di importatore, assente.",
+   "quando": "2026-08-08"
+  },
+  "RMW": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica tedesca (assorbì Phönix); produzione cessata negli anni '50",
+   "quando": "2026-08-08"
+  },
+  "Rolektro": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio tedesco (Soletek) di e-scooter e trike elettrici; attivo, assente in Italia",
+   "quando": "2026-08-08",
+   "fonte": "https://rolektro.de/"
+  },
+  "RollerFoxx": {
+   "verdetto": "assente",
+   "prova": "cessata: Rivenditore berlinese (dal 2014) di scooter cinesi a proprio marchio; attività chiusa",
+   "quando": "2026-08-08",
+   "fonte": "https://www.yelp.com/biz/rollerfoxx-berlin"
+  },
+  "Romet": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Polacca (Arkus & Romet), attiva; le sue 125 sono assenti dal mercato italiano",
+   "quando": "2026-08-08"
+  },
+  "Rudge": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica inglese Rudge-Whitworth; produzione moto terminata nel 1939",
+   "quando": "2026-08-08"
+  },
+  "Rumi": {
+   "verdetto": "rinominata",
+   "altroNome": "Moto Rumi",
+   "prova": "Subito ha \"Moto Rumi\" (revival: Mangusta, Pantera); i nostri nomi storici (Formichino, Scoiattolo) non combaciano: resta testo libero.",
+   "quando": "2026-08-08"
+  },
+  "Sanglas": {
+   "verdetto": "assente",
+   "prova": "cessata: Spagnola di Barcellona; produzione cessata nel 1981, rilevata da Yamaha España",
+   "quando": "2026-08-08"
+  },
+  "Saroléa": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica belga; produzione cessata nel 1963; revival elettrico odierno di nicchia",
+   "quando": "2026-08-08"
+  },
+  "Saxon": {
+   "verdetto": "assente",
+   "prova": "cessata: Costruttore USA di chopper (Arizona); produzione cessata intorno al 2010",
+   "quando": "2026-08-08"
+  },
+  "Scarabeo": {
+   "verdetto": "ospite",
+   "ospite": "Aprilia",
+   "prova": "ospite: vedi data/ponte-marche-ospiti.json (misura e perche' li').",
+   "quando": "2026-08-08"
+  },
+  "Schüttoff": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica tedesca di Chemnitz; rilevata da DKW, marchio estinto primi anni '30",
+   "quando": "2026-08-08"
+  },
+  "Scomadi": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Britannico-thailandese, scooter stile Lambretta; attiva ma di nicchia in Italia",
+   "quando": "2026-08-08"
+  },
+  "Scott": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica inglese di Shipley; produzione di fatto cessata negli anni '50",
+   "quando": "2026-08-08"
+  },
+  "Scrooser": {
+   "verdetto": "assente",
+   "prova": "cessata: Startup tedesca di scooter elettrici; Scrooser GmbH in insolvenza nel 2023",
+   "quando": "2026-08-08",
+   "fonte": "https://insolvenzkontor.de/insolvenz/scrooser-gmbh-36s-in-3673-23"
+  },
+  "SDG": {
+   "verdetto": "rebadge",
+   "prova": "Marchio del distributore Senzabenzina: scooter elettrici del cinese Jiangsu Xinling (sigle XL…DQT) [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Xinling",
+   "fonte": "https://xinlingmotorcycle.en.made-in-china.com/"
+  },
+  "SEAT": {
+   "verdetto": "rinominata",
+   "altroNome": "Seat Mó",
+   "prova": "Subito tiene gli e-scooter SEAT come marca \"Seat Mó\" (famiglia \"eScooter 125\"); i nostri nomi MO/MO 125 non combaciano: 0 famiglie, resta testo libero.",
+   "quando": "2026-08-08"
+  },
+  "Segway": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Segway-Ninebot, attiva; ATV Snarler e scooter rari nell'usato italiano",
+   "quando": "2026-08-08"
+  },
+  "Seikel": {
+   "verdetto": "assente",
+   "prova": "cessata: Quad tedeschi d'importazione anni 2000 (piattaforme SMC/Barossa); marchio veicoli non più attivo",
+   "quando": "2026-08-08"
+  },
+  "SEV": {
+   "verdetto": "assente",
+   "prova": "e-bike francesi (eTricks); \"Seventy\" di Mash e' un prefisso casuale: refutato.",
+   "quando": "2026-08-08"
+  },
+  "Shineray": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Cinese di Chongqing (controlla SWM); attiva, assente in Italia col proprio marchio",
+   "quando": "2026-08-08"
+  },
+  "Si.O": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio tedesco di scooter elettrici, di nicchia, assente dal mercato italiano",
+   "quando": "2026-08-08",
+   "fonte": "https://www.sio-scooter.com/products/si-o-r-1-2-2/"
+  },
+  "Simson": {
+   "verdetto": "assente",
+   "prova": "cessata: Tedesca orientale di Suhl; produzione terminata nel 2002 con l'insolvenza",
+   "quando": "2026-08-08"
+  },
+  "Skyteam": {
+   "verdetto": "assente",
+   "prova": "fa CLONI delle Honda Dax/Monkey: mappare su Honda mostrerebbe gli originali al posto dei cloni (prezzi diversissimi). REFUTATO il segnale, resta testo libero.",
+   "quando": "2026-08-08"
+  },
+  "SMC": {
+   "verdetto": "assente",
+   "prova": "cessata: Quad taiwanesi (venduti anche come Barossa); spariti dal mercato europeo dopo gli anni 2000",
+   "quando": "2026-08-08",
+   "fonte": "https://www.chinaquads.de/threads/10184-smc-barossa"
+  },
+  "Solo": {
+   "verdetto": "assente",
+   "prova": "cessata: Tedesca di Sindelfingen; ciclomotori cessati nei primi anni '80, resta il giardinaggio",
+   "quando": "2026-08-08"
+  },
+  "Speedex": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marca austriaca di scooter retrò (dal 2018); attiva, assente dal mercato italiano",
+   "quando": "2026-08-08",
+   "fonte": "https://speedex.at/"
+  },
+  "Standard": {
+   "verdetto": "assente",
+   "prova": "cessata: Tedesca di Ludwigsburg (modelli Rex); produzione moto cessata a fine anni '30",
+   "quando": "2026-08-08"
+  },
+  "Steereon": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Produttore di Colonia (PLEV Technologies), e-scooter con sedile; attivo, di nicchia",
+   "quando": "2026-08-08",
+   "fonte": "https://steereon.com/"
+  },
+  "Stels": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Russa (Velomotors), attiva; quad e ATV assenti dal mercato italiano",
+   "quando": "2026-08-08"
+  },
+  "Stock": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica berlinese; produzione cessata nei primi anni '30",
+   "quando": "2026-08-08"
+  },
+  "Stormborn": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marca tedesca (Lentec GmbH) di moto e scooter elettrici; attiva, assente dall'usato italiano",
+   "quando": "2026-08-08",
+   "fonte": "https://www.stormborn.eu/"
+  },
+  "Sumco": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marca spagnola di moto e scooter economici; attiva in Spagna, assente in Italia",
+   "quando": "2026-08-08"
+  },
+  "Sunbeam": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica marca britannica (gruppo BSA); produzione moto cessata nel 1956 con S7/S8",
+   "quando": "2026-08-08"
+  },
+  "SXT": {
+   "verdetto": "assente",
+   "prova": "e-scooter tedeschi; \"SXT 125/250/350\" di Cagiva e' un modello anni 80 omonimo: refutato.",
+   "quando": "2026-08-08"
+  },
+  "Tante Paula": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marca tedesca di mini-scooter elettrici (Ferdinand); vendita e assistenza ancora attive, nicchia",
+   "quando": "2026-08-08",
+   "fonte": "https://tantepaula.de/tante-paula-elektro-roller"
+  },
+  "Tauris": {
+   "verdetto": "assente",
+   "prova": "cessata: Marca spagnola di scooter nata nel 2005; non più commercializzata, restano usato e ricambi",
+   "quando": "2026-08-08"
+  },
+  "Terrot": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica casa francese di Digione; produzione cessata nel 1961",
+   "quando": "2026-08-08"
+  },
+  "THA": {
+   "verdetto": "rebadge",
+   "prova": "Distributore austro-tedesco: 'Tha Heist' è il bobber di Cleveland CycleWerks venduto come THA [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Cleveland CycleWerks",
+   "fonte": "https://www.tha-heist.at/"
+  },
+  "Thumpstar": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marca australiana di pit bike; attiva, praticamente assente dal mercato italiano",
+   "quando": "2026-08-08"
+  },
+  "Tisto": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marca tedesca di scooter elettrici (Luna, Berlin, Sunshine); attiva, di nicchia",
+   "quando": "2026-08-08",
+   "fonte": "https://tisto.net/"
+  },
+  "Tomaszo": {
+   "verdetto": "assente",
+   "prova": "cessata: Trike artigianali austriaci di Willy Tomaszovits su base VW; produzione terminata",
+   "quando": "2026-08-08"
+  },
+  "Tomos": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica casa slovena di ciclomotori; fallita nel 2019",
+   "quando": "2026-08-08"
+  },
+  "Tornax": {
+   "verdetto": "assente",
+   "prova": "cessata: Casa tedesca di Wuppertal; produzione cessata nel 1955, breve revival negli anni '80",
+   "quando": "2026-08-08"
+  },
+  "Toth-Twa": {
+   "verdetto": "assente",
+   "prova": "cessata: Piccolo costruttore tedesco di trike su base VW (anni '80-'90); non più attivo",
+   "quando": "2026-08-08"
+  },
+  "Touratech": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Azienda tedesca di accessori per maxienduro; attiva, non costruisce moto di serie",
+   "quando": "2026-08-08"
+  },
+  "Trike": {
+   "verdetto": "pseudo",
+   "prova": "Categoria di catalogo: raggruppa costruttori reali (Boom, Rewaco, TRIKEtec) e trike artigianali (Eigenbau)",
+   "quando": "2026-08-08",
+   "fonte": "https://suchen.mobile.de/motorrad/trike.html"
+  },
+  "Trinity": {
+   "verdetto": "assente",
+   "prova": "e-scooter tedeschi; \"Trinity 3Kw/5Kw\" di CJR MotorEco e' un modello omonimo: refutato.",
+   "quando": "2026-08-08"
+  },
+  "Triton": {
+   "verdetto": "rebadge",
+   "prova": "Quad del taiwanese Access venduti come Triton da Koch Zweirad; distribuzione cessata nel 2014 [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Access Motor",
+   "fonte": "https://atv-quad-magazin.com/aus-fur-koch-zweirad-bitteres-ende/"
+  },
+  "TRMOTOR": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marca di moto 125 economiche di produzione cinese vendute in Europa; nicchia",
+   "quando": "2026-08-08"
+  },
+  "Turbho": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marca olandese di scooter di produzione cinese; nicchia, assente dal mercato italiano",
+   "quando": "2026-08-08"
+  },
+  "Ultra Motor": {
+   "verdetto": "rinominata",
+   "prova": "E-bike britanniche; dopo insolvenza rilevata da Hero Eco (2011) e ribattezzata A2B (2013) [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "A2B",
+   "fonte": "https://en.wikipedia.org/wiki/A2B_(brand)"
+  },
+  "Unu Motors": {
+   "verdetto": "assorbita",
+   "prova": "Scooter elettrici berlinesi; insolvenza novembre 2023, asset e marchio rilevati da Emco nel 2024 [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Emco",
+   "fonte": "https://www.electrive.net/2024/04/30/emco-uebernimmt-insolvente-unu/"
+  },
+  "UT": {
+   "verdetto": "assente",
+   "prova": "tedesca storica (anni 20-50): assente.",
+   "quando": "2026-08-08"
+  },
+  "Vahrenkamp": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Team Vahrenkamp (Melle): moto diesel artigianali su base Royal Enfield; attiva, ultra-nicchia",
+   "quando": "2026-08-08",
+   "fonte": "https://www.teamvahrenkamp.de/produkte/vahrenkamp-diesel.html"
+  },
+  "Valenti Racing": {
+   "verdetto": "ospite",
+   "ospite": "Suzuki Valenti",
+   "prova": "ospite: vedi data/ponte-marche-ospiti.json (misura e perche' li').",
+   "quando": "2026-08-08"
+  },
+  "Varaneo": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marca tedesca di scooter elettrici; attiva, di nicchia in Italia",
+   "quando": "2026-08-08"
+  },
+  "Velocette": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica casa britannica; chiuse i battenti nel 1971",
+   "quando": "2026-08-08"
+  },
+  "Velosolex": {
+   "verdetto": "assente",
+   "prova": "cessata: Ciclomotore francese; produzione originale cessata nel 1988, poi solo revival elettrici del marchio",
+   "quando": "2026-08-08"
+  },
+  "Venturino": {
+   "verdetto": "assente",
+   "prova": "microfabbrica italiana; \"Vent\" e' un'altra marca (enduro): refutato il quasi-omonimo.",
+   "quando": "2026-08-08"
+  },
+  "Vespa": {
+   "verdetto": "ospite",
+   "ospite": "Piaggio",
+   "prova": "ospite: vedi data/ponte-marche-ospiti.json (misura e perche' li').",
+   "quando": "2026-08-08"
+  },
+  "Vespino": {
+   "verdetto": "assente",
+   "prova": "cessata: Ciclomotori della spagnola Motovespa (gruppo Piaggio); produzione cessata nel 1999",
+   "quando": "2026-08-08"
+  },
+  "Victoria": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica casa di Norimberga; confluita nella Zweirad Union nel 1958, marchio poi estinto",
+   "quando": "2026-08-08"
+  },
+  "Vincent": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica casa britannica; produzione cessata nel 1955",
+   "quando": "2026-08-08"
+  },
+  "Volta": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Nome di più costruttori di elettrici di nicchia (es. Volta Motorbikes Barcellona); marginale in Italia",
+   "quando": "2026-08-08"
+  },
+  "VoltaGO": {
+   "verdetto": "ignota",
+   "prova": "Nessun riscontro affidabile sui modelli indicati; solo omonimie con monopattini USA",
+   "quando": "2026-08-08"
+  },
+  "Voxan": {
+   "verdetto": "assente",
+   "prova": "francese cessata (2010, rilevata da Venturi per i record elettrici); \"Scrambler→Triumph\" e' omonimia: refutato.",
+   "quando": "2026-08-08"
+  },
+  "VR": {
+   "verdetto": "assente",
+   "prova": "minimoto elettriche per bambini (VR One/Kids): assenti.",
+   "quando": "2026-08-08"
+  },
+  "W-Tec": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Costruttore di nicchia di quad da cross ultraleggeri (Eraser Evo); assente dal mercato italiano.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.w-tec-quads.com/w-tec-eraser-evo-2023"
+  },
+  "Wakan": {
+   "verdetto": "assente",
+   "prova": "cessata: Piccolo costruttore francese di custom V-twin degli anni 2000; non più in produzione.",
+   "quando": "2026-08-08"
+  },
+  "Wanderer": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica marca tedesca; produzione moto cessata nel 1929, licenza ceduta a Janeček (Jawa).",
+   "quando": "2026-08-08"
+  },
+  "Wanjin": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Zhejiang Wanjin Industry, produttore cinese di quad economici; mai distribuito stabilmente in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Watsonian/Squire": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Storico costruttore britannico di sidecar, tuttora attivo; nicchia assente dal mercato usato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Wellbrock": {
+   "verdetto": "ignota",
+   "prova": "Nessuna marca riscontrata; i modelli elencati (Speedfight 3, Jet C-Tech) sono Peugeot.",
+   "quando": "2026-08-08"
+  },
+  "Wild Eagle": {
+   "verdetto": "assente",
+   "prova": "cessata: Marchio di scooter cinesi venduti dalla catena tedesca ATU; vendite cessate da anni.",
+   "quando": "2026-08-08",
+   "fonte": "https://www.zweiradteile.net/modelle/atu/wild-eagle-50-4t-level-100-bj.-2012/"
+  },
+  "WMI": {
+   "verdetto": "rebadge",
+   "prova": "Moto disegnate da Johnny Pag, prodotte da Lifeng in Cina, vendute in Germania come WMI. [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Johnny Pag",
+   "fonte": "https://www.dime-design.de/wmi.htm"
+  },
+  "Wüdo": {
+   "verdetto": "ospite",
+   "ospite": "BMW",
+   "prova": "ospite: vedi data/ponte-marche-ospiti.json (misura e perche' li').",
+   "quando": "2026-08-08"
+  },
+  "X-Spin": {
+   "verdetto": "ignota",
+   "prova": "Nessun riscontro affidabile sulla marca o sui modelli Rolly e Ted.",
+   "quando": "2026-08-08"
+  },
+  "Xingfu": {
+   "verdetto": "assente",
+   "prova": "cessata: Marca cinese storica (Shanghai), derivate Honda esportate negli anni '80-'90; produzione cessata.",
+   "quando": "2026-08-08"
+  },
+  "Xingyue": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Xingyue Group, produttore cinese di scooter e quad; mai distribuito significativamente in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Xispa": {
+   "verdetto": "assente",
+   "prova": "cessata: Marca spagnola di moto da trial (2005-2011); attività cessata, eredità passata a XPA.",
+   "quando": "2026-08-08",
+   "fonte": "https://cybermotorcycle.com/marques/spanish/xispa.htm"
+  },
+  "XPA": {
+   "verdetto": "assente",
+   "prova": "cessata: Breve erede spagnola di Xispa (Alta Motor Group, 2013); nessuna attività da anni.",
+   "quando": "2026-08-08",
+   "fonte": "https://trialworld.es/en/xpa-250-racing-2013-trial-presentation/"
+  },
+  "Yiben": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Zhejiang Yiben, produttore cinese di scooter; presenza solo marginale sul mercato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Yukon-Atv": {
+   "verdetto": "ignota",
+   "prova": "Nessuna fonte affidabile su marca o importatore dei quad serie Alps.",
+   "quando": "2026-08-08"
+  },
+  "Zhejiang": {
+   "verdetto": "pseudo",
+   "prova": "Zhejiang è una provincia cinese, non una marca; Jiaji, Huatian e Yaqi sono marche distinte.",
+   "quando": "2026-08-08",
+   "fonte": "https://en.wikipedia.org/wiki/Zhejiang"
+  },
+  "Zhongneng": {
+   "verdetto": "rinominata",
+   "prova": "Zhongneng Vehicle Group vende gli scooter col marchio ZNEN; voce duplicata di Znen. [il nome nuovo NON e' su Subito: riverificato]",
+   "quando": "2026-08-08",
+   "altroNome": "Znen",
+   "fonte": "https://en.wikipedia.org/wiki/Znen"
+  },
+  "Zhongshan": {
+   "verdetto": "ignota",
+   "prova": "Zhongshan è una città cinese; nessuna marca omonima riscontrata per il modello Ecobike.",
+   "quando": "2026-08-08"
+  },
+  "Zhongyu": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Jiangmen Zhongyu Motor Group, produttore cinese di motocicli; mai distribuito stabilmente in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Zing": {
+   "verdetto": "ignota",
+   "prova": "Zero modelli e nessuna marca riscontrata; probabile voce spuria (Zing è un modello Kymco).",
+   "quando": "2026-08-08"
+  },
+  "Zipp": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio polacco di scooter su base cinese, attivo in Polonia; assente dal mercato italiano.",
+   "quando": "2026-08-08"
+  },
+  "Znen": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Marchio scooter di Zhongneng Vehicle Group, tuttora attivo; diffusione minima nel mercato italiano.",
+   "quando": "2026-08-08",
+   "fonte": "https://en.wikipedia.org/wiki/Znen"
+  },
+  "Zongshen": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Grande costruttore cinese tuttora attivo; poco diffuso nel mercato dell'usato italiano.",
+   "quando": "2026-08-08"
+  },
+  "ZTR": {
+   "verdetto": "assente",
+   "prova": "attiva ma fuori dal mercato usato italiano: Trike cinese generico prodotto da più fabbriche di Yongkang; mai importato ufficialmente in Italia.",
+   "quando": "2026-08-08"
+  },
+  "Zündapp": {
+   "verdetto": "assente",
+   "prova": "cessata: Storica marca tedesca fallita nel 1984; il nome oggi riusato per veicoli d'importazione.",
+   "quando": "2026-08-08"
+  },
+  "Zweirad Union": {
+   "verdetto": "assente",
+   "prova": "cessata: Consorzio tedesco (DKW, Victoria, Express) del 1958; rilevato da Fichtel & Sachs, estinto anni '70.",
+   "quando": "2026-08-08"
+  }
+ }
+}

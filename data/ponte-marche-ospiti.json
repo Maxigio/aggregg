@@ -1,0 +1,62 @@
+{
+  "_perche": "Marche del nostro menu che su Subito NON esistono come marca: i loro veicoli vivono sotto un'altra marca (Vespa sotto PIAGGIO), o sotto il nome nuovo della stessa casa (Bullit → Bluroc). Senza questo ponte quei nomi cercavano a testo libero puro — 71% di precisione misurata, 0% sui nomi corti — e Vespa, una delle moto piu' vendute d'Italia, era invisibile agli id del catalogo.",
+  "_come": "risolviNodo (backend/scrapers/subito-nodo.js), quando la MARCA non si risolve, guarda qui: se la marca ha un ospite, ri-risolve il modello dentro l'ospite — prima col prefisso davanti (le famiglie Subito si chiamano 'Vespa 125 GTS', il nostro menu dice '125 GTS'), poi col nome nudo. Esce SOLO se trova una famiglia: mai la marca sola dell'ospite (75 famiglie non sono una risposta), mai un id quasi giusto. `come: 'ospite (X sotto Y)'` lo dichiara fino allo schermo.",
+  "_misura": "2026-08-08, script sull'indice vero (data/subito-indice.json) leggendo caso per caso. Recupero a livello famiglia: Vespa 42/154 (col prefisso; 9 senza), Wüdo 13/30, Regal-Raptor 6/20, Bullit 5/10, Scarabeo 5/6, Valenti Racing 4/6, Explorer 3/55, ATK 2/15, Galloper 2/4. Totale ~82 nomi che smettono di cercare a testo libero.",
+  "_dubbi": "REFUTATI leggendo i casi proposti dai segnali automatici — non riproporli: Skyteam→Honda (CLONI di Dax/Monkey: veicolo diverso, prezzo diverso, mappare mostrerebbe l'originale), REX→Aprilia (RS 125 omonimo: scooter vs sportiva), E.-ATV→KTM (quad col nome del motore donatore), Bull→Bullet(Royal Enfield), Imperia→Imperiale(Benelli), Ride→Rider(Garelli), SEV→Seventy(Mash), SXT→Cagiva, Energy→GiPuma, Excalibur→Morini, Express→TGB, Panther→Garelli/P&M, Trinity→CJR, Venturino→Vent, Barossa→Ossa, Haima→AIMA, RAM→MILITEM (e Dodge su Subito non ha famiglie RAM), Vespa→Royal Alloy (GT omonime), Regal-Raptor→Kustombike (sottoinsieme di Leonart). Dangel resta fuori: trasformatore MULTI-casa (Berlingo/Boxer/Ducato), un ospite solo non esiste.",
+  "auto": {
+    "Galloper": {
+      "ospite": "Hyundai",
+      "perche": "Hyundai Precision; Subito tiene le famiglie 'Galloper' e 'Santamo' sotto HYUNDAI.",
+      "misura": "2/4 nomi a livello famiglia (GALLOPER, Santamo)."
+    }
+  },
+  "moto": {
+    "Vespa": {
+      "ospite": "Piaggio",
+      "prefisso": "Vespa",
+      "perche": "Su Subito 'Vespa' non e' una marca: 75 famiglie 'Vespa …' vivono sotto PIAGGIO. Il nostro menu dice '125 GTS', la famiglia Subito 'Vespa 125 GTS': serve il prefisso.",
+      "misura": "42/154 nomi col prefisso, 9 senza (il ramo prova prima col prefisso, poi nudo: 'Cosa 125' e 'Vespa Elettrica' combaciano nudi)."
+    },
+    "Scarabeo": {
+      "ospite": "Aprilia",
+      "perche": "Lo Scarabeo e' una linea Aprilia: su Subito le famiglie 'Scarabeo 50…500' stanno sotto Aprilia, e i nostri nomi portano gia' il prefisso.",
+      "misura": "5/6 nomi a livello famiglia."
+    },
+    "Bullit": {
+      "ospite": "Bluroc",
+      "perche": "La belga Bullit ha cambiato nome in Bluroc nel 2022: Hero, Heritage e V-BOB su Subito stanno sotto Bluroc con gli stessi nomi.",
+      "misura": "5/10 nomi a livello famiglia."
+    },
+    "Regal-Raptor": {
+      "ospite": "Leonart",
+      "perche": "Leonart vende le Regal Raptor rimarchiate: Daytona, Bobber e Spyder 125/350 combaciano una per una. (Subito ha anche 'Pagsta Regal-Raptor', ma con modelli diversi dai nostri.)",
+      "misura": "6/20 nomi a livello famiglia."
+    },
+    "Valenti Racing": {
+      "ospite": "Suzuki Valenti",
+      "perche": "Subito tiene la marca come 'Suzuki Valenti': N01, RME, S01 e SM 50 sono le stesse moto.",
+      "misura": "4/6 nomi a livello famiglia."
+    },
+    "ATK": {
+      "ospite": "Hyosung",
+      "perche": "Le ATK GT 250 R e GT 650 R sono Hyosung rimarchiate (distribuzione USA 2012-2017): stesso veicolo, altro adesivo. Le altre ATK non hanno famiglia Hyosung e restano a testo libero.",
+      "misura": "2/15 nomi a livello famiglia."
+    },
+    "Wüdo": {
+      "ospite": "BMW",
+      "perche": "Wüdo e' un allestitore di BMW: 13 dei suoi 30 nomi SONO famiglie BMW (F 650 CS, K 100 RS, R 100 GS…). La dichiarazione a schermo dice che si sta guardando la base BMW.",
+      "misura": "13/30 nomi a livello famiglia."
+    },
+    "Explorer": {
+      "ospite": "Generic",
+      "prefisso": "Explorer",
+      "perche": "Explorer e Generic sono i marchi di casa ATU, il secondo erede del primo: su Subito 'Explorer Cracker 50', 'Explorer Defender 50' e 'Explorer Race 50' stanno sotto Generic.",
+      "misura": "3/55 nomi col prefisso (i quad Ares/Argon/Atlas non hanno famiglia e restano a testo libero)."
+    },
+    "Pegasus": {
+      "ospite": "TGB",
+      "perche": "Pegasus e' il marchio della tedesca ZEG: scooter costruiti da TGB a Taiwan. Sull'indice combacia il solo R 50 X (famiglia TGB 'R50X').",
+      "misura": "1/17 nomi a livello famiglia; il resto (Corona, Fabio, Sky) non ha famiglia TGB e resta a testo libero."
+    }
+  }
+}

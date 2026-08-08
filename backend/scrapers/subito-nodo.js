@@ -53,6 +53,55 @@ function ponte() {
 const pontePer = (tipo, marcaNome, cercato) => ponte().get(`${tipo}|${norm(marcaNome)}|${cercato}`) || null;
 
 /**
+ * LE PSEUDO-MARCHE (verdetto 'pseudo' in data/verdetti-marche-subito.json): voci del menu
+ * ereditate da Autoscout che NON sono marche ma categorie — Oldtimer (275 "modelli" che
+ * sono nomi di marca), Caravans-Wohnm, Trucks-Lkw, Trike, Pocket Bike… Su Autoscout
+ * funzionano (makeId vero); su Subito la query diventava q="Oldtimer Abarth", che trova
+ * nulla e passa per mercato vuoto. Decisione del proprietario (2026-08-08): per queste la
+ * fonte NON si interroga, e la colonna lo dichiara. File assente → nessuna pseudo.
+ */
+let PSEUDO = null;
+function marcaPseudo(tipo, marca) {
+  if (!PSEUDO) {
+    PSEUDO = { auto: new Set(), moto: new Set() };
+    try {
+      const j = require('../../data/verdetti-marche-subito.json');
+      for (const t of ['auto', 'moto']) {
+        for (const [nome, v] of Object.entries(j[t] || {})) {
+          if (v && v.verdetto === 'pseudo') PSEUDO[t].add(norm(nome));
+        }
+      }
+    } catch (e) { console.warn('[subito-nodo] verdetti delle marche non letti: ' + e.message); }
+  }
+  return PSEUDO[tipo === 'moto' ? 'moto' : 'auto'].has(norm(marca));
+}
+
+/**
+ * LE MARCHE OSPITI (data/ponte-marche-ospiti.json): marche del menu che su Subito non
+ * esistono come marca — i loro veicoli vivono sotto un'altra (Vespa sotto PIAGGIO, 75
+ * famiglie; Bullit sotto il suo nome nuovo, Bluroc). Curato a mano, ogni voce con la sua
+ * prova: la parentela fra marche non si deduce dai nomi — Skyteam fa CLONI delle Honda
+ * Dax/Monkey e mapparla mostrerebbe l'originale al posto del clone, REX RS 125 e' uno
+ * scooter omonimo della sportiva Aprilia. File assente o illeggibile → nessun ospite.
+ */
+let OSPITI = null;
+function ospiti() {
+  if (OSPITI) return OSPITI;
+  OSPITI = new Map();
+  try {
+    const j = require('../../data/ponte-marche-ospiti.json');
+    for (const [tipo, marche] of Object.entries(j)) {
+      if (tipo.startsWith('_')) continue;                 // le chiavi di documentazione
+      for (const [marca, v] of Object.entries(marche || {})) {
+        if (!v || !v.ospite) continue;
+        OSPITI.set(`${tipo}|${norm(marca)}`, { marca: v.ospite, prefisso: v.prefisso || null });
+      }
+    }
+  } catch (e) { console.warn('[subito-nodo] ponte delle marche ospiti non letto: ' + e.message); }
+  return OSPITI;
+}
+
+/**
  * Il catalogo a TRE livelli di Subito (marca → modello → versione), letto una volta e
  * indicizzato: per ogni marca, i token dei nomi-versione con il modello a cui appartengono.
  * E' la fonte che dichiara la parentela fra un allestimento e la sua famiglia; qui non si
@@ -144,7 +193,28 @@ function risolviNodo(tipo, marca, modello, opts = {}) {
   const q = ix.per[t];
   if (!q) return null;
   const m = q.risolviMarca(marca);
-  if (!m || !m.id) return null;
+  /**
+   * LA MARCA CHE NON C'E' PUO' AVERE UN OSPITE. Se nemmeno la marca si risolve, prima di
+   * arrendersi al testo libero si guarda il ponte degli ospiti: il modello si ri-risolve
+   * DENTRO la marca ospitante — prima col prefisso davanti («125 GTS» → «Vespa 125 GTS»,
+   * perche' cosi' si chiamano le famiglie di Subito sotto PIAGGIO), poi col nome nudo
+   * («Cosa 125» combacia gia'). Si esce SOLO con una famiglia: la marca sola dell'ospite
+   * non e' una risposta (sotto Piaggio ci sono 75 famiglie Vespa e tutte le altre), e un
+   * id quasi giusto e' peggio del testo libero. Un salto solo: l'ospite non ha ospiti.
+   * `come` dichiara il passaggio fino allo schermo.
+   */
+  if (!m || !m.id) {
+    if (opts._ospite) return null;
+    const voce = ospiti().get(`${t}|${norm(marca)}`);
+    const mod = String(modello == null ? '' : modello).trim();
+    if (!voce || !mod) return null;
+    const tentativi = voce.prefisso ? [`${voce.prefisso} ${mod}`, mod] : [mod];
+    for (const nome of tentativi) {
+      const dentro = risolviNodo(t, voce.marca, nome, { ...opts, _ospite: true });
+      if (dentro && dentro.famigliaId) return { ...dentro, come: `ospite (${marca} sotto ${dentro.marcaNome})` };
+    }
+    return null;
+  }
 
   const base = { tipo: t, marcaId: m.id, marcaNome: m.nome, famigliaId: null, famigliaNome: null, generazioni: [], come: 'marca' };
   if (!modello || !String(modello).trim()) return base;
@@ -223,41 +293,71 @@ function risolviNodo(tipo, marca, modello, opts = {}) {
     if (famPonte.length) return { ...perFamiglie(famPonte), come: 'ponte (nome rinominato)' };
   }
 
+  // LA REGOLA DEL PREFISSO, scritta una volta: la usano il ramo del prefisso qui sotto e
+  // l'unione del ramo delle parole qui sopra di lui. COL CONFINE di brand-match (82e4d15)
+  // — la stessa funzione, non una copia. Senza, 'Pegaso 500' agganciava la famiglia
+  // 'Pegaso 50' e i cinquantini passavano da risultati normali. Per i nomi CORTI (sotto i
+  // 3 caratteri) si pretende che il taglio cada su un confine di token del cercato:
+  // «X5 | M», «IS | 250» passano; «GT|V», «AX|el», «C1|5» no — e sono proprio i falsi.
+  // Misurato: 118 nomi recuperati, zero agganci che tagliano dentro una parola.
+  const filtroPrefisso = f => {
+    const n = norm(f.nome);
+    if (n.length < 2) return false;
+    if (n.length < 3 && !confiniDi(modello).has(n)) return false;
+    if (n.startsWith(cercato)) return taglioValido(f.nome, n, cercato);
+    if (cercato.startsWith(n)) return taglioValido(modello, cercato, n);
+    return false;
+  };
+
+  /**
+   * LE PAROLE TUTTE, COI RESTI NUMERICI — piu' preciso del prefisso, meno dell'esatto.
+   *
+   * Il prefisso incolla i token e pretende l'ordine: «Primavera» trovava solo le famiglie
+   * che COMINCIANO cosi' («Vespa Primavera Elettrica 45») e perdeva le classiche col
+   * numero in mezzo («Vespa 125 Primavera») — annunci che esistono, persi. E «GTS 125»
+   * non trovava «Vespa 125 GTS», stesso nome girato.
+   *
+   * La regola: ogni token del cercato sta nel nome della famiglia (MULTINSIEME: la
+   * seconda «R» di «R 1200 R» va trovata anche lei, cosi' «R 1200 GS» resta fuori), e i
+   * token che alla famiglia AVANZANO devono essere NUMERI puri — la cilindrata della
+   * stessa linea («125 Primavera» per «Primavera»), mai un altro modello («Primavera
+   * Elettrica» ha il resto 'elettrica' e per il cercato «Elettrica» il resto e'
+   * 'primavera': fuori entrambe le direzioni sbagliate). Misurato caso per caso sui 105
+   * agganci ospiti: la versione senza multinsieme o senza il vincolo numerico proponeva
+   * «R 1200 GS» per «R 1200 R» e le Primavera per «Elettrica».
+   *
+   * Si UNISCE al prefisso invece di sostituirlo: «Primavera» = le 3 classiche (parole)
+   * + le Elettrica (prefisso). Chi interroga porta tutte le famiglie e lo dichiara.
+   */
+  if (cercato) {
+    const tokCercato = parole(modello);
+    const conta = xs => { const m2 = new Map(); for (const x of xs) m2.set(x, (m2.get(x) || 0) + 1); return m2; };
+    const tq = conta(tokCercato);
+    // Tutti token da UN carattere = niente da agganciare: «R 5» combaciava con «R 60/5»
+    // (il resto '60' e' numerico, ma LI' il numero e' l'identita' del modello, non la
+    // cilindrata della stessa linea). Letto sui casi veri: gli unici falsi erano proprio
+    // questi — BMW R 5 → R 60/5, R 6 → R 60/6.
+    const soloMonocarattere = tokCercato.length > 0 && tokCercato.every(x => x.length === 1);
+    const perParoleNum = (tokCercato.length && !soloMonocarattere) ? fam.filter(f => {
+      const tf = conta(parole(f.nome));
+      for (const [x, n] of tq) if ((tf.get(x) || 0) < n) return false;
+      for (const [x, n] of tf) if (n - (tq.get(x) || 0) > 0 && !/^\d+$/.test(x)) return false;
+      return true;
+    }) : [];
+    if (perParoleNum.length) {
+      const ids = new Set(perParoleNum.map(f => f.id));
+      const unione = [...perParoleNum, ...(cercato.length >= 3 ? fam.filter(f => !ids.has(f.id) && filtroPrefisso(f)) : [])];
+      return { ...perFamiglie(unione), come: unione.length > 1 ? 'parole (' + unione.length + ' famiglie)' : 'parole' };
+    }
+  }
+
   // Solo ora il matching largo: prefisso bidirezionale, minimo 3 caratteri — la stessa
   // regola di `makeModelResolver`, che qui non si usa per un motivo preciso: quello a
   // pari merito ne SCEGLIE UNA e le altre le perde in silenzio. "Serie" su BMW aggancia
   // Serie 1, 2, 3, 5…: sceglierne una vorrebbe dire cercare un settimo di quello che
   // l'utente ha chiesto senza dirglielo. Si portano tutte e chi interroga lo dichiara.
   if (cercato.length >= 3) {
-    // COL CONFINE di brand-match (82e4d15) — la stessa funzione, non una copia. Senza,
-    // 'Pegaso 500' agganciava la famiglia 'Pegaso 50' e i cinquantini passavano da
-    // risultati normali: sulle moto la 'generazione' E' la famiglia stessa (4.605 su
-    // 4.605 fotocopia), quindi `riconosci` li ACCETTAVA — veicolo sbagliato senza dirlo.
-    // I rinominati storici (VN 15/VN 1500, ZR 750/ZR 7) che questo confine sacrifica
-    // sono materia da ponte curato, non da prefisso: due numeri diversi restano due moto.
-    const pref = fam.filter(f => {
-      const n = norm(f.nome);
-      if (n.length < 2) return false;
-      /**
-       * LE FAMIGLIE DAL NOME CORTO NON SONO IRRAGGIUNGIBILI. Il taglio a tre caratteri era
-       * un modo grezzo di dire «non agganciare troppo facilmente», scritto quando il
-       * confine non esisteva: ma buttava via 141 famiglie auto e 26 moto il cui nome
-       * normalizzato ne ha due — X5, IS, RX, SL, V7, X9 — e con loro 94 nomi del menu auto
-       * e 13 moto, che finivano a cercare TUTTA la marca. «Lexus IS 250» pescava in tutta
-       * la Lexus, «BMW X5 M» in tutta la BMW.
-       *
-       * Il lavoro che quel taglio faceva alla cieca lo fa ora il CONFINE, e per i nomi
-       * corti si pretende su entrambi i fronti: il taglio deve cadere su un confine di
-       * token del nome cercato. «X5 | M», «IS | 250», «C4 | Picasso» passano; «GT|V»,
-       * «AX|el», «C1|5», «TT|S» no — e sono proprio i falsi (Alfa GTV non e' la GT,
-       * l'Axel non e' la AX, la C15 non e' la C1). Misurato: 118 nomi recuperati, zero
-       * agganci che tagliano dentro una parola.
-       */
-      if (n.length < 3 && !confiniDi(modello).has(n)) return false;
-      if (n.startsWith(cercato)) return taglioValido(f.nome, n, cercato);
-      if (cercato.startsWith(n)) return taglioValido(modello, cercato, n);
-      return false;
-    });
+    const pref = fam.filter(filtroPrefisso);
     if (pref.length) {
       const n = { ...perFamiglie(pref), come: pref.length > 1 ? 'prefisso (' + pref.length + ' famiglie)' : 'prefisso' };
       /**
@@ -344,4 +444,4 @@ function livelliAnnuncio(ad) {
 const NON_DICHIARATO = '000000';
 const dichiarato = liv => !!(liv && liv.id && liv.id !== NON_DICHIARATO);
 
-module.exports = { risolviNodo, livelliAnnuncio, dichiarato, NON_DICHIARATO, _indice: indice, norm };
+module.exports = { risolviNodo, livelliAnnuncio, dichiarato, marcaPseudo, NON_DICHIARATO, _indice: indice, norm };
