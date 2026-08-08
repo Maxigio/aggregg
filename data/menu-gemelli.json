@@ -1,0 +1,24 @@
+{
+  "_perche": "Coppie di marche del MENU che si spartiscono gli stessi veicoli: il menu Piaggio offriva 'Vespa 125 GTS' e il menu Vespa no (aveva la GTR ma non la GTS) — due strade per lo stesso veicolo con liste diverse, trovato dal proprietario il 2026-08-08. Misurato sull'intero menu: 13 coppie vere (56 modelli Vespa mancanti al menu Vespa, 5 Scarabeo, 3 Alpine, 2 Maybach...). Il menu di 'marca' offre ANCHE i modelli di 'da' che portano il prefisso, senza il prefisso; con 'inversa' vale pure il contrario (i modelli propri di 'marca' compaiono sotto 'da', col prefisso davanti).",
+  "_come": "backend/menu-gemelli.js, usato da /api/models. Le voci aggiunte tengono i campi originali (mmmvAutoscout, slugMotoIt): Autoscout continua a interrogare per id, Subito passa dal ponte degli ospiti o dalla famiglia nativa. Doppioni evitati con la chiave senza parentesi: '160 GS' e 'Vespa 160 GS (VSB1)' sono la stessa voce.",
+  "_dubbi": "REFUTATI leggendo i casi — omonimi, NON gemelli, mai aggiungerli: Indian/Ducati ('Indiana' e' un modello Ducati anni 80), Mega/Renault ('Megane'), Mega/Westfield ('Megablade'), Karma/Oldtimer ('Karmann' e' un carrozziere), Zero/Beta ('Zero 250' e' un trial Beta anni 90), Solo/Ural ('Solo' e' l'Ural senza sidecar), Cobra/Kymco e Cobra/Aeon (modelli omonimi), Bull/Royal Enfield ('Bullet'), Highland/Jinlun ('Highlander'), Express/TGB, Imperia/Benelli ('Imperiale'), Trinity/CJR, Panther/Adly, Ride/Generic. Le pseudo-marche (Iveco⊂Trucks-Lkw) restano fuori: sono categorie. Mansory resta fuori: le sue 'Mercedes-Benz - C' sono elaborazioni, un altro veicolo.",
+  "voci": {
+    "auto": [
+      { "marca": "Alpine", "da": "Renault", "prefisso": "Alpine", "perche": "Alpine vendute anche come Renault Alpine: A310, A610, V6 stavano solo sotto Renault." },
+      { "marca": "Maybach", "da": "Mercedes-Benz", "prefisso": "Maybach", "perche": "Le Mercedes-Maybach (GLS, S-Klasse) stavano solo sotto Mercedes." },
+      { "marca": "Matra", "da": "Talbot", "prefisso": "Matra", "perche": "Le Talbot-Matra (Murena, Rancho) stavano solo sotto Talbot." },
+      { "marca": "Forthing", "da": "DFM", "prefisso": "Forthing", "perche": "Forthing e' la linea di Dongfeng (DFM): tutti e 5 i modelli stavano solo sotto DFM." },
+      { "marca": "Haval", "da": "GWM", "prefisso": "HAVAL", "perche": "Haval e' un marchio GWM: H6 e Jolion Pro stavano solo sotto GWM." }
+    ],
+    "moto": [
+      { "marca": "Vespa", "da": "Piaggio", "prefisso": "Vespa", "inversa": true, "perche": "Il caso del proprietario: 56 modelli 'Vespa …' offerti solo dal menu Piaggio (125 GTS compresa); l'inversa porta sotto Piaggio anche i soli-Vespa (125 GTR, Cosa)." },
+      { "marca": "Scarabeo", "da": "Aprilia", "prefisso": "Scarabeo", "perche": "Linea Aprilia: 100, 150, 250 e 300 Special stavano solo sotto Aprilia." },
+      { "marca": "Bluroc", "da": "Bullit", "prefisso": "Bluroc", "perche": "La rinominata (Bullit→Bluroc 2022) spartita in due voci: 'Bluroc 125' e '250 V2' stavano solo sotto Bullit." },
+      { "marca": "Kymco", "da": "Kwang Yang", "prefisso": "Kymco", "perche": "Kwang Yang E' Kymco (ragione sociale): Dink, Grand, Movie doppiati la' dentro." },
+      { "marca": "Adiva", "da": "Benelli", "prefisso": "Adiva", "perche": "Nata come Benelli Adiva: le 125/150 stavano anche sotto Benelli." },
+      { "marca": "Silence", "da": "Dreems", "prefisso": "Silence", "perche": "Dreems rivende gli scooter Silence: S01/S02 stavano solo sotto Dreems, col nome Silence per intero." },
+      { "marca": "Montesa", "da": "Honda", "prefisso": "Montesa", "perche": "Montesa e' di Honda: la 4Ride stava solo sotto Honda." },
+      { "marca": "Goes", "da": "Aeon", "prefisso": "Goes", "perche": "I quad Goes storici sono Aeon rimarchiati: 320/350/360/520 stavano solo sotto Aeon." }
+    ]
+  }
+}

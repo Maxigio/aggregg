@@ -45,6 +45,7 @@ const carburanti     = require('./carburanti');   // prezzi carburante MIMIT per
 const saved = require('./saved');
 const budget = require('./budget-richieste');     // quante richieste costa una ricerca: contate, non stimate
 const { risolviNodo, marcaPseudo } = require('./scrapers/subito-nodo');   // testo digitato → id del catalogo Subito
+const { unisciGemelli } = require('./menu-gemelli');   // due strade nel menu, la stessa lista
 const { agganciaSubito } = require('./scrapers/ponte-buchi'); // i modelli che il ponte non copriva
 const { codiciAs24, unisciCodici, famigliaSubito, famiglieSubito } = require('./scrapers/as24-modelli');   // traduzione di livello, nei due versi
 const { versioniAs24 } = require('./scrapers/as24-tassonomia');   // il catalogo versioni di AS24 (la sua tendina)
@@ -812,6 +813,16 @@ app.get('/api/models', async (req, res) => {
     kindAS:         m.kindAS         || '',
     slugMotoIt:     m.slugMotoIt     || '',
   }));
+
+  /**
+   * LE MARCHE GEMELLE: due strade, la stessa lista. Il menu Piaggio offriva «Vespa 125
+   * GTS» e il menu Vespa no — la ricerca giusta esisteva (ponte degli ospiti) ma la
+   * force-select non lasciava chiederla. Le coppie, curate con la prova, stanno in
+   * data/menu-gemelli.json; l'unione tiene i campi originali, quindi Autoscout continua
+   * a partire per id. Vedi backend/menu-gemelli.js.
+   */
+  modelli.push(...unisciGemelli(tipo, marca.trim(), modelli, modelsData));
+  modelli.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
 
   // MOTO — F43 Fase 0' (lazy): fonde i modelli AUTOREVOLI dell'API Moto.it
   // (`models/<brand>/Used`, cache 12h) col catalogo: riempie lo slug mancante per
