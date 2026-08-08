@@ -44,7 +44,7 @@ const motornet       = require('./scrapers/motornet');  // kW ufficiali di listi
 const carburanti     = require('./carburanti');   // prezzi carburante MIMIT per provincia
 const saved = require('./saved');
 const budget = require('./budget-richieste');     // quante richieste costa una ricerca: contate, non stimate
-const { risolviNodo } = require('./scrapers/subito-nodo');   // testo digitato → id del catalogo Subito
+const { risolviNodo, marcaPseudo } = require('./scrapers/subito-nodo');   // testo digitato → id del catalogo Subito
 const { agganciaSubito } = require('./scrapers/ponte-buchi'); // i modelli che il ponte non copriva
 const { codiciAs24, unisciCodici, famigliaSubito, famiglieSubito } = require('./scrapers/as24-modelli');   // traduzione di livello, nei due versi
 const { versioniAs24 } = require('./scrapers/as24-tassonomia');   // il catalogo versioni di AS24 (la sua tendina)
@@ -1768,10 +1768,20 @@ async function runSearchCore(params) {
     console.log(`[server] Moto.it brand-only fallback per "${params.marca} ${params.modello}" (slug specifico assente)`);
   }
 
+  // LE PSEUDO-MARCHE NON SI CHIEDONO A SUBITO. «Oldtimer», «Trike», «Pocket Bike» sono
+  // categorie di Autoscout, non marche: la query q="Oldtimer Abarth" trovava nulla e il
+  // mercato Subito passava per vuoto senza esserlo. Decisione del proprietario
+  // (2026-08-08): la fonte non parte e la colonna dichiara il perche' — lo skip e' uno
+  // stato esplicito, come per le altre due fonti. Su Autoscout tutto invariato.
+  const skipSubito = marcaPseudo(params.tipo, params.marca);
+  const subitoSkipReason = 'categoria di catalogo (Oldtimer, Trike…): Subito non ha l\'equivalente';
+
   // Ogni fonte ritorna { items, status, reason }. Subito ha wrapper dedicato
   // (propaga 'needs_bootstrap'). Lo skip è uno stato esplicito, non un [] muto.
   const [subitoRes, asRes0, motoRes] = await Promise.all([
-    runSubito(params, TIMEOUT_MS),
+    skipSubito
+      ? Promise.resolve({ items: [], status: 'skipped', reason: subitoSkipReason })
+      : runSubito(params, TIMEOUT_MS),
     skipAutoscout
       ? Promise.resolve({ items: [], status: 'skipped', reason: asSkipReason })
       // UNA PAGINA IN PIU' QUANDO IL CAP FILTRA. Il cerchio regione sborda nelle regioni
