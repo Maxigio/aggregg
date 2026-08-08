@@ -11,7 +11,7 @@
       { "marca": "Haval", "da": "GWM", "prefisso": "HAVAL", "perche": "Haval e' un marchio GWM: H6 e Jolion Pro stavano solo sotto GWM." }
     ],
     "moto": [
-      { "marca": "Vespa", "da": "Piaggio", "prefisso": "Vespa", "inversa": true, "perche": "Il caso del proprietario: 56 modelli 'Vespa …' offerti solo dal menu Piaggio (125 GTS compresa); l'inversa porta sotto Piaggio anche i soli-Vespa (125 GTR, Cosa)." },
+      { "marca": "Vespa", "da": "Piaggio", "prefisso": "Vespa", "inversa": true, "tendina": "nascondi", "perche": "Il caso del proprietario: 56 modelli 'Vespa …' offerti solo dal menu Piaggio (125 GTS compresa); l'inversa porta sotto Piaggio anche i soli-Vespa (125 GTR, Cosa). Decisione del 2026-08-08: 'Solo Piaggio, Vespa sparisce' — la voce esce dalla tendina marca, chi digita 'vespa' viene portato su Piaggio (sinonimo), e le ricerche gia' salvate con marca=Vespa continuano a funzionare dal ponte degli ospiti." },
       { "marca": "Scarabeo", "da": "Aprilia", "prefisso": "Scarabeo", "perche": "Linea Aprilia: 100, 150, 250 e 300 Special stavano solo sotto Aprilia." },
       { "marca": "Bluroc", "da": "Bullit", "prefisso": "Bluroc", "perche": "La rinominata (Bullit→Bluroc 2022) spartita in due voci: 'Bluroc 125' e '250 V2' stavano solo sotto Bullit." },
       { "marca": "Kymco", "da": "Kwang Yang", "prefisso": "Kymco", "perche": "Kwang Yang E' Kymco (ragione sociale): Dink, Grand, Movie doppiati la' dentro." },

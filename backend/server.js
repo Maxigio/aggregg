@@ -45,7 +45,7 @@ const carburanti     = require('./carburanti');   // prezzi carburante MIMIT per
 const saved = require('./saved');
 const budget = require('./budget-richieste');     // quante richieste costa una ricerca: contate, non stimate
 const { risolviNodo, marcaPseudo } = require('./scrapers/subito-nodo');   // testo digitato → id del catalogo Subito
-const { unisciGemelli } = require('./menu-gemelli');   // due strade nel menu, la stessa lista
+const { unisciGemelli, marcheNascoste, sinonimiTendina } = require('./menu-gemelli');   // due strade nel menu, la stessa lista
 const { versioniDi } = require('./versioni-menu');     // le versioni suggeribili, dal catalogo su disco
 const { agganciaSubito } = require('./scrapers/ponte-buchi'); // i modelli che il ponte non copriva
 const { codiciAs24, unisciCodici, famigliaSubito, famiglieSubito } = require('./scrapers/as24-modelli');   // traduzione di livello, nei due versi
@@ -783,8 +783,17 @@ app.get('/api/brands', (req, res) => {
       lista.push({ nome: m.nome || slug, sites: ['motoit'], autoscout: null });
     }
   }
-  lista.sort((a, b) => a.nome.localeCompare(b.nome, 'it', { sensitivity: 'base' }));
-  res.json({ brands: lista });
+  /**
+   * LE MARCHE NASCOSTE non stanno in tendina (decisione del proprietario, 2026-08-08:
+   * «Solo Piaggio, Vespa sparisce»): i loro modelli vivono nella gemella via unione
+   * inversa (menu-gemelli), e chi digita il nome nascosto viene portato sulla gemella
+   * coi `sinonimi` qui sotto. Le ricerche salvate con la marca nascosta funzionano
+   * ancora: il ponte degli ospiti non guarda la tendina.
+   */
+  const nascoste = marcheNascoste(tipo);
+  const visibili = lista.filter(b => !nascoste.has(b.nome));
+  visibili.sort((a, b) => a.nome.localeCompare(b.nome, 'it', { sensitivity: 'base' }));
+  res.json({ brands: visibili, sinonimi: sinonimiTendina(tipo) });
 });
 
 // Endpoint modelli per marca (alimenta il dropdown modello nel frontend).

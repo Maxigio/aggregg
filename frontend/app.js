@@ -861,6 +861,10 @@ function populateRegione() {
 
 function currentTipo() { return document.querySelector('input[name="tipo"]:checked')?.value || 'auto'; }
 
+// `${tipo}` → [{da, a}]: i nomi NASCOSTI dalla tendina e la gemella che li accoglie
+// («vespa» → Piaggio). Arrivano da /api/brands insieme all'elenco: chi digita il nome
+// che non c'e' piu' non trova un buco, trova la marca giusta.
+const brandSinonimi = {};
 async function populateMarca(tipo) {
   if (!brandCache[tipo]) {
     try {
@@ -868,6 +872,7 @@ async function populateMarca(tipo) {
       if (!res.ok) return;                       // review: non cachare su errore (sennò marca rotta per sempre)
       const data = await res.json();
       brandCache[tipo] = data.brands || [];
+      brandSinonimi[tipo] = data.sinonimi || [];
     } catch { /* transitorio: lascia brandCache[tipo] undefined → ritenta al prossimo giro */ }
   }
 }
@@ -919,10 +924,26 @@ function setupMarcaAutocomplete() {
     const brands = brandCache[currentTipo()] || [];
     if (q) {
       // Ranking: prefisso prima del semplice "contiene", poi posizione, poi alfabetico.
+      // I SINONIMI valgono come il nome: «vespa» non e' piu' in tendina (vive sotto
+      // Piaggio, decisione del proprietario) ma chi lo digita deve trovare Piaggio,
+      // non un elenco vuoto.
+      const perGemella = new Map();
+      for (const s of (brandSinonimi[currentTipo()] || [])) {
+        const g = acn(s.a);
+        if (!perGemella.has(g)) perGemella.set(g, []);
+        perGemella.get(g).push(acn(s.da));
+      }
       const scored = [];
       for (const b of brands) {
-        const n = acn(b.nome); const i = n.indexOf(q);
-        if (i >= 0) scored.push({ b, rank: n.startsWith(q) ? 0 : 1, i, n });
+        const n = acn(b.nome);
+        let best = -1, prefisso = false;
+        for (const cand of [n, ...(perGemella.get(n) || [])]) {
+          const j = cand.indexOf(q);
+          if (j < 0) continue;
+          if (best < 0 || j < best) best = j;
+          if (cand.startsWith(q)) prefisso = true;
+        }
+        if (best >= 0) scored.push({ b, rank: prefisso ? 0 : 1, i: best, n });
       }
       scored.sort((a, c) => a.rank - c.rank || a.i - c.i || a.n.localeCompare(c.n));
       matches = scored.map(s => s.b);

@@ -59,6 +59,25 @@ test('le voci aggiunte portano i campi della fonte: Autoscout continua a partire
   for (const m of agg) for (const k of ['sites', 'mmmvAutoscout', 'kindAS', 'slugMotoIt']) assert.ok(k in m, k + ' mancante');
 });
 
+test('Vespa sparisce dalla tendina ma non dal mondo: nascosta, con sinonimo, e le sue ricerche vivono', () => {
+  // Decisione del proprietario (2026-08-08): «Solo Piaggio, Vespa sparisce».
+  const { marcheNascoste, sinonimiTendina } = require('../backend/menu-gemelli');
+  assert.ok(marcheNascoste('moto').has('Vespa'), 'Vespa deve essere nascosta dalla tendina moto');
+  assert.ok(!marcheNascoste('moto').has('Piaggio'), 'Piaggio resta in tendina');
+  const sin = sinonimiTendina('moto');
+  assert.ok(sin.some(s => s.da === 'Vespa' && s.a === 'Piaggio'), 'chi digita «vespa» deve trovare Piaggio');
+  // e Piaggio offre TUTTO il mondo Vespa (l'inversa): GTS del catalogo e GTR sola-Vespa
+  const aggP = unisciGemelli('moto', 'Piaggio', base('moto', 'Piaggio'), models);
+  const tuttiP = new Set([...base('moto', 'Piaggio'), ...aggP].map(m => _chiave(m.nome)));
+  for (const atteso of ['Vespa 125 GTS', 'Vespa 125 GTR']) {
+    assert.ok(tuttiP.has(_chiave(atteso)), `sotto Piaggio manca «${atteso}»`);
+  }
+  // la RICERCA con marca=Vespa continua a funzionare: la risoluzione non guarda la tendina
+  const { risolviNodo } = require('../backend/scrapers/subito-nodo');
+  const r = risolviNodo('moto', 'Vespa', '125 GTS');
+  assert.ok(r && r.famigliaId, 'le ricerche salvate con marca=Vespa devono vivere ancora');
+});
+
 test('gli omonimi refutati NON stanno fra i gemelli («Indiana» e\' una Ducati, «Megane» non e\' una Mega)', () => {
   const coppie = new Set();
   for (const t of ['auto', 'moto']) for (const v of gemelli.voci[t]) coppie.add(`${v.marca}|${v.da}`).add(`${v.da}|${v.marca}`);

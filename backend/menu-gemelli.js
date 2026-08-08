@@ -92,4 +92,24 @@ function unisciGemelli(tipo, marca, modelli, modelsData) {
   return aggiunte;
 }
 
-module.exports = { unisciGemelli, _chiave: chiave };
+/**
+ * LE MARCHE CHE NON STANNO IN TENDINA (`"tendina": "nascondi"`). Decisione del
+ * proprietario (2026-08-08) sul caso Vespa: «Solo Piaggio, Vespa sparisce» — la voce esce
+ * dall'elenco marche, i suoi modelli vivono nella gemella (l'unione inversa li porta gia'
+ * tutti), e chi digita il nome nascosto va accompagnato sulla gemella: per questo accanto
+ * all'elenco dei nascosti c'e' quello dei SINONIMI da dare all'autocompletamento.
+ * Le ricerche gia' salvate con la marca nascosta continuano a funzionare: la risoluzione
+ * (ponte degli ospiti) non guarda la tendina.
+ */
+function marcheNascoste(tipo) {
+  const t = tipo === 'moto' ? 'moto' : 'auto';
+  return new Set(voci()[t].filter(v => v.tendina === 'nascondi').map(v => v.marca));
+}
+
+/** [{da, a}]: chi digita `da` in tendina deve trovare `a` («vespa» → Piaggio). */
+function sinonimiTendina(tipo) {
+  const t = tipo === 'moto' ? 'moto' : 'auto';
+  return voci()[t].filter(v => v.tendina === 'nascondi').map(v => ({ da: v.marca, a: v.da }));
+}
+
+module.exports = { unisciGemelli, marcheNascoste, sinonimiTendina, _chiave: chiave };
