@@ -40,7 +40,32 @@ function catalogo() {
 const spazi = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   .replace(/[^a-z0-9]+/g, ' ').trim();
 
-/** I nomi-versione della famiglia risolta, senza la testa-modello, senza doppioni. */
+/**
+ * DALLA STRINGA DI CATALOGO ALLA PARTE CHE SI DIGITA. Le versioni Subito sono
+ * motore+allestimento tutto attaccato («2.0 TDI 184 CV 5p. GTD BlueMotion Technology»):
+ * suggerite intere erano 1.348 voci per la Golf, quasi uguali fra loro, e sceglierne una
+ * mandava TUTTA la stringa nel filtro — che alle fonti e' un AND su ogni parola, cioe'
+ * zero risultati. Quello che si digita e' l'ALLESTIMENTO: la coda dopo l'ultimo marcatore
+ * di potenza (NNN CV / NNN kW), tolti i token delle porte (3p./5p.). Le versioni senza
+ * marcatore (le moto: «Super ABS i.e.», «Pro») restano intere, che gia' si digitano cosi'.
+ * Il motore-e-basta (coda vuota) non si suggerisce: non distingue niente.
+ */
+function allestimentoDaVersione(v) {
+  let s = String(v).replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
+  const m = [...s.matchAll(/\b\d{1,4}\s*(?:CV|kW)\b/gi)];
+  if (m.length) {
+    const ultimo = m[m.length - 1];
+    s = s.slice(ultimo.index + ultimo[0].length).trim();
+  }
+  s = s.replace(/^\d\s*p\.?\s+/i, '').trim();            // «5p. GTD …» → «GTD …»
+  return s;
+}
+
+/**
+ * I suggerimenti per la tendina: gli allestimenti distinti della famiglia risolta,
+ * ordinati per frequenza (quante versioni li portano) e poi per nome — cio' che il
+ * mercato usa di piu' sta in cima.
+ */
 function versioniDi(tipo, marca, modello) {
   const t = tipo === 'moto' ? 'moto' : 'auto';
   const nodo = risolviNodo(t, marca, modello);
@@ -48,8 +73,7 @@ function versioniDi(tipo, marca, modello) {
   const m = catalogo()[t].get(String(nodo.marcaId));
   if (!m) return [];
   const famIds = new Set((nodo.famigliaIds || [nodo.famigliaId]).map(String));
-  const visti = new Set();
-  const out = [];
+  const conta = new Map();   // norm(allestimento) → { nome, n }
   for (const [modId, mod] of Object.entries(m.modelli || {})) {
     // AUTO: il catalogo scende alla generazione, che porta `famigliaId`; MOTO: il modello
     // E' la famiglia (fotocopia misurata 4.605/4.605), quindi si confronta l'id stesso.
@@ -71,15 +95,18 @@ function versioniDi(tipo, marca, modello) {
           break;
         }
       }
-      if (!v) continue;
-      const k = norm(v);
-      if (!k || visti.has(k)) continue;
-      visti.add(k);
-      out.push(v);
+      const a = allestimentoDaVersione(v);
+      if (!a) continue;
+      const k = norm(a);
+      if (!k) continue;
+      const voce = conta.get(k);
+      if (voce) voce.n++;
+      else conta.set(k, { nome: a, n: 1 });
     }
   }
-  out.sort((a, b) => a.localeCompare(b, 'it'));
-  return out;
+  return [...conta.values()]
+    .sort((x, y) => y.n - x.n || x.nome.localeCompare(y.nome, 'it'))
+    .map(x => x.nome);
 }
 
 module.exports = { versioniDi };

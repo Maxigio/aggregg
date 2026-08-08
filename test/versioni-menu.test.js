@@ -11,11 +11,15 @@ const assert = require('node:assert');
 const { versioniDi } = require('../backend/versioni-menu');
 const { norm } = require('../backend/scrapers/brand-match');
 
-test('la testa-modello viene tolta: restano le parti che si digitano', () => {
+test('si suggerisce l\'ALLESTIMENTO, non la stringa-motore: la coda dopo il marcatore di potenza', () => {
   const v = versioniDi('auto', 'Abarth', '124 Spider');
-  assert.ok(v.length >= 3, 'attese versioni per la 124 Spider, avute ' + v.length);
-  assert.ok(v.some(x => /^1\.4 Turbo/.test(x)), 'attesa una «1.4 Turbo …», avute: ' + v.slice(0, 3).join(' | '));
+  assert.ok(v.length >= 3, 'attesi allestimenti per la 124 Spider, avuti ' + v.length);
+  assert.ok(v.includes('GT') && v.includes('Scorpione'), 'attesi «GT» e «Scorpione», avuti: ' + v.join(' | '));
   assert.ok(!v.some(x => /^124 Spider/i.test(x)), 'la testa «124 Spider» va tolta');
+  assert.ok(!v.some(x => /\d+\s*CV\b/i.test(x)), 'il motore («… 170 CV») non si suggerisce: alle fonti e\' un AND che azzera');
+  // e l'ordine e' per frequenza: per la 500 le voci comuni (Lounge, Pop) stanno in cima
+  const cinquecento = versioniDi('auto', 'Fiat', '500');
+  assert.ok(cinquecento.slice(0, 6).includes('Lounge'), 'atteso «Lounge» in testa alla 500: ' + cinquecento.slice(0, 6).join(' | '));
 });
 
 test('il ponte degli ospiti vale anche qui: le versioni della Vespa 125 GTS arrivano da marca Vespa', () => {

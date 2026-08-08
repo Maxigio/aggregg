@@ -793,6 +793,12 @@ async function init() {
     const open = advancedFilters.classList.toggle('d-none');
     advancedToggle.setAttribute('aria-expanded', String(!open));
     advancedToggle.classList.toggle('open', !open);
+    // LE TENDINE MANCANTI SI RIPROVANO QUI. /api/filtri-auto parte una volta al boot: se
+    // in quel momento la rete (o il server in riavvio) non rispondeva, il pannello
+    // restava SENZA Carrozzeria/Cambio/Alimentazione per tutta la sessione — un intoppo
+    // di un secondo diventava un pannello monco per sempre. Stessa regola di loadModels:
+    // il fallimento non si memorizza, all'apertura si riprova.
+    if (!open && !filtriAutoNomi.length) caricaFiltriAuto();
   });
 
   // Logo → RICARICA. Prima apriva un QR per aprire l'app dal telefono: da dentro l'app non
