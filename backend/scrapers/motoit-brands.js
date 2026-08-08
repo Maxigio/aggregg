@@ -26,8 +26,21 @@ try {
     .map(([slug, m]) => ({ name: (m && m.nome) || slug, slug }));
 } catch (_) { /* senza catalogo locale resta l'elenco harvestato: nessuna marca in meno di prima */ }
 
+/**
+ * LE AGGIUNTE CURATE (data/motoit-marche-aggiunte.json): marche che Moto.it ha — listino
+ * verificato dal vivo — ma che mancano da ENTRAMBI gli elenchi qui sopra. Trovata con
+ * Talaria: 5 modelli del menu con slugMotoIt validi e la marca dichiarata «non su
+ * Moto.it», perche' lo slug vero e' 'talaria-moto' e nessun file lo sapeva. File assente
+ * o illeggibile → nessuna marca in meno di prima.
+ */
+let aggiunte = [];
+try {
+  const agg = require('../../data/motoit-marche-aggiunte.json');
+  aggiunte = (agg.voci || []).filter(v => v && v.name && v.slug).map(v => ({ name: v.name, slug: v.slug }));
+} catch (_) { /* senza aggiunte resta l'unione di prima */ }
+
 const resolve = makeResolver(
-  [...brands, ...daCatalogo].map(b => ({ name: b.name, value: b.slug })),
+  [...brands, ...daCatalogo, ...aggiunte].map(b => ({ name: b.name, value: b.slug })),
   { alias: loadAliasMap('moto') }
 );
 

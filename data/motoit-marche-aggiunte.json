@@ -1,0 +1,12 @@
+{
+  "_perche": "Marche che Moto.it HA (verificato dal vivo sul listino) ma che mancano sia da motoit-brands.json (harvest) sia da motoit-catalogo.json: per queste il runtime diceva 'marca non su Moto.it' — una ragione che i dati dell'app stessa smentivano, visto che i modelli portano slugMotoIt validi. E' il fratello del caso hyosung/um-italia chiuso con l'unione dei due file: Talaria manca da ENTRAMBI, quindi serviva un terzo posto. I cataloghi in data/ non si toccano: le aggiunte curate stanno qui.",
+  "_presidio": "test/verdetti-marche.test.js: ogni marca del menu con 'motoit' in sites deve risolvere uno slug.",
+  "voci": [
+    {
+      "name": "Talaria",
+      "slug": "talaria-moto",
+      "perche": "5 modelli del menu con slugMotoIt validi (komodo, sting-tl3000, sting-tl4000, sting-tl5500); listino verificato il 2026-08-08: Komodo, Sting TL4000/TL5500, xXx TL2500, con TL3000 fra i fuori produzione. Lo slug della marca e' 'talaria-moto', non 'talaria'.",
+      "quando": "2026-08-08"
+    }
+  ]
+}
