@@ -90,3 +90,30 @@ test('la traduzione della marca e STRETTA: prefisso di parole intere, mai somigl
   assert.strictEqual(liq.risolviMarca('Marca Inventata'), null);
   assert.strictEqual(liq.risolviMarca(''), null);
 });
+
+/**
+ * I RIACCOPPIAMENTI CURATI (campagna E2, 2026-08-08). Le due tavole ACI chiamano la
+ * stessa auto con nomi diversi e 669 voci restavano monche. Tre classi provate:
+ * seriali-data di Excel («9-3» diventato 46090 = 9/3/2026), zero-pad Lynk (1 vs 01),
+ * marche nuove col parco sotto «NON DEFINITO». Qui si pretende che restino accoppiate
+ * — e che le AMBIGUE restino sciolte: attribuire il parco di «NON DEFINITO 5» a uno
+ * solo dei CINQUE orfani col tipo 5 sarebbe un numero falso.
+ */
+test('riaccoppiamenti ACI: le coppie curate sono complete, i seriali-data spariti', () => {
+  const dati = require('../data/liquidita-modelli.json').modelli;
+  for (const [k, ricambioAtteso] of [['saab|9 3', 5.5], ['saab|9 5', 3.2], ['morgan|4 4', 5.2], ['lynk co|01', 16.2]]) {
+    const m = dati[k];
+    assert.ok(m && m.parco > 0 && m.trasferimenti > 0, `${k}: attesa voce completa`);
+    assert.strictEqual(m.ricambio, ricambioAtteso, `${k}: ricambio`);
+  }
+  // niente tipi che sono date di Excel travestite (finestra 35000-50000 = anni 1995-2036)
+  const date = Object.keys(dati).filter(k => { const t = k.split('|')[1]; return /^\d{5}$/.test(t) && +t >= 35000 && +t <= 50000; });
+  assert.deepStrictEqual(date, [], 'tipi seriale-data ancora nel file: ' + date.join(', '));
+  // le marche nuove hanno il nome vero, non «NON DEFINITO»
+  for (const k of ['leapmotor|t03', 'ich x|k3', 'kgm|torres', 'cirelli|2', 'ineos|grenadier']) {
+    assert.ok(dati[k] && dati[k].parco > 0 && dati[k].trasferimenti > 0, `${k}: attesa completa`);
+  }
+  // e le ambigue restano dichiarate tali (5 orfani col tipo «5»: Omoda, Cirelli, Jaecoo, Smart, Sportequipe)
+  assert.ok(dati['non definito|5'] && dati['non definito|5'].parco > 0 && dati['non definito|5'].trasferimenti == null,
+    '«NON DEFINITO 5» non va attribuito a nessuno: cinque orfani se lo contendono');
+});

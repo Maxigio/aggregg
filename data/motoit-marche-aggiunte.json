@@ -7,6 +7,636 @@
       "slug": "talaria-moto",
       "perche": "5 modelli del menu con slugMotoIt validi (komodo, sting-tl3000, sting-tl4000, sting-tl5500); listino verificato il 2026-08-08: Komodo, Sting TL4000/TL5500, xXx TL2500, con TL3000 fra i fuori produzione. Lo slug della marca e' 'talaria-moto', non 'talaria'.",
       "quando": "2026-08-08"
+    },
+    {
+      "name": "Adiva",
+      "slug": "adiva",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Adly",
+      "slug": "adly",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Aeon",
+      "slug": "aeon",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 3 modelli con annunci usati — Cobra 220, Elite 400, Minikolt 50. Il campo value conferma lo slug («aeon|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "AJP",
+      "slug": "ajp",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 2 modelli con annunci usati — PR7 650 Adventure, SPR 240. Il campo value conferma lo slug («ajp|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "AJS",
+      "slug": "ajs",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Arctic Cat",
+      "slug": "arctic-cat",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 4 modelli con annunci usati — 400 DVX, 650 H1, 650 V2, 700 Diesel. Il campo value conferma lo slug («arctic-cat|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Atala",
+      "slug": "atala",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Bajaj",
+      "slug": "bajaj",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Baotian",
+      "slug": "baotian",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — Victoria 50. Il campo value conferma lo slug («baotian|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Bombardier",
+      "slug": "bombardier",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Borile",
+      "slug": "borile",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — Multiuso. Il campo value conferma lo slug («borile|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Boss Hoss",
+      "slug": "boss-hoss",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 3 modelli con annunci usati — Big Block, Small Block, Trike. Il campo value conferma lo slug («boss-hoss|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Brammo",
+      "slug": "brammo",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "BSA",
+      "slug": "bsa",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 2 modelli con annunci usati — Bantam 350, Gold Star 650. Il campo value conferma lo slug («bsa|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Bultaco",
+      "slug": "bultaco",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — Sherpa Trial 350. Il campo value conferma lo slug («bultaco|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Cake",
+      "slug": "cake",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — Makka. Il campo value conferma lo slug («cake|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Cannondale",
+      "slug": "cannondale",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "CCM",
+      "slug": "ccm",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "CJR MotorEco",
+      "slug": "cjr-motoreco",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 3 modelli con annunci usati — Tiger, Trinity, Tude. Il campo value conferma lo slug («cjr-motoreco|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Cleveland",
+      "slug": "cleveland",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Confederate",
+      "slug": "confederate",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "CPI",
+      "slug": "cpi-moto",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "CR&S",
+      "slug": "cr-s",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 2 modelli con annunci usati — Duu, Vun. Il campo value conferma lo slug («cr-s|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "CZ",
+      "slug": "cz",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Daelim",
+      "slug": "daelim",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 2 modelli con annunci usati — Roadwin 125, S3 250. Il campo value conferma lo slug («daelim|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Di Blasi",
+      "slug": "di-blasi",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Dinli",
+      "slug": "dinli",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — DMX 450. Il campo value conferma lo slug («dinli|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "DKW",
+      "slug": "dkw",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Dnepr",
+      "slug": "dnepr",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "E-Ton",
+      "slug": "e-ton",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Ecooter",
+      "slug": "ecooter",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — E2 Sport. Il campo value conferma lo slug («ecooter|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Electric Motion",
+      "slug": "electric-motion",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Emco",
+      "slug": "emco",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Energica",
+      "slug": "energica",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — Eva. Il campo value conferma lo slug («energica|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Garelli",
+      "slug": "garelli",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 5 modelli con annunci usati — Blast 125, Capri 50, Ciclone Elettrico, City Four. Il campo value conferma lo slug («garelli|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Generic",
+      "slug": "generic",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Ghezzi-Brian",
+      "slug": "ghezzi-brian",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 2 modelli con annunci usati — Furia Titanium, Super Twin. Il campo value conferma lo slug («ghezzi-brian|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Goes",
+      "slug": "goes",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Govecs",
+      "slug": "govecs",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Hanway",
+      "slug": "hanway",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Headbanger",
+      "slug": "headbanger",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 3 modelli con annunci usati — High Flyin', Hollister, Summertime. Il campo value conferma lo slug («headbanger|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Hercules",
+      "slug": "hercules",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Horex",
+      "slug": "horex",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — VR6 1218. Il campo value conferma lo slug («horex|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Horwin",
+      "slug": "horwin",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 2 modelli con annunci usati — EK1, EK3. Il campo value conferma lo slug («horwin|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "HRD",
+      "slug": "hrd",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Jawa",
+      "slug": "jawa",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — 350 Sidecar. Il campo value conferma lo slug («jawa|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Jonway",
+      "slug": "jonway",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — MJS-E Sport. Il campo value conferma lo slug («jonway|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Jotagas",
+      "slug": "jotagas",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Lambretta",
+      "slug": "lambretta",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 5 modelli con annunci usati — Pato 125, Pato 150, V125 Special, V200 Special. Il campo value conferma lo slug («lambretta|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Laverda",
+      "slug": "laverda",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 7 modelli con annunci usati — 1200, 500, Ghost 650, Ghost 668. Il campo value conferma lo slug («laverda|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Leonart",
+      "slug": "leonart",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Linhai",
+      "slug": "linhai",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Magni",
+      "slug": "magni",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Maico",
+      "slug": "maico",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Matchless",
+      "slug": "matchless",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Motobecane",
+      "slug": "motobecane",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Motobi",
+      "slug": "motobi",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Motom",
+      "slug": "motom",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Motorhispania",
+      "slug": "motorhispania",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Motosacoche",
+      "slug": "motosacoche",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Motron",
+      "slug": "motron",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Münch",
+      "slug": "munch",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "MZ",
+      "slug": "mz",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Nimbus",
+      "slug": "nimbus",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Nito",
+      "slug": "nito",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Norton",
+      "slug": "norton",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — Commando 961. Il campo value conferma lo slug («norton|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "NSU",
+      "slug": "nsu",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Orcal",
+      "slug": "orcal",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Ossa",
+      "slug": "ossa",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "PGO",
+      "slug": "pgo",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — Big Max 50. Il campo value conferma lo slug («pgo|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Puch",
+      "slug": "puch",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Ray",
+      "slug": "ray",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — 7.7. Il campo value conferma lo slug («ray|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Rickman",
+      "slug": "rickman",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Royal Alloy",
+      "slug": "royal-alloy",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Rudge",
+      "slug": "rudge",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Rumi",
+      "slug": "rumi",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Sachs/SFM",
+      "slug": "sachs",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Saroléa",
+      "slug": "sarolea",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Scorpa",
+      "slug": "scorpa",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 5 modelli con annunci usati — SR 280, T-Ride 250 F, T-Ride 290, Twenty 250. Il campo value conferma lo slug («scorpa|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Scott",
+      "slug": "scott",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Silence",
+      "slug": "silence",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — S01. Il campo value conferma lo slug («silence|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Simson",
+      "slug": "simson",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Somoto",
+      "slug": "somoto",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — Classic 1.0 125. Il campo value conferma lo slug («somoto|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Stark Future",
+      "slug": "stark-future",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — Varg. Il campo value conferma lo slug («stark-future|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Sunbeam",
+      "slug": "sunbeam",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Sur-Ron",
+      "slug": "sur-ron",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — Light Bee. Il campo value conferma lo slug («sur-ron|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Tacita",
+      "slug": "tacita",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Tauris",
+      "slug": "tauris",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Terrot",
+      "slug": "terrot",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "TGB",
+      "slug": "tgb",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 4 modelli con annunci usati — 303RS 150, Express 125, X Motion 250, X Motion 300. Il campo value conferma lo slug («tgb|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Tinbot",
+      "slug": "tinbot",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Tomos",
+      "slug": "tomos",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Torrot",
+      "slug": "torrot",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — Kids. Il campo value conferma lo slug («torrot|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Triton",
+      "slug": "triton",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Tromox",
+      "slug": "tromox",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Ural",
+      "slug": "ural",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 2 modelli con annunci usati — 750, UH 650 Sidecar. Il campo value conferma lo slug («ural|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Vectrix",
+      "slug": "vectrix",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Vertemati",
+      "slug": "vertemati",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Victory",
+      "slug": "victory",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 4 modelli con annunci usati — Cross Country, Cross Roads, Hammer, Vegas. Il campo value conferma lo slug («victory|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Villa",
+      "slug": "villa",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — SMS 125. Il campo value conferma lo slug («villa|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Vincent",
+      "slug": "vincent",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Voxan",
+      "slug": "voxan",
+      "perche": "A listino (API market result OK il 2026-08-08), 0 annunci usati al momento: la marca ESISTE su Moto.it, dirla assente e' falso.",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Yadea",
+      "slug": "yadea",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 3 modelli con annunci usati — C1S, G5, Y1S. Il campo value conferma lo slug («yadea|…»).",
+      "quando": "2026-08-08"
+    },
+    {
+      "name": "Zündapp",
+      "slug": "zundapp",
+      "perche": "Listino vivo (API market verificata il 2026-08-08): 1 modelli con annunci usati — K 125 KW. Il campo value conferma lo slug («zundapp|…»).",
+      "quando": "2026-08-08"
     }
-  ]
+  ],
+  "_dubbi": {
+    "nota": "Marche provate dal vivo il 2026-08-08 con risposta INSTABILE o errore server: non si dichiara ne' vive ne' assenti, da riprovare.",
+    "Hisun": "HTTP 500 in entrambe le passate",
+    "Volta": "HTTP 500 su volta-moto, null su volta",
+    "Loncin": "result OK nella prima passata, non-OK nella seconda: instabile"
+  }
 }

@@ -68,3 +68,31 @@ test('pagina 2 illeggibile dopo pagina 1 buona: si tengono le buone, ma dichiara
     assert.strictEqual(r.truncated, true, 'vista parziale: senza troncato il crawler farebbe markGone');
   });
 });
+
+/**
+ * LE MARCHE AGGIUNTE (campagna E1, 2026-08-08). 373 marche del menu non risolvevano uno
+ * slug e il runtime diceva «marca non su Moto.it» — provate TUTTE dal vivo sull'API
+ * market: 104 esistono (39 con annunci usati in quel momento: Lambretta, Laverda,
+ * Garelli, TGB, Aeon, Yadea, BSA…), e per ognuna il campo `value` dei modelli conferma
+ * lo slug. Le instabili (Hisun, Volta, Loncin) stanno nei _dubbi, non nelle voci.
+ * Qui si pretende che ogni voce curata risolva col SUO slug, senza doppioni.
+ */
+const testAggiunte = require('node:test');
+testAggiunte('le marche aggiunte risolvono col loro slug, i dubbi restano fuori', () => {
+  const assert = require('node:assert');
+  const { resolveMotoitSlug } = require('../backend/scrapers/motoit-brands');
+  const j = require('../data/motoit-marche-aggiunte.json');
+  assert.ok(j.voci.length >= 100, `attese >=100 voci, lette ${j.voci.length}`);
+  const visti = new Set();
+  for (const v of j.voci) {
+    assert.ok(v.name && v.slug && v.perche && v.quando, `${v.name}: voce senza slug/prova/data`);
+    assert.strictEqual(resolveMotoitSlug(v.name), v.slug, `${v.name}: lo slug curato non arriva al resolver`);
+    const k = v.name.toLowerCase();
+    assert.ok(!visti.has(k), `${v.name}: doppione`);
+    visti.add(k);
+  }
+  for (const dubbia of ['Hisun', 'Volta', 'Loncin']) {
+    assert.ok(!visti.has(dubbia.toLowerCase()), `${dubbia} e' instabile: sta nei _dubbi, non nelle voci`);
+    assert.ok(j._dubbi && j._dubbi[dubbia], `${dubbia}: il dubbio va scritto perche' nessuno la riproponga alla cieca`);
+  }
+});

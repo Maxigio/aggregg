@@ -111,6 +111,64 @@ function leggiCoppie(righe, colVal) {
   return out;
 }
 
+/**
+ * I RIACCOPPIAMENTI CURATI (campagna E2, 2026-08-08): le due tavole ACI chiamano la
+ * stessa auto con nomi diversi, e la chiave normalizzata non li unisce — 669 voci
+ * restavano monche. Ogni coppia qui sotto e' stata letta e provata UNA A UNA:
+ *
+ *  - SERIALI-DATA DI EXCEL: nel parco «SAAB 9-3» e' diventato il numero 46090, che e'
+ *    il seriale della data 9/3/2026; 46151 = 9/5/2026 = «9-5»; e Morgan 46116 =
+ *    4/4/2026 = la «4/4». Prova aritmetica: 46151−46090 = 61 giorni = da 9 marzo a
+ *    9 maggio. Trovati spazzolando TUTTI i tipi a 5 cifre nella finestra-data.
+ *  - ZERO-PAD: parco «LYNK & CO 1/2/8», trasferimenti «01/02» (il modello si chiama 01).
+ *  - MARCHE NUOVE: il parco le registra sotto «NON DEFINITO», i trasferimenti col nome
+ *    vero. Si accoppia SOLO dove l'orfano dei trasferimenti con quel tipo e' UNICO
+ *    (t03→Leapmotor, k2/k3→ICH-X, friday→Forthing, grenadier→Ineos, 2/4→Cirelli,
+ *    torres/korando→KGM cioe' SsangYong ribattezzata).
+ *
+ * NON accoppiati, e il perche' resta scritto: «NON DEFINITO 5» ha CINQUE orfani col
+ * tipo 5 (Omoda, Cirelli, Jaecoo, Smart, Sportequipe), «7» ne ha due (Jaecoo, Cirelli),
+ * «9» due (Omoda, Cirelli): attribuire il parco a uno solo sarebbe un numero falso.
+ * «free» e «box» non hanno un orfano riconoscibile. Il catch-all «NON DEFINITO NON
+ * DEFINITO» (261k) e gli «altri tipi» restano quel che sono.
+ */
+const RIACCOPPIAMENTI = [
+  { da: 'saab|46090', a: 'saab|9 3', marca: 'SAAB', modello: '9-3', perche: 'seriale-data Excel: 46090 = 9/3/2026' },
+  { da: 'saab|46151', a: 'saab|9 5', marca: 'SAAB', modello: '9-5', perche: 'seriale-data Excel: 46151 = 9/5/2026' },
+  { da: 'morgan|46116', a: 'morgan|4 4', marca: 'MORGAN', modello: '4/4', perche: 'seriale-data Excel: 46116 = 4/4/2026' },
+  { da: 'lynk co|1', a: 'lynk co|01', marca: 'LYNK & CO', modello: '01', perche: 'zero-pad: il modello si chiama 01' },
+  { da: 'lynk co|2', a: 'lynk co|02', marca: 'LYNK & CO', modello: '02', perche: 'zero-pad' },
+  { da: 'lynk co|8', a: 'lynk co|08', marca: 'LYNK & CO', modello: '08', perche: 'zero-pad (nessun trasferimento ancora: modello 2025)' },
+  { da: 'non definito|t03', a: 'leapmotor|t03', marca: 'LEAPMOTOR', modello: 'T03', perche: 'orfano unico col tipo t03' },
+  { da: 'non definito|c10', a: 'leapmotor|c10', marca: 'LEAPMOTOR', modello: 'C10', perche: 'orfano unico' },
+  { da: 'non definito|b10', a: 'leapmotor|b10', marca: 'LEAPMOTOR', modello: 'B10', perche: 'orfano unico' },
+  { da: 'non definito|k2', a: 'ich x|k2', marca: 'ICH-X', modello: 'K2', perche: 'orfano unico' },
+  { da: 'non definito|k3', a: 'ich x|k3', marca: 'ICH-X', modello: 'K3', perche: 'orfano unico' },
+  { da: 'non definito|friday', a: 'forthing|friday', marca: 'FORTHING', modello: 'Friday', perche: 'orfano unico' },
+  { da: 'non definito|grenadier', a: 'ineos|grenadier', marca: 'INEOS', modello: 'Grenadier', perche: 'orfano unico' },
+  { da: 'non definito|torres', a: 'kgm|torres', marca: 'KGM', modello: 'Torres', perche: 'orfano unico (KGM = SsangYong ribattezzata; la riga SsangYong Torres resta separata)' },
+  { da: 'non definito|korando', a: 'kgm|korando', marca: 'KGM', modello: 'Korando', perche: 'orfano unico (badge KGM)' },
+  { da: 'non definito|tivoli', a: 'kgm|tivoli', marca: 'KGM', modello: 'Tivoli', perche: 'nessun orfano KGM ancora: rinomina coerente coi Torres/Korando' },
+  { da: 'non definito|2', a: 'cirelli|2', marca: 'CIRELLI', modello: '2', perche: 'orfano unico' },
+  { da: 'non definito|4', a: 'cirelli|4', marca: 'CIRELLI', modello: '4', perche: 'orfano unico' },
+];
+function riaccoppia(parco, netti, totali) {
+  let applicati = 0;
+  for (const r of RIACCOPPIAMENTI) {
+    const v = parco.get(r.da);
+    if (!v) continue;                                   // la tavola e' cambiata: niente da spostare
+    parco.delete(r.da);
+    const pre = parco.get(r.a);
+    parco.set(r.a, { marca: r.marca, modello: r.modello, n: v.n + (pre ? pre.n : 0) });
+    // il nome vero vale anche sul lato trasferimenti (la marca la sanno gia', ma cosi'
+    // marca/modello del JSON escono con la grafia curata anche per le voci solo-nette)
+    for (const t of [netti, totali]) { const x = t.get(r.a); if (x) t.set(r.a, { ...x, marca: r.marca, modello: r.modello }); }
+    applicati++;
+  }
+  console.log(`[liq] riaccoppiamenti curati applicati: ${applicati}/${RIACCOPPIAMENTI.length}`);
+  return applicati;
+}
+
 (async () => {
   const dry = process.argv.includes('--dry');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-liq-'));
@@ -135,6 +193,8 @@ function leggiCoppie(righe, colVal) {
     const nomeNaz = Object.keys(fogliF).find(n => /riepilogo nazionale/i.test(n)) || Object.keys(fogliF)[1];
     const parco = leggiCoppie(righeFoglio(dF, fogliF[nomeNaz], ssF), 'D');   // A=Fabbrica B=Tipo C=Serie D=Totale
     console.log(`[liq] parco (foglio "${nomeNaz}"): ${parco.size} modelli`);
+
+    riaccoppia(parco, netti, totali);
 
     // ── unione ──
     const modelli = {};
