@@ -1,0 +1,3671 @@
+{
+ "_nota": "Ponte dei SOTTO-MODELLI (fonte Subito): nomi del menu che non risolvono una famiglia da soli, agganciati alla famiglia giusta dopo il dossier del 2026-08-08 (454 candidati letti uno a uno; i refutati sono qui sotto perche’ nessuno li riproponga). Ogni voce: famiglie (nomi dell’indice), testo che restringe la ricerca (opzionale), prova.",
+ "auto": {
+  "Audi": {
+   "Allroad": {
+    "famiglie": [
+     "A4 allroad",
+     "A6 allroad"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "RS5": {
+    "famiglie": [
+     "A5"
+    ],
+    "testo": "RS5",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "RS6": {
+    "famiglie": [
+     "A6"
+    ],
+    "testo": "RS6",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "RS7": {
+    "famiglie": [
+     "A7"
+    ],
+    "testo": "RS7",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "S3": {
+    "famiglie": [
+     "A3"
+    ],
+    "testo": "S3",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "S4": {
+    "famiglie": [
+     "A4"
+    ],
+    "testo": "S4",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "S5": {
+    "famiglie": [
+     "A5"
+    ],
+    "testo": "S5",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "S7": {
+    "famiglie": [
+     "A7"
+    ],
+    "testo": "S7",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "S8": {
+    "famiglie": [
+     "A8"
+    ],
+    "testo": "S8",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "SQ5": {
+    "famiglie": [
+     "Q5"
+    ],
+    "testo": "SQ5",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "SQ8": {
+    "famiglie": [
+     "Q8",
+     "Q8 e-tron"
+    ],
+    "testo": "SQ8",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "TTS": {
+    "famiglie": [
+     "TT"
+    ],
+    "testo": "TTS",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   }
+  },
+  "Bentley": {
+   "Eight": {
+    "famiglie": [
+     "Berlina"
+    ],
+    "testo": "Eight",
+    "prova": "versione «Eight» letta nella famiglia Berlina",
+    "quando": "2026-08-08"
+   },
+   "Turbo S": {
+    "famiglie": [
+     "Berlina"
+    ],
+    "testo": "Turbo S",
+    "prova": "versione «Turbo S» letta nella famiglia Berlina",
+    "quando": "2026-08-08"
+   }
+  },
+  "BMW": {
+   "114": {
+    "famiglie": [
+     "Serie 1"
+    ],
+    "testo": "114",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "116": {
+    "famiglie": [
+     "Serie 1"
+    ],
+    "testo": "116",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "118": {
+    "famiglie": [
+     "Serie 1"
+    ],
+    "testo": "118",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "120": {
+    "famiglie": [
+     "Serie 1"
+    ],
+    "testo": "120",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "123": {
+    "famiglie": [
+     "Serie 1"
+    ],
+    "testo": "123",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "125": {
+    "famiglie": [
+     "Serie 1"
+    ],
+    "testo": "125",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "128": {
+    "famiglie": [
+     "Serie 1"
+    ],
+    "testo": "128",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "130": {
+    "famiglie": [
+     "Serie 1"
+    ],
+    "testo": "130",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "135": {
+    "famiglie": [
+     "Serie 1"
+    ],
+    "testo": "135",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "214": {
+    "famiglie": [
+     "Serie 2 Active Tourer",
+     "Serie 2 Gran Tourer"
+    ],
+    "testo": "214",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "216": {
+    "famiglie": [
+     "Serie 2 Active Tourer",
+     "Serie 2 Gran Coupé",
+     "Serie 2 Gran Tourer"
+    ],
+    "testo": "216",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "218": {
+    "famiglie": [
+     "Serie 2",
+     "Serie 2 Active Tourer",
+     "Serie 2 Gran Coupé",
+     "Serie 2 Gran Tourer"
+    ],
+    "testo": "218",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "220": {
+    "famiglie": [
+     "Serie 2",
+     "Serie 2 Active Tourer",
+     "Serie 2 Gran Coupé",
+     "Serie 2 Gran Tourer"
+    ],
+    "testo": "220",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "223": {
+    "famiglie": [
+     "Serie 2 Active Tourer",
+     "Serie 2 Gran Coupé"
+    ],
+    "testo": "223",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "225": {
+    "famiglie": [
+     "Serie 2",
+     "Serie 2 Active Tourer"
+    ],
+    "testo": "225",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "228": {
+    "famiglie": [
+     "Serie 2"
+    ],
+    "testo": "228",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "230": {
+    "famiglie": [
+     "Serie 2",
+     "Serie 2 Active Tourer"
+    ],
+    "testo": "230",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "315": {
+    "famiglie": [
+     "Serie 3"
+    ],
+    "testo": "315",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "316": {
+    "famiglie": [
+     "Serie 3"
+    ],
+    "testo": "316",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "318": {
+    "famiglie": [
+     "Serie 3",
+     "Serie 3 Gran Turismo"
+    ],
+    "testo": "318",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "320": {
+    "famiglie": [
+     "Serie 3",
+     "Serie 3 Gran Turismo"
+    ],
+    "testo": "320",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "323": {
+    "famiglie": [
+     "Serie 3"
+    ],
+    "testo": "323",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "324": {
+    "famiglie": [
+     "Serie 3"
+    ],
+    "testo": "324",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "325": {
+    "famiglie": [
+     "Serie 3",
+     "Serie 3 Gran Turismo"
+    ],
+    "testo": "325",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "328": {
+    "famiglie": [
+     "Serie 3",
+     "Serie 3 Gran Turismo"
+    ],
+    "testo": "328",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "330": {
+    "famiglie": [
+     "Serie 3",
+     "Serie 3 Gran Turismo"
+    ],
+    "testo": "330",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "335": {
+    "famiglie": [
+     "Serie 3",
+     "Serie 3 Gran Turismo"
+    ],
+    "testo": "335",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "340": {
+    "famiglie": [
+     "Serie 3",
+     "Serie 3 Gran Turismo"
+    ],
+    "testo": "340",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "418": {
+    "famiglie": [
+     "Serie 4",
+     "Serie 4 Gran Coupé"
+    ],
+    "testo": "418",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "420": {
+    "famiglie": [
+     "Serie 4",
+     "Serie 4 Gran Coupé"
+    ],
+    "testo": "420",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "425": {
+    "famiglie": [
+     "Serie 4",
+     "Serie 4 Gran Coupé"
+    ],
+    "testo": "425",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "428": {
+    "famiglie": [
+     "Serie 4",
+     "Serie 4 Gran Coupé"
+    ],
+    "testo": "428",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "430": {
+    "famiglie": [
+     "Serie 4",
+     "Serie 4 Gran Coupé"
+    ],
+    "testo": "430",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "435": {
+    "famiglie": [
+     "Serie 4",
+     "Serie 4 Gran Coupé"
+    ],
+    "testo": "435",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "440": {
+    "famiglie": [
+     "Serie 4",
+     "Serie 4 Gran Coupé"
+    ],
+    "testo": "440",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "518": {
+    "famiglie": [
+     "Serie 5"
+    ],
+    "testo": "518",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "520": {
+    "famiglie": [
+     "Serie 5",
+     "Serie 5 Gran Turismo"
+    ],
+    "testo": "520",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "523": {
+    "famiglie": [
+     "Serie 5"
+    ],
+    "testo": "523",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "524": {
+    "famiglie": [
+     "Serie 5"
+    ],
+    "testo": "524",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "525": {
+    "famiglie": [
+     "Serie 5"
+    ],
+    "testo": "525",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "528": {
+    "famiglie": [
+     "Serie 5"
+    ],
+    "testo": "528",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "530": {
+    "famiglie": [
+     "Serie 5",
+     "Serie 5 Gran Turismo"
+    ],
+    "testo": "530",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "535": {
+    "famiglie": [
+     "Serie 5",
+     "Serie 5 Gran Turismo"
+    ],
+    "testo": "535",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "540": {
+    "famiglie": [
+     "Serie 5"
+    ],
+    "testo": "540",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "545": {
+    "famiglie": [
+     "Serie 5"
+    ],
+    "testo": "545",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "550": {
+    "famiglie": [
+     "Serie 5",
+     "Serie 5 Gran Turismo"
+    ],
+    "testo": "550",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "620": {
+    "famiglie": [
+     "Serie 6 Gran Turismo"
+    ],
+    "testo": "620",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "628": {
+    "famiglie": [
+     "Serie 6"
+    ],
+    "testo": "628",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "630": {
+    "famiglie": [
+     "Serie 6",
+     "Serie 6 Gran Turismo"
+    ],
+    "testo": "630",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "633": {
+    "famiglie": [
+     "Serie 6"
+    ],
+    "testo": "633",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "635": {
+    "famiglie": [
+     "Serie 6"
+    ],
+    "testo": "635",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "640": {
+    "famiglie": [
+     "Serie 6",
+     "Serie 6 Gran Coupé",
+     "Serie 6 Gran Turismo"
+    ],
+    "testo": "640",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "645": {
+    "famiglie": [
+     "Serie 6"
+    ],
+    "testo": "645",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "650": {
+    "famiglie": [
+     "Serie 6",
+     "Serie 6 Gran Coupé"
+    ],
+    "testo": "650",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "725": {
+    "famiglie": [
+     "Serie 7"
+    ],
+    "testo": "725",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "728": {
+    "famiglie": [
+     "Serie 7"
+    ],
+    "testo": "728",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "730": {
+    "famiglie": [
+     "Serie 7"
+    ],
+    "testo": "730",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "732": {
+    "famiglie": [
+     "Serie 7"
+    ],
+    "testo": "732",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "735": {
+    "famiglie": [
+     "Serie 7"
+    ],
+    "testo": "735",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "740": {
+    "famiglie": [
+     "Serie 7"
+    ],
+    "testo": "740",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "745": {
+    "famiglie": [
+     "Serie 7"
+    ],
+    "testo": "745",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "750": {
+    "famiglie": [
+     "Serie 7"
+    ],
+    "testo": "750",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "760": {
+    "famiglie": [
+     "Serie 7"
+    ],
+    "testo": "760",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "840": {
+    "famiglie": [
+     "Serie 8",
+     "Serie 8 Gran Coupé"
+    ],
+    "testo": "840",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "850": {
+    "famiglie": [
+     "Serie 8"
+    ],
+    "testo": "850",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (sigla numerica BMW)",
+    "quando": "2026-08-08"
+   },
+   "M2": {
+    "famiglie": [
+     "Serie 2"
+    ],
+    "testo": "M2",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "M3": {
+    "famiglie": [
+     "Serie 3"
+    ],
+    "testo": "M3",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "M4": {
+    "famiglie": [
+     "Serie 4"
+    ],
+    "testo": "M4",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "M5": {
+    "famiglie": [
+     "Serie 5"
+    ],
+    "testo": "M5",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "M550": {
+    "famiglie": [
+     "Serie 5"
+    ],
+    "testo": "M550",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "M6": {
+    "famiglie": [
+     "Serie 6",
+     "Serie 6 Gran Coupé"
+    ],
+    "testo": "M6",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "M8": {
+    "famiglie": [
+     "Serie 8",
+     "Serie 8 Gran Coupé"
+    ],
+    "testo": "M8",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "M850": {
+    "famiglie": [
+     "Serie 8",
+     "Serie 8 Gran Coupé"
+    ],
+    "testo": "M850",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "Active Hybrid 7": {
+    "famiglie": [
+     "Serie 7"
+    ],
+    "testo": "Active Hybrid",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "Active Hybrid X6": {
+    "famiglie": [
+     "X6"
+    ],
+    "testo": "Active Hybrid",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Dacia": {
+   "1310": {
+    "famiglie": [
+     "Renault 12"
+    ],
+    "testo": "1310",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia — la 1310 e’ la R12 su licenza",
+    "quando": "2026-08-08"
+   }
+  },
+  "Ferrari": {
+   "308": {
+    "famiglie": [
+     "208/308/328/GTO",
+     "Dino 308 GT/4"
+    ],
+    "testo": "308",
+    "prova": "V + D: le due famiglie 308 (GTB/GTS e Dino GT4), unione dichiarata",
+    "quando": "2026-08-08"
+   }
+  },
+  "Fiat": {
+   "New Panda": {
+    "famiglie": [
+     "Panda"
+    ],
+    "testo": null,
+    "prova": "la New Panda (2003) E’ la Panda: famiglia intera, «new» e’ marketing",
+    "quando": "2026-08-08"
+   }
+  },
+  "Ford": {
+   "Grand C-Max": {
+    "famiglie": [
+     "C-Max"
+    ],
+    "testo": "Grand",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante — la 7 posti negli annunci si chiama «Grand C-Max»",
+    "quando": "2026-08-08"
+   }
+  },
+  "Honda": {
+   "e": {
+    "famiglie": [
+     "Honda e"
+    ],
+    "testo": null,
+    "prova": "la citycar elettrica: famiglia «Honda e» (e:Ny1 e’ un’altra auto)",
+    "quando": "2026-08-08"
+   }
+  },
+  "Hyundai": {
+   "Grand Santa Fe": {
+    "famiglie": [
+     "Santa Fe"
+    ],
+    "testo": "Grand",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Infiniti": {
+   "EX30": {
+    "famiglie": [
+     "EX"
+    ],
+    "testo": "EX30",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "M30": {
+    "famiglie": [
+     "M"
+    ],
+    "testo": "M30",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "M35": {
+    "famiglie": [
+     "M"
+    ],
+    "testo": "M35",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   }
+  },
+  "Jaguar": {
+   "Daimler": {
+    "famiglie": [
+     "XJ"
+    ],
+    "testo": "Daimler",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia — la Daimler e’ la XJ col badge di lusso",
+    "quando": "2026-08-08"
+   },
+   "XJ40": {
+    "famiglie": [
+     "XJ"
+    ],
+    "testo": "XJ40",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "XJ8": {
+    "famiglie": [
+     "XJ"
+    ],
+    "testo": "XJ8",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "XJR": {
+    "famiglie": [
+     "XJ"
+    ],
+    "testo": "XJR",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "XKR": {
+    "famiglie": [
+     "XK"
+    ],
+    "testo": "XKR",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   }
+  },
+  "Maserati": {
+   "222": {
+    "famiglie": [
+     "Ghibli"
+    ],
+    "testo": "222",
+    "prova": "versioni «222»/«2.22v» lette nel modello «Biturbo e derivati» della famiglia Ghibli",
+    "quando": "2026-08-08"
+   },
+   "224": {
+    "famiglie": [
+     "Ghibli"
+    ],
+    "testo": "224",
+    "prova": "versioni «224»/«2.24v» lette nel modello «Biturbo e derivati» della famiglia Ghibli",
+    "quando": "2026-08-08"
+   },
+   "228": {
+    "famiglie": [
+     "Ghibli"
+    ],
+    "testo": "228",
+    "prova": "versioni «228»/«2.28v» lette nel modello «Biturbo e derivati» della famiglia Ghibli",
+    "quando": "2026-08-08"
+   },
+   "418": {
+    "famiglie": [
+     "Ghibli"
+    ],
+    "testo": "418",
+    "prova": "versioni «418»/«4.18v» lette nel modello «Biturbo e derivati» della famiglia Ghibli",
+    "quando": "2026-08-08"
+   },
+   "420": {
+    "famiglie": [
+     "Ghibli"
+    ],
+    "testo": "420",
+    "prova": "versioni «420»/«4.20v» lette nel modello «Biturbo e derivati» della famiglia Ghibli",
+    "quando": "2026-08-08"
+   },
+   "422": {
+    "famiglie": [
+     "Ghibli"
+    ],
+    "testo": "422",
+    "prova": "versioni «422»/«4.22v» lette nel modello «Biturbo e derivati» della famiglia Ghibli",
+    "quando": "2026-08-08"
+   },
+   "424": {
+    "famiglie": [
+     "Ghibli"
+    ],
+    "testo": "424",
+    "prova": "versioni «424»/«4.24v» lette nel modello «Biturbo e derivati» della famiglia Ghibli",
+    "quando": "2026-08-08"
+   },
+   "430": {
+    "famiglie": [
+     "Ghibli"
+    ],
+    "testo": "430",
+    "prova": "versioni «430»/«4.30v» lette nel modello «Biturbo e derivati» della famiglia Ghibli",
+    "quando": "2026-08-08"
+   },
+   "3200": {
+    "famiglie": [
+     "GT"
+    ],
+    "testo": "3200",
+    "prova": "versione «3200 GT» letta nella famiglia GT",
+    "quando": "2026-08-08"
+   },
+   "Racing": {
+    "famiglie": [
+     "Ghibli"
+    ],
+    "testo": "Racing",
+    "prova": "versione «Racing» (Biturbo Racing 1991) nella famiglia Ghibli",
+    "quando": "2026-08-08"
+   }
+  },
+  "Mazda": {
+   "2": {
+    "famiglie": [
+     "Mazda2",
+     "Mazda2 Hybrid"
+    ],
+    "testo": null,
+    "prova": "Subito la chiama «Mazda2» (piu’ la Hybrid): il menu ha solo «2»",
+    "quando": "2026-08-08"
+   },
+   "3": {
+    "famiglie": [
+     "Mazda3"
+    ],
+    "testo": null,
+    "prova": "Subito la chiama «Mazda3»; CX-3/MX-3 sono altre auto (refutate)",
+    "quando": "2026-08-08"
+   },
+   "5": {
+    "famiglie": [
+     "Mazda5"
+    ],
+    "testo": null,
+    "prova": "Subito la chiama «Mazda5»; CX-5/MX-5 sono altre auto (refutate)",
+    "quando": "2026-08-08"
+   }
+  },
+  "McLaren": {
+   "12 C": {
+    "famiglie": [
+     "MP4"
+    ],
+    "testo": "12C",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia — la MP4-12C",
+    "quando": "2026-08-08"
+   }
+  },
+  "Mercedes-Benz": {
+   "V 220": {
+    "famiglie": [
+     "Classe V"
+    ],
+    "testo": "V 220",
+    "prova": "LETTO IN NEGATIVO: la generazione «Classe S (W/V220)» agganciava il codice telaio; le vere «V 220 CDI…» stanno in Classe V",
+    "quando": "2026-08-08"
+   }
+  },
+  "Mini": {
+   "Cooper": {
+    "famiglie": [
+     "Mini",
+     "Mini All Electric"
+    ],
+    "testo": "Cooper",
+    "prova": "LETTO IN NEGATIVO: la generazione «Mini Cooper AE(J01)» prendeva solo l’elettrica; le Cooper a benzina (~217 versioni) stanno nella famiglia «Mini» — unione delle due, la Cooper e’ entrambe",
+    "quando": "2026-08-08"
+   }
+  },
+  "Morgan": {
+   "4/4": {
+    "famiglie": [
+     "Morgan"
+    ],
+    "testo": "4/4",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   }
+  },
+  "Peugeot": {
+   "e-208": {
+    "famiglie": [
+     "208"
+    ],
+    "testo": "e-208",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante (25 versioni elettriche nella famiglia)",
+    "quando": "2026-08-08"
+   },
+   "e-2008": {
+    "famiglie": [
+     "2008"
+    ],
+    "testo": "e-2008",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Renault": {
+   "Grand Espace": {
+    "famiglie": [
+     "Espace"
+    ],
+    "testo": "Grand",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante (75 versioni «Grand» nella famiglia)",
+    "quando": "2026-08-08"
+   },
+   "P 1400": {
+    "famiglie": [
+     "Trafic"
+    ],
+    "testo": "P1400",
+    "prova": "versioni «P1400 …» lette nella famiglia Trafic",
+    "quando": "2026-08-08"
+   },
+   "R 4": {
+    "famiglie": [
+     "4"
+    ],
+    "testo": null,
+    "prova": "la R4 su Subito e’ la famiglia «4»: la R e’ ridondante",
+    "quando": "2026-08-08"
+   },
+   "R 5": {
+    "famiglie": [
+     "5"
+    ],
+    "testo": null,
+    "prova": "la R5 su Subito e’ la famiglia «5»: la R e’ ridondante",
+    "quando": "2026-08-08"
+   },
+   "R 9": {
+    "famiglie": [
+     "9"
+    ],
+    "testo": null,
+    "prova": "la R9 su Subito e’ la famiglia «9»: la R e’ ridondante",
+    "quando": "2026-08-08"
+   },
+   "R 11": {
+    "famiglie": [
+     "11"
+    ],
+    "testo": null,
+    "prova": "la R11 su Subito e’ la famiglia «11»: la R e’ ridondante",
+    "quando": "2026-08-08"
+   },
+   "R 18": {
+    "famiglie": [
+     "18"
+    ],
+    "testo": null,
+    "prova": "la R18 su Subito e’ la famiglia «18»: la R e’ ridondante",
+    "quando": "2026-08-08"
+   },
+   "R 19": {
+    "famiglie": [
+     "19"
+    ],
+    "testo": null,
+    "prova": "la R19 su Subito e’ la famiglia «19»: la R e’ ridondante",
+    "quando": "2026-08-08"
+   },
+   "R 21": {
+    "famiglie": [
+     "21"
+    ],
+    "testo": null,
+    "prova": "la R21 su Subito e’ la famiglia «21»: la R e’ ridondante",
+    "quando": "2026-08-08"
+   },
+   "R 25": {
+    "famiglie": [
+     "25"
+    ],
+    "testo": null,
+    "prova": "la R25 su Subito e’ la famiglia «25»: la R e’ ridondante",
+    "quando": "2026-08-08"
+   },
+   "Super 5": {
+    "famiglie": [
+     "5"
+    ],
+    "testo": "Super",
+    "prova": "la Supercinque e’ la seconda serie della famiglia «5»",
+    "quando": "2026-08-08"
+   }
+  },
+  "Rolls-Royce": {
+   "Flying Spur": {
+    "famiglie": [
+     "Silver Spirit/Spur"
+    ],
+    "testo": "Flying Spur",
+    "prova": "versione «Flying Spur» letta nella famiglia Silver Spirit/Spur",
+    "quando": "2026-08-08"
+   },
+   "Silver Dawn": {
+    "famiglie": [
+     "Silver Spirit/Spur"
+    ],
+    "testo": "Silver Dawn",
+    "prova": "versione «Silver Dawn» letta in Silver Spirit/Spur; la famiglia «Dawn» (2016) e’ un’altra auto (refutata)",
+    "quando": "2026-08-08"
+   }
+  },
+  "Skoda": {
+   "105": {
+    "famiglie": [
+     "Serie 100"
+    ],
+    "testo": "105",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "120": {
+    "famiglie": [
+     "Serie 100"
+    ],
+    "testo": "120",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "130": {
+    "famiglie": [
+     "Serie 100"
+    ],
+    "testo": "130",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   }
+  },
+  "Smart": {
+   "city-coupé/city-cabrio": {
+    "famiglie": [
+     "city-coupé/cabrio"
+    ],
+    "testo": null,
+    "prova": "stesso modello, grafia diversa del menu",
+    "quando": "2026-08-08"
+   }
+  },
+  "Subaru": {
+   "E10": {
+    "famiglie": [
+     "E (Mini-van)"
+    ],
+    "testo": "E10",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "E12": {
+    "famiglie": [
+     "E (Mini-van)"
+    ],
+    "testo": "E12",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   }
+  },
+  "Suzuki": {
+   "SJ 410": {
+    "famiglie": [
+     "SJ400/Samurai"
+    ],
+    "testo": "SJ 410",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "SJ 413": {
+    "famiglie": [
+     "SJ400/Samurai"
+    ],
+    "testo": "SJ 413",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "SJ Samurai": {
+    "famiglie": [
+     "Samurai"
+    ],
+    "testo": null,
+    "prova": "famiglia «Samurai» a se’ nell’indice",
+    "quando": "2026-08-08"
+   }
+  },
+  "Volkswagen": {
+   "Cross Golf": {
+    "famiglie": [
+     "Golf"
+    ],
+    "testo": "Cross",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante (6 versioni Cross nella famiglia)",
+    "quando": "2026-08-08"
+   },
+   "Cross Touran": {
+    "famiglie": [
+     "Touran"
+    ],
+    "testo": "Cross",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "T3 California": {
+    "famiglie": [
+     "California"
+    ],
+    "testo": "T3",
+    "prova": "la famiglia e’ «California», la sigla T3 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T3 Caravelle": {
+    "famiglie": [
+     "Caravelle"
+    ],
+    "testo": "T3",
+    "prova": "la famiglia e’ «Caravelle», la sigla T3 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T3 Multivan": {
+    "famiglie": [
+     "Multivan"
+    ],
+    "testo": "T3",
+    "prova": "la famiglia e’ «Multivan», la sigla T3 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T3 Transporter": {
+    "famiglie": [
+     "Transporter"
+    ],
+    "testo": "T3",
+    "prova": "la famiglia e’ «Transporter», la sigla T3 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T4 California": {
+    "famiglie": [
+     "California"
+    ],
+    "testo": "T4",
+    "prova": "la famiglia e’ «California», la sigla T4 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T4 Caravelle": {
+    "famiglie": [
+     "Caravelle"
+    ],
+    "testo": "T4",
+    "prova": "la famiglia e’ «Caravelle», la sigla T4 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T4 Multivan": {
+    "famiglie": [
+     "Multivan"
+    ],
+    "testo": "T4",
+    "prova": "la famiglia e’ «Multivan», la sigla T4 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T4 Transporter": {
+    "famiglie": [
+     "Transporter"
+    ],
+    "testo": "T4",
+    "prova": "la famiglia e’ «Transporter», la sigla T4 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T5 California": {
+    "famiglie": [
+     "California"
+    ],
+    "testo": "T5",
+    "prova": "la famiglia e’ «California», la sigla T5 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T5 Caravelle": {
+    "famiglie": [
+     "Caravelle"
+    ],
+    "testo": "T5",
+    "prova": "la famiglia e’ «Caravelle», la sigla T5 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T5 Multivan": {
+    "famiglie": [
+     "Multivan"
+    ],
+    "testo": "T5",
+    "prova": "la famiglia e’ «Multivan», la sigla T5 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T5 Transporter": {
+    "famiglie": [
+     "Transporter"
+    ],
+    "testo": "T5",
+    "prova": "la famiglia e’ «Transporter», la sigla T5 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T6 California": {
+    "famiglie": [
+     "California"
+    ],
+    "testo": "T6",
+    "prova": "la famiglia e’ «California», la sigla T6 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T6 Caravelle": {
+    "famiglie": [
+     "Caravelle"
+    ],
+    "testo": "T6",
+    "prova": "la famiglia e’ «Caravelle», la sigla T6 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T6 Multivan": {
+    "famiglie": [
+     "Multivan"
+    ],
+    "testo": "T6",
+    "prova": "la famiglia e’ «Multivan», la sigla T6 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T6 Transporter": {
+    "famiglie": [
+     "Transporter"
+    ],
+    "testo": "T6",
+    "prova": "la famiglia e’ «Transporter», la sigla T6 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T6.1 California": {
+    "famiglie": [
+     "California"
+    ],
+    "testo": "T6.1",
+    "prova": "la famiglia e’ «California», la sigla T6.1 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T6.1 Caravelle": {
+    "famiglie": [
+     "Caravelle"
+    ],
+    "testo": "T6.1",
+    "prova": "la famiglia e’ «Caravelle», la sigla T6.1 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T6.1 Multivan": {
+    "famiglie": [
+     "Multivan"
+    ],
+    "testo": "T6.1",
+    "prova": "la famiglia e’ «Multivan», la sigla T6.1 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T6.1 Transporter": {
+    "famiglie": [
+     "Transporter"
+    ],
+    "testo": "T6.1",
+    "prova": "la famiglia e’ «Transporter», la sigla T6.1 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T7 California": {
+    "famiglie": [
+     "California"
+    ],
+    "testo": "T7",
+    "prova": "la famiglia e’ «California», la sigla T7 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T7 Caravelle": {
+    "famiglie": [
+     "Caravelle"
+    ],
+    "testo": "T7",
+    "prova": "la famiglia e’ «Caravelle», la sigla T7 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T7 Multivan": {
+    "famiglie": [
+     "Multivan"
+    ],
+    "testo": "T7",
+    "prova": "la famiglia e’ «Multivan», la sigla T7 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   },
+   "T7 Transporter": {
+    "famiglie": [
+     "Transporter"
+    ],
+    "testo": "T7",
+    "prova": "la famiglia e’ «Transporter», la sigla T7 negli annunci indica la generazione",
+    "quando": "2026-08-08"
+   }
+  },
+  "Volvo": {
+   "340": {
+    "famiglie": [
+     "Serie 300"
+    ],
+    "testo": "340",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "360": {
+    "famiglie": [
+     "Serie 300"
+    ],
+    "testo": "360",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "440": {
+    "famiglie": [
+     "Serie 400"
+    ],
+    "testo": "440",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "460": {
+    "famiglie": [
+     "Serie 400"
+    ],
+    "testo": "460",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "480": {
+    "famiglie": [
+     "Serie 400"
+    ],
+    "testo": "480",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "740": {
+    "famiglie": [
+     "Serie 700"
+    ],
+    "testo": "740",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "760": {
+    "famiglie": [
+     "Serie 700"
+    ],
+    "testo": "760",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "780": {
+    "famiglie": [
+     "Serie 700"
+    ],
+    "testo": "780",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "850": {
+    "famiglie": [
+     "Serie 800"
+    ],
+    "testo": "850",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "940": {
+    "famiglie": [
+     "Serie 900"
+    ],
+    "testo": "940",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "960": {
+    "famiglie": [
+     "Serie 900"
+    ],
+    "testo": "960",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   }
+  },
+  "Caterham": {
+   "Roadsport Seven": {
+    "famiglie": [
+     "Seven"
+    ],
+    "testo": "Roadsport",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Chrysler": {
+   "Grand Voyager": {
+    "famiglie": [
+     "Voy./G.Voyager"
+    ],
+    "testo": "Grand",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   }
+  },
+  "Daihatsu": {
+   "Gran Move": {
+    "famiglie": [
+     "Move"
+    ],
+    "testo": "Gran",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Donkervoort": {
+   "S8": {
+    "famiglie": [
+     "Super Eight"
+    ],
+    "testo": "S8",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   }
+  },
+  "Lada": {
+   "110": {
+    "famiglie": [
+     "Serie 100"
+    ],
+    "testo": "110",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "111": {
+    "famiglie": [
+     "Serie 100"
+    ],
+    "testo": "111",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "112": {
+    "famiglie": [
+     "Serie 100"
+    ],
+    "testo": "112",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   }
+  },
+  "Rover": {
+   "111": {
+    "famiglie": [
+     "100"
+    ],
+    "testo": "111",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "114": {
+    "famiglie": [
+     "100"
+    ],
+    "testo": "114",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "213": {
+    "famiglie": [
+     "200"
+    ],
+    "testo": "213",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "214": {
+    "famiglie": [
+     "200"
+    ],
+    "testo": "214",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "216": {
+    "famiglie": [
+     "200"
+    ],
+    "testo": "216",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "218": {
+    "famiglie": [
+     "200"
+    ],
+    "testo": "218",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "220": {
+    "famiglie": [
+     "200"
+    ],
+    "testo": "220",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "414": {
+    "famiglie": [
+     "400"
+    ],
+    "testo": "414",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "416": {
+    "famiglie": [
+     "400"
+    ],
+    "testo": "416",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "418": {
+    "famiglie": [
+     "400"
+    ],
+    "testo": "418",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "420": {
+    "famiglie": [
+     "400"
+    ],
+    "testo": "420",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "618": {
+    "famiglie": [
+     "600"
+    ],
+    "testo": "618",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "620": {
+    "famiglie": [
+     "600"
+    ],
+    "testo": "620",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "820": {
+    "famiglie": [
+     "800"
+    ],
+    "testo": "820",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "825": {
+    "famiglie": [
+     "800"
+    ],
+    "testo": "825",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "827": {
+    "famiglie": [
+     "800"
+    ],
+    "testo": "827",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   }
+  },
+  "TVR": {
+   "S 2,8": {
+    "famiglie": [
+     "S"
+    ],
+    "testo": null,
+    "prova": "la S 2.8 e’ una S: famiglia, il motore resta testo",
+    "quando": "2026-08-08"
+   }
+  }
+ },
+ "moto": {
+  "Aprilia": {
+   "Classic M 50": {
+    "famiglie": [
+     "Classic 50"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "MX 50": {
+    "famiglie": [
+     "MX Super Motard 50"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Pegaso 3 650": {
+    "famiglie": [
+     "Pegaso 650"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante — terza serie della Pegaso 650",
+    "quando": "2026-08-08"
+   },
+   "Shiver 750": {
+    "famiglie": [
+     "SL Shiver 750"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "SL 750": {
+    "famiglie": [
+     "SL Shiver 750"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "SL 1000 Falco": {
+    "famiglie": [
+     "SL Falco"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Sportcity Cube 125": {
+    "famiglie": [
+     "Sportcity 125"
+    ],
+    "testo": "Cube",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "BMW": {
+   "100 CS": {
+    "famiglie": [
+     "R 100 CS"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   }
+  },
+  "Benelli": {
+   "250 Sport": {
+    "famiglie": [
+     "Sport Special 250"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Cafe Racer": {
+    "famiglie": [
+     "Tornado Naked Tre"
+    ],
+    "testo": "Cafe",
+    "prova": "versioni «Cafe’ Racer» lette nella famiglia TNT",
+    "quando": "2026-08-08"
+   }
+  },
+  "Beta": {
+   "RR 125": {
+    "famiglie": [
+     "RR Enduro 125",
+     "RR Motard 125"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "RR 200": {
+    "famiglie": [
+     "RR Enduro 200"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "RR 250": {
+    "famiglie": [
+     "RR Enduro 250"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "RR 300": {
+    "famiglie": [
+     "RR Enduro 300"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "RR 350": {
+    "famiglie": [
+     "RR Enduro 350"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "RR 390": {
+    "famiglie": [
+     "RR Enduro 390"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "RR 430": {
+    "famiglie": [
+     "RR Enduro 430"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "RR 480": {
+    "famiglie": [
+     "RR Enduro 480"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "RR 520": {
+    "famiglie": [
+     "RR Enduro 520"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "RR 400": {
+    "famiglie": [
+     "RR Enduro 400",
+     "RR Motard 400"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "RR 450": {
+    "famiglie": [
+     "RR Enduro 450",
+     "RR Motard 450"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "RR 525": {
+    "famiglie": [
+     "RR Enduro 525",
+     "RR Motard 525"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "RR 125 4T Enduro": {
+    "famiglie": [
+     "RR Enduro 125"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "RR 125 4T Motard": {
+    "famiglie": [
+     "RR Motard 125"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Ducati": {
+   "350 Desmo": {
+    "famiglie": [
+     "350 Sport Desmo"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Sportclassic GT 1000": {
+    "famiglie": [
+     "GT 1000"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Sportclassic Sport 1000": {
+    "famiglie": [
+     "Sport 1000"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Gas Gas": {
+   "EC Boy 50": {
+    "famiglie": [
+     "EC 50"
+    ],
+    "testo": "Boy",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "TT 200 EC": {
+    "famiglie": [
+     "EC 200"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Harley-Davidson": {
+   "Deluxe": {
+    "famiglie": [
+     "Softail Deluxe",
+     "Softail Deluxe C.V.O."
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "Dyna Glide": {
+    "famiglie": [
+     "Dyna Super Glide",
+     "Dyna Wide Glide"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "Fat Bob": {
+    "famiglie": [
+     "Dyna Fat Bob",
+     "Dyna Fat Bob C.V.O.",
+     "Softail Fat Bob"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "Freewheeler": {
+    "famiglie": [
+     "Trike"
+    ],
+    "testo": "Freewheeler",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "Hydra Glide": {
+    "famiglie": [
+     "Softail Hydra-Glide"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Night Train": {
+    "famiglie": [
+     "Softail Night Train"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Sport Glide": {
+    "famiglie": [
+     "Softail Sport Glide"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Super Glide": {
+    "famiglie": [
+     "Dyna Super Glide"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Sportster XL 883": {
+    "famiglie": [
+     "Sportster 883"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante (19 versioni XL)",
+    "quando": "2026-08-08"
+   },
+   "Sportster XR 1200": {
+    "famiglie": [
+     "XR 1200"
+    ],
+    "testo": null,
+    "prova": "famiglia «XR 1200» a se’ nell’indice",
+    "quando": "2026-08-08"
+   },
+   "Street Bob": {
+    "famiglie": [
+     "Dyna Street Bob",
+     "Softail Street Bob"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "VRSC Street Rod": {
+    "famiglie": [
+     "Street Rod"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "VRSC V-Rod": {
+    "famiglie": [
+     "V-Rod"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "XL 1200": {
+    "famiglie": [
+     "Sportster 1200"
+    ],
+    "testo": "XL 1200",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia (20 versioni)",
+    "quando": "2026-08-08"
+   }
+  },
+  "Honda": {
+   "50 Sky DX": {
+    "famiglie": [
+     "Sky"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Black Widow": {
+    "famiglie": [
+     "VT 750 Black Widow"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "DAX ST 125": {
+    "famiglie": [
+     "Dax 125"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Gold Wing": {
+    "famiglie": [
+     "GL 1100 Gold Wing",
+     "GL 1200 Gold Wing",
+     "GL 1500 Gold Wing",
+     "GL 1800 Gold Wing"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "Pacific Coast": {
+    "famiglie": [
+     "PC 800"
+    ],
+    "testo": "Pacific",
+    "prova": "dossier V: il catalogo ha versioni col nome come prefisso sotto questa famiglia",
+    "quando": "2026-08-08"
+   },
+   "Pan European": {
+    "famiglie": [
+     "ST 1100",
+     "ST 1300"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "PS I 150": {
+    "famiglie": [
+     "PS 150"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Rebel 250": {
+    "famiglie": [
+     "CMX 250 Rebel"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Shadow 125": {
+    "famiglie": [
+     "VT 125 Shadow"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Shadow 600": {
+    "famiglie": [
+     "VT 600 Shadow"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Shadow 750": {
+    "famiglie": [
+     "VT 750 Shadow"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Transalp": {
+    "famiglie": [
+     "XL 600 V Transalp",
+     "XL 650 V Transalp",
+     "XL 700 V Transalp",
+     "XL 750 Transalp"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "FX Vigor 650": {
+    "famiglie": [
+     "Vigor"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "KTM": {
+   "LC4 640 Adventure": {
+    "famiglie": [
+     "640 LC4"
+    ],
+    "testo": "Adventure",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "LC4 640 SM": {
+    "famiglie": [
+     "640 LC4"
+    ],
+    "testo": "SM",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Kawasaki": {
+   "Vulcan VN 1700": {
+    "famiglie": [
+     "VN 1700"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante — Vulcan e’ il nome della serie VN",
+    "quando": "2026-08-08"
+   },
+   "Vulcan VN 900": {
+    "famiglie": [
+     "VN 900"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Kymco": {
+   "Dink 250": {
+    "famiglie": [
+     "Grand Dink 250"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Gran Dink 125": {
+    "famiglie": [
+     "Dink 125"
+    ],
+    "testo": "Gran",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Gran Dink 150": {
+    "famiglie": [
+     "Dink 150"
+    ],
+    "testo": "Gran",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Grand Dink 50": {
+    "famiglie": [
+     "Dink 50"
+    ],
+    "testo": "Grand",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "People S 125": {
+    "famiglie": [
+     "People 125"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante — la S e’ nelle versioni",
+    "quando": "2026-08-08"
+   },
+   "People S 150i": {
+    "famiglie": [
+     "People 150i"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante — la S e’ nelle versioni",
+    "quando": "2026-08-08"
+   },
+   "People S 200i": {
+    "famiglie": [
+     "People 200i"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante — la S e’ nelle versioni",
+    "quando": "2026-08-08"
+   },
+   "People S 250i": {
+    "famiglie": [
+     "People 250i"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante — la S e’ nelle versioni",
+    "quando": "2026-08-08"
+   },
+   "People S 300i": {
+    "famiglie": [
+     "People 300i"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante — la S e’ nelle versioni",
+    "quando": "2026-08-08"
+   },
+   "People S 50": {
+    "famiglie": [
+     "People 50"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante — la S e’ nelle versioni",
+    "quando": "2026-08-08"
+   },
+   "Super Dink 125": {
+    "famiglie": [
+     "Dink 125"
+    ],
+    "testo": "Super",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Super Fever ZX 50": {
+    "famiglie": [
+     "Fever 50"
+    ],
+    "testo": "Super",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Xciting S 400i ABS": {
+    "famiglie": [
+     "Xciting 400i"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Moto Guzzi": {
+   "1000 Daytona": {
+    "famiglie": [
+     "Daytona"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "850 Le Mans": {
+    "famiglie": [
+     "Le Mans III 850"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile) — l’unica Le Mans 850 dell’indice",
+    "quando": "2026-08-08"
+   },
+   "LE Mans 850": {
+    "famiglie": [
+     "Le Mans III 850"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Breva V 1100 i.e.": {
+    "famiglie": [
+     "Breva 1100"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Breva V 750 i.e.": {
+    "famiglie": [
+     "Breva 750"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Griso 1200 8V": {
+    "famiglie": [
+     "Griso 8V"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "NTX 750": {
+    "famiglie": [
+     "750"
+    ],
+    "testo": "NTX",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Sport Corsa 1100": {
+    "famiglie": [
+     "Sport 1100"
+    ],
+    "testo": "Corsa",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Piaggio": {
+   "1": {
+    "famiglie": [
+     "Piaggio 1",
+     "Piaggio 1 Active"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "Beverly Cruiser 500": {
+    "famiglie": [
+     "Beverly 500"
+    ],
+    "testo": "Cruiser",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Beverly Tourer 300": {
+    "famiglie": [
+     "Beverly 300"
+    ],
+    "testo": "Tourer",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Beverly Tourer 400": {
+    "famiglie": [
+     "Beverly 400"
+    ],
+    "testo": "Tourer",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Carnaby Cruiser 300": {
+    "famiglie": [
+     "Carnaby 300"
+    ],
+    "testo": "Cruiser",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "GTS 125": {
+    "famiglie": [
+     "Vespa 125 GTS",
+     "Vespa 125 GTS hpe"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "GTS 250": {
+    "famiglie": [
+     "Vespa 250 GTS"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "GTS 300": {
+    "famiglie": [
+     "Vespa 300 GTS",
+     "Vespa 300 GTS hpe"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "P 80": {
+    "famiglie": [
+     "Vespa P 80 X"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Primavera": {
+    "famiglie": [
+     "Vespa 125 Primavera",
+     "Vespa 150 Primavera",
+     "Vespa 50 Primavera",
+     "Vespa Primavera Elettrica 45",
+     "Vespa Primavera Elettrica 70"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "PX 150": {
+    "famiglie": [
+     "Vespa 150 PX",
+     "Vespa PX 150 E"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "Super Bravo": {
+    "famiglie": [
+     "Bravo"
+    ],
+    "testo": "Super",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Vespa 125 T5": {
+    "famiglie": [
+     "Vespa PX 125 T5"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Vespa 200 E": {
+    "famiglie": [
+     "Vespa P 200 E",
+     "Vespa PX 200 E"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "Zip II 125": {
+    "famiglie": [
+     "Zip 125"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Zip II 50": {
+    "famiglie": [
+     "Zip 50"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Sherco": {
+   "0.5": {
+    "famiglie": [
+     "SE 0.5",
+     "SM 0.5",
+     "SU 0.5"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "1.25": {
+    "famiglie": [
+     "SE 125",
+     "SM 125"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "125 2T SM": {
+    "famiglie": [
+     "SM 125"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "125 XY": {
+    "famiglie": [
+     "XY"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "450 SEF-R": {
+    "famiglie": [
+     "SEF 450"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "50 SE-R": {
+    "famiglie": [
+     "SE 50"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "50 SM-R": {
+    "famiglie": [
+     "SM 50"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "CityCorp 125": {
+    "famiglie": [
+     "CityCorp Enduro 125",
+     "CityCorp SM 125"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   }
+  },
+  "Suzuki": {
+   "AY 50": {
+    "famiglie": [
+     "AY Katana 50"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "B King": {
+    "famiglie": [
+     "GSX B-King 1300"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Bandit 1200": {
+    "famiglie": [
+     "GSF 1200 Bandit"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Bandit 1250": {
+    "famiglie": [
+     "GSF 1250 Bandit"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Bandit 400": {
+    "famiglie": [
+     "GSF 400 Bandit"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Bandit 600": {
+    "famiglie": [
+     "GSF 600 Bandit"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Bandit 650": {
+    "famiglie": [
+     "GSF 650 Bandit"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Burgman 150": {
+    "famiglie": [
+     "UH Burgman 150"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Burgman AN 650": {
+    "famiglie": [
+     "Burgman 650"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "DR BIG 800": {
+    "famiglie": [
+     "DR 800 S Big"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Gladius 650": {
+    "famiglie": [
+     "SFV Gladius 650"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "GSX 1300": {
+    "famiglie": [
+     "GSX B-King 1300",
+     "GSX Hayabusa 1300"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "GSX 1300 R Hayabusa": {
+    "famiglie": [
+     "GSX Hayabusa 1300"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "GSX R 250": {
+    "famiglie": [
+     "GSX 250"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "GSX-R 400": {
+    "famiglie": [
+     "GSX 400"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "GZ 250": {
+    "famiglie": [
+     "GZ Marauder 250"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Intruder 800": {
+    "famiglie": [
+     "VL Intruder 800",
+     "VZ Intruder 800"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "Katana 1000": {
+    "famiglie": [
+     "GSX S 1000 S Katana"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Katana 50": {
+    "famiglie": [
+     "AY Katana 50"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "RV 125": {
+    "famiglie": [
+     "RV Van Van 125"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "RV 200": {
+    "famiglie": [
+     "RV Van Van 200"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Sixteen 125": {
+    "famiglie": [
+     "UX Sixteen 125"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Sixteen 150": {
+    "famiglie": [
+     "UX Sixteen 150"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "TR 50": {
+    "famiglie": [
+     "TR Street Magic 50"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "UC 125": {
+    "famiglie": [
+     "UC Epicuro 125"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "UF 50": {
+    "famiglie": [
+     "UF Estilete 50"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "UX 50": {
+    "famiglie": [
+     "UX Zillion 50"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "V-Strom 1000": {
+    "famiglie": [
+     "V Strom DL 1000"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "V-Strom 1050": {
+    "famiglie": [
+     "V Strom DL 1050"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "V-Strom 650": {
+    "famiglie": [
+     "V Strom DL 650"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "V-Strom 800": {
+    "famiglie": [
+     "V Strom DL 800"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "VL 125": {
+    "famiglie": [
+     "VL Intruder 125"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "VL 1500": {
+    "famiglie": [
+     "VL Intruder 1500"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "VL 250": {
+    "famiglie": [
+     "VL Intruder 250"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "VLR 1800": {
+    "famiglie": [
+     "VLR Intruder 1800"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "VS 750": {
+    "famiglie": [
+     "VS Intruder 750"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "VZ 1600": {
+    "famiglie": [
+     "VZ Marauder 1600"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "VZ 800": {
+    "famiglie": [
+     "VZ Intruder 800",
+     "VZ Marauder 800"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata — la sigla VZ copre entrambe",
+    "quando": "2026-08-08"
+   },
+   "VZR 1800": {
+    "famiglie": [
+     "VZR Intruder 1800"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "XF 650": {
+    "famiglie": [
+     "XF Freewind 650"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   }
+  },
+  "Sym": {
+   "Duke 125": {
+    "famiglie": [
+     "New Duke 125",
+     "Super Duke 125"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "Fiddle 200": {
+    "famiglie": [
+     "Fiddle III 200"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Maxsym 500": {
+    "famiglie": [
+     "Maxsym TL 500"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Wolf CR 300": {
+    "famiglie": [
+     "Wolf 300"
+    ],
+    "testo": "CR",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Wolf SB 250 Ni": {
+    "famiglie": [
+     "SB 250 Ni"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Yamaha": {
+   "Diversion 600": {
+    "famiglie": [
+     "XJ 600 Diversion"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   }
+  },
+  "Boss Hoss": {
+   "BHC-3 LS3": {
+    "famiglie": [
+     "BHC-3 ZZ4 LS3"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   }
+  },
+  "Buell": {
+   "M 2": {
+    "famiglie": [
+     "Cyclone"
+    ],
+    "testo": "M2",
+    "prova": "versioni «M2 …» lette nella famiglia Cyclone",
+    "quando": "2026-08-08"
+   },
+   "X1": {
+    "famiglie": [
+     "Ligthing"
+    ],
+    "testo": "X1",
+    "prova": "versioni «X1 …» lette nella famiglia «Ligthing» (typo di Subito per Lightning)",
+    "quando": "2026-08-08"
+   }
+  },
+  "Cagiva": {
+   "SST SX 350": {
+    "famiglie": [
+     "SST 350"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Can-Am": {
+   "Rally": {
+    "famiglie": [
+     "Ryker 900"
+    ],
+    "testo": "Rally",
+    "prova": "versione «Rally» letta nella famiglia Ryker 900",
+    "quando": "2026-08-08"
+   }
+  },
+  "CPI": {
+   "Aragon GP 125": {
+    "famiglie": [
+     "Aragon 125"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Aragon GP 50": {
+    "famiglie": [
+     "Aragon 50"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Derbi": {
+   "Boulevard 25/50": {
+    "famiglie": [
+     "Boulevard 50"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante — il 25 e’ la versione a 25 km/h",
+    "quando": "2026-08-08"
+   },
+   "Bullet": {
+    "famiglie": [
+     "Atlantis 50"
+    ],
+    "testo": "Bullet",
+    "prova": "versioni «Bullet»/«Red Bullet» lette nella famiglia Atlantis 50",
+    "quando": "2026-08-08"
+   },
+   "Nude": {
+    "famiglie": [
+     "GPR 125",
+     "GPR 50"
+    ],
+    "testo": "Nude",
+    "prova": "versione «Nude» letta in entrambe le famiglie GPR",
+    "quando": "2026-08-08"
+   }
+  },
+  "Garelli": {
+   "Cross": {
+    "famiglie": [
+     "Ciclone E4"
+    ],
+    "testo": "Cross",
+    "prova": "versione «Cross» letta nella famiglia Ciclone E4",
+    "quando": "2026-08-08"
+   }
+  },
+  "Gilera": {
+   "300 B": {
+    "famiglie": [
+     "B 300 Extra"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   }
+  },
+  "HM": {
+   "City": {
+    "famiglie": [
+     "Scrambler 125",
+     "Scrambler 200"
+    ],
+    "testo": "City",
+    "prova": "versioni «City 4T» lette in entrambe le famiglie Scrambler",
+    "quando": "2026-08-08"
+   },
+   "CRE 230": {
+    "famiglie": [
+     "Easy Enduro CRE 230"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "CRX 50": {
+    "famiglie": [
+     "HM 50 CRX"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Locusta": {
+    "famiglie": [
+     "Trail 125",
+     "Trail 200"
+    ],
+    "testo": "Locusta",
+    "prova": "versioni «Locusta 4T» lette in entrambe le famiglie Trail",
+    "quando": "2026-08-08"
+   }
+  },
+  "Hyosung": {
+   "Aquila 650": {
+    "famiglie": [
+     "Aquila GV 650"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "GV 125": {
+    "famiglie": [
+     "Aquila GV 125"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "GV 250": {
+    "famiglie": [
+     "Aquila GV 250"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "Karion 125": {
+    "famiglie": [
+     "RT 125 Karion"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   }
+  },
+  "Laverda": {
+   "668": {
+    "famiglie": [
+     "Ghost 668",
+     "Strike 668"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   }
+  },
+  "LEM": {
+   "Dirt Bike 250 PRO": {
+    "famiglie": [
+     "Dirt bike PRO"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Malaguti": {
+   "CR 1 Crosser": {
+    "famiglie": [
+     "Crosser"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "F12 Phantom 50": {
+    "famiglie": [
+     "Phantom 50"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante (3 versioni F12 nella famiglia)",
+    "quando": "2026-08-08"
+   },
+   "F18 Warrior 150": {
+    "famiglie": [
+     "F18 150"
+    ],
+    "testo": "Warrior",
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "MBK": {
+   "Flame 125": {
+    "famiglie": [
+     "New Flame 125",
+     "XC 125 Flame"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   }
+  },
+  "Moto Morini": {
+   "3 1/2": {
+    "famiglie": [
+     "3œ"
+    ],
+    "testo": null,
+    "prova": "la famiglia indice «3œ» e’ il mojibake di «3½»: stesso modello",
+    "quando": "2026-08-08"
+   },
+   "9 1/2": {
+    "famiglie": [
+     "9œ"
+    ],
+    "testo": null,
+    "prova": "mojibake di «9½»",
+    "quando": "2026-08-08"
+   },
+   "501 Camel": {
+    "famiglie": [
+     "Camel 501 XE"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   }
+  },
+  "Qooder": {
+   "New Qooder": {
+    "famiglie": [
+     "Qooder"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante — «new» e’ marketing",
+    "quando": "2026-08-08"
+   },
+   "New QV3": {
+    "famiglie": [
+     "QV3"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Quantya": {
+   "Evo 1-Strada": {
+    "famiglie": [
+     "Strada"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Evo 1-Track": {
+    "famiglie": [
+     "Track"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Scorpa": {
+   "125 SY": {
+    "famiglie": [
+     "SY 125 F"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "125 TY-S": {
+    "famiglie": [
+     "TY-S 125 F"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "200 SY": {
+    "famiglie": [
+     "SY 200 F"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "250 SY": {
+    "famiglie": [
+     "SY 250 F",
+     "SY 250 R"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome indica piu’ famiglie sorelle — unione dichiarata",
+    "quando": "2026-08-08"
+   },
+   "250 T-Ride": {
+    "famiglie": [
+     "T-Ride 250 F"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   }
+  },
+  "Somoto": {
+   "Classic": {
+    "famiglie": [
+     "125",
+     "250",
+     "400"
+    ],
+    "testo": "Classic",
+    "prova": "versioni «Classic» lette nelle tre famiglie numeriche",
+    "quando": "2026-08-08"
+   },
+   "Scrambler": {
+    "famiglie": [
+     "125",
+     "250"
+    ],
+    "testo": "Scrambler",
+    "prova": "versioni «Scrambler» lette in 125 e 250",
+    "quando": "2026-08-08"
+   }
+  },
+  "SWM": {
+   "Gran Milano Outlaw 500": {
+    "famiglie": [
+     "Outlaw 500"
+    ],
+    "testo": null,
+    "prova": "famiglia «Outlaw 500» a se’ nell’indice",
+    "quando": "2026-08-08"
+   },
+   "RS GS 125": {
+    "famiglie": [
+     "RS 125"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "TRS": {
+   "Gold": {
+    "famiglie": [
+     "One 125",
+     "One 250",
+     "One 280",
+     "One 300"
+    ],
+    "testo": "Gold",
+    "prova": "versioni «Gold» lette nelle quattro famiglie One",
+    "quando": "2026-08-08"
+   }
+  },
+  "Ural": {
+   "Retro Solo": {
+    "famiglie": [
+     "UH 750 Retro Solo"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   }
+  },
+  "Vent": {
+   "Baja RR 125 4T": {
+    "famiglie": [
+     "Baja 125"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Baja RR 50": {
+    "famiglie": [
+     "Baja 50"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Derapage RR 125 4T": {
+    "famiglie": [
+     "Derapage 125"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Derapage RR 50": {
+    "famiglie": [
+     "Derapage 50"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Verve Moto": {
+   "Classic 250": {
+    "famiglie": [
+     "Classic S 250"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   }
+  },
+  "Victory": {
+   "8-Ball": {
+    "famiglie": [
+     "Hammer",
+     "Kingpin",
+     "Vegas",
+     "Vision"
+    ],
+    "testo": "8-Ball",
+    "prova": "versione «8-Ball» letta nelle quattro famiglie",
+    "quando": "2026-08-08"
+   },
+   "Cory Ness Jackpot": {
+    "famiglie": [
+     "Jackpot"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Voge": {
+   "300 GY Rally": {
+    "famiglie": [
+     "Rally 300"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "SR16 125": {
+    "famiglie": [
+     "Sfida SR16 125"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "SR16 200": {
+    "famiglie": [
+     "Sfida SR16 200"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   }
+  },
+  "YCF": {
+   "Factory SP3 Limited F190 Pastrana": {
+    "famiglie": [
+     "FACTORY F190"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   },
+   "Factory SP3 SM F190 Lucas Oil": {
+    "famiglie": [
+     "FACTORY F190"
+    ],
+    "testo": null,
+    "prova": "dossier C: la famiglia e’ contenuta nel nome, il resto e’ la variante",
+    "quando": "2026-08-08"
+   }
+  },
+  "Zontes": {
+   "125 GK": {
+    "famiglie": [
+     "ZT 125 GK"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "125 U": {
+    "famiglie": [
+     "ZT 125 U"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "310 R": {
+    "famiglie": [
+     "ZT 310 R"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "310 T": {
+    "famiglie": [
+     "ZT 310 T"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "310 V": {
+    "famiglie": [
+     "ZT 310 V"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "310 X": {
+    "famiglie": [
+     "ZT 310 X"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "350 GK": {
+    "famiglie": [
+     "ZT 350 GK"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   },
+   "350 V": {
+    "famiglie": [
+     "ZT 350 V"
+    ],
+    "testo": null,
+    "prova": "dossier D: il nome e’ contenuto nel nome della famiglia (unica compatibile)",
+    "quando": "2026-08-08"
+   }
+  }
+ },
+ "_refutati": {
+  "auto": {
+   "Alfa Romeo": {
+    "1750": "il catalogo aggancia il MOTORE 1750 TBi di 159/Brera; la 1750 (1968) non c’e’"
+   },
+   "Aston Martin": {
+    "V8": "sigla generica: due famiglie e 29 versioni sparse, nessuna e’ «la» V8",
+    "Volante": "Volante = la carrozzeria aperta di piu’ famiglie, non un modello"
+   },
+   "Audi": {
+    "RS": "sigla generica: 8 famiglie diverse"
+   },
+   "Fiat": {
+    "130": "aggancia versioni Marea, non l’ammiraglia 1969",
+    "133": "nessuna versione leggibile nel catalogo",
+    "1100": "aggancia il motore 1100 della Panda, non la berlina anni ’50",
+    "124 Coupè": "la famiglia «Coupé» e’ la Coupé del 1993, un’altra auto"
+   },
+   "Aixam": {
+    "A.": "nome monco del menu: A.721 e A.741 indistinguibili"
+   },
+   "Rolls-Royce": {
+    "Park Ward": "allestimento di carrozzeria su due famiglie, ambiguo"
+   },
+   "Mazda": {
+    "CX/MX per 3 e 5": "CX-3/MX-3/CX-5/MX-5 contengono il numero ma sono auto diverse: 3 e 5 vanno su Mazda3/Mazda5"
+   }
+  },
+  "moto": {
+   "Honda (famiglia «@»)": {
+    "Activa 125, ATC 125, CBZ 125, CR 125, CR 125 R, CRE 125, CRF 125, CRF 150, CRM 125, FES 125, FES 150, Innova 125, Motard 125, MSX 125, NES 125, PES 125, RS 125, SL 125, TL 125": "la famiglia «@ 125/150» (lo scooter @, nome mojibake) ha come token solo il numero: aggancerebbe QUALSIASI «… 125» — tutte refutate"
+   },
+   "MV Agusta": {
+    "98": "ambiguo: la 98 del 1946 vs la versione «98» della Superveloce 800 (ed. limitata 2023) — meglio testo libero che un id quasi giusto",
+    "800": "sigla generica: 8 famiglie"
+   },
+   "BMW": {
+    "R 5": "la R5 (1936, 500cc) NON e’ la «R 60/5» (serie /5, 1969) — refutata gia’ in campagna D, quasi ri-accettata oggi: il presidio l’ha fermata",
+    "R 6": "la R6 (1936) NON e’ la «R 60/6» (serie /6, 1974) — stesso errore, stessa refutazione"
+   },
+   "Piaggio": {
+    "Si": "il ciclomotore Si (1978): il catalogo aggancia versioni «S i.e.» dei Beverly"
+   },
+   "Royal Enfield": {
+    "Austro Classic": "nessuna prova nel catalogo (resto «austro» mai visto)"
+   },
+   "Lingben": {
+    "50": "8 famiglie 50cc indistinguibili"
+   },
+   "Linhai": {
+    "150": "due famiglie senza parentela col nome"
+   },
+   "Somoto": {
+    "GRX 125, GRX 250": "nessuna versione GRX nel catalogo"
+   }
+  }
+ }
+}

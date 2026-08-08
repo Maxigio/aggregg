@@ -285,8 +285,13 @@ test('l\'allestimento trova la sua famiglia, e la fonte lo dichiara', () => {
     assert.strictEqual(r.famigliaNome, atteso, `${ma} "${q}" → famiglia sbagliata`);
     assert.strictEqual(r.testo, q, 'il nome cercato deve viaggiare INTERO per restringere: e\' l\'allestimento');
   }
-  // I nomi troppo corti non agganciano: «e» prenderebbe ogni versione che comincia per «e».
-  assert.strictEqual(risolviNodo('auto', 'Honda', 'e').come, 'marca');
+  // I nomi troppo corti non agganciano PER EURISTICA — ma il ponte dei sotto-modelli
+  // (file curato, campagna V2) puo' dichiararli: «Honda e» E' la citycar elettrica,
+  // famiglia «Honda e» dell'indice, voce con prova. L'euristica resta vietata: il come
+  // deve dire «sotto-modello», mai «allestimento».
+  const he = risolviNodo('auto', 'Honda', 'e');
+  assert.ok(/^sotto-modello/.test(he.come), `Honda «e»: come=«${he.come}»`);
+  assert.strictEqual(he.famigliaNome, 'Honda e');
   // E niente scavalca i rami precisi: chi ha una famiglia sua se la tiene.
   assert.strictEqual(risolviNodo('auto', 'Audi', 'A3').come, 'famiglia');
   assert.strictEqual(risolviNodo('auto', 'Volkswagen', 'Golf').come, 'famiglia');

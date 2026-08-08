@@ -102,6 +102,34 @@ function ospiti() {
 }
 
 /**
+ * IL PONTE DEI SOTTO-MODELLI (data/ponte-sottomodelli.json): nomi del menu che da soli
+ * non risolvono nessuna famiglia — «BMW 318», «Suzuki V-Strom 650», «Piaggio Primavera» —
+ * agganciati alla famiglia giusta da un file curato A MANO: 454 candidati del dossier
+ * 2026-08-08 letti uno a uno, 422 accettati ognuno con la sua prova, i refutati scritti
+ * nel file perche' nessuno li riproponga (la «1750» non e' il motore 1750 TBi della 159,
+ * la «124 Coupè» non e' la Coupé del '93, i «… 125» Honda non sono lo scooter «@ 125»).
+ * File assente o illeggibile → nessun ponte, marca sola come prima.
+ */
+let SOTTOMODELLI = null;
+function sottomodelli() {
+  if (SOTTOMODELLI) return SOTTOMODELLI;
+  SOTTOMODELLI = new Map();
+  try {
+    const j = require('../../data/ponte-sottomodelli.json');
+    for (const [tipo, marche] of Object.entries(j)) {
+      if (tipo.startsWith('_')) continue;                 // nota e refutati
+      for (const [marca, voci] of Object.entries(marche || {})) {
+        for (const [nome, v] of Object.entries(voci || {})) {
+          if (v && Array.isArray(v.famiglie) && v.famiglie.length)
+            SOTTOMODELLI.set(`${tipo}|${norm(marca)}|${norm(nome)}`, v);
+        }
+      }
+    }
+  } catch (e) { console.warn('[subito-nodo] ponte dei sotto-modelli non letto: ' + e.message); }
+  return SOTTOMODELLI;
+}
+
+/**
  * Il catalogo a TRE livelli di Subito (marca → modello → versione), letto una volta e
  * indicizzato: per ogni marca, i token dei nomi-versione con il modello a cui appartengono.
  * E' la fonte che dichiara la parentela fra un allestimento e la sua famiglia; qui non si
@@ -260,6 +288,32 @@ function risolviNodo(tipo, marca, modello, opts = {}) {
   if (famEsatte.length) return perFamiglie(famEsatte);
   const genEsatta = gen.find(x => norm(x.g.nome) === cercato);
   if (genEsatta) return perGenerazione(genEsatta);
+
+  /**
+   * IL PONTE DEI SOTTO-MODELLI, dopo l'esatto e prima di OGNI euristica. Sta qui per due
+   * casi letti in negativo: «Mercedes V 220» agganciava per parola-intera la generazione
+   * «Classe S (W/V220)» — il codice telaio, non il furgone — e «Mini Cooper» prendeva la
+   * sola «Mini Cooper AE(J01)» elettrica lasciando fuori ~217 versioni a benzina: i rami
+   * larghi li risolvevano SBAGLIATI, e il file curato deve vincere su di loro (mai
+   * sull'esatto: se un giorno Subito avra' la famiglia «318», quella comanda).
+   * Le altre 420 voci non risolvono in nessun ramo (misurato: marca-sola), quindi qui
+   * non si scavalca nessuna risoluzione nativa giusta.
+   * Famiglia del file sparita dall'indice → avviso e si prosegue come prima.
+   */
+  const sm = sottomodelli().get(`${t}|${norm(marca)}|${norm(modello)}`);
+  if (sm) {
+    const perNomeFam = new Map(fam.map(f => [norm(f.nome), f]));
+    const scelte = sm.famiglie.map(x => perNomeFam.get(norm(x))).filter(Boolean);
+    if (scelte.length === sm.famiglie.length) {
+      const n = {
+        ...perFamiglie(scelte),
+        come: `sotto-modello (${String(modello).trim()} dentro ${scelte[0].nome}${scelte.length > 1 ? ' +' + (scelte.length - 1) : ''})`,
+      };
+      if (sm.testo) n.testo = String(sm.testo);
+      return n;
+    }
+    console.warn(`[subito-nodo] ponte sotto-modelli: famiglia sparita dall'indice per ${marca}/${modello}`);
+  }
 
   // PAROLA INTERA dentro un nome composto. Subito impacchetta piu' modelli in una voce
   // sola — "80/90/4000/Cabrio", "300/400" — e li' l'Audi 80 non si trova ne' esatta ne'
