@@ -171,7 +171,10 @@ test('il nascosto resta nascosto: si scopre solo la radice', () => {
   // nascoste finche' non servono: l'elenco vuoto dell'autocompletamento delle marche, il
   // bottone "Verifica →" della targa, e tutti e tre gli input dei Ricambi insieme invece del
   // solo modo scelto.
-  for (const [sel, quantiNascosti] of [['.search-fields', 2], ['#ricambiFields', 2], ['#versioniRow', 1]]) {
+  // #versioniRow ne nasconde 2 dal 2026-08-08: al bottone della targa si e' aggiunto
+  // l'elenco dell'autocompletamento della versione (#versioneAC), gemello di quelli di
+  // marca e modello che stanno nei 2 di .search-fields.
+  for (const [sel, quantiNascosti] of [['.search-fields', 2], ['#ricambiFields', 2], ['#versioniRow', 2]]) {
     const $ = cheerio.load(componente($index, sel));
     const radice = $('.guida-pezzo').children().first();
     assert.ok(!radice.hasClass('d-none') && !/display\s*:\s*none/.test(radice.attr('style') || ''),

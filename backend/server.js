@@ -46,6 +46,7 @@ const saved = require('./saved');
 const budget = require('./budget-richieste');     // quante richieste costa una ricerca: contate, non stimate
 const { risolviNodo, marcaPseudo } = require('./scrapers/subito-nodo');   // testo digitato → id del catalogo Subito
 const { unisciGemelli } = require('./menu-gemelli');   // due strade nel menu, la stessa lista
+const { versioniDi } = require('./versioni-menu');     // le versioni suggeribili, dal catalogo su disco
 const { agganciaSubito } = require('./scrapers/ponte-buchi'); // i modelli che il ponte non copriva
 const { codiciAs24, unisciCodici, famigliaSubito, famiglieSubito } = require('./scrapers/as24-modelli');   // traduzione di livello, nei due versi
 const { versioniAs24 } = require('./scrapers/as24-tassonomia');   // il catalogo versioni di AS24 (la sua tendina)
@@ -979,6 +980,21 @@ app.get('/api/carburanti', async (req, res) => {
     console.warn('[api/carburanti] KO:', e.message);
     res.json({ ok: false, motivo: 'prezzi non disponibili' });
   }
+});
+
+/**
+ * LE VERSIONI SUGGERIBILI per la tendina del campo Versione (richiesta del proprietario,
+ * 2026-08-08). Non un menu che sceglie un id: il campo resta testo libero e quello che
+ * scrivi va alle fonti com'e' — la tendina suggerisce i nomi che il catalogo Subito usa
+ * davvero per quella famiglia (disco, niente rete). Vedi backend/versioni-menu.js.
+ */
+app.get('/api/versioni', (req, res) => {
+  const tipo = String((req.query || {}).tipo || '');
+  const marca = String((req.query || {}).marca || '').trim();
+  const modello = String((req.query || {}).modello || '').trim();
+  if (!['auto', 'moto'].includes(tipo)) return res.status(400).json({ error: 'tipo deve essere "auto" o "moto"' });
+  if (!marca || !modello) return res.status(400).json({ error: 'marca e modello obbligatori' });
+  res.json({ versioni: versioniDi(tipo, marca, modello) });
 });
 
 app.get('/api/moto-versions', async (req, res) => {

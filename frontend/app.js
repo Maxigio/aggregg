@@ -424,6 +424,7 @@ async function init() {
   await populateMarca(currentTipo());
   setupMarcaAutocomplete();
   setupModelloAutocomplete();
+  setupVersioneAutocomplete();
   validateMarca();
 
   // PRIMA del ripristino, non dopo: `ripristinaModo()` rimette il radio su Moto e lancia il
@@ -895,11 +896,19 @@ function setupMarcaAutocomplete() {
     list.innerHTML = matches.map((b, i) => `<li class="ac-item${i === active ? ' active' : ''}" role="option" data-i="${i}">${escapeHtml(b.nome)}</li>`).join('');
     list.classList.remove('d-none');
     marcaSelect.setAttribute('aria-expanded', 'true');
+    // la lista ora e' INTERA e scorre: l'evidenziato deve restare in vista mentre si naviga
+    list.querySelector('.ac-item.active')?.scrollIntoView({ block: 'nearest' });
   };
   const pick = i => { if (matches[i]) { marcaSelect.value = matches[i].nome; close(); validateMarca(); if (modelloSelect) modelloSelect.value = ''; resetModelloVersione(); document.getElementById('modello')?.focus(); } };
 
-  marcaSelect.addEventListener('input', () => {
-    resetModelloVersione();
+  /**
+   * TUTTE LE VOCI, NON UN ASSAGGIO. C'era `slice(0, 8)`: la tendina mostrava otto marche
+   * con la scrollbar, e chi scorreva credeva di aver visto l'elenco — le altre esistevano
+   * solo se indovinavi le prime lettere. In una force-select l'elenco consultabile E'
+   * il contratto: si mostra tutto (la lista scorre da sola, max-height nel CSS) e a campo
+   * vuoto si apre l'elenco completo, come per il modello.
+   */
+  const compute = () => {
     const q = acn(marcaSelect.value);
     const brands = brandCache[currentTipo()] || [];
     if (q) {
@@ -910,11 +919,13 @@ function setupMarcaAutocomplete() {
         if (i >= 0) scored.push({ b, rank: n.startsWith(q) ? 0 : 1, i, n });
       }
       scored.sort((a, c) => a.rank - c.rank || a.i - c.i || a.n.localeCompare(c.n));
-      matches = scored.slice(0, 8).map(s => s.b);
-    } else matches = [];
+      matches = scored.map(s => s.b);
+    } else matches = brands;
     active = matches.length ? 0 : -1;
     render(); validateMarca();
-  });
+  };
+  marcaSelect.addEventListener('input', () => { resetModelloVersione(); compute(); });
+  marcaSelect.addEventListener('focus', compute);
   marcaSelect.addEventListener('keydown', e => {
     if (list.classList.contains('d-none') || !matches.length) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); active = (active + 1) % matches.length; render(); }
@@ -1003,6 +1014,7 @@ function setupModelloAutocomplete() {
     if (!matches.length) return close();
     list.innerHTML = matches.map((m, i) => `<li class="ac-item${i === active ? ' active' : ''}" role="option" data-i="${i}">${escapeHtml(m.nome)}</li>`).join('');
     list.classList.remove('d-none'); modelloSelect.setAttribute('aria-expanded', 'true');
+    list.querySelector('.ac-item.active')?.scrollIntoView({ block: 'nearest' });
   };
   const pickModel = async (m) => {
     selectedModel = { ...m, _marca: matchedBrand()?.nome || '' };
@@ -1016,12 +1028,15 @@ function setupModelloAutocomplete() {
     if (!brand) { matches = []; return close(); }
     const models = await loadModels(currentTipo(), brand.nome);
     const q = acn(modelloSelect.value);
+    // TUTTE le voci, non le prime dieci: c'era `slice(0, 10)` su entrambi i rami, e la
+    // scrollbar faceva credere di star scorrendo l'elenco intero mentre ne mostrava un
+    // assaggio. La lista scorre da sola (max-height nel CSS).
     if (q) {
       const scored = [];
       for (const m of models) { const n = acn(m.nome); const i = n.indexOf(q); if (i >= 0) scored.push({ m, rank: n.startsWith(q) ? 0 : 1, i, n }); }
       scored.sort((a, c) => a.rank - c.rank || a.i - c.i || a.n.localeCompare(c.n));
-      matches = scored.slice(0, 10).map(s => s.m);
-    } else matches = models.slice(0, 10);
+      matches = scored.map(s => s.m);
+    } else matches = models;
     active = matches.length ? 0 : -1; render();
   };
   modelloSelect.addEventListener('input', compute);
@@ -1036,6 +1051,70 @@ function setupModelloAutocomplete() {
   });
   list.addEventListener('mousedown', e => { const li = e.target.closest('.ac-item'); if (li) { e.preventDefault(); pickModel(matches[+li.dataset.i]); } });
   modelloSelect.addEventListener('blur', () => setTimeout(close, 150));
+}
+
+/**
+ * LA TENDINA DELLA VERSIONE (richiesta del proprietario, 2026-08-08): come marca e
+ * modello, testo libero + elenco consultabile. La differenza di contratto resta: qui
+ * scegliere NON seleziona un id — riempie il testo, che va alle fonti com'e'. I
+ * suggerimenti sono i nomi-versione del catalogo Subito per la famiglia scelta
+ * (/api/versioni, disco): se la famiglia non c'e', la tendina resta vuota e il campo
+ * e' testo libero puro, come prima.
+ */
+const versioniCache = {};   // `${tipo}|${marca}|${modello}` → [nomi]
+async function loadVersioni() {
+  if (!selectedModel) return [];
+  const marca = selectedModel._marca || (marcaSelect && marcaSelect.value) || '';
+  const key = `${currentTipo()}|${marca}|${selectedModel.nome}`;
+  if (!versioniCache[key]) {
+    try {
+      const res = await fetch(`/api/versioni?tipo=${encodeURIComponent(currentTipo())}&marca=${encodeURIComponent(marca)}&modello=${encodeURIComponent(selectedModel.nome)}`);
+      // stesso guard di loadModels: una risposta mancata non e' «questo modello non ha
+      // versioni» — non si memorizza il fallimento, al tasto dopo si riprova
+      if (!res.ok) return [];
+      const data = await res.json();
+      versioniCache[key] = data.versioni || [];
+    } catch (_) { return []; }
+  }
+  return versioniCache[key];
+}
+
+function setupVersioneAutocomplete() {
+  const list = document.getElementById('versioneAC');
+  if (!versioneInput || !list) return;
+  let matches = [], active = -1;
+  const close = () => { list.classList.add('d-none'); list.innerHTML = ''; active = -1; versioneInput.setAttribute('aria-expanded', 'false'); };
+  const render = () => {
+    if (!matches.length) return close();
+    list.innerHTML = matches.map((v, i) => `<li class="ac-item${i === active ? ' active' : ''}" role="option" data-i="${i}">${escapeHtml(v)}</li>`).join('');
+    list.classList.remove('d-none'); versioneInput.setAttribute('aria-expanded', 'true');
+    list.querySelector('.ac-item.active')?.scrollIntoView({ block: 'nearest' });
+  };
+  const pick = i => { if (matches[i] != null) { versioneInput.value = matches[i]; close(); } };
+  const compute = async () => {
+    if (!selectedModel) { matches = []; return close(); }
+    const versioni = await loadVersioni();
+    const q = acn(versioneInput.value);
+    if (q) {
+      const scored = [];
+      for (const v of versioni) { const n = acn(v); const i = n.indexOf(q); if (i >= 0) scored.push({ v, rank: n.startsWith(q) ? 0 : 1, i, n }); }
+      scored.sort((a, c) => a.rank - c.rank || a.i - c.i || a.n.localeCompare(c.n));
+      matches = scored.map(s => s.v);
+    } else matches = versioni;   // tutte, come per marca e modello: la lista scorre
+    active = matches.length ? 0 : -1; render();
+  };
+  versioneInput.addEventListener('input', compute);
+  versioneInput.addEventListener('focus', compute);
+  versioneInput.addEventListener('keydown', e => {
+    if (list.classList.contains('d-none') || !matches.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); active = (active + 1) % matches.length; render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = (active - 1 + matches.length) % matches.length; render(); }
+    else if (e.key === 'Enter') { if (active >= 0) { e.preventDefault(); pick(active); } }
+    else if (e.key === 'Tab') { if (active >= 0) pick(active); }
+    else if (e.key === 'Escape') { close(); }
+  });
+  list.addEventListener('mousedown', e => { const li = e.target.closest('.ac-item'); if (li) { e.preventDefault(); pick(+li.dataset.i); } });
+  versioneInput.addEventListener('blur', () => setTimeout(close, 150));
 }
 
 // ─── Raggruppamento ──────────────────────────────────────────────────────────
