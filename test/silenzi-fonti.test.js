@@ -15,6 +15,10 @@ const os = require('os');
 const fs = require('fs');
 const path = require('path');
 
+// Ogni ricerca salvata ha un padrone. Qui e' sempre lo stesso: l'isolamento fra persone si
+// prova in dati-per-persona.test.js.
+const U = 'owner';
+
 // ─── Il cancello: file illeggibile ≠ password non impostata ──────────────────
 test('auth: auth.json illeggibile chiude il cancello invece di aprirlo', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-auth-'));
@@ -140,18 +144,18 @@ test('saved: le fonti mute restano nel record e arrivano alla lista', () => {
   delete require.cache[require.resolve('../backend/saved')];
   const saved = require('../backend/saved');
   try {
-    const s = saved.addSaved({ label: 'Golf GTD', params: { tipo: 'auto', marca: 'Volkswagen' } });
+    const s = saved.addSaved(U, { label: 'Golf GTD', params: { tipo: 'auto', marca: 'Volkswagen' } });
     const ann = [{ url: 'https://www.subito.it/a', prezzo: 15000, titolo: 'Golf' }];
 
     // Controllo completo: nessuna fonte muta, e resta la data del controllo completo.
-    saved.recordCheck(s.id, ann, {});
-    const dopoPieno = saved.listSaved().find(x => x.id === s.id);
+    saved.recordCheck(U, s.id, ann, {});
+    const dopoPieno = saved.listSaved(U).find(x => x.id === s.id);
     assert.strictEqual(dopoPieno.fontiMute, null);
     assert.ok(dopoPieno.lastCheckedFull, 'un controllo completo si annota come tale');
 
     // Controllo con Autoscout muto: l'ora c'e', ma si sa che non e' completo.
-    saved.recordCheck(s.id, ann, { fontiMute: ['autoscout'] });
-    const dopoMuto = saved.listSaved().find(x => x.id === s.id);
+    saved.recordCheck(U, s.id, ann, { fontiMute: ['autoscout'] });
+    const dopoMuto = saved.listSaved(U).find(x => x.id === s.id);
     assert.deepStrictEqual(dopoMuto.fontiMute, ['autoscout'],
       'senza questo la scheda direbbe "controllata adesso, nessuna novita\'"');
     assert.strictEqual(dopoMuto.lastCheckedFull, dopoPieno.lastCheckedFull,
@@ -214,11 +218,11 @@ test('saved: un annuncio di un altro modello non genera avviso, ma resta fra i v
   delete require.cache[require.resolve('../backend/saved')];
   const saved = require('../backend/saved');
   try {
-    const s = saved.addSaved({ label: 'Beta R-12', params: { tipo: 'moto', marca: 'Beta', modello: 'R-12' } });
+    const s = saved.addSaved(U, { label: 'Beta R-12', params: { tipo: 'moto', marca: 'Beta', modello: 'R-12' } });
     // Primo giro: baseline silenziosa, nessun avviso per nessuno.
-    saved.recordCheck(s.id, [{ url: 'https://x/1', prezzo: 6000, titolo: 'Beta R-12', dichiarazione: 'esatto' }], {});
+    saved.recordCheck(U, s.id, [{ url: 'https://x/1', prezzo: 6000, titolo: 'Beta R-12', dichiarazione: 'esatto' }], {});
     // Secondo giro: due annunci nuovi, uno giusto e uno di un altro modello.
-    const alerts = saved.recordCheck(s.id, [
+    const alerts = saved.recordCheck(U, s.id, [
       { url: 'https://x/1', prezzo: 6000, titolo: 'Beta R-12', dichiarazione: 'esatto' },
       { url: 'https://x/2', prezzo: 5500, titolo: 'Beta RR 125', dichiarazione: 'altro-modello' },
       { url: 'https://x/3', prezzo: 6200, titolo: 'Beta R-12 2023', dichiarazione: 'senza-versione' },
@@ -227,7 +231,7 @@ test('saved: un annuncio di un altro modello non genera avviso, ma resta fra i v
     assert.ok(urls.includes('https://x/3'), 'il modello giusto senza versione dichiarata avvisa');
     assert.ok(!urls.includes('https://x/2'), 'l\'altro modello non suona: la ricerca salvata segue QUEL modello');
     // Ma e' stato visto: al giro dopo non deve arrivare come "nuovo".
-    const dopo = saved.getSaved(s.id);
+    const dopo = saved.getSaved(U, s.id);
     assert.ok(Object.prototype.hasOwnProperty.call(dopo.seen, 'https://x/2'),
       'non avvisare non vuol dire dimenticare');
   } finally {
@@ -485,18 +489,18 @@ test('saved: il clic segna letto SOLO quell\'avviso', () => {
   delete require.cache[require.resolve('../backend/saved')];
   const saved = require('../backend/saved');
   try {
-    const s = saved.addSaved({ label: 'Golf', params: { tipo: 'auto', marca: 'Volkswagen' } });
+    const s = saved.addSaved(U, { label: 'Golf', params: { tipo: 'auto', marca: 'Volkswagen' } });
     const ann = n => Array.from({ length: n }, (_, i) => ({ url: 'https://x/' + i, prezzo: 10000 + i, titolo: 'Golf ' + i }));
-    saved.recordCheck(s.id, ann(1), {});          // baseline
-    saved.recordCheck(s.id, ann(4), {});          // tre nuovi
-    assert.strictEqual(saved.listSaved().find(x => x.id === s.id).novita, 3);
+    saved.recordCheck(U, s.id, ann(1), {});          // baseline
+    saved.recordCheck(U, s.id, ann(4), {});          // tre nuovi
+    assert.strictEqual(saved.listSaved(U).find(x => x.id === s.id).novita, 3);
 
-    saved.markRead(s.id, 'https://x/1');
-    assert.strictEqual(saved.listSaved().find(x => x.id === s.id).novita, 2,
+    saved.markRead(U, s.id, 'https://x/1');
+    assert.strictEqual(saved.listSaved(U).find(x => x.id === s.id).novita, 2,
       'prima il clic su UNO faceva sparire tutta la coda');
     // Il bottone "segna tutti letti" resta, ma e' un gesto diverso e esplicito.
-    saved.markRead(s.id);
-    assert.strictEqual(saved.listSaved().find(x => x.id === s.id).novita, 0);
+    saved.markRead(U, s.id);
+    assert.strictEqual(saved.listSaved(U).find(x => x.id === s.id).novita, 0);
   } finally {
     if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
     delete require.cache[require.resolve('../backend/saved')];
@@ -662,8 +666,11 @@ test('province: una preferenza per una domanda sola', () => {
     assert.ok(!/carbProvincia\(\)/.test(corpoDi(APP, f)),
       `${f}...) legge di nuovo carbProvincia(): la tendina della benzina tornerebbe a spostare l'IPT`);
   }
+  // La chiave dev'essere SUA, e va sia letta sia scritta. Da quando le preferenze che cambiano
+  // i numeri seguono la persona e non il dispositivo, chi scrive e' `salvaPref` (browser +
+  // account); quello che si difende qui e' la chiave separata, non il verbo.
   assert.ok(/localStorage\.getItem\('amrPassProvincia'\)/.test(APP) &&
-            /localStorage\.setItem\('amrPassProvincia'/.test(APP),
+            /salvaPref\('amrPassProvincia'/.test(APP),
     'la provincia del passaggio non ha piu\' una preferenza sua');
   // E cambiandola, i conti gia' fatti con l'altra provincia si buttano invece di restare
   // a schermo con la sigla nuova sopra un importo vecchio.
@@ -907,16 +914,16 @@ test('annuncio: l\'identita\' non e\' l\'indirizzo, e il passato si converte', (
     // L'URL di Subito porta dentro il titolo scritto dal venditore.
     const urlPrima = 'https://www.subito.it/auto/ford-kuga-2-0-tdci-150-cv-titan-cagliari-651863039.htm';
     const urlDopo  = 'https://www.subito.it/auto/ford-kuga-2-0-tdci-150cv-PREZZO-TRATTABILE-cagliari-651863039.htm';
-    const s = saved.addSaved({ label: 'Kuga', params: { tipo: 'auto', marca: 'Ford' } });
+    const s = saved.addSaved(U, { label: 'Kuga', params: { tipo: 'auto', marca: 'Ford' } });
     // Baseline scritta con le chiavi VECCHIE, com'e' il file di chi aggiorna oggi.
-    saved.recordCheck(s.id, [{ fonte: 'subito', url: urlPrima, titolo: 'Kuga', prezzo: 12000 }]);
+    saved.recordCheck(U, s.id, [{ fonte: 'subito', url: urlPrima, titolo: 'Kuga', prezzo: 12000 }]);
 
     // Il venditore ritocca il titolo: URL nuovo, stesso annuncio. Prima era un falso "nuovo".
-    const dopo = saved.recordCheck(s.id, [{ fonte: 'subito', id: 'subito:651863039', url: urlDopo, titolo: 'Kuga', prezzo: 12000 }]);
+    const dopo = saved.recordCheck(U, s.id, [{ fonte: 'subito', id: 'subito:651863039', url: urlDopo, titolo: 'Kuga', prezzo: 12000 }]);
     assert.deepStrictEqual(dopo, [], 'un titolo ritoccato non e\' un annuncio nuovo');
 
     // E lo storico del prezzo e' sopravvissuto: un calo vero deve ancora suonare.
-    const calo = saved.recordCheck(s.id, [{ fonte: 'subito', id: 'subito:651863039', url: urlDopo, titolo: 'Kuga', prezzo: 10500 }]);
+    const calo = saved.recordCheck(U, s.id, [{ fonte: 'subito', id: 'subito:651863039', url: urlDopo, titolo: 'Kuga', prezzo: 10500 }]);
     assert.strictEqual(calo.length, 1, 'il calo deve suonare: senza la conversione la base di confronto era persa');
     assert.strictEqual(calo[0].motivo, 'calo');
   } finally {
@@ -1204,34 +1211,47 @@ test('saved: un elenco illeggibile non e\' un elenco vuoto, e non si riscrive da
   const vecchio = process.env.USER_DATA_PATH;
   process.env.USER_DATA_PATH = dir;
   delete require.cache[require.resolve('../backend/saved')];
+  const dbmod = require('../backend/utenti-db');
+  dbmod.chiudi();
   const saved = require('../backend/saved');
-  const file = path.join(dir, 'saved-searches.json');
+  const file = dbmod.percorso();
   try {
-    saved.addSaved({ label: 'Golf', params: { tipo: 'auto', marca: 'Volkswagen' } });
-    saved.addSaved({ label: 'Panda', params: { tipo: 'auto', marca: 'Fiat' } });
-    assert.strictEqual(saved.listSaved().length, 2);
+    saved.addSaved(U, { label: 'Golf', params: { tipo: 'auto', marca: 'Volkswagen' } });
+    saved.addSaved(U, { label: 'Panda', params: { tipo: 'auto', marca: 'Fiat' } });
+    assert.strictEqual(saved.listSaved(U).length, 2);
     assert.strictEqual(saved.ultimoErroreElenco(), null);
 
-    fs.writeFileSync(file, '{ non e" json ');
+    // Il magazzino si guasta. Si chiude prima, perche' il guasto che conta e' quello che si
+    // trova all'APERTURA: server riavviato, volume rimontato male, file finito sotto un backup.
+    dbmod.chiudi();
+    fs.writeFileSync(file, 'questo non e\' un database');
     const prima = fs.readFileSync(file);
-    assert.deepStrictEqual(saved.listSaved(), [], 'non si inventa niente: l\'elenco resta vuoto');
+
+    assert.deepStrictEqual(saved.listSaved(U), [], 'non si inventa niente: l\'elenco resta vuoto');
     assert.ok(saved.ultimoErroreElenco(), 'ma il guasto ha un nome, e la rotta lo porta a schermo');
     for (const scrivi of [
-      () => saved.addSaved({ label: 'X', params: { tipo: 'auto', marca: 'Audi' } }),
-      () => saved.removeSaved('qualunque'),
-      () => saved.markRead('qualunque'),
+      () => saved.addSaved(U, { label: 'X', params: { tipo: 'auto', marca: 'Audi' } }),
+      () => saved.removeSaved(U, 'qualunque'),
+      () => saved.markRead(U, 'qualunque'),
     ]) {
       assert.throws(scrivi, e => e.code === 'ELENCO_ILLEGGIBILE', 'chi scrive deve rifiutarsi');
     }
-    assert.strictEqual(Buffer.compare(prima, fs.readFileSync(file)), 0, 'il file non e\' stato toccato');
+    assert.strictEqual(Buffer.compare(prima, fs.readFileSync(file)), 0,
+      'il file non nostro e\' stato riscritto: quel che c\'era dentro e\' perso');
 
-    // Risanato: si riprende come prima, senza residui.
-    fs.writeFileSync(file, JSON.stringify([{ id: 'a', label: 'Golf', params: {}, alerts: [] }], null, 2));
-    assert.strictEqual(saved.listSaved().length, 1);
-    assert.strictEqual(saved.ultimoErroreElenco(), null);
-    saved.addSaved({ label: 'Y', params: { tipo: 'auto', marca: 'BMW' } });
-    assert.strictEqual(saved.listSaved().length, 2);
+    // Risanato: si riprende, e l'archivio di prima (se c'e') rientra a nome del proprietario.
+    dbmod.chiudi();
+    fs.rmSync(file, { force: true });
+    fs.writeFileSync(path.join(dir, 'saved-searches.json'),
+      JSON.stringify([{ id: 'a', label: 'Golf', params: {}, alerts: [] }], null, 2));
+    delete require.cache[require.resolve('../backend/saved')];   // la migrazione si fa una volta per processo
+    const saved2 = require('../backend/saved');
+    assert.strictEqual(saved2.ultimoErroreElenco(), null);
+    assert.strictEqual(saved2.listSaved('owner').length, 1, 'le ricerche di prima sono del proprietario');
+    saved2.addSaved('owner', { label: 'Y', params: { tipo: 'auto', marca: 'BMW' } });
+    assert.strictEqual(saved2.listSaved('owner').length, 2);
   } finally {
+    dbmod.chiudi();
     if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
     delete require.cache[require.resolve('../backend/saved')];
     fs.rmSync(dir, { recursive: true, force: true });

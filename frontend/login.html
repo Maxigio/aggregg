@@ -18,7 +18,8 @@
     }
     * { box-sizing: border-box; }
     body {
-      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px;
       font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text);
       padding: 20px; font-variant-numeric: tabular-nums; overflow: auto;
     }
@@ -48,8 +49,20 @@
     .tag-mo  { background: var(--t-mo-bg);  color: var(--t-mo-fg); }
     .claim { font-size: 0.8rem; color: var(--muted); margin-bottom: 18px; }
     label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
-    input[type=password] { width: 100%; font-size: 1rem; padding: 11px 12px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--text); }
-    input[type=password]:focus { outline: none; border-color: var(--accent); }
+    input[type=password], input[type=text], input[type=email] { width: 100%; font-size: 1rem; padding: 11px 12px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--text); }
+    input[type=password]:focus, input[type=text]:focus, input[type=email]:focus { outline: none; border-color: var(--accent); }
+    /* Chiedere un accesso: sta in una scheda a parte perche' un modulo dentro un altro modulo
+       non e' HTML valido, e perche' sono due gesti diversi — entrare e bussare. */
+    .chiedi { padding: 16px 24px; }
+    .chiedi > summary { list-style: none; cursor: pointer; font-size: 0.84rem; font-weight: 600; color: var(--accent); }
+    .chiedi > summary::-webkit-details-marker { display: none; }
+    .chiedi > summary:hover { text-decoration: underline; }
+    .chiedi .spiega { font-size: 0.78rem; color: var(--muted); line-height: 1.45; margin: 12px 0 4px; }
+    .chiedi button.submit { margin-top: 14px; }
+    .esito { display: none; margin-top: 12px; font-size: 0.82rem; border-radius: 5px; padding: 8px 10px; line-height: 1.4; }
+    .esito.show { display: block; }
+    .esito.no { color: var(--neg); background: var(--neg-bg); border: 1px solid var(--neg); }
+    .esito.si { color: var(--t-mo-fg); background: var(--t-mo-bg); border: 1px solid var(--t-mo-fg); }
     button.submit { width: 100%; margin-top: 16px; font-size: 1rem; font-weight: 700; padding: 12px; border: none; border-radius: 5px; background: var(--accent); color: #fff; cursor: pointer; }
     button.submit:hover { background: #1a5fcc; }
     .err { display: none; margin-top: 14px; font-size: 0.85rem; color: var(--neg); background: var(--neg-bg); border: 1px solid var(--neg); border-radius: 5px; padding: 8px 10px; }
@@ -104,6 +117,24 @@
       <button type="button" class="theme-toggle" id="themeBtn" title="Cambia tema" aria-label="Cambia tema">☾</button>
     </div>
   </form>
+
+  <details class="card chiedi" id="chiedi">
+    <summary>Non hai un accesso? Chiedilo</summary>
+    <form id="modReg" autocomplete="off">
+      <p class="spiega">
+        Lascia nome ed email: la richiesta arriva al proprietario, che decide lui. Se ti approva ti manda
+        un link con cui scegli la tua password — quindi qui non devi sceglierne nessuna.
+        L'email serve solo a farti riconoscere: non ti arriva niente, non viene controllata.
+      </p>
+      <label for="regNome">Nome e cognome</label>
+      <input type="text" id="regNome" name="nome" maxlength="60" autocomplete="name" required />
+      <label for="regEmail">Email</label>
+      <input type="email" id="regEmail" name="email" maxlength="120" autocomplete="email" required />
+      <button type="submit" class="submit" id="regVai">Manda la richiesta</button>
+      <div class="esito" id="regEsito"></div>
+    </form>
+  </details>
+
   <script>
     var e = new URLSearchParams(location.search).get('err');
     if (e) {
@@ -136,6 +167,41 @@
           '<a class="qr-link" href="' + d.url + '" target="_blank" rel="noopener noreferrer">' + d.url + '</a>';
         loaded = true;
       } catch (e) { qrBox.innerHTML = '<p class="qr-empty">Impossibile leggere l\'indirizzo.</p>'; }
+    });
+
+    // Chiedere un accesso. Nessuna password viaggia da qui: chi chiede non ne sceglie una,
+    // perche' fra la richiesta e l'approvazione possono passare giorni e quel nome, nel
+    // frattempo, puo' diventare di qualcun altro.
+    var modReg = document.getElementById('modReg');
+    var regEsito = document.getElementById('regEsito');
+    modReg.addEventListener('submit', async function (ev) {
+      ev.preventDefault();
+      var vai = document.getElementById('regVai');
+      var nome = document.getElementById('regNome').value;
+      var email = document.getElementById('regEmail').value;
+      vai.disabled = true;
+      regEsito.className = 'esito';
+      try {
+        var r = await fetch('/api/registrazione', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome: nome, email: email }),
+        });
+        var d = await r.json();
+        if (d && d.ok) {
+          modReg.querySelectorAll('input, button').forEach(function (x) { x.disabled = true; });
+          regEsito.textContent = 'Richiesta mandata. Adesso tocca al proprietario: se ti approva, '
+            + 'ti fa avere un link con cui scegli la tua password.';
+          regEsito.className = 'esito show si';
+          return;
+        }
+        vai.disabled = false;
+        regEsito.textContent = (d && d.error) || 'Non ha funzionato. Riprova.';
+        regEsito.className = 'esito show no';
+      } catch (err) {
+        vai.disabled = false;
+        regEsito.textContent = 'Non riesco a parlare col server. Riprova fra poco.';
+        regEsito.className = 'esito show no';
+      }
     });
   </script>
 </body>

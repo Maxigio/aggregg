@@ -47,6 +47,9 @@ function mount(app, deps = {}) {
   const chiaveLimite = deps.chiaveLimite || deps.clientIp || (req => req.ip || '');
   // Il body JSON si monta per-rotta in questa app, non globalmente: arriva da server.js.
   const json = deps.json || ((req, res, next) => next());
+  // DI CHI E' QUESTO PARCO. Prima competitor.json era uno per macchina: due persone che
+  // seguivano concorrenti diversi si sovrascrivevano elenco e raggruppamenti a vicenda.
+  const chiDi = deps.utenteDi || (req => req.authId || 'owner');
 
   // La CHIAVE di una voce e' `fonte:id`, non il solo id: Subito e Autoscout numerano
   // ognuno per conto suo (osservati AS24 a 4-7 cifre, Subito a 6-9), e i POST deduplicano
@@ -67,8 +70,8 @@ function mount(app, deps = {}) {
    * chiuso. Qui si chiude davvero: a file corrotto si risponde 503 e non si scrive.
    * Il controllo va fatto SUBITO dopo leggi(), nello stesso tick, mai dopo un await.
    */
-  function vociPerScrivere(res) {
-    const voci = C.leggi();
+  function vociPerScrivere(req, res) {
+    const voci = C.leggi(chiDi(req));
     if (C.leggi.ultimoErrore) {
       res.status(503).json({
         ok: false, corrotto: true,
@@ -81,7 +84,7 @@ function mount(app, deps = {}) {
 
   app.get('/api/competitor', (req, res) => {
     res.set('Cache-Control', 'no-store');
-    const voci = C.leggi();
+    const voci = C.leggi(chiDi(req));
     // Elenco vuoto per file corrotto ed elenco davvero vuoto sono due cose diverse, e chi
     // guarda deve saperlo PRIMA di incollare un link convinto di ripartire da zero.
     res.json({ ok: true, voci, erroreElenco: C.leggi.ultimoErrore || null });
@@ -109,7 +112,7 @@ function mount(app, deps = {}) {
     // vetrina, che la porta di sempre sa gia' risolvere.
     if (fonte !== 'subito' && fonte !== 'autoscout') return res.status(400).json({ ok: false, error: 'fonte non valida' });
     if (!/^\d{1,15}$/.test(id)) return res.status(400).json({ ok: false, error: 'id venditore non valido' });
-    const voci = vociPerScrivere(res); if (!voci) return;
+    const voci = vociPerScrivere(req, res); if (!voci) return;
     const gia = voci.find(v => v.fonte + ':' + v.id === fonte + ':' + id);
     if (gia) return res.status(409).json({ ok: false, error: `${gia.nome || 'Questo venditore'} e' gia' nell'elenco`, voce: gia });
     const nome = String(b.nome || '').trim().slice(0, 80) || `${fonte === 'subito' ? 'Venditore Subito' : 'Venditore Autoscout'} ${id}`;
@@ -123,7 +126,7 @@ function mount(app, deps = {}) {
       aggiunto: new Date().toISOString(),
     };
     voci.push(voce);
-    C.scrivi(voci);
+    C.scrivi(chiDi(req), voci);
     res.json({ ok: true, voce });
   });
 
@@ -133,7 +136,7 @@ function mount(app, deps = {}) {
     let voce;
     try { voce = await C.risolviVetrina(String(url)); }
     catch (e) { return res.status(400).json({ ok: false, error: e.message }); }
-    const voci = vociPerScrivere(res); if (!voci) return;
+    const voci = vociPerScrivere(req, res); if (!voci) return;
     const chiave = voce.fonte + ':' + voce.id;
     // Chi reincolla lo stesso link non sta sbagliando: sta chiedendo QUEL parco. Si dice
     // che c'era gia' e si rimanda la voce salvata, cosi' chi chiama puo' aprirla invece di
@@ -146,22 +149,26 @@ function mount(app, deps = {}) {
     voce.schedaLetta = true;                 // appena letta: non si rilegge al primo parco
     voce.aggiunto = new Date().toISOString();
     voci.push(voce);
-    C.scrivi(voci);
+    C.scrivi(chiDi(req), voci);
     res.json({ ok: true, voce });
   });
 
   app.delete('/api/competitor/:id', (req, res) => {
     const chiave = String(req.params.id);   // `fonte:id`, in un solo segmento
-    const voci = vociPerScrivere(res); if (!voci) return;
+    const voci = vociPerScrivere(req, res); if (!voci) return;
     const restanti = voci.filter(v => chiaveDi(v) !== chiave);
     if (restanti.length === voci.length) return res.status(404).json({ ok: false, error: 'non e\' nell\'elenco' });
-    C.scrivi(restanti);
+    C.scrivi(chiDi(req), restanti);
     res.json({ ok: true, tolti: voci.length - restanti.length });
   });
 
-  /** Il parco di UNA vetrina: cache, rilettura della scheda, annuncio intero. */
-  async function scaricaParco(chiave, forza) {
-    let voce = C.leggi().find(v => chiaveDi(v) === String(chiave));
+  /**
+   * Il parco di UNA vetrina: cache, rilettura della scheda, annuncio intero.
+   * L'utente arriva come argomento: qui dentro `req` non c'e', e l'elenco da cui si pesca la
+   * vetrina e' il SUO — non un elenco comune.
+   */
+  async function scaricaParco(utente, chiave, forza) {
+    let voce = C.leggi(utente).find(v => chiaveDi(v) === String(chiave));
     if (!voce) { const e = new Error('non e\' nell\'elenco'); e.stato = 404; throw e; }
     // Le vetrine salvate prima avevano tre campi: nome, dove, via. Ora la pagina ne da'
     // molti di piu' (telefoni, orari, valutazione, servizi, logo) e chi ce l'ha gia' in
@@ -175,7 +182,7 @@ function mount(app, deps = {}) {
         const fresca = await C.risolviVetrina(voce.url);
         // Rilettura: si rimappa per chiave composta, e MAI sopra un elenco illeggibile —
         // a file corrotto leggi() torna [] e la map scriverebbe un elenco di una voce sola.
-        const tutte = C.leggi();
+        const tutte = C.leggi(utente);
         /**
          * CHI HA OSSERVATO PRIMA NON DECIDE DOPO. `voce` e' stata letta PRIMA dell'await
          * qui sopra: in quei secondi un'altra richiesta puo' aver assegnato il gruppo alla
@@ -186,7 +193,7 @@ function mount(app, deps = {}) {
          */
         const attuale = tutte.find(v => chiaveDi(v) === String(chiave)) || voce;
         voce = { ...voce, ...fresca, id: attuale.id, mio: attuale.mio, aggiunto: attuale.aggiunto, gruppo: attuale.gruppo, schedaLetta: true };
-        if (!C.leggi.ultimoErrore) C.scrivi(tutte.map(v => (chiaveDi(v) === String(chiave) ? voce : v)));
+        if (!C.leggi.ultimoErrore) C.scrivi(utente, tutte.map(v => (chiaveDi(v) === String(chiave) ? voce : v)));
       } catch (_) { /* la vetrina non risponde: si va avanti con quello che c'e' */ }
     }
     const k = chiaveDi(voce);
@@ -239,7 +246,7 @@ function mount(app, deps = {}) {
       return res.status(429).json({ ok: false, error: limiteParco.messaggio(st, MSG_LIMITE), riprovaFra: st.attesa, restanti: 0 });
     }
     try {
-      const d = await scaricaParco(chiave, forza);
+      const d = await scaricaParco(chiDi(req), chiave, forza);
       res.json({ ok: true, ...d, scarichiRestanti: parcoRestanti(ip) });
     } catch (e) { res.status(e.stato || 500).json({ ok: false, error: e.message }); }
   });
@@ -252,12 +259,12 @@ function mount(app, deps = {}) {
   app.post('/api/competitor/:id/gruppo', json, (req, res) => {
     const chiave = String(req.params.id);   // `fonte:id`, come `con` nel body
     const con = req.body && req.body.con != null ? String(req.body.con) : null;
-    const voci = vociPerScrivere(res); if (!voci) return;
+    const voci = vociPerScrivere(req, res); if (!voci) return;
     const a = voci.find(v => chiaveDi(v) === chiave);
     if (!a) return res.status(404).json({ ok: false, error: 'non e\' nell\'elenco' });
     if (con == null) {
       a.gruppo = null;
-      C.scrivi(voci);
+      C.scrivi(chiDi(req), voci);
       return res.json({ ok: true, voci });
     }
     const b = voci.find(v => chiaveDi(v) === con);
@@ -266,7 +273,7 @@ function mount(app, deps = {}) {
     // Chi era gia' in uno dei due gruppi ci resta: unendo A a B si uniscono anche i loro.
     const vecchi = new Set([a.gruppo, b.gruppo].filter(Boolean));
     for (const v of voci) if (v === a || v === b || (v.gruppo && vecchi.has(v.gruppo))) v.gruppo = g;
-    C.scrivi(voci);
+    C.scrivi(chiDi(req), voci);
     res.json({ ok: true, gruppo: g, voci });
   });
 
@@ -281,7 +288,7 @@ function mount(app, deps = {}) {
    */
   app.get('/api/competitor/gruppo/:g/parco', async (req, res) => {
     const g = String(req.params.g);
-    const voci = C.leggi().filter(v => v.gruppo === g);
+    const voci = C.leggi(chiDi(req)).filter(v => v.gruppo === g);
     if (!voci.length) return res.status(404).json({ ok: false, error: 'gruppo vuoto' });
     const forza = String(req.query.forza || '') === '1';
     const ip = chiaveLimite(req);
@@ -303,7 +310,7 @@ function mount(app, deps = {}) {
         errori.push({ id: v.id, nome: v.nome, error: MSG_LIMITE });
         continue;
       }
-      try { parti.push(await scaricaParco(chiave, forza)); }
+      try { parti.push(await scaricaParco(chiDi(req), chiave, forza)); }
       catch (e) { errori.push({ id: v.id, nome: v.nome, error: e.message }); }
     }
     // Tutto rifiutato per budget e niente da mostrare: un "ok con zero veicoli" sembrerebbe

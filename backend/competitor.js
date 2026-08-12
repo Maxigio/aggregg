@@ -31,6 +31,7 @@ const zlib = require('zlib');
 const cheerio = require('cheerio');
 const fs = require('fs');
 const path = require('path');
+const dbmod = require('./utenti-db');
 
 const scrapeAs24 = require('./scrapers/autoscout-graphql');
 const scrapeSubito = require('./scrapers/subito-api');
@@ -54,30 +55,83 @@ function filePath() {
  * la perdita definitiva. Ora l'elenco resta vuoto (non si inventa niente) ma il guasto si
  * vede nel log, e `leggi.ultimoErrore` lo tiene per chi vuole mostrarlo.
  */
-function leggi() {
+/**
+ * IL PARCO E' DI CHI LO TIENE D'OCCHIO.
+ *
+ * `competitor.json` era UNO per macchina: due persone che seguivano concorrenti diversi si
+ * sovrascrivevano l'elenco e i raggruppamenti a vicenda, e nessuno se ne accorgeva finche' non
+ * spariva una vetrina. Adesso ogni persona ha la sua riga.
+ *
+ * Il file di prima entra una volta sola, a nome del proprietario — quelle vetrine le ha messe
+ * lui — e resta dov'e' come archivio.
+ */
+function chi(utente) {
+  const u = String(utente == null ? '' : utente).trim();
+  if (!u) throw new Error('competitor: manca l\'utente — ogni parco ha un padrone.');
+  return u;
+}
+
+let migrazioneFatta = false;
+function migraDalFile(d) {
+  if (migrazioneFatta) return;
+  migrazioneFatta = true;
+  if (Number(d.prepare('SELECT COUNT(*) AS n FROM parco').get().n) > 0) return;
   const p = filePath();
-  if (!fs.existsSync(p)) { leggi.ultimoErrore = null; return []; }
+  if (!fs.existsSync(p)) return;
   try {
     const j = JSON.parse(fs.readFileSync(p, 'utf8'));
-    leggi.ultimoErrore = null;
-    return Array.isArray(j.voci) ? j.voci : [];
+    const voci = Array.isArray(j.voci) ? j.voci : [];
+    if (!voci.length) return;
+    d.prepare('INSERT OR REPLACE INTO parco (utente, dati, aggiornato_il) VALUES (?,?,?)')
+      .run('owner', JSON.stringify(voci), Date.now());
+    console.log(`[competitor] ${voci.length} vetrine importate a nome del proprietario (${p} resta dov'e').`);
+  } catch (e) {
+    console.error(`[competitor] l'archivio ${p} non si legge (${e.message}): le vetrine di prima non sono state importate.`);
+  }
+}
+
+/**
+ * Un magazzino ILLEGGIBILE non e' un elenco ASSENTE, e dirlo cambia cosa succede dopo:
+ * rispondendo `[]` a entrambi, il pannello scriveva "nessun concessionario" su un elenco che
+ * c'era, e il gesto istintivo — reincollare un link — lo riscriveva con quella sola voce,
+ * rendendo la perdita definitiva. Ora l'elenco resta vuoto (non si inventa niente) ma il
+ * guasto si vede, e `leggi.ultimoErrore` lo tiene per chi vuole mostrarlo.
+ */
+function leggi(utente) {
+  const u = chi(utente);
+  const d = dbmod.apri();
+  if (!d) {
+    leggi.ultimoErrore = dbmod.guasto() || dbmod.stato();
+    console.error(`[competitor] magazzino non disponibile (${leggi.ultimoErrore}) — NON si sovrascrive da solo.`);
+    return [];
+  }
+  migraDalFile(d);
+  const r = d.prepare('SELECT dati FROM parco WHERE utente=?').get(u);
+  leggi.ultimoErrore = null;
+  if (!r) return [];
+  try {
+    const a = JSON.parse(r.dati);
+    return Array.isArray(a) ? a : [];
   } catch (e) {
     leggi.ultimoErrore = e.message;
-    console.error(`[competitor] elenco illeggibile (${e.message}) — NON si sovrascrive da solo: ${p}`);
+    console.error(`[competitor] l'elenco di ${u} non si rilegge (${e.message}).`);
     return [];
   }
 }
-/**
- * Scrittura ATOMICA: prima su `.tmp`, poi rename. `writeFileSync` sul file di destinazione
- * comincia troncandolo, quindi fra "il vecchio elenco non c'e' piu'" e "il nuovo e' scritto"
- * esiste una finestra in cui il file e' a zero byte — e questo file sta su un SSD esterno che
- * si puo' staccare. E' la stessa cura che saved.js:43 usa gia' per le ricerche salvate.
- */
-function scrivi(voci) {
-  const p = filePath();
-  const tmp = p + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify({ aggiornato: new Date().toISOString(), voci }, null, 1));
-  fs.renameSync(tmp, p);
+
+/** Chi scrive su un magazzino che non si apre si ferma: non riscrive cio' che non ha letto. */
+function scrivi(utente, voci) {
+  const u = chi(utente);
+  const d = dbmod.apri();
+  if (!d) {
+    const e = new Error(`elenco dei concorrenti non disponibile (${dbmod.guasto() || dbmod.stato()})`);
+    e.code = 'ELENCO_ILLEGGIBILE';
+    throw e;
+  }
+  migraDalFile(d);
+  d.prepare('INSERT INTO parco (utente, dati, aggiornato_il) VALUES (?,?,?)'
+    + ' ON CONFLICT(utente) DO UPDATE SET dati=excluded.dati, aggiornato_il=excluded.aggiornato_il')
+    .run(u, JSON.stringify(voci), Date.now());
   return voci;
 }
 

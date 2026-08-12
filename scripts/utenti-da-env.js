@@ -207,11 +207,18 @@ function applica({ admin, voci }, env) {
   const file = auth.setPassword(admin);                      // per primo: gli altri hanno bisogno che il file esista
   for (const v of voci) auth.setPersona(v.nome, v.pw, v.ruolo);
   const tenuti = new Set(voci.map(v => v.id));
-  const tolti = auth.persone().map(p => p.id).filter(id => !tenuti.has(id));
+  // CHI E' ENTRATO DALL'ALTRA PORTA NON E' UN DIMENTICATO.
+  // Lo specchio del .env vale per chi dal .env e' arrivato. Da quando le persone possono
+  // registrarsi da sole ed essere approvate (`auth.creaPersona`, origine 'web'), toglierle qui
+  // vorrebbe dire che il primo giro di gestione utenti cancella tutti gli iscritti — e i loro
+  // dati restano nel magazzino senza piu' un padrone che possa entrare a prenderli.
+  const persone = auth.persone();
+  const daWeb = persone.filter(p => p.origine === 'web').map(p => p.id);
+  const tolti = persone.filter(p => p.origine !== 'web' && !tenuti.has(p.id)).map(p => p.id);
   for (const id of tolti) auth.togliPersona(id);
   const demoTolta = auth.togliDemoCondiviso();
   const copie = copiaAltrove(file, dest, env);
-  return { file, tolti, demoTolta, copie };
+  return { file, tolti, daWeb, demoTolta, copie };
 }
 
 function principale(argv) {
@@ -228,10 +235,12 @@ function principale(argv) {
   const dest = destinazioni(process.env);
 
   if (prova) {
-    const restano = auth.persone().map(p => p.id);
+    const persone = auth.persone();
     const tenuti = new Set(piano.voci.map(v => v.id));
-    const tolti = restano.filter(id => !tenuti.has(id));
+    const daWeb = persone.filter(p => p.origine === 'web').map(p => p.id);
+    const tolti = persone.filter(p => p.origine !== 'web' && !tenuti.has(p.id)).map(p => p.id);
     if (tolti.length) console.log(`Verrebbero tolti: ${tolti.join(', ')}`);
+    if (daWeb.length) console.log(`Restano comunque (registrati dal web, non stanno nel .env): ${daWeb.join(', ')}`);
     if (dest.length) {
       console.log('Le credenziali finirebbero anche in:');
       for (const d of dest) console.log(`  ${d.dove}${d.remota ? '  (via ssh)' : ''}`);
@@ -248,6 +257,7 @@ function principale(argv) {
   console.log(`Scritto in ${esito.file}`);
   for (const c of esito.copie) console.log(`  → ${c.dove}: ${c.esito}`);
   if (esito.tolti.length) console.log(`Tolti (non entrano piu'): ${esito.tolti.join(', ')}`);
+  if (esito.daWeb.length) console.log(`Lasciati stare (registrati dal web): ${esito.daWeb.join(', ')}`);
   if (esito.demoTolta) console.log('Password demo condivisa ritirata.');
   console.log('Tutte le sessioni aperte sono scadute: chi era dentro rifa il login.');
   const falliti = esito.copie.filter(c => c.esito !== 'copiato');

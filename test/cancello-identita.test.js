@@ -1,0 +1,213 @@
+'use strict';
+/**
+ * IL CANCELLO GUARDA CHI SEI, NON CHE RUOLO HAI.
+ *
+ * La regola di prima — "ruolo demo = sola lettura" — era l'unica possibile finche' il demo era
+ * una password condivisa senza un nome. Da quando le persone si registrano, quella regola e' il
+ * contrario di quel che serve: un iscritto DEVE poter salvare le sue ricerche.
+ *
+ * Qui si prova la regola nuova, e soprattutto i suoi confini:
+ *   · il proprietario e' un'identita' PIU' un ruolo, mai l'id da solo;
+ *   · una persona con un nome scrive, ma non tocca le cose che esistono in una copia sola;
+ *   · l'ospite anonimo resta in sola lettura;
+ *   · i prefissi coprono anche il percorso SENZA slash finale (`/api/richieste` e' l'elenco con
+ *     nome, email e indirizzo di tutti quelli che hanno chiesto di entrare);
+ *   · la grafia non apre e non chiude niente: si decide su un percorso normalizzato.
+ */
+const os = require('node:os');
+const fs = require('node:fs');
+const path = require('node:path');
+const { test } = require('node:test');
+const assert = require('node:assert');
+
+process.env.AMR_LOG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-log-cancello-'));
+process.env.USER_DATA_PATH = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-cancello-'));
+
+const auth = require('../backend/auth');
+const dbmod = require('../backend/utenti-db');
+const srv = require('../backend/server');
+
+auth.setPassword('gateprova1');
+auth.setPersona('Anna Ospite', 'annaospi1', 'demo');
+auth.setPersona('Bruno Collega', 'brunocol1', 'full');
+
+const cookieDi = (ruolo, id) => `amr_auth=${auth.makeToken(ruolo, id)}`;
+const PROPRIETARIO = cookieDi('full', 'owner');
+const REGISTRATA = cookieDi('demo', 'anna-ospite');
+const COLLEGA = cookieDi('full', 'bruno-collega');
+const ANONIMO = cookieDi('demo', 'demo');
+
+function chiama(cookie, metodo, percorso, accept) {
+  const res = {
+    statusCode: 200, redirectTo: null, corpo: null,
+    status(c) { this.statusCode = c; return this; },
+    json(b) { this.corpo = b; return this; },
+    send(b) { this.corpo = b; return this; },
+    redirect(c, u) { this.statusCode = c; this.redirectTo = u; return this; },
+    setHeader() {}, set() { return this; },
+  };
+  let passato = false;
+  const req = { method: metodo, path: percorso, headers: { cookie }, ip: '203.0.113.9' };
+  if (accept) req.headers.accept = accept;
+  srv._gateAuth(req, res, () => { passato = true; });
+  return { passato, status: res.statusCode, dove: res.redirectTo, corpo: res.corpo, req };
+}
+
+// Tutto quello che esiste in UNA copia sola per macchina, e che quindi non puo' essere di
+// nessun altro. Ogni voce va provata anche SENZA slash finale.
+const DELLA_MACCHINA = [
+  '/api/logs',
+  '/api/richieste', '/api/richieste/12/approva', '/api/persone/anna-ospite/revoca',
+  '/richieste',
+  '/api/subito/bootstrap', '/api/subito/keep-alive',
+  '/api/crawl/lease', '/api/worker/bundle.js',
+];
+
+test('cancello: il proprietario passa dappertutto', () => {
+  for (const p of DELLA_MACCHINA) {
+    assert.strictEqual(chiama(PROPRIETARIO, 'GET', p).passato, true, `il proprietario e' stato fermato su ${p}`);
+  }
+  assert.strictEqual(chiama(PROPRIETARIO, 'POST', '/api/saved').passato, true);
+});
+
+test('cancello: chi ha un nome puo\' SCRIVERE le sue cose', () => {
+  // E' il rovesciamento: prima "ruolo demo" voleva dire nessuna scrittura, e un iscritto non
+  // avrebbe potuto salvare niente. L'isolamento fra persone non lo fa il cancello — da qui non
+  // si vede di chi e' una riga — lo fa lo strato dati.
+  for (const [m, p] of [['POST', '/api/saved'], ['DELETE', '/api/saved/abc'], ['POST', '/api/saved/abc/read'],
+                        ['POST', '/api/competitor'], ['DELETE', '/api/competitor/7'], ['GET', '/api/saved']]) {
+    const r = chiama(REGISTRATA, m, p);
+    assert.strictEqual(r.passato, true, `la persona registrata e' stata fermata su ${m} ${p}`);
+  }
+  // E il cancello le mette in mano la sua identita', che e' quella che filtrera' le righe.
+  assert.deepStrictEqual(
+    [chiama(REGISTRATA, 'GET', '/api/saved').req.authId, chiama(REGISTRATA, 'GET', '/api/saved').req.authRole],
+    ['anna-ospite', 'demo']);
+});
+
+test('cancello: chi ha un nome NON tocca le cose della macchina, in nessuna grafia', () => {
+  for (const p of DELLA_MACCHINA) {
+    for (const grafia of [p, p + '/', p.toUpperCase(), p.replace(/^\/api/, '/API')]) {
+      const r = chiama(REGISTRATA, 'GET', grafia);
+      assert.strictEqual(r.passato, false, `la persona registrata e' passata su ${grafia}`);
+      assert.strictEqual(r.status, 403, `${grafia} doveva dare 403, ha dato ${r.status}`);
+    }
+  }
+  // Il prefisso senza slash e' il caso che si dimentica: `startsWith('/api/richieste/')` da solo
+  // lascerebbe fuori proprio l'elenco.
+  assert.strictEqual(chiama(REGISTRATA, 'GET', '/api/richieste').status, 403);
+  // Chi naviga con un browser non deve vedere del JSON: la pagina lo rimanda all'app.
+  const html = chiama(REGISTRATA, 'GET', '/richieste', 'text/html');
+  assert.strictEqual(html.status, 302);
+  assert.strictEqual(html.dove, '/');
+});
+
+test('cancello: un collega "full" non e\' il proprietario', () => {
+  // Il ruolo pieno vuol dire "puo' scrivere", non "e' la sua macchina": il registro degli
+  // accessi contiene le ricerche e gli indirizzi di tutti, e la sessione del portale e' una sola.
+  assert.strictEqual(chiama(COLLEGA, 'GET', '/api/logs').passato, false);
+  assert.strictEqual(chiama(COLLEGA, 'GET', '/api/richieste').passato, false);
+  assert.strictEqual(chiama(COLLEGA, 'POST', '/api/subito/bootstrap').passato, false);
+  // Ma tutto il resto e' suo come prima.
+  assert.strictEqual(chiama(COLLEGA, 'POST', '/api/saved').passato, true);
+  assert.strictEqual(chiama(COLLEGA, 'GET', '/api/search').passato, true);
+});
+
+test('cancello: l\'ospite ANONIMO resta in sola lettura', () => {
+  // Senza un nome non si sa di chi sarebbe la riga che salva: e' l'unico motivo per cui la
+  // sola lettura esisteva, e per lui vale ancora.
+  for (const [m, p] of [['POST', '/api/saved'], ['GET', '/api/saved'], ['POST', '/api/competitor'],
+                        ['DELETE', '/api/competitor/7'], ['GET', '/API/SAVED'], ['GET', '/api/saved/']]) {
+    const r = chiama(ANONIMO, m, p);
+    assert.strictEqual(r.passato, false, `l'ospite anonimo e' passato su ${m} ${p}`);
+    assert.strictEqual(r.status, 403);
+  }
+  assert.strictEqual(chiama(ANONIMO, 'GET', '/api/search').passato, true, 'guardare deve poterlo fare');
+  assert.strictEqual(chiama(ANONIMO, 'POST', '/api/report').passato, true, 'segnalare un problema anche');
+  assert.strictEqual(chiama(ANONIMO, 'POST', '/api/report-pdf').passato, true, 'e stampare cio\' che ha gia\' a schermo');
+
+  // Il cookie che nessun login produce ma che si puo' costruire a mano: ruolo 'demo' con id
+  // 'owner' (il valore predefinito di makeToken). Nel dubbio, la porta piu' stretta.
+  const chimera = cookieDi('demo', 'owner');
+  assert.strictEqual(chiama(chimera, 'POST', '/api/saved').passato, false, 'ruolo demo con id owner non e\' il proprietario');
+  assert.strictEqual(chiama(chimera, 'GET', '/api/logs').passato, false);
+});
+
+test('cancello: la grafia non apre e non chiude le porte pubbliche', () => {
+  assert.strictEqual(srv._percorsoGate('/API/Saved/'), '/api/saved');
+  assert.strictEqual(srv._percorsoGate('/invito/'), '/invito');
+  assert.strictEqual(srv._percorsoGate('/'), '/');
+  assert.strictEqual(srv._percorsoGate('///'), '/');
+
+  // `/invito/` — lo slash che il telefono aggiunge incollando — deve arrivare alla pagina, non
+  // al login: chi apre un invito una password non ce l'ha ancora.
+  for (const p of ['/invito', '/invito/', '/INVITO', '/login/', '/api/registrazione/']) {
+    assert.strictEqual(chiama('amr_auth=niente', 'GET', p).passato, true, `${p} doveva restare pubblica`);
+  }
+  // E cio' che pubblico non e', non lo diventa cambiando le maiuscole.
+  assert.strictEqual(chiama('amr_auth=niente', 'GET', '/api/search').status, 401);
+  assert.strictEqual(chiama('amr_auth=niente', 'GET', '/API/RICHIESTE').status, 401);
+});
+
+// ── Il tetto giornaliero ─────────────────────────────────────────────────────
+
+function tetto(authId, authRole) {
+  const res = {
+    statusCode: 200, corpo: null,
+    status(c) { this.statusCode = c; return this; },
+    json(b) { this.corpo = b; return this; }, setHeader() {},
+  };
+  let passato = false;
+  srv._tettoGiornaliero({ authId, authRole, method: 'GET', path: '/api/search', headers: {} }, res, () => { passato = true; });
+  return { passato, status: res.statusCode, corpo: res.corpo };
+}
+
+test('tetto: scatta alla ricerca dopo l\'ultima concessa, e riparte il giorno dopo', () => {
+  dbmod.chiudi();
+  const p = dbmod.percorso();
+  for (const f of [p, p + '-wal', p + '-shm']) { try { fs.rmSync(f, { force: true }); } catch { /* non c'era */ } }
+  const MAX = srv._TETTO_GIORNALIERO;
+
+  for (let i = 1; i <= MAX; i++) {
+    assert.strictEqual(tetto('anna-ospite', 'demo').passato, true, `la ricerca numero ${i} doveva passare`);
+  }
+  const oltre = tetto('anna-ospite', 'demo');
+  assert.strictEqual(oltre.passato, false, `la ricerca numero ${MAX + 1} doveva essere fermata`);
+  assert.strictEqual(oltre.status, 429);
+  assert.match(oltre.corpo.error, /riparte domani/i, 'il messaggio deve dire QUANDO si riprova');
+  assert.strictEqual(dbmod.ricercheOggi('anna-ospite'), MAX, 'una ricerca rifiutata non deve addebitarsi');
+
+  // Il conto e' per persona e per giorno: un altro nome parte da zero, e domani anche lei.
+  assert.strictEqual(tetto('carlo-altro', 'demo').passato, true);
+  const domani = Date.now() + 24 * 60 * 60 * 1000;
+  assert.strictEqual(dbmod.consumaRicerca('anna-ospite', MAX, domani).ok, true, 'domani il conto riparte');
+});
+
+test('tetto: il proprietario e i colleghi non hanno tetto', () => {
+  // E' la loro macchina: il tetto serve a proteggerla dagli ospiti, non a limitarli.
+  for (let i = 0; i < srv._TETTO_GIORNALIERO + 5; i++) {
+    assert.strictEqual(tetto('owner', 'full').passato, true);
+    assert.strictEqual(tetto('bruno-collega', 'full').passato, true);
+  }
+  assert.strictEqual(dbmod.ricercheOggi('owner'), 0, 'del proprietario non si tiene nemmeno il conto');
+  // E l'ospite anonimo non ha un nome a cui addebitare: passa, ma non scrive niente e non
+  // salva niente (il cancello gli nega tutto il resto).
+  assert.strictEqual(tetto('demo', 'demo').passato, true);
+  assert.strictEqual(dbmod.ricercheOggi('demo'), 0);
+});
+
+test('tetto: se il magazzino non si apre, l\'ospite si ferma — non passa "perche\' non si sa"', () => {
+  const vecchio = process.env.USER_DATA_PATH;
+  try {
+    dbmod.chiudi();
+    process.env.USER_DATA_PATH = path.join(os.tmpdir(), `amr-magazzino-sparito-${process.pid}`);
+    const r = tetto('anna-ospite', 'demo');
+    assert.strictEqual(r.passato, false, 'un contatore che non si legge non e\' un contatore a zero');
+    assert.strictEqual(r.status, 503);
+    // Il proprietario invece non passa nemmeno di qui: l'app non si blocca per lui.
+    assert.strictEqual(tetto('owner', 'full').passato, true);
+  } finally {
+    dbmod.chiudi();
+    if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
+  }
+});

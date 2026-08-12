@@ -97,6 +97,111 @@ let lastSearchParams = null;
 let savedSearches  = [];
 let sliderGlobalBounds = [0, 0];
 let myRole         = 'full';
+// CHI SONO, non solo con che ruolo. 'demo' come id e' l'ospite anonimo della vecchia password
+// condivisa; una persona registrata ha il suo. Il proprietario e' id 'owner' con ruolo 'full',
+// e solo lui vede i comandi che valgono per tutta la macchina.
+let myId           = 'owner';
+let sonoProprietario = true;
+
+/**
+ * ─── LE MIE COSE: il server e' la verita', il browser la copia veloce ──────────
+ *
+ * Annunci salvati, ricambi salvati, codici preferiti e impostazioni di prezzo vivevano solo qui
+ * dentro, cioe' PER DISPOSITIVO: salvati dall'iMac, dal telefono non c'erano. Adesso salgono al
+ * proprio account e si ritrovano da qualsiasi parte.
+ *
+ * Il localStorage NON si toglie: resta come cache e come rete di sicurezza quando il server non
+ * risponde. E finche' non si sa cosa c'e' di la' (`mieiPronti`) non si manda su niente — senno'
+ * la prima apertura, con lo schermo ancora vuoto, cancellerebbe quello che c'e' sul server.
+ */
+let mieiPronti = false;
+const MIEI_ATTESA = 800;          // una raffica di clic diventa un invio solo
+const mieiTimer = {};
+let mieiKo = false;               // l'ultimo invio non e' arrivato: lo si dice una volta sola
+
+function mieiManda(genere, elenco) {
+  if (!mieiPronti) return;
+  clearTimeout(mieiTimer[genere]);
+  mieiTimer[genere] = setTimeout(() => {
+    fetch(`/api/miei/elenco/${genere}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ elenco }),
+    }).then(r => {
+      if (r.ok) { mieiKo = false; return; }
+      if (!mieiKo) { mieiKo = true; console.warn(`[miei] "${genere}" non salvato sul server (${r.status}): resta su questo dispositivo.`); }
+    }).catch(() => {
+      if (!mieiKo) { mieiKo = true; console.warn(`[miei] "${genere}" non salvato sul server: resta su questo dispositivo.`); }
+    });
+  }, MIEI_ATTESA);
+}
+
+function mieiPreferenza(chiave, valore) {
+  if (!mieiPronti) return;
+  clearTimeout(mieiTimer['p:' + chiave]);
+  mieiTimer['p:' + chiave] = setTimeout(() => {
+    fetch(`/api/miei/preferenze/${encodeURIComponent(chiave)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ valore: String(valore == null ? '' : valore) }),
+    }).catch(() => {});
+  }, MIEI_ATTESA);
+}
+
+/** Scrive una preferenza nel browser E sul proprio account: un gesto solo, due posti. */
+function salvaPref(chiave, valore) {
+  try {
+    if (valore == null || valore === '') localStorage.removeItem(chiave);
+    else localStorage.setItem(chiave, String(valore));
+  } catch (_) {}
+  mieiPreferenza(chiave, valore);
+}
+
+/**
+ * Il primo contatto col proprio account, all'apertura.
+ *
+ * Tre strade, e la differenza fra la seconda e la terza e' quella che fa perdere i dati alla
+ * gente: "il server dice che non ho niente" e "il server non me lo ha detto" non sono la stessa
+ * cosa. Nel dubbio non si manda su niente e non si cancella niente.
+ */
+async function mieiCarica() {
+  let d = null;
+  try { d = await fetch('/api/miei').then(r => (r.ok ? r.json() : null)); } catch (_) { d = null; }
+  if (!d || d.guasto) {
+    console.warn('[miei] i dati del mio account non si leggono: tengo quelli di questo dispositivo e non tocco niente.');
+    return;                                  // mieiPronti resta falso: nessun invio
+  }
+  const s = d.salvataggi || {};
+  const p = d.preferenze || {};
+  const serverVuoto = !(s.annuncio || []).length && !(s.ricambio || []).length
+    && !(s.oem || []).length && !Object.keys(p).length;
+
+  if (!serverVuoto) {
+    // Il server vince: e' quello che ritrovo da qualunque dispositivo.
+    if (Array.isArray(s.annuncio)) { salvati = s.annuncio; persistSalvatiLocale(); }
+    if (Array.isArray(s.ricambio)) { salvatiRicambi = s.ricambio; rcPersistSalvatiLocale(); }
+    if (Array.isArray(s.oem)) { oemFav = s.oem; rcPersistFavLocale(); }
+    for (const [k, v] of Object.entries(p)) { try { localStorage.setItem(k, v); } catch (_) {} }
+    if (p.amr_price_v) priceCfgV = loadPriceCfg('amr_price_v');
+    if (p.amr_price_r) priceCfgR = loadPriceCfg('amr_price_r');
+    mieiPronti = true;
+    // Ridisegnare e' l'ultimo gesto e il meno importante: se una di queste inciampa, i dati
+    // sono comunque arrivati e il primo clic li fa comparire. Non deve portarsi dietro tutto.
+    try { aggiornaContatoreSalvati(); renderSalvati(); renderRicambiFavTab(); }
+    catch (e) { console.warn('[miei] dati caricati, ridisegno incompleto:', e.message); }
+    return;
+  }
+
+  // Sul mio account non c'e' ancora niente: e' il primo accesso dopo l'aggiornamento. Quello che
+  // c'e' in questo browser SALE, e la copia locale resta dov'e': se l'invio non arriva, non si e'
+  // perso niente e al prossimo giro ci riprova.
+  mieiPronti = true;
+  if (salvati.length) mieiManda('annuncio', salvati.slice(-SALVATI_CAP));
+  if (salvatiRicambi.length) mieiManda('ricambio', salvatiRicambi.slice(0, RC_SALVATI_CAP));
+  if (oemFav.length) mieiManda('oem', oemFav.slice(0, RC_FAV_CAP));
+  for (const k of ['amr_price_v', 'amr_price_r', 'amrCarbProvincia', 'amrCarbKm', 'amrPassProvincia']) {
+    let v = null; try { v = localStorage.getItem(k); } catch (_) {}
+    if (v) mieiPreferenza(k, v);
+  }
+}
 let searchActive   = false;                     // true dopo una ricerca → la toolbar può apparire
 const COMPARE_CAP  = 10;
 
@@ -125,7 +230,12 @@ function icon(name, cls = '') {
 // `pricing`/`priceAdjActive`/`PRICE_DEFAULT` arrivano da pricing.js (globale). Stato per contesto,
 // persistito in localStorage. Applicato coerentemente a righe/stats/slider/export.
 function loadPriceCfg(key) { try { return Object.assign({}, PRICE_DEFAULT, JSON.parse(localStorage.getItem(key) || '{}')); } catch (_) { return Object.assign({}, PRICE_DEFAULT); } }
-function savePriceCfg(key, cfg) { try { localStorage.setItem(key, JSON.stringify(cfg)); } catch (_) {} }
+function savePriceCfg(key, cfg) {
+  try { localStorage.setItem(key, JSON.stringify(cfg)); } catch (_) {}
+  // Sono le cifre che finiscono stampate sul PDF del cliente: trovarne di diverse su un altro
+  // computer vorrebbe dire due preventivi diversi per lo stesso mezzo.
+  mieiPreferenza(key, JSON.stringify(cfg));
+}
 let priceCfgV = loadPriceCfg('amr_price_v');   // veicoli (auto/moto)
 let priceCfgR = loadPriceCfg('amr_price_r');   // ricambi
 // Il costo del passaggio e' un dato del SINGOLO annuncio: dipende da potenza e provincia di
@@ -390,6 +500,21 @@ function sincronizzaFiltriAuto(tipo) {
  * Via anche `setSearchMode('cerca')`: girava DOPO `ripristinaModo()` e riportava l'ospite
  * su Auto a ogni ricaricamento, buttando via il modo in cui stava lavorando.
  */
+/**
+ * Quello che NON e' del proprietario sparisce dallo schermo.
+ *
+ * Non e' cosmesi: la sessione del portale e' una sola per macchina e il CAPTCHA lo risolve chi
+ * e' fisicamente davanti al Mac, quindi «Aggiorna sessione» premuto da un ospite non poteva
+ * funzionare — apriva una finestra a casa di qualcun altro. Lasciare a schermo un comando che
+ * prende 403 e' peggio che non averlo: sembra un guasto.
+ */
+function applySoloProprietario() {
+  document.body.classList.add('non-proprietario');
+  ['btnBootstrapSubito', 'btnRichieste'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+}
+
 function applyDemoMode() {
   document.body.classList.add('demo-mode');
   ['btnSalvaRicerca', 'btnControllaTutte'].forEach(id => {
@@ -459,7 +584,14 @@ async function init() {
   try {
     const me = await fetch('/api/me').then(r => (r.ok ? r.json() : null)).catch(() => null);
     if (me && me.role) myRole = me.role;
-    if (myRole === 'demo') applyDemoMode();
+    if (me) { myId = me.id || null; sonoProprietario = me.proprietario === true; }
+    if (sonoProprietario) { const r = document.getElementById('btnRichieste'); if (r) r.style.display = ''; }
+    // SOLA LETTURA E' DELL'OSPITE ANONIMO, non del ruolo. La vecchia password demo era
+    // condivisa e senza un nome: qualunque cosa avesse salvato sarebbe finita in un mucchio
+    // comune, quindi non salvava niente. Chi si e' registrato ha un nome suo e le sue righe,
+    // e i comandi di salvataggio devono restare.
+    if (myRole === 'demo' && myId === 'demo') applyDemoMode();
+    if (!sonoProprietario) applySoloProprietario();
   } catch (_) {}
 
   themeToggle?.addEventListener('click', () => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
@@ -564,7 +696,7 @@ async function init() {
       if (e.target.checked) vehXf.highlight.add(k); else vehXf.highlight.delete(k);
       renderVehBody();
     } else if (e.target.classList.contains('veh-carb-prov')) {   // provincia: cambia il prezzo al litro
-      try { localStorage.setItem('amrCarbProvincia', e.target.value); } catch (_) {}
+      salvaPref('amrCarbProvincia', e.target.value);
       vehCostoAggiorna();          // l'indice ha già tutte le province: nessuna richiesta
     }
   });
@@ -578,14 +710,14 @@ async function init() {
     if (!e.target.classList.contains('veh-carb-km')) return;
     const n = carbKmValido(e.target.value);
     if (!(n >= KM_MIN && n <= KM_MAX)) return;
-    try { localStorage.setItem('amrCarbKm', String(n)); } catch (_) {}
+    salvaPref('amrCarbKm', String(n));
     vehCostoAggiorna();
   });
   vehSchedaEl?.addEventListener('change', e => {
     if (!e.target.classList.contains('veh-carb-km')) return;
     const n = carbKmValido(e.target.value);
     if (n >= KM_MIN && n <= KM_MAX) return;
-    try { localStorage.removeItem('amrCarbKm'); } catch (_) {}
+    salvaPref('amrCarbKm', '');
     renderVehBody();                      // il campo torna al valore usato davvero
   });
 
@@ -680,6 +812,11 @@ async function init() {
   // (GET, zero scraping) per riflettere gli avvisi appena calcolati dal server.
   setTimeout(loadSavedSearches, 13000);
   loadSalvati();
+  // ADESSO: `loadSalvati` ha messo in mano quello che c'e' in QUESTO browser, e solo da qui in
+  // poi la domanda "il mio account e' vuoto?" ha senso — se si chiedesse prima, non ci sarebbe
+  // niente da caricare su e il primo accesso perderebbe i salvataggi di prima. Non si aspetta:
+  // se il server risponde tardi, lo schermo intanto lavora con la copia locale.
+  mieiCarica().catch(e => console.warn('[miei] caricamento saltato:', e && e.message));
 
   // Thumbnail rotta → slot grigio
   resultsGrid.addEventListener('error', e => {
@@ -768,7 +905,7 @@ async function init() {
     // sono di un'altra provincia: si buttano, cosi' riaprendoli si rifanno invece di mostrare
     // un importo vecchio sotto una sigla nuova.
     if (e.target.classList.contains('pp-prov-sel')) {
-      try { localStorage.setItem('amrPassProvincia', e.target.value); } catch (_) {}
+      salvaPref('amrPassProvincia', e.target.value);
       for (const x of currentResults) if (x._pass && !x._passProvAnnuncio) delete x._pass;
       const rw = e.target.closest('[data-url]');
       const rr = rw && trovaResult(rw.dataset.url);
@@ -1386,7 +1523,8 @@ let oemFav = rcLoadFav();   // codici OE/OEM/OEN preferiti
 let rcGen = 0;               // generation token ricerche ricambi (mirror searchGen auto: la risposta vecchia non sovrascrive la nuova)
 
 function rcLoadSalvati() { try { const a = JSON.parse(localStorage.getItem(RC_SALVATI_KEY)); return Array.isArray(a) ? a : []; } catch { return []; } }
-function rcPersistSalvati() { try { localStorage.setItem(RC_SALVATI_KEY, JSON.stringify(salvatiRicambi.slice(0, RC_SALVATI_CAP))); } catch {} }
+function rcPersistSalvatiLocale() { try { localStorage.setItem(RC_SALVATI_KEY, JSON.stringify(salvatiRicambi.slice(0, RC_SALVATI_CAP))); } catch {} }
+function rcPersistSalvati() { rcPersistSalvatiLocale(); mieiManda('ricambio', salvatiRicambi.slice(0, RC_SALVATI_CAP)); }
 
 // ── Codici ricambio salvati (tab "Ricambi" dell'offcanvas Salvati, mirror di annunci/ricerche).
 // Item = {q, mode}. Retro-compat: le vecchie voci stringa diventano {q, mode:'oem'}.
@@ -1397,7 +1535,8 @@ function rcLoadFav() {
     return a.map(x => (typeof x === 'string' ? { q: x, mode: 'oem' } : x)).filter(x => x && typeof x.q === 'string');
   } catch { return []; }
 }
-function rcPersistFav() { try { localStorage.setItem(RC_FAV_KEY, JSON.stringify(oemFav.slice(0, RC_FAV_CAP))); } catch {} }
+function rcPersistFavLocale() { try { localStorage.setItem(RC_FAV_KEY, JSON.stringify(oemFav.slice(0, RC_FAV_CAP))); } catch {} }
+function rcPersistFav() { rcPersistFavLocale(); mieiManda('oem', oemFav.slice(0, RC_FAV_CAP)); }
 const rcFavNorm = s => String(s || '').replace(/[^a-z0-9]/gi, '').toUpperCase();   // chiave di dedup
 const rcFavHas = (q) => oemFav.some(f => rcFavNorm(f.q) === rcFavNorm(q));
 function rcToggleFav(q, mode, veicolo) {
@@ -2550,7 +2689,9 @@ async function fetchSubitoStatus() {
      * Il pannello resta raggiungibile: la riserva si mantiene quando vuoi, non quando
      * te lo chiede una riga rossa.
      */
-    const serve = data.ricercheUsanoSessione !== false || data.blocked === true;
+    // E lo si mostra solo a chi puo' farci qualcosa: il CAPTCHA si risolve davanti al Mac dove
+    // gira AMR, quindi a un ospite quell'avviso chiede una cosa che non puo' fare.
+    const serve = (data.ricercheUsanoSessione !== false || data.blocked === true) && sonoProprietario;
     if (subitoBlocked && serve) showBootstrapBanner(); else hideBootstrapBanner();
     return data;
   } catch (_) { return null; }
@@ -3361,7 +3502,7 @@ const passProvinciaMia = () => {
     const p = localStorage.getItem('amrPassProvincia');
     if (p != null) return p;
     const eredita = localStorage.getItem('amrCarbProvincia') || '';
-    localStorage.setItem('amrPassProvincia', eredita);
+    salvaPref('amrPassProvincia', eredita);
     return eredita;
   } catch (_) { return ''; }
 };
@@ -4177,7 +4318,8 @@ function toggleSalva(url) {
 }
 const SALVATI_KEY = 'amr_salvati';
 const SALVATI_CAP = 200;
-function persistSalvati() { try { localStorage.setItem(SALVATI_KEY, JSON.stringify(salvati.slice(-SALVATI_CAP))); } catch (_) {} }
+function persistSalvatiLocale() { try { localStorage.setItem(SALVATI_KEY, JSON.stringify(salvati.slice(-SALVATI_CAP))); } catch (_) {} }
+function persistSalvati() { persistSalvatiLocale(); mieiManda('annuncio', salvati.slice(-SALVATI_CAP)); }
 function loadSalvati() {
   try { const raw = localStorage.getItem(SALVATI_KEY); const arr = raw ? JSON.parse(raw) : []; salvati = Array.isArray(arr) ? arr : []; }
   catch (_) { salvati = []; }

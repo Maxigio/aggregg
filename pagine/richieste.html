@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Auto Moto Radar — Richieste di accesso</title>
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('amr_theme')||'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+  <style>
+    :root, :root[data-theme="light"] {
+      --bg:#f3f4f6; --surface:#ffffff; --surface-2:#eceef1; --line:#d3d8de; --line2:#b6bdc7;
+      --text:#14181f; --muted:#5b6472; --accent:#1f6feb; --neg:#c2362f; --neg-bg:#fbe9e9;
+      --ok:#117a37; --ok-bg:#e1f3e8; --warn-bg:#faf0d5; --warn-fg:#8a6100;
+    }
+    :root[data-theme="dark"] {
+      --bg:#0d1117; --surface:#161b22; --surface-2:#1b212c; --line:#2a313c; --line2:#3a434f;
+      --text:#e6edf3; --muted:#8b97a6; --accent:#4d9bff; --neg:#f0726a; --neg-bg:#2a1414;
+      --ok:#56d364; --ok-bg:#11271a; --warn-bg:#2a2310; --warn-fg:#e3b341;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text);
+      padding:22px; font-variant-numeric:tabular-nums; }
+    .wrap { max-width:1000px; margin:0 auto; }
+    header { display:flex; align-items:center; gap:12px; margin-bottom:6px; }
+    header b { font-size:1.15rem; font-weight:800; letter-spacing:-0.02em; }
+    header a { margin-left:auto; font-size:0.84rem; color:var(--accent); text-decoration:none; font-weight:600; }
+    .claim { font-size:0.83rem; color:var(--muted); margin-bottom:20px; line-height:1.45; }
+    h2 { font-size:0.95rem; margin:24px 0 8px; }
+    .vuoto { font-size:0.86rem; color:var(--muted); font-style:italic; padding:10px 0; }
+    table { width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--line); border-radius:6px; }
+    th, td { text-align:left; padding:9px 11px; border-bottom:1px solid var(--line); font-size:0.85rem; vertical-align:top; }
+    th { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); font-weight:700; }
+    tr:last-child td { border-bottom:none; }
+    .id { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:0.78rem; color:var(--muted); }
+    .id.collide { color:var(--neg); font-weight:700; }
+    .avviso { display:block; font-size:0.74rem; color:var(--neg); margin-top:3px; max-width:230px; line-height:1.35; }
+    .stato { font-size:0.7rem; font-weight:700; text-transform:uppercase; padding:2px 7px; border-radius:3px;
+      background:var(--surface-2); color:var(--muted); }
+    .stato.approvata { background:var(--warn-bg); color:var(--warn-fg); }
+    .azioni { white-space:nowrap; }
+    button { font-size:0.8rem; font-weight:600; padding:6px 10px; border:1px solid var(--line2); border-radius:4px;
+      background:var(--surface); color:var(--text); cursor:pointer; }
+    button:hover { border-color:var(--accent); color:var(--accent); }
+    button.si { background:var(--accent); color:#fff; border-color:var(--accent); }
+    button.si:hover { background:#1a5fcc; color:#fff; }
+    button.no:hover { border-color:var(--neg); color:var(--neg); }
+    button:disabled { opacity:.5; cursor:default; }
+    .link { margin-top:8px; padding:10px 11px; background:var(--ok-bg); border:1px solid var(--ok); border-radius:5px; }
+    .link p { margin:0 0 7px; font-size:0.8rem; color:var(--text); line-height:1.45; }
+    .link input { width:100%; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:0.76rem;
+      padding:7px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--text); }
+    .link .riga { display:flex; gap:7px; margin-top:7px; }
+    .msg { margin:14px 0; font-size:0.86rem; border-radius:5px; padding:9px 11px; line-height:1.45; display:none; }
+    .msg.show { display:block; }
+    .msg.err { color:var(--neg); background:var(--neg-bg); border:1px solid var(--neg); }
+    .msg.ok  { color:var(--ok);  background:var(--ok-bg);  border:1px solid var(--ok); }
+    .fonte { font-size:0.7rem; font-weight:700; text-transform:uppercase; padding:2px 7px; border-radius:3px;
+      background:var(--surface-2); color:var(--muted); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg width="28" height="28" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect width="32" height="32" rx="6" fill="#1f6feb"/>
+      <circle cx="16" cy="16" r="10" fill="none" stroke="#bfdbfe" stroke-width="1.8"/>
+      <circle cx="16" cy="16" r="5.5" fill="none" stroke="#bfdbfe" stroke-width="1.8"/>
+      <circle cx="16" cy="16" r="1.8" fill="#bfdbfe"/>
+    </svg>
+    <b>Richieste di accesso</b>
+    <a href="/">← torna all'app</a>
+  </header>
+  <div class="claim">
+    Chi chiede un account compare qui. Approvando nasce un link valido <span id="ore">48</span> ore, che gli
+    mandi tu come vuoi: e' lui a scegliersi la password, e nessuno la vede. L'email che ha scritto e'
+    solo un recapito — non e' stata verificata da nessuno.
+  </div>
+
+  <div class="msg" id="msg"></div>
+
+  <h2>In attesa</h2>
+  <div id="richieste"></div>
+
+  <h2>Chi entra oggi</h2>
+  <div id="persone"></div>
+</div>
+
+<script>
+  var msg = document.getElementById('msg');
+  function dillo(testo, tipo) { msg.textContent = testo; msg.className = 'msg show ' + (tipo || 'err'); }
+  function zitto() { msg.className = 'msg'; }
+
+  function posta(percorso, dati) {
+    return fetch(percorso, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dati || {})
+    }).then(function (r) { return r.json().then(function (j) { return { stato: r.status, corpo: j }; }); });
+  }
+  function quando(ms) {
+    if (!ms) return '';
+    var d = new Date(Number(ms));
+    return d.toLocaleDateString('it-IT') + ' ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  }
+  /** Sempre textContent: nome, email e IP li ha scritti qualcuno che non conosciamo. */
+  function cella(testo, classe) {
+    var td = document.createElement('td');
+    if (classe) td.className = classe;
+    td.textContent = testo == null ? '' : String(testo);
+    return td;
+  }
+
+  function carica() {
+    fetch('/api/richieste', { headers: { 'Accept': 'application/json' } })
+      .then(function (r) {
+        if (r.status === 403) throw new Error('Questa pagina e\' solo del proprietario.');
+        if (r.status === 503) return r.json().then(function (j) { throw new Error(j.error); });
+        return r.json();
+      })
+      .then(disegna)
+      .catch(function (e) { dillo(e.message || 'Non riesco a leggere le richieste.'); });
+  }
+
+  function disegna(dati) {
+    document.getElementById('ore').textContent = dati.scadenzaInvitoOre || 48;
+
+    var box = document.getElementById('richieste');
+    box.textContent = '';
+    if (!dati.richieste.length) {
+      var v = document.createElement('div');
+      v.className = 'vuoto'; v.textContent = 'Nessuna richiesta in attesa.';
+      box.appendChild(v);
+    } else {
+      var t = document.createElement('table');
+      t.innerHTML = '<thead><tr><th>Nome</th><th>Email</th><th>Da dove</th><th>Quando</th><th>Stato</th><th></th></tr></thead>';
+      var tb = document.createElement('tbody');
+      dati.richieste.forEach(function (r) {
+        var tr = document.createElement('tr');
+
+        var tdNome = document.createElement('td');
+        tdNome.appendChild(document.createTextNode(r.nome));
+        var idSpan = document.createElement('div');
+        idSpan.className = 'id' + (r.collide ? ' collide' : '');
+        idSpan.textContent = r.persona;
+        tdNome.appendChild(idSpan);
+        if (r.collide) {
+          // Il pannello mostra il NOME, e due nomi scritti diversi possono cadere sullo stesso
+          // identificativo: "Marió Rossì" e "Mario Rossi" sono la stessa riga per la macchina.
+          // A occhio, in mezzo a venti richieste, non si vede. Il conto lo fa la macchina.
+          var a = document.createElement('span');
+          a.className = 'avviso';
+          a.textContent = 'Attenzione: questo nome cade su una persona che esiste gia\'. Approvarlo non serve a niente.';
+          tdNome.appendChild(a);
+        }
+        tr.appendChild(tdNome);
+
+        tr.appendChild(cella(r.email));
+        tr.appendChild(cella(r.ip || '—'));
+        tr.appendChild(cella(quando(r.creata_il)));
+
+        var tdStato = document.createElement('td');
+        var s = document.createElement('span');
+        s.className = 'stato' + (r.stato === 'approvata' ? ' approvata' : '');
+        s.textContent = r.stato === 'approvata' ? 'link in giro' : 'in attesa';
+        tdStato.appendChild(s);
+        if (r.stato === 'approvata' && r.invitoScadeIl) {
+          var q = document.createElement('div');
+          q.className = 'id'; q.textContent = 'scade ' + quando(r.invitoScadeIl);
+          tdStato.appendChild(q);
+        }
+        tr.appendChild(tdStato);
+
+        var tdAz = document.createElement('td');
+        tdAz.className = 'azioni';
+        if (r.stato === 'attesa') {
+          var si = document.createElement('button');
+          si.className = 'si'; si.textContent = 'Approva';
+          si.onclick = function () { approva(r.id, si); };
+          tdAz.appendChild(si);
+          tdAz.appendChild(document.createTextNode(' '));
+        }
+        var no = document.createElement('button');
+        no.className = 'no'; no.textContent = 'Rifiuta';
+        no.onclick = function () { rifiuta(r.id, r.nome); };
+        tdAz.appendChild(no);
+        tr.appendChild(tdAz);
+
+        tb.appendChild(tr);
+
+        var trLink = document.createElement('tr');
+        trLink.id = 'link-' + r.id;
+        var tdLink = document.createElement('td');
+        tdLink.colSpan = 6; tdLink.style.padding = '0 11px 11px';
+        trLink.appendChild(tdLink);
+        trLink.style.display = 'none';
+        tb.appendChild(trLink);
+      });
+      t.appendChild(tb);
+      box.appendChild(t);
+    }
+
+    var pbox = document.getElementById('persone');
+    pbox.textContent = '';
+    var tp = document.createElement('table');
+    tp.innerHTML = '<thead><tr><th>Nome</th><th>Puo\' fare</th><th>Entrato da</th><th></th></tr></thead>';
+    var tpb = document.createElement('tbody');
+    dati.persone.forEach(function (p) {
+      var tr = document.createElement('tr');
+      var tdN = document.createElement('td');
+      tdN.appendChild(document.createTextNode(p.nome));
+      var i = document.createElement('div'); i.className = 'id'; i.textContent = p.id;
+      tdN.appendChild(i);
+      tr.appendChild(tdN);
+      tr.appendChild(cella(p.ruolo === 'full' ? 'tutto' : 'guarda e salva le sue cose'));
+      var tdF = document.createElement('td');
+      var f = document.createElement('span');
+      f.className = 'fonte';
+      f.textContent = p.origine === 'web' ? 'si e\' registrato' : 'elenco del .env';
+      tdF.appendChild(f);
+      tr.appendChild(tdF);
+      var tdA = document.createElement('td');
+      tdA.className = 'azioni';
+      var rev = document.createElement('button');
+      rev.className = 'no'; rev.textContent = 'Revoca';
+      rev.onclick = function () { revoca(p.id, p.nome); };
+      tdA.appendChild(rev);
+      tr.appendChild(tdA);
+      tpb.appendChild(tr);
+    });
+    tp.appendChild(tpb);
+    pbox.appendChild(tp);
+    if (!dati.persone.length) {
+      pbox.textContent = '';
+      var v2 = document.createElement('div');
+      v2.className = 'vuoto'; v2.textContent = 'Nessuna persona oltre a te.';
+      pbox.appendChild(v2);
+    }
+  }
+
+  function approva(id, bottone) {
+    zitto();
+    bottone.disabled = true;
+    posta('/api/richieste/' + encodeURIComponent(id) + '/approva').then(function (r) {
+      if (!r.corpo || !r.corpo.ok) { bottone.disabled = false; return dillo((r.corpo && r.corpo.error) || 'Non ha funzionato.'); }
+      mostraLink(id, r.corpo);
+    }).catch(function () { bottone.disabled = false; dillo('Non riesco a parlare col server.'); });
+  }
+
+  function mostraLink(id, dati) {
+    // Il link esce UNA volta sola: nel database resta solo l'impronta del token, quindi qui
+    // dentro c'e' l'unica copia leggibile. Se si perde, si rifa' l'approvazione.
+    var url = location.origin + '/invito#t=' + dati.token;
+    var tr = document.getElementById('link-' + id);
+    var td = tr.firstChild;
+    td.textContent = '';
+    var box = document.createElement('div');
+    box.className = 'link';
+    var p = document.createElement('p');
+    p.textContent = 'Link per ' + dati.nome + ', valido fino al ' + quando(dati.scadeIl)
+      + '. Mandaglielo come vuoi. Compare una volta sola: se lo perdi, riapprova e te ne do un altro.';
+    box.appendChild(p);
+    var inp = document.createElement('input');
+    inp.readOnly = true; inp.value = url;
+    inp.onclick = function () { inp.select(); };
+    box.appendChild(inp);
+    var riga = document.createElement('div');
+    riga.className = 'riga';
+    var copia = document.createElement('button');
+    copia.className = 'si'; copia.textContent = 'Copia';
+    copia.onclick = function () {
+      inp.select();
+      var fatto = false;
+      try { fatto = document.execCommand('copy'); } catch (e) { fatto = false; }
+      if (!fatto && navigator.clipboard) { navigator.clipboard.writeText(url).then(function(){ copia.textContent = 'Copiato'; }); }
+      else copia.textContent = fatto ? 'Copiato' : 'Copialo a mano';
+    };
+    riga.appendChild(copia);
+    var ok = document.createElement('button');
+    ok.textContent = 'Fatto, aggiorna';
+    ok.onclick = function () { carica(); };
+    riga.appendChild(ok);
+    box.appendChild(riga);
+    td.appendChild(box);
+    tr.style.display = '';
+  }
+
+  function rifiuta(id, nome) {
+    if (!confirm('Rifiutare la richiesta di ' + nome + '? Se aveva gia\' un link, smette di valere.')) return;
+    zitto();
+    posta('/api/richieste/' + encodeURIComponent(id) + '/rifiuta').then(function (r) {
+      if (!r.corpo || !r.corpo.ok) return dillo((r.corpo && r.corpo.error) || 'Non ha funzionato.');
+      carica();
+    }).catch(function () { dillo('Non riesco a parlare col server.'); });
+  }
+
+  function revoca(id, nome) {
+    if (!confirm('Togliere l\'accesso a ' + nome + '?\n\nSmette di entrare subito. Le sue ricerche e i suoi salvataggi restano dove sono, e il nome resta riservato.')) return;
+    zitto();
+    posta('/api/persone/' + encodeURIComponent(id) + '/revoca').then(function (r) {
+      if (!r.corpo || !r.corpo.ok) return dillo((r.corpo && r.corpo.error) || 'Non ha funzionato.');
+      dillo(nome + ' non entra piu\'.', 'ok');
+      carica();
+    }).catch(function () { dillo('Non riesco a parlare col server.'); });
+  }
+
+  carica();
+</script>
+</body>
+</html>

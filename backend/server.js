@@ -16,6 +16,7 @@ const { buildGuidaSync, mtimeGuida } = require('../scripts/build-guida');   // F
 const filtriAuto = require('./filtri-auto');            // filtri avanzati auto → dialetto di ogni fonte
 const versioneVerifica = require('./versione-verifica');  // la versione, verificata da noi su tutte le fonti
 const auth = require('./auth');
+const utentiDb = require('./utenti-db');                                // il magazzino delle persone (SQLite)
 const db = require('./db');
 const crawler = require('./crawler');
 const listingsRepo = require('./db/listings-repo');
@@ -275,7 +276,12 @@ const LOCK_DECAY_MS = 30 * 60 * 1000;
 // L'interruttore del bot WhatsApp. Default SPENTO: la webhook non viene montata affatto e la
 // sua deroga all'autenticazione non esiste. Si riaccende solo con AMR_WHATSAPP=1.
 const WHATSAPP_ON = process.env.AMR_WHATSAPP === '1';
+// Le porte che si devono poter bussare SENZA una sessione. Le tre della registrazione ci stanno
+// per definizione: chi chiede un account, e chi apre un invito per scegliersi la password, una
+// sessione non ce l'ha ancora — e `/api/invito` e' l'unica rotta non autenticata di tutta l'app
+// che SCRIVE una credenziale, quindi ogni riga che ci si aggiunge dentro va pesata.
 const AUTH_FREE = new Set(['/login', '/logout', '/api/public-url', '/api/health',
+  '/api/registrazione', '/invito', '/api/invito', '/api/invito/chi',
   ...(WHATSAPP_ON ? ['/api/whatsapp/webhook'] : [])]);
 
 function parseCookies(req) {
@@ -294,7 +300,54 @@ function parseCookies(req) {
 
 const MSG_AUTH_ROTTA = 'Configurazione di accesso illeggibile: nessuno puo\' entrare finche\' auth.json non viene riparato.';
 
+/**
+ * IL PERCORSO SU CUI SI DECIDE — minuscole e senza slash finale, calcolato UNA volta in cima.
+ *
+ * Due lezioni gia' pagate, unite in una riga. Express instrada senza distinguere le maiuscole
+ * (`case sensitive routing` non e' impostato) mentre il gate confrontava la grafia arrivata:
+ * `GET /API/saved` finiva all'handler giusto ma passava il cancello (misurato: /api/saved → 403,
+ * /API/saved → 200). E `AUTH_FREE.has(req.path)` e' un confronto ESATTO: `/invito/` — lo slash
+ * che il telefono aggiunge quando si incolla un indirizzo — non ci cadeva dentro, e l'invitato
+ * finiva sulla pagina di accesso, dove una password non ce l'ha ancora.
+ */
+function percorsoGate(p) {
+  const s = String(p || '/').toLowerCase();
+  const senzaCoda = s.length > 1 ? s.replace(/\/+$/, '') : s;
+  return senzaCoda || '/';
+}
+
+/**
+ * LE ZONE DELLA MACCHINA E DEL PROPRIETARIO.
+ *
+ * Non sono "cose da amministratore": sono cose che esistono in UNA sola copia per macchina, e
+ * che quindi non possono essere di nessun altro — il registro degli accessi di tutti, la
+ * sessione del portale (una sola, e il CAPTCHA lo risolve chi e' fisicamente davanti al Mac),
+ * il coordinamento dei nodi di crawl, e il pannello con nome, email e indirizzo di chi ha
+ * chiesto di entrare.
+ *
+ * `/api/subito/status` NON e' qui: e' una lettura senza effetti che ogni client interroga ogni
+ * minuto per sapere se mostrare l'avviso. Owner-only sono le due rotte che la sessione la
+ * TOCCANO.
+ *
+ * Ogni voce vale esatta E come prefisso. Scrivere solo `startsWith('/api/richieste/')`
+ * lascerebbe scoperta `GET /api/richieste`, che e' proprio l'elenco delle persone.
+ */
+const SOLO_OWNER = [
+  '/api/logs', '/api/richieste', '/api/persone', '/richieste',
+  '/api/subito/bootstrap', '/api/subito/keep-alive',
+  '/api/crawl', '/api/worker',
+];
+const soloOwner = p => SOLO_OWNER.some(x => p === x || p.startsWith(x + '/'));
+
+/** Il "no" nella lingua di chi ha bussato: JSON alle API, una pagina a chi naviga. */
+function nega(req, res, pn, codice, messaggio, dove) {
+  if (pn.startsWith('/api/')) return res.status(codice).json({ error: messaggio });
+  if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) return res.redirect(302, dove);
+  return res.status(codice).send(messaggio);
+}
+
 function gateAuth(req, res, next) {
+  const pn = percorsoGate(req.path);
   const stato = auth.stato();
   if (stato === 'assente') return next();         // nessuna password → app locale aperta
   // Il file c'e' ma non si legge. Prima questo caso valeva "nessuna password" e apriva
@@ -302,54 +355,100 @@ function gateAuth(req, res, next) {
   // giusta manda a cercare il guasto dalla parte sbagliata. /api/health resta viva,
   // altrimenti il probe di avvio di Electron aspetta per sempre.
   if (stato === 'illeggibile') {
-    if (req.path === '/api/health') return next();
-    if (req.path.startsWith('/api/')) return res.status(503).json({ error: MSG_AUTH_ROTTA });
+    if (pn === '/api/health') return next();
+    if (pn.startsWith('/api/')) return res.status(503).json({ error: MSG_AUTH_ROTTA });
     return res.status(503).send(MSG_AUTH_ROTTA);
   }
-  if (AUTH_FREE.has(req.path)) return next();     // /login, /logout sempre raggiungibili
+  if (AUTH_FREE.has(pn)) return next();           // /login, /logout, registrazione, invito
   // L'identita', non solo il ruolo: da qui in poi ogni limite e ogni riga di registro sanno
   // CHI ha fatto la richiesta, e non piu' soltanto da quale indirizzo e' arrivata.
   const ses = auth.checkSessione(parseCookies(req).amr_auth);   // { ruolo, id } | null
   const role = ses ? ses.ruolo : null;
-  if (!role) {
-    if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'non autorizzato' });
-    if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) {
-      return res.redirect(302, '/login');
-    }
-    return res.status(401).send('non autorizzato');
-  }
+  if (!role) return nega(req, res, pn, 401, 'non autorizzato', '/login');
   req.authRole = role;
   req.authId = ses.id;
-  // Gate DEMO (ospite read-only): solo GET; niente scritture, niente modo Valuta.
-  // /login·/logout sono già esenti via AUTH_FREE. (Il pannello admin non esiste più →
-  // l'owner-tool DB-puro lo sostituisce; nessuna route /admin da gateare qui.)
-  if (role === 'demo') {
-    // L'utente demo DEVE poter segnalare, e puo' esportare in PDF cio' che ha gia' a schermo:
-    // il PDF si compone dalle righe che il suo browser ha gia' in mano, quindi negarlo non
-    // proteggerebbe nessun dato. (Match esatto, non prefisso.)
-    const isReport = req.path === '/api/report' || req.path === '/api/report-pdf';
+
+  // IL PROPRIETARIO E' UN'IDENTITA' PIU' UN RUOLO, mai l'id da solo: `makeToken('demo')` produce
+  // un cookie con ruolo 'demo' e id 'owner' (il valore predefinito del secondo argomento), ed e'
+  // proprio il cookie che due prove della suite si costruiscono a mano. Guardare il solo id
+  // aprirebbe tutta la macchina a quel cookie.
+  const proprietario = ses.id === 'owner' && role === 'full';
+  if (soloOwner(pn) && !proprietario) return nega(req, res, pn, 403, 'solo il proprietario', '/');
+
+  /**
+   * I DIRITTI SEGUONO L'IDENTITA', NON IL RUOLO.
+   *
+   * La regola di prima era "ruolo demo = sola lettura", ed era l'unica possibile: il demo era
+   * una password condivisa, senza un nome, quindi qualunque cosa avesse scritto sarebbe finita
+   * in un mucchio comune — e leggere le ricerche salvate voleva dire leggere quelle del
+   * proprietario, perche' l'elenco era uno solo.
+   *
+   * Da quando ogni persona ha un nome suo, quella regola e' il contrario di quel che serve: un
+   * iscritto DEVE poter salvare le sue ricerche e i suoi annunci. In sola lettura resta soltanto
+   * l'ospite anonimo — `id === 'demo'`, la vecchia password condivisa — perche' di lui non si sa
+   * di chi sarebbe la riga.
+   *
+   * L'isolamento fra persone NON lo fa questo cancello: da qui non si vede di chi e' una riga.
+   * Lo fa lo strato dati, dove ogni interrogazione e' filtrata per utente.
+   */
+  // Anonimo = qualunque sessione che non sia il proprietario e non abbia un nome proprio.
+  // `checkSessione` lascia passare tre famiglie di id: 'owner', 'demo', e le persone vere (che
+  // riconfronta con l'elenco vivo). Quindi "non proprietario e id d'ufficio" copre sia l'ospite
+  // condiviso sia la combinazione che nessun login puo' produrre ma che una prova si costruisce
+  // a mano — ruolo 'demo' con id 'owner', il valore predefinito di `makeToken`. Nel dubbio, la
+  // porta piu' stretta.
+  const anonimo = !proprietario && (ses.id === 'demo' || ses.id === 'owner');
+  if (anonimo) {
+    // Segnalare ed esportare in PDF restano concessi: il PDF si compone dalle righe che il suo
+    // browser ha gia' in mano, quindi negarlo non proteggerebbe nessun dato.
+    const isReport = pn === '/api/report' || pn === '/api/report-pdf';
     const isWrite = req.method !== 'GET' && req.method !== 'HEAD';
-    // review: il gate method-based NON basta. Alcune GET MUTANO (GET /api/crawl/lease scrive
-    // leased_by/until) o espongono dati PRIVATI dell'owner (GET /api/saved = ricerche/avvisi di
-    // papà). Blocca il demo da questi prefissi a prescindere dal metodo. (/api/saved/check è POST,
-    // già coperto da isWrite; qui copriamo la GET di lista e le route di coordinamento crawl.)
-    // Il confronto va fatto sul percorso NORMALIZZATO. Express instrada senza distinguere le
-    // maiuscole (`case sensitive routing` non e' impostato), il gate invece le distingueva:
-    // `GET /API/saved` finiva all'handler di `/api/saved` con `req.path` ancora maiuscolo,
-    // quindi isPrivate era falso e l'ospite demo leggeva le ricerche salvate del proprietario.
-    // Misurato: /api/saved → 403, /API/saved → 200, /Api/Saved → 200.
-    const p = req.path.toLowerCase();
-    const isPrivate = p === '/api/saved' || p.startsWith('/api/saved/')
-      || p.startsWith('/api/crawl/');
+    // Il metodo non basta: `GET /api/saved` non scrive niente ed e' comunque l'elenco privato
+    // di qualcun altro.
+    const isPrivate = pn === '/api/saved' || pn.startsWith('/api/saved/');
     if ((isWrite || isPrivate) && !isReport) {
-      if (p.startsWith('/api/')) return res.status(403).json({ error: 'modalità demo: sola lettura' });
-      if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) return res.redirect(302, '/');
-      return res.status(403).send('modalità demo: sola lettura');
+      return nega(req, res, pn, 403, 'modalità demo: sola lettura', '/');
     }
   }
   return next();
 }
 app.use(gateAuth);
+
+/**
+ * IL TETTO GIORNALIERO DEGLI OSPITI REGISTRATI.
+ *
+ * Ogni ricerca di questa app esce dall'IP di casa verso Subito, AutoScout e Moto.it — otto,
+ * venti richieste alla volta. Dieci ospiti che cercano insieme sono dieci volte quel traffico
+ * dallo stesso indirizzo, e le fonti bannano la MACCHINA, non la persona: il conto lo pagherebbe
+ * il proprietario. Il limite al minuto che c'e' gia' protegge dalle raffiche, non dal totale di
+ * una giornata.
+ *
+ * Vale per chi si e' registrato (ruolo demo con un nome). Il proprietario e i colleghi `full`
+ * non hanno tetto: quella e' la loro macchina.
+ */
+const TETTO_GIORNALIERO = 50;
+function tettoGiornaliero(req, res, next) {
+  if (!auth.isEnabled()) return next();                        // app locale aperta
+  if (req.authRole !== 'demo' || !req.authId) return next();   // owner e full non hanno tetto
+  if (req.authId === 'demo') return next();                    // l'ospite anonimo non scrive e non ha un nome
+  try {
+    const g = utentiDb.consumaRicerca(req.authId, TETTO_GIORNALIERO);
+    if (!g.ok) {
+      return res.status(429).json({
+        error: `Hai fatto le ${g.max} ricerche di oggi. Il conto riparte domani.`,
+        tetto: g.max, usate: g.usate, riprovaDomani: true,
+      });
+    }
+    res.setHeader('X-AMR-Ricerche-Oggi', `${g.usate}/${g.max}`);
+    return next();
+  } catch (e) {
+    // Il magazzino non si apre: non si lascia passare "perche' non si sa". Il proprietario non
+    // passa di qui, quindi l'app non si blocca per lui.
+    return res.status(503).json({ error: 'Il registro delle persone non e\' raggiungibile: riprova piu\' tardi.' });
+  }
+}
+app.use('/api/search', tettoGiornaliero);
+app.use('/api/targa/verifica', tettoGiornaliero);
 
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, '../frontend/login.html')));
 
@@ -406,8 +505,13 @@ app.get('/logout', (req, res) => {
 // Ruolo della sessione corrente (per la UI: nasconde salvataggi/admin in demo).
 // Auth disattivata (app locale) → 'full'. Sotto /api/ → già protetta dal middleware.
 app.get('/api/me', (req, res) => {
-  if (!auth.isEnabled()) return res.json({ role: 'full', authDisabled: true });
-  res.json({ role: req.authRole || auth.checkToken(parseCookies(req).amr_auth) || null });
+  if (!auth.isEnabled()) return res.json({ role: 'full', id: 'owner', proprietario: true, authDisabled: true });
+  const ses = req.authId ? { ruolo: req.authRole, id: req.authId } : auth.checkSessione(parseCookies(req).amr_auth);
+  if (!ses) return res.json({ role: null, id: null, proprietario: false });
+  // Lo schermo deve poter nascondere quello che prenderebbe 403: senza l'identita', il pannello
+  // del proprietario e il bottone che rinnova la sessione del portale comparivano a tutti, e
+  // fallivano al clic. Chi ha un nome ma non e' il proprietario e' un ospite registrato.
+  res.json({ role: ses.ruolo, id: ses.id, proprietario: ses.id === 'owner' && ses.ruolo === 'full' });
 });
 
 // Liveness per il probe di avvio Electron (waitForBackend). Auth-exempt: il
@@ -1284,6 +1388,15 @@ app.get('/api/search', async (req, res) => {
 });
 
 // ─── Ricambi: codice OEM → articoli (auto-doc via stealth) — vedi ricambi-route.js ──
+// Registrazione, pannello del proprietario e link d'invito. Le sue pagine stanno in `pagine/`,
+// FUORI da `frontend/`: quella cartella la serve express.static, e su un filesystem che non
+// distingue le maiuscole un pannello protetto da un solo handler si scaricherebbe con
+// `GET /richieste.html`.
+require('./registrazioni-route').mount(app, { json: express.json({ limit: '4kb' }), chiaveLimite, clientIp });
+// Annunci e ricambi salvati, codici preferiti, impostazioni di prezzo: erano nel localStorage
+// del browser, cioe' per DISPOSITIVO. Il limite e' generoso perche' l'elenco viaggia intero
+// (fino a 200 annunci), ed e' comunque il modulo stesso a tagliare ai suoi tetti.
+require('./dati-utente').mount(app, { json: express.json({ limit: '2mb' }), utenteDi: req => req.authId || 'owner' });
 require('./ricambi-route').mount(app, { chiaveLimite });
 
 // ─── Scheda tecnica veicolo (auto-data.net) — vedi scheda-veicolo-route.js ──────────
@@ -2255,7 +2368,7 @@ function normalizeSavedParams(raw) {
 
 // Check di UNA ricerca (SENZA lock — usato dentro il lock). `s` = oggetto con
 // {id, params, label} (da listSaved o getSaved) → niente reload (fix review §19).
-async function _checkSavedOne(s) {
+async function _checkSavedOne(utente, s) {
   if (!s) return null;
   const out = await runSearch(normalizeSavedParams(s.params));
   // Le fonti che in questo giro non hanno parlato: i loro annunci restano in `seen` e non
@@ -2264,12 +2377,12 @@ async function _checkSavedOne(s) {
   const rotto = st => st === 'error' || st === 'timeout' || st === 'needs_bootstrap';
   const fontiMute = Object.entries(out.sources || {})
     .filter(([, v]) => v && rotto(v.status)).map(([f]) => f);
-  const alerts = saved.recordCheck(s.id, out.risultati || [], { fontiMute });
+  const alerts = saved.recordCheck(utente, s.id, out.risultati || [], { fontiMute });
   return { id: s.id, label: s.label, nuovi: alerts.length, sources: out.sources };
 }
 
 // Check di tutte (o le stantie), SENZA lock. Salta se Subito è bloccato.
-async function _checkAll({ onlyStale = false, cap = Infinity } = {}) {
+async function _checkAll(utente, { onlyStale = false, cap = Infinity } = {}) {
   const esiti = [];
   if (subitoSession.isSubitoBlocked()) {
     console.log('[saved] Subito bloccato → salto il check automatico.');
@@ -2277,17 +2390,17 @@ async function _checkAll({ onlyStale = false, cap = Infinity } = {}) {
   }
   const now = Date.now();
   let done = 0;
-  for (const s of saved.listSaved()) {   // s ha già params/label → passato diretto
+  for (const s of saved.listSaved(utente)) {   // s ha già params/label → passato diretto
     if (done >= cap) break;
     if (onlyStale && s.lastChecked && now - s.lastChecked < SAVED_STALE_MS) continue;
-    try { esiti.push(await _checkSavedOne(s)); done++; }
+    try { esiti.push(await _checkSavedOne(utente, s)); done++; }
     catch (e) { console.warn(`[saved] check ${s.id} fallito: ${e.message}`); }
   }
   return esiti;
 }
 
-const checkSaved    = (id)   => withSavedLock(() => _checkSavedOne(saved.getSaved(id)));
-const checkAllSaved = (opts) => withSavedLock(() => _checkAll(opts));
+const checkSaved    = (u, id)  => withSavedLock(() => _checkSavedOne(u, saved.getSaved(u, id)));
+const checkAllSaved = (u, opts) => withSavedLock(() => _checkAll(u, opts));
 
 // CRUD
 /**
@@ -2300,9 +2413,16 @@ const saved503 = (res, e) => {
   if (e && e.code === 'ELENCO_ILLEGGIBILE') { res.status(503).json({ error: e.message }); return true; }
   return false;
 };
+/**
+ * CHI STA CHIEDENDO. Quando l'autenticazione e' spenta (app locale, nessun auth.json) non c'e'
+ * nessuna sessione: quella e' la macchina di casa e chi la usa e' il proprietario. In ogni
+ * altro caso l'identita' la mette `gateAuth`, e da li' in poi ogni riga salvata porta quel nome.
+ */
+const utenteDi = req => req.authId || 'owner';
+
 app.get('/api/saved', (req, res) => {
-  const lista = saved.listSaved();
-  res.json({ saved: lista, erroreElenco: saved.ultimoErroreElenco() || null });
+  try { res.json({ saved: saved.listSaved(utenteDi(req)), erroreElenco: saved.ultimoErroreElenco() || null }); }
+  catch (e) { if (!saved503(res, e)) throw e; }
 });
 
 app.post('/api/saved', express.json(), (req, res) => {
@@ -2310,27 +2430,43 @@ app.post('/api/saved', express.json(), (req, res) => {
   if (!params || !params.tipo || !params.marca) {
     return res.status(400).json({ error: 'params con tipo+marca obbligatori' });
   }
-  try { res.json({ saved: saved.addSaved({ label, params }) }); }
+  try { res.json({ saved: saved.addSaved(utenteDi(req), { label, params }) }); }
   catch (e) { if (!saved503(res, e)) throw e; }
 });
 
 app.delete('/api/saved/:id', (req, res) => {
-  try { res.json({ ok: saved.removeSaved(req.params.id) }); }
+  // `removeSaved` cerca fra le SUE: la ricerca di un altro non e' "non tua", e' "non c'e'".
+  try { res.json({ ok: saved.removeSaved(utenteDi(req), req.params.id) }); }
   catch (e) { if (!saved503(res, e)) throw e; }
 });
 
 // `?url=` segna QUELL'avviso; senza, segna tutta la coda (il bottone "segna tutti letti").
 app.post('/api/saved/:id/read', (req, res) => {
-  try { res.json({ ok: saved.markRead(req.params.id, String(req.query.url || '') || null) }); }
+  try { res.json({ ok: saved.markRead(utenteDi(req), req.params.id, String(req.query.url || '') || null) }); }
   catch (e) { if (!saved503(res, e)) throw e; }
 });
 
-// Controlla ora: una (?id=) o tutte. Restituisce gli esiti + la lista aggiornata.
+/**
+ * Controlla ora: una (?id=) o tutte. Restituisce gli esiti + la lista aggiornata.
+ *
+ * FRENO. Questa e' la rotta piu' cara dell'app: senza `?id=` rifa' fino a VENTI ricerche
+ * complete, cioe' qualche centinaio di richieste alle tre fonti, e non aveva nessun limitatore —
+ * era l'unica delle otto rotte care a non averlo. Finche' solo il proprietario poteva
+ * chiamarla non si vedeva; da quando ogni iscritto ha le sue ricerche salvate, ripeterla in
+ * ciclo e' il modo piu' economico di far bandire la macchina. E le fonti bandiscono la
+ * MACCHINA, non la persona: il conto lo pagano tutti.
+ */
+const limiteControlli = require('./limite-richieste').crea({
+  max: 3, finestra: 10 * 60 * 1000, cosa: 'controlli delle ricerche salvate',
+});
 app.post('/api/saved/check', express.json(), async (req, res) => {
+  const gCtrl = limiteControlli.consuma(chiaveLimite(req));
+  if (!gCtrl.ok) return res.status(429).json({ error: limiteControlli.messaggio(gCtrl), riprovaFra: gCtrl.attesa, restanti: 0 });
   try {
     const id = req.query.id;
-    const esiti = id ? [await checkSaved(id)].filter(Boolean) : await checkAllSaved({ cap: 20 });
-    res.json({ esiti, saved: saved.listSaved() });
+    const chi = utenteDi(req);
+    const esiti = id ? [await checkSaved(chi, id)].filter(Boolean) : await checkAllSaved(chi, { cap: 20 });
+    res.json({ esiti, saved: saved.listSaved(chi) });
   } catch (e) {
     console.error('[saved/check]', e.message);
     res.status(500).json({ error: 'Errore durante il controllo' });
@@ -2538,8 +2674,13 @@ const server = !avviaAscolto ? null : app.listen(PORT, () => {
     // §11 — boot-check ricerche salvate (gentile): solo le stantie (>6h), cap 5,
     // sequenziale, non bloccante, salta se Subito è bloccato. Ritardo per non
     // competere col keep-alive boot.
+    //
+    // SOLO QUELLE DEL PROPRIETARIO, per decisione presa: ogni controllo automatico interroga
+    // le tre fonti dall'IP di casa, e farlo per conto di ogni iscritto moltiplicherebbe quel
+    // traffico per il numero di ospiti — traffico che nessuno ha chiesto, in un momento in cui
+    // nessuno sta guardando. Gli iscritti hanno il bottone "Controlla", che parte da un gesto.
     setTimeout(() => {
-      checkAllSaved({ onlyStale: true, cap: SAVED_BOOT_CAP })
+      checkAllSaved('owner', { onlyStale: true, cap: SAVED_BOOT_CAP })
         .then(esiti => {
           const tot = esiti.reduce((a, e) => a + (e?.nuovi || 0), 0);
           if (esiti.length) console.log(`[saved] boot-check: ${esiti.length} ricerche, ${tot} nuovi avvisi.`);
@@ -2554,6 +2695,8 @@ module.exports = { server, app, _lookupBrand: lookupBrand, _lookupModelGroup: lo
   // Superficie interna per i test: due gestori che senza questo non sarebbero raggiungibili
   // senza aprire una porta (supertest non e' fra le dipendenze).
   _gateAuth: gateAuth, _postLogin: postLogin, _loginAttempts: loginAttempts, _cacheable: cacheable,
+  _percorsoGate: percorsoGate, _soloOwner: soloOwner, _SOLO_OWNER: SOLO_OWNER, _AUTH_FREE: AUTH_FREE,
+  _tettoGiornaliero: tettoGiornaliero, _TETTO_GIORNALIERO: TETTO_GIORNALIERO,
   // Chi si puo' credere e come si contano i limiti sono due decisioni di sicurezza:
   // vanno provate, e senza aprire una porta.
   _clientIp: clientIp, _chiaveLimite: chiaveLimite,

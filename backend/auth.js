@@ -38,7 +38,30 @@ function filePath() {
 // chiude: ILLEGGIBILE tiene acceso il cancello e non lascia entrare nessuno.
 const ILLEGGIBILE = Symbol('auth-illeggibile');
 
+/**
+ * LA CARTELLA CHE DOVREBBE CONTENERE auth.json E' ANCORA LI'?
+ *
+ * "Il file non c'e'" e "il posto dove sta non c'e' piu'" erano la stessa cosa, e non lo sono:
+ * il primo e' una configurazione (nessuna password impostata, app locale aperta), il secondo
+ * e' un GUASTO. Il volume esterno che si smonta sotto un processo gia' in piedi — macOS toglie
+ * il mountpoint da /Volumes e il percorso smette di risolvere — da' ENOENT, lo stesso codice
+ * di un file mancante. Misurato: readFileSync('/Volumes/NONESISTE/data/auth.json') → ENOENT.
+ * Confonderli APRIVA il cancello invece di chiuderlo: stato() rispondeva 'assente' e il
+ * middleware faceva passare ogni rotta senza cookie, su una macchina pubblicata da Funnel.
+ * La guardia d'avvio controlla solo al boot; a runtime qui non c'era niente.
+ *
+ * Il caso USER_DATA_PATH va guardato PRIMA di leggere, non nel catch: con la cartella sparita
+ * filePath() ricade su data/, quel file esiste, e la lettura riesce — su un ALTRO auth.json,
+ * cioe' altre credenziali, senza dirlo a nessuno.
+ */
+function baseSparita() {
+  const ud = process.env.USER_DATA_PATH;
+  if (ud && !fs.existsSync(ud)) return true;
+  try { fs.accessSync(path.dirname(filePath())); return false; } catch { return true; }
+}
+
 function load() {
+  if (baseSparita()) return ILLEGGIBILE;
   try { return JSON.parse(fs.readFileSync(filePath(), 'utf8')); }
   catch (e) { return (e && e.code === 'ENOENT') ? null : ILLEGGIBILE; }
 }
@@ -176,7 +199,7 @@ function idDaNome(nome) {
 }
 const ID_RISERVATI = new Set(['owner', 'demo']);
 
-function setPersona(nome, pw, ruolo = 'demo') {
+function setPersona(nome, pw, ruolo = 'demo', origine = null) {
   const n = String(nome || '').trim();
   if (!n) throw new Error('Serve un nome.');
   if (!pw || String(pw).length < MIN_LEN) throw new Error(`Password troppo corta (minimo ${MIN_LEN} caratteri).`);
@@ -188,17 +211,68 @@ function setPersona(nome, pw, ruolo = 'demo') {
   if (ID_RISERVATI.has(id)) throw new Error(`"${id}" e' riservato: usa un altro nome.`);
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(String(pw), salt, 64).toString('hex');
-  const esisteva = (cfg.persone || []).some(p => String(p.id) === id);
+  const prima = (cfg.persone || []).find(p => String(p.id) === id);
   cfg.persone = (cfg.persone || []).filter(p => String(p.id) !== id);
-  cfg.persone.push({ id, nome: n, salt, hash, ruolo: ruolo === 'full' ? 'full' : 'demo' });
+  const voce = { id, nome: n, salt, hash, ruolo: ruolo === 'full' ? 'full' : 'demo' };
+  // Il telefono (bot WhatsApp) sopravvive al cambio password: e' un attributo della persona,
+  // non della credenziale — perderlo qui vorrebbe dire che ogni reset scollega il bot.
+  if (prima && prima.telefono) voce.telefono = prima.telefono;
+  // DA DOVE VIENE QUESTA PERSONA. 'web' = si e' registrata da sola ed e' stata approvata, quindi
+  // NON sta nel .env. Serve a `scripts/utenti-da-env.js`, che rispecchia il .env e toglie chi non
+  // ci sta scritto: senza questo campo, il primo giro di gestione utenti cancellerebbe tutti gli
+  // iscritti dal web, lasciando i loro dati orfani nel magazzino. Come `telefono`, sopravvive al
+  // cambio password: e' un attributo della persona, non della credenziale.
+  const org = origine || (prima && prima.origine) || null;
+  if (org) voce.origine = String(org);
+  cfg.persone.push(voce);
   // Cambiare la password di una persona che C'ERA GIA' invalida anche la sua vecchia
   // sessione: il cookie e' firmato col secret, e il ricontrollo su id+ruolo non basta
   // (id e ruolo restano uguali). Prezzo: tutti rifanno il login, lo stesso che il giro
   // completo di utenti-da-env dichiara gia' normale. Una persona nuova non ha sessioni
   // da uccidere, e aggiungerla non butta fuori nessuno.
-  if (esisteva) cfg.secret = crypto.randomBytes(32).toString('hex');
+  if (prima) cfg.secret = crypto.randomBytes(32).toString('hex');
   scriviAtomico(filePath(), cfg);
   return { id, nome: n, ruolo: ruolo === 'full' ? 'full' : 'demo' };
+}
+
+/**
+ * CREA una persona che non c'era. Non e' `setPersona` con un controllo in piu': e' la porta per
+ * chi arriva da fuori, e le due cose che qui sono errori li' sono comportamenti normali.
+ *
+ *  1. `setPersona` SOVRASCRIVE la voce con lo stesso id. Va benissimo per lo script che
+ *     rispecchia il .env (cambiare una password e' proprio il suo mestiere), ed e' una presa di
+ *     controllo se il nome arriva da una registrazione pubblica: chi si fa chiamare come una
+ *     persona che gia' c'e' le riscrive la password. E siccome sovrascrivere rigenera il
+ *     `secret`, sarebbe anche un logout di tutti quanti.
+ *  2. Due password uguali sono UNA identita': `verifica` torna il PRIMO match, quindi chi entra
+ *     col doppione viene scambiato per l'altro — id, dati, quota, riga nel registro accessi.
+ *     Lo script del .env questo controllo ce l'ha gia' (`utenti-da-env.js`); qui serve lo stesso,
+ *     perche' la password se la sceglie una persona che non sa quali sono gia' in uso. Non si
+ *     dice MAI con chi ha fatto collisione: sarebbe un oracolo sulle password degli altri.
+ *
+ * Fra il controllo e la scrittura non c'e' nessun `await`: su un thread solo, il controllo e la
+ * riga che nasce sono un gesto unico. Chi tocchera' questa funzione lo tenga.
+ */
+function creaPersona(nome, pw, ruolo = 'demo', origine = 'web') {
+  const n = String(nome || '').trim();
+  const id = idDaNome(n);
+  if (!id) throw new Error('Il nome non produce un identificativo utilizzabile.');
+  if (ID_RISERVATI.has(id)) throw new Error(`"${id}" e' riservato: usa un altro nome.`);
+  const cfg = load();
+  if (cfg === ILLEGGIBILE) throw new Error(`${filePath()} esiste ma non si legge: correggilo prima di riscriverlo.`);
+  if (!cfg) throw new Error('Imposta prima la password principale (scripts/set-password.js).');
+  if ((cfg.persone || []).some(p => String(p.id) === id)) {
+    const e = new Error(`Il nome "${n}" e' gia' in uso: scegline un altro.`);
+    e.code = 'NOME_OCCUPATO';
+    throw e;
+  }
+  if (!pw || String(pw).length < MIN_LEN) throw new Error(`Password troppo corta (minimo ${MIN_LEN} caratteri).`);
+  if (verifica(pw)) {
+    const e = new Error('Questa password e\' gia\' in uso: scegline un\'altra.');
+    e.code = 'PASSWORD_OCCUPATA';
+    throw e;
+  }
+  return setPersona(n, pw, ruolo, origine);
 }
 
 /** Toglie una persona. Il suo cookie smette di valere al primo controllo. */
@@ -217,7 +291,79 @@ function togliPersona(idONome) {
 function persone() {
   const cfg = load();
   if (!leggibile(cfg)) return [];
-  return (cfg.persone || []).map(p => ({ id: String(p.id), nome: p.nome || String(p.id), ruolo: p.ruolo === 'full' ? 'full' : 'demo' }));
+  return (cfg.persone || []).map(p => ({
+    id: String(p.id), nome: p.nome || String(p.id),
+    ruolo: p.ruolo === 'full' ? 'full' : 'demo',
+    telefono: p.telefono || null,
+    // Chi non ha origine viene dal .env: e' il caso di tutte le voci scritte prima che la
+    // registrazione dal web esistesse, e non vanno trattate come iscritte da sole.
+    origine: p.origine || null,
+  }));
+}
+
+// Sole cifre: "+39 352 072 7252" → "393520727252". Il confronto fra numeri e' sempre su
+// questa forma, mai sulla stringa com'e' arrivata.
+const soloCifre = s => String(s || '').replace(/\D/g, '');
+
+/**
+ * LA PERSONA DIETRO UN NUMERO WHATSAPP.
+ *
+ * Il bot riceve solo il numero del mittente: qui lo si trasforma in un'identita' — le stesse
+ * voci di `persone` del login web, tramite il campo opzionale `telefono` (scripts/set-telefono.js).
+ * Confronto per SUFFISSO (ultime 10 cifre, la lunghezza dei mobili italiani) dopo aver tolto
+ * tutto cio' che non e' cifra: cosi' "+39 352 072 7252", "393520727252" e "00393520727252"
+ * sono lo stesso numero, qualunque prefisso abbiano.
+ *
+ * @returns {{id:string, nome:string, ruolo:'full'|'demo'}|null}
+ */
+function personaDaTelefono(numero) {
+  // "00" iniziale = prefisso di uscita internazionale (0039... ≡ +39...): via,
+  // cosi' il confronto per intero funziona a prescindere da come e' scritto il numero.
+  const cifre = soloCifre(numero).replace(/^00/, '');
+  if (cifre.length < 9) return null;   // troppo corto per essere un numero vero: niente match "per coda"
+  const coda = cifre.slice(-10);
+  const cfg = load();
+  if (!leggibile(cfg)) return null;
+  for (const p of cfg.persone || []) {
+    const tel = soloCifre(p.telefono).replace(/^00/, '');
+    if (tel.length < 9) continue;
+    // Se ENTRAMBI i lati hanno il prefisso internazionale (>=12 cifre) il match
+    // e' sull'intera stringa: un numero estero con la stessa coda di 10 cifre
+    // non puo' impersonare l'account. Se uno dei due e' senza prefisso, si
+    // torna al confronto per coda (tolleranza +39/0039).
+    const match = (tel.length >= 12 && cifre.length >= 12) ? tel === cifre : tel.slice(-10) === coda;
+    if (match) {
+      return { id: String(p.id), nome: p.nome || String(p.id), ruolo: p.ruolo === 'full' ? 'full' : 'demo' };
+    }
+  }
+  return null;
+}
+
+/**
+ * Assegna (o toglie, passando vuoto) il telefono WhatsApp di una persona.
+ * Un numero identifica UNA persona: assegnarlo a due voci renderebbe ambigua l'identita'
+ * che il bot ricava dal mittente, quindi il doppione (per suffisso) e' un errore.
+ */
+function setTelefono(idONome, telefono) {
+  const q = String(idONome || '').trim().toLowerCase();
+  if (!q) throw new Error('Serve il nome (o l\'id) della persona.');
+  const cfg = load();
+  if (cfg === ILLEGGIBILE) throw new Error(`${filePath()} esiste ma non si legge: correggilo prima di riscriverlo.`);
+  if (!cfg) throw new Error('Imposta prima la password principale (scripts/set-password.js).');
+  const p = (cfg.persone || []).find(x => String(x.id).toLowerCase() === q || String(x.nome || '').toLowerCase() === q);
+  if (!p) throw new Error(`Nessuna persona di nome o id "${idONome}" (scripts/set-password.js --elenco).`);
+  const cifre = soloCifre(telefono);
+  if (!cifre) {
+    delete p.telefono;
+  } else {
+    if (cifre.length < 9) throw new Error('Numero troppo corto: servono almeno 9 cifre.');
+    const coda = cifre.slice(-10);
+    const doppione = (cfg.persone || []).find(x => x !== p && soloCifre(x.telefono).length >= 9 && soloCifre(x.telefono).slice(-10) === coda);
+    if (doppione) throw new Error(`Quel numero e' gia' di ${doppione.nome || doppione.id}: un numero identifica UNA persona.`);
+    p.telefono = cifre;   // salvato normalizzato (sole cifre), col prefisso com'e' arrivato
+  }
+  scriviAtomico(filePath(), cfg);
+  return { id: String(p.id), nome: p.nome || String(p.id), ruolo: p.ruolo === 'full' ? 'full' : 'demo', telefono: p.telefono || null };
 }
 
 /**
@@ -282,7 +428,8 @@ function checkSessione(v) {
 function checkToken(v) { const s = checkSessione(v); return s ? s.ruolo : null; }
 
 module.exports = {
-  isEnabled, stato, setPassword, setDemoPassword, togliDemoCondiviso, setPersona, togliPersona,
+  isEnabled, stato, setPassword, setDemoPassword, togliDemoCondiviso, setPersona, creaPersona, togliPersona,
   persone, verifica, verifyRole, makeToken, checkToken, checkSessione,
+  personaDaTelefono, setTelefono,
   idDaNome, ID_RISERVATI, MIN_LEN, TTL_MS,
 };

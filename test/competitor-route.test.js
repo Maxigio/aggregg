@@ -38,13 +38,20 @@ function resFinta() {
   r.set = () => r;
   return r;
 }
-/** Esegue un handler in una cartella dati usa-e-getta. */
+/**
+ * Esegue un handler in una cartella dati usa-e-getta.
+ * Il magazzino si CHIUDE a ogni cambio di cartella: resta aperto sul file di prima, e senza
+ * questa riga la prova successiva scriverebbe nella cartella sbagliata.
+ */
+const dbmod = require('../backend/utenti-db');
 async function conCartellaPulita(fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-cp-'));
   const prima = process.env.USER_DATA_PATH;
   process.env.USER_DATA_PATH = dir;
+  dbmod.chiudi();
   try { return await fn(); }
   finally {
+    dbmod.chiudi();
     if (prima === undefined) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = prima;
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -118,8 +125,12 @@ test('da-annuncio: fonte e id sono controllati, e senza nome se ne mette uno leg
 test('elenco corrotto: le scritture rispondono 503 e il file resta byte per byte com\'era', async () => {
   await conCartellaPulita(async () => {
     const H = monta();
-    const p = path.join(process.env.USER_DATA_PATH, 'competitor.json');
-    const rotto = '{"voci":[{"fonte":"subito","id":"1","nome":"Recuperabi';   // troncato
+    // Il magazzino, non piu' il vecchio competitor.json: quello resta come archivio e si
+    // importa una volta sola. Si chiude prima, perche' il guasto che conta e' quello che si
+    // trova all'APERTURA — server riavviato, volume rimontato male.
+    const p = dbmod.percorso();
+    const rotto = 'questo non e\' un database';
+    dbmod.chiudi();
     fs.writeFileSync(p, rotto);
     const r = resFinta();
     await H['POST /api/competitor/da-annuncio']({ body: { fonte: 'subito', id: '42', nome: 'X' } }, r);

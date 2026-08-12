@@ -274,10 +274,112 @@ test('auth: il minimo di lunghezza vale per tutte e tre le porte', () => {
   assert.doesNotThrow(() => auth.setPassword(giusta));
 });
 
+test('auth: se la cartella delle credenziali sparisce, il cancello si CHIUDE', () => {
+  // Il guasto vero: AMR gira da un volume esterno (o con USER_DATA_PATH su una cartella che
+  // non c'e' piu'). Il processo e' gia' in piedi e continua a servire, ma auth.json non si
+  // raggiunge. ENOENT e' lo STESSO codice di "nessuna password impostata": confonderli faceva
+  // rispondere 'assente', e 'assente' vuol dire "app locale aperta", cioe' ogni rotta senza
+  // cookie su una macchina pubblicata su internet.
+  const vecchio = process.env.USER_DATA_PATH;
+  try {
+    process.env.USER_DATA_PATH = path.join(os.tmpdir(), `amr-volume-smontato-${process.pid}`);
+    assert.ok(!fs.existsSync(process.env.USER_DATA_PATH), 'la cartella non deve esistere: e\' il punto della prova');
+
+    assert.strictEqual(auth.stato(), 'illeggibile',
+      'cartella sparita = guasto, non "nessuna password": con \'assente\' il middleware apre tutto');
+    assert.strictEqual(auth.isEnabled(), true,
+      'isEnabled() deve restare vero: il cancello c\'e\', e\' solo irraggiungibile');
+    assert.strictEqual(auth.verifica('qualunque8'), null, 'nessuna password puo\' valere se il file non si legge');
+    assert.deepStrictEqual(auth.persone(), [], 'nessuna persona, ma per guasto — non perche\' non ce ne sono');
+    assert.strictEqual(auth.makeToken('full', 'owner'), null, 'non si firma niente senza il secret');
+
+    // E chi SCRIVE si ferma invece di ricreare il file altrove con dentro solo la voce nuova.
+    assert.throws(() => auth.setPassword('nuovapw1'), /non si legge/);
+    assert.throws(() => auth.setPersona('Anna Bianchi', 'annaseg1'), /non si legge/);
+  } finally {
+    if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
+  }
+
+  // Il caso legittimo resta legittimo: cartella che c'e', file che non c'e' = nessuna password.
+  const vuota = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-senza-auth-'));
+  try {
+    process.env.USER_DATA_PATH = vuota;
+    assert.strictEqual(auth.stato(), 'assente', 'una cartella vuota e\' una configurazione, non un guasto');
+    assert.strictEqual(auth.isEnabled(), false);
+  } finally {
+    if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
+    fs.rmSync(vuota, { recursive: true, force: true });
+  }
+});
+
 test('auth: "owner" e "demo" restano riservati, e i nomi diversi danno id diversi', () => {
   assert.throws(() => auth.setPersona('owner', 'qualcosa1'), /riservat/);
   assert.throws(() => auth.setPersona('Demo', 'qualcosa1'), /riservat/);
   assert.strictEqual(auth.idDaNome('Anna Bianchi'), 'anna-bianchi');
   assert.strictEqual(auth.idDaNome('  ANNA   BIANCHI  '), 'anna-bianchi', 'spazi e maiuscole non fanno due persone');
   assert.strictEqual(auth.idDaNome('Nicolò Perù'), 'nicolo-peru', 'gli accenti non devono sparire in un id vuoto');
+});
+
+// ── 4. La porta di chi arriva da fuori ───────────────────────────────────────
+
+test('creaPersona: un nome gia\' in uso non si sovrascrive — nemmeno scritto in un\'altra grafia', () => {
+  auth.setPassword(PW.admin);
+  auth.setPersona('Mario Rossi', 'mariorossi1', 'demo');
+  assert.ok(auth.verifica('mariorossi1'), 'partenza: Mario esiste ed entra');
+
+  // setPersona SOVRASCRIVE ed e' giusto cosi' per lo script del .env (cambiare una password e'
+  // il suo mestiere). Dalla porta pubblica sarebbe una presa di controllo.
+  for (const grafia of ['Mario Rossi', 'mario  rossi', 'MARIO.ROSSI', 'Marió Rossì', 'Mario_Rossi']) {
+    assert.throws(() => auth.creaPersona(grafia, 'altrapw1'), e => e.code === 'NOME_OCCUPATO',
+      `"${grafia}" da' lo stesso id di Mario Rossi e deve essere respinta`);
+  }
+  assert.ok(auth.verifica('mariorossi1'), 'la password di Mario doveva restare quella di prima');
+  assert.strictEqual(auth.verifica('altrapw1'), null, 'la password dell\'impostore non deve valere niente');
+});
+
+test('creaPersona: una password gia\' in uso e\' un\'altra identita\', e si rifiuta', () => {
+  auth.setPassword(PW.admin);
+  auth.setPersona('Anna Bianchi', PW.anna, 'demo');
+
+  // `verifica` torna il PRIMO match: chi entrasse col doppione verrebbe scambiato per l'altro.
+  assert.throws(() => auth.creaPersona('Carla Neri', PW.anna), e => e.code === 'PASSWORD_OCCUPATA');
+  assert.throws(() => auth.creaPersona('Carla Neri', PW.admin), e => e.code === 'PASSWORD_OCCUPATA',
+    'vale anche contro la password del proprietario');
+  // E il messaggio non dice CON CHI ha fatto collisione: sarebbe un oracolo sulle altrui password.
+  try { auth.creaPersona('Carla Neri', PW.anna); } catch (e) {
+    assert.ok(!/anna/i.test(e.message), `il messaggio nomina l'altra persona: ${e.message}`);
+  }
+  assert.strictEqual(auth.verifica(PW.anna).id, 'anna-bianchi', 'Anna resta lei');
+});
+
+test('creaPersona: nasce demo, marcata "web", e la marcatura sopravvive al cambio password', () => {
+  auth.setPassword(PW.admin);
+  const nata = auth.creaPersona('Chiara Web', 'chiaraw1');
+  assert.deepStrictEqual([nata.id, nata.ruolo], ['chiara-web', 'demo'], 'chi si registra guarda e basta');
+
+  const c = auth.persone().find(p => p.id === 'chiara-web');
+  assert.strictEqual(c.origine, 'web');
+  // Cambiare la password non deve scollegarla dalla sua provenienza: senza, il primo reset la
+  // farebbe sembrare una voce del .env e il giro dopo la cancellerebbe.
+  auth.setPersona('Chiara Web', 'chiaraw2', 'demo');
+  assert.strictEqual(auth.persone().find(p => p.id === 'chiara-web').origine, 'web');
+  assert.strictEqual(auth.persone().find(p => p.id === 'chiara-web').ruolo, 'demo');
+
+  assert.throws(() => auth.creaPersona('Owner', 'qualcosa1'), /riservat/);
+  assert.throws(() => auth.creaPersona('Demo', 'qualcosa1'), /riservat/);
+});
+
+test('utenti-da-env: lo specchio del .env non cancella chi si e\' registrato dal web', () => {
+  auth.setPassword(PW.admin);
+  for (const p of auth.persone()) auth.togliPersona(p.id);   // la prova parte da un elenco suo
+  auth.creaPersona('Chiara Web', 'chiaraw1');
+  auth.setPersona('Dario Env', 'darioenv1', 'demo');   // c'era per via del .env, ma nel .env non c'e' piu'
+
+  const esito = applica(pianifica({ AMR_ADMIN_PASSWORD: PW.admin, AMR_UTENTE_01: `Anna Bianchi:${PW.anna}` }), {});
+
+  assert.deepStrictEqual(esito.tolti, ['dario-env'], 'chi viene dal .env e non ci sta piu\' esce, come sempre');
+  assert.deepStrictEqual(esito.daWeb, ['chiara-web'], 'chi si e\' registrato dal web va detto, non tolto in silenzio');
+  assert.ok(auth.verifica('chiaraw1'), 'Chiara e\' entrata da un\'altra porta: il .env non e\' il suo elenco');
+  assert.strictEqual(auth.verifica('darioenv1'), null);
+  assert.ok(auth.verifica(PW.anna));
 });

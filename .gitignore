@@ -26,6 +26,12 @@ AutoMotoRadar-Data/
 
 # Credenziali accesso remoto (hash password + secret cookie) — MAI versionare
 data/auth.json
+# Dati delle persone (richieste di registrazione con nome/email/IP, inviti, salvataggi,
+# preferenze) — MAI versionare, e mai sovrascrivere in un aggiornamento: e' l'unico posto
+# dove vivono. I tre file sono il database e i suoi due compagni di WAL.
+data/*.db
+data/*.db-wal
+data/*.db-shm
 # Config nodo worker (contiene la password app in chiaro) — MAI versionare
 worker/node.config.json
 # Bundle worker generato da esbuild (rigenerato al boot del server) — non versionare

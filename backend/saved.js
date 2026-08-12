@@ -13,8 +13,9 @@
  */
 const fs   = require('fs');
 const path = require('path');
+const dbmod = require('./utenti-db');
 
-const FILE = 'saved-searches.json';
+const FILE = 'saved-searches.json';   // l'archivio di prima: si importa una volta e resta dov'e'
 
 // ─── Soglie tarabili ──────────────────────────────────────────────────────────
 const FLOOR_ABS   = 300;    // € — sotto è scam/errore a prescindere dai comparabili
@@ -31,49 +32,121 @@ function filePath() {
 }
 
 /**
- * UN FILE ILLEGGIBILE NON E' UN FILE ASSENTE — la regola gia' scritta in competitor.js:50,
- * che qui mancava. Rispondendo `[]` a entrambi, il pannello scriveva «Nessuna ricerca
- * salvata» su un elenco che c'era, e il gesto istintivo — risalvare la ricerca — chiamava
- * saveAll con quella sola voce: il file si riscriveva DA SOLO e le altre ricerche, con
- * tutto il loro storico (`seen`, `alerted`, avvisi), sparivano per sempre.
+ * OGNI RICERCA HA UN PADRONE, e senza padrone non si scrive niente.
  *
- * Ora l'elenco resta vuoto (non si inventa niente) ma il guasto ha un nome, e chi SCRIVE
- * si ferma invece di sovrascrivere cio' che non e' riuscito a leggere.
+ * Fin qui l'elenco era UNO per installazione: due persone con la password piena si vedevano e
+ * si cancellavano le ricerche a vicenda, e l'unica difesa era negare l'intera sezione a chi era
+ * in sola lettura. Con le persone che si registrano quella difesa non regge piu' — un iscritto
+ * le sue ricerche le deve avere — quindi il confine si sposta dove puo' stare davvero: nel
+ * magazzino, dove ogni riga porta scritto di chi e'.
+ *
+ * Un utente vuoto non e' "l'utente predefinito": e' una chiamata che ha dimenticato di dire
+ * CHI. Meglio un errore rumoroso che un mucchio comune chiamato "undefined".
  */
-function loadAll() {
-  const p = filePath();
-  if (!fs.existsSync(p)) { loadAll.ultimoErrore = null; return []; }
-  try {
-    const raw = fs.readFileSync(p, 'utf8');
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) throw new Error('il file non contiene un elenco');
-    loadAll.ultimoErrore = null;
-    // Conversione delle chiavi vecchie (URL → id stabile), una volta sola: si riscrive
-    // solo se qualcosa e' cambiato davvero. Vedi `migraChiavi`.
-    let tocco = false;
-    for (const s of arr) if (migraChiavi(s)) tocco = true;
-    if (tocco) { try { saveAll(arr); } catch (_) {} }
-    return arr;
-  } catch (e) {
-    loadAll.ultimoErrore = e.message;
-    console.error(`[saved] elenco illeggibile (${e.message}) — NON si sovrascrive da solo: ${p}`);
-    return [];
-  }
+function chi(utente) {
+  const u = String(utente == null ? '' : utente).trim();
+  if (!u) throw new Error('saved: manca l\'utente — ogni ricerca salvata ha un padrone.');
+  return u;
 }
-/** Chi sta per SCRIVERE lo chiama prima: su un elenco illeggibile si rifiuta di riscrivere. */
-function esigiLeggibile() {
-  if (loadAll.ultimoErrore) {
-    const e = new Error(`elenco delle ricerche salvate illeggibile (${loadAll.ultimoErrore}): non lo sovrascrivo`);
+
+/**
+ * UN MAGAZZINO CHE NON SI APRE NON E' UN MAGAZZINO VUOTO — la stessa regola che questo file
+ * aveva gia' per il suo JSON. Rispondere `[]` a entrambi faceva scrivere «Nessuna ricerca
+ * salvata» su un elenco che c'era, e il gesto istintivo (risalvare la ricerca) lo riscriveva
+ * con quella sola voce, buttando via tutto lo storico degli avvisi.
+ */
+function apri() {
+  const d = dbmod.apri();
+  if (!d) {
+    const e = new Error(`elenco delle ricerche salvate non disponibile (${dbmod.guasto() || dbmod.stato()})`);
     e.code = 'ELENCO_ILLEGGIBILE';
     throw e;
   }
+  migraDalFile(d);
+  return d;
 }
 
-function saveAll(list) {
+/**
+ * L'archivio di prima entra una volta sola, intestato al PROPRIETARIO: quelle ricerche le ha
+ * fatte lui, e non ci sarebbe modo di indovinare un altro nome. Il file resta dov'e', intatto:
+ * e' l'unica copia di prima e non si cancella per una migrazione riuscita a meta'.
+ */
+let migrazioneFatta = false;
+function migraDalFile(d) {
+  if (migrazioneFatta) return;
+  migrazioneFatta = true;
+  if (Number(d.prepare('SELECT COUNT(*) AS n FROM ricerche').get().n) > 0) return;   // gia' popolato
   const p = filePath();
-  const tmp = p + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(list, null, 2));
-  fs.renameSync(tmp, p);   // scrittura atomica
+  if (!fs.existsSync(p)) return;
+  let arr;
+  try {
+    arr = JSON.parse(fs.readFileSync(p, 'utf8'));
+    if (!Array.isArray(arr)) throw new Error('il file non contiene un elenco');
+  } catch (e) {
+    // Non e' un dettaglio da ingoiare: vuol dire che le ricerche di prima NON sono entrate.
+    console.error(`[saved] l'archivio ${p} non si legge (${e.message}): le ricerche di prima non sono state importate.`);
+    return;
+  }
+  if (!arr.length) return;
+  const ins = d.prepare('INSERT OR REPLACE INTO ricerche (utente, id, dati) VALUES (?,?,?)');
+  d.exec('BEGIN');
+  try {
+    for (const s of arr) { migraChiavi(s); ins.run('owner', String(s.id), JSON.stringify(s)); }
+    d.exec('COMMIT');
+    console.log(`[saved] ${arr.length} ricerche importate dall'archivio a nome del proprietario (${p} resta dov'e').`);
+  } catch (e) {
+    try { d.exec('ROLLBACK'); } catch { /* la transazione era gia' caduta */ }
+    console.error(`[saved] importazione dall'archivio fallita (${e.message}): nessuna ricerca importata.`);
+  }
+}
+
+/**
+ * LEGGERE NON LANCIA, SCRIVERE SI'.
+ *
+ * E' la regola che questo file aveva gia' e che va tenuta: su un magazzino guasto l'elenco
+ * resta vuoto — non si inventa niente — ma il guasto ha un nome (`ultimoErroreElenco`) e lo
+ * schermo lo dice; chi SCRIVE invece si ferma, perche' riscrivere sopra a cio' che non si e'
+ * riusciti a leggere e' il modo in cui si perde tutto lo storico degli avvisi.
+ */
+function loadAll(utente) {
+  const u = chi(utente);
+  const d = dbmod.apri();
+  if (!d) return [];
+  migraDalFile(d);
+  const righe = d.prepare('SELECT dati FROM ricerche WHERE utente=? ORDER BY rowid').all(u);
+  const out = [];
+  for (const r of righe) {
+    try { out.push(JSON.parse(r.dati)); }
+    catch (e) { console.error(`[saved] una ricerca di ${u} non si rilegge (${e.message}): saltata.`); }
+  }
+  // Conversione delle chiavi vecchie (URL → id stabile), una volta sola e solo se cambia
+  // qualcosa davvero. Senza, un annuncio salvato prima della conversione tornava "nuovo" al
+  // controllo successivo, perche' la chiave con cui lo si cerca non e' quella con cui e' stato
+  // scritto. Vedi `migraChiavi`.
+  let tocco = false;
+  for (const s of out) if (migraChiavi(s)) tocco = true;
+  if (tocco) { try { saveAll(u, out); } catch (_) { /* magazzino in sola lettura: si riprova dopo */ } }
+  return out;
+}
+
+/** Riscrive l'elenco di UNA persona. In transazione: o cambia tutto o non cambia niente. */
+function saveAll(utente, list) {
+  const d = apri();
+  const u = chi(utente);
+  const tieni = new Set(list.map(s => String(s.id)));
+  d.exec('BEGIN');
+  try {
+    for (const r of d.prepare('SELECT id FROM ricerche WHERE utente=?').all(u)) {
+      if (!tieni.has(String(r.id))) d.prepare('DELETE FROM ricerche WHERE utente=? AND id=?').run(u, String(r.id));
+    }
+    const su = d.prepare('INSERT INTO ricerche (utente,id,dati) VALUES (?,?,?)'
+      + ' ON CONFLICT(utente,id) DO UPDATE SET dati=excluded.dati');
+    for (const s of list) su.run(u, String(s.id), JSON.stringify(s));
+    d.exec('COMMIT');
+  } catch (e) {
+    try { d.exec('ROLLBACK'); } catch { /* gia' caduta */ }
+    throw e;
+  }
 }
 
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -85,10 +158,10 @@ function defaultLabel(params) {
 }
 
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
-function listSaved() {
+function listSaved(utente) {
   // non esporre seen/alerted (pesanti) nella lista UI; include il digest e gli
   // avvisi non letti (piccoli) per la resa.
-  return loadAll().map(s => {
+  return loadAll(utente).map(s => {
     const unread = (s.alerts || []).filter(a => !a.letto);
     const digest = unread.reduce((d, a) => { d[a.motivo] = (d[a.motivo] || 0) + 1; return d; }, {});
     return {
@@ -105,9 +178,9 @@ function listSaved() {
   });
 }
 
-function addSaved({ label, params }) {
-  const list = loadAll();
-  esigiLeggibile();   // mai riscrivere un elenco che non si e' riusciti a leggere
+function addSaved(utente, { label, params }) {
+  apri();                       // magazzino rotto → si dice, non si scrive
+  const list = loadAll(utente);
   const s = {
     id: newId(),
     label: (label && String(label).trim()) || defaultLabel(params),
@@ -120,20 +193,25 @@ function addSaved({ label, params }) {
     fingerprint: null,
   };
   list.push(s);
-  saveAll(list);
+  saveAll(utente, list);
   return { id: s.id, label: s.label, params: s.params, createdAt: s.createdAt, lastChecked: null, novita: 0 };
 }
 
-function removeSaved(id) {
-  const list = loadAll();
-  esigiLeggibile();
+function removeSaved(utente, id) {
+  // PRIMA il magazzino, POI la ricerca. Al contrario, su un magazzino che non si apre l'elenco
+  // e' vuoto e questa funzione risponde "false" — cioe' "non c'era" — quando la verita' e'
+  // "non lo so". E' la stessa risposta con cui si perde la fiducia in un comando.
+  apri();
+  const list = loadAll(utente);
   const next = list.filter(s => s.id !== id);
+  // Non trovata = non e' tua, o non esiste. Sono la stessa risposta di proposito: chi prova a
+  // cancellare la ricerca di un altro non deve poter scoprire, dal "no" diverso, che esiste.
   if (next.length === list.length) return false;
-  saveAll(next);
+  saveAll(utente, next);
   return true;
 }
 
-function getSaved(id) { return loadAll().find(s => s.id === id) || null; }
+function getSaved(utente, id) { return loadAll(utente).find(s => s.id === id) || null; }
 
 /**
  * SEGNA LETTO QUELLO SU CUI HAI CLICCATO, non tutti.
@@ -148,9 +226,9 @@ function getSaved(id) { return loadAll().find(s => s.id === id) || null; }
  * @param {string} url  l'avviso da segnare. Senza, si segnano tutti: e' il bottone
  *                      "segna tutti letti", un gesto esplicito e diverso dal clic su una riga.
  */
-function markRead(id, url) {
-  const list = loadAll();
-  esigiLeggibile();
+function markRead(utente, id, url) {
+  apri();                       // "non trovato" e "non leggibile" non sono la stessa risposta
+  const list = loadAll(utente);
   const s = list.find(x => x.id === id);
   if (!s) return false;
   const coda = s.alerts || [];
@@ -161,7 +239,7 @@ function markRead(id, url) {
   } else {
     coda.forEach(a => { a.letto = true; });
   }
-  saveAll(list);
+  saveAll(utente, list);
   return true;
 }
 
@@ -328,9 +406,9 @@ function migraChiavi(s) {
  *   visto", e' "non verificabile" — e trattarlo da vecchio lo fa tornare "nuovo" al
  *   ritorno della fonte, cioe' un falso avviso su un mezzo in lista da settimane.
  */
-function recordCheck(id, results, { extraSeen = {}, removedUrls = [], fontiMute = [] } = {}) {
-  const list = loadAll();
-  esigiLeggibile();
+function recordCheck(utente, id, results, { extraSeen = {}, removedUrls = [], fontiMute = [] } = {}) {
+  apri();
+  const list = loadAll(utente);
   const s = list.find(x => x.id === id);
   if (!s) return [];
 
@@ -377,12 +455,18 @@ function recordCheck(id, results, { extraSeen = {}, removedUrls = [], fontiMute 
   // anche quando Autoscout — dove stava il grosso degli annunci — era andato in timeout.
   s.fontiMute = fontiMute.length ? fontiMute.slice() : null;
   if (!fontiMute.length) s.lastCheckedFull = s.lastChecked;
-  saveAll(list);
+  saveAll(utente, list);
   return alerts;
 }
 
 /** Il perche' l'elenco non si e' letto (null se sta bene): la rotta lo porta a schermo. */
-const ultimoErroreElenco = () => loadAll.ultimoErrore || null;
+function ultimoErroreElenco() {
+  const s = dbmod.stato();
+  if (s === 'ok') return null;
+  return s === 'assente'
+    ? `il magazzino delle ricerche non e' raggiungibile (${dbmod.percorso()})`
+    : `il magazzino delle ricerche non si apre (${dbmod.guasto() || 'motivo sconosciuto'})`;
+}
 
 module.exports = {
   listSaved, addSaved, removeSaved, getSaved, markRead, ultimoErroreElenco,
