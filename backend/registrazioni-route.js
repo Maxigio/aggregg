@@ -1,17 +1,16 @@
 /**
- * LE ROTTE DI CHI CHIEDE DI ENTRARE.
+ * LE ROTTE DI CHI CHIEDE DI ENTRARE — solo pubbliche, nessuna di gestione.
  *
- * Tre porte pubbliche (chi le usa una sessione non ce l'ha, per definizione) e un pannello che
- * vede solo il proprietario:
+ * Quattro porte, tutte raggiungibili senza sessione perche' chi le usa una sessione non ce l'ha
+ * ancora, per definizione:
  *
- *   pubbliche    POST /api/registrazione     chiede un account (nome + email, nessuna password)
- *                POST /api/invito/chi        cosa c'e' dietro un link, senza consumarlo
- *                POST /api/invito            sceglie la password e nasce l'account
- *                GET  /invito                la pagina dove si sceglie la password
- *   proprietario GET  /richieste             il pannello
- *                GET  /api/richieste         le richieste vive + le persone che ci sono
- *                POST /api/richieste/:id/approva|rifiuta
- *                POST /api/persone/:id/revoca
+ *   POST /api/registrazione     chiede un accesso (nome + email, nessuna password)
+ *   GET  /invito                la pagina dove si sceglie la password
+ *   POST /api/invito/chi        cosa c'e' dietro un link, senza consumarlo
+ *   POST /api/invito            sceglie la password e nasce l'account
+ *
+ * Approvare, rifiutare e revocare NON stanno qui e non stanno sul web: `scripts/richieste.js`.
+ * Il perche' e' scritto per esteso in fondo a questo file.
  *
  * IL TOKEN NON PASSA MAI DA UNA QUERY. La pagina lo prende dal FRAMMENTO dell'indirizzo
  * (`/invito#t=...`), che il browser non manda al server e non mette nell'header `Referer`; da
@@ -19,10 +18,10 @@
  * dai server di quel servizio per fabbricare l'anteprima: con il token nel frammento, quello che
  * scaricano e' una pagina vuota.
  *
- * LE PAGINE STANNO FUORI DA `frontend/`. Quella cartella e' servita da `express.static`, il
- * filesystem di questa macchina non distingue le maiuscole, e un pannello protetto da un solo
- * handler si scaricherebbe con `GET /richieste.html` o `/RICHIESTE.HTML`. E' la stessa lezione
- * gia' scritta per `/guida` e per il gate del percorso in minuscolo.
+ * LA PAGINA DELL'INVITO STA FUORI DA `frontend/`. Quella cartella e' servita da `express.static`
+ * e il filesystem di questa macchina non distingue le maiuscole: quello che ci si mette dentro si
+ * scarica anche scritto in un altro modo. E' la stessa lezione gia' scritta per `/guida` e per il
+ * gate del percorso in minuscolo.
  */
 const path = require('path');
 const auth = require('./auth');
@@ -53,13 +52,6 @@ function mount(app, deps = {}) {
 
   const limiteRichieste = crea({ max: 1, finestra: FINESTRA, cosa: 'richieste di registrazione' });
   const limiteInviti = crea({ max: 10, finestra: FINESTRA, cosa: 'tentativi sul link di invito' });
-
-  /** Il proprietario e non "chi ha un cookie": senza identita' non si e' il proprietario. */
-  function soloProprietario(req, res) {
-    if (req.authId === 'owner' && req.authRole === 'full') return true;
-    res.status(403).json({ error: 'solo il proprietario' });
-    return false;
-  }
 
   // Il magazzino rotto non deve diventare "nessun conflitto": chi scrive credenziali si ferma.
   function magazzinoPronto(res) {
@@ -115,58 +107,26 @@ function mount(app, deps = {}) {
     }
   });
 
-  // ── Pannello del proprietario ──────────────────────────────────────────────
-
-  app.get('/richieste', (req, res) => {
-    if (req.authId !== 'owner' || req.authRole !== 'full') return res.redirect(302, '/');
-    res.sendFile(path.join(PAGINE, 'richieste.html'), { headers: { 'Cache-Control': 'no-store' } });
-  });
-
-  app.get('/api/richieste', (req, res) => {
-    if (!soloProprietario(req, res)) return;
-    if (!magazzinoPronto(res)) return;
-    res.set('Cache-Control', 'no-store');
-    res.json({
-      richieste: reg.elenco(),
-      // Le persone servono a due cose: revocarle, e far vedere accanto a ogni richiesta se il
-      // nome cadrebbe su una di loro.
-      persone: auth.persone().map(p => ({ id: p.id, nome: p.nome, ruolo: p.ruolo, origine: p.origine })),
-      scadenzaInvitoOre: Math.round(reg.INVITO_TTL / 3600000),
-    });
-  });
-
-  app.post('/api/richieste/:id/approva', json, (req, res) => {
-    if (!soloProprietario(req, res)) return;
-    if (!magazzinoPronto(res)) return;
-    try {
-      const inv = reg.approva(req.params.id);
-      // Il token in chiaro esce di qui UNA volta sola: nel database c'e' solo l'impronta.
-      res.set('Cache-Control', 'no-store');
-      res.json({ ok: true, nome: inv.nome, token: inv.token, scadeIl: inv.scadeIl });
-    } catch (e) {
-      res.status(400).json({ error: e.message, code: e.code || null });
-    }
-  });
-
-  app.post('/api/richieste/:id/rifiuta', json, (req, res) => {
-    if (!soloProprietario(req, res)) return;
-    if (!magazzinoPronto(res)) return;
-    try { reg.rifiuta(req.params.id, req.body && req.body.motivo); res.json({ ok: true }); }
-    catch (e) { res.status(400).json({ error: e.message, code: e.code || null }); }
-  });
-
-  app.post('/api/persone/:id/revoca', json, (req, res) => {
-    if (!soloProprietario(req, res)) return;
-    const id = String(req.params.id || '');
-    if (auth.ID_RISERVATI.has(id)) return res.status(400).json({ error: 'questa voce non si revoca' });
-    // Revocare toglie l'ACCESSO, non i dati: il cookie cade al primo controllo (la sessione si
-    // riconfronta con l'elenco vivo a ogni richiesta) e le sue righe restano dove sono. Il nome
-    // resta riservato finche' qualcuno non decide di cancellare anche quelle: e' un gesto a
-    // parte, e va fatto sapendo cosa si butta.
-    const tolta = auth.togliPersona(id);
-    if (!tolta) return res.status(404).json({ error: 'nessuna persona con questo id' });
-    res.json({ ok: true });
-  });
+  /**
+   * QUI FINIVA IL PANNELLO DEL PROPRIETARIO, e non c'e' piu': elenco, approvazione, rifiuto e
+   * revoca stanno in `scripts/richieste.js`, che gira sulla macchina.
+   *
+   * IL PERCHE', deciso dal proprietario dopo averlo misurato. Un cookie scade, un account no.
+   * Approvare dal web voleva dire che una sessione presa in prestito per un minuto — un telefono
+   * lasciato sul bancone, non un attacco da internet — bastava a fabbricare un accesso
+   * PERMANENTE: l'approvazione restituisce un token che vale 48 ore e che si consuma senza piu'
+   * nessuna sessione, e l'account che ne nasce sopravvive alla scadenza del cookie, alla revoca
+   * della sessione e al cambio password del proprietario. Variante peggiore: approvando una
+   * richiesta LEGITTIMA gia' in coda, l'account nasce col nome del richiedente vero e con la
+   * password scelta da chi ha rubato il momento — e a schermo sembra tutto normale.
+   *
+   * Prima di questa funzione, la stessa sessione rubata poteva leggere e scrivere; non poteva
+   * creare un accesso permanente. Quel potere e' l'unica cosa che il pannello aggiungeva, ed e'
+   * la ragione per cui e' tornato dove non passa da un browser.
+   *
+   * Restano qui sopra solo le tre porte pubbliche, che pubbliche devono essere: chiedere un
+   * accesso, e usarne uno gia' approvato per scegliersi la password.
+   */
 }
 
 module.exports = { mount, PAGINE };

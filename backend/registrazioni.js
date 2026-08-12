@@ -113,6 +113,7 @@ function chiedi({ nome, email, ip } = {}) {
   const r = db.prepare(
     'INSERT INTO richieste (persona, nome, email, ip, creata_il, scade_il, stato) VALUES (?,?,?,?,?,?,\'attesa\')'
   ).run(persona, n, mail, ip ? String(ip).slice(0, 60) : null, t, t + RICHIESTA_TTL);
+  dbmod.annota('richiesta', { persona, nome: n, dettagli: `${mail} da ${ip || '?'}` });
   return { id: Number(r.lastInsertRowid), persona, nome: n, email: mail };
 }
 
@@ -162,6 +163,9 @@ function approva(idRichiesta, t = ora()) {
   const token = crypto.randomBytes(32).toString('base64url');
   db.prepare('INSERT INTO inviti (token, richiesta, persona, nome, creato_il, scade_il) VALUES (?,?,?,?,?,?)')
     .run(impronta(token), r.id, r.persona, r.nome, t, t + INVITO_TTL);
+  // Nel registro finisce che un invito e' stato emesso, MAI il token: chi legge il registro non
+  // deve poterlo usare, altrimenti il registro diventa un secondo posto da cui rubare l'accesso.
+  dbmod.annota('approvata', { persona: r.persona, nome: r.nome, dettagli: `invito valido fino al ${new Date(t + INVITO_TTL).toLocaleString('it-IT')}` });
   return { token, persona: r.persona, nome: r.nome, scadeIl: t + INVITO_TTL };
 }
 
@@ -172,6 +176,7 @@ function rifiuta(idRichiesta, motivo = null, t = ora()) {
   if (Number(cambiate.changes) !== 1) throw errore('Richiesta inesistente o gia\' decisa.', 'RICHIESTA_ASSENTE');
   // Un invito gia' emesso non deve sopravvivere al rifiuto.
   db.prepare('DELETE FROM inviti WHERE richiesta=? AND usato_il IS NULL').run(Number(idRichiesta));
+  dbmod.annota('rifiutata', { dettagli: `richiesta ${idRichiesta}${motivo ? ': ' + motivo : ''}` });
   return true;
 }
 
@@ -215,11 +220,33 @@ function consuma(token, password, t = ora()) {
     throw e;
   }
   db.prepare("UPDATE richieste SET stato='usata' WHERE id=?").run(i.richiesta);
+  // L'unico gesto di questa app che lascia una credenziale permanente. Se un giorno qui compare
+  // un nome che nessuno ha invitato, e' da questa riga che lo si scopre.
+  dbmod.annota('account-creato', { persona: nata.id, nome: nata.nome, dettagli: `ruolo ${nata.ruolo}` });
   return nata;
 }
 
+/**
+ * Toglie l'accesso a una persona e lo scrive nel registro.
+ *
+ * Sta qui e non nello script perche' "togliere una persona" e "annotare che e' stata tolta" sono
+ * un gesto solo: separarli vuol dire che prima o poi qualcuno chiamera' `auth.togliPersona`
+ * direttamente e il registro raccontera' una storia con un buco.
+ */
+function revoca(idONome) {
+  const q = String(idONome || '').trim();
+  const prima = auth.persone().find(p => p.id.toLowerCase() === q.toLowerCase() || (p.nome || '').toLowerCase() === q.toLowerCase());
+  if (!auth.togliPersona(q)) return null;
+  dbmod.annota('revocata', {
+    persona: prima ? prima.id : q,
+    nome: prima ? prima.nome : null,
+    dettagli: prima ? `veniva da ${prima.origine === 'web' ? 'una registrazione dal sito' : "l'elenco del .env"}` : null,
+  });
+  return prima || { id: q, nome: q };
+}
+
 module.exports = {
-  chiedi, elenco, approva, rifiuta, guarda, consuma, purga, viveContate,
+  chiedi, elenco, approva, rifiuta, guarda, consuma, purga, viveContate, revoca,
   emailPlausibile, impronta,
   RICHIESTA_TTL, INVITO_TTL, MAX_VIVE, NOME_MAX, EMAIL_MAX,
 };

@@ -91,10 +91,10 @@ Cosa deve esserci dentro, e perché:
   `build-guida` in cima: senza, non parte;
 - `docs/guida/**` — la Guida (`/guida`) si monta all'avvio da quei markdown, quindi `docs/` non
   è più solo documentazione;
-- `pagine/` — **dal 2026-08-12**: le pagine `/invito` e `/richieste`. Stanno fuori da `frontend/`
-  di proposito (quella cartella la serve `express.static`, e il filesystem non distingue le
-  maiuscole: un pannello lì dentro si scaricherebbe con `GET /richieste.html`). Se non arrivano,
-  chi apre un link d'invito prende un 404.
+- `pagine/` — **dal 2026-08-12**: la pagina `/invito`. Sta fuori da `frontend/` di proposito
+  (quella cartella la serve `express.static`, e il filesystem non distingue le maiuscole: quello
+  che ci si mette dentro si scarica anche scritto in un altro modo). Se non arriva, chi apre un
+  link d'invito prende un 404.
 
 ### 3. Dipendenze
 
@@ -160,9 +160,41 @@ Chi entra sta in `data/auth.json`, in due modi che non vanno confusi:
   dell'iMac: chi c'è entra, chi non c'è più non entra più, e le credenziali vengono copiate anche
   sulle destinazioni di `AMR_AUTH_ANCHE` (compreso l'M2 via `scp`). ⚠ **Rigenera il segreto dei
   cookie: dopo un giro, tutti rifanno il login.**
-- **dal sito** — chi si registra da `/login`, viene approvato da papà nel pannello `/richieste` e
-  si sceglie la password col link d'invito. Queste persone hanno `origine: "web"` e
-  **`utenti-da-env.js` NON le tocca**: non stanno nel `.env` e non è una dimenticanza.
+- **dal sito** — chi si registra da `/login`, viene approvato **da questa macchina** e si sceglie
+  la password col link d'invito. Queste persone hanno `origine: "web"` e **`utenti-da-env.js` NON
+  le tocca**: non stanno nel `.env` e non è una dimenticanza.
+
+### Approvare, rifiutare, revocare: `scripts/richieste.js`
+
+**Non c'è nessun pannello web, ed è una scelta.** C'era, dentro l'app, ed è stato tolto il
+2026-08-12 dopo averne misurato il costo: approvare una richiesta crea una credenziale
+**permanente**, cioè trasforma una sessione presa in prestito per un minuto — un telefono lasciato
+sul bancone, non un attacco da internet — in un accesso che sopravvive alla scadenza del cookie,
+alla revoca della sessione e al cambio della password del proprietario. L'approvazione restituisce
+un link valido 48 ore che si consuma **senza più nessuna sessione**, e la variante peggiore non
+fabbrica un account nuovo: approva una richiesta vera e se ne prende il nome.
+
+```bash
+ssh -i ~/.ssh/amr_m2_ed25519 -o IdentitiesOnly=yes massimo@100.66.119.62 \
+  'cd ~/AutoMotoRadar && /opt/homebrew/bin/node scripts/richieste.js --elenco'
+```
+
+`--elenco` · `--approva "Nome"` (stampa il link, **una volta sola**) · `--rifiuta "Nome" [motivo]`
+· `--revoca "Nome"` · `--registro [quante]`.
+
+⚠ **Si lancia SULL'M2, sempre.** Lanciato sull'iMac apre un **altro** archivio — qui `data/`
+esiste, quindi non darebbe nessun errore: mostrerebbe una coda vuota e approverebbe nel vuoto.
+Per questo lo script stampa sempre, prima di ogni cosa, il percorso del database che ha aperto:
+leggilo.
+
+Il registro (`--registro`) tiene richieste, approvazioni, account creati, rifiuti e revoche. Non è
+esposto da nessuna rotta web: ci arriva solo chi ha accesso alla macchina. **Non contiene i
+token**, nemmeno le loro impronte: un registro da cui si può rubare un accesso sarebbe un secondo
+posto da cui rubare un accesso.
+
+Nell'app resta una sola cosa che riguarda gli altri, e in **sola lettura**: il proprietario vede
+etichetta, criteri, ultimo controllo e numero di avvisi delle ricerche salvate di ciascuno — non
+la coda degli avvisi, che contiene gli annunci e i prezzi che quella persona sta seguendo.
 
 Il `.env` dell'M2 inietta **0 variabili** (sull'iMac ne inietta 18): gli accessi lì vivono in
 `data/auth.json` e funzionano, ma `scripts/utenti-da-env.js` su quella macchina non avrebbe

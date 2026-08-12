@@ -130,6 +130,28 @@ const MIGRAZIONI = [
     PRIMARY KEY (utente, giorno)
   );
   `,
+
+  // 2 — il registro degli accessi concessi. Non previene niente: serve ad accorgersene.
+  //
+  // Una richiesta approvata e un account nato sono gli unici due gesti di questa app che
+  // lasciano una credenziale permanente, e finora non li scriveva nessuno: il registro esistente
+  // (`db/011_access_log.sql`) vive su Postgres, che sulla macchina che serve le persone NON C'E'
+  // — li' `accessLog.record` esce alla prima riga senza scrivere e senza lamentarsi. Quindi
+  // sarebbe stato un registro che non registra.
+  //
+  // Nessuna rotta web lo espone, per decisione del proprietario: si legge solo da
+  // `scripts/richieste.js`, cioe' da chi ha accesso alla macchina.
+  `
+  CREATE TABLE registro (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    quando  INTEGER NOT NULL,
+    evento  TEXT    NOT NULL,
+    persona TEXT,
+    nome    TEXT,
+    dettagli TEXT
+  );
+  CREATE INDEX registro_quando ON registro(quando DESC);
+  `,
 ];
 
 let aperto = null;         // DatabaseSync vivo
@@ -262,6 +284,35 @@ function consumaRicerca(utente, max, t = Date.now()) {
   return { ok: true, usate: usate + 1, max, giorno: g };
 }
 
+/**
+ * SCRIVE NEL REGISTRO. Chiamata dopo che il gesto e' riuscito, mai prima.
+ *
+ * Non lancia: un registro che non si scrive non deve impedire un'approvazione che era giusta.
+ * Ma non tace nemmeno — l'errore finisce a schermo, perche' "il registro e' vuoto" e "il registro
+ * non ha potuto scrivere" sono due frasi diverse e chi legge deve poterle distinguere.
+ */
+function annota(evento, { persona = null, nome = null, dettagli = null } = {}) {
+  try {
+    const db = apri();
+    if (!db) { console.error(`[registro] "${evento}" non annotato: ${guasto() || stato()}`); return false; }
+    db.prepare('INSERT INTO registro (quando, evento, persona, nome, dettagli) VALUES (?,?,?,?,?)')
+      .run(Date.now(), String(evento), persona ? String(persona) : null,
+           nome ? String(nome) : null, dettagli ? String(dettagli).slice(0, 500) : null);
+    return true;
+  } catch (e) {
+    console.error(`[registro] "${evento}" non annotato: ${e.message}`);
+    return false;
+  }
+}
+
+/** Le ultime N righe del registro, dalla piu' recente. Solo per lo script di gestione. */
+function registro(n = 100) {
+  const db = apri();
+  if (!db) return [];
+  return db.prepare('SELECT quando, evento, persona, nome, dettagli FROM registro ORDER BY quando DESC, id DESC LIMIT ?')
+    .all(Math.max(1, Math.min(1000, Number(n) || 100)));
+}
+
 /** Quante ne ha gia' fatte oggi, senza consumarne una. */
 function ricercheOggi(utente, t = Date.now()) {
   const db = apri();
@@ -272,5 +323,5 @@ function ricercheOggi(utente, t = Date.now()) {
 
 module.exports = {
   apri, richiedi, stato, chiudi, percorso, cartella, giorno, guasto,
-  consumaRicerca, ricercheOggi, MIGRAZIONI,
+  consumaRicerca, ricercheOggi, annota, registro, MIGRAZIONI,
 };

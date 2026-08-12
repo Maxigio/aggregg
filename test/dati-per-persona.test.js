@@ -211,3 +211,33 @@ test('parco concorrenti: uno per persona, e i gruppi non si sovrascrivono', () =
   assert.strictEqual(comp.leggi('bruno')[0].gruppo, 'altro', 'il gruppo di Bruno non si e\' mosso');
   assert.throws(() => comp.scrivi('', []), /manca l'utente/);
 });
+
+test('le ricerche degli altri: il proprietario legge il meno possibile', () => {
+  daCapo();
+  // Che `listSaved` restituisca anche la coda degli avvisi non e' un dettaglio: significa che
+  // NON esporla e' una scelta, non un caso. Se un giorno la rotta passasse `listSaved` intera,
+  // il proprietario si troverebbe a leggere gli annunci e i prezzi che un altro sta seguendo.
+  const s = saved.addSaved('anna', { label: 'Golf', params: { tipo: 'auto', marca: 'Volkswagen' } });
+  const base = [R('a', 10000), R('b', 9000), R('c', 9500)];
+  saved.recordCheck('anna', s.id, base);
+  saved.recordCheck('anna', s.id, [...base, R('d', 8800)]);
+  const mia = saved.listSaved('anna')[0];
+  assert.ok(Array.isArray(mia.alerts) && mia.alerts.length, 'listSaved deve restituire la coda: e\' su quella che si taglia');
+  assert.ok(mia.alerts[0].url, 'e dentro ci sono gli annunci trovati');
+
+  const SRV = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
+  const i = SRV.indexOf("app.get('/api/saved/altri'");
+  assert.ok(i > 0, 'la rotta delle ricerche altrui non c\'e\' piu\'');
+  const blocco = SRV.slice(i, SRV.indexOf('\n});', i));
+
+  for (const vietato of ['alerts', 'digest', 'seen', 'alerted', 'fontiMute']) {
+    assert.ok(!new RegExp(`\\b${vietato}\\b`).test(blocco),
+      `la rotta espone "${vietato}": sapere che qualcuno segue "BMW Serie 3" e' una cosa, leggergli il taccuino un'altra`);
+  }
+  for (const atteso of ['label', 'params', 'lastChecked', 'novita']) {
+    assert.ok(blocco.includes(atteso), `manca "${atteso}": serve a capire se lo strumento viene usato`);
+  }
+  // E solo da guardare: niente cancellazione, niente controllo per conto di un altro.
+  assert.ok(!/delete|removeSaved|checkSaved|recordCheck/i.test(blocco),
+    'la rotta fa qualcosa oltre a leggere: cancellare farebbe sparire roba senza spiegazione, e controllare spenderebbe richieste alle fonti per conto di un altro');
+});

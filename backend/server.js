@@ -321,9 +321,13 @@ function percorsoGate(p) {
  *
  * Non sono "cose da amministratore": sono cose che esistono in UNA sola copia per macchina, e
  * che quindi non possono essere di nessun altro — il registro degli accessi di tutti, la
- * sessione del portale (una sola, e il CAPTCHA lo risolve chi e' fisicamente davanti al Mac),
- * il coordinamento dei nodi di crawl, e il pannello con nome, email e indirizzo di chi ha
- * chiesto di entrare.
+ * sessione del portale (una sola, e il CAPTCHA lo risolve chi e' fisicamente davanti al Mac) e
+ * il coordinamento dei nodi di crawl. Piu' una lettura sola: le ricerche salvate degli altri.
+ *
+ * La GESTIONE degli account non e' piu' in questo elenco perche' non e' piu' sul web: approvare
+ * una richiesta creava una credenziale PERMANENTE, cioe' trasformava una sessione presa in
+ * prestito per un minuto in un accesso che sopravvive alla scadenza del cookie. Vive in
+ * `scripts/richieste.js`, sulla macchina.
  *
  * `/api/subito/status` NON e' qui: e' una lettura senza effetti che ogni client interroga ogni
  * minuto per sapere se mostrare l'avviso. Owner-only sono le due rotte che la sessione la
@@ -333,7 +337,7 @@ function percorsoGate(p) {
  * lascerebbe scoperta `GET /api/richieste`, che e' proprio l'elenco delle persone.
  */
 const SOLO_OWNER = [
-  '/api/logs', '/api/richieste', '/api/persone', '/richieste',
+  '/api/logs', '/api/saved/altri',
   '/api/subito/bootstrap', '/api/subito/keep-alive',
   '/api/crawl', '/api/worker',
 ];
@@ -2423,6 +2427,38 @@ const utenteDi = req => req.authId || 'owner';
 app.get('/api/saved', (req, res) => {
   try { res.json({ saved: saved.listSaved(utenteDi(req)), erroreElenco: saved.ultimoErroreElenco() || null }); }
   catch (e) { if (!saved503(res, e)) throw e; }
+});
+
+/**
+ * LE RICERCHE DEGLI ALTRI, IN SOLA LETTURA — solo il proprietario (`SOLO_OWNER`).
+ *
+ * È una deroga voluta, decisa dal proprietario sapendo cosa costa: tutto il resto della gestione
+ * delle persone è uscito dal web proprio per non lasciare poteri a una sessione presa in
+ * prestito. Questa resta perché è di un'altra specie — si LEGGE, non si crea niente di
+ * permanente — e perché serve a sapere se lo strumento viene usato.
+ *
+ * Si legge il meno possibile: etichetta, criteri, quando è stata controllata e quanti avvisi
+ * ha. NON la coda degli avvisi, che contiene gli annunci trovati e i loro prezzi: sapere che
+ * qualcuno segue "BMW Serie 3 in Lombardia" è una cosa, leggergli il taccuino un'altra.
+ *
+ * E non si tocca niente: cancellare o far ripartire il controllo di una ricerca altrui
+ * resta fuori — la prima farebbe sparire roba senza spiegazione, la seconda spenderebbe
+ * richieste alle fonti per conto di un altro.
+ */
+app.get('/api/saved/altri', (req, res) => {
+  try {
+    const persone = auth.persone().filter(p => p.id !== 'owner');
+    res.set('Cache-Control', 'no-store').json({
+      persone: persone.map(p => ({
+        id: p.id, nome: p.nome, origine: p.origine,
+        ricerche: saved.listSaved(p.id).map(s => ({
+          id: s.id, label: s.label, params: s.params, createdAt: s.createdAt,
+          lastChecked: s.lastChecked, lastCheckedFull: s.lastCheckedFull, novita: s.novita,
+        })),
+      })),
+      erroreElenco: saved.ultimoErroreElenco() || null,
+    });
+  } catch (e) { if (!saved503(res, e)) throw e; }
 });
 
 app.post('/api/saved', express.json(), (req, res) => {

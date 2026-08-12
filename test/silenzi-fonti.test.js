@@ -1496,3 +1496,29 @@ test('moto.it: versione senza slug-modello e tetto famiglie arrivano al banner, 
   assert.ok(/versioneElencoMonco: params\.motoitVersioneElencoMonco/.test(SRV), 'il campo deve viaggiare nella risposta');
   assert.ok(/mo && mo\.versioneElencoMonco/.test(APP), 'il banner frontend deve leggerlo');
 });
+
+test('scheda tecnica: il numero di prova di auto.it non entra grezzo nella pagina', () => {
+  /**
+   * L'UNICO CAMPO DI TERZI CHE ENTRAVA GREZZO IN innerHTML, in tutta l'app.
+   *
+   * Su 73 punti in cui si scrive HTML nella pagina e 46 che interpolano una variabile, ogni
+   * campo raccolto dalle fonti passava da `escapeHtml` — tranne `v.prova`, dove la riga sopra e
+   * quella sotto escapavano gia'. Una dimenticanza, non una scelta.
+   *
+   * Non e' un dettaglio perche' la difesa qui e' a UNO strato: non esiste nessuna
+   * Content-Security-Policy in tutto il repo (verificato sotto), quindi fra un campo di terzi e
+   * l'esecuzione di codice nella sessione del proprietario c'e' quella funzione e basta.
+   */
+  const corpo = codice(corpoDi(APP, 'function vehMisureHTML('));
+  const riga = corpo.split('\n').find(r => r.includes('veh-mis-m'));
+  assert.ok(riga, 'la riga della misura non c\'e\' piu\': se l\'hai spostata, sposta anche questa prova');
+  assert.ok(/escapeHtml/.test(riga),
+    `il numero di prova torna grezzo nella pagina — e' testo scritto da auto.it, non un numero:\n  ${riga.trim()}`);
+
+  // E che sia davvero testo di terzi senza sanificazione, non un numero: lo si legge alla fonte.
+  const SCRAPER = fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'autoit-rilevamenti.js'), 'utf8');
+  assert.match(SCRAPER, /prova:\s*testo\(r\.NumeroProva\)/,
+    'il campo `prova` non arriva piu\' da NumeroProva: ricontrolla da dove viene prima di fidarti');
+  assert.match(SCRAPER, /const testo = v => \{ const t = String\(v == null \? '' : v\)\.trim\(\);/,
+    '`testo()` e\' cambiato: se adesso sanifica, questa prova va riscritta; se non lo fa, resta com\'e\'');
+});

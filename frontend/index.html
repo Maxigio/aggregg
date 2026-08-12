@@ -47,11 +47,6 @@
       <!-- La Guida. E' un <a> e non un <button>: si apre in una scheda a fianco, cosi' chi
            legge non perde la ricerca che stava facendo, e si puo' aprire col tasto centrale
            o mettere fra i preferiti come qualunque indirizzo. -->
-      <!-- Solo il proprietario: lo scopre app.js da /api/me e lo mostra. Nascosto di default,
-           cosi' chi non lo e' non vede un comando che prenderebbe 403. -->
-      <a class="theme-toggle" id="btnRichieste" href="/richieste" title="Richieste di accesso" aria-label="Richieste di accesso" style="display:none">
-        <svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-      </a>
       <a class="theme-toggle" id="btnGuida" href="/guida" target="_blank" rel="noopener" title="Guida" aria-label="Guida">
         <svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       </a>
@@ -398,6 +393,13 @@
             <button type="button" class="rnav-btn" id="btnControllaTutte">Controlla tutte</button>
           </div>
           <div id="ricercheList" class="p-3"></div>
+          <!-- Solo il proprietario, e solo per guardare: lo scopre app.js da /api/me e lo
+               mostra. Nascosto di default, così chi non lo è non vede un comando che
+               prenderebbe 403. -->
+          <details id="ricercheAltri" class="ricerche-altri" style="display:none">
+            <summary><span class="ra-freccia">▸</span> Le ricerche degli altri utenti <span class="ra-solo">solo tu le vedi</span></summary>
+            <div id="ricercheAltriCorpo"></div>
+          </details>
         </div>
         <div class="tab-pane fade" id="paneRicambi" role="tabpanel" aria-labelledby="tabRicambiBtn">
           <div id="ricambiFavList" class="p-3"></div>

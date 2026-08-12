@@ -510,7 +510,7 @@ function sincronizzaFiltriAuto(tipo) {
  */
 function applySoloProprietario() {
   document.body.classList.add('non-proprietario');
-  ['btnBootstrapSubito', 'btnRichieste'].forEach(id => {
+  ['btnBootstrapSubito'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
 }
@@ -585,7 +585,7 @@ async function init() {
     const me = await fetch('/api/me').then(r => (r.ok ? r.json() : null)).catch(() => null);
     if (me && me.role) myRole = me.role;
     if (me) { myId = me.id || null; sonoProprietario = me.proprietario === true; }
-    if (sonoProprietario) { const r = document.getElementById('btnRichieste'); if (r) r.style.display = ''; }
+    if (sonoProprietario) montaRicercheAltri();
     // SOLA LETTURA E' DELL'OSPITE ANONIMO, non del ruolo. La vecchia password demo era
     // condivisa e senza un nome: qualunque cosa avesse salvato sarebbe finita in un mucchio
     // comune, quindi non salvava niente. Chi si e' registrato ha un nome suo e le sue righe,
@@ -4348,6 +4348,70 @@ function updateSavedButton() {
   const btn = document.getElementById('btnSaved');
   if (btn) btn.style.display = 'inline-flex';
 }
+/**
+ * LE RICERCHE DEGLI ALTRI — solo per il proprietario, e solo da guardare.
+ *
+ * Si carica quando si apre il riquadro, non all'avvio: e' una curiosita' saltuaria, non una
+ * cosa che serve a ogni ricerca, e chiederla sempre vorrebbe dire leggere i dati di tutti a
+ * ogni apertura dell'app.
+ */
+function montaRicercheAltri() {
+  const box = document.getElementById('ricercheAltri');
+  if (!box) return;
+  box.style.display = '';
+  box.addEventListener('toggle', () => { if (box.open) caricaRicercheAltri(); });
+}
+
+async function caricaRicercheAltri() {
+  const corpo = document.getElementById('ricercheAltriCorpo');
+  if (!corpo) return;
+  corpo.textContent = 'Un momento…';
+  let d = null;
+  try { d = await fetch('/api/saved/altri').then(r => (r.ok ? r.json() : null)); } catch (_) { d = null; }
+  corpo.textContent = '';
+  if (!d) { corpo.textContent = 'Non riesco a leggerle adesso.'; return; }
+  if (d.erroreElenco) { corpo.textContent = d.erroreElenco; return; }
+  const conRicerche = (d.persone || []).filter(p => p.ricerche.length);
+  if (!conRicerche.length) {
+    corpo.textContent = (d.persone || []).length
+      ? 'Nessuno degli iscritti ha ancora salvato una ricerca.'
+      : 'Non c\'e\' ancora nessun altro iscritto.';
+    return;
+  }
+  for (const p of conRicerche) {
+    // textContent dappertutto: nome dell'iscritto ed etichetta della ricerca li ha scritti
+    // qualcun altro, e questa e' la scheda del proprietario.
+    const blocco = document.createElement('div');
+    blocco.className = 'ra-persona';
+    const chi = document.createElement('div');
+    chi.className = 'ra-chi';
+    chi.textContent = `${p.nome} — ${p.ricerche.length} ${p.ricerche.length === 1 ? 'ricerca' : 'ricerche'}`;
+    blocco.appendChild(chi);
+    for (const s of p.ricerche) {
+      const r = document.createElement('div');
+      r.className = 'ra-riga';
+      const et = document.createElement('span');
+      et.className = 'ra-et';
+      et.textContent = s.label || '(senza nome)';
+      r.appendChild(et);
+      const q = document.createElement('span');
+      q.className = 'ra-quando';
+      q.textContent = s.lastChecked
+        ? `controllata ${new Date(s.lastChecked).toLocaleDateString('it-IT')}`
+        : 'mai controllata';
+      r.appendChild(q);
+      if (s.novita) {
+        const n = document.createElement('span');
+        n.className = 'ra-nov';
+        n.textContent = `${s.novita} ${s.novita === 1 ? 'avviso' : 'avvisi'}`;
+        r.appendChild(n);
+      }
+      blocco.appendChild(r);
+    }
+    corpo.appendChild(blocco);
+  }
+}
+
 function renderSalvati() {
   const container = document.getElementById('salvatiList');
   if (salvati.length === 0) { container.innerHTML = '<p class="text-muted text-center py-4">Nessun annuncio salvato.</p>'; return; }
@@ -5233,7 +5297,12 @@ function vehMisureHTML() {
           ['autostrada', misNum(v.l100Autostrada, unitaCons(v))],
         ].filter(([, x]) => x);
         return `<div class="veh-mis-r"><div class="veh-mis-h">${escapeHtml(v.nome || '')}`
-          + `<span class="veh-mis-m">${[v.anno, v.prova].filter(Boolean).join(' · ')}</span></div>`
+          // `v.prova` e' il numero di prova scritto da auto.it (`autoit-rilevamenti.js:156`), e li'
+          // passa solo da String().trim(): e' testo di terzi, non un numero. Era l'unico campo di
+          // fonte esterna che entrava grezzo in innerHTML in tutta l'app — la riga sopra e quella
+          // sotto escapavano gia', questa no. Un'app senza CSP ha un solo strato di difesa, e uno
+          // strato solo non sopporta le dimenticanze.
+          + `<span class="veh-mis-m">${[v.anno, v.prova].filter(Boolean).map(x => escapeHtml(String(x))).join(' · ')}</span></div>`
           + `<div class="veh-mis-d">${dati.map(([k, x]) => `<span><em>${k}</em>${escapeHtml(String(x))}</span>`).join('')}</div></div>`;
       }).join('');
       corpo = `<div class="veh-mis">${righe}</div>`

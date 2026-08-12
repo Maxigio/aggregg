@@ -195,3 +195,44 @@ test('coda: il tetto vale sulle vive, e le vive scadono da sole', () => {
   assert.strictEqual(reg.viveContate(), 0);
   assert.doesNotThrow(() => reg.chiedi({ nome: 'Uno Ancora', email: 'u@esempio.it' }));
 });
+
+// ── Il registro, e la revoca ─────────────────────────────────────────────────
+
+test('registro: i due gesti che lasciano una credenziale permanente vengono scritti', () => {
+  daCapo();
+  const r = reg.chiedi({ nome: 'Livia Neri', email: 'livia@esempio.it', ip: '10.0.0.7' });
+  const inv = reg.approva(r.id);
+  reg.consuma(inv.token, 'liviapw12');
+
+  const righe = dbmod.registro(10);
+  assert.deepStrictEqual(righe.map(x => x.evento), ['account-creato', 'approvata', 'richiesta'],
+    'dalla piu\' recente: la nascita dell\'account, l\'approvazione, la richiesta');
+  assert.ok(righe.every(x => x.nome === 'Livia Neri'));
+
+  // IL TOKEN NON DEVE STARE NEL REGISTRO. Se ci finisse, chi legge il registro potrebbe usarlo:
+  // sarebbe un secondo posto da cui rubare un accesso, ed e' esattamente quello che si evita
+  // conservando del token la sola impronta.
+  const tutto = JSON.stringify(righe);
+  assert.ok(!tutto.includes(inv.token), 'il token in chiaro e\' finito nel registro');
+  assert.ok(!tutto.includes(reg.impronta(inv.token)), 'nemmeno la sua impronta serve li\' dentro');
+});
+
+test('registro: anche il rifiuto e la revoca lasciano traccia', () => {
+  daCapo();
+  const a = reg.chiedi({ nome: 'Mara Blu', email: 'mara@esempio.it' });
+  reg.rifiuta(a.id, 'non la conosco');
+
+  const b = reg.chiedi({ nome: 'Nadia Verdi', email: 'nadia@esempio.it' });
+  reg.consuma(reg.approva(b.id).token, 'nadiapw123');
+  assert.ok(auth.verifica('nadiapw123'), 'partenza: Nadia entra');
+
+  const tolta = reg.revoca('Nadia Verdi');
+  assert.strictEqual(tolta.id, 'nadia-verdi');
+  assert.strictEqual(auth.verifica('nadiapw123'), null, 'revocata vuol dire che non entra piu\'');
+
+  const eventi = dbmod.registro(20).map(x => x.evento);
+  assert.ok(eventi.includes('rifiutata'), 'il rifiuto non e\' stato annotato');
+  assert.ok(eventi.includes('revocata'), 'la revoca non e\' stata annotata');
+  // Revocare toglie l'ACCESSO, non i dati.
+  assert.strictEqual(reg.revoca('nessuno-cosi'), null, 'revocare chi non c\'e\' non inventa una riga');
+});

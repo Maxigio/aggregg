@@ -1686,3 +1686,19 @@ select.cp-unisci { max-width: 190px; }
 .rc-pagina:hover .rc-pagina-t { text-decoration: underline; }
 .rc-pagina-t { font-size: 0.82rem; }
 .rc-pagina-d { font-size: 0.72rem; color: var(--text-muted); margin-left: auto; white-space: nowrap; }
+
+/* Le ricerche degli altri: riquadro in fondo alla scheda Ricerche, solo per il proprietario. */
+.ricerche-altri { margin: 0 12px 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.ricerche-altri > summary { cursor: pointer; font-size: 0.84rem; font-weight: 700; color: var(--accent); list-style: none;
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; }
+.ricerche-altri > summary::-webkit-details-marker { display: none; }
+.ricerche-altri > summary:hover { border-color: var(--accent); }
+.ricerche-altri > summary .ra-freccia { transition: transform .12s; display: inline-block; }
+.ricerche-altri[open] > summary .ra-freccia { transform: rotate(90deg); }
+.ricerche-altri > summary .ra-solo { margin-left: auto; font-size: 0.7rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.ricerche-altri .ra-persona { margin-top: 10px; }
+.ricerche-altri .ra-chi { font-size: 0.78rem; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+.ricerche-altri .ra-riga { display: flex; gap: 8px; align-items: baseline; font-size: 0.76rem; color: var(--muted); padding: 2px 0 2px 8px; }
+.ricerche-altri .ra-et { color: var(--text); }
+.ricerche-altri .ra-quando { margin-left: auto; white-space: nowrap; }
+.ricerche-altri .ra-nov { color: var(--accent); font-weight: 700; white-space: nowrap; }
