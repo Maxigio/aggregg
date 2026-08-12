@@ -67,7 +67,8 @@
     button.submit:hover { background: #1a5fcc; }
     .err { display: none; margin-top: 14px; font-size: 0.85rem; color: var(--neg); background: var(--neg-bg); border: 1px solid var(--neg); border-radius: 5px; padding: 8px 10px; }
     .err.show { display: block; }
-    .foot { margin-top: 16px; display: flex; align-items: center; justify-content: space-between; }
+    /* Il tasto del tema resta a destra anche adesso che l'etichetta a sinistra non c'e' piu'. */
+    .foot { margin-top: 16px; display: flex; align-items: center; justify-content: flex-end; }
     .foot .hint { font-size: 0.76rem; color: var(--muted); }
     .lhelp { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin-left: 4px;
       border: 1px solid var(--line2); border-radius: 50%; font-size: 0.6rem; font-weight: 700; color: var(--muted);
@@ -108,23 +109,21 @@
     </button>
     <div class="claim">Aggregatore prezzi auto e moto usate in tutta Italia.</div>
     <div class="qr-box" id="qrBox"></div>
-    <label for="password">Password <span class="lhelp" tabindex="0" role="button" aria-label="Aiuto">?<span class="lhelp-tip">Inserisci la password ricevuta. La demo è in sola lettura: cerca e naviga liberamente, i salvataggi e il pannello admin sono disattivati.</span></span></label>
+    <label for="password">Password <span class="lhelp" tabindex="0" role="button" aria-label="Aiuto">?<span class="lhelp-tip">Inserisci la password che hai scelto quando hai attivato il tuo accesso. Se non ne hai ancora una, chiedi la registrazione qui sotto.</span></span></label>
     <input type="password" id="password" name="password" autocomplete="current-password" autofocus required />
     <button type="submit" class="submit">Entra</button>
     <div class="err" id="err"></div>
     <div class="foot">
-      <span class="hint">Demo</span>
       <button type="button" class="theme-toggle" id="themeBtn" title="Cambia tema" aria-label="Cambia tema">☾</button>
     </div>
   </form>
 
   <details class="card chiedi" id="chiedi">
-    <summary>Non hai un accesso? Chiedilo</summary>
+    <summary>Registrati</summary>
     <form id="modReg" autocomplete="off">
       <p class="spiega">
-        Lascia nome ed email: la richiesta arriva al proprietario, che decide lui. Se ti approva ti manda
-        un link con cui scegli la tua password — quindi qui non devi sceglierne nessuna.
-        L'email serve solo a farti riconoscere: non ti arriva niente, non viene controllata.
+        Inoltra una richiesta di registrazione per accedere all'applicazione.
+        Ogni richiesta viene validata prima di essere approvata.
       </p>
       <label for="regNome">Nome e cognome</label>
       <input type="text" id="regNome" name="nome" maxlength="60" autocomplete="name" required />
