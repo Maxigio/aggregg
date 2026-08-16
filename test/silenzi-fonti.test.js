@@ -116,6 +116,44 @@ test('cache-disco: scrive accanto ai dati utente e legge il file impacchettato c
   }
 });
 
+// ─── La cache non si distrugge da sola se la scrittura si interrompe ─────────
+test('cache-disco: il file vero non si tocca finche\' la copia nuova non e\' completa', async () => {
+  const cacheDisco = require('../backend/scrapers/cache-disco');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-atomica-'));
+  const vecchio = process.env.USER_DATA_PATH;
+  process.env.USER_DATA_PATH = dir;
+
+  // Si guarda DOVE va ogni writeFileSync. Scrivere dritto sulla destinazione e' il difetto:
+  // un processo ucciso a meta' lascia un JSON troncato, `leggi()` non lo interpreta e riparte
+  // da zero — cioe' butta l'intera cache e fa ripartire la raffica di richieste che questa
+  // cache esiste per evitare.
+  const scritture = [];
+  const writeVero = fs.writeFileSync, renameVero = fs.renameSync;
+  fs.writeFileSync = (p, ...r) => { scritture.push(String(p)); return writeVero.call(fs, p, ...r); };
+  let rinominati = 0;
+  fs.renameSync = (a, b) => { rinominati++; return renameVero.call(fs, a, b); };
+
+  try {
+    const file = path.join(dir, 'prova-atomica.json');
+    const destinazione = path.join(dir, 'cache', 'prova-atomica.json');
+    const conCache = cacheDisco.crea(file, { tag: 'prova', schema: 1, ttl: 60000, max: 10 });
+    assert.strictEqual(await conCache('k', async () => 'valore'), 'valore');
+
+    assert.ok(!scritture.includes(destinazione),
+      'la destinazione non deve MAI essere il bersaglio di writeFileSync: si scrive sul .tmp e si rinomina');
+    assert.ok(scritture.includes(destinazione + '.tmp'), 'la copia nuova va scritta sul .tmp accanto');
+    assert.strictEqual(rinominati, 1, 'e resa buona con un rename, che e\' atomico');
+
+    // A giro finito il mezzo file non resta in giro, e il file vero si legge.
+    assert.ok(!fs.existsSync(destinazione + '.tmp'), 'nessun .tmp avanzato dopo una scrittura riuscita');
+    assert.strictEqual(JSON.parse(fs.readFileSync(destinazione, 'utf8')).voci.k.d, 'valore');
+  } finally {
+    fs.writeFileSync = writeVero;
+    fs.renameSync = renameVero;
+    if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
+  }
+});
+
 // ─── Ricambi: zero articoli "sospetti" non e' zero articoli ──────────────────
 test('ricambi: una fonte che dichiara di non aver letto NON esce come "empty"', async () => {
   const { searchRicambi } = require('../backend/ricambi-core');

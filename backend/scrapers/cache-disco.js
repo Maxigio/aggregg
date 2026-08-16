@@ -78,10 +78,22 @@ function crea(file, opt = {}) {
       for (const k of vive) nuove[k] = c.voci[k];
       c.voci = nuove;
     }
+    // SI SCRIVE ACCANTO, POI SI RINOMINA. Scrivendo dritto sul file di destinazione, un
+    // processo ucciso o un disco pieno a meta' scrittura lasciavano un JSON troncato: `leggi()`
+    // non riesce a interpretarlo e riparte da `{voci:{}}`, cioe' la cache sparisce TUTTA. Non e'
+    // un caso di scuola: e' esattamente la raffica di ricrawl che questa cache esiste per
+    // evitare (vedi il commento in cima, "proprio la raffica che si becca il 403"). Il rename
+    // e' atomico dentro lo stesso filesystem, e il `.tmp` sta nella stessa cartella apposta.
+    // Stesso schema gia' usato da backend/auth.js:76.
+    //
     // Una cache che non riesce a scrivere continua a funzionare — in memoria — ma il costo
     // si paga al riavvio, e in silenzio non se ne accorge nessuno.
-    try { fs.writeFileSync(fileScrittura, JSON.stringify(c)); scritturaKo = false; }
+    const tmp = fileScrittura + '.tmp';
+    try { fs.writeFileSync(tmp, JSON.stringify(c)); fs.renameSync(tmp, fileScrittura); scritturaKo = false; }
     catch (e) {
+      // Il mezzo file non resta in giro: se il rename non e' avvenuto, quel `.tmp` non e' la
+      // cache di nessuno e al prossimo giro darebbe solo fastidio.
+      try { fs.unlinkSync(tmp); } catch (_) { /* non c'era: meglio cosi' */ }
       if (!scritturaKo) { scritturaKo = true; console.warn('[' + tag + '] cache non scrivibile in ' + fileScrittura + ' (' + e.message + '): resta in memoria e si perde al riavvio'); }
     }
   };
