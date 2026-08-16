@@ -174,18 +174,55 @@ alla revoca della sessione e al cambio della password del proprietario. L'approv
 un link valido 48 ore che si consuma **senza più nessuna sessione**, e la variante peggiore non
 fabbrica un account nuovo: approva una richiesta vera e se ne prende il nome.
 
+**Chi ha chiesto di entrare, e chi entra già**
+
 ```bash
-ssh -i ~/.ssh/amr_m2_ed25519 -o IdentitiesOnly=yes massimo@100.66.119.62 \
-  'cd ~/AutoMotoRadar && /opt/homebrew/bin/node scripts/richieste.js --elenco'
+ssh -i ~/.ssh/amr_m2_ed25519 -o IdentitiesOnly=yes massimo@100.66.119.62 'cd ~/AutoMotoRadar && /opt/homebrew/bin/node scripts/richieste.js --elenco'
 ```
 
-`--elenco` · `--approva "Nome"` (stampa il link, **una volta sola**) · `--rifiuta "Nome" [motivo]`
-· `--revoca "Nome"` · `--registro [quante]`.
+**Approvare** — stampa il link da girare, e lo stampa **una volta sola**
 
-⚠ **Si lancia SULL'M2, sempre.** Lanciato sull'iMac apre un **altro** archivio — qui `data/`
-esiste, quindi non darebbe nessun errore: mostrerebbe una coda vuota e approverebbe nel vuoto.
-Per questo lo script stampa sempre, prima di ogni cosa, il percorso del database che ha aperto:
-leggilo.
+```bash
+ssh -i ~/.ssh/amr_m2_ed25519 -o IdentitiesOnly=yes massimo@100.66.119.62 'cd ~/AutoMotoRadar && /opt/homebrew/bin/node scripts/richieste.js --approva "Mario Rossi"'
+```
+
+**Rifiutare** (il motivo è facoltativo e finisce nel registro)
+
+```bash
+ssh -i ~/.ssh/amr_m2_ed25519 -o IdentitiesOnly=yes massimo@100.66.119.62 'cd ~/AutoMotoRadar && /opt/homebrew/bin/node scripts/richieste.js --rifiuta "Mario Rossi" non lo conosco'
+```
+
+**Togliere l'accesso a qualcuno**
+
+```bash
+ssh -i ~/.ssh/amr_m2_ed25519 -o IdentitiesOnly=yes massimo@100.66.119.62 'cd ~/AutoMotoRadar && /opt/homebrew/bin/node scripts/richieste.js --revoca "Massimo"'
+```
+
+**Il registro: cosa è successo e quando**
+
+```bash
+ssh -i ~/.ssh/amr_m2_ed25519 -o IdentitiesOnly=yes massimo@100.66.119.62 'cd ~/AutoMotoRadar && /opt/homebrew/bin/node scripts/richieste.js --registro 30'
+```
+
+Comodità, una riga nel proprio `~/.zshrc` — poi basta `amr-richieste --elenco`:
+
+```bash
+echo "alias amr-richieste=\"ssh -i ~/.ssh/amr_m2_ed25519 -o IdentitiesOnly=yes massimo@100.66.119.62 'cd ~/AutoMotoRadar && /opt/homebrew/bin/node scripts/richieste.js'\"" >> ~/.zshrc
+```
+
+Tre cose che evitano una sorpresa:
+
+- **Il nome basta parziale**: `--approva "carla"` trova «Carla Prova». Se corrisponde a due
+  richieste non ne sceglie una — le mostra e chiede il numero. Su un gesto che crea un accesso
+  non si decide al posto di chi comanda.
+- ⚠ **Si lancia SULL'M2, sempre.** Lanciato sull'iMac apre un **altro** archivio: qui `data/`
+  esiste, quindi non darebbe nessun errore — mostrerebbe una coda vuota e approverebbe nel vuoto.
+  Per questo la prima riga stampata è sempre il percorso del database aperto
+  (`Archivio: /Users/massimo/AutoMotoRadar/data/amr-utenti.db [ok]`): **leggila**.
+- **Le virgolette attorno al nome servono**, perché c'è uno spazio: senza,
+  `--approva Mario Rossi` legge solo `Mario`.
+
+Quando arriva una richiesta **non lo dice nessuno**: si vede con `--elenco`.
 
 Il registro (`--registro`) tiene richieste, approvazioni, account creati, rifiuti e revoche. Non è
 esposto da nessuna rotta web: ci arriva solo chi ha accesso alla macchina. **Non contiene i
