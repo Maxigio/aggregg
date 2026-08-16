@@ -1,6 +1,6 @@
 const path = require('path');
 // .env dalla ROOT della repo con path ASSOLUTO: dotenv di default cerca in
-// process.cwd(), che sotto Electron può non essere la repo → DATABASE_URL perso.
+// process.cwd(), che sotto Electron può non essere la repo → tutto il .env perso.
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 // Logger centralizzato: install SUBITO dopo dotenv → tee dei console.* + file rotante +
 // handler uncaught. Cattura anche il boot dei moduli sotto (che loggano al require).
@@ -10,19 +10,12 @@ const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
-const { buildWorkerBundle, OUTFILE: WORKER_BUNDLE } = require('../scripts/build-worker-bundle');   // F9
 const { buildFrontendSync } = require('../scripts/build-frontend');   // F39: minify (via commenti) app.js/style.css
 const { buildGuidaSync, mtimeGuida } = require('../scripts/build-guida');   // F41: la Guida, montata da docs/guida/*.md
 const filtriAuto = require('./filtri-auto');            // filtri avanzati auto → dialetto di ogni fonte
 const versioneVerifica = require('./versione-verifica');  // la versione, verificata da noi su tutte le fonti
 const auth = require('./auth');
 const utentiDb = require('./utenti-db');                                // il magazzino delle persone (SQLite)
-const db = require('./db');
-const crawler = require('./crawler');
-const listingsRepo = require('./db/listings-repo');
-const healthRepo = require('./db/health-repo');
-const watchlistRepo = require('./db/watchlist-repo');
-const accessLog = require('./db/access-log-repo');                      // F50 Fase 4 — log eventi/accessi
 const qrcode = require('qrcode-generator');
 const scrapeSubito    = require('./scrapers/subito-playwright');
 const scrapeAutoscout = require('./scrapers/autoscout-playwright');
@@ -321,8 +314,8 @@ function percorsoGate(p) {
  *
  * Non sono "cose da amministratore": sono cose che esistono in UNA sola copia per macchina, e
  * che quindi non possono essere di nessun altro — il registro degli accessi di tutti, la
- * sessione del portale (una sola, e il CAPTCHA lo risolve chi e' fisicamente davanti al Mac) e
- * il coordinamento dei nodi di crawl. Piu' una lettura sola: le ricerche salvate degli altri.
+ * sessione del portale (una sola, e il CAPTCHA lo risolve chi e' fisicamente davanti al Mac).
+ * Piu' una lettura sola: le ricerche salvate degli altri.
  *
  * La GESTIONE degli account non e' piu' in questo elenco perche' non e' piu' sul web: approvare
  * una richiesta creava una credenziale PERMANENTE, cioe' trasformava una sessione presa in
@@ -339,7 +332,6 @@ function percorsoGate(p) {
 const SOLO_OWNER = [
   '/api/logs', '/api/saved/altri',
   '/api/subito/bootstrap', '/api/subito/keep-alive',
-  '/api/crawl', '/api/worker',
 ];
 const soloOwner = p => SOLO_OWNER.some(x => p === x || p.startsWith(x + '/'));
 
@@ -483,15 +475,11 @@ async function postLogin(req, res) {
     const precedenti = (rec && ora - (rec.last || 0) < LOCK_DECAY_MS) ? rec.fails : 0;
     const fails = precedenti + 1;
     loginAttempts.set(ip, { fails, until: fails >= LOCK_MAX ? ora + LOCK_MS : 0, last: ora });
-    accessLog.record('login_fail', { ip, ua: req.headers['user-agent'] });   // best-effort
     await new Promise(r => setTimeout(r, 1000));   // delay anti-brute, DOPO aver contato
     return res.redirect(302, '/login?err=1');
   }
 
   loginAttempts.delete(ip);
-  // Nel registro finisce CHI e' entrato, non solo con che ruolo: con una password a testa
-  // "login_ok demo" non diceva piu' niente a nessuno.
-  accessLog.record('login_ok', { role, utente: utente.id, nome: utente.nome, ip, ua: req.headers['user-agent'] });
   const token  = auth.makeToken(role, utente.id);
   const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
   res.setHeader('Set-Cookie', `amr_auth=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(auth.TTL_MS / 1000)}${secure}`);
@@ -769,99 +757,6 @@ app.use(express.static(path.join(__dirname, '../frontend'), {
   },
 }));
 
-// §F1.5 — salute crawler / rilevamento ban. DIETRO auth (l'app è esposta via
-// Funnel pubblico → non auth-free). Sommario {ok, blocked[], degraded[], fonti[]}.
-app.get('/api/crawler/health', async (req, res) => {
-  try {
-    res.json(await healthRepo.getHealth());
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// §F3 — fill distribuito: coordinatore lease/ingest (DIETRO auth).
-// Il worker (Surface) prende 1 target mai crawlato, lo crawla dal SUO IP, e
-// rimanda i risultati qui. Niente esposizione DB: tutto via HTTP autenticato.
-app.get('/api/crawl/lease', async (req, res) => {
-  try {
-    const device = String(req.query.device || '').trim() || 'worker';
-    // F5 — mode-aware. Default 'fill' (preserva il worker Surface già deployato,
-    // che non passa mode). I worker nuovi passano &mode=due per il refresh giornaliero.
-    const mode = req.query.mode === 'due' ? 'due' : 'fill';
-    const t = await watchlistRepo.leaseDueTarget(device, mode);
-    if (!t) return res.json({ none: true });
-    // Risolvi qui mmmv AS24 + slug Moto.it (catalogo sull'iMac) → il worker non serve il catalogo.
-    const as = crawler._resolveAutoscout(t);
-    const out = { id: t.id, tipo: t.tipo, marca: t.marca, modello: t.modello, mmmv: (as && as.mmmv) || null };
-    if (t.tipo === 'moto') {
-      const mt = await crawler._resolveMotoit(t);
-      out.motoitBrandSlug = (mt && mt.brandSlug) || null;
-      out.motoitModelSlug = (mt && mt.modelSlug) || null;
-    }
-    res.json(out);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.post('/api/crawl/ingest', express.json({ limit: '10mb' }), async (req, res) => {
-  try {
-    const { id, device, sources, mode } = req.body || {};
-    const tRow = await db.query('SELECT tipo, marca, modello FROM watchlist WHERE id=$1', [id]);
-    if (!tRow || !tRow.rows.length) return res.status(400).json({ error: 'target id sconosciuto' });
-    const target = tRow.rows[0];
-    const node = String(device || 'worker').trim();
-    // markGone SOLO sul refresh giornaliero (mode='due'). Il 'fill' (1° backfill,
-    // anche di target già popolati dall'iMac) vede da un IP/result-set diverso →
-    // l'assenza di un URL NON è venduto. Default (mode assente) = non-due → no markGone.
-    const doMarkGone = mode === 'due';
-    let written = 0;
-    for (const s of (Array.isArray(sources) ? sources : [])) {
-      if (!s || !s.fonte) continue;
-      if (s.error) { await healthRepo.record(s.fonte, { error: s.error, node }); continue; }
-      const raw = Array.isArray(s.items) ? s.items : [];
-      // Salute = stato del FETCH → conteggio PRE-filtro (Fix D).
-      await healthRepo.record(s.fonte, { count: raw.length, node });
-      // Guard anti-rumore Subito (free-text) PRIMA dell'upsert (come crawler iMac).
-      const items = s.fonte === 'subito' ? raw.filter(i => crawler._titleMatchesModel(i.titolo, target.modello)) : raw;
-      const r = await listingsRepo.upsertListings(items, target);
-      written += r.written;
-      // F5 — sold-detection dai nodi remoti SOLO su 'due' (refresh giornaliero),
-      // fonte-scoped (un worker WORKER_SOURCES=moto NON tocca autoscout/subito) e
-      // solo se vista COMPLETA (!truncated). Partizione (1 target=1 nodo) + K=2.
-      if (doMarkGone && !s.truncated) await listingsRepo.markGone(target, items.map(i => i.url), { fonte: s.fonte });
-    }
-    await watchlistRepo.completeTarget(id);
-    res.json({ written });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ─── F9 — il centrale serve il worker come 1 file bundle (i nodi lo scaricano, niente git/npm) ──
-let workerBundleVersion = null;
-async function ensureWorkerBundle() {
-  // Ricostruisce a ogni boot → il bundle servito combacia col codice iMac corrente.
-  try {
-    await buildWorkerBundle();
-  } catch (e) {
-    console.warn('[worker-bundle] build fallita (esbuild installato? `npm install`):', e.message);
-  }
-  try {
-    const buf = fs.readFileSync(WORKER_BUNDLE);
-    workerBundleVersion = crypto.createHash('sha256').update(buf).digest('hex');
-    console.log(`[worker-bundle] pronto v${workerBundleVersion.slice(0, 12)} (${buf.length} byte)`);
-  } catch (_) {
-    console.warn('[worker-bundle] nessun bundle disponibile → /api/worker/bundle.js darà 503');
-  }
-}
-
-app.get('/api/worker/bundle/version', (req, res) => res.json({ version: workerBundleVersion }));
-app.get('/api/worker/bundle.js', (req, res) => {
-  if (!workerBundleVersion) return res.status(503).json({ error: 'bundle non pronto' });
-  res.type('application/javascript').sendFile(WORKER_BUNDLE);
-});
-
 // Endpoint lista brand (con metadata per-sito) — alimenta il dropdown marca
 app.get('/api/brands', (req, res) => {
   const { tipo } = req.query;
@@ -1118,7 +1013,7 @@ app.get('/api/versioni', (req, res) => {
 });
 
 // (campagna E6: la rotta /api/moto-versions e' stata tolta — zero chiamanti misurati
-// in frontend e crawler; le versioni della tendina passano da /api/versioni qui sopra,
+// nel frontend; le versioni della tendina passano da /api/versioni qui sopra,
 // e la traduzione Moto.it della versione avviene dentro runSearch.)
 
 // §15 — Arricchimento spec ON-CLICK: fetch pagina-dettaglio → { cambio, potenzaCv,
@@ -1297,7 +1192,7 @@ function sciogli(r) {
  * @param {Function|Promise} lavoro  meglio una FUNZIONE: cosi' parte dentro il contesto di
  *   annullamento e, quando il timeout scade, la richiesta si chiude davvero invece di
  *   restare aperta verso la fonte a scaricare una pagina che nessuno guardera'. Una Promise
- *   gia' avviata si accetta ancora (il crawler e i test la passano cosi'), ma non e'
+ *   gia' avviata si accetta ancora (i test la passano cosi'), ma non e'
  *   annullabile: e' nata fuori dal contesto.
  */
 async function runSource(lavoro, ms, nomeSito) {
@@ -1377,13 +1272,6 @@ app.get('/api/search', async (req, res) => {
   }
   try {
     const out = await runSearch(parsed.params);
-    accessLog.record('search', {                                   // best-effort, fire-and-forget
-      role: req.authRole || (auth.isEnabled() ? null : 'full'),
-      ip: clientIp(req),
-      ua: req.headers['user-agent'],
-      query: parsed.params,
-      resultCount: Array.isArray(out && out.risultati) ? out.risultati.length : null,
-    });
     res.json(out);
   } catch (e) {
     console.error('[runSearch]', e.message);
@@ -2263,14 +2151,6 @@ async function runSearchCore(params) {
       ? 'modello filtrato per titolo'
       : (asRes.reason || null);
 
-  // §DB — scrittura opportunistica on-search (fire-and-forget, NON blocca la
-  // risposta). Solo con marca+modello entrambi presenti (no brand-only/serie →
-  // model_key ambiguo). Dati gratis dei modelli cercati a mano.
-  if (params.marca && params.modello && db.isEnabled()) {
-    listingsRepo.upsertListings(risultati, { tipo: params.tipo, marca: params.marca, modello: params.modello })
-      .catch(e => console.warn('[db] on-search write KO:', e.message));
-  }
-
   /**
    * LA VERSIONE, VERIFICATA DA NOI E UGUALE PER TUTTE E TRE LE COLONNE.
    *
@@ -2631,8 +2511,8 @@ if (WHATSAPP_ON) {
 
 // Si mette in ascolto SOLO se questo file e' il programma avviato, mai se qualcuno lo
 // richiede come modulo. Serve ai test: la catena di risoluzione marca/modello vive qui dentro
-// e finora nessun test poteva toccarla, perche' bastava il require ad aprire una porta,
-// inizializzare il DB, compilare il bundle worker e scaldare due browser headless.
+// e finora nessun test poteva toccarla, perche' bastava il require ad aprire una porta
+// e scaldare due browser headless.
 // Produzione invariata: sia `node backend/server.js` sia il fork di Electron eseguono questo
 // file come principale, quindi require.main === module e' vero in entrambi i casi.
 /**
@@ -2660,29 +2540,6 @@ if (avviaAscolto && auth.stato() === 'assente') {
 const server = !avviaAscolto ? null : app.listen(PORT, () => {
   console.log(`Server avviato su http://localhost:${PORT}`);
 
-  // F9 — costruisce/aggiorna il bundle worker servito ai nodi (best-effort, non blocca il boot).
-  ensureWorkerBundle();
-
-  // §DB — init schema (migrazioni) + avvio crawler proattivo. Best-effort: se
-  // DATABASE_URL manca o il DB è giù, l'app funziona lo stesso (crawler OFF).
-  if (db.isEnabled()) {
-    db.init()
-      .then(applied => {
-        if (applied.length) console.log(`[db] migrazioni applicate: ${applied.join(', ')}`);
-        // F60 — scheduler 24h DISATTIVATO di default: il crawl si avvia MANUALMENTE
-        // dalla TUI owner (coda crawl_queue + drainer scripts/crawl-once.js). Per
-        // riattivare lo scheduler automatico: CRAWLER_AUTO=1.
-        if (process.env.CRAWLER_AUTO === '1') {
-          crawler.start({ withLock: withSavedLock });
-          console.log('[crawler] auto-scheduler ON (CRAWLER_AUTO=1)');
-        } else {
-          console.log('[crawler] auto-scheduler OFF (CRAWLER_AUTO≠1) → crawl manuale dalla TUI');
-        }
-      })
-      .catch(e => console.error('[db] init KO (crawler OFF):', e.message));
-  } else {
-    console.log('[db] DATABASE_URL assente → persistenza/crawler disattivati');
-  }
   // Pre-warm Chromium: primo lancio sposta il costo (3-5s × 3 browser) dal
   // primo /api/search al boot, eliminando il rischio di timeout sulla prima
   // ricerca quando i 3 scraper partono in parallelo.

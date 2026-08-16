@@ -20,8 +20,7 @@
     "dist:mac": "electron-builder --mac --x64",
     "dist:mac-arm64": "electron-builder --mac --arm64",
     "dist:win": "electron-builder --win --x64",
-    "test": "AMR_LOG_DIR=\"$(mktemp -d)\" node --test test/*.test.js",
-    "build:worker": "node scripts/build-worker-bundle.js"
+    "test": "AMR_LOG_DIR=\"$(mktemp -d)\" node --test test/*.test.js"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -125,7 +124,6 @@
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
     "marked": "^18.0.7",
-    "pg": "^8.21.0",
     "playwright": "^1.59.1",
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",

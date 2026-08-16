@@ -20,7 +20,6 @@ data/models.json.bak
 
 # Artefatti runtime (non versionare)
 data/bootstrap.log
-data/crawl-once.log
 data/chrome-profile/
 AutoMotoRadar-Data/
 
@@ -32,10 +31,6 @@ data/auth.json
 data/*.db
 data/*.db-wal
 data/*.db-shm
-# Config nodo worker (contiene la password app in chiaro) — MAI versionare
-worker/node.config.json
-# Bundle worker generato da esbuild (rigenerato al boot del server) — non versionare
-worker/dist/
 # Ricerche salvate utente (runtime)
 data/saved-searches.json
 # Concorrenti monitorati (runtime, e' l'elenco di chi guarda il proprietario)

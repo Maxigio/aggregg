@@ -17,8 +17,9 @@ const path = require('path');
  * "Citro\u00ebn" e "Citroen", "Regolarit\u00e0" e "Regolarita" diventano la stessa cosa.
  *
  * E' UNA SOLA apposta, e chi confronta marche o modelli importa questa. Erano tre copie che
- * facevano cose diverse \u2014 quella di server.js e quella di watchlist-overlaps.js NON toglievano
- * gli accenti \u2014 e due funzioni che normalizzano diverso sono la sorgente classica del mismatch
+ * facevano cose diverse \u2014 quella di server.js e quella di watchlist-overlaps.js (file poi
+ * cancellato col crawler) NON toglievano gli accenti \u2014 e due funzioni che normalizzano
+ * diverso sono la sorgente classica del mismatch
  * silenzioso: l'annuncio sparisce dai risultati e nessuno vede un errore. Misurato sui dati veri:
  * 69 nomi trattati diversamente dalle due forme, fra cui il marchio Citroen ("citron" contro
  * "citroen") e 32 modelli moto accentati, proprio dove il filtro sui titoli e' attivo.

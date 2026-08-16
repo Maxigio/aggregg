@@ -65,7 +65,6 @@ const DELLA_MACCHINA = [
   '/api/logs',
   '/api/saved/altri',
   '/api/subito/bootstrap', '/api/subito/keep-alive',
-  '/api/crawl/lease', '/api/worker/bundle.js',
 ];
 
 test('cancello: il proprietario passa dappertutto', () => {

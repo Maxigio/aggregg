@@ -83,8 +83,9 @@ una fonte muta per un mercato vuoto, mostrare un numero che non corrisponde alla
   non vista — confronto largo, ma le corrispondenze per parole si **dichiarano**.
 - **Ordine dei lavori**: per famiglia di causa, dai gravi. Le famiglie chiuse si riaprono
   quando la stessa forma ricompare dove la regola non era arrivata.
-- **Crawler / DB / worker**: area in pausa, **non toccare** (decisione esplicita). Tre
-  problemi gravi lì dentro restano aperti e vanno ripresi quando Postgres torna vivo.
+- **Crawler / DB / worker**: **cancellati dal repo il 2026-08-17**, decisione del proprietario.
+  Non sono più «in pausa»: non esistono. I problemi che restavano aperti lì dentro sono chiusi
+  per sparizione dell'oggetto — non vanno più cercati né riaperti.
 - **I problemi minori** (43, non 36): primo giro fatto — vedi più sotto.
 
 ---
@@ -224,11 +225,11 @@ Gli altri otto, con le misure:
 
 Il giro automatico all'avvio delle ricerche salvate **resta com'è** (decisione esplicita).
 
-### Aree in pausa (non toccare senza dirlo)
-- `backend/crawler.js:60` e `:103`, `scripts/fill-moto-local.js:38`, `worker/worker.js:145`:
-  spazzolano l'intera marca e la salvano sotto un modello. **Sono i più gravi in assoluto** se
-  Postgres torna vivo.
-- Colonna `dichiarazione` in `listings`: rimandata.
+### Aree in pausa — non esistono più (2026-08-17)
+I due problemi che stavano qui vivevano in file cancellati: `backend/crawler.js:60` e `:103`,
+`scripts/fill-moto-local.js:38`, `worker/worker.js:145` (spazzolavano l'intera marca e la
+salvavano sotto un modello) e la colonna `dichiarazione` in `listings`. Restano scritti solo
+come memoria di cosa c'era: **non sono lavori da riprendere**.
 
 ---
 

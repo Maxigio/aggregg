@@ -40,9 +40,10 @@ Sono l'unica copia al mondo di quello che contengono. Un `rsync` che li porta vi
 Sono entrambi in `.gitignore`, quindi **non** compaiono in `git ls-files` e il perimetro qui sotto
 non li tocca. Il `.gitignore` è la difesa; il fatto che siano scritti qui è la seconda.
 
-**Come si salvano.** `scripts/backup-db.js` fa `pg_dump` di Postgres e **non tocca né `data/` né
-SQLite**: non è il backup di questi due. Il backup di questi due è il `tar` del passo 1, che
-prende tutta la cartella `data/` — quindi il passo 1 non è una formalità.
+**Come si salvano.** Il `tar` del passo 1, che prende tutta la cartella `data/`: è l'**unico**
+backup che esiste, quindi il passo 1 non è una formalità. (Fino al 2026-08-17 c'era anche
+`scripts/backup-db.js`, che faceva `pg_dump` di Postgres e questi due file non li toccava
+comunque: è stato cancellato con tutto il resto di Postgres.)
 
 ---
 
@@ -87,8 +88,8 @@ Il perimetro è `git ls-files`, non una lista scritta a mano: il `.gitignore` es
 `.env`, `data/auth.json`, il database, le cache e i log.
 
 Cosa deve esserci dentro, e perché:
-- `scripts/` — `backend/server.js` richiede `build-frontend`, `build-worker-bundle` e
-  `build-guida` in cima: senza, non parte;
+- `scripts/` — `backend/server.js` richiede `build-frontend` e `build-guida` in cima: senza,
+  non parte;
 - `docs/guida/**` — la Guida (`/guida`) si monta all'avvio da quei markdown, quindi `docs/` non
   è più solo documentazione;
 - `pagine/` — **dal 2026-08-12**: la pagina `/invito`. Sta fuori da `frontend/` di proposito
@@ -127,13 +128,15 @@ con **gli stessi hash** del dev server locale: se differiscono, è arrivato codi
 Righe normali su quella macchina, da non scambiare per guasti:
 - `[prewarm] Subito/AS24 KO: pw-browsers non trovato` — lì Playwright non c'è e non serve: le tre
   fonti vanno via API/HTTP;
-- `[db] DATABASE_URL assente → persistenza/crawler disattivati` — Postgres non c'è sull'M2, e il
-  crawler è comunque in pausa. **Il magazzino delle persone è un'altra cosa** e non dipende da
-  questo: se manca *quello*, il log lo dice con parole sue.
+- (fino al 2026-08-17 usciva anche `[db] DATABASE_URL assente → persistenza/crawler
+  disattivati`: Postgres è stato cancellato, quella riga non esiste più. **Il magazzino delle
+  persone è un'altra cosa** e non c'entra: se manca *quello*, il log lo dice con parole sue.)
 
 ### 6. La prova di fine lavoro: md5
 
-Non "sembra a posto": 648 su 648 identici, zero diversi, zero assenti.
+Non "sembra a posto": tutti identici, zero diversi, zero assenti. Quanti siano lo dice
+`wc -l < /tmp/perimetro.txt` — erano 633 il 2026-08-17, e il numero cambia a ogni file
+aggiunto o tolto: è quello il totale da confrontare, non un numero scritto qui.
 
 ```bash
 cd "$TMP" && while read f; do md5 -q "$f" 2>/dev/null | sed "s|$|  $f|"; done < /tmp/perimetro.txt > /tmp/md5-head.txt
@@ -239,15 +242,21 @@ nessun elenco da cui pescare. Quel comando si lancia **dall'iMac**.
 
 ---
 
-## Zone in pausa: cosa aspettarsi
+## Postgres, crawler, worker: cancellati (2026-08-17)
 
-`backend/crawler.js` è in pausa e non è stato toccato. Da quando ogni ricerca salvata ha un
-padrone, la sua `syncSavedSearches()` — che importava i target delle ricerche salvate nella
-watch-list — chiama `saved.listSaved()` senza dire di chi. Il suo `try/catch` degrada e lo scrive:
+Non sono più «in pausa»: sono **fuori dal repo**, per decisione del proprietario. Via
+`backend/crawler.js`, `backend/dealer.js`, `backend/db/`, `db/*.sql`, `worker/`, `tools/owner/`
+(la TUI Python), otto script, il `plist` del backup e la dipendenza `pg` — 79 file in tutto.
 
-```
-[crawler] sync saved-searches saltato: saved: manca l'utente — ogni ricerca salvata ha un padrone.
-```
+Cosa vuol dire in pratica, sull'M2:
+- l'avvio non stampa più nessuna riga `[db]` né `[worker-bundle]`;
+- `/api/crawl/*`, `/api/worker/*` e `/api/crawler/health` non esistono: rispondono 404 a chi è
+  entrato, 401 a chi no (il cancello nega prima);
+- `DATABASE_URL` nel `.env` non la legge più nessuno. Lasciarla lì non fa danno, toglierla neanche;
+- **il magazzino delle persone (`data/amr-utenti.db`, SQLite) non c'entra e resta**: è dentro Node,
+  non ha mai avuto a che fare con Postgres.
 
-Non è un guasto nuovo da inseguire: è la domanda «di chi sono le ricerche che il crawler deve
-seguire?», che va risposta il giorno che quella zona si riaccende.
+Se il job `com.automotoradar.backup` è caricato su una macchina, ora punta a uno script che non
+c'è: va scaricato a mano (`launchctl bootout gui/$(id -u)/com.automotoradar.backup`).
+
+Il codice resta nella storia di git: `git show <commit>^:backend/crawler.js` lo tira fuori.

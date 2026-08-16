@@ -35,7 +35,6 @@ const assert = require('node:assert');
 
 const CASI = require('./fixtures/risoluzione-nomi.json');
 const srv = require('../backend/server');           // non si mette in ascolto se richiesto come modulo
-const crawler = require('../backend/crawler');
 const mbrands = require('../backend/scrapers/motoit-brands');
 const mmodels = require('../backend/scrapers/motoit-models');
 
@@ -83,32 +82,10 @@ test(`lookupModelGroup: ${CASI.lookupModelGroup.length} casi (serie commerciali)
   assert.ok(ca && ca.out.includes('A 180'), 'Classe A deve contenere A 180');
 });
 
-test(`resolveAutoscout del crawler: ${CASI.resolveAutoscout.length} casi`, () => {
-  // Il crawler rifa' la risoluzione della ricerca ma SENZA narrowing ne' grafie alternative:
-  // e' una divergenza voluta oggi, e questi casi la fissano perche' unificando cambierebbe il
-  // volume di richieste verso AS24.
-  for (const c of CASI.resolveAutoscout) {
-    const p = { tipo: c.in[0], marca: c.in[1], modello: c.in[2] };
-    if (c.err) { assert.throws(() => crawler._resolveAutoscout(p)); continue; }
-    uguale(crawler._resolveAutoscout(p), c.out, `resolveAutoscout(${JSON.stringify(c.in)})`);
-  }
-});
-
-// resolveMotoit e' ASYNC: va awaitata, altrimenti si confrontano Promise e il test e' cieco.
-// Si congela il brandSlug per tutti i casi — e' locale, deterministico, ed e' esattamente cio'
-// che i gruppi di alias (0183c1c) producono: Beta→betamotor, Fantic→fantic-motor, Can-Am→can-am-brp.
-// Il modelSlug si congela SOLO dove esce dal catalogo locale: sugli altri tre la fonte e' l'API
-// Moto.it, e congelarlo renderebbe la rete di sicurezza dipendente dalla rete.
-test(`resolveMotoit del crawler: ${CASI.resolveMotoit.length} casi`, async () => {
-  for (const c of CASI.resolveMotoit) {
-    const p = { tipo: c.in[0], marca: c.in[1], modello: c.in[2] };
-    if (c.err) { await assert.rejects(() => crawler._resolveMotoit(p)); continue; }
-    const v = await crawler._resolveMotoit(p);
-    uguale((v && v.brandSlug) || null, c.brandSlug, `resolveMotoit(${JSON.stringify(c.in)}).brandSlug`);
-    if (c.modelSlug !== undefined) uguale((v && v.modelSlug) || null, c.modelSlug, `resolveMotoit(${JSON.stringify(c.in)}).modelSlug`);
-  }
-  assert.ok(CASI.resolveMotoit.some(c => c.brandSlug === null), 'serve almeno un caso che NON risolve');
-});
+// I due casi `resolveAutoscout` / `resolveMotoit` che stavano qui provavano backend/crawler.js,
+// cancellato insieme a Postgres e al worker. La fixture li contiene ancora: se un giorno una
+// risoluzione del genere tornasse, i valori congelati sono ancora in
+// test/fixtures/risoluzione-nomi.json e non vanno rigenerati.
 
 test('motoit: le funzioni pure senza test, congelate come stanno oggi', () => {
   const fn = { versionBase: mmodels._versionBase, parseYears: mmodels._parseYears, resolveMotoitSlug: mbrands.resolveMotoitSlug };

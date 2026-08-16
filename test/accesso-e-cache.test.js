@@ -52,8 +52,10 @@ test('gate demo: le rotte private sono negate in QUALSIASI grafia del percorso',
   };
 
   // Le grafie che il router di Express consegna comunque all'handler minuscolo.
+  // `/api/logs` al posto delle vecchie `/api/crawl/*` (cancellate col crawler): serve una rotta
+  // solo-owner scritta in maiuscolo, perche' e' la grafia che il gate deve normalizzare.
   for (const p of ['/api/saved', '/API/saved', '/API/SAVED', '/Api/Saved', '/API/saved/',
-                   '/api/crawl/lease', '/API/CRAWL/lease']) {
+                   '/api/logs', '/API/LOGS']) {
     const r = chiama('GET', p);
     assert.strictEqual(r.passato, false, `il demo e' passato su ${p}`);
     assert.strictEqual(r.status, 403, `${p} doveva rispondere 403, ha risposto ${r.status}`);
