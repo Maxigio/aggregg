@@ -3934,7 +3934,10 @@ const SOURCE_STATUS = {
   skipped: { cls: 'src-muted' }, timeout: { cls: 'src-bad', txt: 'timeout' },
   error: { cls: 'src-bad', txt: 'errore' }, needs_bootstrap: { cls: 'src-warn', txt: 'verifica richiesta' },
 };
-const SKIP_REASON_TXT = { 'solo moto': 'solo moto', 'marca non su Moto.it': 'non disponibile', 'marca non su Autoscout': 'non disponibile' };
+// La chiave e' il `reason` che arriva dal server, uguale identico. 'in pausa dopo un blocco'
+// lo scrive backend/fonti-salute.js quando la fonte ci ha respinti due volte di fila: non e'
+// un guasto nostro e non e' "non disponibile", e' una scelta di non insistere per un po'.
+const SKIP_REASON_TXT = { 'solo moto': 'solo moto', 'marca non su Moto.it': 'non disponibile', 'marca non su Autoscout': 'non disponibile', 'in pausa dopo un blocco': 'in pausa' };
 function renderSourceStatus() {
   if (!fonteBreakdown) return;
   if (!lastSources) { fonteBreakdown.innerHTML = ''; return; }

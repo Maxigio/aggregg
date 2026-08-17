@@ -16,6 +16,7 @@ const filtriAuto = require('./filtri-auto');            // filtri avanzati auto 
 const versioneVerifica = require('./versione-verifica');  // la versione, verificata da noi su tutte le fonti
 const auth = require('./auth');
 const utentiDb = require('./utenti-db');                                // il magazzino delle persone (SQLite)
+const salute = require('./fonti-salute');                               // chi ci sta bloccando, e per quanto la saltiamo
 const qrcode = require('qrcode-generator');
 const scrapeSubito    = require('./scrapers/subito-playwright');
 const scrapeAutoscout = require('./scrapers/autoscout-playwright');
@@ -1195,14 +1196,25 @@ function sciogli(r) {
  *   gia' avviata si accetta ancora (i test la passano cosi'), ma non e'
  *   annullabile: e' nata fuori dal contesto.
  */
-async function runSource(lavoro, ms, nomeSito) {
+/**
+ * @param {string} [chiaveFonte]  'autoscout' | 'moto' — se c'e', l'esito finisce in
+ *   `fonti-salute`. Se manca NON si registra niente, ed e' voluto: le prove chiamano
+ *   `_runSource` a mano, e senza questa condizione un errore finto in una prova metterebbe
+ *   in pausa una fonte VERA nell'archivio di chi sta sviluppando.
+ */
+async function runSource(lavoro, ms, nomeSito, chiaveFonte) {
+  const segna = (errore, conteggio) => { if (chiaveFonte) salute.registra(chiaveFonte, { errore, conteggio }); };
   const ctrl = new AbortController();
   let scattato;
   const timeout = new Promise((_, reject) => {
     scattato = setTimeout(() => { ctrl.abort(); reject(new Error('__timeout__')); }, ms);
   });
-  const avviato = typeof lavoro === 'function' ? annullo.dentro(ctrl.signal, lavoro) : lavoro;
   try {
+    // DENTRO il try, non fuori. Fuori, una fonte che lancia in modo SINCRONO (un catalogo
+    // mancante al require, un campo letto su undefined) scavalcava questa cattura: la
+    // Promise.all di runSearch cadeva e la ricerca intera rispondeva 500, invece di
+    // degradare quella sola colonna e lasciare parlare le altre due.
+    const avviato = typeof lavoro === 'function' ? annullo.dentro(ctrl.signal, lavoro) : lavoro;
     // Lo SPREAD, non una destrutturazione scelta a mano: sciogli() e' il punto unico che
     // elenca i campi-dichiarazione, e chi ritorna li ripassa TUTTI per costruzione. La
     // destrutturazione era il punto esatto in cui `parziale` moriva nel wrapper gemello
@@ -1210,7 +1222,13 @@ async function runSource(lavoro, ms, nomeSito) {
     const s = sciogli(await Promise.race([avviato, timeout]));
     // Una fonte che DICHIARA di non aver letto bene non e' 'ok' e non e' 'empty': con
     // 'empty' a schermo diventerebbe "nessun annuncio", cioe' un fatto sul mercato.
-    if (s.sospetto) return { ...s, status: 'error', reason: s.sospetto };
+    if (s.sospetto) {
+      // Ha risposto, ma male: e' un errore nostro di lettura, non un blocco. Non deve far
+      // scattare la pausa, senno' un cambio di markup ci toglie la fonte per ore.
+      segna(Object.assign(new Error(s.sospetto), { kind: 'error' }), 0);
+      return { ...s, status: 'error', reason: s.sospetto };
+    }
+    segna(null, s.items.length);
     // Un risultato parziale con item resta 'ok' (il flag sta ACCANTO allo status, mai al
     // posto suo — stessa regola di `allargato`), ma il perche' viaggia in `reason` e il
     // campo `parziale` arriva fino a `sources`, dove cacheable() lo legge.
@@ -1219,6 +1237,9 @@ async function runSource(lavoro, ms, nomeSito) {
     const isTimeout = err.message === '__timeout__';
     // Anche su un errore: se la fonte ha risposto male, quello che resta in volo non serve.
     ctrl.abort();
+    // Il timeout e' NOSTRO (l'abbiamo deciso noi), non un verdetto della fonte: va registrato
+    // come transitorio, non come blocco. L'errore vero invece porta gia' status/kind da `fail()`.
+    segna(isTimeout ? Object.assign(new Error('timeout'), { kind: 'transient' }) : err, 0);
     console.warn(`[WARN] ${nomeSito}: ${isTimeout ? 'timeout' : err.message}`);
     return { items: [], status: isTimeout ? 'timeout' : 'error', reason: isTimeout ? 'timeout' : err.message };
   } finally { clearTimeout(scattato); }
@@ -1226,7 +1247,10 @@ async function runSource(lavoro, ms, nomeSito) {
 
 // Wrapper Subito-specifico: distingue fra bloccato (CAPTCHA/403 → needs_bootstrap)
 // e altri errori (timeout/parsing → 'error'). Ritorna { items, status }.
-async function runSubito(params, ms) {
+async function runSubito(params, ms, chiaveFonte) {
+  // Come in runSource: senza chiave non si registra niente, cosi' una prova che simula un
+  // blocco non mette in pausa Subito nell'archivio vero di chi sviluppa.
+  const segna = (errore, conteggio) => { if (chiaveFonte) salute.registra(chiaveFonte, { errore, conteggio }); };
   // Stesso annullamento di runSource: scaduto il tempo, la richiesta a Subito si chiude
   // invece di restare aperta a scaricare una risposta che nessuno leggera'.
   const ctrl = new AbortController();
@@ -1243,16 +1267,25 @@ async function runSubito(params, ms) {
     // ripremere Cerca non faceva ripartire nulla. E «Subito N di M» usciva senza segno.
     const s = sciogli(await Promise.race([avviato, timeout]));
     // Come in runSource: una fonte che dichiara di non aver letto bene non e' 'empty'.
-    if (s.sospetto) return { ...s, status: 'error', reason: s.sospetto };
+    if (s.sospetto) {
+      segna(Object.assign(new Error(s.sospetto), { kind: 'error' }), 0);
+      return { ...s, status: 'error', reason: s.sospetto };
+    }
+    segna(null, s.items.length);
     return { ...s, status: s.items.length ? 'ok' : 'empty', reason: s.parziale || null };
   } catch (err) {
     ctrl.abort();
     if (err instanceof SubitoBlockedError) {
+      // CAPTCHA / sessione scaduta: NON e' un ban da cui allontanarsi, e' una credenziale da
+      // rinnovare. Registrato come 'auth' proprio perche' non faccia scattare la pausa —
+      // fermare Subito per ore quando basta rifare il bootstrap sarebbe un autogol.
+      segna(Object.assign(new Error(err.reason || 'sessione'), { kind: 'auth' }), 0);
       // Senza fallback browser (es. M2) il bootstrap non è proponibile → degrada a
       // "vuoto" silenzioso (AS24/Moto.it portano la ricerca), niente banner-errore.
       if (process.env.HIDE_SUBITO_BOOTSTRAP) return { items: [], status: 'empty', reason: null };
       return { items: [], status: 'needs_bootstrap', reason: err.reason };
     }
+    segna(err, 0);
     console.warn('[WARN] ' + err.message);
     return { items: [], status: 'error', reason: err.message };
   } finally { clearTimeout(scattato); }
@@ -1830,23 +1863,41 @@ async function runSearchCore(params) {
   const skipSubito = marcaPseudo(params.tipo, params.marca);
   const subitoSkipReason = 'categoria di catalogo (Oldtimer, Trike…): Subito non ha l\'equivalente';
 
+  /**
+   * LA FONTE CHE CI STA BLOCCANDO NON SI INTERROGA. Le fonti bannano la macchina, non
+   * l'utente: insistere mentre ci respingono allunga il blocco per tutti quelli che usano
+   * questo Mac. `fonti-salute` decide quando smettere e per quanto (due respinte di fila, poi
+   * una pausa che parte da un quarto d'ora), e qui si legge e basta.
+   *
+   * Lo stato e' 'skipped' e non 'error' perche' e' una scelta nostra, non un guasto: a schermo
+   * la colonna resta grigia con scritto il perche', invece di accendersi in rosso.
+   */
+  const pausa = f => salute.fermo(f).fermo;
+  const inPausaSubito = pausa('subito'), inPausaAs = pausa('autoscout'), inPausaMoto = pausa('moto');
+
   // Ogni fonte ritorna { items, status, reason }. Subito ha wrapper dedicato
   // (propaga 'needs_bootstrap'). Lo skip è uno stato esplicito, non un [] muto.
   const [subitoRes, asRes0, motoRes] = await Promise.all([
     skipSubito
       ? Promise.resolve({ items: [], status: 'skipped', reason: subitoSkipReason })
-      : runSubito(params, TIMEOUT_MS),
+      : inPausaSubito
+        ? Promise.resolve({ items: [], status: 'skipped', reason: salute.MOTIVO_PAUSA })
+        : runSubito(params, TIMEOUT_MS, 'subito'),
     skipAutoscout
       ? Promise.resolve({ items: [], status: 'skipped', reason: asSkipReason })
+      : inPausaAs
+      ? Promise.resolve({ items: [], status: 'skipped', reason: salute.MOTIVO_PAUSA })
       // UNA PAGINA IN PIU' QUANDO IL CAP FILTRA. Il cerchio regione sborda nelle regioni
       // confinanti — misurato in Sicilia: dei 100 letti, 25 calabresi — e quelli il filtro
       // sul CAP li toglie. Senza compensare, la regione mostrerebbe MENO annunci di prima
       // pur pescando da un insieme piu' grande (75 contro 83). Costa una richiesta.
       : runSource(() => scrapeAutoscoutUnion(params, { withMeta: true, fetta: params.fetta || 0,
-          ...(params.as24RegioneDaCap ? { maxPages: 3 } : {}) }), TIMEOUT_MS, 'Autoscout24'),
+          ...(params.as24RegioneDaCap ? { maxPages: 3 } : {}) }), TIMEOUT_MS, 'Autoscout24', 'autoscout'),
     skipMotoIt
       ? Promise.resolve({ items: [], status: 'skipped', reason: motoSkipReason })
-      : runSource(() => scrapeMotoIt(params, { withMeta: true, fetta: params.fetta || 0 }), TIMEOUT_MS, 'Moto.it'),
+      : inPausaMoto
+        ? Promise.resolve({ items: [], status: 'skipped', reason: salute.MOTIVO_PAUSA })
+        : runSource(() => scrapeMotoIt(params, { withMeta: true, fetta: params.fetta || 0 }), TIMEOUT_MS, 'Moto.it', 'moto'),
   ]);
 
   // F50 fase 1 — riallargamento SOLO a zero risultati (scelta di prodotto: mai allargare
@@ -1867,12 +1918,12 @@ async function runSearchCore(params) {
     if (params.autoscoutVersionModello) {
       const soloModello = await runSource(() =>
         scrapeAutoscoutUnion({ ...params, versione: null, autoscoutVersionText: params.autoscoutVersionModello },
-          { withMeta: true, fetta }), TIMEOUT_MS, 'Autoscout24');
+          { withMeta: true, fetta }), TIMEOUT_MS, 'Autoscout24', 'autoscout');
       if (soloModello.items.length) { asRes = { ...soloModello, viaSoloModello: true }; as24Allargato = true; }
     }
     if (!as24Allargato) {
       const retry = await runSource(() =>
-        scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null, autoscoutSpellings: null }, { withMeta: true, fetta }), TIMEOUT_MS, 'Autoscout24');
+        scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null, autoscoutSpellings: null }, { withMeta: true, fetta }), TIMEOUT_MS, 'Autoscout24', 'autoscout');
       if (retry.items.length) { asRes = retry; as24Allargato = true; }
       // Un ritentativo SCADUTO non e' "la fonte non ha nulla": lasciando 'empty' la risposta
       // monca finiva pure in cache per tre minuti (vedi `cacheable`). Si porta fuori lo stato
@@ -2250,17 +2301,32 @@ function normalizeSavedParams(raw) {
   return parsed.errors ? { ...raw } : parsed.params;
 }
 
+/**
+ * Questa fonte, in questo giro, NON ha detto la sua? Allora i suoi annunci non si sfrattano da
+ * `seen`: senza questa regola, al ritorno della fonte arriverebbero tutti come "nuovi".
+ *
+ * 'skipped' di norma NON e' muta: la marca su quella fonte non c'e' e non ci sara' fra sei ore.
+ * Ma c'e' uno skip temporaneo — la pausa dopo un blocco, che dura un quarto d'ora — e quella
+ * fonte torna. Per questo si guarda anche il MOTIVO, non solo lo stato.
+ */
+const fonteMuta = v => v.status === 'error' || v.status === 'timeout' || v.status === 'needs_bootstrap'
+  || (v.status === 'skipped' && v.reason === salute.MOTIVO_PAUSA);
+
 // Check di UNA ricerca (SENZA lock — usato dentro il lock). `s` = oggetto con
 // {id, params, label} (da listSaved o getSaved) → niente reload (fix review §19).
 async function _checkSavedOne(utente, s) {
   if (!s) return null;
   const out = await runSearch(normalizeSavedParams(s.params));
   // Le fonti che in questo giro non hanno parlato: i loro annunci restano in `seen` e non
-  // vanno sfrattati, senno' al ritorno della fonte arrivano tutti come "nuovi". 'skipped'
-  // non conta: la marca su quella fonte non c'e' e non ci sara' fra sei ore.
-  const rotto = st => st === 'error' || st === 'timeout' || st === 'needs_bootstrap';
+  // vanno sfrattati, senno' al ritorno della fonte arrivano tutti come "nuovi".
+  //
+  // 'skipped' di norma non conta: la marca su quella fonte non c'e' e non ci sara' fra sei ore.
+  // MA c'e' uno skip che e' TEMPORANEO — la pausa dopo un blocco (`fonti-salute`), che dura un
+  // quarto d'ora. Quella fonte torna, e se intanto le sfrattiamo gli annunci al ritorno li
+  // riporta tutti come novita': una raffica di avvisi falsi, proprio la cosa che questo elenco
+  // esiste per impedire. Per questo qui si guarda anche il MOTIVO, non solo lo stato.
   const fontiMute = Object.entries(out.sources || {})
-    .filter(([, v]) => v && rotto(v.status)).map(([f]) => f);
+    .filter(([, v]) => v && fonteMuta(v)).map(([f]) => f);
   const alerts = saved.recordCheck(utente, s.id, out.risultati || [], { fontiMute });
   return { id: s.id, label: s.label, nuovi: alerts.length, sources: out.sources };
 }
@@ -2597,5 +2663,5 @@ module.exports = { server, app, _lookupBrand: lookupBrand, _lookupModelGroup: lo
   // prova ESEGUENDOLI (con lo stub HTTP di subito-api), non leggendo il sorgente — la
   // guardia a parole era verde mentre runSubito buttava il campo, perche' combaciava con
   // la copia gemella di runSource.
-  _runSource: runSource, _runSubito: runSubito,
+  _runSource: runSource, _runSubito: runSubito, _fonteMuta: fonteMuta,
   _as24LivelloAllargamento: as24LivelloAllargamento };
