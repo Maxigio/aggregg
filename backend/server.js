@@ -444,7 +444,11 @@ function tettoGiornaliero(req, res, next) {
     return res.status(503).json({ error: 'Il registro delle persone non e\' raggiungibile: riprova piu\' tardi.' });
   }
 }
-app.use('/api/search', tettoGiornaliero);
+// NON piu' `app.use` davanti alla rotta: cosi' il tetto si addebitava PRIMA che l'handler
+// validasse i parametri e consultasse il limitatore al minuto, e una richiesta rifiutata con 400
+// o 429 bruciava comunque una delle 50 ricerche del giorno. Ora lo chiama l'handler, dopo i
+// controlli che non costano niente. /api/targa/verifica resta com'era: non ha una validazione
+// a monte che valga la pena di aspettare.
 app.use('/api/targa/verifica', tettoGiornaliero);
 
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, '../frontend/login.html')));
@@ -606,7 +610,12 @@ app.post('/api/report', express.json({ limit: '32kb' }), (req, res) => {
  *
  * L'utente demo puo' usarla: il documento contiene esattamente cio' che ha gia' a schermo.
  */
+// L'UNICA rotta cara che non aveva un freno: rende un PDF in modo SINCRONO da un corpo fino a
+// 4 MB e 2000 righe, e l'ospite anonimo puo' chiamarla. Stesso stampo delle altre sette.
+const limitePdf = require('./limite-richieste').crea({ max: 10, cosa: 'esportazioni PDF' });
 app.post('/api/report-pdf', express.json({ limit: '4mb' }), (req, res) => {
+  const gPdf = limitePdf.consuma(chiaveLimite(req));
+  if (!gPdf.ok) return res.status(429).json({ error: limitePdf.messaggio(gPdf), riprovaFra: gPdf.attesa, restanti: 0 });
   const b = req.body || {};
   const righe = Array.isArray(b.righe) ? b.righe.slice(0, 2000) : [];
   if (!righe.length) return res.status(400).json({ error: 'niente da stampare' });
@@ -1186,6 +1195,10 @@ function sciogli(r) {
     sospetto: (r && r.sospetto) || null,
     // Il totale che la fonte dichiara descrive la ricerca che hai fatto, o una piu' larga?
     totaleLargo: (r && r.totaleLargo) || null,
+    // Qualche famiglia moto e' stata RESPINTA (403/429) ma altre hanno risposto: un errore
+    // taggato col suo genere, che runSubito passa al freno. Se non stesse qui, morirebbe nel
+    // passaggio come a suo tempo `parziale` — e' proprio il motivo per cui sciogli() esiste.
+    bloccoParziale: (r && r.bloccoParziale) || null,
   };
 }
 
@@ -1271,7 +1284,12 @@ async function runSubito(params, ms, chiaveFonte) {
       segna(Object.assign(new Error(s.sospetto), { kind: 'error' }), 0);
       return { ...s, status: 'error', reason: s.sospetto };
     }
-    segna(null, s.items.length);
+    // BLOCCO PARZIALE: qualche famiglia moto e' stata RESPINTA (403/429) ma altre hanno risposto.
+    // Non e' un errore di lettura e non e' "mercato parziale": lo stato resta 'ok' con la nota
+    // `parziale` (gli annunci ci sono), ma il freno anti-ban deve vedere la respinta col suo
+    // genere vero — non un 'error' generico, che non ferma mai.
+    if (s.bloccoParziale) segna(s.bloccoParziale, s.items.length);
+    else segna(null, s.items.length);
     return { ...s, status: s.items.length ? 'ok' : 'empty', reason: s.parziale || null };
   } catch (err) {
     ctrl.abort();
@@ -1303,6 +1321,12 @@ app.get('/api/search', async (req, res) => {
   if (parsed.errors) {
     return res.status(400).json({ error: parsed.errors.join(', ') });
   }
+  // Il tetto giornaliero si addebita QUI, dopo il limitatore al minuto e la validazione: una
+  // richiesta che viene rifiutata non deve costare una ricerca. `tettoGiornaliero` chiama
+  // next() solo se si puo' procedere; altrimenti ha gia' risposto lui.
+  let passa = false;
+  tettoGiornaliero(req, res, () => { passa = true; });
+  if (!passa) return;
   try {
     const out = await runSearch(parsed.params);
     res.json(out);
@@ -2343,7 +2367,10 @@ async function _checkAll(utente, { onlyStale = false, cap = Infinity } = {}) {
   for (const s of saved.listSaved(utente)) {   // s ha già params/label → passato diretto
     if (done >= cap) break;
     if (onlyStale && s.lastChecked && now - s.lastChecked < SAVED_STALE_MS) continue;
-    try { esiti.push(await _checkSavedOne(utente, s)); done++; }
+    // `done` conta i TENTATIVI: il costo verso le fonti si paga anche quando il controllo
+    // fallisce, e con l'incremento dopo l'await il tetto non limitava niente di reale.
+    done++;
+    try { esiti.push(await _checkSavedOne(utente, s)); }
     catch (e) { console.warn(`[saved] check ${s.id} fallito: ${e.message}`); }
   }
   return esiti;
@@ -2447,6 +2474,30 @@ app.post('/api/saved/check', express.json(), async (req, res) => {
   try {
     const id = req.query.id;
     const chi = utenteDi(req);
+    // IL TETTO GIORNALIERO VALE ANCHE QUI. Un controllo e' una ricerca completa verso le tre
+    // fonti, e "tutte" ne fa fino a 20: senza questo, un ospite registrato poteva fare 3 giri
+    // ogni dieci minuti (limiteControlli) da 20 ricerche l'uno e il tetto delle 50 al giorno non
+    // contava niente. Si addebita PRIMA di partire, una unita' per ricerca che si fara' davvero:
+    // se il credito del giorno non basta, si ferma prima di spendere traffico.
+    // Si conta SOLO quello che si fara' davvero: con `id` una sola, e solo se esiste; con
+    // "tutte" quelle salvate fino al tetto di 20, e zero se Subito e' bloccato (allora
+    // `_checkAll` non parte nemmeno). Poi l'addebito e' ATOMICO: o c'e' credito per tutte, o
+    // non se ne spende nessuna — consumarle una a una e fermarsi a meta' bruciava il credito
+    // senza fare il lavoro, e chiudeva fuori l'utente anche dalla ricerca normale fino a domani.
+    const daFare = id
+      ? (saved.getSaved(chi, id) ? 1 : 0)
+      : (subitoSession.isSubitoBlocked() ? 0 : Math.min(20, saved.listSaved(chi).length));
+    if (daFare && auth.isEnabled() && req.authRole === 'demo' && req.authId && req.authId !== 'demo') {
+      let g;
+      try { g = utentiDb.consumaRicerche(req.authId, daFare, TETTO_GIORNALIERO); }
+      catch (e) { return res.status(503).json({ error: 'Il registro delle persone non e\' raggiungibile: riprova piu\' tardi.' }); }
+      if (!g.ok) {
+        return res.status(429).json({
+          error: `Ti restano ${Math.max(0, g.max - g.usate)} ricerche oggi e questo controllo ne farebbe ${g.servono}. Il conto riparte domani.`,
+          tetto: g.max, usate: g.usate, servono: g.servono, riprovaDomani: true,
+        });
+      }
+    }
     const esiti = id ? [await checkSaved(chi, id)].filter(Boolean) : await checkAllSaved(chi, { cap: 20 });
     res.json({ esiti, saved: saved.listSaved(chi) });
   } catch (e) {
