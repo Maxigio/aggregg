@@ -13,7 +13,7 @@
  * Raggruppamento TRANSITIVO: KL↔KL Motors e KL Motors↔Kl devono diventare un gruppo di tre.
  */
 const fs = require('fs');
-const R = '/Volumes/MAIN/BananaChePrezzi-main';
+const R = require('path').join(__dirname, '..');   // la radice del repo, non un percorso scritto a mano
 const norm = require(R + '/backend/scrapers/brand-match.js').norm;
 const S = require(R + '/data/subito-catalogo.json');
 const M = require(R + '/data/motoit-catalogo.json');

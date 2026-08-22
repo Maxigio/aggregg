@@ -187,7 +187,18 @@ const iso = v => {
     generato: new Date().toISOString().slice(0, 10),
     campagne: out,
   };
-  fs.writeFileSync(DEST, JSON.stringify(dati));
+  // GUARDIA SUL RACCOLTO. E' l'archivio che l'app legge per i richiami (4.571 campagne il
+  // 2026-07-28): se il dataset cambia nome ai campi o torna vuoto, `out` resta a zero e senza
+  // questo controllo l'archivio buono veniva sovrascritto con niente. Si confronta col file che
+  // c'e' gia': un calo oltre la meta' non e' un aggiornamento, e' un guasto della lettura.
+  let prima = 0;
+  try { prima = (JSON.parse(fs.readFileSync(DEST, 'utf8')).campagne || []).length; } catch (_) { /* prima volta */ }
+  if (prima && out.length < prima / 2) {
+    console.error(`KO: raccolte ${out.length} campagne contro le ${prima} gia' in ${DEST}: non sovrascrivo. Se e' voluto, cancella prima il file.`);
+    process.exit(2);
+  }
+  fs.writeFileSync(DEST + '.tmp', JSON.stringify(dati));
+  fs.renameSync(DEST + '.tmp', DEST);
   const mb = (fs.statSync(DEST).size / 1048576).toFixed(1);
 
   console.log('\nscritte ' + out.length + ' campagne agganciabili (su ' + azioni.length + ' totali) → ' + DEST + ' (' + mb + ' MB)');

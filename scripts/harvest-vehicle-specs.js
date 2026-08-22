@@ -9,7 +9,13 @@ const vs = require('../backend/scrapers/vehicle-specs');
 
 const args = process.argv.slice(2);
 const limit = (() => { const i = args.indexOf('--limit'); return i >= 0 ? Number(args[i + 1]) : 0; })();
-const outPath = (() => { const i = args.indexOf('--out'); return path.join(__dirname, '..', i >= 0 ? args[i + 1] : 'data/autodata-index.json'); })();
+const outPath = (() => {
+  const i = args.indexOf('--out');
+  if (i >= 0) return path.join(__dirname, '..', args[i + 1]);
+  // `--limit` e' fatto per le prove: un giro limitato NON deve sovrascrivere l'indice che l'app
+  // usa. Senza `--out` esplicito scrive su un file di prova accanto.
+  return path.join(__dirname, '..', limit ? 'data/autodata-index.PROVA.json' : 'data/autodata-index.json');
+})();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 (async () => {
