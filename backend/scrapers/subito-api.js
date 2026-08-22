@@ -49,6 +49,10 @@ function httpGetJson(path) {
       let d = ''; res.setEncoding('utf8');
       res.on('data', c => d += c);
       res.on('end', () => resolve({ status: res.statusCode, body: d }));
+      // Se la presa cade DOPO gli header, l'errore esce su `res`, non su `req`: senza questi due
+      // la Promise restava appesa per sempre e la ricerca aspettava il timeout esterno ogni volta.
+      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+      res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
     });
     req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
     req.setTimeout(TIMEOUT_MS, () => req.destroy(fail('timeout', { kind: 'transient' })));
@@ -625,7 +629,7 @@ async function unioneFamiglieMoto(params, opts) {
   const tutte = nodo.famigliaIds.map(String);
   const chieste = tutte.slice(0, MAX_FAMIGLIE_MOTO);
   const perUrl = new Map();
-  let truncated = false, total = null, errori = 0;
+  let truncated = false, total = null, errori = 0, peggiore = null;
   const sospetti = [];
   for (let i = 0; i < chieste.length; i++) {
     if (i > 0) await sleep(opts.pageDelayMs || 400);      // mai raffica verso la stessa fonte
@@ -643,11 +647,27 @@ async function unioneFamiglieMoto(params, opts) {
       if (Number.isFinite(r.total)) total = (total || 0) + r.total;
     } catch (e) {
       errori++;
+      // Si conserva l'errore PIU' GRAVE: un 403/429 su una famiglia e' un blocco della fonte, e
+      // rilanciarlo come 'error' generico faceva si' che il freno anti-ban (fonti-salute) non
+      // scattasse mai sulle moto. Ordine: bloccato > auth > transitorio > errore.
+      const peso = k => ({ blocked: 3, auth: 2, transient: 1 }[k] || 0);
+      if (!peggiore || peso(e.kind) > peso(peggiore.kind)) peggiore = e;
       console.warn(`[subito] famiglia moto ${chieste[i]} KO: ${e.message}`);
     }
   }
-  // Tutte cadute: e' un errore della fonte, non un mercato vuoto.
-  if (errori === chieste.length) throw fail(`Subito: nessuna delle ${chieste.length} famiglie ha risposto`, { kind: 'error' });
+  // Tutte cadute: e' un errore della fonte, non un mercato vuoto. E il genere e' quello del
+  // peggiore, cosi' chi sta a valle sa se e' un blocco o un singhiozzo.
+  if (errori === chieste.length) {
+    throw fail(`Subito: nessuna delle ${chieste.length} famiglie ha risposto`,
+      { kind: (peggiore && peggiore.kind) || 'error', status: peggiore && peggiore.status });
+  }
+  // Qualcuna ha risposto ma almeno una e' stata RESPINTA: viaggia come campo proprio, non come
+  // `sospetto` — `sospetto` fa uscire la colonna in errore e il freno lo leggerebbe come 'error'
+  // generico. Cosi' lo stato resta 'ok' + parziale (gli annunci ci sono) e runSubito passa al
+  // freno la respinta col suo genere vero.
+  const bloccoParziale = (peggiore && peggiore.kind === 'blocked')
+    ? Object.assign(new Error(`Subito ha respinto ${errori} famiglie su ${chieste.length} (${peggiore.message})`), { kind: 'blocked', status: peggiore.status })
+    : null;
   const fuori = tutte.length - chieste.length;
   const parziale = [
     fuori ? `${fuori} famiglie Subito oltre il tetto di ${MAX_FAMIGLIE_MOTO} non sono state chieste` : null,
@@ -656,7 +676,7 @@ async function unioneFamiglieMoto(params, opts) {
   if (parziale) console.warn(`[subito] moto "${params.marca} ${params.modello || ''}": ${parziale}`);
   const items = [...perUrl.values()];
   console.log(`[subito] moto "${params.marca} ${params.modello || ''}": ${chieste.length} famiglie → ${items.length} annunci`);
-  return opts.withMeta ? { items, truncated, total, parziale, sospetto: sospetti[0] || null } : items;
+  return opts.withMeta ? { items, truncated, total, parziale, sospetto: sospetti[0] || null, bloccoParziale } : items;
 }
 
 async function scrapeSubitoApi(params, opts = {}) {

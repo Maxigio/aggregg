@@ -170,17 +170,33 @@ function apri({ crea = false } = {}) {
     d.exec('PRAGMA busy_timeout = 3000');
     d.exec('PRAGMA synchronous = NORMAL');
     d.exec(SCHEMA);
+    // LA MEMORIA VINCE SUL DISCO. Questo ciclo gira anche quando `salva()` apre il file per
+    // la prima volta in un processo che ha GIA' registrato qualcosa: se riscrivesse le righe
+    // gia' in memoria, sovrascriverebbe la pausa appena decisa coi valori vecchi del disco —
+    // e la INSERT subito dopo persisterebbe quelli. Misurato: il log diceva "ferma per 15
+    // min" e sul disco finiva `ferma_fino_a: null`. Dal disco si prendono SOLO le fonti che
+    // la memoria non conosce ancora.
+    const adesso = Date.now();
+    const daCorreggere = [];
     for (const r of d.prepare('SELECT * FROM salute').all()) {
+      if (memoria.has(r.fonte)) continue;
       const m = riga(r.fonte);
       m.esito = r.esito;
-      m.fermaFinoA = r.ferma_fino_a != null ? Number(r.ferma_fino_a) : null;
+      // Il taglio si applica GIA' qui, cosi' un valore assurdo (orologio saltato, backup
+      // vecchio) non sopravvive nemmeno in memoria: diventa al massimo adesso+FINESTRA_MAX.
+      const ferma = r.ferma_fino_a != null ? Number(r.ferma_fino_a) : null;
+      m.fermaFinoA = ferma ? Math.min(ferma, adesso + FINESTRA_MAX) : null;
       m.stopFatti = Number(r.stop_fatti) || 0;
       m.aggiornataIl = Number(r.aggiornata_il) || 0;
       // Se il disco dice che era ferma, allora i colpi c'erano stati: si ricostruisce il minimo
       // coerente, senno' al riavvio servirebbero due NUOVI blocchi per rimettersi in pausa.
       if (m.fermaFinoA) m.colpi = COLPI_PER_FERMARSI;
+      // Se il disco portava un valore assurdo, quello tagliato va RISCRITTO: altrimenti al
+      // prossimo riavvio si ricomincia da dieci anni, e la pausa non finisce mai davvero.
+      if (ferma && m.fermaFinoA !== ferma) daCorreggere.push(m);
     }
     db = d;
+    for (const m of daCorreggere) salva(m);
     ultimoGuasto = null;
   } catch (e) {
     db = null;
@@ -283,8 +299,12 @@ function fermo(fonte) {
   const m = memoria.get(fonte);
   if (!m || !m.fermaFinoA) return { fermo: false, fino: null, motivo: null };
   const adesso = Date.now();
-  const tetto = adesso + FINESTRA_MAX;
-  const fino = Math.min(m.fermaFinoA, tetto);
+  // IL TAGLIO SI SCRIVE, NON SI RICALCOLA. Prima `fino` era `min(fermaFinoA, adesso+MAX)`
+  // calcolato a ogni lettura e mai riscritto: con una scadenza assurda sul disco ogni lettura
+  // rispondeva "fra sei ore", per sempre — cioe' il vicolo cieco che il tetto doveva impedire.
+  // Ora il valore tagliato sostituisce quello assurdo, una volta, e da li' scade davvero.
+  if (m.fermaFinoA > adesso + FINESTRA_MAX) { m.fermaFinoA = adesso + FINESTRA_MAX; salva(m); }
+  const fino = m.fermaFinoA;
   if (fino <= adesso) {
     m.fermaFinoA = null;         // scaduta: si riprova, ed e' un esito 'ok' a rimetterla a posto
     m.colpi = 0;

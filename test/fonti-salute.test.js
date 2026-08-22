@@ -290,3 +290,43 @@ test('azzera funziona anche su un processo appena avviato, e dice quante ne ha t
       'e su una fonte che non c\'e\' deve dire zero, non fingere');
   });
 });
+
+// ─── Le due regressioni trovate dalla revisione del 2026-08-22 ───────────────────────────────
+test('salva() non sovrascrive la pausa appena decisa coi valori del disco', () => {
+  // Il file esisteva gia' (pausa messa e tolta). Processo nuovo: nessuna lettura, due blocchi.
+  // `salva` apriva il file e il caricamento RISCRIVEVA la riga in memoria coi valori vecchi del
+  // disco (ferma_fino_a: null), poi persisteva quelli. Il log diceva "ferma per 15 min" e la
+  // fonte NON era ferma.
+  conCartella(dir => {
+    salute.registra('subito', { errore: err('403', 403) });
+    salute.registra('subito', { errore: err('403', 403) });
+    salute.azzera('subito');
+    salute._reset();
+    salute.registra('subito', { errore: err('403', 403) });
+    salute.registra('subito', { errore: err('403', 403) });
+    assert.strictEqual(salute.fermo('subito').fermo, true, 'in memoria la pausa deve esserci');
+    const d = new DatabaseSync(path.join(dir, 'amr-fonti.db'));
+    const r = d.prepare('SELECT ferma_fino_a FROM salute WHERE fonte = ?').get('subito');
+    d.close();
+    assert.ok(r && r.ferma_fino_a, 'e sul disco deve essere stata SCRITTA, non annullata dal caricamento');
+  });
+});
+
+test('una scadenza assurda viene tagliata E riscritta: la pausa finisce davvero', () => {
+  // Prima il taglio era calcolato a ogni lettura e mai scritto: "fra sei ore", per sempre.
+  conCartella(dir => {
+    salute.registra('subito', { errore: err('403', 403) });
+    salute.registra('subito', { errore: err('403', 403) });
+    salute._reset();
+    const dieciAnni = Date.now() + 10 * 365 * 24 * 60 * 60 * 1000;
+    let d = new DatabaseSync(path.join(dir, 'amr-fonti.db'));
+    d.prepare('UPDATE salute SET ferma_fino_a = ? WHERE fonte = ?').run(dieciAnni, 'subito');
+    d.close();
+    salute.fermo('subito');                                       // processo nuovo: legge e taglia
+    d = new DatabaseSync(path.join(dir, 'amr-fonti.db'));
+    const r = d.prepare('SELECT ferma_fino_a FROM salute WHERE fonte = ?').get('subito');
+    d.close();
+    assert.ok(Number(r.ferma_fino_a) <= Date.now() + salute.FINESTRA_MAX + 1000,
+      'il valore sul DISCO deve essere quello tagliato: senno\' al riavvio si riparte da dieci anni');
+  });
+});

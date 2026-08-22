@@ -57,6 +57,17 @@ function crea(file, opt = {}) {
   let memo = null;
   const leggi = () => {
     if (!memo) {
+      // I `.tmp` di un processo ucciso a meta' scrittura restano sul disco (col PID nel nome non
+      // vengono mai riscritti). Alla prima lettura si buttano quelli piu' vecchi di un'ora: uno
+      // recente puo' essere di un processo vivo che sta scrivendo adesso.
+      try {
+        const dir = path.dirname(fileScrittura), base = path.basename(fileScrittura) + '.';
+        for (const f of fs.readdirSync(dir)) {
+          if (!f.startsWith(base) || !f.endsWith('.tmp')) continue;
+          const p = path.join(dir, f);
+          try { if (Date.now() - fs.statSync(p).mtimeMs > ORA) fs.unlinkSync(p); } catch (_) { /* sparito intanto */ }
+        }
+      } catch (_) { /* cartella non leggibile: non e' compito di questa riga */ }
       // Prima quello che abbiamo scritto noi, poi la semente impacchettata.
       for (const p of (fileScrittura === file ? [file] : [fileScrittura, file])) {
         try { memo = JSON.parse(fs.readFileSync(p, 'utf8')); } catch (_) { memo = null; }
@@ -69,11 +80,16 @@ function crea(file, opt = {}) {
   };
   const scrivi = () => {
     const c = leggi();
+    const adesso = Date.now();
+    const scadenza = v => (v.scade != null ? v.scade : v.t + ttl);
+    // PRIMA le scadute, sempre: una voce oltre la sua vita non serve a nessuno e non deve
+    // occupare un posto. Poi, se ancora troppe, si tengono quelle che scadono piu' TARDI —
+    // cioe' per scadenza effettiva, non per `t`: cosi' un sospetto fresco (vita 15') non
+    // sfratta una voce buona di ieri (vita 7 giorni).
+    for (const k of Object.keys(c.voci)) if (scadenza(c.voci[k]) <= adesso) delete c.voci[k];
     const chiavi = Object.keys(c.voci);
     if (chiavi.length > max) {
-      // Si tengono le piu' recenti. Non e' una LRU vera (conta la scrittura, non la lettura) ma
-      // basta a impedire la crescita, e costa un sort su una lista che per definizione e' corta.
-      const vive = chiavi.sort((a, b) => c.voci[b].t - c.voci[a].t).slice(0, max);
+      const vive = chiavi.sort((a, b) => scadenza(c.voci[b]) - scadenza(c.voci[a])).slice(0, max);
       const nuove = {};
       for (const k of vive) nuove[k] = c.voci[k];
       c.voci = nuove;
@@ -88,7 +104,10 @@ function crea(file, opt = {}) {
     //
     // Una cache che non riesce a scrivere continua a funzionare — in memoria — ma il costo
     // si paga al riavvio, e in silenzio non se ne accorge nessuno.
-    const tmp = fileScrittura + '.tmp';
+    // Il nome del file d'appoggio porta il PID: con un nome fisso due processi sulla stessa cache
+    // (l'orfano documentato in electron/main.js) scrivevano sullo stesso `.tmp`, e il rename di uno
+    // pubblicava il file che l'altro stava ancora riempiendo — cioe' di nuovo un JSON troncato.
+    const tmp = fileScrittura + '.' + process.pid + '.tmp';
     try { fs.writeFileSync(tmp, JSON.stringify(c)); fs.renameSync(tmp, fileScrittura); scritturaKo = false; }
     catch (e) {
       // Il mezzo file non resta in giro: se il rename non e' avvenuto, quel `.tmp` non e' la
@@ -102,13 +121,16 @@ function crea(file, opt = {}) {
   return async function conCache(chiave, produci, sospettoSe) {
     const c = leggi();
     const v = c.voci[chiave];
-    if (v && Date.now() - v.t < ttl) return v.d;
+    if (v && Date.now() < (v.scade != null ? v.scade : v.t + ttl)) return v.d;
     if (inVolo.has(chiave)) return inVolo.get(chiave);
     const p = (async () => {
       try {
         const d = await produci();
         const sospetto = sospettoSe ? !!sospettoSe(d) : false;
-        c.voci[chiave] = { t: sospetto ? Date.now() - ttl + ttlCorto : Date.now(), d };
+        // Il SOSPETTO vive poco, ma non lo si data nel passato: la sfoltitura tiene le voci col `t`
+        // piu' alto, e una voce retrodatata di sette giorni era la prima a saltare a cache piena —
+        // vita breve che diventava vita zero. Porta invece la sua scadenza esplicita.
+        c.voci[chiave] = sospetto ? { t: Date.now(), scade: Date.now() + ttlCorto, d } : { t: Date.now(), d };
         scrivi();
         return d;
       } catch (e) {

@@ -141,11 +141,12 @@ test('cache-disco: il file vero non si tocca finche\' la copia nuova non e\' com
 
     assert.ok(!scritture.includes(destinazione),
       'la destinazione non deve MAI essere il bersaglio di writeFileSync: si scrive sul .tmp e si rinomina');
-    assert.ok(scritture.includes(destinazione + '.tmp'), 'la copia nuova va scritta sul .tmp accanto');
+    assert.ok(scritture.some(p => p.startsWith(destinazione + '.') && p.endsWith('.tmp')),
+      'la copia nuova va scritta su un .tmp accanto (col PID nel nome: due processi non si pestano)');
     assert.strictEqual(rinominati, 1, 'e resa buona con un rename, che e\' atomico');
 
     // A giro finito il mezzo file non resta in giro, e il file vero si legge.
-    assert.ok(!fs.existsSync(destinazione + '.tmp'), 'nessun .tmp avanzato dopo una scrittura riuscita');
+    assert.ok(!fs.readdirSync(path.dirname(destinazione)).some(f => f.endsWith('.tmp')), 'nessun .tmp avanzato dopo una scrittura riuscita');
     assert.strictEqual(JSON.parse(fs.readFileSync(destinazione, 'utf8')).voci.k.d, 'valore');
   } finally {
     fs.writeFileSync = writeVero;
@@ -1003,8 +1004,13 @@ test('ricambi: i codici OE si leggono dai link, non dal testo', () => {
 test('minori: un errore non si mette in cache', () => {
   // Tre punti diversi, una regola sola: una risposta mancata non e' una risposta.
   const richiami = fs.readFileSync(path.join(__dirname, '..', 'backend', 'richiami-route.js'), 'utf8');
-  assert.match(richiami, /out\.ok !== false\) res\.set\('Cache-Control'/,
+  // La guardia copre `ok:false` E gli altri modi in cui le rotte dicono "non lo so"
+  // (`pronto:false`, `archivio:false`): la revisione del 2026-08-22 ha trovato che /stato,
+  // /marche e /ultime non passavano da `ok:false` e prendevano un'ora di cache lo stesso.
+  assert.match(richiami, /const nonPronto = out && \(out\.ok === false \|\| out\.pronto === false/,
     'le rotte richiami rimettono un\'ora di cache su un "archivio non costruito"');
+  assert.match(richiami, /if \(out && !nonPronto\) res\.set\('Cache-Control', 'public, max-age=3600'\)/,
+    'l\'ora di cache va SOLO su una risposta pronta');
   const ebay = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ebay-scrape.js'), 'utf8');
   assert.ok(!/item details[\s\S]{0,80}return \{\}/.test(codice(ebay)),
     'un 403 di eBay torna a diventare una scheda vuota, che il chiamante cacha per un\'ora');
@@ -1213,6 +1219,32 @@ test('subito: parziale e sospetto ATTRAVERSANO runSubito — eseguito, non letto
     assert.strictEqual(r.status, 'error', 'il parser rotto e\' un errore della fonte, non un mercato vuoto');
     assert.match(String(r.reason), /prezzo/, 'e il perche\' nomina il prezzo');
   } finally { sub._setHttpGetJson(null); }
+
+  // (c) una famiglia su tre viene RESPINTA (429), le altre rispondono → lo stato resta 'ok' con
+  // la nota parziale (gli annunci ci sono) ma il freno anti-ban vede la respinta col suo genere
+  // vero, 'bloccato', non un 'errore' generico che non ferma mai. Revisione 2026-08-22: il primo
+  // fix faceva passare la respinta da `sospetto`, che accendeva la colonna in rosso E arrivava al
+  // freno come 'error' — peggio di prima su entrambi i fronti.
+  const salute = require('../backend/fonti-salute');
+  const dirSal = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-sal-'));
+  const udpPrima = process.env.USER_DATA_PATH;
+  process.env.USER_DATA_PATH = dirSal; salute._reset();
+  sub._setHttpGetJson(async p => {
+    const bm = (p.match(/[?&]bm=([^&]+)/) || [])[1];
+    if (bm === '222') return { status: 429, body: '' };
+    return { status: 200, body: JSON.stringify({ count_all: 10, ads: [annuncio(bm, 5000)] }) };
+  });
+  try {
+    const r = await srv._runSubito(params(), 30000, 'subito');
+    assert.strictEqual(r.status, 'ok', 'una respinta parziale NON spegne la colonna: gli annunci delle altre famiglie ci sono');
+    assert.match(String(r.reason), /non hanno risposto/, 'la nota parziale resta');
+    const st = salute.stato().fonti.find(f => f.fonte === 'subito');
+    assert.ok(st, 'il freno deve aver registrato qualcosa per subito');
+    assert.strictEqual(st.esito, 'bloccato', `il freno deve vedere la RESPINTA col suo genere, non "${st.esito}"`);
+  } finally {
+    sub._setHttpGetJson(null); salute._reset();
+    if (udpPrima == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = udpPrima;
+  }
 });
 
 test('il totale della pill dice a quale ricerca appartiene', () => {
