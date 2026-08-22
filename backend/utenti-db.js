@@ -313,6 +313,66 @@ function registro(n = 100) {
     .all(Math.max(1, Math.min(1000, Number(n) || 100)));
 }
 
+/**
+ * Questo id e' mai stato REVOCATO? Si legge dal registro, che gia' annota ogni revoca.
+ *
+ * Serve a non far rinascere un account con lo stesso id: togliere una persona cancella solo la
+ * credenziale in auth.json, ma ricerche, salvataggi, preferenze e parco restano indicizzati su
+ * quell'id. Se qualcuno si registra dopo con lo stesso nome, l'id torna uguale e lui EREDITA i
+ * dati privati del revocato. Un id revocato resta bruciato: chi vuole rientrare usa un altro
+ * nome, oppure il proprietario lo riammette a mano.
+ * A magazzino guasto si risponde `true` (prudenza): meglio un nome rifiutato di un'eredita'.
+ */
+function revocato(persona, { personeVive = null } = {}) {
+  const db = apri();
+  if (!db) return true;
+  const id = String(persona || '');
+  // CHI E' VIVO NON E' BRUCIATO. Un id portato da una persona che esiste e' "occupato" (e lo
+  // dice il ramo NOME_OCCUPATO di chi chiama), non "revocato": se fosse stato revocato e poi
+  // riammesso a mano, il registro porta ancora la riga vecchia, e senza questo controllo il
+  // riammesso risulterebbe bruciato per sempre.
+  if (Array.isArray(personeVive) && personeVive.includes(id)) return false;
+  if (db.prepare("SELECT 1 FROM registro WHERE evento = 'revocata' AND persona = ? LIMIT 1").get(id)) return true;
+  // E' BRUCIATO ANCHE SENZA ANNOTAZIONE. Chi toglie una persona passando da `auth.togliPersona`
+  // direttamente (set-password.js --togli, utenti-da-env.js) non scrive nel registro: se l'id ha
+  // ancora righe nel magazzino e nessuna persona viva lo porta, quelle righe sono di un revocato,
+  // e chi rinascesse con lo stesso nome le erediterebbe. `personeVive` lo passa chi sa gia'
+  // chi c'e' (evita una lettura di auth.json); senza, si risponde solo col registro.
+  if (!Array.isArray(personeVive)) return false;
+  const haDati = db.prepare(
+    'SELECT 1 FROM salvataggi WHERE utente=? UNION SELECT 1 FROM ricerche WHERE utente=? ' +
+    'UNION SELECT 1 FROM preferenze WHERE utente=? UNION SELECT 1 FROM parco WHERE utente=? LIMIT 1'
+  ).get(id, id, id, id);
+  return !!haDati;
+}
+
+/**
+ * Addebita N ricerche in UN colpo: o ci stanno tutte nel credito di oggi, o non se ne spende
+ * nessuna. Serve a /api/saved/check, che fa fino a venti ricerche per chiamata: consumarle una
+ * per una e fermarsi a meta' bruciava il credito senza fare il lavoro, e chiudeva fuori l'utente
+ * anche dalla ricerca normale fino a domani.
+ */
+function consumaRicerche(utente, n, max, t = Date.now()) {
+  const db = richiedi();
+  const g = giorno(t);
+  const chi = String(utente || '');
+  const quante = Math.max(0, Number(n) || 0);
+  const riga = db.prepare('SELECT ricerche FROM uso WHERE utente=? AND giorno=?').get(chi, g);
+  const usate = riga ? Number(riga.ricerche) : 0;
+  if (quante === 0) return { ok: true, usate, max, giorno: g };
+  if (usate + quante > max) return { ok: false, usate, max, giorno: g, servono: quante };
+  if (!riga) {
+    db.prepare('DELETE FROM uso WHERE utente=? AND giorno < ?').run(chi, giorno(t - USO_STORICO));
+    db.prepare('INSERT INTO uso (utente, giorno, ricerche) VALUES (?,?,?)').run(chi, g, quante);
+  } else {
+    // La condizione nell'UPDATE rende l'addebito atomico anche con due processi: se un altro ha
+    // consumato nel frattempo e il credito non basta piu', non cambia nessuna riga.
+    const r = db.prepare('UPDATE uso SET ricerche = ricerche + ? WHERE utente=? AND giorno=? AND ricerche + ? <= ?').run(quante, chi, g, quante, max);
+    if (!r.changes) return { ok: false, usate, max, giorno: g, servono: quante };
+  }
+  return { ok: true, usate: usate + quante, max, giorno: g };
+}
+
 /** Quante ne ha gia' fatte oggi, senza consumarne una. */
 function ricercheOggi(utente, t = Date.now()) {
   const db = apri();
@@ -323,5 +383,5 @@ function ricercheOggi(utente, t = Date.now()) {
 
 module.exports = {
   apri, richiedi, stato, chiudi, percorso, cartella, giorno, guasto,
-  consumaRicerca, ricercheOggi, annota, registro, MIGRAZIONI,
+  consumaRicerca, consumaRicerche, ricercheOggi, annota, registro, revocato, MIGRAZIONI,
 };

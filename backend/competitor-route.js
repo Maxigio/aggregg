@@ -199,7 +199,12 @@ function mount(app, deps = {}) {
     const k = chiaveDi(voce);
     const hit = cache.get(k);
     if (!forza && hit && Date.now() - hit.ts < TTL) {
-      return { ...hit.dati, daCache: true, quando: new Date(hit.ts).toISOString() };
+      // LA CACHE NON HA PADRONE, LA `voce` SI'. La chiave e' `fonte:id` — la vetrina e' la stessa
+      // per tutti, ed e' giusto che i veicoli scaricati si condividano — ma `voce` porta i campi
+      // PERSONALI di chi guarda (il gruppo che ha assegnato, `mio`, il nome che ha scelto): quella
+      // di chi ha scaricato per primo non deve finire sullo schermo del secondo. Si sostituisce
+      // con la riga del chiamante, appena riletta.
+      return { ...hit.dati, voce, daCache: true, quando: new Date(hit.ts).toISOString() };
     }
     let p;
     try { p = await C.parco(voce); }

@@ -215,7 +215,13 @@ function applica({ admin, voci }, env) {
   const persone = auth.persone();
   const daWeb = persone.filter(p => p.origine === 'web').map(p => p.id);
   const tolti = persone.filter(p => p.origine !== 'web' && !tenuti.has(p.id)).map(p => p.id);
-  for (const id of tolti) auth.togliPersona(id);
+  // Annotate come revoche nel magazzino DI QUESTA macchina. Questo script gira sull'iMac e copia
+  // sull'M2 solo auth.json: il registro dell'M2 NON riceve la riga. Li' un id tolto da qui resta
+  // bruciato solo se ha lasciato dati (salvataggi, ricerche, preferenze, parco: vedi
+  // utenti-db.revocato); senza dati puo' rinascere — ma passa comunque dall'approvazione a mano.
+  // `revoca` fa gia' `auth.togliPersona` + annotazione.
+  const registrazioni = require('../backend/registrazioni');
+  for (const id of tolti) registrazioni.revoca(id);
   const demoTolta = auth.togliDemoCondiviso();
   const copie = copiaAltrove(file, dest, env);
   return { file, tolti, daWeb, demoTolta, copie };

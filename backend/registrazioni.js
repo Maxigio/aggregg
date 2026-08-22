@@ -96,7 +96,12 @@ function chiedi({ nome, email, ip } = {}) {
 
   // Il nome e' gia' di qualcuno che e' DENTRO: lo si dice subito, invece di far aspettare
   // l'approvazione per poi fallire al momento di creare l'account.
-  if (auth.persone().some(p => p.id === persona)) {
+  // E un id gia' REVOCATO risponde con le STESSE parole: i suoi dati sono ancora nel magazzino e
+  // chi lo riprendesse li erediterebbe — ma da fuori "occupato" e "revocato" devono essere
+  // indistinguibili, senno' la registrazione anonima diventa un modo per scoprire chi e' stato
+  // tolto. Il controllo sta DOPO l'email, come quello sull'occupato, per lo stesso motivo.
+  const vive = auth.persone().map(p => p.id);
+  if (vive.includes(persona) || dbmod.revocato(persona, { personeVive: vive })) {
     throw errore(`Il nome "${n}" e' gia' in uso: scegline un altro.`, 'NOME_OCCUPATO');
   }
   const viva = db.prepare("SELECT id, stato FROM richieste WHERE persona=? AND stato IN ('attesa','approvata')").get(persona);
@@ -154,8 +159,14 @@ function approva(idRichiesta, t = ora()) {
   const r = db.prepare('SELECT * FROM richieste WHERE id=?').get(Number(idRichiesta));
   if (!r) throw errore('Richiesta inesistente.', 'RICHIESTA_ASSENTE');
   if (r.stato !== 'attesa') throw errore(`La richiesta e' gia' "${r.stato}".`, 'RICHIESTA_NON_IN_ATTESA');
-  if (auth.persone().some(p => p.id === r.persona)) {
+  const viveOra = auth.persone().map(p => p.id);
+  if (viveOra.includes(r.persona)) {
     throw errore(`"${r.persona}" nel frattempo e' diventato l'id di una persona che esiste gia'.`, 'NOME_OCCUPATO');
+  }
+  // Stesso controllo di `chiedi` e `consuma`: un id bruciato non va approvato, senno' il link
+  // nasce, `consuma` lo rifiuta, e la richiesta resta 'approvata' con un invito inutilizzabile.
+  if (dbmod.revocato(r.persona, { personeVive: viveOra })) {
+    throw errore(`"${r.persona}" e' l'id di una persona revocata: non si riapre, si chiede un altro nome.`, 'NOME_RISERVATO');
   }
   const cambiate = db.prepare("UPDATE richieste SET stato='approvata', deciso_il=? WHERE id=? AND stato='attesa'").run(t, r.id);
   if (Number(cambiate.changes) !== 1) throw errore('La richiesta e\' cambiata sotto le mani: ricarica.', 'RICHIESTA_CAMBIATA');
@@ -214,6 +225,9 @@ function consuma(token, password, t = ora()) {
 
   let nata;
   try {
+    // Ricontrollo al consumo: fra la richiesta e il clic sul link il nome puo' essere stato
+    // revocato (e i suoi dati lasciati nel magazzino).
+    if (dbmod.revocato(auth.idDaNome(i.nome), { personeVive: auth.persone().map(p => p.id) })) throw errore(`Il nome "${i.nome}" e' gia' in uso.`, 'NOME_OCCUPATO');
     nata = auth.creaPersona(i.nome, password, 'demo', 'web');
   } catch (e) {
     db.prepare('UPDATE inviti SET usato_il=NULL WHERE token=?').run(h);   // il link resta buono

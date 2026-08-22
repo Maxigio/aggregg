@@ -150,7 +150,10 @@ function mount(app, deps = {}) {
 
   app.put('/api/miei/elenco/:genere', json, (req, res) => {
     try {
-      const n = scriviElenco(utenteDi(req), req.params.genere, (req.body && req.body.elenco) || []);
+      // Niente `|| []`: trasformava un campo MANCANTE in un elenco vuoto volontario, e un corpo
+      // senza `elenco` azzerava i salvataggi rispondendo 200. La guardia Array.isArray di
+      // scriviElenco esiste apposta: si lascia parlare. Chi vuole svuotare manda {"elenco": []}.
+      const n = scriviElenco(utenteDi(req), req.params.genere, req.body && req.body.elenco);
       res.json({ ok: true, tenuti: n });
     } catch (e) { male(res, e); }
   });
