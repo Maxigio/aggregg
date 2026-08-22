@@ -5276,7 +5276,7 @@ function vehMisureHTML() {
     else {
       const scelte = cand.map(c => `<button type="button" class="veh-mis-cand" data-prova="${escapeHtml(c.slug)}">`
         + `<span class="veh-mis-cand-t">${escapeHtml(c.titolo)}</span>`
-        + `<span class="veh-mis-cand-m">${[c.anno, c.categoria].filter(Boolean).join(' · ')}</span></button>`).join('');
+        + `<span class="veh-mis-cand-m">${[c.anno, c.categoria].filter(Boolean).map(x => escapeHtml(String(x))).join(' · ')}</span></button>`).join('');
       corpo = `<div class="veh-mis-lista">${scelte}</div>${vehProvaHTML()}`;
     }
   } else {
@@ -5604,6 +5604,9 @@ async function liqCarica(marca, modello, tipo) {
     if (modello) q.set('modello', modello);
     if (tipo) q.set('tipo', tipo);
     const d = await fetch('/api/liquidita?' + q.toString()).then(r => r.json());
+    // Nel frattempo l'utente puo' aver cambiato ricerca: una risposta per una domanda superata
+    // non deve sovrascrivere i dati di quella corrente. Stesso guardiano di tutte le altre fetch.
+    if (liqMarca !== chiave) return;
     // `d.voce` (il modello CERCATO) non si tiene piu': il riquadro dentro la scheda parla
     // dell'annuncio aperto, non della ricerca, e ha il suo stato — vedi `liqAnn`.
     liqAnno = (d && d.anno) || liqAnno;
@@ -6278,7 +6281,9 @@ function exportPdf(results) {
 async function applyUrlParams() {
   const p = new URLSearchParams(window.location.search);
   if (!p.has('marca')) return false;
-  const tipo = p.get('tipo') || 'auto';
+  // Solo i due valori che esistono: qualunque altra cosa nell'URL (compreso un `"` che farebbe
+  // lanciare querySelector e abortire init()) ricade su 'auto'.
+  const tipo = p.get('tipo') === 'moto' ? 'moto' : 'auto';
   const tipoInput = document.querySelector(`input[name="tipo"][value="${tipo}"]`);
   if (tipoInput) {
     tipoInput.checked = true; document.body.dataset.tipo = tipo;

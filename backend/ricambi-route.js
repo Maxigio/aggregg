@@ -90,7 +90,10 @@ function mount(app, deps = {}) {
     }
     try {
       const data = await fetchEbayItemDetails(url);
-      ebayCache.set(url, { ts: Date.now(), data });
+      // Una scheda VUOTA (la pagina non si e' idratata nei 12 s: il timeout e' ingoiato dentro
+      // fetchEbayItemDetails) non e' "la risposta di eBay" e non si tiene un'ora: si risponde e
+      // basta, cosi' il prossimo clic riprova. In cache entra solo una scheda con dentro qualcosa.
+      if (data && Object.keys(data).length) ebayCache.set(url, { ts: Date.now(), data });
       if (ebayCache.size > RICAMBI_CACHE_MAX) ebayCache.delete(ebayCache.keys().next().value);
       res.json(data);
     } catch (e) {

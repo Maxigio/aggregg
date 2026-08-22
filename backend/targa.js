@@ -277,7 +277,9 @@ async function verifica(id, { tipo, targa, captcha }) {
   // verifica da se'), e portandosi dietro i cookie di sessione.
   if (r.status === 302 && r.headers && r.headers.location) {
     const dopo = new URL(r.headers.location, s.azione).href;
-    const cookieDopo = [s.cookie, ...(r.cookie || [])].filter(Boolean).join('; ');
+    // `unisci` e non un join a mano: deduplica per NOME di cookie e fa vincere il valore nuovo.
+    // Col join il vecchio restava davanti e il portale leggeva quello.
+    const cookieDopo = unisci(s.cookie ? s.cookie.split(/;\s*/) : [], r.cookie || []);
     try { r = await chiamata(dopo, { cookie: cookieDopo, referer: s.azione }); }
     catch (e) { throw new Error(`il portale rimanda a una pagina che non risponde (${e.message})`); }
   }

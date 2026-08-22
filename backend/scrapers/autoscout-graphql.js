@@ -220,7 +220,8 @@ function finisci(v, params, page, opts) {
   //    per le auto → inutile). Cosi l'anno è filtrato alla fonte: pagina 1 già in-range,
   //    niente più hack sort-by-date + maxPages in server.js.
   if (params.kmMin != null || params.kmMax != null) {
-    v.mileageInKm = { from: params.kmMin || 0, to: params.kmMax || 100000000 };
+    // `?? ` e non `||`: kmMax=0 ("solo km zero") e' un tetto valido, con `||` spariva.
+    v.mileageInKm = { from: params.kmMin ?? 0, to: params.kmMax ?? 100000000 };
   }
   if (params.annoMin != null || params.annoMax != null) {
     v.firstRegistration = {

@@ -29,7 +29,10 @@ const ALTRA_VALUTA = /(\$|£|\bUSD\b|\bGBP\b|\bCHF\b)/i;
 function parsePrezzoEur(s) {
   const t = String(s || '');
   if (ALTRA_VALUTA.test(t)) return null;
-  const m = t.match(/(\d{1,3}(?:\.\d{3})*|\d+)(?:,(\d{2}))?/);
+  // Prima la forma con i punti delle migliaia (1.234,56), poi una sequenza di cifre intera — ma il
+  // primo ramo deve fermarsi su un CONFINE: con `\d{1,3}(?:\.\d{3})*` davanti a "1234,56" si
+  // accontentava di "123" e il prezzo usciva diviso per dieci.
+  const m = t.match(/(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{2}))?/);
   if (!m) return null;
   const n = parseFloat(m[1].replace(/\./g, '') + '.' + (m[2] || '00'));
   return isFinite(n) ? n : null;

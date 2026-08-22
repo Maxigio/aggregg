@@ -211,7 +211,12 @@ function mount(app, deps = {}) {
       // lanciare — per esempio quando l'archivio non e' stato costruito — e quella risposta
       // usciva con un'ora di cache addosso: il browser la ripeteva per sessanta minuti anche
       // dopo aver ricostruito l'archivio. L'intestazione si mette solo su una risposta vera.
-      if (out && out.ok !== false) res.set('Cache-Control', 'public, max-age=3600');
+      // Tre rotte dichiarano l'archivio mancante con altri campi, senza `ok:false`: `pronto:false`
+      // (/stato) e gli elenchi vuoti di /marche e /ultime quando non c'e' niente da leggere. Anche
+      // quelli sono un "non lo so" e non si cachano un'ora.
+      // `motivo` e' come /marche e /ultime dicono "archivio non costruito" (senza ok:false).
+      const nonPronto = out && (out.ok === false || out.pronto === false || out.motivo != null);
+      if (out && !nonPronto) res.set('Cache-Control', 'public, max-age=3600');
       else res.set('Cache-Control', 'no-store');
       res.json({ ok: true, ...out });
     } catch (e) {

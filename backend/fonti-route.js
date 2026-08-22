@@ -142,7 +142,13 @@ function mount(app, deps = {}) {
     if (!g.ok) return res.status(429).json({ ok: false, motivo: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     try {
       const out = await lavoro(req.query || {});
-      res.set('Cache-Control', 'public, max-age=3600');
+      // L'ora di cache solo se c'e' un dato dentro: "prezzi non disponibili adesso" e' un "non
+      // lo so", e congelarlo un'ora fa sembrare guasta una fonte che e' tornata dopo un minuto.
+      // I campi che le rotte di questo file emettono DAVVERO quando non hanno il dato: `notaPrezzi`
+      // (territorio senza MIMIT) e `motivo` (categoria mancante, misura mancante, fonte vuota).
+      // Una risposta con uno di questi e' un "non lo so" e non si congela un'ora.
+      const vuoto = out && (out.notaPrezzi != null || out.motivo != null);
+      res.set('Cache-Control', vuoto ? 'no-store' : 'public, max-age=3600');
       res.json({ ok: true, ...out });
     } catch (e) {
       console.warn('[fonti] ' + percorso + ' KO:', e.message);

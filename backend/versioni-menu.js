@@ -46,16 +46,19 @@ const { norm, taglioValido } = require('./scrapers/brand-match');
 let CAT = null;
 function catalogo() {
   if (CAT) return CAT;
-  CAT = { auto: new Map(), moto: new Map() };
+  // Si assegna a CAT solo se la lettura riesce: assegnando prima del try, un fallimento restava
+  // memorizzato come catalogo vuoto per tutta la vita del processo.
+  const cat = { auto: new Map(), moto: new Map() };
   try {
     const j = require('../data/subito-catalogo.json');
     for (const t of ['auto', 'moto']) {
       for (const m of Object.values(j[t] || {})) {
-        if (m && m.id) CAT[t].set(String(m.id), m);
+        if (m && m.id) cat[t].set(String(m.id), m);
       }
     }
+    CAT = cat;
   } catch (e) { console.warn('[versioni-menu] catalogo non letto: ' + e.message); }
-  return CAT;
+  return CAT || cat;   // fallito: si risponde col vuoto di QUESTA chiamata, senza memorizzarlo
 }
 
 const spazi = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')

@@ -103,13 +103,18 @@ process.env.PLAYWRIGHT_BROWSERS_PATH = PW_BROWSERS;
 
 // ─── Browser singleton ───────────────────────────────────────────────────────
 let browserInstance = null;
+let avvio = null;   // la PROMESSA di lancio: due chiamate concorrenti devono aspettare lo stesso Chrome
 
 async function getBrowser() {
   if (browserInstance) {
     try { browserInstance.contexts(); return browserInstance; } catch (_) {}
   }
+  // Si memorizza la promessa, non solo l'istanza: fra il controllo qui sopra e l'assegnazione
+  // c'e' un await, e due ricerche partite insieme lanciavano DUE Chromium — il primo restava
+  // orfano per sempre. Stesso stampo di oem-lookup.js (`launching`).
+  if (avvio) return avvio;
   console.log('[AS24-PW] Avvio Chrome headless…');
-  browserInstance = await chromium.launch({
+  avvio = chromium.launch({
     executablePath: resolveChromiumExecutable(PW_BROWSERS),
     headless: true,
     args: [
@@ -118,9 +123,12 @@ async function getBrowser() {
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
     ],
-  });
-  browserInstance.on('disconnected', () => { browserInstance = null; });
-  return browserInstance;
+  }).then(b => {
+    browserInstance = b;
+    b.on('disconnected', () => { if (browserInstance === b) browserInstance = null; });
+    return b;
+  }).finally(() => { avvio = null; });
+  return avvio;
 }
 
 // ─── Costruzione URL ─────────────────────────────────────────────────────────

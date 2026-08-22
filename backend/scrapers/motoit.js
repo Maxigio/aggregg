@@ -291,9 +291,12 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
 // ─── Rate limiting: minimo 1.5s tra ricerche ─────────────────────────────────
 let lastSearchAt = 0;
 async function throttle() {
-  const wait = 1500 - (Date.now() - lastSearchAt);
+  // Si PRENOTA lo slot prima di dormire: leggendo prima e scrivendo dopo, N chiamate concorrenti
+  // calcolavano la stessa attesa, dormivano fino allo stesso istante e partivano insieme.
+  const mio = Math.max(Date.now(), lastSearchAt + 1500);
+  lastSearchAt = mio;
+  const wait = mio - Date.now();
   if (wait > 0) await sleep(wait);
-  lastSearchAt = Date.now();
 }
 
 /**
