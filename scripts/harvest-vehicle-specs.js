@@ -42,6 +42,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     } catch (e) { ko++; console.warn(`[harvest] KO ${b.name}: ${e.message}`); }
     await sleep(250);   // gentile
   }
-  fs.writeFileSync(outPath, JSON.stringify(out));
+  // GUARDIA SUL RACCOLTO (come build-rdw-richiami): se il markup di /en/allbrands cambia o ogni
+  // marca fallisce (catch qui sopra, ok=0), `out.brands` resta vuoto e sovrascriverebbe l'indice
+  // buono che l'app legge. Un calo oltre la meta' rispetto al file gia' scritto non e' un
+  // aggiornamento, e' un guasto della lettura.
+  const nuove = Object.keys(out.brands).length;
+  let prima = 0;
+  try { prima = Object.keys(JSON.parse(fs.readFileSync(outPath, 'utf8')).brands || {}).length; } catch (_) { /* prima volta */ }
+  if (prima && nuove < prima / 2) {
+    console.error(`[harvest] KO: raccolte ${nuove} marche contro le ${prima} gia' in ${outPath}: non sovrascrivo. Se e' voluto, cancella prima il file.`);
+    process.exit(2);
+  }
+  fs.writeFileSync(outPath + '.tmp', JSON.stringify(out));
+  fs.renameSync(outPath + '.tmp', outPath);
   console.log(`[harvest] scritto ${outPath} — marche ${ok} (ko ${ko}), modelli ${models}, bytes ${fs.statSync(outPath).size}`);
 })().catch(e => { console.error('[harvest] FATAL', e.message); process.exit(1); });

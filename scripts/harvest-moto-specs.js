@@ -54,6 +54,15 @@ const RE = /\/motorcycles-specs\/([^/]+)\/(.+)-(\d{4})$/;
       b.models[key].items = items; models++;
     }
   }
-  fs.writeFileSync(outPath, JSON.stringify(out));
+  // GUARDIA SUL RACCOLTO (come build-rdw-richiami): sitemap vuote o formato cambiato con HTTP 200
+  // lasciano `out.brands` vuoto; senza il confronto col file esistente l'indice buono sparirebbe.
+  let prima = 0;
+  try { prima = Object.keys(JSON.parse(fs.readFileSync(outPath, 'utf8')).brands || {}).length; } catch (_) { /* prima volta */ }
+  if (prima && brands < prima / 2) {
+    console.error(`[moto] KO: raccolte ${brands} marche contro le ${prima} gia' in ${outPath}: non sovrascrivo. Se e' voluto, cancella prima il file.`);
+    process.exit(2);
+  }
+  fs.writeFileSync(outPath + '.tmp', JSON.stringify(out));
+  fs.renameSync(outPath + '.tmp', outPath);
   console.log(`[moto] scritto ${outPath} — marche ${brands}, modelli ${models}, url ${urls} (skip ${skipped}), bytes ${fs.statSync(outPath).size}`);
 })().catch(e => { console.error('[moto] FATAL', e.message); process.exit(1); });

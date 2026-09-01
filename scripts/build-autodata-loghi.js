@@ -65,7 +65,17 @@ function get(u, hop = 0) {
     const url = perSlug.get(b.slug);
     if (url) out[chiave] = url; else senza++;
   }
-  fs.writeFileSync(OUT, JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), fonte: PAGINA, loghi: out }));
+  // GUARDIA SUL RACCOLTO (come build-rdw-richiami): se il markup della pagina cambia, perSlug
+  // resta vuota e `out` con lei; il confronto col file esistente ferma la sovrascrittura a vuoto.
+  const nuovi = Object.keys(out).length;
+  let prima = 0;
+  try { prima = Object.keys(JSON.parse(fs.readFileSync(OUT, 'utf8')).loghi || {}).length; } catch (_) { /* prima volta */ }
+  if (prima && nuovi < prima / 2) {
+    console.error(`[autodata-loghi] KO: abbinati ${nuovi} loghi contro i ${prima} gia' in ${OUT}: non sovrascrivo. Se e' voluto, cancella prima il file.`);
+    process.exit(2);
+  }
+  fs.writeFileSync(OUT + '.tmp', JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), fonte: PAGINA, loghi: out }));
+  fs.renameSync(OUT + '.tmp', OUT);
   console.log(`[autodata-loghi] loghi in pagina: ${perSlug.size} · abbinati all'indice: ${Object.keys(out).length} · senza logo: ${senza}`);
   console.log('[autodata-loghi] scritto ' + OUT);
 })().catch(e => { console.error('[autodata-loghi] KO:', e.message); process.exit(1); });

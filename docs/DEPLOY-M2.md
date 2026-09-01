@@ -40,7 +40,8 @@ Sono l'unica copia al mondo di quello che contengono. Un `rsync` che li porta vi
 Sono entrambi in `.gitignore`, quindi **non** compaiono in `git ls-files` e il perimetro qui sotto
 non li tocca. Il `.gitignore` è la difesa; il fatto che siano scritti qui è la seconda.
 
-**Come si salvano.** Il `tar` del passo 1, che prende tutta la cartella `data/`: è l'**unico**
+**Come si salvano.** Il `tar` del passo 1, che prende tutta la cartella `data/` — il database
+però NON come copia del file vivo ma come snapshot `sqlite3 .backup` (vedi passo 1): è l'**unico**
 backup che esiste, quindi il passo 1 non è una formalità. (Fino al 2026-08-17 c'era anche
 `scripts/backup-db.js`, che faceva `pg_dump` di Postgres e questi due file non li toccava
 comunque: è stato cancellato con tutto il resto di Postgres.)
@@ -52,11 +53,35 @@ comunque: è stato cancellato con tutto il resto di Postgres.)
 ### 1. Backup, prima di qualsiasi cosa
 
 ```bash
-ssh -i ~/.ssh/amr_m2_ed25519 -o IdentitiesOnly=yes massimo@100.66.119.62 \
-  'cd ~ && tar --exclude=node_modules -czf ~/AutoMotoRadar-backup-$(date +%Y%m%d-%H%M).tar.gz AutoMotoRadar && ls -lh ~/AutoMotoRadar-backup-*.tar.gz | tail -1'
+ssh -i ~/.ssh/amr_m2_ed25519 -o IdentitiesOnly=yes massimo@100.66.119.62 '
+  set -e
+  rm -rf ~/amr-rollback && mkdir -p ~/amr-rollback/AutoMotoRadar/data
+  /usr/bin/sqlite3 ~/AutoMotoRadar/data/amr-utenti.db ".backup /Users/massimo/amr-rollback/AutoMotoRadar/data/amr-utenti.db"
+  : > ~/amr-rollback/AutoMotoRadar/data/amr-utenti.db-wal
+  : > ~/amr-rollback/AutoMotoRadar/data/amr-utenti.db-shm
+  B=~/AutoMotoRadar-backup-$(date +%Y%m%d-%H%M).tar
+  cd ~ && tar --exclude=node_modules \
+    --exclude=AutoMotoRadar/data/amr-utenti.db \
+    --exclude=AutoMotoRadar/data/amr-utenti.db-wal \
+    --exclude=AutoMotoRadar/data/amr-utenti.db-shm \
+    -cf "$B" AutoMotoRadar
+  tar -rf "$B" -C ~/amr-rollback \
+    AutoMotoRadar/data/amr-utenti.db AutoMotoRadar/data/amr-utenti.db-wal AutoMotoRadar/data/amr-utenti.db-shm
+  gzip -f "$B"
+  rm -rf ~/amr-rollback
+  ls -lh ~/AutoMotoRadar-backup-*.tar.gz | tail -1
+'
 ```
 
 Circa 7 MB. È il rollback: se qualcosa va storto, si riestrae questo e si riparte.
+
+Perché non un semplice `tar` di tutto: `amr-utenti.db` è in WAL e lo scrive il server vivo —
+db, `-wal` e `-shm` fotografati in istanti diversi non sono uno snapshot consistente
+(riestratto può risultare "database disk image is malformed" o perdere transazioni). Il db
+entra nel tar SOLO come snapshot `sqlite3 .backup` (la stessa regola di
+`scripts/backup-dati-m2.sh`), e le `-wal`/`-shm` nel tar sono vuote apposta: riestraendo sopra
+la cartella viva troncano quelle stantie, che altrimenti verrebbero rigiocate sul db
+ripristinato corrompendolo.
 
 ### 2. Si sincronizza da HEAD, MAI dal working tree
 
