@@ -147,6 +147,62 @@ test('i filtri stanno solo sulle auto', () => {
     'il browser non deve mandare questi filtri sulle moto');
 });
 
+test('due caricamenti concorrenti non duplicano le tendine (e il fallimento si riprova)', async () => {
+  /**
+   * Il boot lancia caricaFiltriAuto senza await; il toggle del pannello la rilancia quando
+   * `filtriAutoNomi` e' vuoto — che e' vero anche mentre la PRIMA richiesta e' ancora in
+   * volo. Senza guardia le due risposte appendevano l'intero set di <select id="fa_...">
+   * due volte: id duplicati, e la copia che getElementById non vede perdeva le scelte in
+   * silenzio. Qui si esegue il codice VERO di app.js su un DOM minimo, con la fetch lenta.
+   */
+  const app = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const inizio = app.indexOf('let filtriAutoNomi');
+  const fine = app.indexOf('function sincronizzaFiltriAuto');
+  assert.ok(inizio >= 0 && fine > inizio, 'caricaFiltriAuto non si trova piu\': aggiorna questo test');
+  const estratto = app.slice(inizio, fine);
+
+  // DOM minimo: albero vero, getElementById = primo in ordine di documento (come il browser).
+  class El {
+    constructor(tag) { this.tagName = tag; this.children = []; this.id = ''; this.className = ''; this.dataset = {}; this.value = ''; this.textContent = ''; }
+    appendChild(c) { this.children.push(c); return c; }
+    append(...cs) { cs.forEach(c => this.appendChild(c)); }
+    insertBefore(n, rif) { const i = this.children.indexOf(rif); this.children.splice(i < 0 ? this.children.length : i, 0, n); return n; }
+    get firstElementChild() { return this.children[0] || null; }
+    *walk() { for (const c of this.children) { yield c; yield* c.walk(); } }
+  }
+  const root = new El('body');
+  const griglia = new El('div'); griglia.id = 'filtriAutoGrid'; root.appendChild(griglia);
+  const documento = {
+    getElementById(id) { for (const el of root.walk()) if (el.id === id) return el; return null; },
+    createElement(tag) { return new El(tag); },
+  };
+  const RISPOSTA = { filtri: [{ nome: 'cambio', etichetta: 'Cambio', voci: [{ id: 'automatico', etichetta: 'Automatico' }] }] };
+  let chiamate = 0;
+  const fetchLenta = () => { chiamate++; return new Promise(res => setTimeout(() => res({ ok: true, json: async () => RISPOSTA }), 30)); };
+  const fabbrica = new Function('document', 'fetch', estratto + '\nreturn { caricaFiltriAuto };');
+
+  // Scenario del bug: boot senza await + toggle mentre la prima e' in volo.
+  const { caricaFiltriAuto } = fabbrica(documento, fetchLenta);
+  const p1 = caricaFiltriAuto();
+  const p2 = caricaFiltriAuto();
+  await Promise.all([p1, p2]);
+  const selects = [...root.walk()].filter(e => e.tagName === 'select');
+  assert.strictEqual(chiamate, 1, 'due chiamate concorrenti devono fare UNA richiesta sola');
+  assert.strictEqual(selects.length, 1,
+    `le tendine sono state appese ${selects.length} volte: id duplicati, le scelte sulla seconda copia si perdono`);
+
+  // E la regola del toggle resta viva: il fallimento NON si memorizza, si riprova all'apertura.
+  const root2 = new El('body'); const g2 = new El('div'); g2.id = 'filtriAutoGrid'; root2.appendChild(g2);
+  const doc2 = { getElementById(id) { for (const el of root2.walk()) if (el.id === id) return el; return null; }, createElement(tag) { return new El(tag); } };
+  let giri = 0;
+  const fetchPrimaRotta = () => { giri++; return giri === 1 ? Promise.reject(new Error('rete giu\'')) : Promise.resolve({ ok: true, json: async () => RISPOSTA }); };
+  const secondo = fabbrica(doc2, fetchPrimaRotta);
+  await secondo.caricaFiltriAuto();   // boot: fallisce
+  await secondo.caricaFiltriAuto();   // toggle: deve riprovare
+  assert.strictEqual(giri, 2, 'dopo un fallimento la riapertura del pannello deve riprovare');
+  assert.strictEqual([...root2.walk()].filter(e => e.tagName === 'select').length, 1);
+});
+
 test('le voci per il menu non portano i codici delle fonti', () => {
   // Il menu deve poter cambiare senza toccare la traduzione, e viceversa.
   for (const nome of f.NOMI) {

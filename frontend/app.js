@@ -100,8 +100,10 @@ let myRole         = 'full';
 // CHI SONO, non solo con che ruolo. 'demo' come id e' l'ospite anonimo della vecchia password
 // condivisa; una persona registrata ha il suo. Il proprietario e' id 'owner' con ruolo 'full',
 // e solo lui vede i comandi che valgono per tutta la macchina.
-let myId           = 'owner';
-let sonoProprietario = true;
+// I default vestono l'OSPITE, non il proprietario: se /api/me non arriva (riavvio del server,
+// 502 del proxy) i comandi che il server negherebbe devono restare nascosti, non comparire.
+let myId           = null;
+let sonoProprietario = false;
 
 /**
  * ─── LE MIE COSE: il server e' la verita', il browser la copia veloce ──────────
@@ -119,15 +121,74 @@ const MIEI_ATTESA = 800;          // una raffica di clic diventa un invio solo
 const mieiTimer = {};
 let mieiKo = false;               // l'ultimo invio non e' arrivato: lo si dice una volta sola
 
+/**
+ * La copia LOCALE com'era all'ultima sincronizzazione col server, per genere. E' il metro per
+ * capire cosa e' successo QUI da allora (aggiunte e rimozioni proprie): senza, una scheda aperta
+ * da ore spedirebbe la sua fotografia stantia e l'ultimo dispositivo che scrive cancellerebbe
+ * quello che gli altri hanno salvato nel frattempo.
+ */
+const mieiBase = { annuncio: [], ricambio: [], oem: [] };
+const mieiGiro = {};              // per genere: solo l'invio piu' recente aggiorna la baseline
+
+// Identita' e tetto di ogni genere: le stesse regole dei rispettivi elenchi piu' in basso
+// (stessoAnnuncio, rcKey, rcFavNorm — valutate a runtime, quando sono gia' definite).
+const MIEI_CHIAVI = {
+  annuncio: { chiave: a => String((a && (a.id || a.url)) || ''), taglia: a => a.slice(-SALVATI_CAP), inCoda: true },
+  ricambio: { chiave: a => (a ? rcKey(a) : ''), taglia: a => a.slice(0, RC_SALVATI_CAP), inCoda: false },
+  oem:      { chiave: f => rcFavNorm(f && f.q), taglia: a => a.slice(0, RC_FAV_CAP), inCoda: false },
+};
+
+/**
+ * Fusione a tre vie: baseline (com'era qui all'ultima sincronizzazione), locale (com'e' qui
+ * adesso) e server (com'e' di la' adesso). Sopra lo stato del server si applicano solo le
+ * PROPRIE aggiunte e rimozioni, cosi' quello che un altro dispositivo ha salvato resta.
+ * Server vuoto = la regola del primo accesso: quello che c'e' qui sale — da un elenco vuoto
+ * non si deduce una cancellazione totale, potrebbe mancare per un guasto.
+ */
+function mieiFondi(genere, locale, server) {
+  const { chiave, taglia, inCoda } = MIEI_CHIAVI[genere];
+  if (!Array.isArray(server) || !server.length) return locale;
+  const inLocale = new Set(locale.map(chiave));
+  const chiaviBase = (mieiBase[genere] || []).map(chiave);
+  const inBase = new Set(chiaviBase);
+  // C'era all'ultima sincronizzazione e qui non c'e' piu': l'ho tolto io, non deve tornare.
+  const tolteQui = new Set(chiaviBase.filter(c => !inLocale.has(c)));
+  const inServer = new Set(server.map(chiave));
+  // Le voci di qui restano se le ho aggiunte io (fuori baseline) o se il server le ha ancora:
+  // se erano in baseline e dal server sono sparite, le ha tolte un altro dispositivo.
+  const mie = locale.filter(x => { const c = chiave(x); return !inBase.has(c) || inServer.has(c); });
+  // Le voci del server che qui mancano e non ho tolto io: aggiunte altrui, si tengono.
+  const altrui = server.filter(x => { const c = chiave(x); return c && !inLocale.has(c) && !tolteQui.has(c); });
+  return taglia(inCoda ? mie.concat(altrui) : altrui.concat(mie));
+}
+
 function mieiManda(genere, elenco) {
   if (!mieiPronti) return;
   clearTimeout(mieiTimer[genere]);
-  mieiTimer[genere] = setTimeout(() => {
+  mieiTimer[genere] = setTimeout(async () => {
+    const giro = mieiGiro[genere] = (mieiGiro[genere] || 0) + 1;
+    // Prima si RILEGGE il server: la copia in mano puo' essere vecchia di ore, e spedita
+    // cosi' com'e' cancellerebbe i salvataggi fatti nel frattempo dagli altri dispositivi.
+    let server;
+    try {
+      const d = await fetch('/api/miei').then(r => (r.ok ? r.json() : null));
+      if (!d || d.guasto) throw new Error('server muto');
+      server = (d.salvataggi || {})[genere] || [];
+    } catch (_) {
+      if (!mieiKo) { mieiKo = true; console.warn(`[miei] "${genere}" non salvato sul server: resta su questo dispositivo.`); }
+      return;
+    }
     fetch(`/api/miei/elenco/${genere}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ elenco }),
+      body: JSON.stringify({ elenco: mieiFondi(genere, elenco, server) }),
     }).then(r => {
-      if (r.ok) { mieiKo = false; return; }
+      if (r.ok) {
+        mieiKo = false;
+        // La baseline e' la copia locale al momento della sincronizzazione (non la fusione:
+        // lo schermo non l'ha vista) — e solo se questo e' ancora l'invio piu' recente.
+        if (giro === mieiGiro[genere]) mieiBase[genere] = elenco.slice();
+        return;
+      }
       if (!mieiKo) { mieiKo = true; console.warn(`[miei] "${genere}" non salvato sul server (${r.status}): resta su questo dispositivo.`); }
     }).catch(() => {
       if (!mieiKo) { mieiKo = true; console.warn(`[miei] "${genere}" non salvato sul server: resta su questo dispositivo.`); }
@@ -175,10 +236,11 @@ async function mieiCarica() {
     && !(s.oem || []).length && !Object.keys(p).length;
 
   if (!serverVuoto) {
-    // Il server vince: e' quello che ritrovo da qualunque dispositivo.
-    if (Array.isArray(s.annuncio)) { salvati = s.annuncio; persistSalvatiLocale(); }
-    if (Array.isArray(s.ricambio)) { salvatiRicambi = s.ricambio; rcPersistSalvatiLocale(); }
-    if (Array.isArray(s.oem)) { oemFav = s.oem; rcPersistFavLocale(); }
+    // Il server vince: e' quello che ritrovo da qualunque dispositivo. La baseline e' una COPIA
+    // (l'array vivo poi si muta): da qui in avanti misura i gesti fatti su questo dispositivo.
+    if (Array.isArray(s.annuncio)) { salvati = s.annuncio; mieiBase.annuncio = s.annuncio.slice(); persistSalvatiLocale(); }
+    if (Array.isArray(s.ricambio)) { salvatiRicambi = s.ricambio; mieiBase.ricambio = s.ricambio.slice(); rcPersistSalvatiLocale(); }
+    if (Array.isArray(s.oem)) { oemFav = s.oem; mieiBase.oem = s.oem.slice(); rcPersistFavLocale(); }
     for (const [k, v] of Object.entries(p)) { try { localStorage.setItem(k, v); } catch (_) {} }
     if (p.amr_price_v) priceCfgV = loadPriceCfg('amr_price_v');
     if (p.amr_price_r) priceCfgR = loadPriceCfg('amr_price_r');
@@ -421,11 +483,20 @@ function toast(msg) {
  * sarebbe un filtro che una fonte su tre ignora in silenzio.
  */
 let filtriAutoNomi = [];
+let filtriAutoInVolo = false;
 async function caricaFiltriAuto() {
   const griglia = document.getElementById('filtriAutoGrid');
   if (!griglia) return;
+  // UNA RICHIESTA ALLA VOLTA, E UNA SOLA VOLTA. Il toggle del pannello riprova quando
+  // `filtriAutoNomi` e' vuoto — ma e' vuoto anche mentre la chiamata del boot e' ancora in
+  // volo: senza questa guardia le due risposte appendevano DUE volte le tendine (id
+  // duplicati, e la copia che getElementById non vede perdeva le scelte in silenzio).
+  // Il fallimento invece NON si memorizza: la bandiera si abbassa e si riprova all'apertura.
+  if (filtriAutoInVolo || filtriAutoNomi.length) return;
+  filtriAutoInVolo = true;
   let d = null;
   try { d = await fetch('/api/filtri-auto').then(r => (r.ok ? r.json() : null)); } catch (_) { d = null; }
+  filtriAutoInVolo = false;
   if (!d || !Array.isArray(d.filtri)) return;   // senza elenco niente tendine: meglio di tendine vuote
   filtriAutoNomi = d.filtri.map(f => f.nome);
   const prima = griglia.firstElementChild;      // i due campi CV restano in coda
@@ -567,10 +638,16 @@ async function init() {
   // Registrandolo dopo, l'evento partiva senza ascoltatori: chi chiudeva l'app in Moto la
   // riapriva con la barra su Moto e il catalogo marche vuoto — nessuna marca accettata,
   // "Cerca" spento, e l'unico modo di uscirne era passare da Auto e tornare indietro.
+  // Token di generazione (gemello di searchGen/rcGen/vehGen): chi commuta Moto→Auto mentre
+  // le marche moto sono ancora in volo NON deve vedersi svuotare la marca appena digitata
+  // dalla continuazione del gestore vecchio quando quella fetch finalmente risponde.
+  let tipoGen = 0;
   tipoInputs.forEach(input => input.addEventListener('change', async () => {
+    const myGen = ++tipoGen;
     document.body.dataset.tipo = input.value;
     sincronizzaFiltriAuto(input.value);
     await populateMarca(input.value);
+    if (myGen !== tipoGen) return;   // commutazione superata: il reset lo fa quella nuova
     marcaSelect.value = '';
     document.getElementById('modello').value = '';
     resetModelloVersione();
@@ -592,6 +669,10 @@ async function init() {
     // e i comandi di salvataggio devono restare.
     if (myRole === 'demo' && myId === 'demo') applyDemoMode();
     if (!sonoProprietario) applySoloProprietario();
+    // Il primo poll dello stato Subito parte al caricamento pagina, quando l'identita' non e'
+    // ancora nota e il default e' ospite: al proprietario il banner va rivalutato adesso,
+    // non al prossimo giro fra 60 secondi.
+    if (sonoProprietario) fetchSubitoStatus();
   } catch (_) {}
 
   themeToggle?.addEventListener('click', () => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
@@ -3433,7 +3514,7 @@ async function aggiungiVenditoreAlCompetitor(r, btn) {
     // smettono subito di offrire "Aggiungi".
     if (res.status === 409) {
       toast(d.error || 'Era gia\' nell\'elenco'); btn.textContent = 'Gia\' in Competitor';
-      if (d.voce) cpVoci = (cpVoci || []).concat([d.voce]);
+      if (d.voce && Array.isArray(cpVoci)) cpVoci = cpVoci.concat([d.voce]);
       return;
     }
     if (!res.ok || !d.ok) { showError(d.error || 'Non riuscito'); btn.disabled = false; btn.textContent = testo; return; }
@@ -3441,7 +3522,10 @@ async function aggiungiVenditoreAlCompetitor(r, btn) {
     btn.textContent = 'In Competitor ✓';
     // L'elenco in memoria si AGGIORNA invece di azzerarsi: azzerandolo, ogni altra riga
     // dello stesso venditore tornava a offrire "Aggiungi" fino alla riapertura della sezione.
-    if (d.voce) cpVoci = (cpVoci || []).concat([d.voce]);
+    // SOLO se e' gia' caricato, pero': null vuol dire "mai caricato" (cpApri scarica
+    // l'elenco vero proprio su quel segnale), e trasformarlo in un array di una voce
+    // faceva credere a cpApri di avere gia' tutto — la sezione mostrava solo questa voce.
+    if (d.voce && Array.isArray(cpVoci)) cpVoci = cpVoci.concat([d.voce]);
   } catch (_) {
     showError('Impossibile contattare il server'); btn.disabled = false; btn.textContent = testo;
   }
@@ -4466,11 +4550,13 @@ async function saveCurrentSearch() {
   btn.disabled = true;
   try {
     const r = await fetch('/api/saved', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ params: lastSearchParams }) });
-    if (!r.ok) throw new Error('save failed');
+    // Il "no" del server ha una spiegazione (tetto di ricerche, limitatore): va mostrata,
+    // senno' «non riuscito» sembra un guasto e il gesto istintivo e' riprovare.
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || 'Salvataggio ricerca non riuscito.'); }
     await loadSavedSearches();
     btn.textContent = '✓ Salvata';
     setTimeout(() => { btn.textContent = 'Salva ricerca'; btn.disabled = false; }, 1500);
-  } catch (_) { showError('Salvataggio ricerca non riuscito.'); btn.disabled = false; }
+  } catch (e) { showError((e && e.message) || 'Salvataggio ricerca non riuscito.'); btn.disabled = false; }
 }
 async function checkRicerche(id) {
   const url = id ? `/api/saved/check?id=${encodeURIComponent(id)}` : '/api/saved/check';
@@ -4560,7 +4646,7 @@ function renderRicerche() {
       : '';
     const alertsHtml = (s.alerts || []).map(a => `
       <div class="ric-alert ric-${a.motivo}" data-url="${escapeHtml(a.url)}" title="Apri annuncio">
-        <span class="ric-motivo">${MOTIVO_LABEL[a.motivo]?.slice(0, -1) || a.motivo}</span>
+        <span class="ric-motivo">${escapeHtml(a.motivo)}</span>
         <span class="ric-alert-tit">${escapeHtml(a.titolo || 'Annuncio')}</span>
         <span class="ric-alert-prezzo">${prezzoEtichetta(a)}</span>
       </div>`).join('');
