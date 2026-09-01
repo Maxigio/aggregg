@@ -1702,3 +1702,52 @@ select.cp-unisci { max-width: 190px; }
 .ricerche-altri .ra-et { color: var(--text); }
 .ricerche-altri .ra-quando { margin-left: auto; white-space: nowrap; }
 .ricerche-altri .ra-nov { color: var(--accent); font-weight: 700; white-space: nowrap; }
+
+/* ─── Area Aste ──────────────────────────────────────────────────────────── */
+.as-wrap { max-width: 1100px; margin: 0 auto; padding: 4px 0 24px; }
+.as-testa { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.as-tipi { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.as-tipo { border: 0; background: var(--surface); color: var(--text-muted); padding: 6px 16px; font-size: 0.85rem; cursor: pointer; }
+.as-tipo.attivo { background: var(--accent); color: #fff; }
+.as-meta { font-size: 0.78rem; color: var(--text-muted); font-style: italic; margin-left: auto; }
+.as-agg { border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 14px; font-size: 0.82rem; cursor: pointer; }
+.as-agg:hover:not(:disabled) { background: var(--surface-2); }
+.as-agg:disabled { opacity: 0.6; cursor: default; }
+
+.as-filtri { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.as-sel, .as-inp { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); padding: 6px 10px; font-size: 0.84rem; }
+.as-sel { min-width: 170px; }
+.as-inp { min-width: 190px; }
+.as-inp-n { min-width: 130px; }
+.as-conta { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px; }
+
+.as-lotto { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 10px 14px; margin-bottom: 8px; cursor: pointer; }
+.as-lotto:hover { background: var(--surface-2); }
+.as-riga1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.as-marca { font-size: 0.95rem; }
+/* La marca che non siamo riusciti a leggere si DICHIARA: in corsivo e smorzata, ma c'e'. */
+.as-nomarca { font-size: 0.82rem; color: var(--text-muted); font-style: italic; }
+.as-desc { font-size: 0.86rem; color: var(--text); flex: 1 1 260px; }
+.as-bollo { font-size: 0.7rem; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.as-cumulo { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--line); }
+.as-piatt { background: var(--accent); color: #fff; }
+.as-riga2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-top: 6px; }
+.as-prezzo { font-size: 1.05rem; font-weight: 600; color: var(--accent); }
+.as-n { font-size: 0.78rem; color: var(--text-muted); }
+.as-sep { color: var(--text-muted); }
+.as-quando { font-size: 0.8rem; color: var(--text-muted); }
+.as-urgente { color: #c0392b; font-weight: 600; }
+.as-riga3 { font-size: 0.76rem; color: var(--text-muted); margin-top: 4px; }
+
+.as-detbox { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
+.as-termine { font-size: 0.86rem; margin-bottom: 6px; }
+.as-sotto { margin-top: 8px; font-size: 0.82rem; }
+.as-sotto ul { margin: 4px 0 0; padding-left: 18px; }
+.as-sotto li { margin-bottom: 3px; }
+.as-tag { font-size: 0.68rem; color: var(--text-muted); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; margin-left: 5px; }
+.as-vai { display: inline-block; margin-top: 10px; font-size: 0.82rem; }
+
+@media (max-width: 640px) {
+  .as-meta { margin-left: 0; width: 100%; }
+  .as-sel, .as-inp { flex: 1 1 100%; min-width: 0; }
+}

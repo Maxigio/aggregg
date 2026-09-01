@@ -1382,6 +1382,11 @@ require('./fonti-route').mount(app, { chiaveLimite });
 // il costruttore dichiara. Su richiesta, una fonte per tipo di veicolo.
 require('./prove-route').mount(app, { chiaveLimite });
 
+// ─── Aste giudiziarie: i lotti del PVP, in magazzino locale — vedi aste-route.js ──
+// Fonte unica per legge (art. 490 c.p.c.), copiata una volta al giorno in `amr-aste.db`:
+// i filtri a schermo non costano niente al portale del ministero.
+require('./aste-route').mount(app, { chiaveLimite });
+
 // ─── Cache ricerche recenti (§17.4) ───────────────────────────────────────────
 // Stessa ricerca entro il TTL → risposta istantanea. NON cacha se una fonte è
 // error/needs_bootstrap/timeout (non congelare uno stato-bloccato) né i 0-risultati totali.
@@ -2793,6 +2798,12 @@ const server = !avviaAscolto ? null : app.listen(PORT, () => {
         })
         .catch(e => console.warn('[saved] boot-check KO:', e.message));
     }, 8000).unref?.();
+
+    // Aste: il giro sul portale del ministero, uno al giorno. Si sveglia da solo e quasi
+    // sempre non fa niente — decide `stantio()`, che guarda l'ETA' dell'ultimo giro riuscito
+    // e non l'orologio, cosi' funziona uguale su una macchina sempre accesa e su una che si
+    // riaccende dopo una settimana. Ritardo suo per non accavallarsi ai due giri qui sopra.
+    require('./aste').avvia();
   });
 });
 // Esposte per i test di caratterizzazione: sono le funzioni con cui inizia OGNI risoluzione
