@@ -71,6 +71,10 @@ function startKeepAlive() {
     const state = subitoSession.loadStorageState();
     if (!state) return;  // niente da rinfrescare
     if (subitoSession.isSubitoBlocked()) return;  // già bloccato, l'utente farà bootstrap
+    // Bootstrap in corso (minuti: c'e' un CAPTCHA umano di mezzo): il keep-alive partirebbe
+    // dallo stato VECCHIO e a fine giro lo risalverebbe sopra quello appena rinnovato
+    // (saveStorageState e' last-writer-wins). Si salta il giro, il prossimo e' fra 15 min.
+    if (bootstrapInFlight) return;
     const res = await keepAliveSubito();
     console.log('[keep-alive] ' + (res.ok ? 'OK' : 'FAIL ' + res.reason));
   }, KEEP_ALIVE_INTERVAL_MS);
@@ -1057,11 +1061,20 @@ app.get('/api/detail', async (req, res) => {
 // `tailscale` ad ogni richiesta (anti-spam/DoS leggero).
 let funnelCache = { ts: 0, url: null };
 const FUNNEL_TTL = 60 * 1000;
+// Dedup in volo: la cache copre solo chi arriva DOPO il completamento; senza
+// coda, N richieste concorrenti a cache scaduta spawnerebbero N subprocess.
+let funnelInVolo = null;
 function tailscalePublicUrl(cb) {
   if (Date.now() - funnelCache.ts < FUNNEL_TTL) return cb(funnelCache.url);
+  if (funnelInVolo) { funnelInVolo.push(cb); return; }
+  funnelInVolo = [cb];
   const bins = ['/usr/local/bin/tailscale', 'tailscale'];
   let i = 0;
-  const done = url => { funnelCache = { ts: Date.now(), url }; cb(url); };
+  const done = url => {
+    funnelCache = { ts: Date.now(), url };
+    const attese = funnelInVolo; funnelInVolo = null;
+    for (const f of attese) f(url);
+  };
   const tryNext = () => {
     if (i >= bins.length) return done(null);
     execFile(bins[i++], ['funnel', 'status'], { timeout: 3000 }, (err, stdout) => {
@@ -1405,6 +1418,11 @@ function cacheable(data) {
   // Un risultato PARZIALE (grafie AS24 cadute con item superstiti) e' monco quanto un
   // timeout: congelarlo tre minuti renderebbe inutile il gesto di ripremere Cerca.
   if (src.subito?.parziale || src.autoscout?.parziale || src.moto?.parziale) return false;
+  // Il menu versioni Moto.it caduto per RETE: la ricerca parte senza filtro versione (o con
+  // un elenco monco che puo' agganciare la versione sbagliata) ma lo status resta 'ok'.
+  // Stessa classe dei due casi qui sopra. I monchi deterministici (oltre 12 famiglie,
+  // modello senza codice) NON alzano questo flag e restano cachabili: ritentare non cambia.
+  if (src.moto?.versioneKoRete) return false;
   return (data.totale || 0) > 0;
 }
 
@@ -1777,6 +1795,14 @@ async function runSearchCore(params) {
         params.motoitVersioneElencoMonco = famigliKo >= fam.length
           ? 'il menu versioni di Moto.it non ha risposto: il filtro versione non e\' stato applicato a questa fonte'
           : `${famigliKo} famiglie su ${fam.length} non hanno risposto: l'elenco versioni di Moto.it e' incompleto`;
+        // KO DI RETE, non di catalogo: fra un attimo puo' riuscire (motoit-models fa risalire
+        // apposta l'errore per NON metterlo in cache 12h). Il flag arriva a `sources.moto`
+        // dove cacheable() lo legge: senza, la risposta senza filtro versione (o col filtro
+        // stretto su un elenco monco) restava 'ok' e congelava tre minuti — ripremere Cerca,
+        // l'unico gesto di rimedio, non ritentava niente. Gli ALTRI due elenchi-monchi
+        // (oltre 12 famiglie, modello senza codice) restano cachabili: sono deterministici,
+        // ritentare da' lo stesso identico esito.
+        params.motoitVersioneKoRete = true;
         console.warn(`[server] Moto.it: ${params.motoitVersioneElencoMonco}`);
       }
       const r = motoitVersione.risolvi(bikes, params.versione, { marca: params.marca, modello: params.modello });
@@ -2237,6 +2263,20 @@ async function runSearchCore(params) {
    */
   const versioneConto = params.versione ? versioneVerifica.marca(risultati, params.versione) : null;
 
+  // MOTO MULTI-FAMIGLIA DAL PONTE: `bm` accetta un valore solo, quindi la ricerca Subito e'
+  // partita sulla prima famiglia e le altre sono rimaste fuori (vedi sopra, dove nasce
+  // `subitoFamiglieNonChieste`). Il warn nel log non arriva a schermo: si dichiara in
+  // `parziale`, lo stesso campo con cui lo scraper dichiara le famiglie oltre il tetto —
+  // un risultato monco che non si dice e' esattamente il difetto che quel campo chiude.
+  // Con l'interruttore di servizio la ricerca e' a parole e la frase non varrebbe piu'.
+  const nonChieste = (!params.subitoTestoLibero && Array.isArray(params.subitoFamiglieNonChieste))
+    ? params.subitoFamiglieNonChieste : [];
+  const subitoNonChieste = nonChieste.length
+    ? (nonChieste.length === 1
+        ? `la famiglia Subito agganciata "${nonChieste[0]}" non e' stata chiesta`
+        : `${nonChieste.length} famiglie Subito agganciate (${nonChieste.join(', ')}) non sono state chieste`)
+    : null;
+
   return {
     risultati,
     totale:       risultati.length,
@@ -2255,7 +2295,7 @@ async function runSearchCore(params) {
       // FONTE per questa ricerca. Sono due popolazioni diverse e restano due numeri.
       subito:    { status: subitoRes.status, reason: subitoRes.reason || null, count: countBy('subito'),
                    totale: subitoRes.total ?? null,
-                   parziale: subitoRes.parziale || null,
+                   parziale: [subitoRes.parziale, subitoNonChieste].filter(Boolean).join(' · ') || null,
                    // Con l'interruttore di servizio la ricerca E' a parole, anche quando il
                    // nodo di catalogo era stato risolto: dirla 'id' la spaccerebbe per una
                    // ricerca precisa che non e'.
@@ -2297,7 +2337,11 @@ async function runSearchCore(params) {
                      ? params.motoitVersioneScartate : null,
                    // Il menu versioni che non ha risposto: senza, un timeout della fonte
                    // valeva "questa versione non esiste a catalogo".
-                   versioneElencoMonco: params.motoitVersioneElencoMonco || null },
+                   versioneElencoMonco: params.motoitVersioneElencoMonco || null,
+                   // Vero SOLO quando l'elenco monco viene da un KO di rete (transitorio):
+                   // cacheable() lo legge per non congelare tre minuti una ricerca partita
+                   // senza filtro versione. I monchi deterministici non lo alzano.
+                   versioneKoRete: params.motoitVersioneKoRete || null },
     },
   };
 }
@@ -2376,7 +2420,6 @@ async function _checkAll(utente, { onlyStale = false, cap = Infinity } = {}) {
   return esiti;
 }
 
-const checkSaved    = (u, id)  => withSavedLock(() => _checkSavedOne(u, saved.getSaved(u, id)));
 const checkAllSaved = (u, opts) => withSavedLock(() => _checkAll(u, opts));
 
 // CRUD
@@ -2434,13 +2477,30 @@ app.get('/api/saved/altri', (req, res) => {
   } catch (e) { if (!saved503(res, e)) throw e; }
 });
 
-app.post('/api/saved', express.json(), (req, res) => {
+/**
+ * FRENI ANCHE SUL SALVARE. Era l'unica scrittura senza: niente limitatore (le otto rotte care
+ * lo hanno), body al default di express (100kb) mentre ogni altra scrittura ha un limite
+ * piccolo esplicito, e nessun tetto sul numero di righe (quello sta in `addSaved`). Ogni riga
+ * e' un blob che `loadAll` riparsa in sincrono a ogni lettura: un ciclo di POST riempiva il
+ * disco e bloccava l'event loop di tutto il server. I `params` veri sono i criteri di una
+ * ricerca — poche centinaia di byte — quindi 8kb basta con largo margine.
+ */
+const limiteSalvataggi = require('./limite-richieste').crea({
+  max: 15, finestra: 10 * 60 * 1000, cosa: 'ricerche salvate',
+});
+app.post('/api/saved', express.json({ limit: '8kb' }), (req, res) => {
+  const gSal = limiteSalvataggi.consuma(chiaveLimite(req));
+  if (!gSal.ok) return res.status(429).json({ error: limiteSalvataggi.messaggio(gSal), riprovaFra: gSal.attesa, restanti: 0 });
   const { label, params } = req.body || {};
   if (!params || !params.tipo || !params.marca) {
     return res.status(400).json({ error: 'params con tipo+marca obbligatori' });
   }
   try { res.json({ saved: saved.addSaved(utenteDi(req), { label, params }) }); }
-  catch (e) { if (!saved503(res, e)) throw e; }
+  catch (e) {
+    // Tetto per persona raggiunto: non e' un guasto, e' un no con la spiegazione.
+    if (e && e.code === 'TROPPE_RICERCHE') return res.status(409).json({ error: e.message });
+    if (!saved503(res, e)) throw e;
+  }
 });
 
 app.delete('/api/saved/:id', (req, res) => {
@@ -2484,22 +2544,37 @@ app.post('/api/saved/check', express.json(), async (req, res) => {
     // `_checkAll` non parte nemmeno). Poi l'addebito e' ATOMICO: o c'e' credito per tutte, o
     // non se ne spende nessuna — consumarle una a una e fermarsi a meta' bruciava il credito
     // senza fare il lavoro, e chiudeva fuori l'utente anche dalla ricerca normale fino a domani.
-    const daFare = id
-      ? (saved.getSaved(chi, id) ? 1 : 0)
-      : (subitoSession.isSubitoBlocked() ? 0 : Math.min(20, saved.listSaved(chi).length));
-    if (daFare && auth.isEnabled() && req.authRole === 'demo' && req.authId && req.authId !== 'demo') {
-      let g;
-      try { g = utentiDb.consumaRicerche(req.authId, daFare, TETTO_GIORNALIERO); }
-      catch (e) { return res.status(503).json({ error: 'Il registro delle persone non e\' raggiungibile: riprova piu\' tardi.' }); }
-      if (!g.ok) {
-        return res.status(429).json({
-          error: `Ti restano ${Math.max(0, g.max - g.usate)} ricerche oggi e questo controllo ne farebbe ${g.servono}. Il conto riparte domani.`,
-          tetto: g.max, usate: g.usate, servono: g.servono, riprovaDomani: true,
-        });
+    //
+    // CONTEGGIO E ADDEBITO DENTRO IL LOCK. Fuori, fra l'addebito e l'esecuzione poteva passare
+    // la coda del lock (minuti, se un altro check lo tiene): in quel buco la lista cresceva
+    // (POST /api/saved e' istantaneo e non passa dal lock) e si eseguivano 20 ricerche
+    // pagandone 1 — o Subito veniva marcato bloccato e si pagavano 20 ricerche per un [].
+    // Dentro il lock, lista e stato di blocco sono quelli su cui si lavora davvero: fra il
+    // conteggio e la partenza non c'e' nessun await (consumaRicerche e' sincrono), quindi
+    // lo snapshot che `_checkAll` rilegge e' lo stesso che e' stato addebitato.
+    const esito = await withSavedLock(async () => {
+      const daFare = id
+        ? (saved.getSaved(chi, id) ? 1 : 0)
+        : (subitoSession.isSubitoBlocked() ? 0 : Math.min(20, saved.listSaved(chi).length));
+      if (daFare && auth.isEnabled() && req.authRole === 'demo' && req.authId && req.authId !== 'demo') {
+        let g;
+        try { g = utentiDb.consumaRicerche(req.authId, daFare, TETTO_GIORNALIERO); }
+        catch (e) { return { rifiuto: { status: 503, corpo: { error: 'Il registro delle persone non e\' raggiungibile: riprova piu\' tardi.' } } }; }
+        if (!g.ok) {
+          return { rifiuto: { status: 429, corpo: {
+            error: `Ti restano ${Math.max(0, g.max - g.usate)} ricerche oggi e questo controllo ne farebbe ${g.servono}. Il conto riparte domani.`,
+            tetto: g.max, usate: g.usate, servono: g.servono, riprovaDomani: true,
+          } } };
+        }
       }
-    }
-    const esiti = id ? [await checkSaved(chi, id)].filter(Boolean) : await checkAllSaved(chi, { cap: 20 });
-    res.json({ esiti, saved: saved.listSaved(chi) });
+      // Il cap e' `daFare`, non 20: si esegue esattamente quello che si e' pagato.
+      const esiti = id
+        ? [await _checkSavedOne(chi, saved.getSaved(chi, id))].filter(Boolean)
+        : await _checkAll(chi, { cap: daFare });
+      return { esiti };
+    });
+    if (esito.rifiuto) return res.status(esito.rifiuto.status).json(esito.rifiuto.corpo);
+    res.json({ esiti: esito.esiti, saved: saved.listSaved(chi) });
   } catch (e) {
     console.error('[saved/check]', e.message);
     res.status(500).json({ error: 'Errore durante il controllo' });
@@ -2524,7 +2599,12 @@ let bootstrapInFlight = null;  // promise in corso, evita lanci multipli concorr
  */
 const DA_LOCALE = req => {
   const r = (req.socket && req.socket.remoteAddress) || '';
-  return r === '127.0.0.1' || r === '::1' || r === '::ffff:127.0.0.1';
+  const loopback = r === '127.0.0.1' || r === '::1' || r === '::ffff:127.0.0.1';
+  // Anche il Funnel arriva da 127.0.0.1 (vedi clientIp): loopback CON X-Forwarded-For
+  // e' un visitatore remoto proxato, non chi siede davanti all'iMac. Senza questo
+  // distinguo, proprio chi premeva dal Funnel — il caso raccontato sopra — risultava
+  // "locale" e la nota non partiva mai.
+  return loopback && !req.headers['x-forwarded-for'];
 };
 app.post('/api/subito/bootstrap', express.json(), async (req, res) => {
   if (bootstrapInFlight) {
@@ -2586,6 +2666,11 @@ app.get('/api/subito/status', (req, res) => {
 
 // Endpoint per forzare un keep-alive on-demand (es. utente clicca "rinfresca ora")
 app.post('/api/subito/keep-alive', express.json(), async (req, res) => {
+  // Stessa guardia del timer: durante il bootstrap il keep-alive leggerebbe lo stato
+  // vecchio e lo risalverebbe sopra la sessione appena rinnovata col CAPTCHA.
+  if (bootstrapInFlight) {
+    return res.status(409).json({ ok: false, reason: 'bootstrap_in_progress' });
+  }
   const result = await keepAliveSubito();
   res.json(result);
 });
@@ -2593,11 +2678,22 @@ app.post('/api/subito/keep-alive', express.json(), async (req, res) => {
 // Closure di ricerca AMR condivisa (bot WhatsApp + assistente web "AI mode"): il modello LLM può
 // omettere tipo (default auto) o passare una regione libera non valida → normalizza prima di
 // parseSearchParams (che li rigetterebbe). In-process, niente HTTP hop.
-const amrSearchFn = async (input) => {
+const amrSearchFn = async (input, utente) => {
   const q = { ...input, tipo: input.tipo || 'auto' };
   let parsed = parseSearchParams(q);
   if (parsed.errors && q.regione) { delete q.regione; parsed = parseSearchParams(q); }   // regione invalida → droppa e riprova
   if (parsed.errors) return { error: parsed.errors.join(', ') };
+  // IL TETTO GIORNALIERO VALE ANCHE QUI. Questa closure arriva a runSearch in-process e
+  // saltava il gate di /api/search: un 'demo' fermo alle 50 ricerche sul web continuava
+  // illimitato da WhatsApp, dallo stesso IP di casa che il tetto deve proteggere. Stessa
+  // regola del web: paga solo il ruolo demo con identita' (owner, full e il fallback legacy
+  // senza identita' no), e l'addebito sta DOPO la validazione — un parametro sbagliato non
+  // costa una delle 50. Se il magazzino non si apre, consumaRicerca lancia: fail-closed,
+  // come il 503 del web (il chiamante risponde "errore tecnico", non cerca).
+  if (utente && utente.ruolo === 'demo' && utente.id) {
+    const g = utentiDb.consumaRicerca(String(utente.id), TETTO_GIORNALIERO);
+    if (!g.ok) return { tettoEsaurito: { usate: g.usate, max: g.max } };
+  }
   const data = await runSearch(parsed.params);
   return { params: parsed.params, risultati: data.risultati || [], sources: data.sources || {} };
 };
@@ -2706,7 +2802,10 @@ module.exports = { server, app, _lookupBrand: lookupBrand, _lookupModelGroup: lo
   // senza aprire una porta (supertest non e' fra le dipendenze).
   _gateAuth: gateAuth, _postLogin: postLogin, _loginAttempts: loginAttempts, _cacheable: cacheable,
   _percorsoGate: percorsoGate, _soloOwner: soloOwner, _SOLO_OWNER: SOLO_OWNER, _AUTH_FREE: AUTH_FREE,
-  _tettoGiornaliero: tettoGiornaliero, _TETTO_GIORNALIERO: TETTO_GIORNALIERO,
+  _tettoGiornaliero: tettoGiornaliero, _TETTO_GIORNALIERO: TETTO_GIORNALIERO, _amrSearchFn: amrSearchFn,
+  // La dedup delle chiamate in volo (un solo subprocess tailscale per cache-miss)
+  // si prova solo eseguendo la funzione con richieste concorrenti.
+  _tailscalePublicUrl: tailscalePublicUrl,
   // Chi si puo' credere e come si contano i limiti sono due decisioni di sicurezza:
   // vanno provate, e senza aprire una porta.
   _clientIp: clientIp, _chiaveLimite: chiaveLimite,

@@ -24,6 +24,7 @@ const DROP_ABS    = 200;    // € — calo minimo per notificare
 const DROP_PCT    = 0.03;   // … oppure 3%
 const SEEN_CAP    = 800;    // max URL ricordati per ricerca (prune FIFO)
 const ALERTED_CAP = 500;    // max chiavi anti-ripetizione
+const MAX_RICERCHE = 50;    // max ricerche salvate per persona (il check ne fa 20 al massimo)
 
 function filePath() {
   const userData = process.env.USER_DATA_PATH;
@@ -181,6 +182,19 @@ function listSaved(utente) {
 function addSaved(utente, { label, params }) {
   apri();                       // magazzino rotto → si dice, non si scrive
   const list = loadAll(utente);
+  /**
+   * TETTO PER PERSONA. `seen`/`alerted`/`alerts` hanno i loro cap DENTRO una ricerca, ma il
+   * NUMERO di ricerche non ne aveva: ogni riga e' un blob che `loadAll` riparsa tutto e in
+   * sincrono — a ogni GET, a ogni check, e in /api/saved/altri per TUTTE le persone insieme —
+   * quindi senza tetto un ciclo di POST fa crescere il magazzino senza limite su disco e
+   * blocca l'event loop dell'intero server a ogni lettura. Cinquanta e' largo per l'uso vero
+   * (il check ne controlla al massimo venti per giro) e tiene le letture piccole.
+   */
+  if (list.length >= MAX_RICERCHE) {
+    const e = new Error(`Hai gia' ${list.length} ricerche salvate (il massimo e' ${MAX_RICERCHE}): cancellane una prima di salvarne un'altra.`);
+    e.code = 'TROPPE_RICERCHE';
+    throw e;
+  }
   const s = {
     id: newId(),
     label: (label && String(label).trim()) || defaultLabel(params),
@@ -471,5 +485,5 @@ function ultimoErroreElenco() {
 module.exports = {
   listSaved, addSaved, removeSaved, getSaved, markRead, ultimoErroreElenco,
   computeAlerts, recordCheck, fingerprint,
-  _const: { FLOOR_ABS, FLOOR_PCT, DROP_ABS, DROP_PCT },
+  _const: { FLOOR_ABS, FLOOR_PCT, DROP_ABS, DROP_PCT, MAX_RICERCHE },
 };

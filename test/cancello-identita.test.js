@@ -221,6 +221,20 @@ test('tetto: il proprietario e i colleghi non hanno tetto', () => {
   assert.strictEqual(dbmod.ricercheOggi('demo'), 0);
 });
 
+test('tetto: vale anche per la ricerca in-process del canale WhatsApp', async () => {
+  // _amrSearchFn e' la closure che il bot WhatsApp usa al posto di /api/search: arrivava a
+  // runSearch senza addebito, e un demo fermo alle 50 sul web continuava dal telefono.
+  const MAX = srv._TETTO_GIORNALIERO;
+  assert.strictEqual(dbmod.consumaRicerche('pina-whatsapp', MAX, MAX).ok, true, 'oggi e\' gia\' tutto speso');
+  const r = await srv._amrSearchFn({ marca: 'Audi' }, { id: 'pina-whatsapp', nome: 'Pina', ruolo: 'demo' });
+  assert.deepStrictEqual(r.tettoEsaurito, { usate: MAX, max: MAX }, 'a credito finito NON si cerca: si risponde solo che il conto e\' finito');
+  assert.strictEqual(dbmod.ricercheOggi('pina-whatsapp'), MAX, 'la ricerca rifiutata non si addebita');
+  // L'addebito sta DOPO la validazione: un parametro sbagliato non costa una delle 50.
+  const r2 = await srv._amrSearchFn({}, { id: 'rino-whatsapp', ruolo: 'demo' });
+  assert.match(r2.error, /marca obbligatoria/);
+  assert.strictEqual(dbmod.ricercheOggi('rino-whatsapp'), 0);
+});
+
 test('tetto: se il magazzino non si apre, l\'ospite si ferma — non passa "perche\' non si sa"', () => {
   const vecchio = process.env.USER_DATA_PATH;
   try {

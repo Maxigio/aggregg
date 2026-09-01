@@ -19,6 +19,25 @@ process.env.AMR_LOG_DIR = fsTmp.mkdtempSync(pathTmp.join(os.tmpdir(), 'amr-log-'
 
 const { test } = require('node:test');
 const assert = require('node:assert');
+
+// Stub di `tailscale funnel status` per il test 4: server.js cattura execFile per
+// destructuring al require, quindi il rimpiazzo deve stare PRIMA del require qui sotto.
+// Solo le chiamate ['funnel', ...] sono intercettate (contate e risposte dopo 50ms,
+// la finestra in cui le richieste concorrenti si devono accodare, non moltiplicare);
+// tutto il resto passa all'execFile vero.
+const cp = require('node:child_process');
+const execFileVero = cp.execFile;
+let spawnFunnel = 0;
+cp.execFile = function (bin, args) {
+  if (Array.isArray(args) && args[0] === 'funnel') {
+    spawnFunnel++;
+    const cb = arguments[arguments.length - 1];
+    setTimeout(() => cb(null, 'https://finto.ts.net/\n', ''), 50);
+    return;
+  }
+  return execFileVero.apply(this, arguments);
+};
+
 const auth = require('../backend/auth');
 const srv = require('../backend/server');
 
@@ -126,4 +145,32 @@ test('cache ricerche: NON congela una risposta con una fonte in timeout', () => 
   // ma la risposta e' monca quanto un timeout: congelarla renderebbe inutile ripremere Cerca.
   assert.strictEqual(srv._cacheable({ totale: 60, sources: { subito: { status: 'ok' }, autoscout: { status: 'ok', parziale: '1/3 grafie AS24 fallite: http 429' }, moto: { status: 'ok' } } }), false,
     'un risultato dichiarato parziale non si cacha');
+  // MENU VERSIONI MOTO.IT caduto per RETE: la ricerca parte senza filtro versione (o con un
+  // elenco monco), lo status resta 'ok', ma congelarla tre minuti renderebbe inutile
+  // ripremere Cerca — il ritentativo funzionerebbe (motoit-models non cacha i suoi KO).
+  assert.strictEqual(srv._cacheable({ totale: 60, sources: { subito: { status: 'ok' }, autoscout: { status: 'ok' },
+    moto: { status: 'ok', versioneElencoMonco: 'il menu versioni di Moto.it non ha risposto: il filtro versione non e\' stato applicato a questa fonte', versioneKoRete: true } } }), false,
+    'un KO di rete del menu versioni non si cacha');
+  // L'elenco monco DETERMINISTICO (oltre 12 famiglie, modello senza codice) invece si cacha:
+  // ritentare fra tre minuti darebbe lo stesso identico esito.
+  assert.strictEqual(srv._cacheable({ totale: 60, sources: { subito: { status: 'ok' }, autoscout: { status: 'ok' },
+    moto: { status: 'ok', versioneElencoMonco: 'il modello non ha un codice su Moto.it: la ricerca su questa fonte e\' larga', versioneKoRete: null } } }), true,
+    'un elenco monco deterministico resta cachabile');
+});
+
+// ── 4. /api/public-url: un solo subprocess per cache-miss ────────────────────
+// La rotta e' auth-exempt e la cache da 60s copre solo chi arriva DOPO il
+// completamento: senza dedup, N richieste concorrenti a cache scaduta
+// spawnavano N processi `tailscale` (fino a 3s l'uno), ripetibile a ogni TTL.
+test('public-url: le richieste concorrenti a cache scaduta condividono UN solo tailscale', async () => {
+  spawnFunnel = 0;
+  // Ondata a cache scaduta (all'avvio ts=0): 50 richieste insieme.
+  const urls = await Promise.all(Array.from({ length: 50 }, () =>
+    new Promise(risolvi => srv._tailscalePublicUrl(risolvi))));
+  assert.strictEqual(spawnFunnel, 1, `un solo subprocess atteso, visti ${spawnFunnel}`);
+  assert.ok(urls.every(u => u === 'https://finto.ts.net'), 'ogni richiesta in coda riceve l\'URL');
+  // Ondata a cache calda: zero subprocess.
+  const url2 = await new Promise(risolvi => srv._tailscalePublicUrl(risolvi));
+  assert.strictEqual(spawnFunnel, 1, 'a cache calda non parte nessun subprocess');
+  assert.strictEqual(url2, 'https://finto.ts.net');
 });

@@ -96,3 +96,23 @@ test('recordCheck: gli annunci di una fonte MUTA non vengono sfrattati da seen',
   saved.recordCheck(U, s2.id, [R(subito, 10000), ...valanga]);
   assert.ok(!Object.prototype.hasOwnProperty.call(saved.getSaved(U, s2.id).seen, as24));
 });
+
+/**
+ * TETTO PER PERSONA. Il numero di ricerche salvate non aveva nessun cap (a differenza di
+ * seen/alerted/alerts, che i loro li hanno DENTRO la ricerca): un ciclo di POST /api/saved
+ * faceva crescere il magazzino senza limite, e loadAll — sincrono, chiamato a ogni GET/check
+ * e per tutte le persone in /api/saved/altri — bloccava l'event loop dell'intero server.
+ */
+test('addSaved: oltre il tetto per persona si rifiuta con TROPPE_RICERCHE', () => {
+  const MAX = saved._const.MAX_RICERCHE;
+  const utente = 'tetto-test';                    // utente suo: non sporca i conteggi degli altri test
+  for (let i = 0; i < MAX; i++) saved.addSaved(utente, { params: { tipo: 'auto', marca: `M${i}` } });
+  assert.throws(() => saved.addSaved(utente, { params: { tipo: 'auto', marca: 'Troppa' } }),
+    e => e.code === 'TROPPE_RICERCHE');
+  // Il tetto non e' un vicolo cieco: tolta una, se ne puo' salvare un'altra.
+  const prima = saved.listSaved(utente)[0];
+  assert.ok(saved.removeSaved(utente, prima.id));
+  const s = saved.addSaved(utente, { params: { tipo: 'auto', marca: 'DiNuovo' } });
+  assert.ok(s.id);
+  assert.strictEqual(saved.listSaved(utente).length, MAX);
+});
