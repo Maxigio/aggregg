@@ -129,6 +129,10 @@ function httpPost(body, auth = AUTH) {
       let d = ''; res.setEncoding('utf8');
       res.on('data', c => d += c);
       res.on('end', () => resolve({ status: res.statusCode, body: d }));
+      // Se la presa cade DOPO gli header, l'errore esce su `res`, non su `req`: senza questi due
+      // la Promise resta appesa per sempre (e req.setTimeout non scatta a connessione chiusa).
+      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+      res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
     });
     req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
     req.setTimeout(TIMEOUT_MS, () => req.destroy(fail('timeout', { kind: 'transient' })));

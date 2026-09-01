@@ -73,6 +73,10 @@ async function getHtml(percorso) {
       s.on('data', x => c.push(x));
       s.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(c).toString('utf8') }));
       s.on('error', reject);
+      // `pipe()` non propaga gli errori: se la connessione cade dopo gli header l'errore esce su
+      // `res`, non sul gunzip, e la Promise restava appesa. Un gestore anche qui.
+      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+      res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
     });
     req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
     req.setTimeout(TIMEOUT_MS, () => req.destroy(fail('timeout', { kind: 'transient' })));
@@ -328,14 +332,20 @@ function marcaDiSlug(slug, slugMarche) {
 let INDICE = null;
 try { INDICE = require('../../data/insella-index.json'); } catch (_) { INDICE = null; }
 
-/** Scorre le categorie e torna tutte le prove. `forza` salta l'indice su disco (lo usa lo script). */
-const crawlIndice = () => conCache('indice', async () => {
+/** Scorre le categorie e torna tutte le prove. `forza` salta l'indice su disco E la voce in cache
+ *  (lo usa lo script): senza, un rilancio entro i 7 giorni di TTL riserviva il crawl precedente
+ *  senza toccare la rete e riscriveva l'indice identico — anche dopo un fix al parser. */
+const crawlIndice = forza => conCache('indice', async () => {
   const tutte = new Map();
   for (const cat of CATEGORIE) {
     for (let p = 0; p < MAX_PAGINE; p++) {
       let html;
       try { html = await getHtml('/prova/' + cat + (p ? '?page=' + p : '')); }
-      catch (e) { if (e.kind === 'blocked') throw e; break; }
+      // Fine della categoria e' SOLO il 404 oltre l'ultima pagina (kind 'error'). Un guasto
+      // transitorio (timeout, 5xx, reset) trattato da fine troncava la categoria in silenzio:
+      // il parziale non vuoto passava `sospettoSe`, finiva in cache per 7 giorni e restava
+      // sopra la soglia di build-insella-index, che riscriveva l'indice monco su disco.
+      catch (e) { if (e.kind === 'blocked' || e.kind === 'transient') throw e; break; }
       const trovate = proveDaIndice(html, cat);
       if (!trovate.length) break;                            // categoria finita
       let nuove = 0;
@@ -344,21 +354,23 @@ const crawlIndice = () => conCache('indice', async () => {
     }
   }
   return [...tutte.values()];
-}, d => !Array.isArray(d) || !d.length);
+}, d => !Array.isArray(d) || !d.length, { forza: !!forza });
 
-const crawlMarche = () => conCache('marche', async () => {
+const crawlMarche = forza => conCache('marche', async () => {
+  // L'indice qui NON si riforza: lo script lo ha appena riforzato la riga prima, e la voce in
+  // cache e' quindi il crawl fresco — riforzarlo rifarebbe l'intero giro delle categorie.
   const [html, prove] = [await getHtml('/marca'), await crawlIndice()];
   const tutte = marcheDaIndice(html);
   const slugs = tutte.map(m => m.acronimo);
   const conta = {};
   for (const p of prove) { const m = marcaDiSlug(p.slug, slugs); if (m) conta[m] = (conta[m] || 0) + 1; }
   return tutte.filter(m => conta[m.acronimo]).map(m => ({ ...m, prove: conta[m.acronimo] }));
-}, d => !Array.isArray(d) || !d.length);
+}, d => !Array.isArray(d) || !d.length, { forza: !!forza });
 
 /** Tutte le prove. Dall'indice su disco se c'e', altrimenti scorrendo le categorie. */
-const indice = (opt = {}) => (!opt.forza && INDICE ? Promise.resolve(INDICE.prove) : crawlIndice());
+const indice = (opt = {}) => (!opt.forza && INDICE ? Promise.resolve(INDICE.prove) : crawlIndice(opt.forza));
 /** Le marche che hanno almeno una prova, col conteggio. */
-const marche = (opt = {}) => (!opt.forza && INDICE ? Promise.resolve(INDICE.marche) : crawlMarche());
+const marche = (opt = {}) => (!opt.forza && INDICE ? Promise.resolve(INDICE.marche) : crawlMarche(opt.forza));
 
 /** Le prove di una marca (solo l'elenco: il dettaglio si chiede a parte). */
 async function proveDi(marcaSlug) {

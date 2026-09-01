@@ -113,6 +113,9 @@ function stato() {
       let s = '';
       res.on('data', c => { s += c; });
       res.on('end', () => resolve(leggiStato(s)));
+      // Connessione caduta a meta' risposta: senza questo la Promise resterebbe appesa.
+      res.on('error', () => resolve(IGNOTO));
+      res.on('aborted', () => resolve(IGNOTO));
     });
     // Se lo stato non risponde non si insiste: e' un aiuto, non un requisito.
     req.on('error', () => resolve(IGNOTO));
@@ -139,6 +142,10 @@ async function overpass(query) {
       s.on('data', x => c.push(x));
       s.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(c).toString('utf8') }));
       s.on('error', reject);
+      // `pipe()` non propaga gli errori: se la connessione cade dopo gli header l'errore esce su
+      // `res`, non sul gunzip, e la Promise restava appesa. Un gestore anche qui.
+      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+      res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
     });
     req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
     req.setTimeout(TIMEOUT_MS, () => req.destroy(fail('timeout', { kind: 'transient' })));

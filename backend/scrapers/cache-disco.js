@@ -42,7 +42,10 @@ function percorsoScrittura(file) {
 /**
  * @param {string} file      percorso del JSON su disco
  * @param {object} opt       { tag, schema, ttl, ttlCorto, max }
- * @returns {function} conCache(chiave, produci, sospettoSe?) → Promise
+ * @returns {function} conCache(chiave, produci, sospettoSe?, opzioni?) → Promise
+ *   opzioni.forza: interroga la fonte anche con una copia fresca in cache, e il risultato nuovo
+ *   prende il posto della voce. Serve agli script di build: un rilancio dentro il TTL riserviva
+ *   il crawl PRECEDENTE senza toccare la rete, e riscriveva su disco gli stessi dati vecchi.
  */
 function crea(file, opt = {}) {
   const tag = opt.tag || 'cache';
@@ -118,10 +121,11 @@ function crea(file, opt = {}) {
   };
 
   const inVolo = new Map();
-  return async function conCache(chiave, produci, sospettoSe) {
+  return async function conCache(chiave, produci, sospettoSe, opzioni) {
     const c = leggi();
     const v = c.voci[chiave];
-    if (v && Date.now() < (v.scade != null ? v.scade : v.t + ttl)) return v.d;
+    const fresca = !!v && Date.now() < (v.scade != null ? v.scade : v.t + ttl);
+    if (fresca && !(opzioni && opzioni.forza)) return v.d;
     if (inVolo.has(chiave)) return inVolo.get(chiave);
     const p = (async () => {
       try {
@@ -142,7 +146,8 @@ function crea(file, opt = {}) {
         // Decisione del proprietario: se la fonte non risponde si dice e basta. L'errore
         // arriva al chiamante, che ha gia' il suo modo di dichiararlo ("archivio non
         // raggiungibile", "fonte in pausa dopo un blocco", la pill della fonte).
-        if (v) console.warn('[' + tag + '] ' + chiave + ' KO (' + e.message + '): la copia in cache e\' scaduta, non la servo');
+        // Con `forza` la copia puo' essere ancora fresca: il messaggio "scaduta" vale solo se lo e'.
+        if (v && !fresca) console.warn('[' + tag + '] ' + chiave + ' KO (' + e.message + '): la copia in cache e\' scaduta, non la servo');
         throw e;
       } finally { inVolo.delete(chiave); }
     })();

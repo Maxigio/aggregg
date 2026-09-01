@@ -64,6 +64,10 @@ function scarica(url, redirects = 0) {
       s.on('data', c => chunks.push(c));
       s.on('end', () => resolve(Buffer.concat(chunks).toString('latin1')));   // NON utf8: il file è latin1
       s.on('error', e => reject(e));
+      // `pipe()` non propaga gli errori: se la connessione cade dopo gli header l'errore esce su
+      // `res`, non sul gunzip, e la Promise restava appesa. Un gestore anche qui.
+      res.on('error', reject);
+      res.on('aborted', () => reject(new Error('risposta interrotta')));
     });
     req.on('error', reject);
     req.setTimeout(45000, () => req.destroy(new Error('timeout')));

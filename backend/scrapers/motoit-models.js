@@ -42,6 +42,13 @@ function fetchJson(url, hops = 0) {
       let d = ''; res.setEncoding('utf8');
       res.on('data', c => d += c);
       res.on('end', () => { try { resolve(JSON.parse(d)); } catch (e) { reject(new Error('JSON non valido: ' + e.message)); } });
+      // Se la presa cade DOPO gli header (FIN a meta' body), l'errore esce su `res`, non su
+      // `req`: senza questi due la Promise restava appesa per sempre (il timeout di req e' di
+      // INATTIVITA': a presa chiusa non scatta) e l'inflight di `cached` — mai ripulito —
+      // incastrava ogni richiesta successiva per quella chiave. Stesso difetto misurato in
+      // subito-api.js.
+      res.on('error', reject);
+      res.on('aborted', () => reject(new Error('risposta interrotta')));
     });
     req.on('error', reject);
     req.setTimeout(12000, () => req.destroy(new Error('timeout')));

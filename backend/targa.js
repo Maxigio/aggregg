@@ -75,6 +75,15 @@ function chiamata(u, { metodo = 'GET', cookie = '', corpo = null, referer = null
         cookie: (r.headers['set-cookie'] || []).map(c => c.split(';')[0]),
         buf: Buffer.concat(pezzi),
       }));
+      /**
+       * SE IL SOCKET CADE A META' CORPO, 'end' non arriva mai e l'errore esce sulla
+       * RISPOSTA, non sulla request (Node lo sopprime pure, se nessuno lo ascolta);
+       * il timeout non salva, perche' vive sul socket ormai distrutto. Senza questi
+       * due gestori la Promise resta appesa per sempre: spinner infinito in pagina
+       * e CAPTCHA risolto a mano bruciato senza nemmeno un messaggio.
+       */
+      r.on('error', e => rej(new Error(e.message)));
+      r.on('close', () => { if (!r.complete) rej(new Error('risposta del portale troncata')); });
     });
     req.on('error', e => rej(new Error(e.message)));
     req.setTimeout(TIMEOUT, () => req.destroy(new Error('timeout')));

@@ -100,3 +100,18 @@ test('la sfida si consuma PRIMA di partire: due invii insieme non bussano due vo
   assert.ok(consuma < parte,
     'la sfida va consumata PRIMA della chiamata al portale: dopo, due invii concorrenti passano entrambi');
 });
+
+test('una risposta troncata a meta\' corpo non lascia la Promise appesa', () => {
+  // Se il portale (o Radware) chiude il socket dopo gli header, 'end' non arriva mai e
+  // l'errore esce sulla RISPOSTA, non sulla request — e Node lo sopprime pure, se nessuno
+  // lo ascolta. Il timeout non salva: vive sul socket, che a quel punto e' gia' distrutto.
+  // Senza i gestori sulla risposta, POST /api/targa/verifica restava muto per sempre e il
+  // CAPTCHA risolto a mano andava bruciato senza un messaggio.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'backend', 'targa.js'), 'utf8')
+    .replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
+  const corpo = src.slice(src.indexOf('function chiamata('), src.indexOf('const unisci'));
+  assert.ok(/r\.on\('error'/.test(corpo),
+    'chiamata() deve ascoltare gli errori sulla RISPOSTA, non solo sulla request');
+  assert.ok(/r\.on\('close',[\s\S]{0,80}?r\.complete/.test(corpo),
+    'chiamata() deve rifiutare su \'close\' quando la risposta non e\' completa (r.complete)');
+});

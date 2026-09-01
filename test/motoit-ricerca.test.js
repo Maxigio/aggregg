@@ -49,6 +49,35 @@ test('zero card e zero annunci dichiarati: fine genuina, nessun falso allarme', 
   });
 });
 
+test('risposta troncata con FIN pulita: la porta HTTP rigetta, non resta pendente', async () => {
+  // Content-Length 1000, 100 byte scritti, poi FIN pulita: prima del fix niente 'end',
+  // niente errore su req, e il timeout socket muore col socket → Promise pendente per
+  // sempre. La vetrina (motoit-vetrina via competitor) aspetta `_get` FUORI dal segnale
+  // di annullo e senza timeout di rotta: li' nessuno poteva piu' chiuderla.
+  const http = require('node:http');
+  const https = require('node:https');
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Length': '1000' });
+    res.write('x'.repeat(100));
+    setTimeout(() => res.socket.end(), 50);   // FIN a meta' body
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const porta = server.address().port;
+  const orig = https.get;
+  // motoit.js risolve `https.get` a ogni chiamata: la patch devia sul server locale.
+  https.get = (url, opts, cb) => http.get(url.replace(/^https:\/\/[^/]+/, `http://127.0.0.1:${porta}`), opts, cb);
+  try {
+    const esito = await Promise.race([
+      motoit._get('https://www.moto.it/troncata', 0, 2000).then(() => 'risolta', () => 'rigettata'),
+      new Promise(r => { setTimeout(() => r('pendente'), 5000).unref(); }),
+    ]);
+    assert.strictEqual(esito, 'rigettata');
+  } finally {
+    https.get = orig;
+    server.close();
+  }
+});
+
 test('"Carica altri" oltre il fondo: pagina vuota con totale dichiarato NON e\' deriva', async () => {
   // La fetta 3 di una ricerca da 30 annunci: la testata dichiara ancora il totale della
   // query, ma la pagina e' genuinamente vuota. Senza il gate su fetta sarebbe un falso errore.

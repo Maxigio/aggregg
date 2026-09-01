@@ -50,6 +50,11 @@ function httpGetText(url, hops = 0) {
       let d = ''; res.setEncoding('utf8');
       res.on('data', c => d += c);
       res.on('end', () => resolve({ status: res.statusCode, body: d }));
+      // Risposta troncata con FIN pulita: niente 'end', niente errore su req → Promise
+      // pendente per sempre (vedi motoit.js). 'close' arriva comunque; dopo 'end' il
+      // reject e' un no-op innocuo.
+      res.on('error', reject);
+      res.on('close', () => reject(new Error('risposta troncata')));
     });
     req.on('error', reject);
     req.setTimeout(15000, () => req.destroy(new Error('timeout')));
@@ -288,9 +293,13 @@ async function fetchPage(browser, url) {
 // ─── Rate limit: 2s tra ricerche ─────────────────────────────────────────────
 let lastSearchAt = 0;
 async function throttle() {
-  const wait = 2000 - (Date.now() - lastSearchAt);
+  // Si PRENOTA lo slot prima di dormire (stessa regola di motoit.js): leggendo prima e
+  // scrivendo dopo la sleep, N chiamate concorrenti calcolavano la stessa attesa e
+  // partivano insieme — la distanza di 2s valeva solo in fila indiana.
+  const mio = Math.max(Date.now(), lastSearchAt + 2000);
+  lastSearchAt = mio;
+  const wait = mio - Date.now();
   if (wait > 0) await sleep(wait);
-  lastSearchAt = Date.now();
 }
 
 // ─── Scraper principale ──────────────────────────────────────────────────────

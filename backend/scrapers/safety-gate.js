@@ -70,6 +70,10 @@ async function getXml(percorso) {
       s.on('data', x => c.push(x));
       s.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(c).toString('utf8') }));
       s.on('error', reject);
+      // `pipe()` non propaga gli errori: se la connessione cade dopo gli header l'errore esce su
+      // `res`, non sul gunzip, e la Promise restava appesa. Un gestore anche qui.
+      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+      res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
     });
     req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
     req.setTimeout(TIMEOUT_MS, () => req.destroy(fail('timeout', { kind: 'transient' })));

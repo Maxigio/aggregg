@@ -51,6 +51,11 @@ function httpGetText(url, hops = 0, timeoutMs = HTTP_TIMEOUT_DEFAULT) {
       let d = ''; res.setEncoding('utf8');
       res.on('data', c => d += c);
       res.on('end', () => resolve({ status: res.statusCode, body: d }));
+      // Risposta troncata con FIN pulita (Content-Length non onorato): niente 'end',
+      // niente errore su req, e il timeout muore col socket → Promise pendente per
+      // sempre. 'close' arriva comunque; dopo 'end' il reject e' un no-op innocuo.
+      res.on('error', reject);
+      res.on('close', () => reject(new Error('risposta troncata')));
     });
     req.on('error', reject);
     req.setTimeout(timeoutMs, () => req.destroy(new Error('timeout')));

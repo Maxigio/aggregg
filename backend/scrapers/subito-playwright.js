@@ -63,13 +63,18 @@ process.env.PLAYWRIGHT_BROWSERS_PATH = PW_BROWSERS;
 
 // ─── Browser singleton (aperto una volta, riusato per tutte le ricerche) ─────
 let browserInstance = null;
+let avvio = null;   // la PROMESSA di lancio: due chiamate concorrenti devono aspettare lo stesso Chrome
 
 async function getBrowser() {
   if (browserInstance) {
     try { browserInstance.contexts(); return browserInstance; } catch (_) {}
   }
+  // Si memorizza la promessa, non solo l'istanza: fra il controllo qui sopra e l'assegnazione
+  // c'e' un await, e due ricerche partite insieme lanciavano DUE Chromium — il primo restava
+  // orfano per sempre. Stesso stampo di autoscout-playwright.js (`avvio`).
+  if (avvio) return avvio;
   console.log('[Subito-PW] Avvio Chrome headless (stealth)…');
-  browserInstance = await chromium.launch({
+  avvio = chromium.launch({
     executablePath: resolveChromiumExecutable(PW_BROWSERS),
     headless: true,
     args: [
@@ -77,9 +82,12 @@ async function getBrowser() {
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
     ],
-  });
-  browserInstance.on('disconnected', () => { browserInstance = null; });
-  return browserInstance;
+  }).then(b => {
+    browserInstance = b;
+    b.on('disconnected', () => { if (browserInstance === b) browserInstance = null; });
+    return b;
+  }).finally(() => { avvio = null; });
+  return avvio;
 }
 
 // ─── Errore speciale: CAPTCHA / 403 → richiede bootstrap ─────────────────────
@@ -344,8 +352,20 @@ async function keepAliveSubito() {
       return { ok: false, reason: 'no_data' };
     }
 
-    // Cookie probabilmente rinfrescato — salva storageState aggiornato
+    // Cookie probabilmente rinfrescato — salva storageState aggiornato.
+    // MA solo se nel frattempo nessuno ha salvato una sessione PIU' fresca: il nostro
+    // stato deriva da quello letto in cima (secondi fa), e `saveStorageState` e'
+    // last-writer-wins — se un bootstrap (CAPTCHA appena risolto) o una ricerca hanno
+    // salvato durante la nostra navigazione, scrivere ora butterebbe via il loro cookie.
+    // Stessa forma dell'epoca di markSubitoBlocked: chi ha letto in un'altra epoca
+    // non sovrascrive questa.
     const fresh = await context.storageState();
+    // Il controllo sta DOPO l'ultimo await: fra qui e il save non c'e' punto di interleaving.
+    if (session.epocaSessione() !== epocaVista) {
+      session.recordRefresh(true);
+      console.log('[Subito-PW] Keep-alive: sessione rinnovata da altri nel frattempo, non sovrascrivo');
+      return { ok: true, reason: 'sessione_gia_rinnovata' };
+    }
     session.saveStorageState(fresh);
     session.clearSubitoBlocked();
     session.recordRefresh(true);

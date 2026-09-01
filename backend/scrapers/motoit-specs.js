@@ -59,6 +59,10 @@ function httpGetText(url, redirects = 0) {
       s.on('data', c => chunks.push(c));
       s.on('end', () => resolve({ status: code, body: Buffer.concat(chunks).toString('utf8') }));
       s.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+      // `pipe()` non propaga gli errori: se la connessione cade dopo gli header l'errore esce su
+      // `res`, non sul gunzip, e la Promise restava appesa. Un gestore anche qui.
+      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+      res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
     });
     req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
     req.setTimeout(TIMEOUT_MS, () => req.destroy(fail('timeout', { kind: 'transient' })));

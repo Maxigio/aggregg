@@ -154,6 +154,10 @@ function getTesto(url, redirect = 0) {
       s.on('data', c => ch.push(c));
       s.on('end', () => resolve(Buffer.concat(ch).toString('utf8')));
       s.on('error', reject);
+      // `pipe()` non propaga gli errori: se la connessione cade dopo gli header l'errore esce su
+      // `res`, non sul gunzip, e la Promise restava appesa. Un gestore anche qui.
+      res.on('error', reject);
+      res.on('aborted', () => reject(new Error('risposta interrotta')));
     });
     req.on('error', reject);
     req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error('la fonte non risponde')));

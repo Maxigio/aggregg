@@ -249,6 +249,75 @@ test('motoit-models: con `rilancia` l\'errore di rete non si confonde col catalo
   assert.ok(senza.length >= 9);
 });
 
+test('motoit-models: la risposta troncata a meta\' body rigetta, e non incastra l\'inflight', async () => {
+  // FIN pulito DOPO gli header, body incompleto: l'errore esce su `res`, non su `req`, e il
+  // timeout di req e' di sola INATTIVITA' — a presa chiusa non scatta mai. Senza i gestori su
+  // `res` la Promise restava appesa per sempre e l'inflight di `cached`, mai ripulito, veniva
+  // riusato da OGNI chiamata successiva per quella marca fino al riavvio del processo.
+  const http = require('http');
+  const https = require('https');
+  const mm = require('../backend/scrapers/motoit-models');
+  let servite = 0;
+  const srv = http.createServer((req, res) => {
+    servite++;
+    res.writeHead(200, { 'content-type': 'application/json', 'content-length': '1000' });
+    res.write('{"result":"OK","data":[{"value":"zz|');
+    setTimeout(() => res.socket.end(), 50);   // FIN a meta' body
+  });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const porta = srv.address().port;
+  // Il modulo chiama `https.get` al volo sull'oggetto modulo: patchare la proprieta' basta.
+  const veroGet = https.get;
+  https.get = (url, opts, cb) => http.get(`http://127.0.0.1:${porta}/x`, opts, cb);
+  let timer;
+  try {
+    const appesa = Symbol('appesa');
+    const esito = await Promise.race([
+      mm.getBrandModels('zz-marca-troncata', { rilancia: true }).then(() => 'risolta', e => String(e.message)),
+      new Promise(r => { timer = setTimeout(() => r(appesa), 5000); }),
+    ]);
+    assert.notStrictEqual(esito, appesa,
+      'la Promise non deve restare appesa: il menu moto si bloccherebbe per sempre');
+    assert.match(String(esito), /interrotta|aborted/i, 'e non deve nemmeno risolversi con un elenco a meta\'');
+    // E l'inflight si e' ripulito: la chiamata dopo RIPROVA invece di riusare quella incastrata.
+    await mm.getBrandModels('zz-marca-troncata', { rilancia: true }).catch(() => {});
+    assert.strictEqual(servite, 2, 'la seconda chiamata deve fare una richiesta nuova al server');
+  } finally { clearTimeout(timer); https.get = veroGet; srv.close(); }
+});
+
+test('autoscout: la risposta troncata a meta\' body rigetta, e non incastra la chiamata', async () => {
+  // Stesso difetto del test sopra, nel gemello httpPost di autoscout-graphql: senza i gestori
+  // su `res` la Promise restava appesa — in ricerca la colonna AS24 pagava i 45s del timeout
+  // esterno, e nel pannello Competitor (nessun timeout di rotta) il GET del parco non
+  // rispondeva mai piu'.
+  const http = require('http');
+  const https = require('https');
+  const scrape = require('../backend/scrapers/autoscout-graphql');
+  const srv = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json', 'content-length': '1000' });
+    res.write('{"data":{"search":');
+    setTimeout(() => res.socket.end(), 50);   // FIN a meta' body
+  });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const porta = srv.address().port;
+  // httpPost chiama `https.request` al volo sull'oggetto modulo: patchare la proprieta' basta.
+  const veroRequest = https.request;
+  https.request = (opts, cb) => http.request({ ...opts, host: '127.0.0.1', port: porta }, cb);
+  let timer;
+  try {
+    const appesa = Symbol('appesa');
+    // fetchTotalCount e' best-effort (mai throw): se il reject interno arriva, risolve null
+    // subito; se la Promise resta appesa, non risolve mai e vince la sentinella.
+    const esito = await Promise.race([
+      scrape.fetchTotalCount({ mmmv: '9|1626', tipo: 'auto' }),
+      new Promise(r => { timer = setTimeout(() => r(appesa), 5000); }),
+    ]);
+    assert.notStrictEqual(esito, appesa,
+      'la Promise non deve restare appesa: il parco Competitor resterebbe bloccato per sempre');
+    assert.strictEqual(esito, null, 'il troncamento e\' un errore, non un conteggio');
+  } finally { clearTimeout(timer); https.request = veroRequest; srv.close(); }
+});
+
 // ─── La marcatura decide anche cosa NON fare ─────────────────────────────────
 test('saved: un annuncio di un altro modello non genera avviso, ma resta fra i visti', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-mark-'));
@@ -926,6 +995,39 @@ test('cache: una copia SCADUTA non si serve al posto di una fonte caduta', async
   }
 });
 
+test('cache: `forza` interroga la fonte anche con una copia fresca, e la sostituisce', async () => {
+  const cacheDisco = require('../backend/scrapers/cache-disco');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-forza-'));
+  const vecchio = process.env.USER_DATA_PATH;
+  process.env.USER_DATA_PATH = dir;
+  try {
+    const file = path.join(dir, 'prova-forza.json');
+    // Una voce FRESCA, come quella che build-insella-index trovava a un rilancio entro il TTL:
+    // lo script diceva "scorro le categorie" ma riserviva il crawl precedente, zero richieste,
+    // e riscriveva su disco lo stesso indice — anche monco, anche dopo un fix al parser.
+    fs.mkdirSync(path.join(dir, 'cache'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'cache', 'prova-forza.json'),
+      JSON.stringify({ schema: 1, voci: { indice: { t: Date.now(), d: 'crawl vecchio' } } }));
+    const conCache = cacheDisco.crea(file, { tag: 'prova', schema: 1, ttl: 60 * 1000, max: 10 });
+
+    let chiamate = 0;
+    assert.strictEqual(await conCache('indice', async () => { chiamate++; return 'crawl nuovo'; }, null, { forza: true }),
+      'crawl nuovo', 'con forza la fonte si interroga davvero');
+    assert.strictEqual(chiamate, 1);
+    // Il risultato nuovo prende il posto della voce: il crawl vecchio non risorge.
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'cache', 'prova-forza.json'), 'utf8')).voci.indice.d, 'crawl nuovo');
+    assert.strictEqual(await conCache('indice', async () => { throw new Error('senza forza la copia fresca basta'); }), 'crawl nuovo');
+
+    // Se il giro forzato fallisce, la copia fresca NON lo maschera: lo script deve fermarsi.
+    await assert.rejects(
+      () => conCache('indice', async () => { throw new Error('fonte KO'); }, null, { forza: true }),
+      /fonte KO/,
+      'un rilancio forzato che non riesce a leggere la fonte deve dirlo, non riservire la cache');
+  } finally {
+    if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
+  }
+});
+
 // ═══ LA CODA: casi singoli, stessa disciplina ═════════════════════════════════
 test('richiami: le allerte escono dalla piu\' recente, non dalla piu\' vecchia', () => {
   const { cerca } = require('../backend/richiami-route.js');
@@ -1493,6 +1595,24 @@ test('subito-session: un blocco visto nell\'epoca vecchia non rimette in blocco 
   }
 });
 
+test('subito: il keep-alive non pesta la sessione appena rinnovata col CAPTCHA', () => {
+  // `saveStorageState` e' last-writer-wins: il keep-alive legge lo stato in cima, naviga
+  // per secondi, e salvava a fine giro uno stato DERIVATO da quello vecchio. Se in mezzo
+  // finiva un bootstrap (minuti, c'e' un CAPTCHA umano), il cookie appena conquistato
+  // spariva in silenzio e le ricerche restavano sulla sessione scaduta. Tre guardie:
+  // timer e rotta saltano durante il bootstrap, e il salvataggio del keep-alive si
+  // scarta se l'epoca e' cambiata mentre navigava.
+  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8'));
+  assert.match(srv, /if \(bootstrapInFlight\) return;/,
+    'il timer keep-alive torna a girare durante il bootstrap: lo stato vecchio puo\' riscrivere quello del CAPTCHA');
+  assert.match(srv, /bootstrap_in_progress/,
+    'la rotta keep-alive on-demand torna a girare durante il bootstrap');
+  const pw = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'subito-playwright.js'), 'utf8'));
+  const keepAlive = pw.slice(pw.indexOf('async function keepAliveSubito'));
+  assert.ok(/epocaSessione\(\) !== epocaVista[\s\S]{0,300}saveStorageState/.test(keepAlive),
+    'keepAliveSubito salva senza controllare l\'epoca: uno stato derivato dal vecchio pesta quello fresco');
+});
+
 test('subito: la pausa fra ricerche vale anche per chi arriva insieme', async () => {
   // Era un read-modify-write attraverso un await: tre chiamate concorrenti leggevano lo
   // STESSO lastSearchAt, calcolavano la stessa attesa e ripartivano nello stesso istante —
@@ -1517,6 +1637,42 @@ test('subito: la pausa fra ricerche vale anche per chi arriva insieme', async ()
   const t0 = Date.now();
   const a = await Promise.all([throttle(), throttle(), throttle()].map(p => p.then(() => Date.now() - t0)));
   assert.ok(a[1] - a[0] >= 1900 && a[2] - a[1] >= 1900, `partenze non spaziate: ${a.join(', ')}`);
+});
+
+test('autoscout: la pausa fra ricerche vale anche per chi arriva insieme', async () => {
+  // Stesso read-modify-write attraverso un await gia' corretto in subito-playwright e
+  // motoit: questa terza copia era rimasta quella vecchia. Con GraphQL giu', N fallback
+  // a browser passavano il throttle insieme e sparavano in parallelo contro AS24.
+  const src = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'autoscout-playwright.js'), 'utf8'));
+  assert.ok(/const mio = Math\.max\(Date\.now\(\), lastSearchAt \+ 2000\);\s*\n\s*lastSearchAt = mio;/.test(src),
+    'lo slot non si prenota piu\' nello stesso tick: le concorrenti tornano a partire insieme');
+  // E la regola, ESEGUITA sulla stessa forma: tre concorrenti si spaziano di 2 s.
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let lastSearchAt = 0;
+  const throttle = async () => {
+    const mio = Math.max(Date.now(), lastSearchAt + 2000);
+    lastSearchAt = mio;
+    const wait = mio - Date.now();
+    if (wait > 0) await sleep(wait);
+  };
+  const t0 = Date.now();
+  const a = await Promise.all([throttle(), throttle(), throttle()].map(p => p.then(() => Date.now() - t0)));
+  a.sort((x, y) => x - y);
+  assert.ok(a[1] - a[0] >= 1900 && a[2] - a[1] >= 1900, `partenze non spaziate: ${a.join(', ')}`);
+});
+
+test('playwright: due chiamate concorrenti aspettano lo STESSO Chromium', () => {
+  // Fra `if (browserInstance)` e l'assegnazione c'e' un await: due chiamate arrivate
+  // insieme (keep-alive da timer + rotta on-demand) lanciavano DUE Chromium e il primo
+  // restava orfano per sempre (~100-150 MB). E il gestore 'disconnected' senza controllo
+  // di identita' azzerava il singleton buono se a morire era l'istanza vecchia.
+  for (const f of ['subito-playwright.js', 'autoscout-playwright.js']) {
+    const src = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', f), 'utf8'));
+    assert.ok(/if \(avvio\) return avvio;/.test(src),
+      `${f}: manca la promessa di lancio condivisa — due concorrenti lanciano due Chromium`);
+    assert.ok(/if \(browserInstance === b\) browserInstance = null;/.test(src),
+      `${f}: il 'disconnected' di un'istanza vecchia azzera il singleton buono`);
+  }
 });
 
 test('ricerca: la stessa domanda gia\' in volo non si rifa\' da capo', () => {
