@@ -15,8 +15,12 @@ const { searchRicambi } = require('../ricambi-core');   // multi-fonte: Autodoc 
 const { fetchAutodocSpecs } = require('../oem-lookup');  // compat veicoli (l'envelope v7 è lazy)
 const waClient = require('./client');
 
+// Il freno delle ricerche di ricambi: stessi numeri della rotta web (ricambi-route.js,
+// RATE_CAP=10 al minuto) — protegge le fonti dalle raffiche, non conta i clic.
+const limiteOem = require('../limite-richieste').crea({ max: 10, cosa: 'ricerche di ricambi' });
+
 const PROMPT_PATH = path.join(__dirname, 'prompt.md');
-const MODEL = () => process.env.BOT_MODEL || 'claude-sonnet-5';
+const MODEL = () => process.env.BOT_MODEL || 'claude-haiku-4-5';
 const MAX_ITERS = 4;                 // giri di tool-use prima di arrendersi
 const MAX_HISTORY = 20;              // messaggi conservati per conversazione (bound token)
 const WEB_SEARCH_ON = () => process.env.WA_WEB_SEARCH !== '0';
@@ -86,11 +90,15 @@ function pdfName(p) {
 async function runCercaAuto(input, ctx) {
   let r;
   try {
-    r = await ctx.searchFn(input);
+    // L'identita' viaggia con la richiesta: e' searchFn (amrSearchFn, server.js) ad
+    // addebitare il tetto giornaliero del ruolo demo — la stessa regola di /api/search,
+    // perche' anche da WhatsApp la ricerca esce dall'IP di casa verso le tre fonti.
+    r = await ctx.searchFn(input, ctx.utente);
   } catch (e) {
     console.error('[wa] searchFn KO:', e.message);
     return `La ricerca ha dato errore tecnico. Riprova tra poco.`;
   }
+  if (r.tettoEsaurito) return `L'utente ha esaurito le ${r.tettoEsaurito.max} ricerche di oggi (il tetto giornaliero vale anche su WhatsApp). Nessuna ricerca eseguita, nessun PDF inviato: digli che il conto riparte domani.`;
   if (r.error) return `Parametri non validi: ${r.error}. Chiedi all'utente di precisare.`;
   const risultati = r.risultati || [];
   // Niente mediana, media, min e max: erano calcolati su TUTTE le righe, comprese quelle
@@ -137,6 +145,10 @@ async function runCercaAuto(input, ctx) {
 async function runOemLookup(input, ctx) {
   const oen = String(input.oen || input.codice || '').trim();
   if (!oen) return 'Manca il codice OE/OEM/OEN: chiedilo all\'utente.';
+  // Stesso freno al minuto della rotta web /api/ricambi (ricambi-route.js): qui il lookup
+  // arriva a searchRicambi in-process e lo saltava. Chiave = la persona se c'e', il numero se no.
+  const gLim = limiteOem.consuma((ctx.utente && ctx.utente.id) || ctx.from);
+  if (!gLim.ok) return `${limiteOem.messaggio(gLim)} Lookup NON eseguito: avvisa l'utente.`;
   let r;
   try {
     r = await searchRicambi(oen, { mode: 'oem' });
@@ -204,15 +216,22 @@ async function createMsg(client, req, state) {
 }
 
 // Elabora un messaggio utente. history = messaggi Anthropic precedenti (role/content).
+// `utente` (opzionale) = identita' risalita dal numero (auth.personaDaTelefono): il nome
+// entra nel system prompt cosi' il bot sa con chi parla. Il fallback legacy da allowlist
+// non ha identita' e arriva qui senza `utente`.
 // Ritorna { text, history } con lo storico aggiornato e potato.
-async function handleMessage({ from, text, history = [], searchFn }) {
+async function handleMessage({ from, text, history = [], searchFn, utente }) {
   const client = new Anthropic();   // legge ANTHROPIC_API_KEY da env
-  const ctx = { from, searchFn };
+  const ctx = { from, searchFn, utente: utente || null };
   const state = { webSearch: WEB_SEARCH_ON() };
   const req = {
     model: MODEL(),
     max_tokens: 1500,
-    system: loadPrompt(),
+    // Nome sanificato prima di entrare nel prompt: niente a-capo, max 60 caratteri
+    // (difesa in profondita' contro injection via nome, anche se lo imposta solo il proprietario).
+    system: loadPrompt() + (utente && utente.nome
+      ? `\n\nStai parlando con ${String(utente.nome).replace(/[\r\n]+/g, ' ').slice(0, 60)}.`
+      : ''),
     tools: baseTools(),
     messages: [...history, { role: 'user', content: text }],
   };
@@ -272,4 +291,6 @@ function cleanHistory(messages) {
   return out;
 }
 
-module.exports = { handleMessage, cleanHistory };
+// Superficie interna per i test (prefisso _ come in server.js): i due handler dei tool e il
+// freno dei ricambi non sono raggiungibili da fuori senza passare da Anthropic.
+module.exports = { handleMessage, cleanHistory, _runCercaAuto: runCercaAuto, _runOemLookup: runOemLookup, _limiteOem: limiteOem };

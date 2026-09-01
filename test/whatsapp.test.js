@@ -199,3 +199,29 @@ test('dedupeOe: esclude il codice cercato, deduplica, scarta i non-codici', () =
   assert.deepStrictEqual(dedupeOe([], 'X'), []);
   assert.deepStrictEqual(dedupeOe(null, 'X'), []);
 });
+
+// ─── tetto giornaliero: il canale WhatsApp non lo salta piu' ──────────────────────
+// Il tetto lo addebita searchFn (amrSearchFn in server.js, provata in
+// cancello-identita.test.js): qui si prova il pezzo del bot — l'identita' ARRIVA a
+// searchFn, e a credito finito la ricerca si ferma prima di qualunque PDF.
+test('runCercaAuto: passa l\'utente a searchFn e a tetto esaurito si ferma', async () => {
+  const bot = require('../backend/whatsapp/bot');
+  const utente = { id: 'giulia-rossi', nome: 'Giulia Rossi', ruolo: 'demo' };
+  const visti = [];
+  const searchFn = async (input, chi) => { visti.push(chi); return { tettoEsaurito: { usate: 50, max: 50 } }; };
+  const out = await bot._runCercaAuto({ marca: 'Audi' }, { from: '393520727252', searchFn, utente });
+  assert.deepStrictEqual(visti, [utente], 'senza identita\' il tetto non si puo\' addebitare');
+  assert.match(out, /50 ricerche/);
+  assert.match(out, /domani/i, 'deve dire QUANDO si riprova');
+  assert.match(out, /[Nn]essun PDF/, 'niente ricerca = niente PDF');
+});
+
+test('runOemLookup: il freno al minuto della rotta ricambi vale anche qui', async () => {
+  const bot = require('../backend/whatsapp/bot');
+  const chiave = 'freno-oem-test';
+  for (let i = 0; i < bot._limiteOem.max; i++) bot._limiteOem.consuma(chiave);
+  // A finestra piena il lookup NON parte (searchRicambi non viene toccata: nessuna rete).
+  const out = await bot._runOemLookup({ oen: '1K0905851B' }, { from: chiave, utente: null });
+  assert.match(out, /Riprova/);
+  assert.match(out, /NON eseguito/);
+});

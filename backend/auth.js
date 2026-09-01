@@ -72,10 +72,60 @@ const leggibile = cfg => Boolean(cfg) && cfg !== ILLEGGIBILE;
 
 // Scrittura atomica: senza, la finestra in cui il file e' troncato esiste
 // davvero, e ogni lettura che ci cade dentro e' un 401 per tutti.
+// Il nome del tmp porta il pid: due processi con lo stesso tmp fisso si
+// pestavano anche il rename (uno dei due prendeva ENOENT).
 function scriviAtomico(p, dati) {
-  const tmp = p + '.tmp';
+  const tmp = `${p}.tmp.${process.pid}`;
   fs.writeFileSync(tmp, JSON.stringify(dati, null, 2));
   fs.renameSync(tmp, p);
+}
+
+/**
+ * UNA SCRITTURA ALLA VOLTA, FRA PROCESSI.
+ *
+ * scriviAtomico protegge dal file TRONCATO, non dall'aggiornamento PERSO: ogni modifica e'
+ * un read-modify-write dell'INTERO file, e sull'M2 gli scrittori sono processi diversi —
+ * il server vivo (creaPersona da un invito) e gli script via ssh (set-telefono, set-password,
+ * utenti-da-env). Senza mutua esclusione, chi scrive per ultimo cancella in silenzio la
+ * modifica dell'altro: misurato, il telefono appena assegnato dallo script spariva sotto la
+ * creaPersona del server. Il lock e' un file creato in esclusiva (flag 'wx') accanto ad
+ * auth.json: chi lo trova occupato aspetta, chi lo trova stantio (processo morto a meta',
+ * le sezioni critiche durano ~200ms di scryptSync) lo toglie e riprova. Dentro lo stesso
+ * processo le funzioni sono sincrone, quindi non serve rientranza: la creaPersona esportata
+ * prende il lock una volta e al suo interno usa la setPersona nuda.
+ */
+const LOCK_ATTESA_MS  = 5000;    // oltre: errore chiaro, non un'attesa infinita
+const LOCK_STANTIO_MS = 10000;   // un lock cosi' vecchio e' di un processo morto
+
+// Sonno sincrono senza busy-loop: queste funzioni sono sincrone per contratto.
+const dormi = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+function conLock(fn) {
+  // Base sparita: nessun lock da prendere — la funzione sotto si ferma gia' col suo errore,
+  // e filePath() ricadrebbe su data/, cioe' il lock finirebbe accanto al file SBAGLIATO
+  // (lo stesso inganno documentato in baseSparita).
+  if (baseSparita()) return fn();
+  const lock = filePath() + '.lock';
+  const inizio = Date.now();
+  let fd;
+  for (;;) {
+    try { fd = fs.openSync(lock, 'wx'); break; }
+    catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+      try {
+        if (Date.now() - fs.statSync(lock).mtimeMs > LOCK_STANTIO_MS) { fs.unlinkSync(lock); continue; }
+      } catch {}   // sparito fra open e stat: liberato, si riprova
+      if (Date.now() - inizio > LOCK_ATTESA_MS) {
+        throw new Error(`${lock} occupato da troppo tempo: se nessun altro processo sta scrivendo, cancellalo e riprova.`);
+      }
+      dormi(25);
+    }
+  }
+  try { return fn(); }
+  finally {
+    try { fs.closeSync(fd); } catch {}
+    try { fs.unlinkSync(lock); } catch {}
+  }
 }
 
 function isEnabled() { return load() !== null; }
@@ -427,9 +477,19 @@ function checkSessione(v) {
 // Il solo ruolo, come prima: la maggior parte dei chiamanti vuole solo quello.
 function checkToken(v) { const s = checkSessione(v); return s ? s.ruolo : null; }
 
+// Chi RISCRIVE auth.json passa da conLock: il server e gli script sono processi diversi
+// sullo stesso file (vedi il commento sul lock). Chi legge no — scriviAtomico garantisce
+// che una lettura veda sempre un file intero.
 module.exports = {
-  isEnabled, stato, setPassword, setDemoPassword, togliDemoCondiviso, setPersona, creaPersona, togliPersona,
+  isEnabled, stato,
+  setPassword:        (...a) => conLock(() => setPassword(...a)),
+  setDemoPassword:    (...a) => conLock(() => setDemoPassword(...a)),
+  togliDemoCondiviso: (...a) => conLock(() => togliDemoCondiviso(...a)),
+  setPersona:         (...a) => conLock(() => setPersona(...a)),
+  creaPersona:        (...a) => conLock(() => creaPersona(...a)),
+  togliPersona:       (...a) => conLock(() => togliPersona(...a)),
+  setTelefono:        (...a) => conLock(() => setTelefono(...a)),
   persone, verifica, verifyRole, makeToken, checkToken, checkSessione,
-  personaDaTelefono, setTelefono,
+  personaDaTelefono,
   idDaNome, ID_RISERVATI, MIN_LEN, TTL_MS,
 };

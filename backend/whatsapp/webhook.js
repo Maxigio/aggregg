@@ -8,6 +8,7 @@ const express = require('express');
 const crypto = require('node:crypto');
 const bot = require('./bot');
 const waClient = require('./client');
+const auth = require('../auth');
 
 const PATH = '/api/whatsapp/webhook';
 
@@ -21,11 +22,13 @@ function verifySignature(rawBuf, header) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-// ── Allowlist mittenti (csv in WHATSAPP_ALLOWED_SENDERS).
+// ── Allowlist mittenti (csv in WHATSAPP_ALLOWED_SENDERS) — FALLBACK LEGACY.
 // VUOTO = NESSUNO, non "tutti". Prima l'elenco vuoto lasciava passare chiunque, e il `from`
 // lo scrive chi manda il payload: era anche il modo di aggirare il rate limit, che e' chiavato
 // proprio su quel numero (basta cambiare una cifra). Una porta che si apre da sola quando non
 // la si configura e' il contrario di una porta.
+// Oggi la via principale e' auth.personaDaTelefono (numero → persona di auth.json, con nome):
+// questa lista resta per retrocompatibilita', autorizza SENZA identita'.
 const digits = s => String(s || '').replace(/\D/g, '');
 function allowed(from) {
   const raw = (process.env.WHATSAPP_ALLOWED_SENDERS || '').trim();
@@ -33,15 +36,42 @@ function allowed(from) {
   return raw.split(',').map(digits).filter(Boolean).includes(digits(from));
 }
 
+// ── Numeri sconosciuti: risposta cortese UNA volta per numero, poi silenzio.
+// Il payload e' gia' autenticato dalla firma HMAC di Meta, quindi il `from` e' un numero vero:
+// rispondergli una volta spiega la porta chiusa senza offrire un canale di spam. Il TTL con
+// sweep (stesso pattern di rlHits) evita che la mappa cresca per sempre e fa si' che chi
+// riprova il giorno dopo riceva di nuovo la spiegazione, non il silenzio assoluto.
+const RIFIUTO_TTL = 24 * 60 * 60 * 1000;
+const rifiutati = new Map();
+const MSG_NON_RICONOSCIUTO = 'Questo numero non è associato a nessun account Auto Moto Radar, quindi non posso risponderti qui. Se pensi sia un errore, contatta chi gestisce il servizio.';
+async function rifiutaCortese(from) {
+  const now = Date.now();
+  for (const [k, t] of rifiutati) if (now - t > RIFIUTO_TTL) rifiutati.delete(k);
+  console.warn('[wa] mittente non riconosciuto:', from);
+  if (rifiutati.has(from)) return;
+  rifiutati.set(from, now);
+  await waClient.sendText(from, MSG_NON_RICONOSCIUTO).catch(() => {});
+}
+
+// ── Disclosure AI Act (Art. 50): chi parla con un sistema AI deve saperlo, all'inizio di
+// OGNI sessione. Obbligo legale, non una preferenza: il testo si puo' riformulare via env
+// (WA_DISCLOSURE_TEXT) ma MAI svuotare — stringa vuota o assente = testo di default.
+const DISCLOSURE_DEFAULT = 'Sei in contatto con l\'assistente AI di Auto Moto Radar, un sistema automatico di intelligenza artificiale.';
+const disclosureText = () => (process.env.WA_DISCLOSURE_TEXT || '').trim() || DISCLOSURE_DEFAULT;
+
 // ── Stato conversazione in memoria, TTL 30 min. ponytail: in-memory; tabella DB
 // wa_conversations se serve persistenza cross-restart.
+// `disclosed` nasce false a OGNI creazione dello stato (prima interazione o TTL scaduto):
+// e' il segnale che la disclosure AI Act va (ri)mandata. La scadenza del TTL che fa ripartire
+// la disclosure e' il comportamento VOLUTO — una nuova sessione e' una nuova conversazione,
+// e la persona va riavvisata: non "ottimizzarlo" via.
 const CONV_TTL = 30 * 60 * 1000;
 const convs = new Map();
 function getConv(from) {
   const now = Date.now();
   for (const [k, v] of convs) if (now - v.ts > CONV_TTL) convs.delete(k);
   let c = convs.get(from);
-  if (!c) { c = { history: [], ts: now }; convs.set(from, c); }
+  if (!c) { c = { history: [], ts: now, disclosed: false }; convs.set(from, c); }
   else c.ts = now;   // rinfresca alla lettura → un utente attivo (anche se il bot erra) non viene potato a metà
   return c;
 }
@@ -102,12 +132,41 @@ async function processPayload(payload, searchFn) {
   }
 }
 
-async function handleInbound(msg, searchFn) {
+// ── Coda per-mittente. handlePost fa ack e NON attende processPayload: due POST ravvicinate
+// dello stesso numero girerebbero in parallelo, partendo entrambe dallo STESSO conv.history;
+// l'ultima a finire sovrascriverebbe il turno dell'altra (contesto perso, non corrotto).
+// La catena di promise serializza i messaggi per numero; un turno fallito non blocca i
+// successivi, e la voce si toglie quando la coda si svuota (no leak).
+const inboundQueues = new Map();
+function handleInbound(msg, searchFn) {
+  const from = msg && msg.from;
+  if (!from) return Promise.resolve();
+  const prev = inboundQueues.get(from) || Promise.resolve();
+  const next = prev.then(() => processInbound(msg, searchFn));
+  const tail = next.catch(() => {});
+  inboundQueues.set(from, tail);
+  tail.then(() => { if (inboundQueues.get(from) === tail) inboundQueues.delete(from); });
+  return next;
+}
+
+async function processInbound(msg, searchFn) {
   const from = msg.from;
-  if (!from) return;
-  if (!allowed(from)) { console.warn('[wa] mittente fuori allowlist:', from); return; }
+  // Chi e': (a) il numero risale a una persona di auth.json → autorizzato CON identita';
+  // (b) fallback legacy: numero nell'allowlist env → autorizzato SENZA identita';
+  // (c) nessuno dei due → risposta cortese una volta, e il bot NON viene invocato.
+  const utente = auth.personaDaTelefono(from);
+  if (!utente && !allowed(from)) { await rifiutaCortese(from); return; }
   if (!rateOk(from)) { await waClient.sendText(from, 'Un attimo di pausa 🙏 riprova tra poco.').catch(() => {}); return; }
   waClient.markRead(msg.id);
+
+  // Disclosure Art. 50 PRIMA di qualunque altra risposta della sessione (anche quella
+  // "solo testo"): se l'invio fallisce non si marca, si ritenta al messaggio dopo e
+  // SOPRATTUTTO non si va avanti — nessuna risposta del bot puo' uscire senza disclosure.
+  const conv = getConv(from);
+  if (!conv.disclosed) {
+    try { await waClient.sendText(from, disclosureText()); conv.disclosed = true; }
+    catch (e) { console.error('[wa] disclosure KO:', e.message); return; }
+  }
 
   let text = '';
   if (msg.type === 'text') text = msg.text?.body || '';
@@ -117,9 +176,8 @@ async function handleInbound(msg, searchFn) {
   }
   if (!text.trim()) return;
 
-  const conv = getConv(from);
   try {
-    const { text: reply, history } = await bot.handleMessage({ from, text, history: conv.history, searchFn });
+    const { text: reply, history } = await bot.handleMessage({ from, text, history: conv.history, searchFn, utente });
     conv.history = history; conv.ts = Date.now();
     if (reply) await waClient.sendText(from, reply);
   } catch (e) {
@@ -135,4 +193,4 @@ function mount(app, { searchFn }) {
   console.log(`[wa] webhook montato su ${PATH} · client ${waClient.configured() ? 'OK' : 'INCOMPLETO (mancano token/segreti)'}`);
 }
 
-module.exports = { mount, PATH, verifySignature, allowed, rateOk, handleVerify, handlePost };
+module.exports = { mount, PATH, verifySignature, allowed, rateOk, handleVerify, handlePost, handleInbound, disclosureText };

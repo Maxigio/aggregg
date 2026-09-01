@@ -369,6 +369,43 @@ test('creaPersona: nasce demo, marcata "web", e la marcatura sopravvive al cambi
   assert.throws(() => auth.creaPersona('Demo', 'qualcosa1'), /riservat/);
 });
 
+// ── 5. Due processi sullo stesso auth.json ───────────────────────────────────
+
+test('auth: chi scrive aspetta il lock di un altro processo, e un lock stantio non blocca', () => {
+  // Il guaio vero, misurato sull'M2: il server vivo e `scripts/set-telefono.js` via ssh fanno
+  // entrambi load() → modifica → riscrittura dell'INTERO auth.json, e l'ultimo che scrive
+  // cancellava in silenzio la modifica dell'altro (telefono assegnato sparito, o persona
+  // appena registrata sparita). La serializzazione e' un lock file esclusivo accanto ad
+  // auth.json: qui si prova che chi scrive lo RISPETTA davvero — cioe' aspetta finche' un
+  // altro processo non lo molla — e che il lock di un processo morto a meta' non chiude
+  // fuori tutti per sempre.
+  const { spawn } = require('node:child_process');
+  auth.setPassword(PW.admin);
+  auth.setPersona('Piero Lock', 'pierolock1', 'demo');
+  const lock = path.join(process.env.USER_DATA_PATH, 'auth.json.lock');
+
+  // Lock stantio (processo morto): si toglie da soli e si scrive, senza aspettare 5 secondi.
+  fs.writeFileSync(lock, '');
+  const morto = (Date.now() - 60_000) / 1000;
+  fs.utimesSync(lock, morto, morto);
+  assert.strictEqual(auth.setTelefono('Piero Lock', '+39 333 111 2233').telefono, '393331112233');
+  assert.ok(!fs.existsSync(lock), 'il lock stantio doveva sparire dopo la scrittura');
+
+  // Lock FRESCO di un altro processo: la scrittura deve ASPETTARE che venga mollato.
+  // Il rilascio arriva da un processo figlio, perche' l'attesa qui e' sincrona: un timer
+  // nello stesso processo non scatterebbe mai.
+  fs.writeFileSync(lock, '');
+  const figlio = spawn(process.execPath, ['-e',
+    `setTimeout(() => { try { require('node:fs').unlinkSync(${JSON.stringify(lock)}) } catch {} }, 250)`,
+  ], { stdio: 'ignore' });
+  figlio.unref();
+  const prima = Date.now();
+  assert.strictEqual(auth.setTelefono('Piero Lock', '+39 333 111 9999').telefono, '393331119999');
+  assert.ok(Date.now() - prima >= 150,
+    'la scrittura non ha aspettato il lock: due processi possono di nuovo cancellarsi le modifiche a vicenda');
+  assert.ok(!fs.existsSync(lock), 'il lock proprio doveva essere rilasciato a fine scrittura');
+});
+
 test('utenti-da-env: lo specchio del .env non cancella chi si e\' registrato dal web', () => {
   auth.setPassword(PW.admin);
   for (const p of auth.persone()) auth.togliPersona(p.id);   // la prova parte da un elenco suo
