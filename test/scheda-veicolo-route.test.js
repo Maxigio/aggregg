@@ -192,6 +192,48 @@ test('copreAnno: il periodo della voce, com e scritto dal catalogo', () => {
  */
 const { senzaGenerazione } = require('../backend/scheda-veicolo-route');
 
+/**
+ * REGRESSIONE. Le rotte della scheda consumavano un posto del limitatore PRIMA di guardare
+ * la cache. Scorrendo il parco di un concessionario (ogni scheda aperta sono 2-4 chiamate)
+ * i 40 posti al minuto finivano in una decina di annunci, e il 429 arrivava anche su
+ * risposte gia' in memoria, che non toccano ne' auto-data.net ne' Moto.it. La regola e'
+ * quella scritta in ricambi-route.js: la cache non costa niente alle fonti, non paga.
+ */
+const routeSV = require('../backend/scheda-veicolo-route');
+const vsMod = require('../backend/scrapers/vehicle-specs');
+
+function resFinta() {
+  const r = { code: 200, body: null };
+  r.status = c => { r.code = c; return r; };
+  r.json = b => { r.body = b; return r; };
+  return r;
+}
+
+test('specs: le risposte servite dalla cache non consumano il limite', async () => {
+  const H = {};
+  routeSV.mount({ get: (p, h) => { H[p] = h; } }, { chiaveLimite: () => 'prova-limite-cache' });
+  const handler = H['/api/scheda-veicolo/specs'];
+  const url = 'https://www.auto-data.net/it/prova-cache-' + Date.now();
+  let rete = 0;
+  const vero = vsMod.fetchVehicleSpecs;
+  vsMod.fetchVehicleSpecs = async () => { rete++; return { title: 'finta' }; };
+  try {
+    const codici = [];
+    for (let i = 0; i < 45; i++) {                       // il tetto e' 40 al minuto
+      const res = resFinta();
+      await handler({ query: { url } }, res);
+      codici.push(res.code);
+    }
+    assert.strictEqual(rete, 1, 'una sola andata in rete: le altre 44 escono dalla memoria');
+    assert.ok(codici.every(c => c === 200), 'nessun 429 su risposte che non toccano le fonti');
+    // E il budget e' ancora quasi intero: un URL mai visto passa lo stesso.
+    const res = resFinta();
+    await handler({ query: { url: url + '-altro' } }, res);
+    assert.strictEqual(res.code, 200);
+    assert.strictEqual(rete, 2);
+  } finally { vsMod.fetchVehicleSpecs = vero; }
+});
+
 test('senzaGenerazione: toglie la serie abbreviata ma NON i nomi che finiscono in "<cifre> S"', () => {
   // quello per cui la regola esiste: Subito scrive cosi'
   assert.strictEqual(senzaGenerazione('Macan 1ªs.'), 'Macan');
@@ -203,4 +245,48 @@ test('senzaGenerazione: toglie la serie abbreviata ma NON i nomi che finiscono i
   assert.strictEqual(senzaGenerazione('K 1200 S'), 'K 1200 S');
   assert.strictEqual(senzaGenerazione('Monster 620 S'), 'Monster 620 S');
   assert.strictEqual(senzaGenerazione('Multistrada 1200 S'), 'Multistrada 1200 S');
+});
+
+/**
+ * REGRESSIONE. `genNonLette` contava due volte le stesse generazioni. Quando il filtro sulla
+ * generazione svuota le candidate scatta la riapertura di sicurezza, che richiama `apri` sullo
+ * stesso insieme: le pagine sono gia' in cache, quindi le generazioni mute falliscono identiche
+ * e il conto si sommava a quello del primo giro. Il numero viaggia nella risposta della rotta
+ * (`genNonLette`, `perche`, `motivo`): un avviso sulla completezza dei dati che ne dichiarava
+ * il doppio — con una sola generazione non letta ne annunciava due.
+ */
+const { schedaPerAnnuncio } = require('../backend/scheda-veicolo-route');
+
+test('genNonLette: la riapertura di sicurezza non riconta le generazioni gia contate', async () => {
+  // Tre generazioni che coprono tutte il 2016, quindi l'anno non ne toglie nessuna; UNA sola
+  // serve la pagina di transizione (200 senza motorizzazioni). Il titolo dice "Sportback":
+  // le parole distintive restringono, i vincoli svuotano le candidate e si riapre su tutte.
+  const GENS = [
+    { name: 'A3 Sportback (8V)',  slug: 'prova-sb-8v',  img: '', years: [2012, 2020] },
+    { name: 'A3 Sportback (8VA)', slug: 'prova-sb-8va', img: '', years: [2013, 2020] },
+    { name: 'A3 (8V)',            slug: 'prova-g-8v',   img: '', years: [2012, 2020] },
+  ];
+  const TRIM = {
+    'prova-sb-8v':  [],                                                                                // l'unica che non si lascia leggere
+    'prova-sb-8va': [{ label: '1.4 TFSI 122 Hp', url: 'u1', hp: 122, fuel: 'Benzina', yearRange: '2013–2020' }],
+    'prova-g-8v':   [{ label: '1.6 TDI 110 Hp', url: 'u2', hp: 110, fuel: 'Diesel',  yearRange: '2012–2020' }],
+  };
+  const veri = { http: vsMod.httpGetText, gen: vsMod.parseGenerationList, trim: vsMod.parseTrimList };
+  const aperte = [];
+  vsMod.httpGetText = async (url) => { aperte.push(url.split('/').pop()); return { body: `<title>Audi A3</title>${url}` }; };
+  vsMod.parseGenerationList = () => GENS.map(g => ({ ...g }));
+  vsMod.parseTrimList = (_html, slug) => (TRIM[slug] || []).map(t => ({ ...t }));
+  try {
+    const out = await schedaPerAnnuncio({
+      tipo: 'auto', marca: 'Audi', modello: 'A3 4ª serie', anno: '2016',
+      cv: '110', carburante: 'Diesel', cambio: '', carrozzeria: '',
+      titolo: 'Audi A3 Sportback 1.6 TDI', variante: '', cilindrata: '',
+    });
+    // Se questo cade non e' il conto a essere rotto: la riapertura non e' nemmeno scattata.
+    assert.ok(GENS.every(g => aperte.includes(g.slug)), 'preparazione: la riapertura di sicurezza non e scattata');
+    assert.strictEqual(out.genNonLette, 1, 'una sola generazione muta, contata una volta sola');
+    assert.match(out.perche, /attenzione: 1 generazione non si e' lasciata leggere/);
+  } finally {
+    vsMod.httpGetText = veri.http; vsMod.parseGenerationList = veri.gen; vsMod.parseTrimList = veri.trim;
+  }
 });

@@ -709,6 +709,10 @@ async function schedaPerAnnuncio({ tipo, marca, modello: modelloGrezzo, anno, cv
   // costruita su un elenco monco.
   let genNonLette = 0;
   const apri = async (quali) => {
+    // Il conto vale per l'insieme che QUESTO giro restituisce, e `apri` viene richiamata dalla
+    // riapertura di sicurezza qui sotto: le pagine sono gia' in cache, quindi le generazioni che
+    // non si erano lasciate leggere falliscono identiche e senza azzerare si conterebbero due volte.
+    genNonLette = 0;
     const voci = (base.motorizzazioni || []).slice();
     for (const g of quali.slice(0, 6)) {
       try {
@@ -887,8 +891,6 @@ function mount(app, deps = {}) {
   const chiaveLimite = deps.chiaveLimite || deps.clientIp || (req => req.ip || '');
   // La scheda tecnica DI QUESTO ANNUNCIO — vedi schedaPerAnnuncio.
   app.get('/api/scheda-veicolo/annuncio', async (req, res) => {
-    const g = limite.consuma(chiaveLimite(req));
-    if (!g.ok) return res.status(429).json({ error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     const { tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria } = req.query || {};
     // Il titolo dell'annuncio serve SOLO alle moto: e' da li' che si legge la variante
     // ("ABS", "Moto Cage", "Rally"), l'unica cosa che il periodo di produzione non separa.
@@ -899,7 +901,12 @@ function mount(app, deps = {}) {
     const cilindrata = String((req.query || {}).cilindrata || '').slice(0, 8);
     if (!marca || !modello) return res.status(400).json({ error: 'marca/modello mancanti' });
     const key = `ann:${tipo}|${norm(marca)}|${norm(modello)}|${anno || ''}|${cv || ''}|${norm(carburante)}|${norm(cambio)}|${norm(carrozzeria)}|${norm(titolo)}|${norm(variante)}|${cilindrata}`;
+    // LA CACHE NON COSTA NIENTE ALLE FONTI, quindi non consuma il budget (stessa regola di
+    // ricambi-route e del parco competitor): scorrere il parco aprendo schede gia' calcolate
+    // finiva i 40 posti al minuto senza che partisse una sola richiesta ad auto-data.net.
     const hit = cacheGet(key); if (hit != null) return res.json(hit);
+    const g = limite.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     try {
       const out = await schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria, titolo, variante, cilindrata });
       cacheSet(key, out, out.ok ? PAGE_TTL : EMPTY_TTL);
@@ -921,13 +928,13 @@ function mount(app, deps = {}) {
     } catch (_) { res.json({ ok: false, error: 'scheda non disponibile' }); }
   });
   app.get('/api/scheda-veicolo/specs', async (req, res) => {
-    const g = limite.consuma(chiaveLimite(req));
-    if (!g.ok) return res.status(429).json({ error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     const url = String(req.query.url || '');
     const kind = specsHostKind(url);
     if (!kind) return res.status(400).json({ error: 'url non valido' });
     const key = 'specs:' + url;
-    const hit = cacheGet(key); if (hit != null) return res.json(hit);
+    const hit = cacheGet(key); if (hit != null) return res.json(hit);   // stessa regola: la cache non paga
+    const g = limite.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     try {
       const specs = kind === 'motoit' ? await mis.fetchMotoitSpecs(url)
         : kind === 'moto' ? await ms.fetchMotoSpecs(url)
