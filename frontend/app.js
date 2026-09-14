@@ -1534,6 +1534,12 @@ function setSearchMode(mode) {
   // azzerato — la lista di prima ridipinta in un contesto che non e' piu' il suo.
   if (ricambi || prev === 'ricambi') { rcGen++; rcData = null; hideResults(); }   // ingresso/uscita ricambi → pulizia piena (currentResults lo azzera resetContesto)
   if (area(prev) && prev !== searchMode) area(prev).chiudi();
+  // USCITA da un'area verso la ricerca: `has-results` la mette apri() e la toglie solo
+  // hideResults(), che su questa via non chiamava nessuno (il radio del tipo e' gia' checked,
+  // quindi nemmeno il suo change parte). Restava la barra compatta in cima, senza sfondo dello
+  // stato-vuoto e senza niente sotto, fino alla ricerca successiva. Gli altri due rami la
+  // pulizia ce l'hanno gia': i Ricambi qui sopra, l'ingresso in un'area qui sotto.
+  if (area(prev) && !attiva && !ricambi) hideResults();
   // Competitor e' l'unica area che tiene la barra: ha una riga di campi sua.
   document.getElementById('competitorFields').classList.toggle('d-none', searchMode !== 'competitor');
   if (attiva) {
@@ -3488,7 +3494,17 @@ function testoHTML(r) {
  */
 function competitorDaAnnuncio(r) {
   if (!r || r.venditore !== 'concessionario') return null;
-  if (r.fonte === 'moto') return r.vetrinaUrl ? { url: r.vetrinaUrl } : null;
+  if (r.fonte === 'moto') {
+    if (!r.vetrinaUrl) return null;
+    // `fonte` e `id` servono SOLO a riconoscere chi e' gia' in elenco: si aggiunge comunque
+    // dall'url (sotto), che e' anche l'unico campo che la rotta legge. Senza di loro il
+    // confronto con `cpVoci` era 'moto' contro `undefined` — sempre falso — e ogni clic su
+    // un concessionario gia' in elenco scaricava la sua vetrina da dealer.moto.it per
+    // sentirsi rispondere 409. L'id di una vetrina Moto.it e' il suo slug, cioe' il primo
+    // pezzo del percorso: e' quello che il server salva (motoit-vetrina: `id: slug`).
+    const slug = (String(r.vetrinaUrl).match(/^https?:\/\/dealer\.moto\.it\/([A-Za-z0-9][A-Za-z0-9._-]{1,59})(?:[/?#]|$)/i) || [])[1] || null;
+    return { url: r.vetrinaUrl, fonte: 'moto', id: slug, nome: r.venditoreNome || null };
+  }
   if ((r.fonte === 'subito' || r.fonte === 'autoscout') && r.venditoreId) {
     return { fonte: r.fonte, id: String(r.venditoreId), nome: r.venditoreNome || null };
   }
@@ -3515,7 +3531,9 @@ async function aggiungiVenditoreAlCompetitor(r, btn) {
     // smettono subito di offrire "Aggiungi".
     if (res.status === 409) {
       toast(d.error || 'Era gia\' nell\'elenco'); btn.textContent = 'Gia\' in Competitor';
-      if (d.voce && Array.isArray(cpVoci)) cpVoci = cpVoci.concat([d.voce]);
+      // La voce del 409 puo' essere GIA' in elenco — e' proprio quello che il server sta
+      // dicendo: concatenarla senza guardare la faceva comparire due volte nella sezione.
+      if (d.voce && Array.isArray(cpVoci) && !cpVoci.some(v => cpChiave(v) === cpChiave(d.voce))) cpVoci = cpVoci.concat([d.voce]);
       return;
     }
     if (!res.ok || !d.ok) { showError(d.error || 'Non riuscito'); btn.disabled = false; btn.textContent = testo; return; }
@@ -3888,6 +3906,12 @@ function gommeCorpoHTML(r, k) {
   const d = st.d || {};
   const calz = (d.calzate || []).filter(c => c.misura);
   if (!calz.length) {
+    // ZERO MISURE HA DUE CAUSE, E NON SI DICONO CON LA STESSA FRASE. Lo scraper accende
+    // `sospetto` quando la pagina ha le generazioni ma nessuna riga leggibile: li' e' il NOSTRO
+    // parser a non sapere piu' leggere la tabella, e la frase qui sotto affermerebbe un fatto sul
+    // veicolo partendo da un guasto nostro. Un modello che Wheel-Size non ha risponde 404 e
+    // finisce nel ramo `ko`: un vuoto con `sospetto` non e' mai «questo mezzo non ha calzate».
+    if (d.sospetto) return `<div class="gom-att">Misure non leggibili adesso: ${escapeHtml(d.sospetto)}.</div>`;
     // Wheel-Size mette la misura in chiaro solo sul primo allestimento di ogni generazione:
     // se qui non ce n'e' nessuna, dirlo e' l'unica cosa onesta — un riquadro vuoto no.
     // Il nome che si dice deve essere quello DAVVERO interrogato: il server ripulisce il
@@ -4599,10 +4623,12 @@ async function markRicercaRead(id, url) {
   const s = savedSearches.find(x => x.id === id);
   if (s) {
     if (url) {
-      // Uno solo in meno, non la coda intera: il conteggio deve dire la verita' anche
-      // prima del prossimo giro sul server.
+      // Tanti in meno quante sono le righe tolte, non la coda intera e nemmeno uno fisso: di
+      // un annuncio possono esserci piu' avvisi vivi ('nuovo' e poi 'calo'), il server li
+      // segna letti insieme, e scalarne uno solo lasciava il badge piu' alto delle righe.
+      const prima = (s.alerts || []).length;
       s.alerts = (s.alerts || []).filter(a => a.url !== url);
-      s.novita = Math.max(0, (s.novita || 0) - 1);
+      s.novita = Math.max(0, (s.novita || 0) - (prima - s.alerts.length));
       s.digest = s.alerts.reduce((d, a) => { d[a.motivo] = (d[a.motivo] || 0) + 1; return d; }, {});
     } else { s.novita = 0; s.digest = {}; s.alerts = []; }
     updateNovitaBadge();
@@ -6580,6 +6606,9 @@ function cpSchedaHTML(v) {
   ].filter(Boolean).join('');
   // La riga chiusa dice chi e' e dov'e', e basta. Tutto il resto — contatti, orari,
   // servizi, descrizione, numeri — sta dentro, e ogni pezzo si richiude per conto suo.
+  // «vetrina ↗» solo se l'url c'e': le voci entrate da `da-annuncio` lo hanno null
+  // (l'annuncio porta l'id del venditore, non il link), e un href "null" e' un percorso
+  // relativo sull'origine dell'app.
   return `<article class="cp-scheda${v.mio ? ' cp-mio' : ''}${aperto ? ' cp-aperto' : ''}" data-cid="${escapeHtml(cpChiave(v))}">
     <details class="cp-det"${cpAperte.has(cpChiave(v)) ? ' open' : ''} data-cpdet="${escapeHtml(cpChiave(v))}">
       <summary class="cp-sum">
@@ -6593,7 +6622,7 @@ function cpSchedaHTML(v) {
           ${quando}
           ${st && st.stato === 'ok' ? `<button type="button" class="cp-btn cp-mostra${aperto ? ' attivo' : ''}">${aperto ? 'Annunci a schermo' : 'Vedi gli annunci'}</button>` : ''}
           <button type="button" class="cp-btn cp-aggiorna">${st && st.stato === 'ok' ? 'Aggiorna' : 'Scarica il parco'}</button>
-          <a class="cp-btn cp-link" href="${escapeHtml(v.url)}" target="_blank" rel="noopener noreferrer">vetrina ↗</a>
+          ${v.url ? `<a class="cp-btn cp-link" href="${escapeHtml(v.url)}" target="_blank" rel="noopener noreferrer">vetrina ↗</a>` : ''}
           ${cpUnisciHTML(v)}
           <button type="button" class="cp-btn cp-togli" title="Togli dall'elenco">✕</button>
         </div>
@@ -6797,7 +6826,19 @@ function cpMostraParco(chiave) {
 }
 
 async function cpTogli(chiave) {
-  try { await fetch(`/api/competitor/${encodeURIComponent(chiave)}`, { method: 'DELETE' }); } catch (_) {}
+  // L'ESITO DELLA DELETE SI LEGGE. A magazzino illeggibile il server risponde 503 e NON
+  // scrive (`vociPerScrivere` esiste apposta): la voce e' ancora su disco, e toglierla dallo
+  // schermo mentirebbe per tutta la sessione — `cpApri()` rilegge l'elenco solo `if (!cpVoci)`
+  // e `cpChiudi()` non lo azzera, quindi non basta riaprire la sezione: ci vuole un F5.
+  // Il 404 invece converge col disco (li' non c'e' piu'): quella la voce si toglie.
+  cpErrore = null;
+  let tolta = false;
+  try {
+    const r = await fetch(`/api/competitor/${encodeURIComponent(chiave)}`, { method: 'DELETE' });
+    tolta = r.ok || r.status === 404;
+    if (!tolta) { const j = await r.json().catch(() => ({})); cpErrore = j.error || 'non riesco a toglierlo'; }
+  } catch (_) { cpErrore = 'il server non risponde'; }
+  if (!tolta) { cpRender(); return; }
   cpVoci = (cpVoci || []).filter(v => cpChiave(v) !== chiave);
   delete cpParchi[chiave];
   // Se a schermo c'erano i SUOI annunci, vanno via con lui: restare li' vorrebbe dire
@@ -7017,6 +7058,8 @@ let asDati = null;         // l'ultima risposta dell'elenco
 let asFiltri = null;       // marche e province viste dal magazzino
 let asStato = { tipo: 'moto', marca: '', provincia: '', q: '', prezzoMax: '', soloSingoli: false };
 let asInVolo = false;
+let asDaRifare = false;    // un filtro e' cambiato mentre la chiamata era in volo
+let asAttesa = null;       // la catena in corso, per chi la trova gia' partita
 
 const asEl = () => document.getElementById('astePanel');
 const asEuro = n => (n == null ? '—' : '€ ' + Number(n).toLocaleString('it-IT'));
@@ -7048,25 +7091,58 @@ function asChiudi() {
   const el = asEl(); if (el) { el.classList.add('d-none'); el.innerHTML = ''; }
 }
 
-async function asCarica() {
-  if (asInVolo) return;
+/**
+ * UNA RICHIESTA ALLA VOLTA, MA CHI ARRIVA DOPO NON SI SCARTA. Chi tocca un filtro mentre siamo
+ * in volo ha gia' scritto in `asStato`: scartarlo lascerebbe i selettori nuovi sopra la lista
+ * vecchia PER SEMPRE, perche' la risposta non dice con quali filtri e' stata servita e nessuno
+ * riproverebbe. Quindi si segna la richiesta e si rilancia prima di disegnare.
+ * A chi arriva a cose iniziate si rende la promessa dell'INTERA catena: il ripristino del fuoco
+ * (in fondo) deve girare dopo l'ULTIMO asRender(), non prima di quello della chiamata in corso.
+ */
+function asCarica() {
+  if (asInVolo) { asDaRifare = true; return asAttesa; }
   asInVolo = true;
-  try {
-    const q = new URLSearchParams({ tipo: asStato.tipo });
-    if (asStato.marca) q.set('marca', asStato.marca);
-    if (asStato.provincia) q.set('provincia', asStato.provincia);
-    if (asStato.q) q.set('q', asStato.q);
-    if (asStato.prezzoMax) q.set('prezzoMax', asStato.prezzoMax);
-    if (asStato.soloSingoli) q.set('soloSingoli', '1');
-    const [d, f] = await Promise.all([
-      fetch('/api/aste?' + q).then(r => r.json()),
-      fetch('/api/aste/filtri?tipo=' + asStato.tipo).then(r => r.json()),
-    ]);
-    asDati = d; asFiltri = f;
-  } catch (_) {
-    asDati = { ok: false, lotti: [], errore: 'non raggiungibile' };
-  } finally { asInVolo = false; }
-  asRender();
+  asAttesa = (async () => {
+    try {
+      do {
+        asDaRifare = false;
+        try {
+          // IL TETTO SI CHIEDE, ALTRIMENTI LO METTE LA ROTTA: senza `limite` sono 500, e
+          // l'elenco e' ordinato per data di vendita crescente — i tagliati sarebbero i lotti
+          // con vendita piu' LONTANA, cioe' gli unici su cui c'e' ancora tempo per preparare
+          // un'offerta. In silenzio, per giunta: la risposta non porta il totale vero e la riga
+          // del conteggio mostra quelli arrivati. Il magazzino vive a un soffio dal 500 (491 auto
+          // vive al 2026-09-14, con un giro che ne muove piu' di cento per volta), quindi si
+          // chiede il massimo che la rotta accetta.
+          const q = new URLSearchParams({ tipo: asStato.tipo, limite: '2000' });
+          if (asStato.marca) q.set('marca', asStato.marca);
+          if (asStato.provincia) q.set('provincia', asStato.provincia);
+          if (asStato.q) q.set('q', asStato.q);
+          if (asStato.prezzoMax) q.set('prezzoMax', asStato.prezzoMax);
+          if (asStato.soloSingoli) q.set('soloSingoli', '1');
+          const [d, f] = await Promise.all([
+            fetch('/api/aste?' + q).then(r => r.json()),
+            fetch('/api/aste/filtri?tipo=' + asStato.tipo).then(r => r.json()),
+          ]);
+          // Un 500 della rotta ha corpo JSON valido, quindi `r.json()` riesce e il catch non
+          // scatterebbe: senza questa riga il guasto del server arriverebbe a schermo travestito
+          // da magazzino vuoto, e in silenzio (le rotte scrivono `error`, l'avviso legge `errore`).
+          if (!d || !d.ok || !f || !f.ok) throw new Error('risposta non valida');
+          asDati = d; asFiltri = f;
+        } catch (_) {
+          // LA RETE CHE CADE NON SVUOTA IL MAGAZZINO. Sostituire `asDati` in blocco cancellava
+          // l'ultima lista buona, e da li' asVuoto accusava il magazzino di essere vuoto quando
+          // era pieno, spingendo su Aggiorna — cioe' un giro intero sul portale del ministero per
+          // una fetch fallita. Si tiene il dato e si segna solo l'errore, come e' sempre stato
+          // per `asFiltri`, che il catch non tocca: l'avviso «potrebbe non essere aggiornato»
+          // presuppone appunto che un elenco ci sia ancora.
+          asDati = { ...(asDati || { ok: false, lotti: [] }), errore: 'non raggiungibile' };
+        }
+      } while (asDaRifare);
+    } finally { asInVolo = false; }
+    asRender();
+  })();
+  return asAttesa;
 }
 
 /**
@@ -7217,12 +7293,23 @@ document.getElementById('astePanel')?.addEventListener('click', async e => {
     b.disabled = true; b.textContent = 'Aggiorno…';
     try {
       const r = await fetch('/api/aste/aggiorna', { method: 'POST' }).then(x => x.json());
-      if (!r.ok) alert(r.error || 'aggiornamento non riuscito');
+      // IL MOTIVO STA IN `motivo`, NON IN `error`. Il giro che fallisce sulla FONTE e' un 200 con
+      // `{ok:false, motivo}` — scelta dichiarata nella rotta — e `error` lo scrivono solo il 429 e
+      // il 500. Leggendo il solo `error` restava la frase generica anche quando lo scraper era
+      // rotto per sempre («fe-config senza msUrl utilizzabile»): uno ci legge un intoppo di
+      // passaggio e ripreme, bruciando le altre due fiches orarie per lo stesso errore.
+      if (!r.ok) alert(r.error || r.motivo || 'aggiornamento non riuscito');
     } catch (_) { alert('server non raggiungibile'); }
     return asCarica();
   }
   const box = e.target.closest('[data-aslotto]');
-  if (box && !e.target.closest('a')) return asDettaglio(box, box.dataset.aslotto, box.dataset.astipo2);
+  // Il dettaglio VIVE dentro la card: senza l'uscita su `.as-det` ogni clic sul suo contenuto —
+  // il termine, i beni, il bianco del box, o il rilascio di un trascinamento per copiarsi
+  // «procedura 431/2024» nel gestionale — risalirebbe fin qui e lo richiuderebbe, portandosi via
+  // la selezione. E riaprirlo, finche' non e' in cache, costa una chiamata al portale e un
+  // gettone di rate-limit. Si chiude dalle righe della card, che restano scoperte.
+  if (box && !e.target.closest('a') && !e.target.closest('.as-det'))
+    return asDettaglio(box, box.dataset.aslotto, box.dataset.astipo2);
 });
 document.getElementById('astePanel')?.addEventListener('change', e => {
   if (e.target.id === 'asMarca') asStato.marca = e.target.value;
@@ -7240,11 +7327,23 @@ document.getElementById('astePanel')?.addEventListener('input', e => {
   else asStato.prezzoMax = e.target.value;
   clearTimeout(asTimer);
   asTimer = setTimeout(() => {
-    const attivo = document.activeElement && document.activeElement.id;
+    const fuoco = document.activeElement;
+    const attivo = fuoco && fuoco.id;
+    // SI SALVA ANCHE DOVE STAVA IL CURSORE, non solo in quale casella. Rimetterlo sempre in coda
+    // andava bene solo a chi scrive in fondo: chi stava correggendo in mezzo alla parola se lo
+    // vedeva saltare alla fine 350 ms dopo l'ultima battuta, e le lettere seguenti finivano nel
+    // punto sbagliato. Su `asPrezzo` (type=number) la selezione non esiste e vale null: la coda
+    // resta il ripiego per quel caso e per chi arriva qui senza una casella a fuoco.
+    const selDa = fuoco && fuoco.type !== 'number' ? fuoco.selectionStart : null;
+    const selA = fuoco && fuoco.type !== 'number' ? fuoco.selectionEnd : null;
     asCarica().then(() => {
       // Il ridisegno rifa' gli input: senza questo, chi scrive perde il cursore a ogni pausa.
       const el = attivo && document.getElementById(attivo);
-      if (el) { el.focus(); if (el.setSelectionRange && el.type !== 'number') el.setSelectionRange(el.value.length, el.value.length); }
+      if (el) {
+        el.focus();
+        if (el.setSelectionRange && el.type !== 'number')
+          el.setSelectionRange(selDa == null ? el.value.length : selDa, selA == null ? el.value.length : selA);
+      }
     });
   }, 350);
 });

@@ -1739,7 +1739,9 @@ select.cp-unisci { max-width: 190px; }
 .as-urgente { color: #c0392b; font-weight: 600; }
 .as-riga3 { font-size: 0.76rem; color: var(--text-muted); margin-top: 4px; }
 
-.as-detbox { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
+/* Il dettaglio non e' un bersaglio da clic: il testo qui dentro si seleziona e si copia, e la
+   mano ereditata da .as-lotto direbbe il contrario. */
+.as-detbox { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; cursor: auto; }
 .as-termine { font-size: 0.86rem; margin-bottom: 6px; }
 .as-sotto { margin-top: 8px; font-size: 0.82rem; }
 .as-sotto ul { margin: 4px 0 0; padding-left: 18px; }
