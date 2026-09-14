@@ -19,6 +19,7 @@ process.env.USER_DATA_PATH = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-reg-'));
 const auth = require('../backend/auth');
 const dbmod = require('../backend/utenti-db');
 const reg = require('../backend/registrazioni');
+const route = require('../backend/registrazioni-route');
 
 const ADMIN = 'proprie8';
 
@@ -235,4 +236,81 @@ test('registro: anche il rifiuto e la revoca lasciano traccia', () => {
   assert.ok(eventi.includes('revocata'), 'la revoca non e\' stata annotata');
   // Revocare toglie l'ACCESSO, non i dati.
   assert.strictEqual(reg.revoca('nessuno-cosi'), null, 'revocare chi non c\'e\' non inventa una riga');
+});
+
+// ── La porta pubblica, e il suo freno ────────────────────────────────────────
+
+/** Un finto `app` che tiene l'ultimo handler di ogni rotta, come la prova delle rotte Aste. */
+function montaRotte() {
+  const H = {};
+  const app = {
+    get: (p, ...h) => { H['GET ' + p] = h[h.length - 1]; },
+    post: (p, ...h) => { H['POST ' + p] = h[h.length - 1]; },
+  };
+  // I limitatori nascono dentro `mount`: ogni prova parte con i suoi, non con quelli di prima.
+  route.mount(app, { json: (req, res, next) => next() });
+  return H;
+}
+function posta(H, body, ip) {
+  const res = { code: 200, body: null };
+  res.status = c => { res.code = c; return res; };
+  res.json = b => { res.body = b; return res; };
+  res.set = () => res;
+  H['POST /api/registrazione']({ body, ip }, res);
+  return res;
+}
+
+test('registrazione: un tentativo RIFIUTATO non brucia il posto dei dieci minuti', () => {
+  daCapo();
+  const H = montaRotte();
+  const ip = '10.0.0.42';
+
+  // Il campo del modulo e' `type="email"`, che per specifica accetta un dominio senza punto:
+  // «mario@gmail» arriva davvero fin qui, il browser non lo ferma.
+  const sbagliata = posta(H, { nome: 'Mario Rossi', email: 'mario@gmail' }, ip);
+  assert.strictEqual(sbagliata.code, 400);
+  assert.strictEqual(reg.viveContate(), 0, 'niente e\' entrato in coda');
+
+  // Corregge il refuso e rimanda. Prima si sentiva rispondere «hai gia' mandato una richiesta»
+  // senza averne mandata nessuna, e questa e' l'unica porta pubblica per chiedere un accesso.
+  const buona = posta(H, { nome: 'Mario Rossi', email: 'mario@gmail.com' }, ip);
+  assert.deepStrictEqual([buona.code, buona.body.ok], [200, true]);
+  assert.strictEqual(reg.viveContate(), 1);
+
+  // Ma il tetto vero resta quello che era: una richiesta ACCETTATA ogni dieci minuti.
+  const seconda = posta(H, { nome: 'Luigi Verdi', email: 'luigi@esempio.it' }, ip);
+  assert.strictEqual(seconda.code, 429);
+  assert.match(seconda.body.error, /Hai gia' mandato una richiesta/);
+  assert.strictEqual(reg.viveContate(), 1, 'la seconda non doveva entrare in coda');
+});
+
+test('registrazione: il magazzino rotto non costa il posto a chi non c\'entra', () => {
+  daCapo();
+  const H = montaRotte();
+  const ip = '10.0.0.43';
+  const vero = dbmod.stato;
+
+  dbmod.stato = () => 'assente';
+  try {
+    assert.strictEqual(posta(H, { nome: 'Nina Gialli', email: 'nina@esempio.it' }, ip).code, 503);
+  } finally {
+    dbmod.stato = vero;
+  }
+  // Il registro torna, e la stessa persona deve poter chiedere: il guasto era nostro.
+  const dopo = posta(H, { nome: 'Nina Gialli', email: 'nina@esempio.it' }, ip);
+  assert.deepStrictEqual([dopo.code, dopo.body.ok], [200, true]);
+});
+
+test('registrazione: martellare con dati invalidi non resta gratis', () => {
+  daCapo();
+  const H = montaRotte();
+  const ip = '10.0.0.44';
+  // Ogni colpo fa girare la purga sul database: il freno sui tentativi c'e' ancora, e' solo
+  // abbastanza largo da non farsi chiudere in faccia da un refuso.
+  for (let i = 0; i < 10; i++) {
+    assert.strictEqual(posta(H, { nome: 'Tizio Uno', email: 'niente' }, ip).code, 400, `giro ${i}`);
+  }
+  const undicesimo = posta(H, { nome: 'Tizio Uno', email: 'tizio@esempio.it' }, ip);
+  assert.strictEqual(undicesimo.code, 429);
+  assert.match(undicesimo.body.error, /Troppi tentativi/);
 });

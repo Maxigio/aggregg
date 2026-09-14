@@ -50,7 +50,16 @@ function mount(app, deps = {}) {
   const clientIp = deps.clientIp || (req => req.ip || '');
   const chiaveLimite = deps.chiaveLimite || (req => 'ip:' + clientIp(req));
 
+  // DUE freni, perche' contano due cose diverse. Il tetto vero e' uno solo — una richiesta che
+  // entra in coda ogni dieci minuti — ma addebitarlo PRIMA di validare voleva dire che il primo
+  // errore di battitura, o un 503 del magazzino, bruciava l'unico posto: chi correggeva l'email
+  // si sentiva rispondere «hai gia' mandato una richiesta» con la coda del proprietario vuota, e
+  // questa e' l'unica porta pubblica per chiedere un accesso. Quindi il posto si paga solo a
+  // richiesta accettata, e i tentativi respinti li conta questo secondo limitatore, piu' largo:
+  // senza, martellare la rotta con dati invalidi tornerebbe gratis, e ogni colpo fa comunque
+  // girare la purga sul database.
   const limiteRichieste = crea({ max: 1, finestra: FINESTRA, cosa: 'richieste di registrazione' });
+  const limiteTentativi = crea({ max: 10, finestra: FINESTRA, cosa: 'tentativi di registrazione' });
   const limiteInviti = crea({ max: 10, finestra: FINESTRA, cosa: 'tentativi sul link di invito' });
 
   // Il magazzino rotto non deve diventare "nessun conflitto": chi scrive credenziali si ferma.
@@ -64,12 +73,19 @@ function mount(app, deps = {}) {
   // ── Pubbliche ──────────────────────────────────────────────────────────────
 
   app.post('/api/registrazione', json, (req, res) => {
-    const stato = limiteRichieste.consuma(chiaveLimite(req));
+    const chiave = chiaveLimite(req);
+    const tentativo = limiteTentativi.consuma(chiave);
+    if (!tentativo.ok) return res.status(429).json({ error: limiteTentativi.messaggio(tentativo, 'Troppi tentativi di registrazione.') });
+    // Qui si GUARDA soltanto: il posto si addebita piu' sotto, quando la richiesta e' in coda.
+    const stato = limiteRichieste.stato(chiave);
     // La `testa` e' una frase chiusa: `messaggio()` ci attacca in coda "Riprova fra …".
     if (!stato.ok) return res.status(429).json({ error: limiteRichieste.messaggio(stato, 'Hai gia\' mandato una richiesta.') });
     if (!magazzinoPronto(res)) return;
     try {
       const r = reg.chiedi({ nome: req.body && req.body.nome, email: req.body && req.body.email, ip: clientIp(req) });
+      // Fra il controllo qui sopra e questo addebito non c'e' niente di asincrono (`chiedi` e'
+      // sincrono): due richieste in parallelo non possono passare tutte e due.
+      limiteRichieste.consuma(chiave);
       // Non si torna l'id della richiesta: a chi ha chiesto non serve, e sarebbe un numero da
       // provare a indovinare sulle rotte del pannello.
       res.json({ ok: true, nome: r.nome });

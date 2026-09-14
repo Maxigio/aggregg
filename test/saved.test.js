@@ -103,6 +103,45 @@ test('recordCheck: gli annunci di una fonte MUTA non vengono sfrattati da seen',
  * faceva crescere il magazzino senza limite, e loadAll — sincrono, chiamato a ogni GET/check
  * e per tutte le persone in /api/saved/altri — bloccava l'event loop dell'intero server.
  */
+/**
+ * REGRESSIONE. `saveAll` apriva una transazione DEFERITA: leggeva l'elenco e solo dopo scriveva.
+ * In WAL, se un'altra connessione committa fra quella lettura e la prima scrittura, SQLite
+ * risponde SQLITE_BUSY_SNAPSHOT (517) SENZA passare dal busy handler — `busy_timeout` non
+ * interviene e la scrittura muore all'istante. Il secondo scrittore non e' teorico:
+ * `scripts/richieste.js --approva/--rifiuta/--revoca` gira via ssh sulla stessa macchina e
+ * scrive nel registro dello stesso file, e quello che si perde e' il giro di un check gia'
+ * addebitato sul tetto giornaliero.
+ *
+ * La finestra si centra da sola: `JSON.stringify` della ricerca avviene DENTRO saveAll, fra la
+ * SELECT e il primo INSERT, quindi `toJSON` e' il momento esatto in cui l'altro deve scrivere.
+ */
+test('saveAll: un altro scrittore fra la lettura e la scrittura non fa cadere il salvataggio', () => {
+  const { DatabaseSync } = require('node:sqlite');
+  const dbmod = require('../backend/utenti-db');
+  const utente = 'scrittore-concorrente';
+  const altro = new DatabaseSync(dbmod.percorso());
+  altro.exec('PRAGMA busy_timeout = 0');   // se il lucchetto e' preso rinuncia subito: la prova non deve durare 3s
+  let tentato = false, riuscito = false;
+  const params = {
+    tipo: 'auto', marca: 'BMW',
+    toJSON() {
+      if (!tentato) {
+        tentato = true;
+        try {
+          altro.prepare('INSERT INTO registro (quando, evento) VALUES (?,?)').run(Date.now(), 'prova-concorrenza');
+          riuscito = true;
+        } catch (_) { /* il lucchetto di scrittura e' di chi sta salvando: e' quello che deve succedere */ }
+      }
+      return { tipo: 'auto', marca: 'BMW' };
+    },
+  };
+  const s = saved.addSaved(utente, { label: 'concorrenza', params });
+  altro.close();
+  assert.ok(tentato, 'senza una scrittura nella finestra la prova non prova niente');
+  assert.ok(!riuscito, 'con BEGIN IMMEDIATE il lucchetto e\' gia\' nostro: l\'altro scrittore aspetta');
+  assert.ok(saved.getSaved(utente, s.id), 'la ricerca deve essere finita sul magazzino');
+});
+
 test('addSaved: oltre il tetto per persona si rifiuta con TROPPE_RICERCHE', () => {
   const MAX = saved._const.MAX_RICERCHE;
   const utente = 'tetto-test';                    // utente suo: non sporca i conteggi degli altri test

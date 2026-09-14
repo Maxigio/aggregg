@@ -152,6 +152,9 @@ function setPassword(pw) {
   // Sovrascrivere un file che non si e' riusciti a leggere cancellerebbe la
   // password demo e il resto senza accorgersene: meglio fermarsi.
   if (cfg === ILLEGGIBILE) throw new Error(`${filePath()} esiste ma non si legge: correggilo prima di riscriverlo.`);
+  // Il proprietario non e' esente: salt/hash suoi si provano PRIMA delle persone, quindi una
+  // password gia' di un iscritto lo farebbe entrare come proprietario senza fare niente.
+  if (chiUsaPassword(cfg, pw, 'owner')) throw erroreOccupata();
   const prev   = cfg || {};
   const salt   = crypto.randomBytes(16).toString('hex');
   const hash   = crypto.scryptSync(String(pw), salt, 64).toString('hex');
@@ -161,8 +164,10 @@ function setPassword(pw) {
   return p;
 }
 
-// Imposta/aggiorna la password DEMO (ospite read-only). Read-modify-write:
-// preserva salt/hash/secret principali → NON invalida la sessione di papà.
+// Imposta/aggiorna la password DEMO (ospite read-only). Read-modify-write: preserva
+// salt/hash/secret principali → NON invalida la sessione di papà, ne' quelle delle persone
+// con un nome. Gli ospiti gia' entrati invece SI', ed e' il motivo per cui la si cambia: il
+// loro cookie e' firmato anche con demoHash (chiaveFirma), che qui diventa un altro.
 function setDemoPassword(pw) {
   if (!pw || String(pw).length < MIN_LEN) {
     throw new Error(`Password demo troppo corta (minimo ${MIN_LEN} caratteri).`);
@@ -170,6 +175,7 @@ function setDemoPassword(pw) {
   const cfg = load();
   if (cfg === ILLEGGIBILE) throw new Error(`${filePath()} esiste ma non si legge: correggilo prima di riscriverlo.`);
   if (!cfg) throw new Error('Imposta prima la password principale (scripts/set-password.js).');
+  if (chiUsaPassword(cfg, pw, 'demo')) throw erroreOccupata();
   cfg.demoSalt = crypto.randomBytes(16).toString('hex');
   cfg.demoHash = crypto.scryptSync(String(pw), cfg.demoSalt, 64).toString('hex');
   const p = filePath();
@@ -201,6 +207,37 @@ function matchHash(pw, salt, hash) {
   const got    = crypto.scryptSync(String(pw == null ? '' : pw), salt, 64);
   const stored = Buffer.from(hash, 'hex');
   return got.length === stored.length && crypto.timingSafeEqual(got, stored);
+}
+
+/**
+ * CHI USA GIA' QUESTA PASSWORD, o null. `esclusoId` e' chi la sta (ri)prendendo per se'.
+ *
+ * Due password uguali non sono due accessi: `verifica` torna il PRIMO match, quindi chi entra
+ * col doppione viene scambiato per l'altro — id, dati salvati, quota giornaliera, riga nel
+ * registro accessi. Vale in tutte le direzioni: il proprietario si prova PRIMA delle persone,
+ * quindi una sua password gia' di un iscritto regalerebbe a quell'iscritto i poteri pieni.
+ *
+ * L'ESCLUSIONE NON E' UN DETTAGLIO: `scripts/utenti-da-env.js` rispecchia lo STESSO .env a ogni
+ * giro, quindi senza di essa una persona riscritta con la sua password di sempre combacerebbe
+ * con SE STESSA e lo specchio non girerebbe piu'.
+ */
+function chiUsaPassword(cfg, pw, esclusoId = null) {
+  if (!leggibile(cfg)) return null;
+  const escluso = esclusoId == null ? null : String(esclusoId);
+  if (escluso !== 'owner' && matchHash(pw, cfg.salt, cfg.hash)) return 'owner';
+  for (const p of cfg.persone || []) {
+    if (String(p.id) === escluso) continue;
+    if (matchHash(pw, p.salt, p.hash)) return String(p.id);
+  }
+  if (escluso !== 'demo' && matchHash(pw, cfg.demoSalt, cfg.demoHash)) return 'demo';
+  return null;
+}
+
+// Non si dice MAI con chi ha fatto collisione: sarebbe un oracolo sulle password degli altri.
+function erroreOccupata() {
+  const e = new Error('Questa password e\' gia\' in uso: scegline un\'altra.');
+  e.code = 'PASSWORD_OCCUPATA';
+  return e;
 }
 
 /**
@@ -259,6 +296,10 @@ function setPersona(nome, pw, ruolo = 'demo', origine = null) {
   const id = idDaNome(n);
   if (!id) throw new Error('Il nome non produce un identificativo utilizzabile.');
   if (ID_RISERVATI.has(id)) throw new Error(`"${id}" e' riservato: usa un altro nome.`);
+  // Il doppione si rifiuta PRIMA di scrivere, e vale per tutte le porte: qui passano lo script
+  // del .env e `set-password.js`, che una guardia loro non ce l'hanno. Escluso questo id, se no
+  // lo specchio del .env troverebbe ogni persona in collisione con se stessa (chiUsaPassword).
+  if (chiUsaPassword(cfg, pw, id)) throw erroreOccupata();
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(String(pw), salt, 64).toString('hex');
   const prima = (cfg.persone || []).find(p => String(p.id) === id);
@@ -295,10 +336,10 @@ function setPersona(nome, pw, ruolo = 'demo', origine = null) {
  *     persona che gia' c'e' le riscrive la password. E siccome sovrascrivere rigenera il
  *     `secret`, sarebbe anche un logout di tutti quanti.
  *  2. Due password uguali sono UNA identita': `verifica` torna il PRIMO match, quindi chi entra
- *     col doppione viene scambiato per l'altro — id, dati, quota, riga nel registro accessi.
- *     Lo script del .env questo controllo ce l'ha gia' (`utenti-da-env.js`); qui serve lo stesso,
- *     perche' la password se la sceglie una persona che non sa quali sono gia' in uso. Non si
- *     dice MAI con chi ha fatto collisione: sarebbe un oracolo sulle password degli altri.
+ *     col doppione viene scambiato per l'altro — id, dati, quota, riga nel registro accessi. La
+ *     guardia sta in `setPersona` (vale per tutte le porte, .env compreso) e torna
+ *     PASSWORD_OCCUPATA: qui non se ne rifa' una seconda, che raddoppierebbe soltanto gli
+ *     scrypt dentro il lock.
  *
  * Fra il controllo e la scrittura non c'e' nessun `await`: su un thread solo, il controllo e la
  * riga che nasce sono un gesto unico. Chi tocchera' questa funzione lo tenga.
@@ -317,11 +358,6 @@ function creaPersona(nome, pw, ruolo = 'demo', origine = 'web') {
     throw e;
   }
   if (!pw || String(pw).length < MIN_LEN) throw new Error(`Password troppo corta (minimo ${MIN_LEN} caratteri).`);
-  if (verifica(pw)) {
-    const e = new Error('Questa password e\' gia\' in uso: scegline un\'altra.');
-    e.code = 'PASSWORD_OCCUPATA';
-    throw e;
-  }
   return setPersona(n, pw, ruolo, origine);
 }
 
@@ -355,34 +391,47 @@ function persone() {
 // questa forma, mai sulla stringa com'e' arrivata.
 const soloCifre = s => String(s || '').replace(/\D/g, '');
 
+const PREFISSO_ITALIA = '39';
+
+/**
+ * IL NUMERO IN FORMA INTERNAZIONALE, SEMPRE.
+ *
+ * "Ha gia' il prefisso del paese?" NON si deduce dalla lunghezza, e usare ">= 12 cifre" come
+ * sinonimo di "ce l'ha" apriva un buco d'identita': 12 e' la forma internazionale completa in
+ * Italia, ma sono 11 cifre in Francia, USA/Canada, Russia, Olanda, Belgio. Quei numeri
+ * finivano nel ramo "confronta le ultime 10 cifre" e combaciavano con l'italiano che ha la
+ * stessa coda — e il mittente non se lo inventa nessuno, la firma di Meta garantisce che il
+ * numero e' davvero suo (whatsapp/webhook.js), quindi era un numero estero VERO che si
+ * prendeva la persona: nome nel prompt del bot, scrape dall'IP di casa, quota consumata.
+ * Il prefisso si mette quando MANCA — 10 cifre sono la forma nazionale italiana, mobili 3xx —
+ * e da li' in poi si confrontano numeri interi.
+ */
+function formaInternazionale(numero) {
+  // "00" iniziale = prefisso di uscita internazionale (0039... ≡ +39...): via.
+  const cifre = soloCifre(numero).replace(/^00/, '');
+  return cifre.length === 10 ? PREFISSO_ITALIA + cifre : cifre;
+}
+
 /**
  * LA PERSONA DIETRO UN NUMERO WHATSAPP.
  *
  * Il bot riceve solo il numero del mittente: qui lo si trasforma in un'identita' — le stesse
  * voci di `persone` del login web, tramite il campo opzionale `telefono` (scripts/set-telefono.js).
- * Confronto per SUFFISSO (ultime 10 cifre, la lunghezza dei mobili italiani) dopo aver tolto
- * tutto cio' che non e' cifra: cosi' "+39 352 072 7252", "393520727252" e "00393520727252"
- * sono lo stesso numero, qualunque prefisso abbiano.
+ * Confronto sul numero INTERO in forma internazionale: "+39 352 072 7252", "393520727252",
+ * "00393520727252" e "3520727252" sono lo stesso numero; uno estero con la stessa coda di 10
+ * cifre non lo e'.
  *
  * @returns {{id:string, nome:string, ruolo:'full'|'demo'}|null}
  */
 function personaDaTelefono(numero) {
-  // "00" iniziale = prefisso di uscita internazionale (0039... ≡ +39...): via,
-  // cosi' il confronto per intero funziona a prescindere da come e' scritto il numero.
-  const cifre = soloCifre(numero).replace(/^00/, '');
-  if (cifre.length < 9) return null;   // troppo corto per essere un numero vero: niente match "per coda"
-  const coda = cifre.slice(-10);
+  const cifre = formaInternazionale(numero);
+  if (cifre.length < 9) return null;   // troppo corto per essere un numero vero
   const cfg = load();
   if (!leggibile(cfg)) return null;
   for (const p of cfg.persone || []) {
-    const tel = soloCifre(p.telefono).replace(/^00/, '');
+    const tel = formaInternazionale(p.telefono);
     if (tel.length < 9) continue;
-    // Se ENTRAMBI i lati hanno il prefisso internazionale (>=12 cifre) il match
-    // e' sull'intera stringa: un numero estero con la stessa coda di 10 cifre
-    // non puo' impersonare l'account. Se uno dei due e' senza prefisso, si
-    // torna al confronto per coda (tolleranza +39/0039).
-    const match = (tel.length >= 12 && cifre.length >= 12) ? tel === cifre : tel.slice(-10) === coda;
-    if (match) {
+    if (tel === cifre) {
       return { id: String(p.id), nome: p.nome || String(p.id), ruolo: p.ruolo === 'full' ? 'full' : 'demo' };
     }
   }
@@ -417,7 +466,24 @@ function setTelefono(idONome, telefono) {
 }
 
 /**
- * Token cookie: "<exp>.<ruolo>.<id>.<hmac(secret, exp.ruolo.id)>".
+ * LA CHIAVE CON CUI SI FIRMA — e per l'ospite condiviso non e' il solo `secret`.
+ *
+ * `checkSessione` riconfronta ogni cookie con l'elenco vivo, ma l'ospite anonimo in
+ * `cfg.persone` non c'e': la sua unica voce viva e' la credenziale demo. Legando la sua firma
+ * a `demoHash`, cambiare la password demo (`set-demo-password.js`) o ritirarla
+ * (`togliDemoCondiviso`, quello che fa lo specchio del .env) uccide SUBITO i cookie gia'
+ * emessi. Prima no: restavano buoni fino a TTL_MS, trenta giorni, e non esisteva nessun gesto
+ * che chiudesse fuori un ospite gia' entrato. Rigenerare il `secret` avrebbe chiuso lo stesso
+ * buco buttando pero' fuori anche papa' e i colleghi, che con l'ospite non c'entrano niente.
+ *
+ * Prezzo, una volta sola: i cookie demo firmati prima di questa riga non valgono piu'.
+ */
+function chiaveFirma(cfg, id) {
+  return id === 'demo' ? `${cfg.secret}.${cfg.demoHash || ''}` : cfg.secret;
+}
+
+/**
+ * Token cookie: "<exp>.<ruolo>.<id>.<hmac(chiaveFirma, exp.ruolo.id)>".
  *
  * Ruolo E identita' stanno DENTRO la firma: un ospite non puo' riscrivere il cookie per
  * diventare 'full', ne' per farsi passare per un collega — e l'id serve a dare a ognuno la
@@ -429,7 +495,7 @@ function makeToken(role = 'full', id = 'owner') {
   if (!ROLES.has(role)) role = 'full';
   const uid = String(id || 'owner').replace(/[^A-Za-z0-9_-]/g, '') || 'owner';
   const exp = Date.now() + TTL_MS;
-  const sig = crypto.createHmac('sha256', cfg.secret).update(`${exp}.${role}.${uid}`).digest('hex');
+  const sig = crypto.createHmac('sha256', chiaveFirma(cfg, uid)).update(`${exp}.${role}.${uid}`).digest('hex');
   return `${exp}.${role}.${uid}.${sig}`;
 }
 
@@ -457,7 +523,7 @@ function checkSessione(v) {
     return null;
   }
   if (!/^\d+$/.test(exp) || Number(exp) < Date.now()) return null;
-  const expect = crypto.createHmac('sha256', cfg.secret).update(signed).digest('hex');
+  const expect = crypto.createHmac('sha256', chiaveFirma(cfg, id)).update(signed).digest('hex');
   const a = Buffer.from(sig);
   const b = Buffer.from(expect);
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
@@ -466,7 +532,10 @@ function checkSessione(v) {
   // Senza, togliere una persona lasciava il suo cookie buono fino a 30 giorni, e un
   // declassamento full→demo restava full fino a scadenza, mentre due punti del repo
   // promettevano il contrario per iscritto. Costo: zero letture in piu' (il cfg e' quello
-  // gia' caricato qui sopra). 'owner' e 'demo' non stanno in cfg.persone e restano fuori.
+  // gia' caricato qui sopra). 'owner' e 'demo' non stanno in cfg.persone e restano fuori di
+  // qui: 'owner' perche' cambiargli la password rigenera il secret, 'demo' perche' la sua
+  // revoca passa dalla chiave di firma (chiaveFirma) — senza quella l'esenzione sarebbe un
+  // buco, non una scorciatoia.
   if (id !== 'owner' && id !== 'demo') {
     const p = (cfg.persone || []).find(x => String(x.id) === String(id));
     if (!p || (p.ruolo === 'full' ? 'full' : 'demo') !== role) return null;

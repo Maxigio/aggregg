@@ -352,6 +352,38 @@ test('creaPersona: una password gia\' in uso e\' un\'altra identita\', e si rifi
   assert.strictEqual(auth.verifica(PW.anna).id, 'anna-bianchi', 'Anna resta lei');
 });
 
+test('setPersona: la password di un altro non si assegna, nemmeno dal .env', () => {
+  // Il buco misurato: `creaPersona` (la porta del web) rifiutava il doppione, `setPersona` no —
+  // e lo specchio del .env confronta le password solo FRA le voci del .env, mentre chi si e'
+  // iscritto dal web sopravvive allo specchio e resta DAVANTI in cfg.persone (setPersona
+  // rimuove-e-ri-accoda). Aggiungere al .env la password di un iscritto non dava nessun errore,
+  // e chi entrava col doppione diventava LUI: stessi salvataggi, stessa quota, stesso registro.
+  for (const p of auth.persone()) auth.togliPersona(p.id);
+  auth.setPassword(PW.admin);
+  auth.creaPersona('Luca Bianchi', 'segreto12345');   // iscritto dal sito, origine 'web'
+
+  assert.throws(() => auth.setPersona('Giovanni Verdi', 'segreto12345', 'full'),
+    e => e.code === 'PASSWORD_OCCUPATA', 'la voce del .env si prendeva l\'identita\' di Luca');
+  assert.strictEqual(auth.persone().find(p => p.id === 'giovanni-verdi'), undefined,
+    'rifiutata ma scritta lo stesso');
+  assert.strictEqual(auth.verifica('segreto12345').id, 'luca-bianchi', 'Luca resta Luca');
+  assert.strictEqual(auth.verifica('segreto12345').ruolo, 'demo', 'e non eredita il ruolo del .env');
+
+  // Vale anche per il proprietario e per l'ospite condiviso: `verifica` prova salt/hash del
+  // proprietario PER PRIMI, quindi un AMR_ADMIN_PASSWORD uguale a quello di un iscritto faceva
+  // di quell'iscritto il proprietario — /api/logs compreso — senza che facesse niente.
+  assert.throws(() => auth.setPassword('segreto12345'), e => e.code === 'PASSWORD_OCCUPATA');
+  assert.throws(() => auth.setDemoPassword('segreto12345'), e => e.code === 'PASSWORD_OCCUPATA');
+  assert.strictEqual(auth.verifica('segreto12345').id, 'luca-bianchi');
+
+  // Ma lo specchio del .env deve continuare a girare: riscrivere la STESSA persona con la SUA
+  // password di sempre non e' una collisione, altrimenti utenti-da-env fallirebbe a ogni giro.
+  assert.doesNotThrow(() => auth.setPersona('Luca Bianchi', 'segreto12345', 'demo'));
+  assert.strictEqual(auth.verifica('segreto12345').id, 'luca-bianchi');
+
+  auth.togliPersona('luca-bianchi');
+});
+
 test('creaPersona: nasce demo, marcata "web", e la marcatura sopravvive al cambio password', () => {
   auth.setPassword(PW.admin);
   const nata = auth.creaPersona('Chiara Web', 'chiaraw1');

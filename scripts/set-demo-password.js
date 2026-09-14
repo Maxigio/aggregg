@@ -2,8 +2,10 @@
 /**
  * Imposta la password DEMO (ospite read-only) per far provare l'app.
  * Uso:  node scripts/set-demo-password.js "<password>"
- * Read-modify-write su auth.json: preserva la password principale + il secret
- * (NON invalida le sessioni). Richiede che la password principale esista già.
+ * Read-modify-write su auth.json: preserva la password principale + il secret, quindi non fa
+ * rifare il login a papà né alle persone con un nome. Chi era entrato con la VECCHIA password
+ * demo invece esce subito — il suo cookie è firmato anche con la credenziale demo — ed è
+ * proprio a questo che serve cambiarla. Richiede che la password principale esista già.
  * Chi entra con questa password può cercare e navigare, ma NON tocca il pannello
  * admin né le ricerche salvate (sola lettura, enforced server-side).
  */

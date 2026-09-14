@@ -5,7 +5,8 @@
  * Il bot WhatsApp risponde solo a chi riconosce, e riconoscere vuol dire risalire dal numero
  * del mittente a una persona di auth.json — le stesse persone del login web (set-password.js).
  * Qui si assegna o si toglie quel numero. Il prefisso e' libero: "+39 352 072 7252",
- * "393520727252" e "3520727252" sono lo stesso numero (il confronto e' sulle ultime 10 cifre).
+ * "393520727252" e "3520727252" sono lo stesso numero — un numero senza prefisso si intende
+ * italiano. Un numero ESTERO va scritto col suo prefisso, se no non verra' riconosciuto.
  *
  * Uso:
  *   node scripts/set-telefono.js "Giulia Rossi" "+39 352 072 7252"   assegna il numero

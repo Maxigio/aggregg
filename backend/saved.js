@@ -135,7 +135,13 @@ function saveAll(utente, list) {
   const d = apri();
   const u = chi(utente);
   const tieni = new Set(list.map(s => String(s.id)));
-  d.exec('BEGIN');
+  // IMMEDIATE perche' qui si LEGGE (la SELECT qui sotto) prima di scrivere. Con una transazione
+  // deferita lo snapshot si apre alla lettura e, se un'altra connessione committa prima del primo
+  // INSERT, SQLite risponde SQLITE_BUSY_SNAPSHOT senza passare dal busy handler: `busy_timeout`
+  // non aspetta niente e il salvataggio muore all'istante. Il secondo scrittore non e' teorico —
+  // `scripts/richieste.js` scrive sullo stesso file da un ALTRO processo, dove `withSavedLock` di
+  // server.js non arriva — e quello che si perde e' il giro di un check gia' addebitato.
+  d.exec('BEGIN IMMEDIATE');
   try {
     for (const r of d.prepare('SELECT id FROM ricerche WHERE utente=?').all(u)) {
       if (!tieni.has(String(r.id))) d.prepare('DELETE FROM ricerche WHERE utente=? AND id=?').run(u, String(r.id));
@@ -237,8 +243,8 @@ function getSaved(utente, id) { return loadAll(utente).find(s => s.id === id) ||
  * Con piu' persone il danno si moltiplicava: un collega che apriva un annuncio azzerava la
  * coda del proprietario.
  *
- * @param {string} url  l'avviso da segnare. Senza, si segnano tutti: e' il bottone
- *                      "segna tutti letti", un gesto esplicito e diverso dal clic su una riga.
+ * @param {string} url  l'annuncio su cui si e' cliccato. Senza, si segna tutta la coda: e' il
+ *                      bottone "segna tutti letti", un gesto esplicito e diverso dal clic.
  */
 function markRead(utente, id, url) {
   apri();                       // "non trovato" e "non leggibile" non sono la stessa risposta
@@ -247,9 +253,19 @@ function markRead(utente, id, url) {
   if (!s) return false;
   const coda = s.alerts || [];
   if (url) {
-    const a = coda.find(x => x.url === url && !x.letto);
-    if (!a) return false;
-    a.letto = true;
+    /**
+     * TUTTI GLI AVVISI DI QUELL'ANNUNCIO, perche' il clic dice solo l'URL.
+     *
+     * Un annuncio ne puo' avere piu' d'uno vivo insieme — 'nuovo' al primo avvistamento, 'calo'
+     * a un controllo dopo — e le chiavi di `alerted` sono distinte, quindi convivono. La coda
+     * e' in ordine cronologico ma lo schermo mostra il piu' recente in cima: cercare il PRIMO
+     * non letto segnava il piu' VECCHIO, cioe' un avviso che l'utente non ha aperto, e quello
+     * su cui aveva cliccato tornava non letto al ricarico. Aprire l'annuncio li riguarda tutti,
+     * ed e' gia' cio' che lo schermo fa (toglie ogni riga con quell'url).
+     */
+    const suoi = coda.filter(x => x.url === url && !x.letto);
+    if (!suoi.length) return false;
+    for (const a of suoi) a.letto = true;
   } else {
     coda.forEach(a => { a.letto = true; });
   }

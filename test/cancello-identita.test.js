@@ -215,10 +215,20 @@ test('tetto: il proprietario e i colleghi non hanno tetto', () => {
     assert.strictEqual(tetto('bruno-collega', 'full').passato, true);
   }
   assert.strictEqual(dbmod.ricercheOggi('owner'), 0, 'del proprietario non si tiene nemmeno il conto');
-  // E l'ospite anonimo non ha un nome a cui addebitare: passa, ma non scrive niente e non
-  // salva niente (il cancello gli nega tutto il resto).
-  assert.strictEqual(tetto('demo', 'demo').passato, true);
-  assert.strictEqual(dbmod.ricercheOggi('demo'), 0);
+});
+
+test('tetto: anche l\'ospite condiviso ha un tetto, e lo divide con tutti', () => {
+  // Il tetto difende il traffico che esce dall'IP di casa, non un elenco da scrivere: la
+  // password che gira di mano in mano e' l'identita' meno fidata di tutte, e prima era l'unica
+  // esente. Non avendo un nome paga su un secchio solo, condiviso fra tutti quelli che ce l'hanno.
+  const MAX = srv._TETTO_GIORNALIERO;
+  for (let i = 1; i <= MAX; i++) {
+    assert.strictEqual(tetto('demo', 'demo').passato, true, `la ricerca numero ${i} doveva passare`);
+  }
+  const oltre = tetto('demo', 'demo');
+  assert.strictEqual(oltre.passato, false, 'l\'ospite condiviso non e\' piu\' esente dal tetto');
+  assert.strictEqual(oltre.status, 429);
+  assert.strictEqual(dbmod.ricercheOggi('demo'), MAX, 'il conto e\' uno solo per tutta la password condivisa');
 });
 
 test('tetto: vale anche per la ricerca in-process del canale WhatsApp', async () => {
