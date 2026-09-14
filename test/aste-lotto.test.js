@@ -58,6 +58,20 @@ test('le sigle di due lettere non si leggono: nella targa ce n\'e\' sempre una',
   assert.equal(marcaDa('Autoveicolo MARCA DR Automobiles targato GPxxxEN', IDX).nome, 'DR Automobiles');
 });
 
+test('le parole comuni dell\'avviso non diventano la marca', () => {
+  // Acura, Quadro, Nero e Stock sono marche VERE del catalogo e insieme parole ordinarie
+  // dell'avviso: sono i casi veri misurati in magazzino, dove la marca veniva inventata dal
+  // corpo del testo (la marca giusta, «Kymco», qui e' scritta «KIMCO» e resta irriconoscibile).
+  const idx = creaIndice(['Acura', 'Fiat'], ['Quadro', 'Nero', 'Stock', 'Kymco']);
+  // «A CURA» incollato fa «acura»: una parola di UNA lettera non e' un pezzo di marca.
+  assert.equal(marcaDa('AUTOVETTURA MG TF CABRIOLET TARGATA CY, VENDITA A CURA DEL CUSTODE', idx), null);
+  assert.equal(marcaDa('MOTOVEICOLO KIMCO AGILITY, KM. 28.900 COME DA QUADRO DI ACCENSIONE', idx), null);
+  assert.equal(marcaDa('Ciclomotore APE 50 a tre ruote, carrozzeria di colore nero', idx), null);
+  assert.equal(marcaDa('Lotto 8: Stock composto da scooter e ciclomotore', idx), null);
+  // La marca vera, nello stesso testo, si legge lo stesso.
+  assert.equal(marcaDa('Autovettura FIAT Panda, km rilevati da quadro di accensione', idx).nome, 'Fiat');
+});
+
 test('i refusi del professionista restano non riconosciuti, e va bene cosi\'', () => {
   // Indovinarli vorrebbe dire un confronto sfocato, cioe' la porta dei falsi positivi che
   // brand-match documenta (Mars→Marshal). Meglio dichiarare «non riconosciuta».
@@ -72,6 +86,21 @@ test('il lotto cumulativo si marca, non si nasconde', () => {
   const singolo = leggi({ id: 2, descLotto: 'Motociclo Piaggio Medley' }, IDX, 'moto');
   assert.equal(singolo.cumulativo, false);
   assert.equal(singolo.marca, 'Piaggio');
+});
+
+test('un veicolo solo non diventa un cumulo per via di una parola', () => {
+  // Casi veri dal magazzino: la categoria DA SOLA non conta i beni. «Scooter» e' invariante, e
+  // «veicoli»/«autovetture» stanno anche nella chiusa di rito e nel link del gestore. Chi spunta
+  // «solo veicoli singoli» perdeva proprio questi.
+  const cumulativo = (d) => leggi({ id: 1, descLotto: d }, IDX, 'moto').cumulativo;
+  assert.equal(cumulativo('Scooter X-MAX Yamaha 400 targato EF38287 marciante e revisionato'), false);
+  assert.equal(cumulativo('AUTOMEZZI Toyota Yaris FM681NV anno 2017 valore 8.500,00'), false);
+  assert.equal(cumulativo('01 AUTOVETTURA AUDI A3 TARGATA DH923XK. IN ALLEGATO CONDIZIONI DI VENDITA VEICOLI'), false);
+  // Nell'URL ci sono le categorie del portale, non i beni del lotto.
+  assert.equal(cumulativo('AUTOVETTURA LANCIA Y. VENDITA AL LINK: https://www.spazioaste.it/Aste/Detail/S1049805-Autovetture-e-Autocarri-Lancia-Y'), false);
+  // Ma la seconda categoria, dopo la congiunzione o l'elenco, resta un cumulo vero.
+  assert.equal(cumulativo('Lotto 8: Stock composto da scooter e ciclomotore provenienti da istituto di bellezza'), true);
+  assert.equal(cumulativo('Autovetture AUDI, FORD, CITROEN; autocarri FIAT, FORD; motociclo SYM Joymax Z+ 300'), true);
 });
 
 test('le due date della fonte finiscono nello stesso formato', () => {

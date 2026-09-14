@@ -94,6 +94,20 @@ test('vendita passata NON vuol dire sparito', () => conCartella(() => {
   assert.equal(db.unLotto(1).sparito, false);
 }));
 
+test('la vendita che scade mentre il lotto e\' a magazzino non lo fa sparire', () => conCartella(() => {
+  // Il percorso VERO: chi chiama passa solo le vendite future (aste.js), quindi il lotto la cui
+  // data e' scaduta nel frattempo non e' nell'elenco — non perche' sia uscito dal portale. La
+  // prova qui sopra glielo passa dentro, cosa che la produzione non fa mai.
+  const t = Date.now();
+  db.sostituisci('moto', [lotto(1, { dataVendita: fraGiorni(-1) }), lotto(2)], t - 2 * GIORNO);
+  const r = db.sostituisci('moto', [lotto(2)], t);
+  assert.equal(r.spariti, 0, 'invecchiare non e\' sparire');
+  assert.equal(db.unLotto(1).sparito, false);
+  // E chi ha ancora la vendita davanti sparisce eccome, se il portale non lo da' piu'.
+  assert.equal(db.sostituisci('moto', [], t + 1000).spariti, 1);
+  assert.equal(db.unLotto(2).sparito, true);
+}));
+
 test('i tipi non si pestano: un giro sulle moto non fa sparire le auto', () => conCartella(() => {
   db.sostituisci('auto', [lotto(10)], Date.now() - GIORNO);
   const r = db.sostituisci('moto', [lotto(20)], Date.now());
@@ -151,6 +165,26 @@ test('un giro FALLITO non conta come riuscito', () => conCartella(() => {
   assert.equal(db.stantio(), true, 'un giro fallito non rimanda il prossimo');
 }));
 
+test('il tipo gia\' commesso da un giro caduto non si riscarica', () => conCartella(() => {
+  // Il giro delle 3:00 fa 'auto' (committato) e cade su 'moto': il giro e' 'ko', quindi al
+  // controllo delle 4:00 si riprova — ma 'auto' e' gia' a magazzino e riscaricarlo e' spreco
+  // verso il portale del ministero, ripetuto ogni ora finche' un giro non riesce per intero.
+  const t = Date.now();
+  const ora = 60 * 60 * 1000;
+  db.sostituisci('auto', [lotto(1)], t);
+  db.chiudiGiro(db.iniziaGiro(t), { esito: 'ko', motivo: 'timeout su moto' }, t);
+  assert.equal(db.stantio(t + ora), true, 'il giro va comunque ritentato');
+  assert.equal(db.stantioTipo('auto', t + ora), false, 'auto e\' gia\' commesso: non si rifa\'');
+  assert.equal(db.stantioTipo('moto', t + ora), true, 'moto non e\' mai arrivato a magazzino');
+  // Ma un lavoro parziale di ieri (macchina spenta a meta' giro) si rifa' comunque.
+  assert.equal(db.stantioTipo('auto', t + 26 * ora), true);
+  // E appena un giro riesce, il giorno dopo tocca di nuovo a tutt'e due.
+  db.sostituisci('moto', [lotto(2)], t + ora);
+  db.chiudiGiro(db.iniziaGiro(t + ora), { esito: 'ok', visti: 1, nuovi: 1, spariti: 0 }, t + ora + 1000);
+  assert.equal(db.stantioTipo('auto', t + ora + 1000), true, 'contato da un giro riuscito');
+  assert.equal(db.stantioTipo('moto', t + ora + 1000), true, 'contato da un giro riuscito');
+}));
+
 test('le righe sparite da oltre un mese si potano', () => conCartella(() => {
   const vecchio = Date.now() - 40 * GIORNO;
   db.sostituisci('moto', [lotto(1), lotto(2)], vecchio);
@@ -159,6 +193,16 @@ test('le righe sparite da oltre un mese si potano', () => conCartella(() => {
   assert.equal(db.potaSpariti(), 1);
   assert.equal(db.unLotto(2), null);
   assert.ok(db.unLotto(1), 'chi non e\' sparito resta');
+}));
+
+test('e anche le vendite passate da oltre un mese si potano', () => conCartella(() => {
+  // Non essendo piu' marcate sparite, sarebbero le uniche righe che non escono mai dal
+  // magazzino: la copia del portale diventerebbe lo storico che il proprietario ha escluso.
+  const vecchio = Date.now() - 40 * GIORNO;
+  db.sostituisci('moto', [lotto(1, { dataVendita: fraGiorni(-40) }), lotto(2)], vecchio);
+  assert.equal(db.potaSpariti(), 1);
+  assert.equal(db.unLotto(1), null);
+  assert.ok(db.unLotto(2), 'la vendita ancora davanti resta');
 }));
 
 test('nel magazzino non entrano dati personali', () => conCartella(() => {

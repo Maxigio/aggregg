@@ -182,7 +182,11 @@ function sostituisci(tipo, lotti, adesso = Date.now()) {
     ON CONFLICT(id, tipo) DO UPDATE SET
       ${COLONNE.filter(c => c !== 'id' && c !== 'tipo').map(c => `${c} = excluded.${c}`).join(', ')},
       sparito_il = NULL`);
-  d.exec('BEGIN');
+  // IMMEDIATE perche' qui si LEGGE prima di scrivere: con una transazione deferita lo snapshot
+  // si apre alla SELECT e, se un'altra connessione committa prima del primo INSERT, SQLite
+  // risponde SQLITE_BUSY_SNAPSHOT senza passare dal busy handler — `busy_timeout` non aiuta e il
+  // giro cade all'istante. Prendendo subito il lucchetto di scrittura, aspetta l'altro.
+  d.exec('BEGIN IMMEDIATE');
   try {
     const primaConosciuti = new Set(
       d.prepare('SELECT id FROM lotti WHERE tipo = ?').all(tipo).map(r => Number(r.id)));
@@ -195,11 +199,22 @@ function sostituisci(tipo, lotti, adesso = Date.now()) {
         l.dataPubblicazione, l.citta, l.provincia, l.tribunale, l.numeroLotto, l.procedura,
         adesso);
     }
-    // Chi non ha il timbro di questo giro non e' piu' sul portale. Marcato, non cancellato:
-    // e chi era gia' marcato tiene la SUA data, se no «sparito da quando» diventerebbe oggi.
-    const spariti = d.prepare(
-      'UPDATE lotti SET sparito_il = ? WHERE tipo = ? AND visto_il < ? AND sparito_il IS NULL')
-      .run(adesso, tipo, adesso).changes;
+    /**
+     * Chi non ha il timbro di questo giro non e' piu' sul portale. Marcato, non cancellato: e chi
+     * era gia' marcato tiene la SUA data, se no «sparito da quando» diventerebbe oggi.
+     *
+     * MA SOLO SE LA VENDITA E' ANCORA FUTURA, ed e' la regola 3 in testa al file. Chi chiama
+     * passa un elenco gia' ristretto alle vendite future (aste.js), quindi una riga la cui data
+     * e' scaduta nel frattempo manca dall'elenco per QUESTO, non perche' sia uscita dal portale.
+     * Senza la guardia ogni lotto veniva timbrato «sparito» il giorno dopo la sua vendita anche
+     * col portale fermo — misurato sul giro vero — cioe' «sembrava venduto tutto cio' che
+     * invecchia». Scaduto si vede dalla data, e `cerca` lo esclude gia' da se'.
+     */
+    const oggi = new Date(adesso).toISOString().slice(0, 10);
+    const spariti = d.prepare(`UPDATE lotti SET sparito_il = ?
+      WHERE tipo = ? AND visto_il < ? AND sparito_il IS NULL
+        AND (data_vendita IS NULL OR data_vendita >= ?)`)
+      .run(adesso, tipo, adesso, oggi).changes;
     d.exec('COMMIT');
     return { visti: lotti.length, nuovi, spariti: Number(spariti) };
   } catch (e) {
@@ -208,12 +223,20 @@ function sostituisci(tipo, lotti, adesso = Date.now()) {
   }
 }
 
-/** Le righe sparite da un pezzo se ne vanno: spiegavano un'assenza, non sono un archivio. */
+/**
+ * Le righe sparite da un pezzo se ne vanno: spiegavano un'assenza, non sono un archivio.
+ *
+ * Con lo stesso mese se ne vanno le vendite passate da allora: da quando `sostituisci` non le
+ * marca piu' sparite (invecchiare non e' sparire) sarebbero le uniche righe che non escono mai
+ * dal magazzino, e la copia diventerebbe lo storico che il proprietario ha escluso.
+ */
 function potaSpariti(adesso = Date.now()) {
   const d = apri();
   if (!d) return 0;
-  return Number(d.prepare('DELETE FROM lotti WHERE sparito_il IS NOT NULL AND sparito_il < ?')
-    .run(adesso - TIENI_SPARITI_MS).changes);
+  const soglia = adesso - TIENI_SPARITI_MS;
+  return Number(d.prepare(`DELETE FROM lotti
+    WHERE (sparito_il IS NOT NULL AND sparito_il < ?) OR data_vendita < ?`)
+    .run(soglia, new Date(soglia).toISOString().slice(0, 10)).changes);
 }
 
 // ─── Il registro dei giri ────────────────────────────────────────────────────────────────────
@@ -247,6 +270,32 @@ const stantio = (adesso = Date.now()) => {
   const g = ultimoGiro();
   return !g || (adesso - g.finitoIl) > GIRO_STANTIO_MS;
 };
+
+/**
+ * Serve rifare QUESTO tipo? Non basta l'eta' del giro, perche' ogni `sostituisci` ha la sua
+ * transazione e committa da solo: un giro caduto sul secondo tipo lascia il primo gia' a
+ * magazzino, durevole, ma si segna 'ko' — e `stantio()` guarda solo i giri riusciti. Senza questa
+ * memoria per tipo il controllo dell'ora dopo riscaricava da capo anche il tipo gia' fatto (~25
+ * pagine di auto), e da capo ogni ora finche' un giro non riusciva per INTERO: con un guasto
+ * stabile su un tipo solo sono centinaia di richieste al giorno al portale del ministero invece
+ * della trentina dichiarata.
+ *
+ * Il timbro per tipo c'e' gia' e non serve una colonna nuova: `visto_il` lo scrive `sostituisci`
+ * DENTRO la sua transazione, quindi esiste esattamente per il lavoro che e' stato commesso.
+ * Il tetto di un giorno vale anche qui: un lavoro parziale piu' vecchio di cosi' (macchina spenta
+ * a meta' giro) e' da rifare comunque.
+ */
+function stantioTipo(tipo, adesso = Date.now()) {
+  const d = apri();
+  if (!d) return true;
+  const r = d.prepare('SELECT MAX(visto_il) AS al FROM lotti WHERE tipo = ?').get(tipo);
+  const al = r && r.al != null ? Number(r.al) : null;
+  if (al == null || (adesso - al) > GIRO_STANTIO_MS) return true;
+  // Messo a magazzino DOPO l'ultimo giro riuscito (o senza nessun giro riuscito) vuol dire lavoro
+  // di un giro caduto: gia' commesso e non ancora contato da nessuno, quindi non si rifa'.
+  const g = ultimoGiro();
+  return !!g && al <= g.finitoIl;
+}
 
 // ─── Lettura ─────────────────────────────────────────────────────────────────────────────────
 
@@ -330,7 +379,7 @@ function unLotto(id, tipo = null) {
 
 module.exports = {
   apri, richiedi, stato, guasto, chiudi, _reset, percorso,
-  sostituisci, potaSpariti, iniziaGiro, chiudiGiro, ultimoGiro, stantio,
+  sostituisci, potaSpariti, iniziaGiro, chiudiGiro, ultimoGiro, stantio, stantioTipo,
   cerca, perMarca, province, unLotto,
   _const: { FILE, GIRO_STANTIO_MS, TIENI_SPARITI_MS, COLONNE },
 };

@@ -27,6 +27,25 @@ const limiteAggiorna = require('./limite-richieste').crea({
   max: AGGIORNA_MAX, finestra: AGGIORNA_FINESTRA, cosa: 'aggiornamenti', maxChiavi: 500,
 });
 
+/**
+ * E UN SECONDO TETTO, QUESTO DELLA MACCHINA. `chiaveLimite` e' la PERSONA (server.js:518),
+ * quindi i tre giri qui sopra sono tre A TESTA: otto ospiti registrati che premono la pastiglia
+ * «da aggiornare» fanno fino a ventiquattro passate intere sul portale del ministero in un'ora —
+ * centinaia di richieste dallo stesso indirizzo — per un inventario che cambia una volta al
+ * giorno. `inVolo` (aste.js:56) non salva il caso: fonde solo i giri che partono INSIEME, mentre
+ * sparpagliati nell'ora sono giri veri uno dietro l'altro. E' la stessa ragione scritta in testa
+ * a /api/saved/check: le fonti bandiscono la MACCHINA, non la persona.
+ *
+ * Sei l'ora e non tre: cosi' il tetto personale di chi ha fretta non se lo puo' mangiare
+ * qualcun altro, e per una persona sola — il caso di oggi — non cambia niente.
+ */
+const AGGIORNA_MAX_MACCHINA = 6;
+const CHIAVE_MACCHINA = 'macchina';
+const MSG_MACCHINA = `Il portale del ministero e' uno solo per tutta la macchina: i giri a mano sono ${AGGIORNA_MAX_MACCHINA} ogni ora in tutto, e sono gia' stati spesi. L'area si aggiorna comunque da sola una volta al giorno.`;
+const limiteMacchina = require('./limite-richieste').crea({
+  max: AGGIORNA_MAX_MACCHINA, finestra: AGGIORNA_FINESTRA, cosa: 'aggiornamenti',
+});
+
 /** Il dettaglio e la ricerca libera vanno in rete a ogni clic: freno piu' largo, ma c'e'. */
 const PORTALE_MAX = 30;
 const PORTALE_FINESTRA = 60 * 1000;
@@ -128,7 +147,12 @@ function mount(app, deps = {}) {
     const g = limitePortale.consuma(chiaveLimite(req));
     if (!g.ok) return res.status(429).json({ ok: false, error: limitePortale.messaggio(g), riprovaFra: g.attesa });
     try {
-      const r = await pvp.pagina(tipo, { page: 0, size: 50, testo: q });
+      // ORDINE DECRESCENTE, e non e' un dettaglio: la fonte ordina per data di vendita e il 90%
+      // del suo archivio e' passato, quindi la prima pagina crescente e' fatta tutta di vendite
+      // vecchie — cioe' esattamente quelle che la riga qui sotto scarta. Misurato il 2026-09-14
+      // su "honda"/moto: 117 corrispondenze, pagina 0 crescente 0 vivi, pagina 0 decrescente 14.
+      // Qui si legge UNA pagina sola, quindi o si chiede il decrescente o non si trova mai niente.
+      const r = await pvp.pagina(tipo, { page: 0, size: 50, testo: q, ordine: 'desc' });
       const idx = aste.indiceMarche();
       const oggi = new Date().toISOString().slice(0, 10);
       const lotti = r.lotti.map(l => leggi(l, idx, tipo));
@@ -174,10 +198,23 @@ function mount(app, deps = {}) {
   // ─── Aggiornare a mano ─────────────────────────────────────────────────────────────────────
   app.post('/api/aste/aggiorna', async (req, res) => {
     noCache(res);
+    // LA MACCHINA SI GUARDA PRIMA E SI ADDEBITA DOPO, e l'ordine e' il vincolo: addebitandola
+    // per prima, chi ha finito i suoi tre giri e continua a premere brucerebbe il budget di
+    // tutti senza far partire niente. Fra il controllo e l'addebito non c'e' nessun await,
+    // quindi sul thread unico quello che si e' guardato e' quello che si paga.
+    const m = limiteMacchina.stato(CHIAVE_MACCHINA);
+    if (!m.ok) {
+      return res.status(429).json({
+        ok: false, error: limiteMacchina.messaggio(m, MSG_MACCHINA), riprovaFra: m.attesa,
+        // I suoi tre giri non li ha spesi lui: dirgli «restanti: 0» sarebbe una bugia.
+        restanti: limiteAggiorna.stato(chiaveLimite(req)).restanti,
+      });
+    }
     const g = limiteAggiorna.consuma(chiaveLimite(req));
     if (!g.ok) {
       return res.status(429).json({ ok: false, error: limiteAggiorna.messaggio(g, MSG_AGGIORNA), riprovaFra: g.attesa, restanti: 0 });
     }
+    limiteMacchina.consuma(CHIAVE_MACCHINA);
     try {
       const r = await aste.giro();
       // Un giro che fallisce sulla FONTE resta un 200 con ok:false: la rotta ha funzionato,

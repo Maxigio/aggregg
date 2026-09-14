@@ -43,7 +43,16 @@ const PIATTAFORMA = /\b(?:www\.)?((?:gobid|astegiudiziarie|astalegale|doauction|
 const CUMULATIVO = [
   /\bn\.?\s*\d+\s*(?:scooter|moto|autov|veicol|ciclomotor|automezz|autocarr)/i,
   /\b\d+\s*(?:scooter|motocicli|autovetture|automezzi|autocarri|veicoli|ciclomotori)\b/i,
-  /\b(?:autocarri|autovetture|automezzi|motocicli|scooter|ciclomotori|veicoli)\b/i,
+  /**
+   * LA PAROLA NUDA NON CONTA I BENI, e da sola non basta. «Scooter» in italiano e' invariante, e
+   * «veicoli», «autovetture», «automezzi» stanno anche nelle chiuse di rito («in allegato
+   * condizioni di vendita veicoli») e nei percorsi del gestore: sui 658 lotti in magazzino la
+   * parola secca marcava come cumulo 18 veicoli singoli veri, che poi sparivano dal filtro «solo
+   * singoli». Serve una SECONDA categoria dopo una congiunzione o un elenco — «scooter e
+   * ciclomotore», «Autovetture AUDI, FORD; autocarri FIAT» — e il salto resta dentro un solo
+   * periodo perche' il punto chiude la frase e separa i beni dalle condizioni di vendita.
+   */
+  /\b(?:autocarri|autovetture|automezzi|motocicli|motoveicoli|ciclomotori|scooter|veicoli)\b[^.]{0,80}?(?:[,;]|\be\b|\bed\b|\boltre\s+a\b)\s*(?:n\.?\s*\d+\s+|altri\s+|vari[ei]\s+)?(?:autocarr|autovettur|automezz|motocicl|motoveicol|ciclomotor|scooter|veicol|furgon)/i,
   /\b(?:beni|compendio|lotto unico composto)\b.*\b(?:liquidazione|fallimentare|aziendal)/i,
   /\be\s+(?:furgoni|arredi|attrezzature|macchinari)\b/i,
 ];
@@ -59,6 +68,17 @@ const RUMORE = new Set([
   'auto', 'autovettura', 'autoveicolo', 'automobile', 'autocarro', 'marca', 'modello',
   'targato', 'targata', 'telaio', 'vendita', 'del', 'della', 'di', 'da', 'il', 'la', 'lo',
   'un', 'una', 'tipo', 'anno', 'colore', 'euro', 'immatricolato', 'immatricolata', 'n',
+  /**
+   * Queste sei sono parole ORDINARIE dell'avviso che nel catalogo esistono anche come marca
+   * («km come da quadro di accensione», «carrozzeria di colore nero», «asta online», «stock
+   * composto da», «mancante solo di sella», «immatricolato per la prima volta»). Senza il
+   * filtro la marca viene inventata dal corpo del testo, che e' il contrario della regola in
+   * testa al file. Misurate sui 787 lotti in magazzino: 7 marche sbagliate e zero
+   * riconoscimenti veri, perche' nessun lotto e' davvero di quelle marche. Il prezzo del
+   * filtro e' che un lotto davvero di marca Quadro finirebbe fra i «senza marca»: e' il verso
+   * giusto in cui sbagliare, perche' un dato che non c'e' si dichiara e uno sbagliato no.
+   */
+  'nero', 'quadro', 'stock', 'online', 'solo', 'volta',
 ]);
 
 /** Toglie il rito e restituisce la parte che descrive davvero il bene. */
@@ -120,7 +140,12 @@ function marcaDa(descrizione, indice) {
     for (let n = Math.min(3, parole.length - i); n >= 1; n--) {
       // Una parola sola di contorno non e' una marca; il gruppo lungo che la contiene si'.
       if (n === 1 && RUMORE.has(parole[i].toLowerCase())) continue;
-      const trovata = indice.get(norm(parole.slice(i, i + n).join('')));
+      const gruppo = parole.slice(i, i + n);
+      // Incollare le parole vicine serve a «CF Moto» → CFMOTO, ma una parola di UNA lettera non
+      // e' mai un pezzo di marca: nessun nome del catalogo ne contiene una. Senza questa guardia
+      // «… VENDITA A CURA DEL CUSTODE …» si incolla in «acura» e diventa la marca Acura.
+      if (n > 1 && gruppo.some(p => p.length === 1)) continue;
+      const trovata = indice.get(norm(gruppo.join('')));
       if (!trovata) continue;
       // Il piu' lungo vince, e a parita' vince il primo incontrato: in queste descrizioni la
       // marca sta quasi sempre all'inizio, dopo «Motociclo»/«Autovettura».
@@ -160,12 +185,19 @@ function leggi(grezzo, indice, tipo) {
    * lotto con un solo `categoriaBene` puo' comunque dire «N. 1433 Scooter».
    */
   const beni = Array.isArray(grezzo.categoriaBene) ? grezzo.categoriaBene.length : 1;
+  /**
+   * Il link alla piattaforma porta i nomi delle CATEGORIE del catalogo del gestore
+   * («…/Detail/S1049805-Autovetture-Autovettura-Lancia-Y»), non i beni di QUESTO lotto: si toglie
+   * prima di cercare il cumulo, se no e' l'URL a decidere al posto della descrizione. Il testo
+   * mostrato resta intero: qui si ripulisce solo la copia su cui si misura.
+   */
+  const testoBeni = desc.replace(/https?:\/\/\S+/gi, ' ');
   return {
     id: grezzo.id,
     tipo,
     descrizione: desc,
     marca: marca ? marca.nome : null,        // null = non riconosciuta, e si dice
-    cumulativo: beni > 1 || CUMULATIVO.some(r => r.test(desc)),
+    cumulativo: beni > 1 || CUMULATIVO.some(r => r.test(testoBeni)),
     piattaforma: piattaforma ? piattaforma[1].toLowerCase() : null,
     prezzoBase: Number.isFinite(grezzo.prezzoBaseAsta) ? grezzo.prezzoBaseAsta : null,
     offertaMinima: Number.isFinite(grezzo.offertaMinima) ? grezzo.offertaMinima : null,

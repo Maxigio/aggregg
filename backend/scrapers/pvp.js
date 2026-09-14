@@ -126,6 +126,10 @@ let bo = BO_SEME;
  */
 async function riscopriBo() {
   const r = await richiesta('/pvp/it/lista_annunci.page');
+  // Una pagina che non risponde 200 (manutenzione, 5xx di bordo, blocco) non ha cambiato forma:
+  // senza questa riga il corpo di cortesia non contiene il pattern e il guasto vero esce come
+  // «prefisso backoffice non trovato», cioe' come un rilascio del ministero che non c'e' stato.
+  if (r.status !== 200) throw fail(`PVP lista_annunci: HTTP ${r.status}`, { status: r.status, kind: kindForStatus(r.status) });
   const m = String(r.body).match(/\bbo-[0-9a-f]{8}-[0-9a-f]{8}\b/);
   if (!m) throw fail('PVP: prefisso backoffice non trovato nella pagina', { kind: 'error' });
   return m[0];
@@ -143,7 +147,13 @@ async function endpoints() {
   } catch (e) {
     // Il seme non vale piu': si ripesca e si riprova UNA volta. Se fallisce anche questa,
     // l'errore sale — una fonte che non risponde si dichiara, non si finge.
-    bo = await riscopriBo();
+    let nuovo;
+    // Ma la causa vera e' la PRIMA: quando il portale degrada i due percorsi cadono insieme, e
+    // tenere solo il fallimento della riscoperta vuol dire scrivere in `giri.motivo` (e nel 502
+    // delle rotte) che la pagina ha cambiato forma. Chi legge andrebbe a riscrivere lo scraper.
+    try { nuovo = await riscopriBo(); }
+    catch (e2) { throw fail(`${e.message} (riscoperta fallita: ${e2.message})`, { status: e.status, kind: e.kind }); }
+    bo = nuovo;
     cfg = await json(`/${bo}/bo-ms/fe-config/lista-annunci`);
   }
   const ms = cfg && cfg.msUrl;
@@ -152,14 +162,37 @@ async function endpoints() {
   return cache.valore;
 }
 
+/**
+ * Il gemello di `json` per i percorsi che arrivano dalla cache. Se la fonte risponde che quel
+ * percorso non c'e' piu' — un 4xx, o l'HTML che qui sopra e' descritto come il modo in cui questo
+ * portale dice «endpoint spostato» — la cache si butta SUBITO. Senza, la riscoperta del punto 2
+ * dell'intestazione non parte mai quando serve davvero, cioe' appena dopo un rilascio del
+ * ministero: il gate del TTL sta prima di tutto e per sei ore ogni giro ribatte lo stesso percorso
+ * morto, con /api/aste/:id e /api/aste/portale a 502 e il controllo orario che ricasca sempre li'.
+ * I 5xx e i timeout NO ('transient'): dicono che la fonte sta male, non che si e' spostata.
+ * Una riscoperta di troppo (un 404 su un lotto che non c'e') costa UNA chiamata e riscrive gli
+ * stessi identici valori: molto meno di sei ore di KO.
+ */
+async function jsonEp(percorso, opzioni) {
+  try {
+    return await json(percorso, opzioni);
+  } catch (e) {
+    if (e && e.kind === 'error') cache = { al: 0, valore: null };
+    throw e;
+  }
+}
+
 // ─── Lista ───────────────────────────────────────────────────────────────────────────────────
 
 /**
  * Una pagina di lotti. `tipo` e' 'auto' o 'moto'; `testo` e' la ricerca libera della fonte, che
- * pesca dentro `descLotto` (provata: "honda" da' 118 lotti).
+ * pesca dentro `descLotto` (provata: "honda" da' 118 lotti). `ordine` e' 'asc' o 'desc' sulla
+ * data di vendita: serve a chi legge UNA pagina sola, perche' col punto 4 qui sopra (90%
+ * dell'archivio passato) la prima pagina crescente e' fatta di vendite del 2024. Chi pagina
+ * tutto puo' lasciare il crescente, tanto le prende comunque tutte.
  * @returns {{lotti: object[], totale: number, ultima: boolean}}
  */
-async function pagina(tipo, { page = 0, size = PAGINA, testo = null } = {}) {
+async function pagina(tipo, { page = 0, size = PAGINA, testo = null, ordine = 'asc' } = {}) {
   const tipologia = TIPOLOGIE[tipo];
   if (!tipologia) throw fail(`PVP: tipo sconosciuto "${tipo}"`, { kind: 'error' });
   const ep = await endpoints();
@@ -170,13 +203,22 @@ async function pagina(tipo, { page = 0, size = PAGINA, testo = null } = {}) {
     flagRicerca: 0,
   };
   if (testo) corpo.ricercaLibera = String(testo);
-  const qs = `language=it&page=${page}&size=${size}&sort=dataOraVendita,asc`;
-  const j = await json(`/${ep.ricerca}/ricerca/vendite?${qs}`, { metodo: 'POST', corpo });
+  // A differenza di `dataVenditaDa` (punto 3) il `sort` la fonte lo ONORA, misurato: stessa
+  // query, tre ordinamenti, tre primi id diversi e l'ordine rispettato riga per riga.
+  const qs = `language=it&page=${page}&size=${size}&sort=dataOraVendita,${ordine === 'desc' ? 'desc' : 'asc'}`;
+  const j = await jsonEp(`/${ep.ricerca}/ricerca/vendite?${qs}`, { metodo: 'POST', corpo });
   const b = (j && j.body) || {};
+  // Il punto 3 dell'intestazione applicato a noi stessi: un involucro che non si riconosce NON si
+  // degrada in una pagina vuota ma plausibile. Chi pagina la prenderebbe per inventario completo,
+  // e il giro marcherebbe sparito tutto il magazzino scrivendo «ok».
+  if (!Array.isArray(b.content)) throw fail('PVP ricerca/vendite: risposta senza content (involucro cambiato?)', { kind: 'error' });
+  // Tollerante sulla forma come bilstein-oe.js:145 ("1000" e' un totale), ma un totale ILLEGGIBILE
+  // resta null: non e' zero, e chi pagina deve saperlo invece di credersi arrivato in fondo.
+  const totale = Number(b.totalElements);
   return {
-    lotti: Array.isArray(b.content) ? b.content : [],
-    totale: Number.isFinite(b.totalElements) ? b.totalElements : 0,
-    ultima: b.last === true || !Array.isArray(b.content) || !b.content.length,
+    lotti: b.content,
+    totale: Number.isFinite(totale) ? totale : null,
+    ultima: b.last === true || !b.content.length,
   };
 }
 
@@ -192,11 +234,13 @@ async function tutti(tipo, { testo = null, pausaMs = 400, aPagina = PAGINA } = {
     const r = await pagina(tipo, { page: p, size: aPagina, testo });
     if (totale === null) totale = r.totale;
     out.push(...r.lotti);
-    if (r.ultima || out.length >= totale) break;
+    // Totale null = la fonte non l'ha detto in modo leggibile: allora l'unico segnale di fine che
+    // resta e' `ultima` (o il tetto, che almeno si dichiara con `troncato`).
+    if (r.ultima || (totale !== null && out.length >= totale)) break;
     if (++p >= MAX_PAGINE) { troncato = true; break; }
     if (pausaMs) await new Promise(r2 => setTimeout(r2, pausaMs));
   }
-  return { lotti: out, totale: totale || 0, troncato };
+  return { lotti: out, totale, troncato };
 }
 
 // ─── Dettaglio ───────────────────────────────────────────────────────────────────────────────
@@ -211,7 +255,7 @@ async function tutti(tipo, { testo = null, pausaMs = 400, aPagina = PAGINA } = {
  */
 async function dettaglio(idVendita) {
   const ep = await endpoints();
-  const j = await json(`/${ep.vendite}/vendite/${encodeURIComponent(idVendita)}/restricted`);
+  const j = await jsonEp(`/${ep.vendite}/vendite/${encodeURIComponent(idVendita)}/restricted`);
   return (j && j.body) || null;
 }
 
@@ -222,7 +266,7 @@ async function dettaglio(idVendita) {
  */
 async function venditePrecedenti(idLotto) {
   const ep = await endpoints();
-  const j = await json(`/${ep.vendite}/vendite/lotti/${encodeURIComponent(idLotto)}/vendite-precedenti`);
+  const j = await jsonEp(`/${ep.vendite}/vendite/lotti/${encodeURIComponent(idLotto)}/vendite-precedenti`);
   const b = (j && j.body) || [];
   return Array.isArray(b) ? b : (Array.isArray(b.content) ? b.content : []);
 }

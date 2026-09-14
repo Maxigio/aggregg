@@ -63,6 +63,13 @@ async function giro({ pausaMs = 400 } = {}) {
     const conto = { visti: 0, nuovi: 0, spariti: 0 };
     try {
       for (const tipo of Object.keys(pvp.TIPOLOGIE)) {
+        // Il tipo gia' commesso da un giro caduto non si riscarica: la sua transazione ha gia'
+        // committato, e senza questo salto ogni controllo orario rifaceva da capo anche quello
+        // (vedi aste-db.stantioTipo). Dopo un giro riuscito tornano stantii tutti e due.
+        if (!db.stantioTipo(tipo)) {
+          console.log(`[aste] ${tipo}: gia' a magazzino dal giro caduto, si salta`);
+          continue;
+        }
         const { lotti, troncato } = await pvp.tutti(tipo, { pausaMs });
         if (troncato) console.warn(`[aste] ${tipo}: paginazione troncata al tetto, l'inventario e' parziale`);
         /**
@@ -77,6 +84,23 @@ async function giro({ pausaMs = 400 } = {}) {
         const vivi = lotti
           .map(l => leggi(l, idx, tipo))
           .filter(l => l.dataVendita && l.dataVendita >= oggi && l.dataVendita < limite + '-01-01');
+        /**
+         * ZERO LOTTI DALLA FONTE NON E' UNA NOTIZIA, E' UN GUASTO. Il portale ne ha 5.758 in
+         * archivio (intestazione di pvp.js), e la ricerca glieli chiede per ENUM: basta che il
+         * ministero ne rinomini uno (`tipoLotto`, `categoriaLotto`, `categoriaBene`) e la
+         * risposta e' un 200 con l'involucro giusto e zero risultati — nessuno lancia. Senza
+         * questa guardia `sostituisci` marcherebbe sparito TUTTO l'inventario del tipo e il giro
+         * si scriverebbe 'ok': l'area resterebbe vuota, senza avviso e timbrata «aggiornato
+         * oggi», fino al giorno dopo. Fallendo invece si tiene quel che c'e' e `stantio()` resta
+         * vero, quindi il controllo dell'ora dopo riprova.
+         *
+         * Si conta il GREZZO della fonte, non `vivi`: un archivio di sole vendite passate e' un
+         * inventario vuoto legittimo. E a magazzino vuoto (primo giro) non c'e' niente da
+         * difendere, quindi si prosegue.
+         */
+        if (!lotti.length && db.cerca({ tipo, limite: 1 }).length) {
+          throw new Error(`${tipo}: il portale non ha restituito nessun lotto, magazzino non toccato`);
+        }
         const r = db.sostituisci(tipo, vivi);
         conto.visti += r.visti; conto.nuovi += r.nuovi; conto.spariti += r.spariti;
         console.log(`[aste] ${tipo}: ${r.visti} vivi su ${lotti.length} in archivio (${r.nuovi} nuovi, ${r.spariti} spariti)`);
@@ -90,9 +114,13 @@ async function giro({ pausaMs = 400 } = {}) {
       try { db.chiudiGiro(id, { esito: 'ko', motivo: e.message }); } catch (_) { /* magazzino rotto: gia' detto */ }
       console.warn('[aste] giro KO:', e.message);
       return { ok: false, motivo: e.message };
-    } finally { inVolo = null; }
+    }
   })();
-  return inVolo;
+  // `finally` QUI FUORI, non dentro la IIFE: `indiceMarche()` e `db.iniziaGiro()` stanno prima
+  // del try, e un loro lancio (magazzino non apribile, SQLITE_BUSY, cartella assente) rifiuta la
+  // Promise senza mai passare dal finally interno. `inVolo` resterebbe la rifiutata e ogni giro
+  // successivo ripeterebbe il vecchio errore fino al riavvio, anche a guasto passato.
+  try { return await inVolo; } finally { inVolo = null; }
 }
 
 /** Fa il giro solo se serve. Torna `{ ok, saltato }` — saltato non e' un fallimento. */
