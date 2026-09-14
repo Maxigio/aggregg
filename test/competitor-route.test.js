@@ -94,6 +94,103 @@ test('da-annuncio: lo stesso venditore due volte e\' 409, non un doppione', asyn
   });
 });
 
+/**
+ * CHI E' GIA' IN ELENCO SI RICONOSCE PRIMA DI CHIEDERLO ALLA FONTE — anche su Moto.it.
+ *
+ * Qui non si monta una rotta: si ESEGUE il codice vero di frontend/app.js, perche' la
+ * guardia sta li'. `vetrinaHTML` offre "Aggiungi" solo a chi in elenco non c'e', e il
+ * confronto e' `fonte`+`id`. Per Moto.it quei due campi non c'erano: il confronto era
+ * sempre falso, il bottone compariva anche sul concessionario che si stava gia' guardando
+ * e ogni clic passava da POST /api/competitor → `risolviVetrina` → una GET vera a
+ * dealer.moto.it, per sentirsi poi rispondere 409. Subito e Autoscout la guardia
+ * ce l'avevano gia': questa e' la terza fonte.
+ */
+const APP = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+/** Ritaglia dal sorgente i blocchi chiesti e li esegue con i pochi globali che usano. */
+function daApp(blocchi, globali, coda = 'return { competitorDaAnnuncio, vetrinaHTML };') {
+  const pezzi = blocchi.map(([da, finoA]) => {
+    const i = APP.indexOf(da);
+    assert.ok(i > 0, `non trovo piu' \`${da}\` in frontend/app.js`);
+    const j = APP.indexOf(finoA, i);
+    assert.ok(j > i, `non trovo piu' la fine del blocco \`${da}\``);
+    return APP.slice(i, j);
+  });
+  const chiavi = Object.keys(globali);
+  const corpo = pezzi.join('\n') + '\n' + coda;
+  return new Function(...chiavi, corpo)(...chiavi.map(k => globali[k]));
+}
+
+test('moto: la vetrina gia\' in elenco si riconosce a schermo, senza una richiesta a dealer.moto.it', () => {
+  const cpVoci = [
+    { fonte: 'moto', id: 'nikomoto', nome: 'Niko Moto', url: 'https://dealer.moto.it/nikomoto' },
+    { fonte: 'subito', id: '105412305', nome: 'FC AUTO SRL' },
+  ];
+  const { competitorDaAnnuncio, vetrinaHTML } = daApp([
+    ['function competitorDaAnnuncio(r)', '\n/** Mette il venditore'],
+    ['function vetrinaHTML(r)', '\n// ── Passaggio'],
+  ], { escapeHtml: s => String(s), cpVoci });
+
+  const moto = {
+    fonte: 'moto', venditore: 'concessionario', venditoreNome: 'Niko Moto',
+    vetrinaUrl: 'https://dealer.moto.it/nikomoto',
+  };
+  const cp = competitorDaAnnuncio(moto);
+  // L'id di una vetrina Moto.it e' il suo slug: lo stesso che il server salva (motoit-vetrina).
+  assert.strictEqual(cp.fonte, 'moto');
+  assert.strictEqual(cp.id, 'nikomoto');
+  // E si continua ad aggiungere dall'url: e' l'unico campo che POST /api/competitor legge,
+  // ed e' quello che sceglie la porta (con l'url non si passa da `da-annuncio`).
+  assert.strictEqual(cp.url, 'https://dealer.moto.it/nikomoto');
+
+  assert.match(vetrinaHTML(moto), /det-open-gia/, 'la vetrina in elenco deve dirsi gia\' presa');
+  assert.ok(!/btn-competitor/.test(vetrinaHTML(moto)),
+    'il bottone su un concessionario gia\' in elenco costa una GET a dealer.moto.it per un 409');
+  // Una vetrina che in elenco NON c'e' il bottone lo deve avere ancora.
+  const altra = { ...moto, venditoreNome: 'Altro Moto', vetrinaUrl: 'https://dealer.moto.it/altromoto' };
+  assert.match(vetrinaHTML(altra), /btn-competitor/);
+  // Le sottopagine portano allo stesso slug: `slugVetrina` accetta /Usato, e la voce in
+  // elenco e' una sola — il confronto deve cadere sulla stessa chiave.
+  assert.strictEqual(competitorDaAnnuncio({ ...moto, vetrinaUrl: 'https://dealer.moto.it/nikomoto/Usato' }).id, 'nikomoto');
+  // Un link che non e' una vetrina non inventa un id: nessuna chiave falsa in confronto.
+  assert.strictEqual(competitorDaAnnuncio({ ...moto, vetrinaUrl: 'https://www.moto.it/nikomoto' }).id, null);
+});
+
+/**
+ * REGRESSIONE. Il bottone «vetrina ↗» della scheda era l'unico incondizionato, ma le voci
+ * entrate da `da-annuncio` hanno `url: null` per costruzione (l'annuncio porta l'id del
+ * venditore, non il link della vetrina): `escapeHtml(null)` da' la stringa "null", e
+ * l'href diventava un percorso relativo sull'origine dell'app. Anche qui si esegue il
+ * codice vero di frontend/app.js, perche' la guardia sta li'.
+ */
+test('competitor: la scheda di una voce senza url non mostra il bottone della vetrina', () => {
+  const { cpSchedaHTML } = daApp([
+    ['function cpSchedaHTML(v)', '\n/**\n * IL PROFILO UNICO'],
+  ], {
+    escapeHtml: s => String(s),
+    cpChiave: v => v.fonte + ':' + v.id,
+    cpParchi: {},
+    cpApertoId: null,
+    cpAperte: new Set(),
+    cpUnisciHTML: () => '',
+    cpNumeriChiave: () => '',
+    cpOrariHTML: () => '',
+    miniHTML: () => '',
+    FONTE_LABEL: { subito: 'Subito.it', autoscout: 'Autoscout24', moto: 'Moto.it' },
+  }, 'return { cpSchedaHTML };');
+
+  // La voce esatta che POST /api/competitor/da-annuncio scrive su disco.
+  const senzaUrl = {
+    fonte: 'subito', id: '105412305', nome: 'FC AUTO SRL',
+    dove: null, via: null, url: null, schedaLetta: true, daAnnuncio: true,
+  };
+  const html = cpSchedaHTML(senzaUrl);
+  assert.ok(!/href="null"/.test(html), 'un href "null" e\' un percorso relativo sull\'origine dell\'app');
+  assert.ok(!/cp-link/.test(html), 'senza url il bottone della vetrina non deve comparire affatto');
+  // Le voci da link incollato (e quelle Moto.it) l'url ce l'hanno: il bottone resta.
+  const conUrl = { ...senzaUrl, url: 'https://www.subito.it/concessionari/fc-auto-srl' };
+  assert.match(cpSchedaHTML(conUrl), /class="cp-btn cp-link" href="https:\/\/www\.subito\.it\/concessionari\/fc-auto-srl"/);
+});
+
 test('da-annuncio: fonte e id sono controllati, e senza nome se ne mette uno leggibile', async () => {
   await conCartellaPulita(async () => {
     const H = monta();
@@ -164,6 +261,105 @@ test('collisione di id fra fonti: la chiave composta indirizza la voce giusta, D
     H['GET /api/competitor']({}, lista);
     assert.deepStrictEqual(lista.body.voci.map(x => x.fonte + ':' + x.id), ['subito:7008']);
   });
+});
+
+/**
+ * REGRESSIONE, di schermo. `cpTogli` buttava via l'esito della DELETE: a magazzino
+ * illeggibile il server risponde 503 e NON scrive, ma la scheda spariva lo stesso dal
+ * pannello — e non tornava, perche' `cpApri()` rilegge l'elenco solo `if (!cpVoci)` e
+ * `cpChiudi()` non lo azzera. Per tutta la sessione il pannello mostrava un elenco che su
+ * disco non esiste. Qui si esegue il `cpTogli` VERO contro la rotta VERA: l'esito non si
+ * finge, si subisce.
+ */
+test('togli: la voce sparisce dallo schermo solo se il server l\'ha davvero tolta', async () => {
+  await conCartellaPulita(async () => {
+    const H = monta();
+    await H['POST /api/competitor/da-annuncio']({ body: { fonte: 'subito', id: '7008', nome: 'Sub' } }, resFinta());
+    await H['POST /api/competitor/da-annuncio']({ body: { fonte: 'autoscout', id: '7008', nome: 'As' } }, resFinta());
+
+    let ultimo = null;
+    const fetchFinta = async url => {
+      const r = resFinta();
+      await H['DELETE /api/competitor/:id']({ params: { id: decodeURIComponent(String(url).split('/').pop()) } }, r);
+      ultimo = r;
+      return { ok: r.code >= 200 && r.code < 300, status: r.code, json: async () => r.body };
+    };
+    const togliVero = voci => daApp(
+      [['async function cpTogli(chiave)', '\n// `toggle` non risale il DOM']],
+      {
+        fetch: fetchFinta, cpChiave: v => v.fonte + ':' + v.id, cpVoci: voci,
+        cpParchi: {}, cpApertoId: null, cpErrore: null, cpRender: () => {}, hideResults: () => {},
+      },
+      'return { cpTogli, stato: () => ({ cpVoci, cpErrore }) };');
+
+    // Magazzino sano: il server toglie davvero, e lo schermo lo segue.
+    const sano = togliVero([{ fonte: 'subito', id: '7008' }, { fonte: 'autoscout', id: '7008' }]);
+    await sano.cpTogli('subito:7008');
+    assert.strictEqual(ultimo.code, 200);
+    assert.deepStrictEqual(sano.stato().cpVoci.map(v => v.fonte), ['autoscout']);
+    assert.strictEqual(sano.stato().cpErrore, null);
+
+    // Ora il magazzino non si apre piu': la DELETE risponde 503 e non scrive niente.
+    const p = dbmod.percorso();
+    dbmod.chiudi();
+    fs.writeFileSync(p, 'questo non e\' un database');
+    const rotto = togliVero([{ fonte: 'autoscout', id: '7008' }]);
+    await rotto.cpTogli('autoscout:7008');
+    assert.strictEqual(ultimo.code, 503, 'a magazzino illeggibile la DELETE deve rifiutare');
+    assert.strictEqual(rotto.stato().cpVoci.length, 1, 'il server non ha scritto: la voce non puo\' sparire dallo schermo');
+    assert.ok(rotto.stato().cpErrore, 'e il perche\' va detto, senno\' il clic sembra riuscito');
+  });
+});
+
+/**
+ * REGRESSIONE. La rilettura della scheda vetrina stava PRIMA del controllo di cache: partiva
+ * a ogni chiamata della rotta — anche sul ramo «dalla cache», che il budget non addebita —
+ * e siccome `schedaLetta` diventa true solo quando `risolviVetrina` RIESCE, una vetrina
+ * chiusa (404) rifaceva quella GET per sempre, fuori da qualunque contatore. Le voci
+ * migrate dal vecchio competitor.json sono esattamente di questa forma: url presente,
+ * `schedaLetta` assente.
+ */
+test('scheda non riletta: il tentativo vive dentro uno scarico addebitato, mai sul ramo di cache', async () => {
+  let riletture = 0, scarichi = 0;
+  const stub = {
+    // La forma delle voci migrate: `url` c'e', `schedaLetta` no. E la vetrina non risponde
+    // piu', quindi `schedaLetta` non diventera' mai true.
+    leggi: () => [{ fonte: 'autoscout', id: '9345705', nome: 'Raineri Massimo', url: 'https://www.autoscout24.it/concessionari/raineri-massimo' }],
+    scrivi: v => v,
+    risolviVetrina: async () => { riletture++; throw new Error('la pagina risponde 404'); },
+    parco: async () => { scarichi++; return { veicoli: [], troncato: false, illeggibili: 0, totaleFonte: null }; },
+    aggrega: () => ({ veicoli: 0 }),
+  };
+  const H = {};
+  const app = {
+    get: (p, ...h) => { H['GET ' + p] = h[h.length - 1]; },
+    post: (p, ...h) => { H['POST ' + p] = h[h.length - 1]; },
+    delete: (p, ...h) => { H['DELETE ' + p] = h[h.length - 1]; },
+  };
+  route.mount(app, { json: (req, res, next) => next(), competitor: stub, clientIp: () => 'ip-test-rilettura' });
+  const chiedi = async forza => {
+    const r = resFinta();
+    await H['GET /api/competitor/:id/parco']({ params: { id: 'autoscout:9345705' }, query: forza ? { forza: '1' } : {} }, r);
+    return r;
+  };
+
+  // Primo scarico vero: si va in rete comunque, e la rilettura ci prova (una volta sola).
+  const primo = await chiedi(true);
+  assert.strictEqual(primo.code, 200);
+  assert.strictEqual(scarichi, 1);
+  assert.strictEqual(riletture, 1, 'la rilettura fa parte dello scarico reale');
+  assert.strictEqual(primo.body.daCache, false);
+
+  // Ora la scheda arriva dalla cache: non si addebita niente, quindi non deve partire NIENTE.
+  for (let i = 0; i < 5; i++) {
+    const r = await chiedi(false);
+    assert.strictEqual(r.code, 200);
+    assert.strictEqual(r.body.daCache, true, 'entro i dieci minuti il parco arriva dalla cache');
+  }
+  assert.strictEqual(scarichi, 1, 'la cache non deve far ripartire il parco');
+  assert.strictEqual(riletture, 1, 'ne\' la GET alla vetrina, che il budget non vede');
+  // E il budget e' stato consumato una volta sola: cinque aperture da cache non pagano.
+  assert.strictEqual(primo.body.scarichiRestanti, 5);
 });
 
 /**

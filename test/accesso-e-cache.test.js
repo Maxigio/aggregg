@@ -145,6 +145,19 @@ test('cache ricerche: NON congela una risposta con una fonte in timeout', () => 
   // ma la risposta e' monca quanto un timeout: congelarla renderebbe inutile ripremere Cerca.
   assert.strictEqual(srv._cacheable({ totale: 60, sources: { subito: { status: 'ok' }, autoscout: { status: 'ok', parziale: '1/3 grafie AS24 fallite: http 429' }, moto: { status: 'ok' } } }), false,
     'un risultato dichiarato parziale non si cacha');
+  // SUBITO mette nello STESSO campo due nature diverse, quindi li' non basta la stringa.
+  // Famiglie CADUTE: transitorio come le grafie AS24, ritentare puo' cambiare esito.
+  assert.strictEqual(srv._cacheable({ totale: 60, sources: {
+    subito: { status: 'ok', parziale: '2 famiglie su 8 non hanno risposto', parzialeRete: true },
+    autoscout: { status: 'ok' }, moto: { status: 'ok' } } }), false,
+    'famiglie Subito cadute: monco transitorio, non si cacha');
+  // Famiglie MAI CHIESTE (oltre il tetto di 8, o agganciate dal ponte): deterministico.
+  // Ritentare rifa' otto richieste in fila a hades per lo stesso identico esito, e queste
+  // sono le ricerche piu' care che abbiamo: e' proprio la risposta che va tenuta.
+  assert.strictEqual(srv._cacheable({ totale: 60, sources: {
+    subito: { status: 'ok', parziale: '1 famiglie Subito oltre il tetto di 8 non sono state chieste', parzialeRete: null },
+    autoscout: { status: 'ok' }, moto: { status: 'ok' } } }), true,
+    'famiglie Subito oltre il tetto: monco deterministico, resta cachabile');
   // MENU VERSIONI MOTO.IT caduto per RETE: la ricerca parte senza filtro versione (o con un
   // elenco monco), lo status resta 'ok', ma congelarla tre minuti renderebbe inutile
   // ripremere Cerca — il ritentativo funzionerebbe (motoit-models non cacha i suoi KO).

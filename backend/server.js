@@ -131,9 +131,13 @@ const TIMEOUT_MS = 45000;
 const USE_AS24_GRAPHQL = process.env.USE_AS24_GRAPHQL !== '0';
 // I vincoli che il ramo a browser NON sa dire alla fonte. Un ripiego che li ignorasse
 // riempirebbe la colonna di annunci piu' larghi della domanda, marcati come giusti.
+// Il raggio vale come vincolo solo se e' PARTITO davvero: senza regione non c'e' centro da cui
+// misurarlo, `autoscoutGeo` resta vuoto (si assegna solo dentro `if (params.regione && asMakeId)`)
+// e il GraphQL cerca in tutta Italia. Rifiutare il ripiego a browser per un vincolo che nemmeno
+// il percorso principale ha applicato spegneva la colonna in cambio di niente.
 const vincoloNonTraducibile = p =>
   filtriAuto.attivi(p.filtriAuto) ? 'i filtri avanzati non passano'
-  : p.raggio ? 'il raggio in km non passa'
+  : p.raggio && p.autoscoutGeo ? 'il raggio in km non passa'
   : null;
 async function scrapeAutoscoutSmart(params, opts = {}) {
   if (USE_AS24_GRAPHQL) {
@@ -215,7 +219,15 @@ async function scrapeAutoscoutUnion(params, opts = {}) {
   // risultato monco che non si dichiara e' esattamente il difetto che questo campo chiude.
   const parziale = errori.length
     ? `${errori.length}/${grafie.length} grafie AS24 fallite: ${errori[0].message}` : null;
-  return { items: [...byUrl.values()], total: null, parziale };
+  // Il GraphQL tagga gia' 403/429 come `blocked`: quel genere NON va sciolto nella stringa
+  // `parziale`, senno' runSource registra 'ok' (gli item delle grafie superstiti ci sono) e il
+  // freno azzera i colpi proprio mentre AS24 ci sta respingendo. Come subito-api.js:668.
+  const respinte = errori.filter(e => e && e.kind === 'blocked');
+  const bloccoParziale = respinte.length
+    ? Object.assign(new Error(`AS24 ha respinto ${respinte.length} grafie su ${grafie.length} (${respinte[0].message})`),
+      { kind: 'blocked', status: respinte[0].status })
+    : null;
+  return { items: [...byUrl.values()], total: null, parziale, bloccoParziale };
 }
 
 // Subito: API di prima parte hades.subito.it come PRIMARIO (JSON diretto, niente
@@ -424,14 +436,19 @@ app.use(gateAuth);
  * il proprietario. Il limite al minuto che c'e' gia' protegge dalle raffiche, non dal totale di
  * una giornata.
  *
- * Vale per chi si e' registrato (ruolo demo con un nome). Il proprietario e i colleghi `full`
- * non hanno tetto: quella e' la loro macchina.
+ * Vale per OGNI ospite, l'anonimo compreso. Esentare la password condivisa perche' "non scrive
+ * e non ha un nome" e' una ragione da SCRITTURA, e qui non si difende un elenco: si difende il
+ * traffico che esce dall'IP di casa. L'ospite senza nome e' anzi quello che ne fa di piu' —
+ * quella password gira di mano in mano e non risale a nessuno. Non avendo un nome paga su un
+ * secchio solo, condiviso fra tutti quelli che ce l'hanno: 'demo' e' un id riservato
+ * (ID_RISERVATI in auth.js), quindi in quel conto non puo' finirci una persona vera.
+ *
+ * Il proprietario e i colleghi `full` non hanno tetto: quella e' la loro macchina.
  */
 const TETTO_GIORNALIERO = 50;
 function tettoGiornaliero(req, res, next) {
   if (!auth.isEnabled()) return next();                        // app locale aperta
   if (req.authRole !== 'demo' || !req.authId) return next();   // owner e full non hanno tetto
-  if (req.authId === 'demo') return next();                    // l'ospite anonimo non scrive e non ha un nome
   try {
     const g = utentiDb.consumaRicerca(req.authId, TETTO_GIORNALIERO);
     if (!g.ok) {
@@ -1202,6 +1219,9 @@ function sciogli(r) {
     // Il risultato copre TUTTE le richieste fatte alla fonte? La union multi-grafia lo
     // dichiara quando una grafia e' caduta: gli item ci sono ma ne mancano altri.
     parziale: (r && r.parziale) || null,
+    // Dentro `parziale` convivono monchi TRANSITORI e DETERMINISTICI: questo dice se ce n'e'
+    // almeno uno transitorio. cacheable() legge il flag, mai la stringa — che e' per lo schermo.
+    parzialeRete: (r && r.parzialeRete) || null,
     // La fonte ha risposto, ma sa di non aver letto bene: e' successo davvero — una
     // pagina in cui nessun annuncio porta un prezzo non e' un mercato senza prezzi, e'
     // un'etichetta del payload che e' cambiata. Stessa convenzione dei Ricambi.
@@ -1254,7 +1274,13 @@ async function runSource(lavoro, ms, nomeSito, chiaveFonte) {
       segna(Object.assign(new Error(s.sospetto), { kind: 'error' }), 0);
       return { ...s, status: 'error', reason: s.sospetto };
     }
-    segna(null, s.items.length);
+    // BLOCCO PARZIALE, stessa regola di runSubito: qualche pagina/grafia e' stata RESPINTA e
+    // altre no. Lo stato resta 'ok' (gli annunci ci sono), ma al freno deve arrivare la respinta
+    // col suo genere vero: con `errore: null` il ramo 'ok' di fonti-salute azzera i colpi, e in
+    // un regime di respinta parziale sostenuta il blocco non veniva contato MAI nemmeno una
+    // volta — la fonte non andava in pausa nemmeno respingendo due terzi delle richieste.
+    if (s.bloccoParziale) segna(s.bloccoParziale, s.items.length);
+    else segna(null, s.items.length);
     // Un risultato parziale con item resta 'ok' (il flag sta ACCANTO allo status, mai al
     // posto suo — stessa regola di `allargato`), ma il perche' viaggia in `reason` e il
     // campo `parziale` arriva fino a `sources`, dove cacheable() lo legge.
@@ -1422,7 +1448,13 @@ function cacheable(data) {
   if (bad(src.subito?.status) || bad(src.autoscout?.status) || bad(src.moto?.status)) return false;
   // Un risultato PARZIALE (grafie AS24 cadute con item superstiti) e' monco quanto un
   // timeout: congelarlo tre minuti renderebbe inutile il gesto di ripremere Cerca.
-  if (src.subito?.parziale || src.autoscout?.parziale || src.moto?.parziale) return false;
+  if (src.autoscout?.parziale || src.moto?.parziale) return false;
+  // SUBITO no: nel suo `parziale` finiscono anche i monchi DETERMINISTICI — le famiglie oltre
+  // il tetto di 8 (subito-api.js) e quelle agganciate dal ponte che `bm` non puo' chiedere
+  // insieme. Ritentare rifa' otto richieste in fila a hades (con le pause) per lo stesso
+  // identico esito, quindi quella ricerca non entrava in cache MAI: doppio traffico verso la
+  // fonte proprio sulle ricerche piu' care. Si guarda il flag, come per Moto.it qui sotto.
+  if (src.subito?.parzialeRete) return false;
   // Il menu versioni Moto.it caduto per RETE: la ricerca parte senza filtro versione (o con
   // un elenco monco che puo' agganciare la versione sbagliata) ma lo status resta 'ok'.
   // Stessa classe dei due casi qui sopra. I monchi deterministici (oltre 12 famiglie,
@@ -1655,7 +1687,11 @@ async function runSearchCore(params) {
       params.motoitBrandSlug = brandEntry?.motoit?.brandSlug || resolveMotoitSlug(params.marca) || null;
     }
     if (!params.motoitModelSlug && modelEntry?.slugMotoIt) {
-      params.motoitModelSlug = modelEntry.slugMotoIt;
+      // TERZO ingresso dello slug, e vuole la correzione come gli altri due (menu e
+      // parametro dal client): `modelEntry` esce da data/models.json GREZZO, quindi qui
+      // passa il kx-250 che Moto.it non conosce — e assegnandolo si salta pure
+      // famiglieMotoit, cioe' l'unica via che avrebbe ripescato lo slug buono.
+      params.motoitModelSlug = correggiModelSlug(modelEntry.slugMotoIt);
     }
     // Slug-modello ON-DEMAND dalla pagina-brand Moto.it (catalogo incompleto: lo
     // slug manca per molti modelli → senza, la ricerca browser sarebbe brand-only
@@ -2301,6 +2337,10 @@ async function runSearchCore(params) {
       subito:    { status: subitoRes.status, reason: subitoRes.reason || null, count: countBy('subito'),
                    totale: subitoRes.total ?? null,
                    parziale: [subitoRes.parziale, subitoNonChieste].filter(Boolean).join(' · ') || null,
+                   // Vero SOLO se dentro quella stringa c'e' un monco TRANSITORIO (famiglie
+                   // cadute). Le famiglie mai chieste — oltre il tetto, o agganciate dal ponte
+                   // qui sopra — sono deterministiche e non lo alzano: cacheable() le cacha.
+                   parzialeRete: subitoRes.parzialeRete || null,
                    // Con l'interruttore di servizio la ricerca E' a parole, anche quando il
                    // nodo di catalogo era stato risolto: dirla 'id' la spaccerebbe per una
                    // ricerca precisa che non e'.
@@ -2413,7 +2453,21 @@ async function _checkAll(utente, { onlyStale = false, cap = Infinity } = {}) {
   }
   const now = Date.now();
   let done = 0;
-  for (const s of saved.listSaved(utente)) {   // s ha già params/label → passato diretto
+  /**
+   * LA CODA GIRA: PRIMA CHI E' STATO GUARDATO DA PIU' TEMPO.
+   *
+   * `listSaved` rende le ricerche nell'ordine in cui sono state salvate (`ORDER BY rowid`), e
+   * l'upsert di `saveAll` quell'ordine non lo cambia mai — il rowid resta quello del primo
+   * inserimento. Con un tetto (20 dal bottone «Controlla», 5 dal boot-check) si ripartiva
+   * sempre dalla stessa testa: chi aveva piu' ricerche del tetto non vedeva controllata MAI la
+   * coda dell'elenco, e da li' non arrivava nessun avviso per quanto insistesse.
+   *
+   * `lastChecked` lo scrive `recordCheck` su disco, quindi il giro prosegue anche fra riavvii;
+   * chi non e' mai stato controllato (null → 0) passa per primo, e a parita' resta l'ordine di
+   * salvataggio. Serve anche a `onlyStale`, che cosi' incontra per prime proprio le stantie.
+   */
+  const coda = saved.listSaved(utente).sort((a, b) => (a.lastChecked || 0) - (b.lastChecked || 0));
+  for (const s of coda) {   // s ha già params/label → passato diretto
     if (done >= cap) break;
     if (onlyStale && s.lastChecked && now - s.lastChecked < SAVED_STALE_MS) continue;
     // `done` conta i TENTATIVI: il costo verso le fonti si paga anche quando il controllo
@@ -2561,7 +2615,7 @@ app.post('/api/saved/check', express.json(), async (req, res) => {
       const daFare = id
         ? (saved.getSaved(chi, id) ? 1 : 0)
         : (subitoSession.isSubitoBlocked() ? 0 : Math.min(20, saved.listSaved(chi).length));
-      if (daFare && auth.isEnabled() && req.authRole === 'demo' && req.authId && req.authId !== 'demo') {
+      if (daFare && auth.isEnabled() && req.authRole === 'demo' && req.authId) {
         let g;
         try { g = utentiDb.consumaRicerche(req.authId, daFare, TETTO_GIORNALIERO); }
         catch (e) { return { rifiuto: { status: 503, corpo: { error: 'Il registro delle persone non e\' raggiungibile: riprova piu\' tardi.' } } }; }

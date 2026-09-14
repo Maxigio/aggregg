@@ -170,6 +170,16 @@ function mount(app, deps = {}) {
   async function scaricaParco(utente, chiave, forza) {
     let voce = C.leggi(utente).find(v => chiaveDi(v) === String(chiave));
     if (!voce) { const e = new Error('non e\' nell\'elenco'); e.stato = 404; throw e; }
+    const k = chiaveDi(voce);
+    const hit = cache.get(k);
+    if (!forza && hit && Date.now() - hit.ts < TTL) {
+      // LA CACHE NON HA PADRONE, LA `voce` SI'. La chiave e' `fonte:id` — la vetrina e' la stessa
+      // per tutti, ed e' giusto che i veicoli scaricati si condividano — ma `voce` porta i campi
+      // PERSONALI di chi guarda (il gruppo che ha assegnato, `mio`, il nome che ha scelto): quella
+      // di chi ha scaricato per primo non deve finire sullo schermo del secondo. Si sostituisce
+      // con la riga del chiamante, appena riletta.
+      return { ...hit.dati, voce, daCache: true, quando: new Date(hit.ts).toISOString() };
+    }
     // Le vetrine salvate prima avevano tre campi: nome, dove, via. Ora la pagina ne da'
     // molti di piu' (telefoni, orari, valutazione, servizi, logo) e chi ce l'ha gia' in
     // elenco non deve toglierla e rimetterla per vederli: si rilegge una volta sola,
@@ -177,6 +187,15 @@ function mount(app, deps = {}) {
     // `voce.url` puo' mancare: le vetrine aggiunte da un annuncio hanno l'id ma non il link
     // della pagina. Senza questa guardia si tentava una risoluzione destinata a fallire a
     // ogni singolo scarico del parco.
+    /**
+     * E STA DOPO LA CACHE, non prima. Questa e' una richiesta di rete, e la rotta addebita
+     * `limiteParco` solo quando il parco NON arriva dalla cache: messa prima, partiva anche
+     * sul ramo «dalla cache» — quello che al chiamante non costa niente — fuori da qualunque
+     * contatore. E non si autoripara: `schedaLetta` diventa true solo se `risolviVetrina`
+     * riesce, quindi una vetrina chiusa (404) rifaceva quella GET a ogni apertura del parco,
+     * per sempre. Qui il tentativo vive dentro uno scarico gia' addebitato: al massimo uno
+     * ogni scarico reale, cioe' sei ogni dieci minuti.
+     */
     if (!voce.schedaLetta && voce.url) {
       try {
         const fresca = await C.risolviVetrina(voce.url);
@@ -194,17 +213,11 @@ function mount(app, deps = {}) {
         const attuale = tutte.find(v => chiaveDi(v) === String(chiave)) || voce;
         voce = { ...voce, ...fresca, id: attuale.id, mio: attuale.mio, aggiunto: attuale.aggiunto, gruppo: attuale.gruppo, schedaLetta: true };
         if (!C.leggi.ultimoErrore) C.scrivi(utente, tutte.map(v => (chiaveDi(v) === String(chiave) ? voce : v)));
-      } catch (_) { /* la vetrina non risponde: si va avanti con quello che c'e' */ }
-    }
-    const k = chiaveDi(voce);
-    const hit = cache.get(k);
-    if (!forza && hit && Date.now() - hit.ts < TTL) {
-      // LA CACHE NON HA PADRONE, LA `voce` SI'. La chiave e' `fonte:id` — la vetrina e' la stessa
-      // per tutti, ed e' giusto che i veicoli scaricati si condividano — ma `voce` porta i campi
-      // PERSONALI di chi guarda (il gruppo che ha assegnato, `mio`, il nome che ha scelto): quella
-      // di chi ha scaricato per primo non deve finire sullo schermo del secondo. Si sostituisce
-      // con la riga del chiamante, appena riletta.
-      return { ...hit.dati, voce, daCache: true, quando: new Date(hit.ts).toISOString() };
+      } catch (e) {
+        // Muto no: una vetrina che non risponde piu' e' l'unico segno che il concessionario
+        // ha chiuso la pagina, e il parco che segue non lo dice.
+        console.warn(`[competitor] scheda ${k} non riletta (${e.message}) — si va avanti con quello che c'e'.`);
+      }
     }
     let p;
     try { p = await C.parco(voce); }
