@@ -111,6 +111,36 @@ test('la pausa parte corta e si allunga solo se ricapita', () => {
   });
 });
 
+test('la scala si scorda: dopo mesi di pace un doppio 403 vale 15 minuti, non sei ore', () => {
+  conCartella(dir => {
+    const stop = () => {
+      salute.registra('subito', { errore: err('403', 403) });
+      salute.registra('subito', { errore: err('403', 403) });
+      return salute.fermo('subito').fino - Date.now();
+    };
+    stop();
+    salute.registra('subito', { conteggio: 1 });
+    stop();
+    salute.registra('subito', { conteggio: 1 });
+    assert.ok(stop() > salute.FINESTRE[1], 'tre pause attaccate devono arrivare al gradino lungo');
+
+    // Mesi dopo, processo nuovo: sul disco `stop_fatti` e' ancora quello, la pausa e' finita da
+    // un pezzo. `fermo()` PRIMA di `registra()` com'e' l'ordine vero in server.js (`runSearch`
+    // chiede la pausa di tutte e tre le fonti prima di lanciarle): senza, la riga nascerebbe
+    // vuota in memoria e il valore del disco non rientrerebbe mai — la prova non proverebbe.
+    salute._reset();
+    const d = new DatabaseSync(path.join(dir, 'amr-fonti.db'));
+    d.prepare('UPDATE salute SET ferma_fino_a = NULL, aggiornata_il = ? WHERE fonte = ?')
+      .run(Date.now() - 90 * 24 * 60 * 60 * 1000, 'subito');
+    d.close();
+    assert.strictEqual(salute.fermo('subito').fermo, false, 'la pausa di mesi fa e\' finita');
+
+    const dopo = stop();
+    assert.ok(dopo <= salute.FINESTRE[0] + 1000,
+      `un singhiozzo dopo mesi di pace non puo' spegnere la fonte per sei ore (era ${dopo})`);
+  });
+});
+
 test('auth non ferma niente: e\' una sessione da rinnovare, non un ban', () => {
   conCartella(() => {
     for (let i = 0; i < 5; i++) salute.registra('subito', { errore: err('401', 401) });
@@ -204,6 +234,21 @@ test('azzera toglie il freno a mano', () => {
   });
 });
 
+test('azzera toglie anche la scala, non solo la pausa in corso', () => {
+  conCartella(() => {
+    const stop = () => {
+      salute.registra('subito', { errore: err('403', 403) });
+      salute.registra('subito', { errore: err('403', 403) });
+      return salute.fermo('subito').fino - Date.now();
+    };
+    stop();
+    salute.azzera('subito');
+    const dopo = stop();
+    assert.ok(dopo <= salute.FINESTRE[0] + 1000,
+      `tolto il freno a mano, il blocco dopo deve ripartire dal gradino corto (era ${dopo})`);
+  });
+});
+
 // ─── il presidio: qui dentro non entrano dati delle persone ──────────────────────────────────
 test('la tabella NON puo\' acquistare colonne oltre quelle dichiarate', () => {
   conCartella(dir => {
@@ -250,6 +295,37 @@ test('una risposta buona da runSource toglie la pausa', async () => {
     assert.strictEqual(salute.fermo('moto').fermo, true);
     await srv._runSource(async () => ({ items: [{ url: 'x' }], total: 1 }), 500, 'Moto.it', 'moto');
     assert.strictEqual(salute.fermo('moto').fermo, false);
+  });
+});
+
+test('una respinta PARZIALE di Autoscout arriva al freno col suo genere', async () => {
+  await conCartella(async () => {
+    // Qualche pagina/grafia respinta e altre no: prima usciva il solo `parziale`, cioe' una
+    // stringa, e runSource registrava `errore: null` con item > 0 — un 'ok', che AZZERA i colpi.
+    // In un regime di respinta parziale sostenuta il blocco non veniva contato mai nemmeno una
+    // volta: AS24 respingeva due terzi delle richieste a ogni giro e non andava mai in pausa.
+    const parzialmenteRespinta = async () => ({
+      items: [{ url: 'a' }, { url: 'b' }], total: null,
+      parziale: '2/3 grafie AS24 fallite: AS24 GraphQL HTTP 403',
+      bloccoParziale: Object.assign(new Error('AS24 ha respinto 2 grafie su 3'), { kind: 'blocked', status: 403 }),
+    });
+    const primo = await srv._runSource(parzialmenteRespinta, 500, 'Autoscout24', 'autoscout');
+    assert.strictEqual(primo.status, 'ok', 'gli annunci superstiti ci sono: la colonna non si spegne');
+    assert.match(String(primo.reason), /grafie AS24 fallite/, 'e la nota parziale resta dov\'era');
+    assert.strictEqual(salute.fermo('autoscout').fermo, false, 'una respinta sola non ferma niente');
+    await srv._runSource(parzialmenteRespinta, 500, 'Autoscout24', 'autoscout');
+    assert.strictEqual(salute.fermo('autoscout').fermo, true,
+      'due respinte parziali di fila devono fermare la fonte come due respinte piene');
+
+    // Controprova: un elenco monco SENZA respinta (pagina caduta per timeout/markup) non e' un
+    // blocco. Se anche questo frenasse, un singhiozzo qualsiasi toglierebbe la fonte per ore.
+    salute.azzera('autoscout');
+    const soloMonco = async () => ({ items: [{ url: 'a' }], total: null,
+      parziale: '1 pagine su 3 non si sono lasciate leggere da Autoscout', bloccoParziale: null });
+    await srv._runSource(soloMonco, 500, 'Autoscout24', 'autoscout');
+    await srv._runSource(soloMonco, 500, 'Autoscout24', 'autoscout');
+    assert.strictEqual(salute.fermo('autoscout').fermo, false,
+      'un elenco monco senza respinta non e\' un blocco: non deve mettere in pausa la fonte');
   });
 });
 

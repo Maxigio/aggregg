@@ -15,7 +15,7 @@
 const { chromium } = require('playwright');
 const path = require('path');
 const https = require('https');
-const { parseEuro, parseKm, REGION_AS24, resolveChromiumExecutable } = require('./utils');
+const { parseEuro, parseKm, REGION_AS24, resolveChromiumExecutable, kindForStatus } = require('./utils');
 // Vedi subito-playwright.js: il ripiego a browser entra nel conto delle richieste, senno'
 // il contatore misura tutto tranne il ramo piu' caro.
 const budget = require('../budget-richieste');
@@ -69,7 +69,22 @@ function httpGetText(url, hops = 0) {
  * e per tre minuti in cache. Un blocco e' un errore, e si dichiara.
  */
 class As24BlockedError extends Error {
-  constructor(reason) { super('AS24 bloccato: ' + reason); this.reason = reason; }
+  constructor(reason, causa = null) {
+    super('AS24 bloccato: ' + reason);
+    this.reason = reason;
+    // IL FRENO LEGGE I TAG, NON IL MESSAGGIO. Questo era l'unico errore di blocco del progetto
+    // senza `kind`/`status`, e fonti-salute scendeva percio' alla lettura del testo — dove
+    // nessun motivo aggancia: fra `_` e `4` di "http_403" non c'e' confine di parola, quindi
+    // ogni respinta usciva come 'errore' generico, che conta i fallimenti ma non ferma niente.
+    // Il ramo a browser continuava a bussare 3 volte per ricerca a una fonte che ci stava
+    // bloccando. Stessa taggatura del gemello GraphQL (`fail(..., kindForStatus(status))`).
+    const m = /^http_(\d{3})$/.exec(String(reason));
+    this.status = m ? Number(m[1]) : (causa && causa.status) || null;
+    // Senza status il genere lo porta la pagina che ha causato il blocco: 'no_data' e
+    // 'no_listings' da soli restano 'error' (un markup cambiato non deve mettere in pausa
+    // la fonte per ore — e' la stessa regola del ramo `sospetto` di runSource).
+    this.kind = m ? kindForStatus(Number(m[1])) : (causa && causa.kind) || 'error';
+  }
 }
 
 // Parse __NEXT_DATA__ da HTML → { items, ok }. ok=false ⇒ struttura attesa
@@ -233,6 +248,13 @@ function parseListing(item) {
     anno:       parseAnno(item.vehicleDetails),
     carburante: detail(item.vehicleDetails, 'Carburante') || null,
     provincia:  parseProvincia(item.location?.city, item.location?.zip),
+    // IL CAP SI EMETTE, NON SOLO SI LEGGE. Il taglio regione del server (`as24RegioneDaCap`)
+    // gira su `r.zip`, e la sua regola «un annuncio senza CAP non si butta» assolveva percio'
+    // OGNI riga del ripiego: il cerchio AS24 e' largo apposta fino a sbordare nelle regioni
+    // confinanti (25 calabresi su 100 letti, cerchio Sicilia) e restava senza la correzione
+    // per CAP che e' l'unica cosa che lo rende accettabile. Il CAP era gia' in mano qui sopra,
+    // passato a parseProvincia; mancava solo di uscire. Stesso campo del gemello GraphQL.
+    zip:        item.location?.zip || null,
     // §22 strutturati (mostrati istantanei nel pannello "Dettagli")
     cambio:     item.vehicle?.transmission || null,
     cilindrata,
@@ -346,17 +368,19 @@ async function scrapeAutoscout(params, fetta = 0) {
   // tengono (comportamento di sempre, e con sort priceasc la pagina 1 porta il segnale).
   // Ma se l'esito sarebbe lo ZERO e almeno una pagina era un blocco, quello zero e' un
   // fantasma: si dichiara il blocco invece di spacciarlo per mercato vuoto.
-  let sospetto = false;
+  let sospetto = null;   // l'ERRORE, non un flag: e' lui che porta kind/status fino al freno
   let cadute = 0;
   const pages = await Promise.all(urls.map(u => fetchPage(browser, u).catch(err => {
-    if (err instanceof As24BlockedError) sospetto = true;
+    // Fra piu' pagine respinte vince la ban-class: un 403 in mezzo a due 'no_data' e' comunque
+    // la fonte che ci sta respingendo, ed e' quello che il freno deve vedere.
+    if (err instanceof As24BlockedError && (!sospetto || err.kind === 'blocked')) sospetto = err;
     cadute++;
     console.warn(`[AS24-PW] Errore pagina ${u}: ${err.message}`);
     return [];
   })));
 
   const risultati = dedup(pages);
-  if (!risultati.length && sospetto) throw new As24BlockedError('soft_block');
+  if (!risultati.length && sospetto) throw new As24BlockedError('soft_block', sospetto);
   console.log(`[AS24-PW] Totale: ${risultati.length} annunci (${pages.map(p => p.length).join('+')})${cadute ? ` [${cadute}/${urls.length} pagine non lette]` : ''}`);
   /**
    * TENERE LE PAGINE SUPERSTITI E' GIUSTO, NON DIRLO NO.
@@ -373,6 +397,15 @@ async function scrapeAutoscout(params, fetta = 0) {
     items: risultati,
     total: null,
     parziale: `${cadute} pagine su ${urls.length} non si sono lasciate leggere da Autoscout: l'elenco e' parziale`,
+    // La RESPINTA viaggia come ERRORE col suo genere, non ridotta alla stringa `parziale`
+    // (stesso stampo del gemello Subito, subito-api.js:668). Senza, runSource registrava
+    // `errore: null` con item > 0 — cioe' un 'ok' — e il ramo 'ok' di fonti-salute AZZERA i
+    // colpi: respingendo due pagine su tre a ogni giro, la fonte non arrivava mai ai due
+    // blocchi di fila che la mettono in pausa.
+    bloccoParziale: sospetto && sospetto.kind === 'blocked'
+      ? Object.assign(new Error(`Autoscout ha respinto ${cadute} pagine su ${urls.length} (${sospetto.message})`),
+        { kind: 'blocked', status: sospetto.status })
+      : null,
   };
 }
 

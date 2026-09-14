@@ -16,6 +16,9 @@
  *
  * 2. LA FINESTRA PARTE CORTA E CRESCE. Prima era sempre 6 ore. Adesso 15 minuti, poi un'ora,
  *    poi sei: se era un incidente si riparte quasi subito, se e' un ban vero ci si allontana.
+ *    E LA SCALA SI SCORDA: se dopo la pausa la fonte torna a lavorare bene piu' a lungo della
+ *    pausa piu' lunga, il blocco successivo riparte da 15 minuti. Senza, `stop_fatti` cresceva
+ *    e basta e dalla terza pausa in poi si tornava per sempre al "sempre 6 ore" di prima.
  *
  * 3. LO STATO VIVE IN MEMORIA, IL DISCO SERVE SOLO A SOPRAVVIVERE A UN RIAVVIO. `node:sqlite`
  *    e' SINCRONO: scrivere a ogni esito vorrebbe dire bloccare il processo tre volte per
@@ -141,6 +144,7 @@ function vuotaRiga(fonte) {
     vuoti: 0,          // vuoti consecutivi
     fermaFinoA: null,  // epoch ms
     stopFatti: 0,      // quante volte si e' gia' fermata → sceglie la finestra
+    scalaFinoA: 0,     // fin quando `stopFatti` vale ancora (non si salva: si ricostruisce)
     aggiornataIl: 0,
   };
 }
@@ -188,6 +192,9 @@ function apri({ crea = false } = {}) {
       m.fermaFinoA = ferma ? Math.min(ferma, adesso + FINESTRA_MAX) : null;
       m.stopFatti = Number(r.stop_fatti) || 0;
       m.aggiornataIl = Number(r.aggiornata_il) || 0;
+      // Anche la scala ereditata dal disco invecchia: si misura dall'ultimo cambio di stato
+      // scritto, senno' uno `stop_fatti` di mesi fa darebbe sei ore al primo inciampo di oggi.
+      m.scalaFinoA = (m.fermaFinoA || m.aggiornataIl) + FINESTRA_MAX;
       // Se il disco dice che era ferma, allora i colpi c'erano stati: si ricostruisce il minimo
       // coerente, senno' al riavvio servirebbero due NUOVI blocchi per rimettersi in pausa.
       if (m.fermaFinoA) m.colpi = COLPI_PER_FERMARSI;
@@ -270,8 +277,16 @@ function registra(fonte, { errore = null, conteggio = 0 } = {}) {
     m.vuoti = 0;
     m.colpi++;
     if (m.colpi >= COLPI_PER_FERMARSI && !eraFerma) {
+      const adesso = Date.now();
+      // LA SCALA DECADE, come i colpi. `stopFatti` saliva e non scendeva mai: dalla terza pausa
+      // in poi un doppio 403 passeggero valeva sei ore per sempre, cioe' il comportamento che il
+      // punto 2 dell'intestazione esiste per sostituire. Se da quando la pausa precedente e'
+      // finita e' passato piu' della pausa piu' lunga, quell'episodio e' chiuso: si riparte dal
+      // gradino corto.
+      if (adesso > m.scalaFinoA) m.stopFatti = 0;
       const finestra = FINESTRE[Math.min(m.stopFatti, FINESTRE.length - 1)];
-      m.fermaFinoA = Date.now() + finestra;
+      m.fermaFinoA = adesso + finestra;
+      m.scalaFinoA = m.fermaFinoA + FINESTRA_MAX;
       m.stopFatti++;
       salva(m);
       console.error(`[fonti] ${fonte} sembra bloccarci (${m.colpi} di fila) → ferma per ${Math.round(finestra / MINUTO)} min`);
@@ -332,6 +347,9 @@ function azzera(fonte = null) {
     const m = memoria.get(k);
     if (!m) continue;
     m.colpi = 0; m.fallimenti = 0; m.vuoti = 0; m.fermaFinoA = null;
+    // Anche la scala: togliere il freno a mano e lasciare `stopFatti` su vorrebbe dire che la
+    // fonte torna subito ma il blocco dopo la ferma per il gradino piu' lungo.
+    m.stopFatti = 0; m.scalaFinoA = 0;
     salva(m);
     toccate++;
   }

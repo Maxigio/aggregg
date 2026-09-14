@@ -72,7 +72,8 @@ function slugDaUrl(url) {
  * diverse. Il dato c'era gia' e lo usavamo per FILTRARE: era solo l'etichetta a ignorarlo.
  *
  * @param {string} slug         lo slug-versione (da `slugDaUrl`)
- * @param {string} modelloSlug  lo slug del modello, che si toglie dal davanti
+ * @param {string} modelloSlug  lo slug del modello, che si toglie dal davanti; puo' essere
+ *                              una LISTA di famiglie separate da virgola (vedi sotto)
  * @returns {string|null} es. "S · 1997–2004", "1993–2004", null se lo slug non si legge
  */
 function varianteDaSlug(slug, modelloSlug) {
@@ -94,9 +95,22 @@ function varianteDaSlug(slug, modelloSlug) {
       periodo = `${da}–${a}`;
     }
   }
-  const mod = String(modelloSlug || '').trim();
+  /**
+   * IL MODELLO PUO' ARRIVARE COME LISTA, e va tolto lo stesso. `famiglieMotoit` risponde con
+   * piu' famiglie separate da virgola quando il nome chiesto e' largo ("Scarabeo" →
+   * scarabeo-50,scarabeo-125,scarabeo-500): confrontata intera, quella stringa non combacia
+   * mai e il nome del modello restava DENTRO la versione — "SCARABEO 500 · 2003–2006" nella
+   * colonna dove Subito e Autoscout scrivono la sola versione. E' la trappola descritta in
+   * cima a questo file: sembra una versione riconosciuta, ed e' solo il modello.
+   * Vince la famiglia PIU' LUNGA che combacia: su "scarabeo-500-s", fra "scarabeo" e
+   * "scarabeo-500", il modello e' il secondo.
+   */
+  const mods = String(modelloSlug || '').split(',').map(s => s.trim()).filter(Boolean)
+    .sort((a, b) => b.length - a.length);
   let nome = testa;
-  if (mod && (testa === mod || testa.startsWith(mod + '-'))) nome = testa.slice(mod.length).replace(/^-+/, '');
+  for (const mod of mods) {
+    if (testa === mod || testa.startsWith(mod + '-')) { nome = testa.slice(mod.length).replace(/^-+/, ''); break; }
+  }
   const parole = nome ? nome.split('-').filter(Boolean).map(w => w.toUpperCase()).join(' ') : '';
   if (parole && periodo) return `${parole} · ${periodo}`;
   return parole || periodo || null;

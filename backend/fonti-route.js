@@ -145,9 +145,12 @@ function mount(app, deps = {}) {
       // L'ora di cache solo se c'e' un dato dentro: "prezzi non disponibili adesso" e' un "non
       // lo so", e congelarlo un'ora fa sembrare guasta una fonte che e' tornata dopo un minuto.
       // I campi che le rotte di questo file emettono DAVVERO quando non hanno il dato: `notaPrezzi`
-      // (territorio senza MIMIT) e `motivo` (categoria mancante, misura mancante, fonte vuota).
+      // (territorio senza MIMIT), `motivo` (categoria mancante, misura mancante, fonte vuota) e
+      // `sospetto` (Wheel-Size: pagina 200 con i pannelli ma nessuna riga leggibile). Il terzo e'
+      // un guasto del parser, non un dato: la cache su disco gli da' gia' vita breve, e senza
+      // questa riga il browser si teneva comunque un'ora la risposta rotta.
       // Una risposta con uno di questi e' un "non lo so" e non si congela un'ora.
-      const vuoto = out && (out.notaPrezzi != null || out.motivo != null);
+      const vuoto = out && (out.notaPrezzi != null || out.motivo != null || out.sospetto != null);
       res.set('Cache-Control', vuoto ? 'no-store' : 'public, max-age=3600');
       res.json({ ok: true, ...out });
     } catch (e) {

@@ -673,10 +673,16 @@ async function unioneFamiglieMoto(params, opts) {
     fuori ? `${fuori} famiglie Subito oltre il tetto di ${MAX_FAMIGLIE_MOTO} non sono state chieste` : null,
     errori ? `${errori} famiglie su ${chieste.length} non hanno risposto` : null,
   ].filter(Boolean).join(' · ') || null;
+  // Le due righe qui sopra sono monchi di natura DIVERSA, e nella stringa unica non si
+  // distinguono piu': le famiglie cadute sono transitorie (ritentare puo' cambiare esito),
+  // quelle oltre il tetto no — ritentare rifa' le stesse otto richieste in fila per lo stesso
+  // identico risultato. Il flag serve a cacheable(), che senno' leggerebbe la stringa e
+  // non cacherebbe MAI le moto a famiglia frammentata. Stampo di `versioneKoRete` (Moto.it).
+  const parzialeRete = errori > 0;
   if (parziale) console.warn(`[subito] moto "${params.marca} ${params.modello || ''}": ${parziale}`);
   const items = [...perUrl.values()];
   console.log(`[subito] moto "${params.marca} ${params.modello || ''}": ${chieste.length} famiglie → ${items.length} annunci`);
-  return opts.withMeta ? { items, truncated, total, parziale, sospetto: sospetti[0] || null, bloccoParziale } : items;
+  return opts.withMeta ? { items, truncated, total, parziale, parzialeRete, sospetto: sospetti[0] || null, bloccoParziale } : items;
 }
 
 async function scrapeSubitoApi(params, opts = {}) {

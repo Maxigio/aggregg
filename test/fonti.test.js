@@ -9,6 +9,8 @@
  */
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const fonti = require('../backend/fonti-route');
 const { FONTI } = fonti;
@@ -264,4 +266,57 @@ test('Wheel-Size: una cella riempita dal JavaScript resta null, non diventa spaz
     <td class="data-pressure"><span class="metric">2.2 2.0</span></td></tr>`);
   assert.strictEqual(righe[0].misura, null);
   assert.strictEqual(righe[0].pressioneAntBar, 2.2, 'la pressione invece c\'e su tutte le righe');
+});
+
+/**
+ * IL SOSPETTO DEL PARSER DEVE ARRIVARE A SCHERMO.
+ *
+ * Lo scraper distingue apposta due vuoti diversi — «questo mezzo non ha calzate a catalogo» e
+ * «non so piu' leggere la tabella» — ma il pannello dell'annuncio leggeva solo `calzate` e `nota`,
+ * e `nota` vale null dallo schema 2: quel ramo era morto e `sospetto` non lo leggeva nessuno. Con
+ * le colonne di Wheel-Size rinominate usciva «Nessuna misura in chiaro per Fiat Panda 2018», cioe'
+ * un'affermazione sul VEICOLO ricavata da un guasto nostro. Qui si esegue il corpo vero di
+ * frontend/app.js, non una sua copia.
+ */
+function corpoGomme() {
+  const APP = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const da = APP.indexOf('function gommeCorpoHTML(r, k) {');
+  assert.ok(da > 0, 'gommeCorpoHTML non e\' piu\' in frontend/app.js');
+  const a = APP.indexOf('\nasync function caricaGomme', da);
+  assert.ok(a > da, 'non trovo la fine di gommeCorpoHTML');
+  return new Function('escapeHtml', 'gommePneuHTML', APP.slice(da, a) + '\nreturn gommeCorpoHTML;')(
+    s => String(s == null ? '' : s), () => '');
+}
+
+test('Wheel-Size: la tabella illeggibile si dice, non diventa «nessuna misura per quel veicolo»', () => {
+  const gommeCorpoHTML = corpoGomme();
+  const k = { marca: 'Fiat', modello: 'Panda', anno: 2018 };
+  const sospetto = 'la pagina ha le generazioni ma nessuna riga leggibile: le colonne di Wheel-Size possono essere cambiate';
+
+  const rotto = gommeCorpoHTML({ _gomme: { stato: 'ok', d: { modello: 'Panda', calzate: [], generazioni: [{}, {}], sospetto, nota: null } } }, k);
+  assert.match(rotto, /colonne di Wheel-Size possono essere cambiate/, 'il sospetto del parser non arriva a schermo');
+  assert.doesNotMatch(rotto, /Nessuna misura in chiaro/, 'col parser rotto non si afferma niente sul veicolo');
+
+  // Il vuoto VERO resta quello di prima: la fonte ha risposto, il mezzo non ha misure in chiaro.
+  const vuoto = gommeCorpoHTML({ _gomme: { stato: 'ok', d: { modello: 'Panda', calzate: [{ misura: null }], sospetto: null, nota: null } } }, k);
+  assert.match(vuoto, /Nessuna misura in chiaro per Fiat Panda 2018/);
+});
+
+test('Wheel-Size: la risposta col sospetto non si congela un\'ora nel browser', async () => {
+  // La cache su disco da' gia' vita breve al risultato sospetto (`sospettoSe`), ma senza `sospetto`
+  // fra i "non lo so" di `via()` la fonte veniva ri-interrogata mentre chi guardava continuava a
+  // leggere per un'ora la risposta rotta tenuta dal browser.
+  const vero = wheelsize.calzate;
+  const risposta = d => { wheelsize.calzate = async () => d; return chiama('/api/fonti/cerchi/calzate', { marca: 'Fiat', modello: 'Panda', anno: '2018' }); };
+  const base = { marca: 'Fiat', modello: 'Panda', anno: 2018, generazioni: [{}], conMisura: 0, nota: null };
+  try {
+    const rotta = await risposta({ ...base, calzate: [], totale: 0, sospetto: 'le colonne di Wheel-Size possono essere cambiate' });
+    assert.strictEqual(rotta.corpo.sospetto, 'le colonne di Wheel-Size possono essere cambiate',
+      'il campo deve arrivare intero al frontend, o il pannello non puo' + '\' distinguere i due vuoti');
+    assert.strictEqual(rotta.headers['Cache-Control'], 'no-store');
+
+    // Una risposta con le misure dentro si tiene l'ora di cache: il taglio vale solo sul sospetto.
+    const buona = await risposta({ ...base, calzate: [{ misura: '175/65R15' }], totale: 1, conMisura: 1, sospetto: null });
+    assert.strictEqual(buona.headers['Cache-Control'], 'public, max-age=3600');
+  } finally { wheelsize.calzate = vero; }
 });
