@@ -16,6 +16,9 @@
 // const valutata al caricamento del modulo.
 const os = require('node:os'), fsTmp = require('node:fs'), pathTmp = require('node:path');
 process.env.AMR_LOG_DIR = fsTmp.mkdtempSync(pathTmp.join(os.tmpdir(), 'amr-log-'));
+// L'auth di questa prova e' SUA, non quella della macchina: auth.js sceglie il file al momento
+// della chiamata, quindi la cartella va puntata qui, prima di ogni require di backend.
+process.env.USER_DATA_PATH = fsTmp.mkdtempSync(pathTmp.join(os.tmpdir(), 'amr-accesso-'));
 
 const { test } = require('node:test');
 const assert = require('node:assert');
@@ -39,6 +42,17 @@ cp.execFile = function (bin, args) {
 };
 
 const auth = require('../backend/auth');
+/**
+ * LE CREDENZIALI SE LE FABBRICA IL TEST, come gia' fanno utenti.test.js e registrazioni.test.js.
+ *
+ * Prima i tre test dell'ingresso aprivano con `if (!auth.isEnabled()) return t.skip(...)`, e
+ * `isEnabled()` guarda il file VERO: su un clone fresco `data/auth.json` non c'e' (e' nel
+ * .gitignore) e `stato()` vale 'assente', quindi si saltavano in silenzio — cioe' nessuno
+ * vedeva una regressione del cancello proprio sulle macchine appena preparate, che sono quelle
+ * pubblicate da Funnel. La password demo VERA non serve: `makeToken('demo')` usa l'id
+ * predefinito 'owner' e `chiaveFirma` firma col solo `secret`, che questo auth.json ha.
+ */
+auth.setPassword('prova-ingresso');
 const srv = require('../backend/server');
 
 /** Risposta finta: raccoglie status, corpo e redirect senza toccare la rete. */
@@ -56,12 +70,13 @@ const reqFinta = (metodo, percorso, extra = {}) => ({
 });
 
 // ── 1. Gate demo ─────────────────────────────────────────────────────────────
-test('gate demo: le rotte private sono negate in QUALSIASI grafia del percorso', t => {
-  if (!auth.isEnabled()) return t.skip('auth non configurata su questa macchina');
-  // Un cookie demo vero, fatto con l'auth del repo: se la password demo non c'e', si salta.
+test('gate demo: le rotte private sono negate in QUALSIASI grafia del percorso', () => {
+  // Un cookie demo vero, fatto con l'auth del repo.
   const token = auth.makeToken('demo');
   const cookie = `amr_auth=${token}`;
-  if (auth.checkToken(token) !== 'demo') return t.skip('ruolo demo non disponibile');
+  // Se il cookie non vale 'demo' il resto della prova non proverebbe niente (passerebbe per 401,
+  // non per il gate): meglio rumore che un verde vuoto.
+  assert.strictEqual(auth.checkToken(token), 'demo', 'il cookie demo deve essere riconosciuto');
 
   const chiama = (metodo, percorso) => {
     const res = resFinta();
@@ -73,8 +88,7 @@ test('gate demo: le rotte private sono negate in QUALSIASI grafia del percorso',
   // Le grafie che il router di Express consegna comunque all'handler minuscolo.
   // `/api/logs` al posto delle vecchie `/api/crawl/*` (cancellate col crawler): serve una rotta
   // solo-owner scritta in maiuscolo, perche' e' la grafia che il gate deve normalizzare.
-  for (const p of ['/api/saved', '/API/saved', '/API/SAVED', '/Api/Saved', '/API/saved/',
-                   '/api/logs', '/API/LOGS']) {
+  for (const p of ['/api/logs', '/API/LOGS']) {
     const r = chiama('GET', p);
     assert.strictEqual(r.passato, false, `il demo e' passato su ${p}`);
     assert.strictEqual(r.status, 403, `${p} doveva rispondere 403, ha risposto ${r.status}`);
@@ -85,8 +99,7 @@ test('gate demo: le rotte private sono negate in QUALSIASI grafia del percorso',
 });
 
 // ── 2. Lockout del login ─────────────────────────────────────────────────────
-test('login: i tentativi sbagliati in parallelo si contano uno per uno', async t => {
-  if (!auth.isEnabled()) return t.skip('auth non configurata su questa macchina');
+test('login: i tentativi sbagliati in parallelo si contano uno per uno', async () => {
   const ip = '198.51.100.77';
   srv._loginAttempts.delete(ip);
 
@@ -113,8 +126,7 @@ test('login: i tentativi sbagliati in parallelo si contano uno per uno', async t
   srv._loginAttempts.delete(ip);
 });
 
-test('login: i fallimenti decadono dopo mezz\'ora di quiete', async t => {
-  if (!auth.isEnabled()) return t.skip('auth non configurata su questa macchina');
+test('login: i fallimenti decadono dopo mezz\'ora di quiete', async () => {
   const ip = '198.51.100.78';
   // Sette fallimenti vecchi di un'ora: non devono sommarsi a quello nuovo, altrimenti il
   // contatore lo azzera solo un login riuscito e chi condivide l'IP resta fuori a oltranza.
@@ -186,4 +198,59 @@ test('public-url: le richieste concorrenti a cache scaduta condividono UN solo t
   const url2 = await new Promise(risolvi => srv._tailscalePublicUrl(risolvi));
   assert.strictEqual(spawnFunnel, 1, 'a cache calda non parte nessun subprocess');
   assert.strictEqual(url2, 'https://finto.ts.net');
+});
+
+// ── 5. la rete d'emergenza: nessun errore esce come HTML con lo stack ────────
+/**
+ * QUESTO SI PROVA SOLO APRENDO UNA PORTA, e per una volta e' giusto cosi'.
+ *
+ * Il difetto non sta in un gestore ma in CHI SCRIVE LA RISPOSTA quando nessun gestore l'ha
+ * scritta: il finalizzatore di Express, che con `env` = 'development' (NODE_ENV non lo imposta
+ * nessuno) mette `err.stack` nel corpo. Una res finta non ci arriva mai — la catena vera parte
+ * dal parser del corpo, cioe' prima di ogni handler. Porta effimera su 127.0.0.1, due
+ * richieste, chiusa subito.
+ *
+ * /api/invito perche' e' il caso peggiore: sta in AUTH_FREE (nessuna sessione), il server e'
+ * pubblicato dal Funnel, e la pagina che la chiama fa `r.json()`.
+ */
+test('errori: /api/invito con corpo monco risponde {ok:false,error} in JSON, mai lo stack', async () => {
+  const http = require('node:http');
+  const ascolto = srv.app.listen(0, '127.0.0.1');
+  await new Promise(r => ascolto.once('listening', r));
+  const chiama = (corpo) => new Promise(risolvi => {
+    const r = http.request({
+      host: '127.0.0.1', port: ascolto.address().port, method: 'POST', path: '/api/invito',
+      headers: { 'content-type': 'application/json' },
+    }, risp => {
+      let b = '';
+      risp.on('data', c => { b += c; });
+      risp.on('end', () => risolvi({ stato: risp.statusCode, tipo: risp.headers['content-type'] || '', corpo: b, headers: risp.headers }));
+    });
+    r.on('error', e => risolvi({ stato: 0, tipo: '', corpo: String(e.message) }));
+    r.end(corpo);
+  });
+
+  try {
+    // JSON troncato → 400 del parser, e prima era 400 text/html con lo stack.
+    const monco = await chiama('{"token":');
+    assert.match(monco.tipo, /application\/json/, 'il corpo deve essere JSON, non la pagina d\'errore di Express');
+    assert.ok(!/\bat \w/.test(monco.corpo), 'nessuno stack nel corpo');
+    assert.ok(!monco.corpo.includes('BananaChePrezzi'), 'nessun percorso assoluto della repo nel corpo');
+    const j = JSON.parse(monco.corpo);   // lancia se non e' JSON: e' il `r.json()` della pagina
+    assert.strictEqual(j.ok, false);
+    assert.ok(j.error, 'un perche\' ci deve essere: senza, la pagina da\' la colpa alla rete');
+    assert.strictEqual(monco.headers['x-powered-by'], undefined, 'Express non deve dichiararsi al client');
+    assert.strictEqual(monco.headers['x-content-type-options'], 'nosniff');
+    assert.strictEqual(monco.headers['x-frame-options'], 'DENY');
+    assert.strictEqual(monco.headers['referrer-policy'], 'no-referrer');
+
+    // Corpo oltre il limite di 4kb → 413, stessa strada, stesso contratto.
+    const grosso = await chiama(JSON.stringify({ token: 'x'.repeat(5000) }));
+    assert.strictEqual(grosso.stato, 413);
+    assert.match(grosso.tipo, /application\/json/);
+    assert.ok(!grosso.corpo.includes('BananaChePrezzi'), 'nessun percorso assoluto nel 413');
+    assert.strictEqual(JSON.parse(grosso.corpo).ok, false);
+  } finally {
+    await new Promise(r => ascolto.close(r));
+  }
 });

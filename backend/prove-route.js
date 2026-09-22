@@ -64,7 +64,15 @@ function mount(app, deps = {}) {
       let voci = perModello((d && d.rilevamenti) || [], senzaGenerazione(String(modello || '')) || modello);
       const y = parseInt(anno, 10) || null;
       if (y) voci = voci.slice().sort((a, b) => Math.abs((a.anno || 0) - y) - Math.abs((b.anno || 0) - y));
-      res.json({ ok: true, marca: voce.nome, voci: voci.slice(0, 8), quante: voci.length, fonte: d && d.fonte });
+      // `completo`/`dichiarati` li calcola la fonte apposta (autoit-rilevamenti.js:246): se la
+      // paginazione si e' fermata a meta' per un guasto transiente l'elenco letto e' monco.
+      // Senza questi due campi una lista parziale e' indistinguibile da un'assenza, e il
+      // pannello finirebbe per dichiarare per la fonte una cosa che la fonte non ha detto —
+      // per 15 minuti, quanto dura in cache un risultato sospetto.
+      res.json({
+        ok: true, marca: voce.nome, voci: voci.slice(0, 8), quante: voci.length, fonte: d && d.fonte,
+        completo: d ? d.completo : null, dichiarati: d ? d.dichiarati : null,
+      });
     } catch (e) {
       res.json({ ok: false, error: e.message });
     }

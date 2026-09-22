@@ -329,17 +329,6 @@ test('una respinta PARZIALE di Autoscout arriva al freno col suo genere', async 
   });
 });
 
-test('la fonte in pausa conta come MUTA per gli avvisi', () => {
-  // Se non contasse, al ritorno della fonte i suoi annunci — sfrattati da `seen` — tornerebbero
-  // tutti come "nuovi": una raffica di avvisi falsi a ogni pausa.
-  assert.strictEqual(srv._fonteMuta({ status: 'skipped', reason: salute.MOTIVO_PAUSA }), true);
-  // Gli skip PERMANENTI invece no: quella marca su quella fonte non ci sara' nemmeno domani.
-  assert.strictEqual(srv._fonteMuta({ status: 'skipped', reason: 'marca non su Moto.it' }), false);
-  assert.strictEqual(srv._fonteMuta({ status: 'error', reason: 'boom' }), true);
-  assert.strictEqual(srv._fonteMuta({ status: 'ok', reason: null }), false);
-  assert.strictEqual(srv._fonteMuta({ status: 'empty', reason: null }), false);
-});
-
 test('il motivo della pausa e\' la STESSA stringa che il frontend sa tradurre', () => {
   // Il frontend mappa `reason` → etichetta con una tabella a chiavi esatte. Se qualcuno cambia
   // la costante in backend e non la tabella, a schermo esce la stringa grezza e nessuno se ne

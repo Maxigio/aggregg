@@ -236,7 +236,21 @@ async function tutti(tipo, { testo = null, pausaMs = 400, aPagina = PAGINA } = {
     out.push(...r.lotti);
     // Totale null = la fonte non l'ha detto in modo leggibile: allora l'unico segnale di fine che
     // resta e' `ultima` (o il tetto, che almeno si dichiara con `troncato`).
-    if (r.ultima || (totale !== null && out.length >= totale)) break;
+    if (r.ultima || (totale !== null && out.length >= totale)) {
+      // UNA PAGINA VUOTA A META' NON E' LA FINE, E' UN'USCITA ANTICIPATA. `pagina()` la traduce in
+      // `ultima` perche' e' anche cosi' che finisce una paginazione normale, ma il totale che la
+      // fonte ha dichiarato — e che abbiamo gia' in mano — dice se ne mancano. Tacere qui consegna
+      // meta' inventario timbrato completo (`troncato` copre SOLO il tetto), e a valle
+      // `sostituisci` marca sparito tutto il resto mentre il giro si scrive 'ok': stessa dottrina
+      // dell'involucro in `pagina()`, quel che non si e' letto si dichiara invece di degradarlo in
+      // un inventario plausibile. Sulla fine vera non scatta, perche' li' `out.length` e' gia'
+      // pari a `totale`; e si guarda SOLO la pagina vuota, perche' qualche lotto tolto dal portale
+      // durante i ~15 s del giro lascia un ammanco legittimo su una pagina piena.
+      if (!r.lotti.length && totale !== null && out.length < totale) {
+        throw fail(`PVP ${tipo}: paginazione interrotta, pagina ${p} vuota con ${out.length} lotti su ${totale} dichiarati`, { kind: 'transient' });
+      }
+      break;
+    }
     if (++p >= MAX_PAGINE) { troncato = true; break; }
     if (pausaMs) await new Promise(r2 => setTimeout(r2, pausaMs));
   }
@@ -244,6 +258,16 @@ async function tutti(tipo, { testo = null, pausaMs = 400, aPagina = PAGINA } = {
 }
 
 // ─── Dettaglio ───────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Gli status con cui il portale parla di QUESTO lotto e non di se stesso, e sono solo i due
+ * MISURATI: un lotto ritirato dopo il nostro giro risponde 403 («Operazione non consentita»), un
+ * id che non esiste risponde 400. Gli altri 4xx restano fuori apposta: il 404 e' il modo in cui
+ * risponde un PERCORSO MORTO dopo un rilascio del ministero — leggerlo come «lotto sparito»
+ * cancellerebbe la riscoperta descritta al punto 2 dell'intestazione — mentre 401 e 429 sono il
+ * portale che dice «non entri» e «rallenta», e valgono per tutte le richieste, non per un lotto.
+ */
+const LOTTO_SPARITO = new Set([400, 403]);
 
 /**
  * Il dettaglio di una vendita. `restricted` e' nel nome dell'endpoint ma la risposta e'
@@ -255,7 +279,17 @@ async function tutti(tipo, { testo = null, pausaMs = 400, aPagina = PAGINA } = {
  */
 async function dettaglio(idVendita) {
   const ep = await endpoints();
-  const j = await jsonEp(`/${ep.vendite}/vendite/${encodeURIComponent(idVendita)}/restricted`);
+  let j;
+  try {
+    j = await jsonEp(`/${ep.vendite}/vendite/${encodeURIComponent(idVendita)}/restricted`);
+  } catch (e) {
+    // `json` lancia su QUALUNQUE status diverso da 200, quindi senza questa riga il lotto che non
+    // c'e' piu' esce da /api/aste/:id come «il portale non risponde» — diagnosi sbagliata (il
+    // portale sta benissimo) e chi la legge ripreme, ripagando gettone e chiamata al ministero.
+    // `null` e' il «non trovato» che il chiamante distingue gia'.
+    if (LOTTO_SPARITO.has(e.status)) return null;
+    throw e;
+  }
   return (j && j.body) || null;
 }
 

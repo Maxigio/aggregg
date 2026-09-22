@@ -37,10 +37,18 @@ const scrapeAs24 = require('./scrapers/autoscout-graphql');
 const scrapeSubito = require('./scrapers/subito-api');
 const vetrinaMoto = require('./scrapers/motoit-vetrina');
 const { getDetail } = require('./scrapers/detail');
+const fontiSalute = require('./fonti-salute');
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const TIMEOUT_MS = 15000;
 const MAX_PAGINE = 40;            // 40 × 50 = 2000 veicoli: oltre, si dichiara troncato
+/**
+ * La pausa fra una pagina e l'altra. Gli scraper ce l'hanno gia' (`opts.pageDelayMs`) ma il
+ * loro default e' 0, e qui non la passava nessuno: uno scarico di parco e' la richiesta piu'
+ * profonda che facciamo — fino a 40 pagine per passata — e partiva a raffica. E' lo stesso
+ * valore che subito-api impone gia' fra le famiglie moto: «mai raffica verso la stessa fonte».
+ */
+const PAUSA_PAGINE_MS = 400;
 
 /* ─── dove si salva l'elenco ──────────────────────────────────────────────── */
 function filePath() {
@@ -329,6 +337,17 @@ async function parco(voce, dip = {}) {
   // si potrebbe verificare solo uscendo in rete verso la fonte vera.
   const as24 = dip.scrapeAs24 || scrapeAs24;
   const subito = dip.scrapeSubito || scrapeSubito;
+  // Anche il freno si inietta, e per lo stesso motivo degli scraper: senza, una prova che
+  // simula un 403 metterebbe in pausa una fonte VERA nell'archivio di chi sviluppa.
+  const salute = dip.salute || fontiSalute;
+  /**
+   * LA FONTE CHE CI STA BLOCCANDO NON SI INTERROGA, nemmeno da qui. Le fonti bannano la
+   * MACCHINA, non l'utente: questa strada restava fuori da `fonti-salute` in tutte e due i
+   * versi — una pausa decisa dalle ricerche non la fermava, e un 403 preso qui non contava
+   * un colpo, quindi la pausa non si allungava mai. Stessa chiave delle ricerche (`voce.fonte`
+   * vale 'subito' | 'autoscout' | 'moto'), cosi' i due lati vedono lo stesso stato.
+   */
+  if (salute.fermo(voce.fonte).fermo) throw new Error(`${voce.fonte}: ${salute.MOTIVO_PAUSA}`);
   const veicoli = [];
   let troncato = false;        // il TETTO nostro (40 pagine): il parco e' piu' grande
   const passateKo = [];        // passate cadute: non si sa quanto manca, e non e' un tetto
@@ -373,8 +392,11 @@ async function parco(voce, dip = {}) {
     // zero moto, e un 429 su quella passata cancellava tutte le auto gia' scaricate e mostrava
     // "Non riuscito" su un parco che c'era tutto. Se almeno una passata ha portato veicoli,
     // si tiene quello che c'e' e si dichiara il parco incompleto.
-    try { r = await scr(params, { maxPages: MAX_PAGINE, withMeta: true }); }
+    try { r = await scr(params, { maxPages: MAX_PAGINE, pageDelayMs: PAUSA_PAGINE_MS, withMeta: true }); }
     catch (e) {
+      // L'esito va al freno PRIMA di qualunque uscita: e' qui che `e` porta ancora `kind` e
+      // `status` messi da `fail()`, mentre il rilancio piu' sotto li perde nel messaggio.
+      salute.registra(voce.fonte, { errore: e });
       if (!veicoli.length) throw new Error(`${voce.fonte}: ${e.message}`);
       // NON e' `troncato`. Le due cause finivano sotto la stessa bandiera e il pannello
       // raccontava sempre la prima: "elenco troncato al tetto di sicurezza, questo parco e'
@@ -387,6 +409,10 @@ async function parco(voce, dip = {}) {
       continue;
     }
     const items = Array.isArray(r) ? r : (r.items || []);
+    // Una passata VUOTA non si registra: qui zero non e' un silenzio sospetto ma il caso
+    // quotidiano (il concessionario di sole auto, passata moto), e contarlo fra i vuoti
+    // renderebbe la fonte "sospetta" nel pannello per un fatto sul venditore, non su di lei.
+    if (items.length) salute.registra(voce.fonte, { errore: null, conteggio: items.length });
     if (!Array.isArray(r) && r.truncated) troncato = true;
     // QUANTI NE HA LA FONTE. Lo dichiara lei nella stessa risposta e finora lo buttavamo:
     // senza, "veicoli presi 180" non si sa se sono tutti o la punta di un piazzale da 400.

@@ -1,9 +1,8 @@
 /**
  * IL MAGAZZINO DELLE PERSONE — l'unico posto che apre `amr-utenti.db`.
  *
- * Fin qui AMR non aveva un dato "di qualcuno": le ricerche salvate stavano in un file solo per
- * installazione, gli annunci salvati nel localStorage del browser. Con le persone che si
- * registrano da sole quel modello non regge: serve un posto dove ogni riga ha un padrone.
+ * AMR conserva qui solo i dati personali ancora previsti dal prodotto: accessi, preferenze e
+ * parco concorrenti. Annunci, ricambi e ricerche non vengono mantenuti.
  *
  * PERCHE' SQLite E NON POSTGRES. Il Postgres del progetto vive su un volume attaccato all'iMac e
  * si avvia a mano; la macchina che serve le persone e' il Mac di papa', dove Postgres non c'e' e
@@ -11,7 +10,7 @@
  * entrambe le macchine (iMac v26.4.0, M2 v25.8.1), senza flag e senza dipendenze nuove.
  *
  * DOVE STA IL FILE: <USER_DATA_PATH>/amr-utenti.db se quella cartella c'e', altrimenti
- * data/amr-utenti.db — lo stesso criterio di auth.js e saved.js, cosi' i dati delle persone
+ * data/amr-utenti.db — lo stesso criterio di auth.js, cosi' i dati delle persone
  * stanno accanto alle loro credenziali e non in un secondo posto da ricordarsi.
  *
  * TRE STATI, NON DUE. Come `auth.stato()`: 'ok', 'assente' (il POSTO non c'e' — volume smontato,
@@ -87,8 +86,7 @@ const MIGRAZIONI = [
     usato_il  INTEGER
   );
 
-  -- Le ricerche salvate: la voce di saved.js intera come blob, perche' la logica degli avvisi
-  -- (seen, alerted, soglie, coda) non deve accorgersi di aver cambiato magazzino.
+  -- Tabella storica delle ricerche salvate. La migrazione 3 la svuota e il prodotto non la usa.
   CREATE TABLE ricerche (
     utente TEXT NOT NULL,
     id     TEXT NOT NULL,
@@ -96,7 +94,7 @@ const MIGRAZIONI = [
     PRIMARY KEY (utente, id)
   );
 
-  -- Annunci salvati, ricambi salvati, codici OEM preferiti: tre generi, una tabella.
+  -- Tabella storica dei preferiti. La migrazione 4 la svuota e il prodotto non la usa.
   CREATE TABLE salvataggi (
     utente    TEXT NOT NULL,
     genere    TEXT NOT NULL,
@@ -152,6 +150,18 @@ const MIGRAZIONI = [
   );
   CREATE INDEX registro_quando ON registro(quando DESC);
   `,
+
+  // 3 — gli annunci e le ricerche veicolo diventano dati solo temporanei. La cancellazione e'
+  // nella migrazione, quindi avviene una volta anche sulle installazioni gia' in produzione.
+  `
+  DELETE FROM ricerche;
+  DELETE FROM salvataggi WHERE genere = 'annuncio';
+  `,
+
+  // 4 — anche ricambi e codici OEM diventano dati solo temporanei.
+  `
+  DELETE FROM salvataggi;
+  `,
 ];
 
 let aperto = null;         // DatabaseSync vivo
@@ -188,6 +198,16 @@ function applicaMigrazioni(db) {
   if (!m) db.prepare("INSERT INTO meta (chiave, valore) VALUES ('creato_il', ?)").run(String(Date.now()));
 }
 
+/** Il vecchio archivio JSON non viene piu' importato: al boot si elimina l'ultima copia. */
+function eliminaRicercheLegacy() {
+  const p = path.join(cartella(), 'saved-searches.json');
+  try {
+    if (fs.existsSync(p)) fs.rmSync(p);
+  } catch (e) {
+    console.error(`[utenti-db] archivio ricerche legacy non eliminato (${e.message})`);
+  }
+}
+
 /**
  * Apre (una volta sola) e migra. Torna il database, oppure null col motivo in `ultimoGuasto`.
  * Non lancia: chi ha bisogno di un database pronto usa `richiedi()`.
@@ -215,6 +235,7 @@ function apri() {
     db.exec('PRAGMA synchronous = NORMAL');
     db.exec('PRAGMA foreign_keys = ON');
     applicaMigrazioni(db);
+    eliminaRicercheLegacy();
     aperto = db; apertoSu = p; ultimoGuasto = null;
     return db;
   } catch (e) {
@@ -317,8 +338,8 @@ function registro(n = 100) {
  * Questo id e' mai stato REVOCATO? Si legge dal registro, che gia' annota ogni revoca.
  *
  * Serve a non far rinascere un account con lo stesso id: togliere una persona cancella solo la
- * credenziale in auth.json, ma ricerche, salvataggi, preferenze e parco restano indicizzati su
- * quell'id. Se qualcuno si registra dopo con lo stesso nome, l'id torna uguale e lui EREDITA i
+ * credenziale in auth.json, ma preferenze e parco restano indicizzati su quell'id. Se qualcuno
+ * si registra dopo con lo stesso nome, l'id torna uguale e lui EREDITA i
  * dati privati del revocato. Un id revocato resta bruciato: chi vuole rientrare usa un altro
  * nome, oppure il proprietario lo riammette a mano.
  * A magazzino guasto si risponde `true` (prudenza): meglio un nome rifiutato di un'eredita'.
@@ -340,17 +361,13 @@ function revocato(persona, { personeVive = null } = {}) {
   // chi c'e' (evita una lettura di auth.json); senza, si risponde solo col registro.
   if (!Array.isArray(personeVive)) return false;
   const haDati = db.prepare(
-    'SELECT 1 FROM salvataggi WHERE utente=? UNION SELECT 1 FROM ricerche WHERE utente=? ' +
-    'UNION SELECT 1 FROM preferenze WHERE utente=? UNION SELECT 1 FROM parco WHERE utente=? LIMIT 1'
-  ).get(id, id, id, id);
+    'SELECT 1 FROM preferenze WHERE utente=? UNION SELECT 1 FROM parco WHERE utente=? LIMIT 1'
+  ).get(id, id);
   return !!haDati;
 }
 
 /**
- * Addebita N ricerche in UN colpo: o ci stanno tutte nel credito di oggi, o non se ne spende
- * nessuna. Serve a /api/saved/check, che fa fino a venti ricerche per chiamata: consumarle una
- * per una e fermarsi a meta' bruciava il credito senza fare il lavoro, e chiudeva fuori l'utente
- * anche dalla ricerca normale fino a domani.
+ * Addebita N ricerche in UN colpo: usato dai client che eseguono una richiesta composta.
  */
 function consumaRicerche(utente, n, max, t = Date.now()) {
   const db = richiedi();

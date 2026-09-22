@@ -8,7 +8,7 @@
  * di chiamate con la pausa, e restituisce ~620 veicoli vivi in tutta Italia.
  *
  * NON SI GUARDA L'OROLOGIO, SI GUARDA L'ETA' DELL'ULTIMO GIRO. E' il modo di questo repo per non
- * aver bisogno di un cron (stesso stampo del boot-check delle ricerche salvate): se l'ultimo giro
+ * aver bisogno di un cron: se l'ultimo giro
  * riuscito e' piu' vecchio di un giorno se ne fa un altro, e basta. Cosi' funziona uguale sul Mac
  * di casa acceso sempre e su un portatile che si riaccende dopo una settimana.
  */
@@ -16,7 +16,7 @@ const pvp = require('./scrapers/pvp');
 const db = require('./aste-db');
 const { leggi, creaIndice } = require('./aste-lotto');
 
-/** Il ritardo dopo l'avvio, per non competere con gli altri giri di partenza (prewarm, saved). */
+/** Il ritardo dopo l'avvio, per non competere con il prewarm. */
 const RITARDO_AVVIO_MS = 20000;
 /** Ogni quanto ci si sveglia a CONTROLLARE se il giro serve. Il giro vero resta uno al giorno. */
 const CONTROLLO_MS = 60 * 60 * 1000;
@@ -61,6 +61,19 @@ async function giro({ pausaMs = 400 } = {}) {
     const idx = indiceMarche();
     const id = db.iniziaGiro();
     const conto = { visti: 0, nuovi: 0, spariti: 0 };
+    /**
+     * UN TIPO GUASTO NON PORTA VIA QUELLI DOPO DI LUI. `Object.keys` conserva l'ordine
+     * d'inserimento, quindi il giro e' sempre ['auto','moto'] e senza una guardia PER TIPO
+     * qualunque lancio sulle auto (enum rinominato dal ministero, una pagina che risponde 500,
+     * la guardia degli zero lotti qui sotto) usciva dal `for` e le moto non venivano nemmeno
+     * chieste — a ogni giro, per sempre, perche' le auto restano stantie e il giro dopo ricade
+     * nello stesso punto. E le auto sono ~25 pagine contro le 6 delle moto: hanno quattro volte
+     * le occasioni di cadere. `stantioTipo` copre solo la direzione opposta (protegge il tipo
+     * gia' commesso, non quello mai chiesto), e l'impianto e' costruito apposta perche' ogni
+     * `sostituisci` committi da se'. I guasti si accumulano e si rilanciano in fondo: il giro
+     * resta 'ko', quindi si ritenta all'ora dopo e nessuno lo timbra «aggiornato oggi».
+     */
+    const guasti = [];
     try {
       for (const tipo of Object.keys(pvp.TIPOLOGIE)) {
         // Il tipo gia' commesso da un giro caduto non si riscarica: la sua transazione ha gia'
@@ -70,41 +83,47 @@ async function giro({ pausaMs = 400 } = {}) {
           console.log(`[aste] ${tipo}: gia' a magazzino dal giro caduto, si salta`);
           continue;
         }
-        const { lotti, troncato } = await pvp.tutti(tipo, { pausaMs });
-        if (troncato) console.warn(`[aste] ${tipo}: paginazione troncata al tetto, l'inventario e' parziale`);
-        /**
-         * SOLO LE VENDITE FUTURE (decisione del proprietario). Il filtro lo facciamo QUI perche'
-         * la fonte non lo fa: il suo `dataVenditaDa` viene accettato e ignorato — misurato,
-         * tornano gli stessi lotti col piu' vecchio al 2024. Il 90% dell'archivio e' passato.
-         * Il tetto in alto scarta le date assurde: c'e' un lotto datato 2034 con "anno 2088"
-         * nella descrizione, perche' il portale non valida quello che i professionisti scrivono.
-         */
-        const oggi = new Date().toISOString().slice(0, 10);
-        const limite = String(new Date().getFullYear() + 5);
-        const vivi = lotti
-          .map(l => leggi(l, idx, tipo))
-          .filter(l => l.dataVendita && l.dataVendita >= oggi && l.dataVendita < limite + '-01-01');
-        /**
-         * ZERO LOTTI DALLA FONTE NON E' UNA NOTIZIA, E' UN GUASTO. Il portale ne ha 5.758 in
-         * archivio (intestazione di pvp.js), e la ricerca glieli chiede per ENUM: basta che il
-         * ministero ne rinomini uno (`tipoLotto`, `categoriaLotto`, `categoriaBene`) e la
-         * risposta e' un 200 con l'involucro giusto e zero risultati — nessuno lancia. Senza
-         * questa guardia `sostituisci` marcherebbe sparito TUTTO l'inventario del tipo e il giro
-         * si scriverebbe 'ok': l'area resterebbe vuota, senza avviso e timbrata «aggiornato
-         * oggi», fino al giorno dopo. Fallendo invece si tiene quel che c'e' e `stantio()` resta
-         * vero, quindi il controllo dell'ora dopo riprova.
-         *
-         * Si conta il GREZZO della fonte, non `vivi`: un archivio di sole vendite passate e' un
-         * inventario vuoto legittimo. E a magazzino vuoto (primo giro) non c'e' niente da
-         * difendere, quindi si prosegue.
-         */
-        if (!lotti.length && db.cerca({ tipo, limite: 1 }).length) {
-          throw new Error(`${tipo}: il portale non ha restituito nessun lotto, magazzino non toccato`);
+        try {
+          const { lotti, troncato } = await pvp.tutti(tipo, { pausaMs });
+          if (troncato) console.warn(`[aste] ${tipo}: paginazione troncata al tetto, l'inventario e' parziale`);
+          /**
+           * SOLO LE VENDITE FUTURE (decisione del proprietario). Il filtro lo facciamo QUI perche'
+           * la fonte non lo fa: il suo `dataVenditaDa` viene accettato e ignorato — misurato,
+           * tornano gli stessi lotti col piu' vecchio al 2024. Il 90% dell'archivio e' passato.
+           * Il tetto in alto scarta le date assurde: c'e' un lotto datato 2034 con "anno 2088"
+           * nella descrizione, perche' il portale non valida quello che i professionisti scrivono.
+           */
+          const oggi = new Date().toISOString().slice(0, 10);
+          const limite = String(new Date().getFullYear() + 5);
+          const vivi = lotti
+            .map(l => leggi(l, idx, tipo))
+            .filter(l => l.dataVendita && l.dataVendita >= oggi && l.dataVendita < limite + '-01-01');
+          /**
+           * ZERO LOTTI DALLA FONTE NON E' UNA NOTIZIA, E' UN GUASTO. Il portale ne ha 5.758 in
+           * archivio (intestazione di pvp.js), e la ricerca glieli chiede per ENUM: basta che il
+           * ministero ne rinomini uno (`tipoLotto`, `categoriaLotto`, `categoriaBene`) e la
+           * risposta e' un 200 con l'involucro giusto e zero risultati — nessuno lancia. Senza
+           * questa guardia `sostituisci` marcherebbe sparito TUTTO l'inventario del tipo e il giro
+           * si scriverebbe 'ok': l'area resterebbe vuota, senza avviso e timbrata «aggiornato
+           * oggi», fino al giorno dopo. Fallendo invece si tiene quel che c'e' e `stantio()` resta
+           * vero, quindi il controllo dell'ora dopo riprova.
+           *
+           * Si conta il GREZZO della fonte, non `vivi`: un archivio di sole vendite passate e' un
+           * inventario vuoto legittimo. E a magazzino vuoto (primo giro) non c'e' niente da
+           * difendere, quindi si prosegue.
+           */
+          if (!lotti.length && db.cerca({ tipo, limite: 1 }).length) {
+            throw new Error(`${tipo}: il portale non ha restituito nessun lotto, magazzino non toccato`);
+          }
+          const r = db.sostituisci(tipo, vivi);
+          conto.visti += r.visti; conto.nuovi += r.nuovi; conto.spariti += r.spariti;
+          console.log(`[aste] ${tipo}: ${r.visti} vivi su ${lotti.length} in archivio (${r.nuovi} nuovi, ${r.spariti} spariti)`);
+        } catch (e) {
+          guasti.push(e.message);
+          console.warn(`[aste] ${tipo} KO:`, e.message);
         }
-        const r = db.sostituisci(tipo, vivi);
-        conto.visti += r.visti; conto.nuovi += r.nuovi; conto.spariti += r.spariti;
-        console.log(`[aste] ${tipo}: ${r.visti} vivi su ${lotti.length} in archivio (${r.nuovi} nuovi, ${r.spariti} spariti)`);
       }
+      if (guasti.length) throw new Error(guasti.join(' — '));
       db.potaSpariti();
       db.chiudiGiro(id, { esito: 'ok', ...conto });
       return { ok: true, ...conto };

@@ -290,3 +290,133 @@ test('genNonLette: la riapertura di sicurezza non riconta le generazioni gia con
     vsMod.httpGetText = veri.http; vsMod.parseGenerationList = veri.gen; vsMod.parseTrimList = veri.trim;
   }
 });
+
+/**
+ * REGRESSIONE. Un 403 (o un 429, o un timeout) di auto-data.net usciva come «Il catalogo non ha
+ * Volkswagen Golf.» sul percorso PIU' comune: il modello che sta nell'indice locale e si apre
+ * diretto. La distinzione fra "non a catalogo" e "non si e' lasciato leggere" viveva solo sul
+ * ramo della ricerca interna; qui il throw risaliva fino al catch della rotta, che rispondeva
+ * senza `fonteKo`. Stessa fonte, stesso errore, due frasi opposte — e chi legge smette di
+ * riprovare perche' gli si e' affermato un fatto sul catalogo che nessuno ha verificato.
+ */
+test('403 sul modello in indice: viaggia fonteKo, non "il catalogo non ha questo modello"', async () => {
+  const H = {};
+  routeSV.mount({ get: (p, h) => { H[p] = h; } }, { chiaveLimite: () => 'prova-403-indice' });
+  const chieste = [];
+  const vero = vsMod.httpGetText;
+  vsMod.httpGetText = async (url) => {
+    chieste.push(url);
+    const e = new Error('http 403'); e.status = 403; e.kind = 'blocked'; throw e;
+  };
+  try {
+    const res = resFinta();
+    await H['/api/scheda-veicolo']({ query: { tipo: 'auto', marca: 'Volkswagen', modello: 'Golf', anno: '2016' } }, res);
+    // Se questo cade non e' la guardia a essere rotta: il modello non e' stato agganciato
+    // nell'indice locale, quindi la richiesta e' passata dalla ricerca interna (altro ramo).
+    assert.match(chieste[0] || '', /\/it\/volkswagen-golf-model-/, 'preparazione: non e il ramo del modello in indice');
+    assert.strictEqual(res.body.ok, false);
+    assert.strictEqual(res.body.fonteKo, 'http 403', 'senza fonteKo il frontend scrive «Il catalogo non ha Volkswagen Golf.»');
+
+    // Stesso 403 dalla rotta dell'annuncio: anche li' la frase deve parlare della fonte.
+    const resAnn = resFinta();
+    await H['/api/scheda-veicolo/annuncio']({ query: { tipo: 'auto', marca: 'Volkswagen', modello: 'Golf', anno: '2016', cv: '110' } }, resAnn);
+    assert.strictEqual(resAnn.body.ok, false);
+    assert.strictEqual(resAnn.body.fonteKo, 'http 403');
+    assert.match(resAnn.body.motivo, /non raggiungibile/);
+  } finally { vsMod.httpGetText = vero; }
+});
+
+/**
+ * REGRESSIONE. La scheda dedotta da un catalogo letto a META' restava in cache 12 ore.
+ * La pagina-generazione servita senza motorizzazioni viene declassata a 5 minuti apposta per
+ * riprovare subito, ma la risposta costruita su quell'elenco monco — «unica del catalogo
+ * compatibile» con `genNonLette > 0` — era `ok`, e `ok` vale PAGE_TTL: la fonte si riprendeva
+ * dopo 5 minuti e quell'annuncio continuava a rispondere con mezzo catalogo fino a sera.
+ */
+test('annuncio: la risposta dedotta su un elenco monco non resta in cache mezza giornata', async () => {
+  const H = {};
+  routeSV.mount({ get: (p, h) => { H[p] = h; } }, { chiaveLimite: () => 'prova-ttl-monco' });
+  const handler = H['/api/scheda-veicolo/annuncio'];
+  const GENS = [
+    { name: 'Golf VII', slug: 'ttl-g7', img: '', years: [2012, 2020] },
+    { name: 'Golf VII Variant', slug: 'ttl-g7v', img: '', years: [2013, 2020] },
+  ];
+  const TRIM = {
+    'ttl-g7': [{ label: '1.6 TDI 110 Hp', url: 'https://x/ttl-u1', hp: 110, fuel: 'Diesel', yearRange: '2012-2020' }],
+    'ttl-g7v': [],   // la muta: 200 senza motorizzazioni → genNonLette
+  };
+  const veri = { http: vsMod.httpGetText, gen: vsMod.parseGenerationList, trim: vsMod.parseTrimList, now: Date.now };
+  let rete = 0;
+  vsMod.httpGetText = async (url) => { rete++; return { body: `<title>Volkswagen Golf</title>${url}` }; };
+  vsMod.parseGenerationList = () => GENS.map(g => ({ ...g }));
+  vsMod.parseTrimList = (_html, slug) => (TRIM[slug] || []).map(t => ({ ...t }));
+  const query = {
+    tipo: 'auto', marca: 'Volkswagen', modello: 'Golf', anno: '2016',
+    cv: '110', carburante: 'Diesel', titolo: 'Volkswagen Golf prova ttl',
+  };
+  try {
+    const uno = resFinta();
+    await handler({ query }, uno);
+    // Se questo cade non e' il TTL a essere rotto: lo scenario (una generazione muta e una
+    // sola candidata superstite) non si e' formato.
+    assert.strictEqual(uno.body.ok, true);
+    assert.strictEqual(uno.body.genNonLette, 1, 'preparazione: nessuna generazione muta');
+    assert.ok(uno.body.scelta, 'preparazione: nessuna candidata unica');
+    const dopoPrima = rete;
+
+    const due = resFinta();
+    await handler({ query }, due);
+    assert.strictEqual(rete, dopoPrima, 'la seconda richiesta esce dalla memoria');
+
+    Date.now = () => veri.now() + 6 * 60 * 1000;   // sei minuti: la fonte ha avuto il tempo di riprendersi
+    const tre = resFinta();
+    await handler({ query }, tre);
+    assert.ok(rete > dopoPrima, 'dopo sei minuti la deduzione su elenco monco si rifa, non si serve dalla cache');
+  } finally {
+    vsMod.httpGetText = veri.http; vsMod.parseGenerationList = veri.gen; vsMod.parseTrimList = veri.trim;
+    Date.now = veri.now;
+  }
+});
+
+/**
+ * REGRESSIONE. La ricerca interna (get-words.php) metteva in cache il CORPO per 12 ore
+ * qualunque cosa fosse: un 200 vuoto (l'interstitial anti-bot, che e' quello che la fonte
+ * serve oggi) diventava «il catalogo non ha questo modello» — senza `fonteKo` — e restava
+ * la risposta per mezza giornata anche dopo che la fonte era tornata. Il gemello
+ * `resolveModelPage` quel caso lo declassa a 5 minuti da sempre: qui il declassamento
+ * mancava, e l'asimmetria la pagava proprio la sigla-motore ("318"), che e' il caso per cui
+ * la ricerca interna esiste.
+ */
+test('ricerca interna: un 200 fuori formato non congela «non a catalogo» per 12 ore', async () => {
+  const H = {};
+  routeSV.mount({ get: (p, h) => { H[p] = h; } }, { chiaveLimite: () => 'prova-search-fuori-formato' });
+  const handler = H['/api/scheda-veicolo'];
+  const BUONA = '1###0|bmw-318i-9901###<img src="/i1.jpg"> BMW 318i (143 Hp) (2012 - 2015) '
+    + '|bmw-318d-9902###<img src="/i2.jpg"> BMW 318d (143 Hp) (2012 - 2015) ';
+  const veri = { http: vsMod.httpGetText, now: Date.now };
+  let rete = 0, viva = false;
+  vsMod.httpGetText = async () => { rete++; return { status: 200, body: viva ? BUONA : '' }; };
+  const query = { tipo: 'auto', marca: 'BMW', modello: '318' };
+  try {
+    const uno = resFinta();
+    await handler({ query }, uno);
+    // Se questo cade non e' il TTL a essere rotto: "318" e' stato agganciato altrove e la
+    // ricerca interna non e' nemmeno partita.
+    assert.strictEqual(rete, 1, 'preparazione: non e il ramo della ricerca interna');
+    assert.strictEqual(uno.body.ok, false);
+    assert.ok(uno.body.fonteKo, 'un 200 illeggibile non e un fatto sul catalogo: deve viaggiare fonteKo');
+
+    viva = true;   // la fonte si riprende un minuto dopo
+    Date.now = () => veri.now() + 60 * 1000;
+    const due = resFinta();
+    await handler({ query }, due);
+    assert.strictEqual(rete, 1, 'entro i 5 minuti si resta sulla cache');
+
+    Date.now = () => veri.now() + 6 * 60 * 1000;
+    const tre = resFinta();
+    await handler({ query }, tre);
+    assert.strictEqual(rete, 2, 'dopo sei minuti si richiede, non si serve il nulla cachato');
+    assert.strictEqual(tre.body.ok, true);
+    assert.ok((tre.body.motorizzazioni || []).length, 'la ricerca ripresa deve tornare le versioni');
+  } finally { vsMod.httpGetText = veri.http; Date.now = veri.now; }
+});

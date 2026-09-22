@@ -473,8 +473,6 @@ body:not(.has-results) .search {
 .rc-item.rc-best { border-left-color: var(--pos); }
 .rc-cell-txt { font-size: 0.82rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rc-compare-bar { position: static; }   /* barra confronto in alto (non sticky come auto) */
-.rc-fav-sec { margin-bottom: 14px; }
-.rc-fav-hd { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 2px 2px 6px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
 /* header colonne connesso alla lista piatta (mirror auto) */
 .rc-grid-head { border-radius: var(--r2) var(--r2) 0 0; }
 .rc-wrap > .rc-grid-head + .rc-list { border-top: none; border-radius: 0 0 var(--r2) var(--r2); }
@@ -822,7 +820,6 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
 }
 .row-act:hover { border-color: var(--accent); color: var(--accent); }
 .row-act.attivo { background: var(--accent-weak); border-color: var(--accent); color: var(--accent); }
-.row-act.btn-salva.attivo { color: var(--accent); }
 .ico { width: 16px; height: 16px; display: inline-block; flex-shrink: 0; }
 
 /* ─── Gruppi (facet) ─────────────────────────────────────────────────────────── */
@@ -958,67 +955,9 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
 }
 .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
 
-/* ─── Salvati: offcanvas a tab ───────────────────────────────────────────────── */
-.offcanvas { background: var(--surface); color: var(--text); border-left: 1px solid var(--line) !important; }
-.saved-header { gap: 10px; border-bottom: 1px solid var(--line) !important; }
-.saved-tabs { gap: 6px; flex-wrap: nowrap; margin: 0; }
-.saved-tabs .nav-link {
-  padding: 6px 14px; font-size: 0.84rem; font-weight: 600; color: var(--text-muted);
-  border-radius: var(--r); display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent;
-}
-.saved-tabs .nav-link.active { background: var(--text); color: var(--bg); }
-.saved-tabs .badge { background: var(--surface-2); color: var(--text-muted); font-size: 0.7rem; font-weight: 700; border-radius: 3px; padding: 1px 7px; font-family: var(--num); }
-.saved-tabs .nav-link.active .badge { background: rgba(127,127,127,.3); color: var(--bg); }
-.ricerche-toolbar { display: flex; justify-content: flex-end; padding: 12px 16px 0; }
-
-.salvato-item {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 10px 6px; border-bottom: 1px solid var(--line); cursor: pointer; border-radius: var(--r);
-}
-.salvato-item:hover { background: var(--surface-2); }
-.salvato-info { flex: 1; min-width: 0; }
-.salvato-titolo { font-weight: 600; font-size: 0.84rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.salvato-dettagli { font-family: var(--num); font-size: 0.74rem; color: var(--text-muted); margin-top: 2px; }
-.salvato-actions { display: flex; gap: 5px; flex-shrink: 0; }
-.btn-confronta-salvato, .btn-rimuovi-salvato {
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
-  padding: 4px 8px; cursor: pointer; font-size: 0.8rem; color: var(--text-muted); font-family: inherit;
-}
-.btn-confronta-salvato:hover { border-color: var(--accent); color: var(--accent); }
-.btn-rimuovi-salvato:hover { border-color: var(--neg); color: var(--neg); }
-.btn-confronta-salvato.attivo { background: var(--accent-weak); border-color: var(--accent); color: var(--accent); }
-
-/* Ricerche salvate (watch) */
-#ricercheList.checking { opacity: .55; pointer-events: none; }
-.ric-card { border: 1px solid var(--line); border-radius: var(--r2); padding: 12px; margin-bottom: 10px; background: var(--surface); }
-.ric-card.has-novita { border-color: var(--accent); }
-.ric-head { cursor: pointer; }
-.ric-title { font-weight: 700; font-size: 0.92rem; display: flex; align-items: center; gap: 6px; }
-.ric-badge { background: var(--neg); color: #fff; font-size: 0.72rem; font-weight: 700; border-radius: 10px; padding: 1px 7px; min-width: 18px; text-align: center; font-family: var(--num); }
-.ric-sub { font-family: var(--num); font-size: 0.74rem; color: var(--text-muted); margin-top: 2px; }
-.ric-digest { font-size: 0.78rem; font-weight: 600; color: var(--warn); margin-top: 4px; }
-.ric-actions { display: flex; gap: 6px; margin-top: 8px; }
-.ric-alerts { margin-top: 8px; display: none; flex-direction: column; gap: 4px; }
-.ric-card.open .ric-alerts { display: flex; }
-.ric-alert { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 5px 8px; border-radius: var(--r); cursor: pointer; background: var(--surface-2); font-size: 0.8rem; }
-.ric-alert:hover { background: var(--surface-3); }
-.ric-motivo { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
-.ric-nuovo .ric-motivo { background: var(--tag-subito-bg); color: var(--tag-subito-fg); }
-.ric-calo .ric-motivo { background: var(--tag-moto-bg); color: var(--tag-moto-fg); }
-.ric-alert-tit { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ric-alert-prezzo { font-family: var(--num); font-weight: 700; white-space: nowrap; }
-.rnav-btn, .ric-check, .ric-del {
-  border: 1px solid var(--line); color: var(--text); background: var(--surface);
-  border-radius: var(--r); font-weight: 600; font-size: 0.78rem; padding: 5px 12px; cursor: pointer; font-family: inherit;
-}
-.rnav-btn:hover, .ric-check:hover { border-color: var(--accent); color: var(--accent); }
-.ric-del:hover { border-color: var(--neg); color: var(--neg); }
-
 /* ─── Bridge Bootstrap (componenti vendor adattati al tema) ──────────────────── */
 .text-muted { color: var(--text-muted) !important; }
-.offcanvas .text-muted { color: var(--text-muted) !important; }
 [data-theme="dark"] .btn-close { filter: invert(1) grayscale(1) brightness(1.6); }
-[data-theme="dark"] .offcanvas { color: var(--text); }
 
 /* ─── Banner modalità demo ───────────────────────────────────────────────────── */
 .demo-banner {
@@ -1226,15 +1165,6 @@ body.demo-mode .cp-separa { display: none; }
   padding-inline: 12px;
 }
 
-/* ─── Topbar: bottone Salvati + AI mode ────────────────────────────────────── */
-.topbar-saved {
-  display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
-  color: var(--text); font-weight: 600; font-size: 0.84rem; cursor: pointer; font-family: inherit;
-}
-.topbar-saved:hover { border-color: var(--accent); color: var(--accent); }
-.tb-badge { background: var(--surface-2); color: var(--text-muted); font-family: var(--num); font-size: 0.72rem; font-weight: 700; border-radius: 3px; padding: 1px 6px; }
-.tb-badge-new { background: var(--neg); color: #fff; }
 /* ─── Menu "Prezzo €" (Commissione/Spese/Margine/IVA) + note prezzo in riga ─────── */
 .price-menu > summary { position: relative; }
 .price-menu.has-adj > summary::after { content: ''; position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
@@ -1669,6 +1599,11 @@ select.cp-unisci { max-width: 190px; }
   background: var(--surface-2); border-radius: 6px; font-size: 0.82rem; line-height: 1.5; }
 .veh-motore-uno b { display: block; color: var(--text); }
 .veh-motore-uno span { color: var(--text-muted); font-size: 0.78rem; }
+
+/* Il catalogo letto a meta': il colore e' quello degli avvisi, non quello dell'accento — la
+   scheda qui sotto e' una deduzione su un elenco monco, non una certezza. */
+.veh-monco { margin: 0 0 8px; padding: 6px 10px; border-left: 3px solid var(--warn);
+  background: var(--warn-weak); border-radius: 6px; font-size: 0.78rem; line-height: 1.5; color: var(--text); }
 
 /* Il chip "Solo IVA esposta" quando in questa ricerca non ce n'e' nessuno: si vede che c'e'
    ma si legge che non porterebbe niente. Non si nasconde — sapere che sono zero e' un dato. */

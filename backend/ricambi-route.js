@@ -79,15 +79,18 @@ function mount(app, deps = {}) {
   // Enrich LAZY di un annuncio eBay (venditore/spedizione/quantità/marca) — chiamata all'apertura ⓘ.
   // Valida l'URL item (anti-SSRF: solo ebay.<tld>/itm/), cache per URL, stesso rate-limit.
   app.get('/api/ricambi/ebay-item', async (req, res) => {
-    const g = limiteEbay.consuma(chiaveLimite(req));
-    if (!g.ok) return res.status(429).json({ error: limiteEbay.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     const url = String(req.query.url || '').trim();
     if (!/^https:\/\/www\.ebay\.\w+\/itm\/\d+/.test(url)) return res.status(400).json({ error: 'URL eBay item non valido' });
     const hit = ebayCache.get(url);
+    // LA CACHE NON COSTA NIENTE ALLE FONTI, quindi non consuma il budget (stessa regola di
+    // /api/ricambi qui sopra): riaprire le stesse ⓘ dopo una nuova ricerca — il frontend
+    // azzera `_ebayDetails` a ogni ricerca — finiva i 30 posti senza una richiesta a eBay.
     if (hit && Date.now() - hit.ts < RICAMBI_TTL) {
       ebayCache.delete(url); ebayCache.set(url, hit);   // LRU touch (come la cache ricerche)
       return res.json(hit.data);
     }
+    const g = limiteEbay.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ error: limiteEbay.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     try {
       const data = await fetchEbayItemDetails(url);
       // Una scheda VUOTA (la pagina non si e' idratata nei 12 s: il timeout e' ingoiato dentro
@@ -105,15 +108,18 @@ function mount(app, deps = {}) {
   // Specs LAZY di una variante Autodoc (datiTecnici + compatibilità) — chiamata quando si seleziona
   // una variante nel selettore. Valida l'URL product-page (anti-SSRF: solo auto-doc.it), cache per URL.
   app.get('/api/ricambi/autodoc-specs', async (req, res) => {
-    const g = limiteEbay.consuma(chiaveLimite(req));
-    if (!g.ok) return res.status(429).json({ error: limiteEbay.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     const url = String(req.query.url || '').trim();
     if (!/^https?:\/\/(www\.)?auto-doc\.it\//i.test(url)) return res.status(400).json({ error: 'URL Autodoc non valido' });
     const hit = autodocCache.get(url);
+    // Stessa regola: la cache non paga pedaggio. Qui pesa doppio perche' il frontend chiama
+    // questa rotta da solo a ogni ricerca e a ogni clic su tipo/variante, e il budget e' lo
+    // STESSO di ebay-item (limiteEbay), quindi i due consumi si sommano sulla stessa persona.
     if (hit && Date.now() - hit.ts < (hit.ttl || RICAMBI_TTL)) {
       autodocCache.delete(url); autodocCache.set(url, hit);   // LRU touch
       return res.json(hit.data);
     }
+    const g = limiteEbay.consuma(chiaveLimite(req));
+    if (!g.ok) return res.status(429).json({ error: limiteEbay.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     try {
       const data = await fetchAutodocSpecs(url);
       // fetchAutodocSpecs non lancia mai (CF block/HTTP>=400 → shape vuoto): un vuoto è spesso un

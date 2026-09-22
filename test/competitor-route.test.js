@@ -243,6 +243,51 @@ test('elenco corrotto: le scritture rispondono 503 e il file resta byte per byte
 });
 
 /**
+ * REGRESSIONE. Le due rotte di LETTURA del parco affermavano un fatto sull'elenco senza
+ * averlo letto: a magazzino illeggibile leggi() risponde [], e la scheda di una vetrina in
+ * elenco da mesi rispondeva 404 «non e' nell'elenco», il gruppo 404 «gruppo vuoto». Il
+ * guasto restava scritto solo nel log, e per giunta il 404 bugiardo era ADDEBITATO: sei
+ * clic bruciavano il budget e dal settimo arrivava un 429 che mascherava il guasto una
+ * seconda volta. Le rotte di scrittura quel controllo ce l'avevano gia' (503 + corrotto).
+ */
+test('parco a magazzino illeggibile: 503 invece di «non e\' nell\'elenco», e senza bruciare il budget', async () => {
+  await conCartellaPulita(async () => {
+    const H = monta();
+    await H['POST /api/competitor/da-annuncio']({ body: { fonte: 'subito', id: '7008', nome: 'Sub' } }, resFinta());
+    await H['POST /api/competitor/da-annuncio']({ body: { fonte: 'autoscout', id: '2', nome: 'As' } }, resFinta());
+    const unione = resFinta();
+    H['POST /api/competitor/:id/gruppo']({ params: { id: 'subito:7008' }, body: { con: 'autoscout:2' } }, unione);
+    assert.strictEqual(unione.code, 200);
+    const g = unione.body.gruppo;
+
+    // Magazzino sano: una chiave che in elenco non c'e' DEVE restare un 404 (niente rete:
+    // la voce non si trova e lo scarico non parte).
+    const assente = resFinta();
+    await H['GET /api/competitor/:id/parco']({ params: { id: 'subito:999' }, query: {} }, assente);
+    assert.strictEqual(assente.code, 404);
+
+    // Ora il magazzino non si apre piu'.
+    const p = dbmod.percorso();
+    dbmod.chiudi();
+    fs.writeFileSync(p, 'questo non e\' un database');
+
+    // Dieci clic: tutti 503. Se il guasto fosse ancora addebitato, dal settimo la risposta
+    // diventerebbe 429 — il budget e' sei ogni dieci minuti.
+    for (let i = 0; i < 10; i++) {
+      const r = resFinta();
+      await H['GET /api/competitor/:id/parco']({ params: { id: 'subito:7008' }, query: {} }, r);
+      assert.strictEqual(r.code, 503, `clic ${i + 1}: la vetrina e' in elenco, il magazzino e' rotto`);
+      assert.strictEqual(r.body.corrotto, true);
+      assert.match(r.body.error, /illeggibile/);
+    }
+    const gruppo = resFinta();
+    await H['GET /api/competitor/gruppo/:g/parco']({ params: { g }, query: {} }, gruppo);
+    assert.strictEqual(gruppo.code, 503, '«gruppo vuoto» su un gruppo che non si e\' potuto leggere e\' una bugia');
+    assert.match(gruppo.body.error, /illeggibile/);
+  });
+});
+
+/**
  * REGRESSIONE. Le rotte indirizzavano per solo id, ma Subito e Autoscout numerano ognuno
  * per conto suo: con una collisione si serviva il parco del venditore sbagliato e DELETE
  * toglieva due voci. La chiave e' `fonte:id`, la stessa dei POST e della cache.

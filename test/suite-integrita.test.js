@@ -122,6 +122,42 @@ test('il cambio tab dei Ricambi tocca tutti e soli gli input dei Ricambi', () =>
     'i tre input dei Ricambi devono avere sia rc-input sia data-rcfor');
 });
 
+test('la pulizia dei Ricambi scatta sul CAMBIO di modo, non sul ri-clic', () => {
+  // Senza `prev !== searchMode` la guardia scattava anche ripremendo "Ricambi" mentre ci sei
+  // gia' dentro: azzerava rcData ma non nascondeva il pannello e non lo ridisegnava, cosi' la
+  // lista restava a schermo sopra uno stato vuoto e il primo chip la sostituiva con "Fonti non
+  // disponibili" — una frase sulle fonti detta su dati che l'app si era cancellata da sola.
+  // A commenti tolti: quello accanto alla riga NOMINA la condizione, e da solo terrebbe verde
+  // una guardia che legge il sorgente cosi' com'e'.
+  const app = fs.readFileSync(path.join(RADICE, 'frontend', 'app.js'), 'utf8')
+    .replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
+  const righe = app.split('\n').filter(r => r.includes('rcGen++'));
+  assert.strictEqual(righe.length, 1,
+    `rcGen++ compare ${righe.length} volte nel codice: la guardia non sa piu' quale riga difendere`);
+  assert.match(righe[0], /prev !== searchMode/,
+    'il reset dei Ricambi (rcGen++ / rcData = null / hideResults) non e\' piu\' legato al cambio di modo: ripremere "Ricambi" da dentro i Ricambi cancella i dati e lascia la lista a schermo');
+});
+
+test('aprire la scheda tecnica su un altro annuncio smonta quella di prima', () => {
+  // Lo stato della scheda e' unico (vehData/vehSelUrl/vehSpecs) e i gestori stanno in delega
+  // sulla griglia, senza sapere da quale pannello arriva il clic: il markup lasciato nel
+  // pannello precedente resta cliccabile e pilota la scheda VIVA — la griglia motorizzazioni
+  // della Panda sotto l'intestazione della BMW, «Esporta» che scarica l'altro annuncio. Il
+  // pannello vecchio non si ridisegna da solo, quindi lo zombie non se ne va da se'.
+  // A commenti tolti: qui sopra e in app.js la prosa nomina gia' tutto.
+  const app = fs.readFileSync(path.join(RADICE, 'frontend', 'app.js'), 'utf8')
+    .replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
+  const da = app.indexOf('async function loadVehScheda(');
+  assert.ok(da > 0, 'loadVehScheda non e\' piu\' in frontend/app.js');
+  const presa = app.indexOf('vehHost = host;', da);
+  assert.ok(presa > da, 'loadVehScheda non prende piu\' possesso dell\'ospite con `vehHost = host;`');
+  const prima = app.slice(da, presa);
+  assert.match(prima, /vehHost !== host[\s\S]*vehHost\.innerHTML/,
+    'loadVehScheda sposta la scheda senza smontare quella del pannello precedente: resta a schermo una scheda morta i cui comandi scrivono sullo stato di quella viva');
+  assert.ok(prima.includes('class="det-scheda-apri"'),
+    'al posto della scheda smontata deve tornare il bottone "Scheda tecnica" (quello che disegna renderDetailInto), altrimenti quel pannello non puo\' piu\' richiederla');
+});
+
 test('richiedere server.js resta senza effetti collaterali', () => {
   // Se qualcuno rimettesse app.listen incondizionato, l'intera suite aprirebbe una porta e
   // scalderebbe due browser headless a ogni esecuzione.

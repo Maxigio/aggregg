@@ -205,6 +205,21 @@ test('saved: le fonti mute restano nel record e arrivano alla lista', () => {
   }
 });
 
+/**
+ * Un freno finto per le prove del parco. Come per gli scraper: col freno VERO un 403
+ * simulato qui dentro finirebbe nell'archivio di chi sviluppa e metterebbe in pausa una
+ * fonte che non ha fatto niente.
+ */
+function frenoFinto(fermo = false) {
+  const registrati = [];
+  return {
+    MOTIVO_PAUSA: 'in pausa dopo un blocco',
+    fermo: () => ({ fermo, fino: null, motivo: fermo ? 'bloccato' : null }),
+    registra: (fonte, esito) => { registrati.push({ fonte, ...esito }); },
+    registrati,
+  };
+}
+
 // ─── Competitor: una passata caduta non e' il tetto di sicurezza ─────────────
 test('competitor: la passata fallita si dichiara per quello che e\', non come troncamento', async () => {
   const C = require('../backend/competitor');
@@ -213,11 +228,40 @@ test('competitor: la passata fallita si dichiara per quello che e\', non come tr
     if (params.tipo === 'auto') return { items: [{ url: 'a1', titolo: 'Auto 1', prezzo: 10000 }], truncated: false, total: 1 };
     throw new Error('HTTP 429');
   };
-  const p = await C.parco(voce, { scrapeAs24: finto });
+  const p = await C.parco(voce, { scrapeAs24: finto, salute: frenoFinto() });
   assert.strictEqual(p.veicoli.length, 1, 'la passata riuscita si tiene');
   assert.strictEqual(p.troncato, false, 'nessun tetto e\' stato toccato: dirlo sarebbe falso');
   assert.ok(p.passateKo && p.passateKo.length === 1, 'la passata caduta si dichiara a parte');
   assert.strictEqual(p.passateKo[0].tipo, 'moto');
+});
+
+// ─── Competitor: il parco passa dal freno anti-ban, come le ricerche ─────────
+test('competitor: la fonte in pausa non si interroga, e l\'esito del parco arriva al freno', async () => {
+  const C = require('../backend/competitor');
+  const voce = { fonte: 'subito', id: '1398723', nome: 'Prova Auto' };
+
+  // Fonte in pausa: lo scarico non deve partire affatto. Le fonti bannano la macchina, e
+  // uno scarico di parco e' la richiesta piu' profonda che facciamo.
+  const freno = frenoFinto(true);
+  let chiamate = 0;
+  await assert.rejects(
+    () => C.parco(voce, { scrapeSubito: async () => { chiamate++; return { items: [], total: 0 }; }, salute: freno }),
+    /in pausa dopo un blocco/);
+  assert.strictEqual(chiamate, 0, 'in pausa non si bussa lo stesso');
+
+  // Fonte libera: le pagine partono con la pausa fra una e l'altra (il default degli
+  // scraper e' 0), e il 403 preso qui conta un colpo per il freno.
+  const freno2 = frenoFinto(false);
+  const opts = [];
+  await assert.rejects(() => C.parco(voce, {
+    scrapeSubito: async (p, o) => { opts.push(o); throw Object.assign(new Error('Subito hades HTTP 403'), { kind: 'blocked', status: 403 }); },
+    salute: freno2,
+  }), /HTTP 403/);
+  assert.ok(opts[0].pageDelayMs > 0, 'senza pausa le 40 pagine partono a raffica verso la stessa fonte');
+  assert.ok(freno2.registrati.length >= 1, 'un blocco preso dal parco deve contare per il freno');
+  assert.strictEqual(freno2.registrati[0].fonte, 'subito');
+  assert.strictEqual(freno2.registrati[0].errore.kind, 'blocked',
+    'al freno serve il genere vero: il rilancio piu\' a valle lo perde nel messaggio');
 });
 
 // ─── Una pagina-annuncio che non dice niente non e' un annuncio senza dati ────
@@ -1265,6 +1309,13 @@ test('minori: una sessione sola, e il file si scrive intero o niente', () => {
   // senza che nessuno se ne accorgesse.
   assert.match(codice(sess), /fs\.renameSync\(tmp, file\)/,
     'la sessione Subito torna a scriversi sul posto: un lettore puo\' trovarla a meta\'');
+  // E il temporaneo porta il PID. Il keep-alive gira in OGNI backend vivo — anche in quello
+  // che ha perso la porta e la callback di listen la esegue lo stesso — sullo STESSO percorso:
+  // con un `.tmp` a nome fisso il rename di uno pubblicava il file che l'altro stava ancora
+  // riempiendo. Misurato con due processi veri: 168 letture rotte su 11836 e meta' dei
+  // salvataggi in ENOENT, cioe' un CAPTCHA appena risolto buttato (subito-bootstrap.js).
+  assert.match(codice(sess), /const tmp = file \+ '\.' \+ process\.pid \+ '\.tmp'/,
+    'il temporaneo della sessione Subito torna a un nome fisso: due backend vivi se lo pestano');
 });
 
 test('minori: uno schermo vuoto per un filtro non e\' un mercato vuoto', () => {
@@ -1297,6 +1348,23 @@ test('moto.it: la versione si legge dall\'URL dell\'annuncio', () => {
   assert.strictEqual(varianteDaSlug('scarabeo-125-s-2004-06', 'scarabeo-50,scarabeo-125,scarabeo-500'), 'S · 2004–2006');
   // Vince la famiglia PIU' LUNGA che combacia, non la prima: senno' "scarabeo" lascia "500 S".
   assert.strictEqual(varianteDaSlug('scarabeo-500-s-2003-06', 'scarabeo,scarabeo-500'), 'S · 2003–2006');
+  /**
+   * E QUANDO NESSUNA FAMIGLIA COMBACIA e' la stessa trappola, non un caso a parte: misurate
+   * 998 versioni su 12.192 che non ripetono lo slug della loro famiglia. Benelli `trk-502`
+   * contiene "TRK 502X", e nella stessa lista usciva "TRK 502X · 2018–2020" accanto a
+   * "ABS · 2017–2020" — un nome di moto nella colonna dell'allestimento. Peggio su BMW: la
+   * famiglia `r-1200-gs-adventure` contiene "R 1200 GS", cioe' il nome di un modello DIVERSO.
+   * Senza famiglia che combaci resta il solo periodo; il modello si legge nel titolo.
+   */
+  assert.strictEqual(varianteDaSlug('trk-502-abs-2017-20', 'trk-502'), 'ABS · 2017–2020');
+  assert.strictEqual(varianteDaSlug('trk-502x-2018-20', 'trk-502'), '2018–2020');
+  assert.strictEqual(varianteDaSlug('r-1200-gs-2017-18', 'r-1200-gs-adventure'), '2017–2018');
+  // Ricerca allargata alla marca: nessuno slug-modello, quindi niente da togliere — e niente
+  // da scrivere. Prima usciva "TRK 502 ABS · 2017–2020", modello compreso.
+  assert.strictEqual(varianteDaSlug('trk-502-abs-2017-20', null), '2017–2020');
+  // Il periodo e' un ANNO: senza il vincolo, la cilindrata in coda passava per periodo.
+  assert.strictEqual(varianteDaSlug('yb11-1000', 'yb11-1000'), null);          // era "YB11 · 1000"
+  assert.strictEqual(varianteDaSlug('monster-s2r-1000', 'monster-s2r-1000'), null);
   // E lo scraper lo attacca all'annuncio, senno' l'etichetta non ha cosa leggere.
   const src = fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'motoit.js'), 'utf8');
   assert.match(src, /variante:\s+varianteDaSlug\(slugDaUrl\(fullUrl\), opts\.modelSlug\)/);
@@ -1492,17 +1560,19 @@ test('saved: un elenco illeggibile non e\' un elenco vuoto, e non si riscrive da
     assert.strictEqual(Buffer.compare(prima, fs.readFileSync(file)), 0,
       'il file non nostro e\' stato riscritto: quel che c\'era dentro e\' perso');
 
-    // Risanato: si riprende, e l'archivio di prima (se c'e') rientra a nome del proprietario.
+    // Risanato: l'archivio legacy non deve rientrare, per nessuno.
     dbmod.chiudi();
     fs.rmSync(file, { force: true });
     fs.writeFileSync(path.join(dir, 'saved-searches.json'),
       JSON.stringify([{ id: 'a', label: 'Golf', params: {}, alerts: [] }], null, 2));
-    delete require.cache[require.resolve('../backend/saved')];   // la migrazione si fa una volta per processo
+    delete require.cache[require.resolve('../backend/saved')];
     const saved2 = require('../backend/saved');
     assert.strictEqual(saved2.ultimoErroreElenco(), null);
-    assert.strictEqual(saved2.listSaved('owner').length, 1, 'le ricerche di prima sono del proprietario');
+    assert.strictEqual(saved2.listSaved('owner').length, 0, 'le ricerche legacy sono rientrate nel prodotto');
+    assert.strictEqual(fs.existsSync(path.join(dir, 'saved-searches.json')), false,
+      'il file legacy resta sul disco');
     saved2.addSaved('owner', { label: 'Y', params: { tipo: 'auto', marca: 'BMW' } });
-    assert.strictEqual(saved2.listSaved('owner').length, 2);
+    assert.strictEqual(saved2.listSaved('owner').length, 1);
   } finally {
     dbmod.chiudi();
     if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
@@ -1536,42 +1606,52 @@ test('contesto: anche i Ricambi invalidano la generazione alla porta, e l\'error
     'doRicambi deve azzerare rcData dopo aver preso la sua generazione: senza, l\'errore mostra la lista di prima');
 });
 
+// Il banco di `setSearchMode`: qui si ESEGUE il vero corpo della funzione con un DOM finto,
+// perche' jsdom non e' fra le dipendenze. Le classi dei singoli elementi si registrano davvero
+// (non solo quelle del body), senno' non si puo' controllare chi nasconde — o non nasconde —
+// il pannello dei ricambi.
+const bancoModi = () => {
+  const classi = new Set();
+  const finto = () => {
+    const cls = new Set();
+    return { cls, required: false, classList: {
+      add: c => cls.add(c), remove: c => cls.delete(c),
+      toggle: (c, on) => (on === undefined ? (cls.has(c) ? cls.delete(c) : cls.add(c)) : on ? cls.add(c) : cls.delete(c)),
+    } };
+  };
+  const memo = {};
+  const document = {
+    body: { classList: { add: c => classi.add(c), remove: c => classi.delete(c) }, dataset: {} },
+    getElementById: id => (memo[id] ||= finto()),
+    querySelector: s => (memo[s] ||= finto()),
+  };
+  const apri = () => document.body.classList.add('has-results');   // asApri/cpApri, in una riga
+  const AREE = {
+    competitor: { pannello: 'competitorPanel', apri, chiudi: () => {} },
+    aste: { pannello: 'astePanel', apri, chiudi: () => {} },
+  };
+  const g = {
+    document, AREE, area: k => AREE[k],
+    localStorage: { setItem() {} },
+    hideResults: () => document.body.classList.remove('has-results'),
+    currentTipo: () => 'auto', sincronizzaFiltriAuto: () => {},
+    btnCerca: { textContent: '' }, versioniRow: finto(),
+  };
+  const chiavi = Object.keys(g);
+  // `corpoDi` taglia PRIMA della graffa di chiusura, che qui serve per ricomporre la funzione.
+  const src = 'let searchMode = \'cerca\', rcGen = 0, rcData = null;\n'
+    + corpoDi(APP, 'function setSearchMode(') + '\n}\n'
+    + 'return { vai: m => setSearchMode(m), carica: d => { rcData = d; }, stato: () => ({ rcGen, rcData }) };';
+  return Object.assign({ classi, el: id => memo[id] }, new Function(...chiavi, src)(...chiavi.map(k => g[k])));
+};
+
 test('contesto: uscendo da un\'area la pagina torna allo stato-vuoto, non resta nel layout post-ricerca', () => {
   // `has-results` la mettono le apri() delle aree e la toglie SOLO hideResults(). Sulla via
   // Aste → Auto non ci passava nessuno: il radio del tipo e' gia' checked (il suo change, che
   // chiama hideResults, non parte), il ramo dei Ricambi non scatta e quello dell'INGRESSO in
   // un'area nemmeno. Restava la barra compatta in cima (body.has-results .search), lo sfondo
   // dello stato-vuoto spento e la pagina vuota sotto, fino alla ricerca successiva.
-  // Qui si ESEGUE il vero setSearchMode con un DOM finto: jsdom non e' fra le dipendenze.
-  const banco = () => {
-    const classi = new Set();
-    const finto = () => ({ classList: { add() {}, remove() {}, toggle() {} }, required: false });
-    const memo = {};
-    const document = {
-      body: { classList: { add: c => classi.add(c), remove: c => classi.delete(c) }, dataset: {} },
-      getElementById: id => (memo[id] ||= finto()),
-      querySelector: s => (memo[s] ||= finto()),
-    };
-    const apri = () => document.body.classList.add('has-results');   // asApri/cpApri, in una riga
-    const AREE = {
-      competitor: { pannello: 'competitorPanel', apri, chiudi: () => {} },
-      aste: { pannello: 'astePanel', apri, chiudi: () => {} },
-    };
-    const g = {
-      document, AREE, area: k => AREE[k],
-      localStorage: { setItem() {} },
-      hideResults: () => document.body.classList.remove('has-results'),
-      currentTipo: () => 'auto', sincronizzaFiltriAuto: () => {},
-      btnCerca: { textContent: '' }, versioniRow: finto(),
-    };
-    const chiavi = Object.keys(g);
-    // `corpoDi` taglia PRIMA della graffa di chiusura, che qui serve per ricomporre la funzione.
-    const src = 'let searchMode = \'cerca\', rcGen = 0, rcData = null;\n'
-      + corpoDi(APP, 'function setSearchMode(') + '\n}\nreturn m => setSearchMode(m);';
-    return { vai: new Function(...chiavi, src)(...chiavi.map(k => g[k])), classi };
-  };
-
-  const aste = banco();
+  const aste = bancoModi();
   aste.vai('aste');
   assert.ok(aste.classi.has('has-results'), 'entrando nelle Aste il body non passa piu\' a has-results: il test non proverebbe niente');
   aste.vai('cerca');
@@ -1580,13 +1660,13 @@ test('contesto: uscendo da un\'area la pagina torna allo stato-vuoto, non resta 
 
   // Il gemello: anche il Competitor, quando nessun parco e' stato aperto (con un parco
   // aperto a pulire e' cpChiudi, e quel ramo copriva il difetto).
-  const cp = banco();
+  const cp = bancoModi();
   cp.vai('competitor'); cp.vai('cerca');
   assert.ok(!cp.classi.has('has-results'), 'stessa cosa uscendo dal Competitor senza nessun parco aperto');
 
   // E chi NON viene da un'area non deve perdere i risultati che ha a schermo: un clic su
   // «Auto» gia' attivo ripassa di qui con prev === 'cerca'.
-  const dopo = banco();
+  const dopo = bancoModi();
   dopo.vai('cerca'); dopo.classi.add('has-results');
   dopo.vai('cerca');
   assert.ok(dopo.classi.has('has-results'), 'un clic sul modo gia\' attivo spazza via i risultati della ricerca');
@@ -1939,11 +2019,14 @@ test('pvp: una paginazione illeggibile non diventa «inventario completo»', asy
       } else {
         const page = Number((opts.path.match(/[?&]page=(\d+)/) || [])[1] || 0);
         const da = page * PAG;
-        const content = Array.from({ length: Math.max(0, Math.min(da + PAG, TOT) - da) },
+        // 'vuotaAMeta': 200 con zero risultati a meta' paginazione, e `last` che NON lo dice —
+        // un nodo di bordo che riparte durante i ~15 s del giro.
+        const vuota = forma === 'vuotaAMeta' && page === 1;
+        const content = vuota ? [] : Array.from({ length: Math.max(0, Math.min(da + PAG, TOT) - da) },
           (_, i) => ({ idLotto: da + i, descLotto: 'lotto di prova' }));
-        const ultima = da + PAG >= TOT;
+        const ultima = !vuota && da + PAG >= TOT;
         const b = { content, last: ultima };
-        if (forma === 'numero') b.totalElements = TOT;
+        if (forma === 'numero' || forma === 'vuotaAMeta') b.totalElements = TOT;
         if (forma === 'stringa') b.totalElements = String(TOT);
         // 'involucro': la stessa risposta senza il guscio `{body:{...}}` che ci aspettiamo.
         payload = forma === 'involucro' ? { content, last: ultima, totalElements: TOT } : { body: b };
@@ -1973,6 +2056,15 @@ test('pvp: una paginazione illeggibile non diventa «inventario completo»', asy
     forma = 'involucro'; pvp._test.resetCache();
     await assert.rejects(() => pvp.tutti('auto', { pausaMs: 0 }), /involucro cambiato/,
       'una risposta senza `content` deve dichiararsi, non passare per inventario vuoto e completo');
+
+    // LA PORTA GEMELLA, dall'altro ramo di `ultima`. Una pagina vuota a meta' e' l'uscita normale
+    // della paginazione, quindi `tutti()` usciva con 200 lotti su 1000 e `troncato:false`, cioe'
+    // «ho preso tutto»: il numero che smaschera la bugia (`totalElements`) ce l'aveva gia' in mano
+    // e non lo guardava. A valle e' lo stesso danno del caso qui sopra — inventario sostituito con
+    // quel poco, il resto marcato sparito, giro 'ok' e «aggiornato oggi» per 24 ore.
+    forma = 'vuotaAMeta'; pvp._test.resetCache();
+    await assert.rejects(() => pvp.tutti('auto', { pausaMs: 0 }), /paginazione interrotta/,
+      'meta\' inventario non si consegna come completo: l\'uscita anticipata si dichiara');
   } finally { https.request = veroRequest; pvp._test.resetCache(); }
 });
 
@@ -2180,6 +2272,37 @@ test('aste: un 200 con zero lotti non marca sparito tutto il magazzino', () => c
   } finally { ripristina(); }
 }));
 
+test('aste: un tipo guasto non porta via il tipo che viene dopo', () => conAste(async ({ db, pvp, aste }) => {
+  /**
+   * `Object.keys(pvp.TIPOLOGIE)` conserva l'ordine d'inserimento, quindi il giro e' SEMPRE
+   * ['auto','moto'] ed e' sempre 'moto' a pagare un guasto delle auto — che sono ~25 pagine
+   * contro 6, cioe' quattro volte le occasioni di cadere. Senza la guardia per tipo le moto non
+   * venivano nemmeno CHIESTE, e siccome le auto restano stantie il giro dopo ricadeva li': a
+   * ogni giro, per sempre. `stantioTipo` copre solo la direzione opposta.
+   */
+  const vero = pvp.tutti;
+  const chiesti = [];
+  pvp.tutti = async (tipo) => {
+    chiesti.push(tipo);
+    if (tipo === 'auto') { const e = new Error('PVP /ricerca/vendite: HTTP 500'); e.kind = 'transient'; throw e; }
+    return { lotti: LOTTI_PVP, totale: LOTTI_PVP.length, troncato: false };
+  };
+  try {
+    const g = await aste.giro({ pausaMs: 0 });
+    assert.deepStrictEqual(chiesti, ['auto', 'moto'],
+      'il tipo DOPO quello guasto deve essere chiesto lo stesso');
+    assert.strictEqual(db.cerca({ tipo: 'moto' }).length, 2,
+      'le moto si aggiornano anche col giro delle auto caduto');
+    assert.deepStrictEqual(db.cerca({ tipo: 'auto' }), [],
+      'il magazzino del tipo guasto non si tocca');
+    // Un giro a meta' resta KO: e' `stantio()` a far riprovare, e un 'ok' falso timbrerebbe
+    // «aggiornato oggi» un inventario in cui manca un tipo intero.
+    assert.strictEqual(g.ok, false, 'un tipo caduto e\' un giro fallito, non un giro riuscito');
+    assert.match(g.motivo, /HTTP 500/, 'il motivo del tipo caduto non si perde per strada');
+    assert.strictEqual(db.ultimoGiro(), null, 'nessun giro RIUSCITO da un giro a meta\'');
+  } finally { pvp.tutti = vero; }
+}));
+
 test('aste: il primo giro in assoluto non e\' bloccato dalla guardia', () => conAste(async ({ db, aste }) => {
   // Magazzino vuoto e portale senza lotti: non c'e' niente da difendere, e un giro che non trova
   // nulla al primo colpo deve poter dire 'ok' — se no l'area non partirebbe mai.
@@ -2189,3 +2312,9 @@ test('aste: il primo giro in assoluto non e\' bloccato dalla guardia', () => con
     assert.deepStrictEqual(db.cerca(), []);
   } finally { ripristina(); }
 }));
+
+test('le ricerche salvate non avviano piu\' controlli periodici', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
+  assert.doesNotMatch(srv, /checkAll|checkSaved|\/api\/saved|require\(['"]\.\/saved['"]\)/,
+    'il server contiene ancora il motore o le rotte delle ricerche salvate');
+});

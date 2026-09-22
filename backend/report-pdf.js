@@ -20,7 +20,7 @@
  * per riga.
  */
 const { jsPDF } = require('jspdf');
-require('jspdf-autotable');   // patcha doc.autoTable sul prototype (verificato Node v26)
+const { autoTable } = require('jspdf-autotable');
 // Come si legge a parole la marcatura di una riga. Il vocabolario che vede l'utente vive nel
 // frontend (DICHIARAZIONE in app.js) e arriva qui dentro le righe gia' composte; questa mappa
 // serve al percorso che le righe NON le manda — oggi il solo bot WhatsApp, spento.
@@ -37,16 +37,18 @@ const CORRISPONDENZA = {
 // e tenere un argomento che nessuno usa avrebbe fatto credere il contrario a chi lo legge.
 function renderReportPdf(results, params = {}, extra = null) {
   results = Array.isArray(results) ? results : [];
+  extra = extra || {};
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const today = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
+  const now = new Date();
+  const data = now.toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
+  const ora = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
 
-  const INK = [20, 24, 31], ACCENT = [31, 111, 235], SLATE = [91, 100, 114];
-  const LINE = [210, 216, 222], WHITE = [255, 255, 255], ZEBRA = [247, 248, 250];
+  const NAVY = [15, 27, 46], BLUE = [31, 111, 235], INK = [25, 35, 52];
+  const SLATE = [94, 108, 130], LINE = [219, 226, 235], PALE = [245, 248, 252];
+  const WHITE = [255, 255, 255], ZEBRA = [248, 250, 253], AMBER = [157, 92, 0];
   const fmtEur = n => '€ ' + n.toLocaleString('it-IT');
-  // Le fonti dei due documenti stanno nella stessa mappa: il PDF ricambi passa da qui e
-  // deve avere le stesse pastiglie di quello dei veicoli, non un secondo insieme di colori.
   const FONTE_LABEL_PDF = {
     subito: 'Subito.it', autoscout: 'Autoscout24', moto: 'Moto.it',
     autodoc: 'Autodoc', cmsnl: 'CMSNL', ebay: 'eBay', web: 'Web',
@@ -61,109 +63,119 @@ function renderReportPdf(results, params = {}, extra = null) {
     web:       { fill: [241, 245, 249], text: [71, 85, 105] },
   };
 
-  // ── Header band scura full-width
-  doc.setFillColor(...INK); doc.rect(0, 0, pageW, 24, 'F');
-  /**
-   * IL LOGO, non un quadrato colorato. E' lo stesso radar della barra in alto dell'app
-   * (frontend/index.html:32): riquadro blu arrotondato, tre cerchi concentrici e due tacche.
-   * jsPDF un SVG non lo sa leggere, ma qui bastano sei primitive vettoriali — e a vettori
-   * resta nitido a qualunque ingrandimento, cosa che una PNG incorporata non farebbe.
-   */
-  const logo = (x, y, lato) => {
-    const s = lato / 32;                     // il disegno originale sta in una griglia 32×32
-    const cx = x + 16 * s, cy = y + 16 * s;
-    doc.setFillColor(31, 111, 235);
-    doc.roundedRect(x, y, lato, lato, 6 * s, 6 * s, 'F');
-    doc.setDrawColor(191, 219, 254);
-    doc.setLineWidth(1.8 * s);
-    doc.circle(cx, cy, 10 * s, 'S');
-    doc.circle(cx, cy, 5.5 * s, 'S');
-    doc.setFillColor(191, 219, 254);
-    doc.circle(cx, cy, 1.8 * s, 'F');
-    doc.setLineWidth(1.5 * s);
-    doc.line(cx, y + 6 * s, cx, y + 3.5 * s);         // tacca in alto
-    doc.line(x + 26 * s, cy, x + 28.5 * s, cy);       // tacca a destra
-  };
-  logo(14, 6.5, 11);
-  const titolo = (extra && extra.titolo) || 'AUTO MOTO RADAR';
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...WHITE); doc.text(titolo, 29, 13.5);
-  const _p = params || {};
-  const crit = (extra && extra.sottotitolo) || [
-    [_p.marca, _p.modello].filter(Boolean).join(' '),
-    _p.regione ? String(_p.regione).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Tutta Italia',
-    (_p.prezzoMin || _p.prezzoMax) ? `prezzo ${_p.prezzoMin || 0}-${_p.prezzoMax || 'max'}` : null,
-    (_p.annoMin || _p.annoMax) ? `anni ${_p.annoMin || ''}-${_p.annoMax || ''}` : null,
-    (_p.kmMin || _p.kmMax) ? `km ${_p.kmMin || 0}-${_p.kmMax || 'max'}` : null,
-  ].filter(Boolean).join('   ·   ');
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(170, 185, 210);
-  doc.text((crit + '   ·   ' + today).slice(0, 150), 29, 19);
-  const quante = (extra && extra.contatore) || (results.length + ' annunci');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...WHITE); doc.text(quante, pageW - 14, 14, { align: 'right' });
+  const titoloDato = String(extra.titolo || '').trim();
+  const ricambi = /ricamb/i.test(titoloDato);
+  const titolo = titoloDato || (ricambi ? 'Report ricambi' : 'Report annunci');
+  const nRighe = Array.isArray(extra.righe) ? extra.righe.length : results.length;
+  const quante = extra.contatore || `${nRighe} ${ricambi ? (nRighe === 1 ? 'ricambio' : 'ricambi') : (nRighe === 1 ? 'annuncio' : 'annunci')}`;
+  const p = params || {};
+  const ricerca = [p.marca, p.modello].filter(Boolean).join(' ') || (ricambi ? 'Ricambi' : 'Ricerca veicolo');
+  const criteri = extra.sottotitolo || [
+    p.regione ? String(p.regione).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Tutta Italia',
+    (p.prezzoMin || p.prezzoMax) ? `Prezzo ${p.prezzoMin || 0}-${p.prezzoMax || 'max'}` : null,
+    (p.annoMin || p.annoMax) ? `Anni ${p.annoMin || ''}-${p.annoMax || ''}` : null,
+    (p.kmMin || p.kmMax) ? `Km ${p.kmMin || 0}-${p.kmMax || 'max'}` : null,
+  ].filter(Boolean).join(' | ');
 
-  /**
-   * NIENTE STRISCIA MIN / MEDIANA / MEDIA / MAX, NIENTE RIGA FONTI, NIENTE LEGENDA.
-   *
-   * La striscia era calcolata su TUTTE le righe — comprese quelle marcate come di un altro
-   * modello — quindi descriveva un mercato che non esiste. Le altre due erano prosa: lo stato
-   * delle fonti e l'elenco degli aggiustamenti di prezzo occupavano tre righe sopra la tabella
-   * senza aggiungere niente che la tabella non dica gia'.
-   *
-   * Quello che serviva davvero e' rimasto, ma dentro i dati invece che accanto: la colonna
-   * "Corrispondenza" dice riga per riga se quell'annuncio e' il veicolo cercato, e
-   * l'intestazione della colonna prezzo dice se il numero e' il prezzo dell'annuncio o quello
-   * finale coi tuoi conti applicati. Chi legge non deve fidarsi di un riassunto: legge la riga.
-   */
-  let tavolaY = 31;
-
-  /**
-   * LA TABELLA. Le colonne e le righe possono ARRIVARE GIA' FATTE da chi chiama.
-   *
-   * Serviva a spegnere due gemelli: questo file e `exportPdf` nel frontend disegnavano lo
-   * stesso documento con due implementazioni diverse, e quella del browser aveva in piu' le
-   * colonne dei prezzi finali (commissione, spese, margine, passaggio) perche' quei conti
-   * dipendono da preferenze che vivono nel browser. Adesso il layout e' uno solo: chi ha i
-   * conti li fa e manda le righe, chi non li ha lascia fare a `colonneDefault`.
-   */
-  const head = (extra && Array.isArray(extra.colonne) && extra.colonne.length)
+  const head = Array.isArray(extra.colonne) && extra.colonne.length
     ? extra.colonne
     : ['Fonte', 'Veicolo', 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia', 'Corrispondenza'];
-  const tableBody = (extra && Array.isArray(extra.righe))
+  const tableBody = Array.isArray(extra.righe)
     ? extra.righe
-    : results.map(r => [FONTE_LABEL_PDF[r.fonte] || r.fonte, r.titolo, r.prezzo != null ? fmtEur(r.prezzo) : '—', r.anno != null ? String(r.anno) : '—', r.km != null ? r.km.toLocaleString('it-IT') + ' km' : '—', r.carburante || '—', r.provincia || '—', CORRISPONDENZA[r.dichiarazione] || 'corrisponde']);
-  // La fonte di ogni riga serve al chip disegnato a mano: quando le righe arrivano da fuori,
-  // arriva anche l'elenco delle fonti nello stesso ordine.
-  const fontiRiga = (extra && Array.isArray(extra.fonti)) ? extra.fonti : results.map(r => r.fonte);
-  doc.autoTable({
-    startY: tavolaY,
+    : results.map(r => [FONTE_LABEL_PDF[r.fonte] || r.fonte, r.titolo, r.prezzo != null ? fmtEur(r.prezzo) : '-', r.anno != null ? String(r.anno) : '-', r.km != null ? r.km.toLocaleString('it-IT') + ' km' : '-', r.carburante || '-', r.provincia || '-', CORRISPONDENZA[r.dichiarazione] || 'corrisponde']);
+  const fontiRiga = Array.isArray(extra.fonti) ? extra.fonti : results.map(r => r.fonte);
+  const conteggi = fontiRiga.reduce((m, f) => { if (f) m[f] = (m[f] || 0) + 1; return m; }, {});
+  const colCorr = head.findIndex(h => /corrispondenza/i.test(String(h)));
+
+  const logo = (x, y, lato) => {
+    const s = lato / 32, cx = x + 16 * s, cy = y + 16 * s;
+    doc.setFillColor(...BLUE); doc.roundedRect(x, y, lato, lato, 6 * s, 6 * s, 'F');
+    doc.setDrawColor(191, 219, 254); doc.setLineWidth(1.8 * s);
+    doc.circle(cx, cy, 10 * s, 'S'); doc.circle(cx, cy, 5.5 * s, 'S');
+    doc.setFillColor(191, 219, 254); doc.circle(cx, cy, 1.8 * s, 'F');
+    doc.setLineWidth(1.5 * s); doc.line(cx, y + 6 * s, cx, y + 3.5 * s); doc.line(x + 26 * s, cy, x + 28.5 * s, cy);
+  };
+
+  const drawFirstPage = () => {
+    doc.setFillColor(...NAVY); doc.rect(0, 0, pageW, 29, 'F');
+    logo(14, 7, 11);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(151, 173, 207);
+    doc.text('AUTO MOTO RADAR', 29, 11.5);
+    doc.setFontSize(16); doc.setTextColor(...WHITE); doc.text(titolo, 29, 21);
+    doc.setFontSize(15); doc.text(quante, pageW - 14, 15, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(176, 193, 218);
+    doc.text(`${data} | ${ora}`, pageW - 14, 21, { align: 'right' });
+
+    doc.setFillColor(...PALE); doc.roundedRect(14, 35, pageW - 28, 20, 2, 2, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...BLUE); doc.text('RICERCA', 19, 41);
+    doc.setFontSize(12); doc.setTextColor(...INK); doc.text(ricerca, 19, 48);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...SLATE);
+    const righeCriteri = doc.splitTextToSize(criteri || 'Nessun filtro aggiuntivo', pageW - 135);
+    doc.text(righeCriteri.slice(0, 2), 91, 43.5);
+
+    let x = 14;
+    for (const [fonte, n] of Object.entries(conteggi)) {
+      const et = `${FONTE_LABEL_PDF[fonte] || fonte}  ${n}`;
+      const colori = FONTE_COLORS[fonte] || { fill: [238, 242, 247], text: SLATE };
+      const w = Math.max(24, doc.getTextWidth(et) + 9);
+      doc.setFillColor(...colori.fill); doc.roundedRect(x, 60, w, 6, 1.4, 1.4, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(6.8); doc.setTextColor(...colori.text);
+      doc.text(et, x + w / 2, 63.8, { align: 'center' });
+      x += w + 3;
+    }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...SLATE);
+    const nota = ricambi
+      ? 'Risultati rilevati al momento dell\'esportazione: verifica prezzo e disponibilita\' sul portale.'
+      : 'Esportazione istantanea: gli annunci non vengono archiviati nell\'app.';
+    doc.text(nota, pageW - 14, 63.8, { align: 'right' });
+  };
+
+  const drawContinuation = () => {
+    doc.setFillColor(...NAVY); doc.rect(0, 0, pageW, 17, 'F');
+    logo(14, 4.5, 8);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...WHITE);
+    doc.text(`AUTO MOTO RADAR  |  ${titolo}`, 26, 9.5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(176, 193, 218);
+    doc.text(`${ricerca}  |  ${quante}`, 26, 13.5);
+    doc.text(data, pageW - 14, 10.5, { align: 'right' });
+  };
+
+  autoTable(doc, {
+    startY: 70,
     head: [head],
     body: tableBody,
     theme: 'plain',
-    styles: { font: 'helvetica', fontSize: 7.5, cellPadding: { top: 2.6, right: 3, bottom: 2.6, left: 3 }, valign: 'middle', overflow: 'ellipsize' },
-    headStyles: { fillColor: INK, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
+    showHead: 'everyPage',
+    styles: { font: 'helvetica', fontSize: 7.4, textColor: INK, cellPadding: { top: 2, right: 2.7, bottom: 2, left: 2.7 }, valign: 'middle', overflow: 'ellipsize', lineColor: LINE, lineWidth: { bottom: 0.08 } },
+    headStyles: { fillColor: [25, 58, 105], textColor: WHITE, fontStyle: 'bold', fontSize: 7.2, cellPadding: { top: 2.5, right: 2.7, bottom: 2.5, left: 2.7 } },
     alternateRowStyles: { fillColor: ZEBRA },
-    // Le larghezze le puo' dettare chi chiama: la tabella dei ricambi ha altre colonne, e
-    // costringerla nella griglia dei veicoli era il motivo per cui esisteva un secondo file.
-    columnStyles: (extra && extra.colonneStile)
-      || { 0: { halign: 'center', cellWidth: 24 }, 1: { cellWidth: 'auto' }, 2: { halign: 'right', cellWidth: 26, fontStyle: 'bold', textColor: ACCENT }, 3: { halign: 'center', cellWidth: 14 }, 4: { halign: 'right', cellWidth: 24 }, 5: { halign: 'center', cellWidth: 24 }, 6: { halign: 'center', cellWidth: 24 } },
-    didParseCell(data) { if (data.section === 'body' && data.column.index === 0) data.cell.text = [' ']; },   // chip disegnato a mano
-    didDrawCell(data) {
-      if (data.section !== 'body' || data.column.index !== 0) return;
-      const fonte = fontiRiga[data.row.index]; const colors = FONTE_COLORS[fonte]; if (!colors) return;
-      const cw = data.cell.width - 4, ch = 5, cx = data.cell.x + 2, cy = data.cell.y + (data.cell.height - ch) / 2;
-      doc.setFillColor(...colors.fill); doc.roundedRect(cx, cy, cw, ch, 1, 1, 'F');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(...colors.text);
-      doc.text(FONTE_LABEL_PDF[fonte] || fonte, cx + cw / 2, cy + ch / 2 + 0.3, { align: 'center', baseline: 'middle' });
+    columnStyles: extra.colonneStile
+      || { 0: { halign: 'center', cellWidth: 24 }, 1: { cellWidth: 'auto' }, 2: { halign: 'right', cellWidth: 26, fontStyle: 'bold', textColor: BLUE }, 3: { halign: 'center', cellWidth: 14 }, 4: { halign: 'right', cellWidth: 24 }, 5: { halign: 'center', cellWidth: 24 }, 6: { halign: 'center', cellWidth: 24 } },
+    margin: { top: 25, left: 14, right: 14, bottom: 17 },
+    willDrawPage(dataHook) { if (dataHook.pageNumber === 1) drawFirstPage(); else drawContinuation(); },
+    didParseCell(cell) {
+      if (cell.section !== 'body') return;
+      if (cell.column.index === 0 && FONTE_COLORS[fontiRiga[cell.row.index]]) cell.cell.text = [' '];
+      if (cell.column.index === colCorr && !/^corrisponde$/i.test(String(cell.cell.raw || ''))) {
+        cell.cell.styles.fontStyle = 'bold'; cell.cell.styles.textColor = AMBER;
+      }
     },
-    margin: { left: 14, right: 14 },
+    didDrawCell(cell) {
+      if (cell.section !== 'body' || cell.column.index !== 0) return;
+      const fonte = fontiRiga[cell.row.index], colori = FONTE_COLORS[fonte]; if (!colori) return;
+      const w = cell.cell.width - 5, h = 5.2, x = cell.cell.x + 2.5, y = cell.cell.y + (cell.cell.height - h) / 2;
+      doc.setFillColor(...colori.fill); doc.roundedRect(x, y, w, h, 1.3, 1.3, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(6.3); doc.setTextColor(...colori.text);
+      doc.text(FONTE_LABEL_PDF[fonte] || fonte, x + w / 2, y + h / 2 + 0.2, { align: 'center', baseline: 'middle' });
+    },
   });
 
-  // ── Footer per pagina
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.line(14, pageH - 10, pageW - 14, pageH - 10);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...SLATE);
-    doc.text('Auto Moto Radar — uso personale', 14, pageH - 5.5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8); doc.setTextColor(...SLATE);
+    doc.text('Auto Moto Radar | Report generato su richiesta', 14, pageH - 5.5);
     doc.text(`Pagina ${i} di ${pageCount}`, pageW - 14, pageH - 5.5, { align: 'right' });
   }
   return Buffer.from(doc.output('arraybuffer'));

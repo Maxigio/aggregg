@@ -95,6 +95,50 @@ test('pagina 2 illeggibile dopo pagina 1 buona: si tengono le buone, ma dichiara
     assert.strictEqual(r.pages.length, 1, 'la pagina buona si tiene');
     assert.strictEqual(r.pages[0].length, 3);
     assert.strictEqual(r.truncated, true, 'vista parziale: senza troncato il crawler farebbe markGone');
+    assert.strictEqual(r.cadute, 2, 'due pagine su tre non lette');
+  });
+});
+
+/**
+ * LE PAGINE PERSE DEVONO USCIRE DAL LOOP, e separate da `truncated`.
+ *
+ * `truncated` lo alza anche il caso ordinario (cap esaurito con got < total), che e' normale
+ * e deve restare cachabile: se reggesse l'avviso, Moto.it non entrerebbe in cache mai piu'.
+ * `cadute` invece dice solo "abbiamo smesso prima", ed e' quello che diventa `parziale`.
+ */
+test('un non-200 a pagina 2 conta come pagina persa; tre pagine buone no', async () => {
+  const buona = pagina([101, 102, 103], 4323);
+  await conGet([{ status: 200, body: buona }, { status: 503, body: '' }], async () => {
+    const r = await motoit._scrapeVia(['u1', 'u2', 'u3']);
+    assert.strictEqual(r.pages.length, 1, 'la pagina buona si tiene');
+    assert.strictEqual(r.cadute, 2, 'un 503 a pagina 2 lascia due pagine non lette');
+  });
+  // Cap esaurito con il sito che dichiara di piu': troncato SI', ma nessuna pagina persa.
+  await conGet([{ status: 200, body: buona }], async () => {
+    const r = await motoit._scrapeVia(['u1', 'u2', 'u3']);
+    assert.strictEqual(r.truncated, true);
+    assert.strictEqual(r.cadute, 0, 'niente avviso quando non si e\' perso nulla');
+  });
+});
+
+/**
+ * IL PERCORSO VIVO: `truncated` non sopravvive a `sciogli()` in server.js (campi fissi),
+ * quindi l'unico modo per far arrivare l'elenco monco fino alla pill e a `cacheable()` e'
+ * `parziale`. Senza, una pagina caduta usciva con pastiglia VERDE, nessun avviso, e la
+ * risposta monca congelata tre minuti in cache: ripremere Cerca serviva la stessa lista.
+ */
+test('pagina caduta: scrapeMotoIt dichiara `parziale`, non solo `truncated`', async () => {
+  const params = { tipo: 'moto', marca: 'Yamaha', modello: 'MT-07',
+    motoitBrandSlug: 'yamaha', motoitModelSlug: 'mt-07' };
+  await conGet([{ status: 200, body: pagina([101, 102, 103], 4323) }, { status: 503, body: '' }], async () => {
+    const r = await motoit(params, { withMeta: true });
+    assert.strictEqual(r.items.length, 3, 'le superstiti si tengono');
+    assert.match(r.parziale, /non si sono lasciate leggere/);
+  });
+  // Tre pagine buone: nessun avviso, altrimenti la ricerca normale non sarebbe piu' cachabile.
+  await conGet([{ status: 200, body: pagina([101, 102, 103], 4323) }], async () => {
+    const r = await motoit(params, { withMeta: true });
+    assert.strictEqual(r.parziale, null);
   });
 });
 

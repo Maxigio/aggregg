@@ -79,8 +79,12 @@ function slugDaUrl(url) {
 function varianteDaSlug(slug, modelloSlug) {
   const s = String(slug || '').trim();
   if (!s) return null;
-  // Il periodo in coda: quattro cifre, e facoltativamente altre due per l'anno di fine.
-  const m = s.match(/-(\d{4})(?:-(\d{2}))?$/);
+  // Il periodo in coda: un ANNO di quattro cifre, e facoltativamente altre due per l'anno di
+  // fine. L'anno va preteso: senza il vincolo "19xx/20xx" la cilindrata in coda al nome passa
+  // per periodo — misurato sul catalogo, 30 versioni su 12.192 ("YB11 1000" → periodo 1000,
+  // "Monster S2R 1000" → 1000), e una cilindrata spacciata per anno di produzione e' un dato
+  // inventato. Gli anni veri del catalogo stanno fra il 1973 e il 2027.
+  const m = s.match(/-((?:19|20)\d{2})(?:-(\d{2}))?$/);
   const testa = m ? s.slice(0, m.index) : s;
   // L'anno di fine e' a DUE cifre e puo' scavalcare il secolo: "1993-04" e' 1993–2004, non
   // 1993–1904. Si prende il secolo dell'anno d'inizio e, se il conto viene all'indietro, si
@@ -108,9 +112,22 @@ function varianteDaSlug(slug, modelloSlug) {
   const mods = String(modelloSlug || '').split(',').map(s => s.trim()).filter(Boolean)
     .sort((a, b) => b.length - a.length);
   let nome = testa;
+  let tolto = false;
   for (const mod of mods) {
-    if (testa === mod || testa.startsWith(mod + '-')) { nome = testa.slice(mod.length).replace(/^-+/, ''); break; }
+    if (testa === mod || testa.startsWith(mod + '-')) { nome = testa.slice(mod.length).replace(/^-+/, ''); tolto = true; break; }
   }
+  /**
+   * E SE NESSUNA FAMIGLIA COMBACIA, il modello resta dentro lo stesso — stessa trappola, altra
+   * porta. Due casi veri: la famiglia non c'e' (ricerca allargata alla marca, `modelloSlug`
+   * nullo: non c'e' niente da togliere) e la versione non ripete lo slug della sua famiglia —
+   * misurate 998 su 12.192 (8,2%): benelli `trk-502` contiene "TRK 502X", bmw
+   * `r-1200-gs-adventure` contiene "R 1200 GS", e in colonna uscivano "TRK 502X · 2018–2020"
+   * e "R 1200 GS · 2017–2018", cioe' il nome di una MOTO dove Subito e Autoscout scrivono il
+   * solo allestimento — accanto, nella stessa lista, alle righe pulite della stessa famiglia.
+   * Senza una famiglia che combaci non si sa dove finisce il modello e dove comincia
+   * l'allestimento: si dice il solo periodo, che e' certo, e il modello si legge nel titolo.
+   */
+  if (!tolto) nome = '';
   const parole = nome ? nome.split('-').filter(Boolean).map(w => w.toUpperCase()).join(' ') : '';
   if (parole && periodo) return `${parole} · ${periodo}`;
   return parole || periodo || null;

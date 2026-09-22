@@ -121,7 +121,7 @@ test('sola lettura: il server permette la LETTURA dei quattro modi e nega le scr
 
 // ── 2. L'elenco delle persone si controlla prima di scriverlo ────────────────
 
-const PW = { admin: 'proprie8', anna: 'annaseg1', bruno: 'brunose1', demo: 'provademo2026' };
+const PW = { admin: 'proprie8', anna: 'annaseg1', bruno: 'brunose1', demo: 'provademo2026', chiara: 'chiaraweb1' };
 
 test('utenti-da-env: una riga sbagliata ferma TUTTO prima di scrivere', () => {
   // La regola non e' "l'errore viene segnalato": e' che nessuno entra finche' non torna tutto.
@@ -143,6 +143,47 @@ test('utenti-da-env: una riga sbagliata ferma TUTTO prima di scrivere', () => {
   }
   assert.deepStrictEqual(auth.persone().map(p => p.id).sort(), prima,
     'una pianificazione fallita ha comunque toccato auth.json');
+});
+
+test('utenti-da-env: una password gia\' VIVA ferma tutto prima di scrivere, e dice quale riga', () => {
+  // `pianifica` confronta le password solo FRA le voci del .env: contro auth.json non guardava
+  // nessuno, e la collisione la lanciava `setPersona` a giro iniziato — col secret gia'
+  // rigenerato (tutti fuori per niente), meta' elenco riscritto, la demo condivisa che si
+  // voleva ritirare ancora valida e le altre macchine ferme alle credenziali vecchie.
+  for (const p of auth.persone()) auth.togliPersona(p.id);
+  auth.setPassword('vecchia9');
+  auth.setDemoPassword(PW.demo);
+  auth.setPersona('Anna Bianchi', PW.anna, 'demo');
+  const tokenPrima = auth.makeToken('full', 'owner');
+
+  // Carla prende la password che finora era della demo condivisa: la demo sarebbe ritirata,
+  // ma solo a fine giro.
+  assert.throws(() => applica(pianifica({
+    AMR_ADMIN_PASSWORD: PW.admin,
+    AMR_UTENTE_01: `Anna Bianchi:${PW.anna}`,
+    AMR_UTENTE_02: `Carla Rossi:${PW.demo}`,
+    AMR_UTENTE_03: `Bruno Verdi:${PW.bruno}`,
+  }), {}), /AMR_UTENTE_02/, "l'errore deve dire QUALE riga del .env: chi legge ce l'ha davanti");
+
+  assert.ok(auth.verifica('vecchia9'), 'la password del proprietario e\' stata riscritta a meta\' giro');
+  assert.strictEqual(auth.checkToken(tokenPrima), 'full', 'il secret e\' stato rigenerato: tutti buttati fuori per niente');
+  assert.deepStrictEqual(auth.persone().map(p => p.id), ['anna-bianchi'], 'qualcuno e\' stato scritto lo stesso');
+  assert.ok(auth.verifica(PW.demo), 'la demo condivisa doveva restare com\'era: il giro non e\' partito');
+
+  // Stesso guaio correggendo un refuso nel NOME e lasciando la password: l'id nuovo non e'
+  // escluso dal confronto, quindi la persona collide con se stessa — e senza controllo prima
+  // fallirebbe a ogni giro, buttando fuori tutti ogni volta.
+  assert.throws(() => applica(pianifica({
+    AMR_ADMIN_PASSWORD: PW.admin, AMR_UTENTE_01: `Anna Bianchii:${PW.anna}`,
+  }), {}), /AMR_UTENTE_01/);
+  assert.ok(auth.verifica('vecchia9'), 'niente scritto e nessuno buttato fuori, nemmeno al secondo tentativo');
+  assert.strictEqual(auth.checkToken(tokenPrima), 'full');
+
+  // E lo specchio normale deve continuare a girare: la stessa persona con la SUA password non
+  // e' una collisione, altrimenti il controllo nuovo bloccherebbe ogni giro.
+  applica(pianifica({ AMR_ADMIN_PASSWORD: PW.admin, AMR_UTENTE_01: `Anna Bianchi:${PW.anna}` }), {});
+  assert.ok(auth.verifica(PW.admin), 'il giro senza collisioni deve arrivare in fondo');
+  assert.strictEqual(auth.verifica(PW.demo), null, 'e ritirare la demo condivisa, come sempre');
 });
 
 test('utenti-da-env: la password puo\' contenere i due-punti, e :piena da\' la scrittura', () => {
@@ -252,7 +293,7 @@ test('utenti-da-env: applicare allinea davvero le altre copie', () => {
   const env = { AMR_AUTH_ANCHE: altra };
   const esito = applica(pianifica({ AMR_ADMIN_PASSWORD: PW.admin, AMR_UTENTE_01: `Anna Bianchi:${PW.anna}` }), env);
 
-  assert.deepStrictEqual(esito.copie, [{ dove: altra, esito: 'copiato' }]);
+  assert.deepStrictEqual(esito.copie, [{ dove: altra, esito: 'copiato', web: [] }]);
   const qui = fs.readFileSync(esito.file, 'utf8');
   const la = fs.readFileSync(path.join(altra, 'auth.json'), 'utf8');
   assert.strictEqual(la, qui, 'la copia non e\' identica all\'originale: due macchine, due verita\'');
@@ -262,6 +303,44 @@ test('utenti-da-env: applicare allinea davvero le altre copie', () => {
   fs.rmSync(altra, { recursive: true, force: true });
   const dopo = copiaAltrove(esito.file, [{ dove: altra, remota: false }], {});
   assert.ok(dopo[0].esito.startsWith('FALLITA'), 'una copia impossibile deve risultare fallita, non riuscita');
+});
+
+test('utenti-da-env: la copia NON cancella chi si e\' registrato sull\'altra macchina', () => {
+  // L'M2 e' il server: `richieste.js --approva` gira li', quindi chi nasce da un invito esiste
+  // solo nel SUO auth.json. Questo script gira sull'iMac, dove quelle voci non ci sono mai
+  // state: la copia secca le toglieva tutte, e i loro dati restavano nel magazzino di la' —
+  // `utenti-db.revocato` da allora considera l'id bruciato, quindi nemmeno ri-registrabile.
+  const altra = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-m2-'));
+  const qui = process.env.USER_DATA_PATH;
+  const dentroAltra = fn => {
+    process.env.USER_DATA_PATH = altra;
+    try { return fn(); } finally { process.env.USER_DATA_PATH = qui; }
+  };
+  dentroAltra(() => {
+    auth.setPassword(PW.admin);
+    auth.creaPersona('Chiara Web', PW.chiara, 'demo', 'web');
+    assert.ok(auth.verifica(PW.chiara), 'preparazione: di la\' Chiara deve entrare');
+  });
+
+  const env = { AMR_AUTH_ANCHE: altra };
+  const esito = applica(pianifica({ AMR_ADMIN_PASSWORD: PW.admin, AMR_UTENTE_01: `Anna Bianchi:${PW.anna}` }), env);
+  assert.deepStrictEqual(esito.copie, [{ dove: altra, esito: 'copiato', web: ['chiara-web'] }],
+    'il resoconto deve dire chi e\' stato salvato di la\': letto qui, l\'elenco dei web e\' sempre vuoto');
+
+  const la = JSON.parse(fs.readFileSync(path.join(altra, 'auth.json'), 'utf8'));
+  assert.deepStrictEqual(la.persone.map(p => p.id).sort(), ['anna-bianchi', 'chiara-web'],
+    'la copia ha cancellato dall\'altra macchina chi si era registrato dal web');
+  // Non basta che l'id ci sia: la voce va portata intera, salt e hash compresi.
+  dentroAltra(() => assert.ok(auth.verifica(PW.chiara), 'Chiara non entra piu\': la sua voce e\' arrivata di la\' rotta'));
+
+  // E un auth.json di la' che non si legge NON si sovrascrive: potrebbe avere accessi che qui
+  // non si vedono, e darlo per vuoto e' esattamente il guaio di sopra.
+  fs.writeFileSync(path.join(altra, 'auth.json'), '{ rotto');
+  const rifiuto = copiaAltrove(esito.file, [{ dove: altra, remota: false }], {});
+  assert.ok(rifiuto[0].esito.startsWith('FALLITA'), 'un file illeggibile e\' un sospetto, non un file vuoto');
+  assert.strictEqual(fs.readFileSync(path.join(altra, 'auth.json'), 'utf8'), '{ rotto');
+
+  fs.rmSync(altra, { recursive: true, force: true });
 });
 
 test('auth: il minimo di lunghezza vale per tutte e tre le porte', () => {

@@ -98,8 +98,8 @@ function unisciGemelli(tipo, marca, modelli, modelsData) {
  * dall'elenco marche, i suoi modelli vivono nella gemella (l'unione inversa li porta gia'
  * tutti), e chi digita il nome nascosto va accompagnato sulla gemella: per questo accanto
  * all'elenco dei nascosti c'e' quello dei SINONIMI da dare all'autocompletamento.
- * Le ricerche gia' salvate con la marca nascosta continuano a funzionare: la risoluzione
- * (ponte degli ospiti) non guarda la tendina.
+ * I link costruiti con la marca nascosta continuano a funzionare: la risoluzione (ponte degli
+ * ospiti) non guarda la tendina.
  */
 function marcheNascoste(tipo) {
   const t = tipo === 'moto' ? 'moto' : 'auto';

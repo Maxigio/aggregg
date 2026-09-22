@@ -34,7 +34,7 @@ const limiteAggiorna = require('./limite-richieste').crea({
  * centinaia di richieste dallo stesso indirizzo — per un inventario che cambia una volta al
  * giorno. `inVolo` (aste.js:56) non salva il caso: fonde solo i giri che partono INSIEME, mentre
  * sparpagliati nell'ora sono giri veri uno dietro l'altro. E' la stessa ragione scritta in testa
- * a /api/saved/check: le fonti bandiscono la MACCHINA, non la persona.
+ * per le ricerche normali: le fonti bandiscono la MACCHINA, non la persona.
  *
  * Sei l'ora e non tre: cosi' il tetto personale di chi ha fretta non se lo puo' mangiare
  * qualcun altro, e per una persona sola — il caso di oggi — non cambia niente.
@@ -62,6 +62,15 @@ const testo = (v, max = 80) => {
   const t = v.trim();
   return t ? t.slice(0, max) : null;
 };
+
+/**
+ * Il messaggio della fonte finisce TALE E QUALE nella card (frontend/app.js, `asDettaglio`), e i
+ * messaggi di `pvp.js` cominciano col percorso interno del microservizio del ministero —
+ * `/ve-xxxxxxxx-yyyyyyyy/ve-ms/vendite/2092470/restricted`, hash del rilascio compreso: roba
+ * nostra, che a chi legge non dice niente. Il resto del messaggio resta, perche' «HTTP 503» e
+ * «risposta non-JSON (endpoint cambiato?)» sono due guasti diversi e chi telefona li legge da li'.
+ */
+const senzaPercorso = m => String(m || '').replace(/PVP \/\S*: /g, '');
 
 function mount(app, deps = {}) {
   const aste = deps.aste || asteReal;
@@ -166,7 +175,7 @@ function mount(app, deps = {}) {
         totalePortale: r.totale,
       });
     } catch (e) {
-      res.status(502).json({ ok: false, error: `il portale non risponde: ${e.message}` });
+      res.status(502).json({ ok: false, error: `il portale non risponde: ${senzaPercorso(e.message)}` });
     }
   });
 
@@ -190,8 +199,10 @@ function mount(app, deps = {}) {
       res.json({ ok: true, lotto: nostro, dettaglio: dettaglioPubblico(d, pvp), url: pvp.urlAnnuncio(id) });
     } catch (e) {
       // La fonte che non risponde non e' un errore NOSTRO: 502, e intanto si serve quel che
-      // abbiamo gia' in magazzino invece di lasciare la scheda vuota.
-      res.status(502).json({ ok: false, error: `il portale non risponde: ${e.message}`, lotto: nostro, url: pvp.urlAnnuncio(id) });
+      // abbiamo gia' in magazzino invece di lasciare la scheda vuota. Il lotto ritirato NON passa
+      // di qui: `pvp.dettaglio` traduce in `null` i 4xx che parlano del lotto, e la riga qui sopra
+      // lo dice per quello che e' — quello che arriva qui e' il portale davvero muto.
+      res.status(502).json({ ok: false, error: `il portale non risponde: ${senzaPercorso(e.message)}`, lotto: nostro, url: pvp.urlAnnuncio(id) });
     }
   });
 

@@ -76,3 +76,43 @@ test('rate-limit: 11ª richiesta (OEN distinti, stesso IP) → 429', async () =>
     assert.strictEqual((await get(s, '/api/ricambi?oen=CODE11')).status, 429);
   } finally { s.close(); }
 });
+
+// Le due rotte lazy condividono lo STESSO budget (30/60s): 20 aperture + le stesse 20 riaperte
+// fanno 40 > 30, e prima del fix le 10 di troppo tornavano 429 senza una sola richiesta di rete.
+test('lazy ⓘ/varianti: la cache non consuma il budget (né 429 né richieste alle fonti al 2° giro)', async () => {
+  let ebayCalls = 0, autodocCalls = 0;
+  const app = express();
+  mount(app, {
+    searchRicambi: async () => { throw new Error('non deve essere chiamato'); }, normOen, clientIp: () => 'ip-test',
+    fetchEbayItemDetails: async () => { ebayCalls++; return { venditore: 'v', spedizione: 's' }; },
+    fetchAutodocSpecs: async () => { autodocCalls++; return { datiTecnici: { peso: '1kg' } }; },
+  });
+  const s = await new Promise(res => { const h = app.listen(0, () => res(h)); });
+  const urls = [
+    ...Array.from({ length: 10 }, (_, i) => `/api/ricambi/ebay-item?url=${encodeURIComponent(`https://www.ebay.it/itm/1000${i}`)}`),
+    ...Array.from({ length: 10 }, (_, i) => `/api/ricambi/autodoc-specs?url=${encodeURIComponent(`https://www.auto-doc.it/p/${i}`)}`),
+  ];
+  try {
+    for (const u of urls) assert.strictEqual((await get(s, u)).status, 200, `giro 1: ${u}`);
+    assert.deepStrictEqual([ebayCalls, autodocCalls], [10, 10]);
+    for (const u of urls) assert.strictEqual((await get(s, u)).status, 200, `giro 2 (cache): ${u}`);
+    assert.deepStrictEqual([ebayCalls, autodocCalls], [10, 10], 'il 2° giro non deve toccare le fonti');
+  } finally { s.close(); }
+});
+
+// Un URL rifiutato non arriva a nessuna fonte: non deve togliere un posto a chi ne ha diritto.
+test('lazy: URL non valido → 400 senza consumare il budget', async () => {
+  let ebayCalls = 0;
+  const app = express();
+  mount(app, {
+    searchRicambi: async () => { throw new Error('non deve essere chiamato'); }, normOen, clientIp: () => 'ip-test',
+    fetchEbayItemDetails: async () => { ebayCalls++; return { venditore: 'v' }; },
+  });
+  const s = await new Promise(res => { const h = app.listen(0, () => res(h)); });
+  try {
+    for (let i = 0; i < 35; i++) assert.strictEqual((await get(s, '/api/ricambi/ebay-item?url=http://evil.test/itm/1')).status, 400);
+    const r = await get(s, `/api/ricambi/ebay-item?url=${encodeURIComponent('https://www.ebay.it/itm/99999')}`);
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(ebayCalls, 1);
+  } finally { s.close(); }
+});

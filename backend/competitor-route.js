@@ -82,6 +82,24 @@ function mount(app, deps = {}) {
     return voci;
   }
 
+  /**
+   * L'elenco quando si sta per LEGGERE, e vale la ragione gemella di `vociPerScrivere`:
+   * a magazzino illeggibile leggi() risponde [], e «non e' nell'elenco» / «gruppo vuoto»
+   * diventano un'affermazione su un elenco che NON abbiamo letto — le vetrine ci sono tutte
+   * e l'unico posto dove il guasto e' scritto e' il log del server. Un dato che non c'e' si
+   * dichiara. Anche qui il controllo va fatto SUBITO dopo leggi(), nello stesso tick.
+   */
+  function vociLette(utente) {
+    const voci = C.leggi(utente);
+    if (C.leggi.ultimoErrore) {
+      const e = new Error(`l'elenco su disco e' illeggibile (${C.leggi.ultimoErrore}): non so dire cosa c'e' in elenco — ripristina il magazzino e riprova`);
+      e.stato = 503;
+      e.corrotto = true;
+      throw e;
+    }
+    return voci;
+  }
+
   app.get('/api/competitor', (req, res) => {
     res.set('Cache-Control', 'no-store');
     const voci = C.leggi(chiDi(req));
@@ -168,7 +186,7 @@ function mount(app, deps = {}) {
    * vetrina e' il SUO — non un elenco comune.
    */
   async function scaricaParco(utente, chiave, forza) {
-    let voce = C.leggi(utente).find(v => chiaveDi(v) === String(chiave));
+    let voce = vociLette(utente).find(v => chiaveDi(v) === String(chiave));
     if (!voce) { const e = new Error('non e\' nell\'elenco'); e.stato = 404; throw e; }
     const k = chiaveDi(voce);
     const hit = cache.get(k);
@@ -259,14 +277,22 @@ function mount(app, deps = {}) {
     // fonti, e non deve consumare il budget. Il limite morde solo quando si va davvero in rete.
     const chiave = String(req.params.id);   // `fonte:id`
     const daCache = !forza && inCacheFresca(chiave);
-    if (!daCache && !parcoOk(ip)) {
-      const st = limiteParco.stato(ip);
-      return res.status(429).json({ ok: false, error: limiteParco.messaggio(st, MSG_LIMITE), riprovaFra: st.attesa, restanti: 0 });
-    }
     try {
+      // E PRIMA DEL LIMITATORE. Un magazzino che non si apre e' un guasto nostro: addebitare
+      // uno scarico che non partira' mai lo maschera una seconda volta — al settimo clic la
+      // risposta diventa 429, e quando il magazzino torna restano fuori anche gli scarichi veri.
+      vociLette(chiDi(req));
+      if (!daCache && !parcoOk(ip)) {
+        const st = limiteParco.stato(ip);
+        return res.status(429).json({ ok: false, error: limiteParco.messaggio(st, MSG_LIMITE), riprovaFra: st.attesa, restanti: 0 });
+      }
       const d = await scaricaParco(chiDi(req), chiave, forza);
       res.json({ ok: true, ...d, scarichiRestanti: parcoRestanti(ip) });
-    } catch (e) { res.status(e.stato || 500).json({ ok: false, error: e.message }); }
+    } catch (e) {
+      const corpo = { ok: false, error: e.message };
+      if (e.corrotto) corpo.corrotto = true;
+      res.status(e.stato || 500).json(corpo);
+    }
   });
 
   /**
@@ -306,7 +332,9 @@ function mount(app, deps = {}) {
    */
   app.get('/api/competitor/gruppo/:g/parco', async (req, res) => {
     const g = String(req.params.g);
-    const voci = C.leggi(chiDi(req)).filter(v => v.gruppo === g);
+    let voci;
+    try { voci = vociLette(chiDi(req)).filter(v => v.gruppo === g); }
+    catch (e) { return res.status(e.stato).json({ ok: false, corrotto: true, error: e.message }); }
     if (!voci.length) return res.status(404).json({ ok: false, error: 'gruppo vuoto' });
     const forza = String(req.query.forza || '') === '1';
     const ip = chiaveLimite(req);

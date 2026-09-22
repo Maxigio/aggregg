@@ -76,7 +76,6 @@ const risultatiAVista = () => (Array.isArray(ultimiVisti) ? ultimiVisti : curren
 let targaBtnSync = () => {};
 let confronto      = [];                       // annunci selezionati per il confronto (cap 10)
 let matrixList     = [];                        // annunci attualmente mostrati nella matrice
-let salvati        = [];
 let groupDim       = '';                        // dimensione di raggruppamento attiva ('' = nessuna)
 // SOLO IVA ESPOSTA. Per un operatore un'auto a 10.000 con IVA esposta e' un'ALTRA auto
 // rispetto a una a 10.000 in margine: la prima gliene costa 8.197 netti, la seconda 10.000.
@@ -94,7 +93,6 @@ let visibleCols    = ['anno', 'km'];            // colonne opzionali mostrate (d
 let lastSources    = null;
 let prezzoSliderInstance = null;
 let lastSearchParams = null;
-let savedSearches  = [];
 let sliderGlobalBounds = [0, 0];
 let myRole         = 'full';
 // CHI SONO, non solo con che ruolo. 'demo' come id e' l'ospite anonimo della vecchia password
@@ -105,96 +103,10 @@ let myRole         = 'full';
 let myId           = null;
 let sonoProprietario = false;
 
-/**
- * ─── LE MIE COSE: il server e' la verita', il browser la copia veloce ──────────
- *
- * Annunci salvati, ricambi salvati, codici preferiti e impostazioni di prezzo vivevano solo qui
- * dentro, cioe' PER DISPOSITIVO: salvati dall'iMac, dal telefono non c'erano. Adesso salgono al
- * proprio account e si ritrovano da qualsiasi parte.
- *
- * Il localStorage NON si toglie: resta come cache e come rete di sicurezza quando il server non
- * risponde. E finche' non si sa cosa c'e' di la' (`mieiPronti`) non si manda su niente — senno'
- * la prima apertura, con lo schermo ancora vuoto, cancellerebbe quello che c'e' sul server.
- */
+/** Le preferenze di prezzo sono configurazione dell'account, non dati dei portali. */
 let mieiPronti = false;
 const MIEI_ATTESA = 800;          // una raffica di clic diventa un invio solo
 const mieiTimer = {};
-let mieiKo = false;               // l'ultimo invio non e' arrivato: lo si dice una volta sola
-
-/**
- * La copia LOCALE com'era all'ultima sincronizzazione col server, per genere. E' il metro per
- * capire cosa e' successo QUI da allora (aggiunte e rimozioni proprie): senza, una scheda aperta
- * da ore spedirebbe la sua fotografia stantia e l'ultimo dispositivo che scrive cancellerebbe
- * quello che gli altri hanno salvato nel frattempo.
- */
-const mieiBase = { annuncio: [], ricambio: [], oem: [] };
-const mieiGiro = {};              // per genere: solo l'invio piu' recente aggiorna la baseline
-
-// Identita' e tetto di ogni genere: le stesse regole dei rispettivi elenchi piu' in basso
-// (stessoAnnuncio, rcKey, rcFavNorm — valutate a runtime, quando sono gia' definite).
-const MIEI_CHIAVI = {
-  annuncio: { chiave: a => String((a && (a.id || a.url)) || ''), taglia: a => a.slice(-SALVATI_CAP), inCoda: true },
-  ricambio: { chiave: a => (a ? rcKey(a) : ''), taglia: a => a.slice(0, RC_SALVATI_CAP), inCoda: false },
-  oem:      { chiave: f => rcFavNorm(f && f.q), taglia: a => a.slice(0, RC_FAV_CAP), inCoda: false },
-};
-
-/**
- * Fusione a tre vie: baseline (com'era qui all'ultima sincronizzazione), locale (com'e' qui
- * adesso) e server (com'e' di la' adesso). Sopra lo stato del server si applicano solo le
- * PROPRIE aggiunte e rimozioni, cosi' quello che un altro dispositivo ha salvato resta.
- * Server vuoto = la regola del primo accesso: quello che c'e' qui sale — da un elenco vuoto
- * non si deduce una cancellazione totale, potrebbe mancare per un guasto.
- */
-function mieiFondi(genere, locale, server) {
-  const { chiave, taglia, inCoda } = MIEI_CHIAVI[genere];
-  if (!Array.isArray(server) || !server.length) return locale;
-  const inLocale = new Set(locale.map(chiave));
-  const chiaviBase = (mieiBase[genere] || []).map(chiave);
-  const inBase = new Set(chiaviBase);
-  // C'era all'ultima sincronizzazione e qui non c'e' piu': l'ho tolto io, non deve tornare.
-  const tolteQui = new Set(chiaviBase.filter(c => !inLocale.has(c)));
-  const inServer = new Set(server.map(chiave));
-  // Le voci di qui restano se le ho aggiunte io (fuori baseline) o se il server le ha ancora:
-  // se erano in baseline e dal server sono sparite, le ha tolte un altro dispositivo.
-  const mie = locale.filter(x => { const c = chiave(x); return !inBase.has(c) || inServer.has(c); });
-  // Le voci del server che qui mancano e non ho tolto io: aggiunte altrui, si tengono.
-  const altrui = server.filter(x => { const c = chiave(x); return c && !inLocale.has(c) && !tolteQui.has(c); });
-  return taglia(inCoda ? mie.concat(altrui) : altrui.concat(mie));
-}
-
-function mieiManda(genere, elenco) {
-  if (!mieiPronti) return;
-  clearTimeout(mieiTimer[genere]);
-  mieiTimer[genere] = setTimeout(async () => {
-    const giro = mieiGiro[genere] = (mieiGiro[genere] || 0) + 1;
-    // Prima si RILEGGE il server: la copia in mano puo' essere vecchia di ore, e spedita
-    // cosi' com'e' cancellerebbe i salvataggi fatti nel frattempo dagli altri dispositivi.
-    let server;
-    try {
-      const d = await fetch('/api/miei').then(r => (r.ok ? r.json() : null));
-      if (!d || d.guasto) throw new Error('server muto');
-      server = (d.salvataggi || {})[genere] || [];
-    } catch (_) {
-      if (!mieiKo) { mieiKo = true; console.warn(`[miei] "${genere}" non salvato sul server: resta su questo dispositivo.`); }
-      return;
-    }
-    fetch(`/api/miei/elenco/${genere}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ elenco: mieiFondi(genere, elenco, server) }),
-    }).then(r => {
-      if (r.ok) {
-        mieiKo = false;
-        // La baseline e' la copia locale al momento della sincronizzazione (non la fusione:
-        // lo schermo non l'ha vista) — e solo se questo e' ancora l'invio piu' recente.
-        if (giro === mieiGiro[genere]) mieiBase[genere] = elenco.slice();
-        return;
-      }
-      if (!mieiKo) { mieiKo = true; console.warn(`[miei] "${genere}" non salvato sul server (${r.status}): resta su questo dispositivo.`); }
-    }).catch(() => {
-      if (!mieiKo) { mieiKo = true; console.warn(`[miei] "${genere}" non salvato sul server: resta su questo dispositivo.`); }
-    });
-  }, MIEI_ATTESA);
-}
 
 function mieiPreferenza(chiave, valore) {
   if (!mieiPronti) return;
@@ -216,50 +128,32 @@ function salvaPref(chiave, valore) {
   mieiPreferenza(chiave, valore);
 }
 
-/**
- * Il primo contatto col proprio account, all'apertura.
- *
- * Tre strade, e la differenza fra la seconda e la terza e' quella che fa perdere i dati alla
- * gente: "il server dice che non ho niente" e "il server non me lo ha detto" non sono la stessa
- * cosa. Nel dubbio non si manda su niente e non si cancella niente.
- */
+/** Carica le sole preferenze consentite per questo account. */
 async function mieiCarica() {
   let d = null;
   try { d = await fetch('/api/miei').then(r => (r.ok ? r.json() : null)); } catch (_) { d = null; }
   if (!d || d.guasto) {
-    console.warn('[miei] i dati del mio account non si leggono: tengo quelli di questo dispositivo e non tocco niente.');
-    return;                                  // mieiPronti resta falso: nessun invio
-  }
-  const s = d.salvataggi || {};
-  const p = d.preferenze || {};
-  const serverVuoto = !(s.annuncio || []).length && !(s.ricambio || []).length
-    && !(s.oem || []).length && !Object.keys(p).length;
-
-  if (!serverVuoto) {
-    // Il server vince: e' quello che ritrovo da qualunque dispositivo. La baseline e' una COPIA
-    // (l'array vivo poi si muta): da qui in avanti misura i gesti fatti su questo dispositivo.
-    if (Array.isArray(s.annuncio)) { salvati = s.annuncio; mieiBase.annuncio = s.annuncio.slice(); persistSalvatiLocale(); }
-    if (Array.isArray(s.ricambio)) { salvatiRicambi = s.ricambio; mieiBase.ricambio = s.ricambio.slice(); rcPersistSalvatiLocale(); }
-    if (Array.isArray(s.oem)) { oemFav = s.oem; mieiBase.oem = s.oem.slice(); rcPersistFavLocale(); }
-    for (const [k, v] of Object.entries(p)) { try { localStorage.setItem(k, v); } catch (_) {} }
-    if (p.amr_price_v) priceCfgV = loadPriceCfg('amr_price_v');
-    if (p.amr_price_r) priceCfgR = loadPriceCfg('amr_price_r');
-    mieiPronti = true;
-    // Ridisegnare e' l'ultimo gesto e il meno importante: se una di queste inciampa, i dati
-    // sono comunque arrivati e il primo clic li fa comparire. Non deve portarsi dietro tutto.
-    try { aggiornaContatoreSalvati(); renderSalvati(); renderRicambiFavTab(); }
-    catch (e) { console.warn('[miei] dati caricati, ridisegno incompleto:', e.message); }
+    console.warn('[miei] le preferenze del mio account non si leggono: tengo quelle di questo dispositivo.');
     return;
   }
-
-  // Sul mio account non c'e' ancora niente: e' il primo accesso dopo l'aggiornamento. Quello che
-  // c'e' in questo browser SALE, e la copia locale resta dov'e': se l'invio non arriva, non si e'
-  // perso niente e al prossimo giro ci riprova.
+  const p = d.preferenze || {};
+  for (const [k, v] of Object.entries(p)) { try { localStorage.setItem(k, v); } catch (_) {} }
+  if (p.amr_price_v) priceCfgV = loadPriceCfg('amr_price_v');
+  if (p.amr_price_r) priceCfgR = loadPriceCfg('amr_price_r');
+  // Il cfg e il suo menu devono cambiare INSIEME. Quello dei veicoli e' disegnato una volta sola
+  // da init(), prima che l'account risponda: lasciandolo indietro mostrerebbe zero mentre i prezzi
+  // a schermo sono gia' rettificati, e `readPriceMenu` rilegge TUTTI i campi dal DOM — il primo
+  // tocco su un campo riporterebbe su gli altri, cancellando dall'account (e dagli altri computer)
+  // quello che ci era stato impostato. Il gemello dei Ricambi si ridisegna da se' a ogni render:
+  // qui serve solo finche' il pannello gia' a schermo non ne fa un altro.
+  try {
+    if (p.amr_price_v) renderPriceMenuV();
+    if (p.amr_price_r && rcData) renderRicambiPanel();
+  } catch (e) { console.warn('[miei] menu prezzi non ridisegnato:', e && e.message); }
   mieiPronti = true;
-  if (salvati.length) mieiManda('annuncio', salvati.slice(-SALVATI_CAP));
-  if (salvatiRicambi.length) mieiManda('ricambio', salvatiRicambi.slice(0, RC_SALVATI_CAP));
-  if (oemFav.length) mieiManda('oem', oemFav.slice(0, RC_FAV_CAP));
+
   for (const k of ['amr_price_v', 'amr_price_r', 'amrCarbProvincia', 'amrCarbKm', 'amrPassProvincia']) {
+    if (Object.prototype.hasOwnProperty.call(p, k)) continue;   // di la' c'e' gia': ha vinto lui
     let v = null; try { v = localStorage.getItem(k); } catch (_) {}
     if (v) mieiPreferenza(k, v);
   }
@@ -272,8 +166,6 @@ const FONTE_LABEL = { subito: 'Subito.it', autoscout: 'Autoscout24', moto: 'Moto
 
 // ─── Icone (SVG inline, offline) ────────────────────────────────────────────
 const ICONS = {
-  bookmark:          '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>',
-  'bookmark-filled': '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" fill="currentColor"/>',
   square:            '<rect x="3" y="3" width="18" height="18" rx="2"/>',
   'square-check':    '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 12 2 2 4-4"/>',
   info:              '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
@@ -342,7 +234,7 @@ function notaIva(r) {
 const rPricing = base => pricing(base, priceCfgR.iva ? Object.assign({}, priceCfgR, { iva: false }) : priceCfgR);
 const eurRound = n => '€ ' + Math.round(n).toLocaleString('it-IT');
 /**
- * L'ETICHETTA del prezzo per chi ne mostra UNO solo (confronto, salvati, avvisi): il
+ * L'ETICHETTA del prezzo per chi ne mostra UNO solo (confronto e avvisi): il
  * finale rettificato della riga, con lo stesso motore delle colonne (vPricing). Questi
  * punti stampavano `r.prezzo` grezzo, e lo stesso annuncio aveva DUE prezzi a schermo —
  * il rettificato in griglia e il grezzo nel confronto — contro la regola «mai due prezzi».
@@ -588,9 +480,6 @@ function applySoloProprietario() {
 
 function applyDemoMode() {
   document.body.classList.add('demo-mode');
-  ['btnSalvaRicerca', 'btnControllaTutte'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.style.display = 'none';
-  });
   if (!document.querySelector('.demo-banner')) {
     const bar = document.createElement('div');
     bar.className = 'demo-banner';
@@ -609,6 +498,10 @@ function applyDemoMode() {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
   applyTheme(currentTheme());
+  // Nessun dato proveniente dai portali resta nel browser dopo l'aggiornamento.
+  for (const key of ['amr_salvati', 'amr_salvati_ricambi', 'amr_oem_preferiti']) {
+    try { localStorage.removeItem(key); } catch (_) {}
+  }
   const currentYear = new Date().getFullYear();
   document.getElementById('annoMin').max = currentYear;
   document.getElementById('annoMax').max = currentYear;
@@ -662,11 +555,7 @@ async function init() {
     const me = await fetch('/api/me').then(r => (r.ok ? r.json() : null)).catch(() => null);
     if (me && me.role) myRole = me.role;
     if (me) { myId = me.id || null; sonoProprietario = me.proprietario === true; }
-    if (sonoProprietario) montaRicercheAltri();
-    // SOLA LETTURA E' DELL'OSPITE ANONIMO, non del ruolo. La vecchia password demo era
-    // condivisa e senza un nome: qualunque cosa avesse salvato sarebbe finita in un mucchio
-    // comune, quindi non salvava niente. Chi si e' registrato ha un nome suo e le sue righe,
-    // e i comandi di salvataggio devono restare.
+    // L'ospite anonimo resta in sola lettura anche per tutte le altre funzioni mutabili.
     if (myRole === 'demo' && myId === 'demo') applyDemoMode();
     if (!sonoProprietario) applySoloProprietario();
     // Il primo poll dello stato Subito parte al caricamento pagina, quando l'identita' non e'
@@ -874,7 +763,7 @@ async function init() {
 
   // Confronto / matrice
   compareOpen?.addEventListener('click', () => openCompareMatrix());
-  compareClear?.addEventListener('click', () => { confronto = []; renderResults(currentResults); renderSalvati(); renderCompareBar(); closeMatrix(); });
+  compareClear?.addEventListener('click', () => { confronto = []; renderResults(currentResults); renderCompareBar(); closeMatrix(); });
   cmatrixClose?.addEventListener('click', closeMatrix);
 
   // Segnalazioni (bug-report)
@@ -883,20 +772,7 @@ async function init() {
   document.getElementById('reportSend')?.addEventListener('click', submitReport);
   document.getElementById('reportModal')?.addEventListener('click', e => { if (e.target.id === 'reportModal') closeReport(); });
 
-  // Ricerche salvate + avvisi
-  document.getElementById('btnSalvaRicerca').addEventListener('click', saveCurrentSearch);
-  document.getElementById('btnControllaTutte').addEventListener('click', () => checkRicerche());
-  document.getElementById('ricercheList').addEventListener('click', onRicercheClick);
-  loadSavedSearches();
-  // Auto-check al boot = il server ricontrolla già le ricerche stantie (gentile, anti-ban).
-  // Qui NON facciamo una POST (sarebbe doppio scraping): ricarichiamo i salvati dopo ~13s
-  // (GET, zero scraping) per riflettere gli avvisi appena calcolati dal server.
-  setTimeout(loadSavedSearches, 13000);
-  loadSalvati();
-  // ADESSO: `loadSalvati` ha messo in mano quello che c'e' in QUESTO browser, e solo da qui in
-  // poi la domanda "il mio account e' vuoto?" ha senso — se si chiedesse prima, non ci sarebbe
-  // niente da caricare su e il primo accesso perderebbe i salvataggi di prima. Non si aspetta:
-  // se il server risponde tardi, lo schermo intanto lavora con la copia locale.
+  // Le preferenze e i ricambi/OEM restano sincronizzati con l'account.
   mieiCarica().catch(e => console.warn('[miei] caricamento saltato:', e && e.message));
 
   // Thumbnail rotta → slot grigio
@@ -921,9 +797,8 @@ async function init() {
       if (r && Array.isArray(r.immagini) && r.immagini.length) openLightbox(r.immagini);
       return;
     }
-    // Azioni nel pannello dettaglio (hub azioni: Salva/Confronta; "Apri annuncio" è un <a> nativo).
+    // Azioni nel pannello dettaglio; "Apri annuncio" è un <a> nativo.
     if (row.dataset.detail) {
-      if (e.target.closest('.btn-salva'))    { toggleSalva(url); return; }
       if (e.target.closest('.btn-confronta')) { toggleConfronto(url); return; }
       // Il venditore di questo annuncio, nella lista di Competitor. Solo aggiunto: il parco
       // lo si scarica da li', quando si vuole — e' una richiesta lunga e non parte a sorpresa.
@@ -958,7 +833,6 @@ async function init() {
     // Mobile: tap sulla riga (non sulla thumb) → apre il dettaglio (azioni dentro). Desktop: titolo→annuncio, bottoni espliciti.
     if (window.matchMedia('(max-width: 860px)').matches) { toggleDetail(row); return; }
     if (e.target.closest('.row-titolo')) { openAd(url); return; }
-    if (e.target.closest('.btn-salva'))     { toggleSalva(url); return; }
     if (e.target.closest('.btn-confronta'))  { toggleConfronto(url); return; }
     if (e.target.closest('.btn-info'))       { toggleDetail(row); return; }
   });
@@ -1000,15 +874,6 @@ async function init() {
     const r = trovaResult(row.dataset.url); if (!r) return;
     if (storico) r._passStorico = e.target.checked; else r._passIva = e.target.checked;
     calcolaPassaggio(r, row);
-  });
-
-  // Delegation: pannello salvati
-  document.getElementById('salvatiList').addEventListener('click', e => {
-    const item = e.target.closest('[data-url]'); if (!item) return;
-    const url = item.dataset.url;
-    if (e.target.closest('.btn-rimuovi-salvato'))   { toggleSalva(url); return; }
-    if (e.target.closest('.btn-confronta-salvato'))  { toggleConfronto(url); return; }
-    openAd(url);
   });
 
   // Delegation: confronto (rimuovi colonna/card) — sul wrapper, vale per tabella E card.
@@ -1075,7 +940,6 @@ async function init() {
   document.getElementById('btnReportNav')?.addEventListener('click', () => openReport());   // p4: Segnala in navbar
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeReport(); tgChiudiModale(); } });
 
-  renderSalvati();
 }
 
 function populateRegione() {
@@ -1532,7 +1396,12 @@ function setSearchMode(mode) {
   // `rcGen++` come il searchGen++ di resetContesto (508ea84): uscendo dai Ricambi una
   // risposta ancora in volo aveva myGen === rcGen, atterrava e RESUSCITAVA rcData appena
   // azzerato — la lista di prima ridipinta in un contesto che non e' piu' il suo.
-  if (ricambi || prev === 'ricambi') { rcGen++; rcData = null; hideResults(); }   // ingresso/uscita ricambi → pulizia piena (currentResults lo azzera resetContesto)
+  // `prev !== searchMode`: la pulizia serve all'INGRESSO e all'USCITA, non al ri-clic su
+  // "Ricambi" mentre ci sei gia' dentro. Li' azzerava rcData senza nascondere il pannello e
+  // senza ridisegnarlo: la lista restava a schermo sopra uno stato vuoto, e il primo chip la
+  // sostituiva con "Fonti non disponibili" — una frase sulle fonti detta su dati che l'app si
+  // era cancellata da sola. Ripremere "Auto" non resetta niente: l'asimmetria era involontaria.
+  if (prev !== searchMode && (ricambi || prev === 'ricambi')) { rcGen++; rcData = null; hideResults(); }   // ingresso/uscita ricambi → pulizia piena (currentResults lo azzera resetContesto)
   if (area(prev) && prev !== searchMode) area(prev).chiudi();
   // USCITA da un'area verso la ricerca: `has-results` la mette apri() e la toglie solo
   // hideResults(), che su questa via non chiamava nessuno (il radio del tipo e' gia' checked,
@@ -1575,8 +1444,7 @@ function setSearchMode(mode) {
 // currentResults/COLS/MATRIX_ROWS/exportCsv/renderResults.
 const RC_FONTE = { autodoc: 'Autodoc', cmsnl: 'CMSNL', subito: 'Subito', ebay: 'eBay', web: 'Web' };
 const RC_GROUP_DIMS = [['', 'Nessuno'], ['fonte', 'Fonte'], ['marca', 'Marca'], ['venditore', 'Venditore']];
-const RC_SALVATI_KEY = 'amr_salvati_ricambi', RC_SALVATI_CAP = 200, RC_COMPARE_CAP = 6;
-const RC_FAV_KEY = 'amr_oem_preferiti', RC_FAV_CAP = 30;   // codici OE/OEM/OEN preferiti (quick-launch)
+const RC_COMPARE_CAP = 6;
 
 /**
  * QUANTE RICERCHE RESTANO PRIMA DI ESSERE FERMATI.
@@ -1596,7 +1464,7 @@ let rcData = null;            // ultimo envelope {articoli, sources, tipoPezzo, 
 let ricambiMode = 'oem';
 let rcVeicolo = 'auto';       // 'auto' | 'moto' — un ricambio è per auto O per moto
 let rcGroupDim = '';
-let rcView = 'grid';         // 'grid' (i salvati vivono nell'offcanvas, come auto)
+let rcView = 'grid';
 let rcCompareOpen = false;   // confronto = sezione separata (come auto), la lista resta navigabile
 let rcSortState = { key: 'prezzo', dir: 'asc' };   // ordinamento via header colonne (mirror auto)
 let rcVisibleCols = [];      // colonne opzionali mostrate (marca/venditore/valutazione)
@@ -1606,59 +1474,14 @@ let rcCollapsed = new Set();  // chiavi-gruppo collassate (persistono al re-rend
 let rcSchedaCollapsed = false;  // scheda tecnica minimizzata (persiste al re-render)
 let rcOpenDetails = new Set();// chiavi articolo con accordion info aperto (persistono al re-render)
 let confrontoRicambi = [];
-let salvatiRicambi = rcLoadSalvati();
-let oemFav = rcLoadFav();   // codici OE/OEM/OEN preferiti
 let rcGen = 0;               // generation token ricerche ricambi (mirror searchGen auto: la risposta vecchia non sovrascrive la nuova)
-
-function rcLoadSalvati() { try { const a = JSON.parse(localStorage.getItem(RC_SALVATI_KEY)); return Array.isArray(a) ? a : []; } catch { return []; } }
-function rcPersistSalvatiLocale() { try { localStorage.setItem(RC_SALVATI_KEY, JSON.stringify(salvatiRicambi.slice(0, RC_SALVATI_CAP))); } catch {} }
-function rcPersistSalvati() { rcPersistSalvatiLocale(); mieiManda('ricambio', salvatiRicambi.slice(0, RC_SALVATI_CAP)); }
-
-// ── Codici ricambio salvati (tab "Ricambi" dell'offcanvas Salvati, mirror di annunci/ricerche).
-// Item = {q, mode}. Retro-compat: le vecchie voci stringa diventano {q, mode:'oem'}.
-function rcLoadFav() {
-  try {
-    const a = JSON.parse(localStorage.getItem(RC_FAV_KEY));
-    if (!Array.isArray(a)) return [];
-    return a.map(x => (typeof x === 'string' ? { q: x, mode: 'oem' } : x)).filter(x => x && typeof x.q === 'string');
-  } catch { return []; }
-}
-function rcPersistFavLocale() { try { localStorage.setItem(RC_FAV_KEY, JSON.stringify(oemFav.slice(0, RC_FAV_CAP))); } catch {} }
-function rcPersistFav() { rcPersistFavLocale(); mieiManda('oem', oemFav.slice(0, RC_FAV_CAP)); }
-const rcFavNorm = s => String(s || '').replace(/[^a-z0-9]/gi, '').toUpperCase();   // chiave di dedup
-const rcFavHas = (q) => oemFav.some(f => rcFavNorm(f.q) === rcFavNorm(q));
-function rcToggleFav(q, mode, veicolo) {
-  const disp = String(q || '').trim();
-  const key = rcFavNorm(disp);
-  if (!key) return;
-  if (rcFavHas(disp)) oemFav = oemFav.filter(f => rcFavNorm(f.q) !== key);
-  else {
-    oemFav.unshift({ q: mode === 'oem' ? disp.toUpperCase() : disp, mode: mode || 'oem', veicolo: veicolo === 'moto' ? 'moto' : 'auto' });
-    if (oemFav.length > RC_FAV_CAP) oemFav.length = RC_FAV_CAP;
-  }
-  rcPersistFav(); renderRicambiFavTab();
-  if (rcData) renderRicambiPanel();   // rinfresca lo stato del bottone "Salva codice"
-}
-const RC_MODE_LABEL = { oem: 'OEM', prodotto: 'Prodotto', nome: 'Nome' };
-// Tab "Ricambi" dell'offcanvas: DUE sezioni come auto — Articoli salvati (♡) + Ricerche salvate (codice/OEM/nome).
-function renderRicambiFavTab() {
-  const t = document.getElementById('tabRicambiCount'); if (t) t.textContent = salvatiRicambi.length + oemFav.length;
-  const box = document.getElementById('ricambiFavList'); if (!box) return;
-  const artItems = salvatiRicambi.length ? salvatiRicambi.map(a => {
-    const u = rcSafeUrl(a.url);
-    const titolo = u ? `<a class="salvato-titolo" href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.nome)}</a>` : `<div class="salvato-titolo">${escapeHtml(a.nome)}</div>`;
-    return `<div class="salvato-item" data-rk="${escapeHtml(rcKey(a))}"><div class="salvato-info">${titolo}<div class="salvato-dettagli">${rcPriceText(a)} · ${escapeHtml(RC_FONTE[a.fonte] || a.fonte)}${a.marca ? ' · ' + escapeHtml(a.marca) : ''}</div></div><div class="salvato-actions"><button class="btn-rimuovi-art" data-rk="${escapeHtml(rcKey(a))}" title="Rimuovi">${icon('x')}</button></div></div>`;
-  }).join('') : '<p class="text-muted small px-1 mb-2">Nessun articolo salvato. Usa il segnalibro sulle righe.</p>';
-  const favItems = oemFav.length ? oemFav.map(f => `<div class="salvato-item" data-q="${escapeHtml(f.q)}" data-mode="${escapeHtml(f.mode || 'oem')}" data-veicolo="${escapeHtml(f.veicolo || 'auto')}"><div class="salvato-info"><div class="salvato-titolo">${escapeHtml(f.q)}</div><div class="salvato-dettagli">${RC_MODE_LABEL[f.mode] || 'OEM'} · ${f.veicolo === 'moto' ? 'Moto' : 'Auto'} · clicca per cercare</div></div><div class="salvato-actions"><button class="btn-rimuovi-salvato" title="Rimuovi">${icon('x')}</button></div></div>`).join('') : '<p class="text-muted small px-1 mb-0">Nessuna ricerca salvata. Usa "Salva ricerca" in toolbar.</p>';
-  box.innerHTML = `<div class="rc-fav-sec"><div class="rc-fav-hd">Articoli salvati</div>${artItems}</div><div class="rc-fav-sec"><div class="rc-fav-hd">Ricerche salvate</div>${favItems}</div>`;
-}
 const rcKey = a => a._rk || `${a.fonte}:${a.url || a.articleId || a.nome}`;   // _rk assegnato in doRicambi (evita collisioni nome)
 const rcHas = (arr, a) => arr.some(x => rcKey(x) === rcKey(a));
 const rcEur = n => (typeof n === 'number' ? '€ ' + n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null);
 const rcSafeUrl = u => (/^https?:\/\//i.test(u || '') ? u : null);   // solo http/https: blocca javascript:/data: (XSS)
 function rcCurrentList() { return rcVisibleArts(); }
 function rcPriceText(a) { const p = rcEur(a.prezzo); return p || (a.fonte === 'subito' ? 'trattabile' : 'prezzo sul sito'); }
-function rcArt(key) { return (rcData && rcData.articoli || []).find(a => rcKey(a) === key) || salvatiRicambi.find(a => rcKey(a) === key) || confrontoRicambi.find(a => rcKey(a) === key); }
+function rcArt(key) { return (rcData && rcData.articoli || []).find(a => rcKey(a) === key) || confrontoRicambi.find(a => rcKey(a) === key); }
 
 // Lista visibile in griglia = articoli ordinati. Se c'è un tipo scelto nel selettore varianti,
 // gli annunci coerenti col tipo (titolo contiene i token) vanno PRIMA (soft, nessuno nascosto).
@@ -1878,7 +1701,7 @@ function rcRowHTML(a, bestKey) {
   const key = rcKey(a);
   const isBest = bestKey && key === bestKey;
   const rowUrl = rcSafeUrl(a.url);
-  const inCmp = rcHas(confrontoRicambi, a), inSave = rcHas(salvatiRicambi, a);
+  const inCmp = rcHas(confrontoRicambi, a);
   const openDet = rcOpenDetails.has(key);
   const cell = c => {
     switch (c.key) {
@@ -1895,8 +1718,7 @@ function rcRowHTML(a, bestKey) {
       case 'fonte': return `<span class="rc-cell-txt">${escapeHtml(RC_FONTE[a.fonte] || a.fonte)}</span>`;
       case 'azioni': return `<div class="rc-rowact">
         <button type="button" class="rc-act rc-btn-info" data-key="${escapeHtml(key)}" title="Dettagli e foto">${icon('info')}</button>
-        <button type="button" class="rc-act rc-btn-cmp${inCmp ? ' on' : ''}" data-key="${escapeHtml(key)}" title="Aggiungi al confronto">${icon(inCmp ? 'square-check' : 'square')}</button>
-        <button type="button" class="rc-act rc-btn-save${inSave ? ' on' : ''}" data-key="${escapeHtml(key)}" title="${inSave ? 'Rimuovi dai salvati' : 'Salva ricambio'}">${icon(inSave ? 'bookmark-filled' : 'bookmark')}</button></div>`;
+        <button type="button" class="rc-act rc-btn-cmp${inCmp ? ' on' : ''}" data-key="${escapeHtml(key)}" title="Aggiungi al confronto">${icon(inCmp ? 'square-check' : 'square')}</button></div>`;
       default: return '';
     }
   };
@@ -2234,12 +2056,9 @@ function rcToolbarHTML() {
   const statsHTML = `<span class="tb-count">${list.length} ricambi</span>`;
   // sez.2 — raggruppa (facet-chips, "Fonte" è QUI)
   const facets = RC_GROUP_DIMS.map(([dim, lab]) => `<button type="button" class="facet-chip${rcGroupDim === dim ? ' active' : ''}" data-dim="${dim}">${escapeHtml(lab)}</button>`).join('');
-  // sez.3 — colonne (dropdown come auto) + salva ricerca + export
+  // sez.3 — colonne (dropdown come auto) + export
   const colsMenu = RC_OPTIONAL_COLS.map(k => { const c = RC_COLS.find(x => x.key === k); return `<label><input type="checkbox" class="rc-col-toggle" value="${k}"${rcVisibleCols.includes(k) ? ' checked' : ''}> ${escapeHtml(c.label || k)}</label>`; }).join('');
   const colsDropdown = `<details class="tb-cols"><summary class="tb-btn">Colonne ▾</summary><div class="tb-cols-menu">${colsMenu}</div></details>`;
-  const term = rcData && rcData.oen;
-  const saved = term && rcFavHas(term);
-  const saveBtn = term ? `<button type="button" class="tb-btn${saved ? ' active' : ''}" id="rcSaveCode" title="Salva la ricerca nei Salvati → Ricambi">${saved ? '✓ Ricerca salvata' : 'Salva ricerca'}</button>` : '';
   return `<div class="results-toolbar rc-tbar">
     <div class="tb-group">${statsHTML}</div>
     <span class="tb-sep"></span>
@@ -2248,7 +2067,6 @@ function rcToolbarHTML() {
     <div class="tb-group">
       ${priceMenuHTML(priceCfgR, 'r')}
       ${colsDropdown}
-      ${saveBtn}
       <button type="button" class="tb-btn" id="rcCsv">CSV</button>
       <button type="button" class="tb-btn" id="rcPdf">PDF</button>
     </div></div>`;
@@ -2294,16 +2112,6 @@ function rcToggleCmp(key) {
   if (!confrontoRicambi.length) rcCompareOpen = false;
   renderRicambiPanel();
 }
-function rcToggleSave(key, remove) {
-  const a = rcArt(key); if (!a) return;
-  const i = salvatiRicambi.findIndex(x => rcKey(x) === key);
-  if (i >= 0 || remove) { if (i >= 0) salvatiRicambi.splice(i, 1); }
-  else { salvatiRicambi.unshift(a); if (salvatiRicambi.length > RC_SALVATI_CAP) salvatiRicambi.length = RC_SALVATI_CAP; }   // cap live = cap persistito
-  rcPersistSalvati();
-  renderRicambiFavTab();   // gli articoli salvati vivono nell'offcanvas (come gli annunci auto)
-  renderRicambiPanel();
-}
-
 function exportCsvRicambi() {
   const arts = rcCurrentList(); if (!arts.length) { showError('Niente da esportare.'); return; }
   const cell = v => { let s = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
@@ -2331,8 +2139,8 @@ function exportPdfRicambi() {
   const colonne = ['Fonte', 'Ricambio', 'Marca', conConti ? 'Prezzo finale' : 'Prezzo', 'Venditore', ...extraH];
   const righe = arts.map(a => {
     const pr = rPricing(a.prezzo);
-    return [' ', a.nome || '\u2014', a.marca || '\u2014', pr ? rcEur(pr.finale) : rcPriceText(a), a.venditore || '\u2014',
-      ...priceExtraValues(pr, cfg).map(x => x === '' ? '\u2014' : rcEur(x))];
+    return [' ', a.nome || '-', a.marca || '-', pr ? rcEur(pr.finale) : rcPriceText(a), a.venditore || '-',
+      ...priceExtraValues(pr, cfg).map(x => x === '' ? '-' : rcEur(x))];
   });
   const colonneStile = Object.assign(
     { 0: { halign: 'center', cellWidth: 24 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 34 },
@@ -2340,8 +2148,8 @@ function exportPdfRicambi() {
     ...extraH.map((_, i) => ({ [5 + i]: { cellWidth: 26, halign: 'right' } })));
   const nome = `ricambi-${String(meta.oen || 'export').toLowerCase().replace(/[^a-z0-9]/g, '')}-${new Date().toISOString().slice(0, 10)}.pdf`;
   scaricaPdf({
-    titolo: 'AUTO MOTO RADAR \u2014 Ricambi',
-    sottotitolo: [[meta.tipoPezzo, meta.veicoli].filter(Boolean).join(' \u00b7 '), meta.oen ? 'OE/OEM ' + meta.oen : null].filter(Boolean).join('   \u00b7   '),
+    titolo: 'Report ricambi',
+    sottotitolo: [[meta.tipoPezzo, meta.veicoli].filter(Boolean).join(' | '), meta.oen ? 'OE/OEM ' + meta.oen : null].filter(Boolean).join(' | '),
     contatore: arts.length + (arts.length === 1 ? ' ricambio' : ' ricambi'),
     colonne, righe, colonneStile,
     fonti: arts.map(a => a.fonte),
@@ -2389,24 +2197,7 @@ function setRcVeicolo(v) {
 (function wireRicambi() {
   const toggle = document.getElementById('ricambiModeToggle');
   toggle?.addEventListener('click', e => { const b = e.target.closest('.rc-mode-btn'); if (b) setRicambiMode(b.dataset.rcmode); });
-  // tab "Ricambi" nell'offcanvas Salvati: click item → rilancia la ricerca; ✕ → rimuove
-  document.getElementById('ricambiFavList')?.addEventListener('click', e => {
-    // rimozione articolo salvato
-    const rmArt = e.target.closest('.btn-rimuovi-art');
-    if (rmArt) { const k = rmArt.dataset.rk; salvatiRicambi = salvatiRicambi.filter(a => rcKey(a) !== k); rcPersistSalvati(); renderRicambiFavTab(); if (rcData) renderRicambiPanel(); return; }
-    const item = e.target.closest('.salvato-item'); if (!item) return;
-    if (e.target.closest('.btn-rimuovi-salvato')) { oemFav = oemFav.filter(f => rcFavNorm(f.q) !== rcFavNorm(item.dataset.q)); rcPersistFav(); renderRicambiFavTab(); return; }
-    if (!item.dataset.q) return;   // articolo salvato: il click sul titolo apre già l'annuncio (link)
-    // riapre ESATTAMENTE la sua ricerca: modo → il SUO input, veicolo, poi cerca
-    selectPrimary('ricambi');
-    setRicambiMode(item.dataset.mode || 'oem');
-    setRcVeicolo(item.dataset.veicolo || 'auto');
-    rcActiveInput().value = item.dataset.q;
-    bootstrap.Offcanvas.getInstance(document.getElementById('offcanvasSaved'))?.hide();
-    doRicambi();
-  });
   document.getElementById('rcVeicoloToggle')?.addEventListener('click', e => { const b = e.target.closest('.rc-mode-btn'); if (b) setRcVeicolo(b.dataset.rcveicolo); });
-  renderRicambiFavTab();
   const panel = document.getElementById('ricambiPanel');
   panel?.addEventListener('click', e => {
     const t = e.target;
@@ -2467,10 +2258,8 @@ function setRcVeicolo(v) {
     if (t.closest('#pmReset_r')) { priceCfgR = Object.assign({}, PRICE_DEFAULT); savePriceCfg('amr_price_r', priceCfgR); renderRicambiPanel(); return; }
     if (t.closest('#rcCsv')) { exportCsvRicambi(); return; }
     if (t.closest('#rcPdf')) { exportPdfRicambi(); return; }
-    if (t.closest('#rcSaveCode')) { if (rcData && rcData.oen) rcToggleFav(rcData.oen, rcData.mode, rcData.veicolo); return; }
     const oe = t.closest('.rc-oe'); if (oe) { setRicambiMode('oem'); rcActiveInput().value = oe.dataset.oe; doRicambi(); return; }
     const cmp = t.closest('.rc-btn-cmp'); if (cmp) { rcToggleCmp(cmp.dataset.key); return; }
-    const sv = t.closest('.rc-btn-save'); if (sv) { rcToggleSave(sv.dataset.key, sv.dataset.rm === '1'); return; }
     const rm = t.closest('.rc-cmp-remove'); if (rm) { rcToggleCmp(rm.dataset.key); return; }
   });
   // dropdown "Colonne": toggle colonne opzionali live (mirror .col-toggle auto)
@@ -2872,8 +2661,8 @@ function rigaVersione(tolti) {
 }
 
 function renderResults(results) {
-  // Nessuna ricerca attiva (es. renderResults chiamato da toggleSalva dopo un reload):
-  // niente toolbar/risultati. La toolbar appare solo dopo una ricerca vera.
+  // Nessuna ricerca attiva: niente toolbar/risultati.
+  // La toolbar appare solo dopo una ricerca vera.
   if (!searchActive) {
     resultsToolbar.classList.add('d-none'); compareBar.classList.add('d-none');
     resultsSection.classList.add('d-none'); noResults.classList.add('d-none');
@@ -2935,7 +2724,7 @@ function renderResults(results) {
   resultsCount.textContent = `${sorted.length} risultati`;
 
   // Lista o schede: cambia solo COME si disegna la stessa fetta di annunci. Il resto
-  // (raggruppamento, ordinamento, pannello dell'annuncio, salvati, confronto) e' identico
+  // (raggruppamento, ordinamento, pannello dell'annuncio, confronto) e' identico
   // — le schede sono righe con la foto grande, non un secondo elenco con regole sue.
   vistaChipsRender();
   const disegna = (items, best) => vista === 'schede'
@@ -3023,8 +2812,7 @@ function updateRowThumb(url) {
  * (`dichiarazione`: un altro modello) e quella della verifica versioni (`versioneEsito`:
  * l'annuncio dichiara un'altra versione). Ogni cancello ne conosceva una — e la stella
  * verde finiva sulla Golf 1.6 base che l'app aveva appena marcato «non e' quella
- * versione». Una funzione sola; backend/saved.js ha la riga GEMELLA per gli avvisi, e il
- * test blinda che diano lo stesso verdetto sugli stessi ingressi.
+ * versione». Una funzione sola evita verdetti diversi nello stesso elenco.
  */
 const fuoriBersaglio = r => !!r && ((r.dichiarazione && r.dichiarazione !== 'esatto' && r.dichiarazione !== 'senza-versione')
   || r.versioneEsito === 'smentita');
@@ -3144,7 +2932,6 @@ function rowHTML(item, bestSet) {
   const fonteLabel = FONTE_LABEL[item.fonte] || item.fonte;
   const fonteTag = { subito: 'tag-subito', autoscout: 'tag-autoscout', moto: 'tag-moto' }[item.fonte] || '';
   const urlSafe = /^https?:\/\//i.test(item.url) ? escapeHtml(item.url) : '#';
-  const isSalvato = salvati.some(r => stessoAnnuncio(r, item));
   const inConfronto = confronto.some(r => stessoAnnuncio(r, item));
   const isBest = bestSet && bestSet.has(item.url);
   const imgs = Array.isArray(item.immagini) ? item.immagini : [];
@@ -3192,7 +2979,6 @@ function rowHTML(item, bestSet) {
       case 'azioni': return `<div class="row-actions">
           <button class="row-act btn-info" title="Dettagli e foto">${icon('info')}</button>
           <button class="row-act btn-confronta${inConfronto ? ' attivo' : ''}" title="Aggiungi al confronto">${icon(inConfronto ? 'square-check' : 'square')}</button>
-          <button class="row-act btn-salva${isSalvato ? ' attivo' : ''}" title="${isSalvato ? 'Rimuovi dai salvati' : 'Salva annuncio'}">${icon(isSalvato ? 'bookmark-filled' : 'bookmark')}</button>
         </div>`;
       default: return '';
     }
@@ -3215,7 +3001,7 @@ function vistaChipsRender() {
  * LA STESSA RIGA, con la foto grande. Non e' un secondo modo di mostrare gli annunci: e'
  * lo stesso, con altre proporzioni. Classi e attributi restano quelli della riga
  * (`data-url`, `.row-thumb`, `.row-titolo`, `.row-actions`, il `.row-detail` fratello),
- * cosi' lightbox, pannello annuncio, salvati e confronto funzionano senza sapere che
+   * cosi' lightbox, pannello annuncio e confronto funzionano senza sapere che
  * vista e' attiva — e non ci sono due strade da tenere allineate.
  */
 function cardHTML(item, bestSet) {
@@ -3243,7 +3029,6 @@ function cardHTML(item, bestSet) {
     vis.includes('carb') ? (item.carburante || null) : null,
     vis.includes('cv') && item.potenzaCv != null ? `${item.potenzaCv} CV` : null,
     ggV != null ? `in vendita da ${ggV} gg` : null].filter(Boolean).join(' · ');
-  const isSalvato = salvati.some(r => stessoAnnuncio(r, item));
   const inConfronto = confronto.some(r => stessoAnnuncio(r, item));
   return `<article class="ann-card${bestSet && bestSet.has(item.url) ? ' best' : ''}${inConfronto ? ' selected' : ''}" data-url="${urlSafe}">
       <div class="ann-foto">${foto}</div>
@@ -3261,7 +3046,6 @@ function cardHTML(item, bestSet) {
           <div class="row-actions">
             <button class="row-act btn-info" title="Dettagli e foto">${icon('info')}</button>
             <button class="row-act btn-confronta${inConfronto ? ' attivo' : ''}" title="Aggiungi al confronto">${icon(inConfronto ? 'square-check' : 'square')}</button>
-            <button class="row-act btn-salva${isSalvato ? ' attivo' : ''}" title="${isSalvato ? 'Rimuovi dai salvati' : 'Salva annuncio'}">${icon(isSalvato ? 'bookmark-filled' : 'bookmark')}</button>
           </div>
         </div>
       </div>
@@ -3981,8 +3765,7 @@ function renderDetailInto(panel, r) {
       : '';
     const openBtn = /^https?:\/\//i.test(r.url) ? `<a class="det-open" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">Apri annuncio ↗</a>` : '';
     // Hub azioni nel pannello (unico accesso su mobile dove la riga non ha bottoni).
-    const isSal = salvati.some(x => stessoAnnuncio(x, r)), inConf = confronto.some(x => stessoAnnuncio(x, r));
-    const salBtn  = `<button type="button" class="det-act btn-salva${isSal ? ' attivo' : ''}">${icon(isSal ? 'bookmark-filled' : 'bookmark')}<span class="ra-txt">${isSal ? 'Salvato' : 'Salva'}</span></button>`;
+    const inConf = confronto.some(x => stessoAnnuncio(x, r));
     const confBtn = `<button type="button" class="det-act btn-confronta${inConf ? ' attivo' : ''}">${icon(inConf ? 'square-check' : 'square')}<span class="ra-txt">${inConf ? 'Nel confronto' : 'Confronta'}</span></button>`;
     panel.innerHTML = `<div class="det-inner">${gallery}<div class="det-specs">${detailSpecsHTML(r)}</div>`
       /**
@@ -4006,7 +3789,7 @@ function renderDetailInto(panel, r) {
       // niente parte finche' non premi. Quando si apre e' larga quanto il pannello, quindi
       // resta fuori dalla griglia: dentro finirebbe schiacciata in una colonna da 290px.
       + `<div class="det-scheda">${vehHostUrl === r.url ? '' : '<button type="button" class="det-scheda-apri">Scheda tecnica</button>'}</div>`
-      + `<div class="det-foot">${openBtn}${salBtn}${confBtn}</div></div>`;
+      + `<div class="det-foot">${openBtn}${confBtn}</div></div>`;
   };
   panel._render = () => {
     renderBody();
@@ -4239,13 +4022,8 @@ function closeLightbox() {
 /**
  * DUE OGGETTI SONO LO STESSO ANNUNCIO?
  *
- * Fino a ieri la risposta era "hanno lo stesso URL". Ma l'URL di Subito contiene il titolo
- * scritto dal venditore: se lui lo ritocca, un annuncio SALVATO ieri oggi non si riconosce
- * piu' — la stella sparisce dalla riga, e nei salvati resta una copia che punta a un
- * indirizzo vecchio. Le fonti che un'identita' stabile la dichiarano la mettono in `id`
- * (vedi backend/scrapers/subito-api.js); le altre restano sull'URL, che li' non porta il
- * titolo dentro. Quando uno dei due lati l'id non ce l'ha, si ricade sull'URL: e' il caso
- * di un salvato di ieri non ancora convertito.
+ * Le fonti che un'identita' stabile la dichiarano la mettono in `id`; le altre restano
+ * sull'URL. Serve al confronto per riconoscere la stessa riga anche dopo un ridisegno.
  */
 const stessoAnnuncio = (a, b) => {
   if (!a || !b) return false;
@@ -4254,13 +4032,12 @@ const stessoAnnuncio = (a, b) => {
 };
 /** L'annuncio con questo URL, fra quelli che l'app ha in mano adesso. */
 function trovaResult(url) {
-  return currentResults.find(r => r.url === url) || salvati.find(r => r.url === url) || confronto.find(r => r.url === url) || null;
+  return currentResults.find(r => r.url === url) || confronto.find(r => r.url === url) || null;
 }
 // Aggiorna SOLO i bottoni/stato di un URL (riga + pannello dettaglio) senza re-render
 // totale → non collassa il dettaglio aperto né perde lo scroll (flusso mobile).
 function refreshRowState(url) {
   const rif = trovaResult(url);
-  const isSal  = salvati.some(r => stessoAnnuncio(r, rif) || r.url === url);
   const inConf = confronto.some(r => stessoAnnuncio(r, rif) || r.url === url);
   // Rimpiazza SOLO l'icona (.ico) e l'eventuale label (.ra-txt) → bottoni icona-soli (riga)
   // e icona+testo (pannello dettaglio) restano coerenti.
@@ -4271,10 +4048,6 @@ function refreshRowState(url) {
   };
   resultsGrid.querySelectorAll(`[data-url="${CSS.escape(url)}"]`).forEach(el => {
     if (el.classList.contains('result-row')) el.classList.toggle('selected', inConf);
-    el.querySelectorAll('.btn-salva').forEach(b => {
-      setBtn(b, isSal, 'bookmark-filled', 'bookmark', 'Salvato', 'Salva');
-      b.title = isSal ? 'Rimuovi dai salvati' : 'Salva annuncio';
-    });
     el.querySelectorAll('.btn-confronta').forEach(b => setBtn(b, inConf, 'square-check', 'square', 'Nel confronto', 'Confronta'));
   });
 }
@@ -4285,7 +4058,7 @@ function toggleConfronto(url) {
   if (idx !== -1) confronto.splice(idx, 1);
   else if (confronto.length < COMPARE_CAP) confronto.push(result);
   else { toast(`Massimo ${COMPARE_CAP} annunci a confronto`); return; }
-  refreshRowState(url); renderSalvati(); renderCompareBar();
+  refreshRowState(url); renderCompareBar();
   if (!cmatrixPanel.classList.contains('d-none') && matrixList.length > 1) openCompareMatrix();
 }
 function renderCompareBar() {
@@ -4301,7 +4074,7 @@ function removeMatrixCol(url) {
   matrixList = matrixList.filter(r => r.url !== url);
   const rifM = trovaResult(url);
   const i = confronto.findIndex(r => stessoAnnuncio(r, rifM) || r.url === url);
-  if (i !== -1) { confronto.splice(i, 1); refreshRowState(url); renderSalvati(); renderCompareBar(); }
+  if (i !== -1) { confronto.splice(i, 1); refreshRowState(url); renderCompareBar(); }
   // Chi cambia la lista riscrive l'intestazione che la conta: il titolo lo scriveva solo
   // showMatrix, e «Selezionati: 3» restava accanto a «Confronto annunci (4)».
   cmatrixTitle.textContent = cmatrixTitle.textContent.replace(/\(\d+\)\s*$/, `(${matrixList.length})`);
@@ -4418,278 +4191,6 @@ async function enrichMotoSpecs(list) {
     } catch (_) {}
   }));
   if (!cmatrixPanel.classList.contains('d-none')) renderMatrix();
-}
-
-// ─── Annunci salvati ──────────────────────────────────────────────────────────
-function toggleSalva(url) {
-  const rifS = trovaResult(url);
-  const idx = salvati.findIndex(r => stessoAnnuncio(r, rifS) || r.url === url);
-  if (idx !== -1) salvati.splice(idx, 1);
-  else { const result = trovaResult(url); if (result) salvati.push(result); }
-  persistSalvati(); aggiornaContatoreSalvati(); renderSalvati(); refreshRowState(url);
-}
-const SALVATI_KEY = 'amr_salvati';
-const SALVATI_CAP = 200;
-function persistSalvatiLocale() { try { localStorage.setItem(SALVATI_KEY, JSON.stringify(salvati.slice(-SALVATI_CAP))); } catch (_) {} }
-function persistSalvati() { persistSalvatiLocale(); mieiManda('annuncio', salvati.slice(-SALVATI_CAP)); }
-function loadSalvati() {
-  try { const raw = localStorage.getItem(SALVATI_KEY); const arr = raw ? JSON.parse(raw) : []; salvati = Array.isArray(arr) ? arr : []; }
-  catch (_) { salvati = []; }
-  // I salvati di ieri non hanno l'id stabile: si ricava dalla coda del vecchio URL, che e'
-  // lo stesso progressivo che la fonte dichiara in `urn`. Senza, un annuncio salvato prima
-  // del passaggio smetteva di riconoscersi appena il venditore ritoccava il titolo.
-  let tocco = false;
-  for (const r of salvati) {
-    if (r && !r.id && typeof r.url === 'string' && /(^|\.)subito\.it\//i.test(r.url)) {
-      const m = r.url.match(/-(\d+)\.htm(?:$|[?#])/);
-      if (m) { r.id = 'subito:' + m[1]; tocco = true; }
-    }
-  }
-  if (tocco) persistSalvati();
-  aggiornaContatoreSalvati(); renderSalvati();
-}
-// Badge topbar "Salvati" = annunci salvati + ricerche salvate (così salvare una
-// ricerca dà riscontro: Salvati 1 → 2). I tab dell'offcanvas distinguono i due.
-function aggiornaContatoreSalvati() {
-  const c = document.getElementById('salvatiCount'); if (c) c.textContent = salvati.length + savedSearches.length;
-  const t = document.getElementById('tabSalvatiCount'); if (t) t.textContent = salvati.length;
-  updateSavedButton();
-}
-function updateSavedButton() {
-  // Bottone "Salvati" persistente nel topbar (niente più pill flottante).
-  const btn = document.getElementById('btnSaved');
-  if (btn) btn.style.display = 'inline-flex';
-}
-/**
- * LE RICERCHE DEGLI ALTRI — solo per il proprietario, e solo da guardare.
- *
- * Si carica quando si apre il riquadro, non all'avvio: e' una curiosita' saltuaria, non una
- * cosa che serve a ogni ricerca, e chiederla sempre vorrebbe dire leggere i dati di tutti a
- * ogni apertura dell'app.
- */
-function montaRicercheAltri() {
-  const box = document.getElementById('ricercheAltri');
-  if (!box) return;
-  box.style.display = '';
-  box.addEventListener('toggle', () => { if (box.open) caricaRicercheAltri(); });
-}
-
-async function caricaRicercheAltri() {
-  const corpo = document.getElementById('ricercheAltriCorpo');
-  if (!corpo) return;
-  corpo.textContent = 'Un momento…';
-  let d = null;
-  try { d = await fetch('/api/saved/altri').then(r => (r.ok ? r.json() : null)); } catch (_) { d = null; }
-  corpo.textContent = '';
-  if (!d) { corpo.textContent = 'Non riesco a leggerle adesso.'; return; }
-  if (d.erroreElenco) { corpo.textContent = d.erroreElenco; return; }
-  const conRicerche = (d.persone || []).filter(p => p.ricerche.length);
-  if (!conRicerche.length) {
-    corpo.textContent = (d.persone || []).length
-      ? 'Nessuno degli iscritti ha ancora salvato una ricerca.'
-      : 'Non c\'e\' ancora nessun altro iscritto.';
-    return;
-  }
-  for (const p of conRicerche) {
-    // textContent dappertutto: nome dell'iscritto ed etichetta della ricerca li ha scritti
-    // qualcun altro, e questa e' la scheda del proprietario.
-    const blocco = document.createElement('div');
-    blocco.className = 'ra-persona';
-    const chi = document.createElement('div');
-    chi.className = 'ra-chi';
-    chi.textContent = `${p.nome} — ${p.ricerche.length} ${p.ricerche.length === 1 ? 'ricerca' : 'ricerche'}`;
-    blocco.appendChild(chi);
-    for (const s of p.ricerche) {
-      const r = document.createElement('div');
-      r.className = 'ra-riga';
-      const et = document.createElement('span');
-      et.className = 'ra-et';
-      et.textContent = s.label || '(senza nome)';
-      r.appendChild(et);
-      const q = document.createElement('span');
-      q.className = 'ra-quando';
-      q.textContent = s.lastChecked
-        ? `controllata ${new Date(s.lastChecked).toLocaleDateString('it-IT')}`
-        : 'mai controllata';
-      r.appendChild(q);
-      if (s.novita) {
-        const n = document.createElement('span');
-        n.className = 'ra-nov';
-        n.textContent = `${s.novita} ${s.novita === 1 ? 'avviso' : 'avvisi'}`;
-        r.appendChild(n);
-      }
-      blocco.appendChild(r);
-    }
-    corpo.appendChild(blocco);
-  }
-}
-
-function renderSalvati() {
-  const container = document.getElementById('salvatiList');
-  if (salvati.length === 0) { container.innerHTML = '<p class="text-muted text-center py-4">Nessun annuncio salvato.</p>'; return; }
-  const fmtKm = n => n != null ? `${n.toLocaleString('it-IT')} km` : '—';
-  container.innerHTML = salvati.map(r => {
-    const inConf = confronto.some(c => stessoAnnuncio(c, r));
-    return `<div class="salvato-item" data-url="${escapeHtml(r.url)}">
-      <div class="salvato-info">
-        <div class="salvato-titolo">${escapeHtml(r.titolo)}</div>
-        <div class="salvato-dettagli">${prezzoEtichetta(r)} · ${fmtKm(r.km)} · ${r.anno || '—'}</div>
-      </div>
-      <div class="salvato-actions">
-        <button class="btn-confronta-salvato${inConf ? ' attivo' : ''}" title="Confronta">${icon(inConf ? 'square-check' : 'square')}</button>
-        <button class="btn-rimuovi-salvato" title="Rimuovi">${icon('x')}</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ─── Ricerche salvate + avvisi ──────────────────────────────────────────────
-/**
- * Perche' l'elenco non si e' letto: senza, un 403 (demo) o un 401 (sessione scaduta)
- * scendevano come lista vuota e il pannello diceva «Nessuna ricerca salvata» — cioe'
- * un'affermazione sui DATI fatta su un permesso negato. E' anche lo stampo per le altre
- * fetch: `!r.ok` non si appiattisce mai su «non c'e' niente».
- */
-let savedSearchesKo = null;   // null | 'demo' | 'sessione' | 'rete'
-async function loadSavedSearches() {
-  savedSearchesKo = null;
-  try {
-    const r = await fetch('/api/saved');
-    if (!r.ok) { savedSearches = []; savedSearchesKo = r.status === 403 ? 'demo' : r.status === 401 ? 'sessione' : 'rete'; }
-    else { const j = await r.json(); savedSearches = j.saved || []; }
-  } catch (_) { savedSearches = []; savedSearchesKo = 'rete'; }
-  renderRicerche(); updateNovitaBadge();
-}
-function totalNovita() { return savedSearches.reduce((a, s) => a + (s.novita || 0), 0); }
-function updateNovitaBadge() {
-  const tot = totalNovita();
-  const badge = document.getElementById('novitaCount');
-  const sc = document.getElementById('salvatiCount'); if (sc) sc.textContent = salvati.length + savedSearches.length;
-  const tr = document.getElementById('tabRicercheCount'); if (tr) tr.textContent = savedSearches.length;
-  if (badge) { if (tot > 0) { badge.textContent = tot; badge.style.display = 'inline-block'; } else badge.style.display = 'none'; }
-  updateSavedButton();
-}
-async function saveCurrentSearch() {
-  if (!lastSearchParams || !lastSearchParams.marca) { showError('Fai prima una ricerca, poi salvala.'); return; }
-  const btn = document.getElementById('btnSalvaRicerca');
-  btn.disabled = true;
-  try {
-    const r = await fetch('/api/saved', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ params: lastSearchParams }) });
-    // Il "no" del server ha una spiegazione (tetto di ricerche, limitatore): va mostrata,
-    // senno' «non riuscito» sembra un guasto e il gesto istintivo e' riprovare.
-    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || 'Salvataggio ricerca non riuscito.'); }
-    await loadSavedSearches();
-    btn.textContent = '✓ Salvata';
-    setTimeout(() => { btn.textContent = 'Salva ricerca'; btn.disabled = false; }, 1500);
-  } catch (e) { showError((e && e.message) || 'Salvataggio ricerca non riuscito.'); btn.disabled = false; }
-}
-async function checkRicerche(id) {
-  const url = id ? `/api/saved/check?id=${encodeURIComponent(id)}` : '/api/saved/check';
-  const listEl = document.getElementById('ricercheList');
-  const btn = id ? listEl.querySelector(`.ric-card[data-id="${CSS.escape(id)}"] .ric-check`) : null;
-  if (btn) { btn.disabled = true; btn.textContent = '…'; } else listEl.classList.add('checking');
-  try {
-    const r = await fetch(url, { method: 'POST' });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error || 'Controllo non riuscito');   // review: prima un 500 dava "Nessuna novità" (falso negativo)
-    if (j.saved) { savedSearches = j.saved; updateNovitaBadge(); }
-    const nuovi = Array.isArray(j.esiti) ? j.esiti.reduce((a, e) => a + (e?.nuovi || 0), 0) : 0;
-    toast(nuovi > 0 ? `${nuovi} ${nuovi === 1 ? 'novità trovata' : 'novità trovate'}` : 'Nessuna novità');
-  } catch (e) { showError(e.message || 'Controllo non riuscito.'); }
-  finally { listEl.classList.remove('checking'); renderRicerche(); }   // ripristina i bottoni ('…' bloccato) in OGNI esito
-}
-function onRicercheClick(e) {
-  const card = e.target.closest('[data-id]'); if (!card) return;
-  const id = card.dataset.id;
-  if (e.target.closest('.ric-check')) { checkRicerche(id); return; }
-  if (e.target.closest('.ric-del')) { deleteRicerca(id); return; }
-  const alertEl = e.target.closest('.ric-alert[data-url]');
-  // Si segna letto SOLO l'avviso cliccato: prima il clic sul primo di dodici li faceva
-  // sparire tutti, e con piu' persone svuotava la coda del proprietario.
-  if (alertEl) { markRicercaRead(id, alertEl.dataset.url); openAd(alertEl.dataset.url); return; }
-  if (e.target.closest('.ric-head')) card.classList.toggle('open');
-}
-async function deleteRicerca(id) {
-  try { await fetch(`/api/saved/${encodeURIComponent(id)}`, { method: 'DELETE' }); await loadSavedSearches(); }
-  catch (_) { showError('Eliminazione non riuscita.'); }
-}
-async function markRicercaRead(id, url) {
-  // L'url dell'avviso: si segna letto QUELLO, non tutta la coda della ricerca. Senza,
-  // aprire il primo di dodici avvisi faceva sparire gli altri undici.
-  try {
-    const q = url ? `?url=${encodeURIComponent(url)}` : '';
-    await fetch(`/api/saved/${encodeURIComponent(id)}/read${q}`, { method: 'POST' });
-  } catch (_) {}
-  const s = savedSearches.find(x => x.id === id);
-  if (s) {
-    if (url) {
-      // Tanti in meno quante sono le righe tolte, non la coda intera e nemmeno uno fisso: di
-      // un annuncio possono esserci piu' avvisi vivi ('nuovo' e poi 'calo'), il server li
-      // segna letti insieme, e scalarne uno solo lasciava il badge piu' alto delle righe.
-      const prima = (s.alerts || []).length;
-      s.alerts = (s.alerts || []).filter(a => a.url !== url);
-      s.novita = Math.max(0, (s.novita || 0) - (prima - s.alerts.length));
-      s.digest = s.alerts.reduce((d, a) => { d[a.motivo] = (d[a.motivo] || 0) + 1; return d; }, {});
-    } else { s.novita = 0; s.digest = {}; s.alerts = []; }
-    updateNovitaBadge();
-  }
-  const card = document.querySelector(`.ric-card[data-id="${CSS.escape(id)}"]`);
-  if (card) { card.classList.remove('has-novita'); card.querySelector('.ric-badge')?.remove(); }
-}
-const MOTIVO_LABEL = { nuovo: 'nuovi', calo: 'cali' };
-function renderRicerche() {
-  const c = document.getElementById('ricercheList');
-  if (!savedSearches.length) {
-    // La frase segue il PERCHE': «nessuna ricerca» e' un fatto sui dati e si dice solo
-    // quando i dati si sono letti davvero. Il messaggio demo non invita a premere un
-    // bottone che applyDemoMode ha appena nascosto.
-    const vuoto = {
-      demo: 'Le ricerche salvate sono del proprietario.<br><small>In modalita\' demo non si leggono.</small>',
-      sessione: 'Sessione scaduta.<br><small>Rientra dalla pagina di accesso per rivedere le tue ricerche.</small>',
-      rete: 'Ricerche salvate non raggiungibili ora.<br><small>Riprova fra poco.</small>',
-    }[savedSearchesKo] || 'Nessuna ricerca salvata.<br><small>Fai una ricerca e premi "Salva ricerca".</small>';
-    c.innerHTML = `<p class="text-muted text-center py-4">${vuoto}</p>`;
-    return;
-  }
-  const isDemo = document.body.classList.contains('demo-mode');
-  const whenTxt = ts => {
-    if (!ts) return 'mai controllata';
-    const min = Math.round((Date.now() - ts) / 60000);
-    if (min < 1) return 'adesso';
-    if (min < 60) return `${min} min fa`;
-    const h = Math.round(min / 60);
-    return h < 24 ? `${h}h fa` : `${Math.round(h / 24)}g fa`;
-  };
-  c.innerHTML = savedSearches.map(s => {
-    const novita = s.novita || 0;
-    const badge = novita > 0 ? `<span class="ric-badge">${novita}</span>` : '';
-    const dig = Object.entries(s.digest || {}).map(([m, n]) => `${n} ${MOTIVO_LABEL[m] || m}`).join(' · ');
-    const digestLine = dig ? `<div class="ric-digest">${dig}</div>` : '';
-    // Un controllo con una fonte muta veniva mostrato come un controllo qualunque: l'ora
-    // c'era, e "nessuna novita'" si leggeva come una risposta. Ora si dice chi non ha parlato,
-    // e quand'e' stata l'ultima volta che hanno risposto tutte.
-    const muteLine = (s.fontiMute && s.fontiMute.length)
-      ? ` · <span class="ric-mute">senza ${escapeHtml(s.fontiMute.map(f => FONTE_LABEL[f] || f).join(' e '))}${s.lastCheckedFull ? `, complete ${whenTxt(s.lastCheckedFull)}` : ''}</span>`
-      : '';
-    const alertsHtml = (s.alerts || []).map(a => `
-      <div class="ric-alert ric-${a.motivo}" data-url="${escapeHtml(a.url)}" title="Apri annuncio">
-        <span class="ric-motivo">${escapeHtml(a.motivo)}</span>
-        <span class="ric-alert-tit">${escapeHtml(a.titolo || 'Annuncio')}</span>
-        <span class="ric-alert-prezzo">${prezzoEtichetta(a)}</span>
-      </div>`).join('');
-    return `<div class="ric-card${novita ? ' has-novita' : ''}" data-id="${escapeHtml(s.id)}">
-      <div class="ric-head">
-        <div class="ric-title">${escapeHtml(s.label)} ${badge}</div>
-        <div class="ric-sub">${escapeHtml(s.params?.tipo || '')} · controllata ${whenTxt(s.lastChecked)}${muteLine}</div>
-        ${digestLine}
-      </div>
-      <div class="ric-actions">
-        ${isDemo ? '' : '<button class="rnav-btn ric-check" title="Controlla ora">Controlla</button>'}
-        ${isDemo ? '' : `<button class="rnav-btn ric-del" title="Elimina">${icon('x')}</button>`}
-      </div>
-      ${alertsHtml ? `<div class="ric-alerts">${alertsHtml}</div>` : ''}
-    </div>`;
-  }).join('');
 }
 
 // ─── Segnalazioni (bug-report) ───────────────────────────────────────────────
@@ -4865,7 +4366,10 @@ let vehModelloBase = '';
 // Quando le candidate sono LO STESSO MOTORE: il server lo calcola sull'annuncio, e la griglia
 // lo scrive invece di mostrare quattordici righe che si distinguono per il cambio.
 let vehStessoMotore = null;
-function clearVehScheda() { vehGen++; vehData = null; vehErrore = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; vehRichiami = null; vehOmoStato = {}; vehMisure = null; vehProva = null; vehStessoMotore = null; vehAddonAperto = false; const el = vehEl(); if (el) el.innerHTML = ''; vehHost = null; vehHostUrl = null; }   // vehGen++ invalida le fetch in volo; i richiami sono del veicolo cercato, non si tengono
+// Quante generazioni del catalogo non si sono lasciate leggere mentre il server deduceva la
+// motorizzazione di QUESTO annuncio: il numero lo manda lui (`genNonLette`), qui si mostra.
+let vehElencoMonco = 0;
+function clearVehScheda() { vehGen++; vehData = null; vehErrore = null; vehSpecs = {}; vehSelUrl = null; vehXf.compare = null; vehXf.q = ''; vehRichiami = null; vehOmoStato = {}; vehMisure = null; vehProva = null; vehStessoMotore = null; vehElencoMonco = 0; vehAddonAperto = false; const el = vehEl(); if (el) el.innerHTML = ''; vehHost = null; vehHostUrl = null; }   // vehGen++ invalida le fetch in volo; i richiami sono del veicolo cercato, non si tengono
 
 /**
  * LA SCHEDA CHE NON SI PUO' FARE LO DEVE DIRE.
@@ -4940,6 +4444,22 @@ async function vehChiediModello(marca, tipo, r, host) {
 
 async function loadVehScheda(r, host, modelloScelto) {
   if (!host) return;
+  /**
+   * LA SCHEDA SI SPOSTA, E QUELLA DI PRIMA DEVE ANDARSENE DALLO SCHERMO.
+   *
+   * Lo stato della scheda e' unico (vehData/vehSelUrl/vehSpecs) e i gestori stanno in delega
+   * sulla GRIGLIA: nessuno di loro sa da quale pannello arriva il clic. Lasciando il markup
+   * nel pannello precedente — che non si ridisegna da solo, `renderDetailInto` gli ha gia'
+   * messo `dataset.loaded='1'` — restava a schermo una scheda morta ma cliccabile, che
+   * pilotava quella VIVA: una card delle motorizzazioni della Panda finiva sotto
+   * l'intestazione della BMW (specifiche, consumo, costo carburante), e «Esporta» premuto
+   * li' scaricava la scheda dell'altro annuncio.
+   *
+   * Si riporta quel pannello al suo bottone, che e' esattamente cio' che `renderDetailInto`
+   * disegna per un annuncio che non ospita la scheda: il difetto non lascia in eredita' un
+   * pannello monco da cui la scheda non si puo' piu' richiedere.
+   */
+  if (vehHost && vehHost !== host && vehHost.isConnected) vehHost.innerHTML = '<button type="button" class="det-scheda-apri">Scheda tecnica</button>';
   vehHost = host; vehHostUrl = r ? r.url : null;
   const el = vehEl(); if (!el) return;
   const my = ++vehGen;   // invalida ogni scheda ancora in volo
@@ -4982,7 +4502,7 @@ async function loadVehScheda(r, host, modelloScelto) {
   vehModelloBase = modello;
   vehSchedaCollapsed = false;  // l'hai aperta tu dall'annuncio: si apre
   vehXf.compare = null; vehXf.q = ''; vehXf.highlight = new Set(); vehGenChosen = false; vehShowAll = false;   // reset per ricerca (traduci/unità restano preferenze)
-  vehRichiami = null; vehOmoStato = {}; vehMisure = null; vehProva = null; vehStessoMotore = null; vehAddonAperto = false;   // richiami e misure sono di QUEL veicolo: cambiando annuncio ripartono
+  vehRichiami = null; vehOmoStato = {}; vehMisure = null; vehProva = null; vehStessoMotore = null; vehElencoMonco = 0; vehAddonAperto = false;   // richiami e misure sono di QUEL veicolo: cambiando annuncio ripartono
   // La targa NON e' un parametro di ricerca: non filtra gli annunci e non va alle fonti.
   // Si legge qui e resta nel browser, cosi' non finisce nemmeno nella chiave di cache.
   targaCercata = String((document.getElementById('targaFiltro') || {}).value || '')
@@ -5062,7 +4582,11 @@ async function preselezionaDaAnnuncio(r, my) {
     // Anche quando non si sceglie, il server ha qualcosa da dire: se le candidate sono lo
     // stesso motore, la griglia lo scrive invece di far scegliere fra righe quasi identiche.
     vehStessoMotore = d.stessoMotore || null;
-    if (vehStessoMotore) renderVehScheda();
+    // E DA QUANTO CATALOGO HA DEDOTTO. `genNonLette` sono le generazioni che non si sono
+    // lasciate leggere: finche' nessuno lo mostrava, "unica compatibile" arrivava identica a
+    // una certezza anche quando era l'unica compatibile di META' elenco.
+    vehElencoMonco = Number(d.genNonLette) || 0;
+    if (vehStessoMotore || vehElencoMonco) renderVehScheda();
     // La generazione si apre anche senza una motorizzazione scelta, purche' le candidate
     // stiano tutte li': non e' una scelta al posto tuo, e' una griglia in meno da leggere.
     const gen = (d.scelta && d.scelta.genSlug) || d.genUnica;
@@ -5114,7 +4638,7 @@ function renderVehScheda() {
   // aggiorna solo .rc-sch-secs (renderVehBody) senza distruggere ciò che l'utente sta digitando.
   el.innerHTML = `<div class="rc-group${vehSchedaCollapsed ? ' collapsed' : ''}">`
     + `<button type="button" class="rc-group-head rc-sched-head"><span class="rc-gcaret">${icon('chevron')}</span><span class="rc-group-title">Scheda tecnica</span><span class="rc-group-meta">${escapeHtml(d.title)}</span></button>`
-    + `<div class="rc-group-body"><div class="veh-sel-row">${genSel}${motoSel}${itBtn}</div>${vehSelUrl ? vehToolbarHTML() : ''}<div class="rc-sch-secs">${vehBodyHTML()}</div></div></div>`;
+    + `<div class="rc-group-body"><div class="veh-sel-row">${genSel}${motoSel}${itBtn}</div>${vehMoncoHTML()}${vehSelUrl ? vehToolbarHTML() : ''}<div class="rc-sch-secs">${vehBodyHTML()}</div></div></div>`;
   applyVehViewState();   // ri-applica ricerca-campo + espandi/comprimi dopo ogni render
 }
 function vehBodyHTML() {
@@ -5395,7 +4919,16 @@ function vehMisureHTML() {
   } else {
     const voci = st.voci || [];
     meta = String(st.quante || voci.length);
-    if (!voci.length) corpo = '<div class="veh-mis-att">auto.it non ha rilevamenti di questo modello.</div>';
+    // Tre stati, non due: `completo === false` vuol dire che la paginazione della fonte si e'
+    // interrotta e l'elenco letto e' MONCO. Dichiarare «non ha rilevamenti» su una lista parziale
+    // sarebbe affermare un'assenza che la fonte non ha affermato. (`dichiarati` arriva dalla
+    // fonte: si mostra solo se e' un numero, mai come testo da fuori.)
+    const monco = st.completo === false;
+    const dich = Number.isFinite(st.dichiarati) ? ' (ne dichiara ' + st.dichiarati + ')' : '';
+    const avviso = monco
+      ? `<div class="veh-mis-att">auto.it ha risposto solo in parte${dich}: elenco incompleto, un rilevamento di questo modello potrebbe esserci lo stesso.</div>`
+      : '';
+    if (!voci.length) corpo = monco ? avviso : '<div class="veh-mis-att">auto.it non ha rilevamenti di questo modello.</div>';
     else {
       const righe = voci.map(v => {
         const dati = [
@@ -5421,7 +4954,8 @@ function vehMisureHTML() {
           + `<span class="veh-mis-m">${[v.anno, v.prova].filter(Boolean).map(x => escapeHtml(String(x))).join(' · ')}</span></div>`
           + `<div class="veh-mis-d">${dati.map(([k, x]) => `<span><em>${k}</em>${escapeHtml(String(x))}</span>`).join('')}</div></div>`;
       }).join('');
-      corpo = `<div class="veh-mis">${righe}</div>`
+      corpo = avviso
+        + `<div class="veh-mis">${righe}</div>`
         + '<div class="veh-mis-fonte">Valori <b>misurati</b> dalla redazione di Auto (auto.it), non dichiarati dal costruttore: '
         + 'il consumo reale e quello di targa non sono lo stesso numero, e il riquadro del carburante qui sopra calcola sul dichiarato.</div>';
     }
@@ -5967,6 +5501,26 @@ function vehStessoMotoreHTML() {
   return `<div class="veh-motore-uno"><b>Il motore e' questo: ${escapeHtml(s.motore)}</b>`
     + `<span>${s.quante} allestimenti a catalogo lo condividono${cosa}. L'annuncio non dice quale sia, quindi la scelta resta a te.</span></div>`;
 }
+
+/**
+ * IL CATALOGO LETTO A META' SI DICHIARA, NON SI NASCONDE DIETRO UNA SCELTA.
+ *
+ * Tre stati, non due: quando una generazione non si lascia leggere (pagina di transizione,
+ * 403, timeout) le sue motorizzazioni non entrano nel confronto, e "unica del catalogo
+ * compatibile" diventa "unica fra quelle lette" — che non e' la stessa cosa. Il server lo
+ * conta da tempo, ma il numero non aveva un lettore: la motorizzazione veniva preselezionata
+ * e le sue specifiche caricate senza un segno, e chi legge non aveva modo di accorgersene.
+ */
+function vehMoncoHTML() {
+  const n = vehElencoMonco;
+  if (!n) return '';
+  const quante = n === 1 ? 'una generazione non si e\' lasciata leggere' : `${n} generazioni non si sono lasciate leggere`;
+  // La frase parla della DEDUZIONE, non di quello che c'e' a schermo: resta vera anche dopo
+  // che hai cambiato generazione o motorizzazione a mano.
+  return `<div class="veh-monco">Catalogo letto in parte: ${quante}.`
+    + ' Il confronto coi dati dell\'annuncio e\' partito da un elenco incompleto: la motorizzazione compatibile puo\' essere anche un\'altra.'
+    + ' Riapri la scheda fra qualche minuto per rifarlo sull\'intero catalogo.</div>';
+}
 // banda "In evidenza": SOLO i campi spuntati dall'utente (niente highlight automatico)
 function vehHlBandHTML(spec) {
   if (!vehXf.highlight.size) return '';
@@ -6370,12 +5924,12 @@ function exportPdf(results) {
     return [
       ' ',                                   // la cella della fonte la disegna il server (chip)
       r.titolo,
-      pr ? fmtEur(Math.round(pr.finale)) : '\u2014',
-      r.anno != null ? String(r.anno) : '\u2014',
-      r.km != null ? r.km.toLocaleString('it-IT') + ' km' : '\u2014',
-      r.carburante || '\u2014',
-      r.provincia || '\u2014',
-      ...priceExtraValues(pr, cfg, conPass).map(x => x === '' ? '\u2014' : fmtEur(x)),
+      pr ? fmtEur(Math.round(pr.finale)) : '-',
+      r.anno != null ? String(r.anno) : '-',
+      r.km != null ? r.km.toLocaleString('it-IT') + ' km' : '-',
+      r.carburante || '-',
+      r.provincia || '-',
+      ...priceExtraValues(pr, cfg, conPass).map(x => x === '' ? '-' : fmtEur(x)),
       // Come nel CSV: il PDF viaggia da solo, e una smentita non puo' uscire \u00abcorrisponde\u00bb.
       r.versioneEsito === 'smentita' ? 'non e\' quella versione' : (d ? d.et : 'corrisponde'),
     ];
@@ -6805,7 +6359,7 @@ async function cpScarica(chiave, forza) {
  * GLI ANNUNCI DEL PARCO NELLA GRIGLIA DELLA RICERCA, non in una lista tutta sua.
  *
  * Un parco e' un elenco di annunci, e questa app sa gia' mostrarli: foto, pannello con la
- * scheda tecnica, salvati, confronto, raggruppamenti, ordinamenti, CSV. Rifarli qui
+ * scheda tecnica, confronto, raggruppamenti, ordinamenti, CSV. Rifarli qui
  * dentro avrebbe voluto dire tenerne allineate due versioni per sempre.
  */
 function cpMostraParco(chiave) {

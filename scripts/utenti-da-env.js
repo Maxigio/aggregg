@@ -110,6 +110,31 @@ function pianifica(env) {
   return { admin, voci };
 }
 
+/**
+ * NESSUNA DI QUESTE PASSWORD E' GIA' DI UN ACCESSO VIVO — e si scopre PRIMA di scrivere.
+ *
+ * `pianifica` confronta le password solo FRA le voci del .env: con auth.json non le confrontava
+ * nessuno, e la collisione saltava fuori da `setPersona` a giro iniziato — cioe' col `secret`
+ * gia' rigenerato (tutti fuori dalle sessioni per niente), meta' elenco riscritto, la demo
+ * condivisa che si voleva ritirare ancora valida e le altre macchine ferme alle credenziali
+ * vecchie. Succede per davvero: una password demo condivisa che diventa quella di un collega,
+ * due colleghi che se le scambiano, o la stessa persona sotto un id nuovo perche' si e'
+ * corretto un refuso nel nome — e quest'ultimo caso fallirebbe a OGNI giro, buttando fuori
+ * tutti ogni volta. Il prezzo e' un secondo passaggio di scrypt sulle stesse password: costa
+ * meno di mezzo giro scritto.
+ *
+ * L'errore dice QUALE riga del .env, non con chi ha fatto collisione: il nome dell'altro
+ * sarebbe un oracolo sulle password altrui (auth.erroreOccupata), ma la riga ce l'ha davanti.
+ */
+function verificaPasswordLibere({ admin, voci }) {
+  const rimedio = "e' gia' di un accesso che esiste (il proprietario, la demo condivisa, un collega o un iscritto dal sito), "
+    + "oppure della stessa persona sotto un id vecchio, se ne hai cambiato il nome. Cambiala, o togli prima la voce vecchia.";
+  if (auth.passwordOccupata(admin, 'owner')) throw new Error(`${CHIAVE_ADMIN}: questa password ${rimedio}`);
+  for (const v of voci) {
+    if (auth.passwordOccupata(v.pw, v.id)) throw new Error(`${v.chiave} (${v.nome}): questa password ${rimedio}`);
+  }
+}
+
 // ─── Le altre copie di auth.json ────────────────────────────────────────────
 /**
  * LO STESSO FILE VIVE IN PIU' POSTI, E DIMENTICARNE UNO NON SI VEDE.
@@ -170,20 +195,89 @@ function verificaDestinazioni(dest, env) {
   }
 }
 
-/** Copia auth.json in ogni destinazione. Torna un resoconto, mai il contenuto. */
+/** `utente@host:/percorso` → host e percorso dell'auth.json di la'. */
+function pezziRemoti(d) {
+  const taglio = d.dove.indexOf(':');
+  const dir = d.dove.slice(taglio + 1);
+  return { host: d.dove.slice(0, taglio), file: `${dir}${dir.endsWith('/') ? '' : '/'}auth.json` };
+}
+
+const MARCA_ASSENTE = 'AMR_AUTH_ASSENTE';
+
+/**
+ * CHI C'E' GIA' DI LA'. Tre stati, come ovunque: 'assente' (installazione nuova: niente da
+ * salvare), 'ok', 'illeggibile' (un file che non riesco a leggere puo' contenere accessi che
+ * non vedo: sospetto, non lo do per vuoto).
+ */
+function personeAltrove(d, env) {
+  let grezzo;
+  if (d.remota) {
+    const { execFileSync } = require('child_process');
+    const { host, file } = pezziRemoti(d);
+    const f = JSON.stringify(file);
+    try {
+      grezzo = String(execFileSync('ssh', [...opzioniSsh(env), '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8',
+        host, `if [ -e ${f} ]; then cat ${f}; else echo ${MARCA_ASSENTE}; fi`], { stdio: 'pipe' }));
+    } catch (_) {
+      return { stato: 'illeggibile', persone: [] };
+    }
+    if (grezzo.trim() === MARCA_ASSENTE) return { stato: 'assente', persone: [] };
+  } else {
+    const f = path.join(d.dove, 'auth.json');
+    if (!fs.existsSync(f)) return { stato: 'assente', persone: [] };
+    try { grezzo = fs.readFileSync(f, 'utf8'); }
+    catch (_) { return { stato: 'illeggibile', persone: [] }; }
+  }
+  try {
+    const cfg = JSON.parse(grezzo);
+    return { stato: 'ok', persone: Array.isArray(cfg && cfg.persone) ? cfg.persone : [] };
+  } catch (_) {
+    return { stato: 'illeggibile', persone: [] };
+  }
+}
+
+/** Le voci 'web' di la' che qui non esistono: sono quelle che una copia secca cancellerebbe. */
+const soloDiLa = (persone, idQui) => persone.filter(p => p && p.origine === 'web' && !idQui.has(String(p.id)));
+
+/**
+ * Copia auth.json in ogni destinazione. Torna un resoconto, mai il contenuto.
+ *
+ * NON E' UNA COPIA SECCA: chi nasce da un invito (`origine: 'web'`) esiste SOLO nell'auth.json
+ * della macchina che l'ha approvato — `richieste.js --approva` gira sull'M2, questo script
+ * sull'iMac, quindi quelle voci qui non ci sono MAI state. Sovrascrivere il file intero le
+ * toglieva tutte, e i loro dati restavano nel magazzino di la': `utenti-db.revocato` considera
+ * l'id bruciato per sempre, quindi non potevano nemmeno ri-registrarsi con lo stesso nome.
+ * La guardia di `applica()` (riga `tolti`) protegge solo il file locale: qui serve di nuovo.
+ */
 function copiaAltrove(sorgente, dest, env) {
   const { execFileSync } = require('child_process');
   return dest.map(d => {
+    let cartellaTmp = null;
     try {
-      if (d.remota) {
-        const sep = d.dove.endsWith('/') ? '' : '/';
-        execFileSync('scp', [...opzioniSsh(env), '-q', sorgente, `${d.dove}${sep}auth.json`], { stdio: 'pipe' });
-      } else {
-        fs.copyFileSync(sorgente, path.join(d.dove, 'auth.json'));
+      const qui = JSON.parse(fs.readFileSync(sorgente, 'utf8'));
+      const la = personeAltrove(d, env);
+      if (la.stato === 'illeggibile') {
+        return { dove: d.dove, web: [],
+          esito: "FALLITA: l'auth.json di la' non si legge, non lo sovrascrivo (potrebbe avere accessi che qui non ci sono)" };
       }
-      return { dove: d.dove, esito: 'copiato' };
+      const restano = soloDiLa(la.persone, new Set((qui.persone || []).map(p => String(p.id))));
+      let daCopiare = sorgente;
+      if (restano.length) {
+        cartellaTmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'amr-auth-copia-'));
+        daCopiare = path.join(cartellaTmp, 'auth.json');
+        fs.writeFileSync(daCopiare, JSON.stringify({ ...qui, persone: [...(qui.persone || []), ...restano] }, null, 2), { mode: 0o600 });
+      }
+      if (d.remota) {
+        const { host, file } = pezziRemoti(d);
+        execFileSync('scp', [...opzioniSsh(env), '-q', daCopiare, `${host}:${file}`], { stdio: 'pipe' });
+      } else {
+        fs.copyFileSync(daCopiare, path.join(d.dove, 'auth.json'));
+      }
+      return { dove: d.dove, esito: 'copiato', web: restano.map(p => String(p.id)) };
     } catch (e) {
-      return { dove: d.dove, esito: 'FALLITA: ' + String(e.message).split('\n')[0] };
+      return { dove: d.dove, esito: 'FALLITA: ' + String(e.message).split('\n')[0], web: [] };
+    } finally {
+      if (cartellaTmp) { try { fs.rmSync(cartellaTmp, { recursive: true, force: true }); } catch (_) { /* sparira' col tmp */ } }
     }
   });
 }
@@ -204,6 +298,7 @@ function applica({ admin, voci }, env) {
   }
   const dest = destinazioni(env);
   verificaDestinazioni(dest, env);                           // prima di scrivere ovunque, anche qui
+  verificaPasswordLibere({ admin, voci });                   // idem: setPersona lo direbbe a giro iniziato
   const file = auth.setPassword(admin);                      // per primo: gli altri hanno bisogno che il file esista
   for (const v of voci) auth.setPersona(v.nome, v.pw, v.ruolo);
   const tenuti = new Set(voci.map(v => v.id));
@@ -241,6 +336,11 @@ function principale(argv) {
   const dest = destinazioni(process.env);
 
   if (prova) {
+    // Una collisione con una password gia' viva va detta QUI: altrimenti la prova dice che va
+    // tutto bene e il giro vero si ferma lo stesso. Stampata, non lanciata: come per le
+    // destinazioni, una prova elenca i guai invece di fermarsi al primo.
+    try { verificaPasswordLibere(piano); }
+    catch (e) { console.log(e.message); }
     const persone = auth.persone();
     const tenuti = new Set(piano.voci.map(v => v.id));
     const daWeb = persone.filter(p => p.origine === 'web').map(p => p.id);
@@ -252,8 +352,23 @@ function principale(argv) {
       for (const d of dest) console.log(`  ${d.dove}${d.remota ? '  (via ssh)' : ''}`);
       // La raggiungibilita' si prova ADESSO: scoprire a giro finito che una macchina non
       // risponde vuol dire scoprirlo quando le altre sono gia' cambiate.
-      try { verificaDestinazioni(dest, process.env); console.log('  tutte raggiungibili.'); }
-      catch (e) { console.log('  ' + e.message); }
+      try {
+        verificaDestinazioni(dest, process.env);
+        console.log('  tutte raggiungibili.');
+        // Gli iscritti dal web di UN'ALTRA macchina qui non si vedono: l'elenco letto da
+        // `auth.persone()` e' quello di questo computer, e direbbe zero anche quando di la'
+        // ce n'e' dieci. Vanno chiesti alla macchina che li ha.
+        const idQui = new Set(auth.persone().map(p => String(p.id)));
+        for (const d of dest) {
+          const la = personeAltrove(d, process.env);
+          if (la.stato === 'illeggibile') {
+            console.log(`  ${d.dove}: l'auth.json di la' non si legge, la copia verrebbe saltata.`);
+            continue;
+          }
+          const web = soloDiLa(la.persone, idQui).map(p => String(p.id));
+          if (web.length) console.log(`  ${d.dove}: restano comunque (registrati dal web di la'): ${web.join(', ')}`);
+        }
+      } catch (e) { console.log('  ' + e.message); }
     }
     console.log('Prova soltanto: non ho scritto niente. Togli --prova per applicare.');
     return;
@@ -261,7 +376,10 @@ function principale(argv) {
 
   const esito = applica(piano, process.env);
   console.log(`Scritto in ${esito.file}`);
-  for (const c of esito.copie) console.log(`  → ${c.dove}: ${c.esito}`);
+  for (const c of esito.copie) {
+    const anche = c.web && c.web.length ? `  (di la' restano anche, registrati dal web: ${c.web.join(', ')})` : '';
+    console.log(`  → ${c.dove}: ${c.esito}${anche}`);
+  }
   if (esito.tolti.length) console.log(`Tolti (non entrano piu'): ${esito.tolti.join(', ')}`);
   if (esito.daWeb.length) console.log(`Lasciati stare (registrati dal web): ${esito.daWeb.join(', ')}`);
   if (esito.demoTolta) console.log('Password demo condivisa ritirata.');
@@ -281,6 +399,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  leggiVoce, pianifica, applica, destinazioni, verificaDestinazioni, copiaAltrove,
+  leggiVoce, pianifica, verificaPasswordLibere, applica, destinazioni, verificaDestinazioni,
+  copiaAltrove, personeAltrove,
   CHIAVE_ADMIN, PREFISSO_UTENTE, CHIAVE_ANCHE, CHIAVE_SSH,
 };

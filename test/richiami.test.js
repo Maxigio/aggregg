@@ -11,6 +11,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const Module = require('module');
 
 const sg = require('../backend/scrapers/safety-gate');
 const rica = require('../backend/richiami-route');
@@ -197,11 +198,40 @@ test('archivio: senza finestra di produzione l\'anno non esclude', seArchivio, (
   assert.ok(r.allerte.some(x => x.caso === a.caso), 'un\'allerta senza anni non va esclusa');
 });
 
+const ARCHIVIO = path.join(__dirname, '..', 'data', 'safety-gate.json');
+/**
+ * Una copia del modulo caricata come se l'archivio fosse illeggibile.
+ * L'archivio e' un file TRACCIATO da git: su ogni copia del repo c'e', quindi far dipendere il
+ * test dalla sua assenza voleva dire non eseguirlo mai. Qui si fa lanciare il solo require
+ * dell'archivio — che e' lo stato vero quando una ricostruzione interrotta lascia il JSON
+ * troncato, visto che build-safety-gate.js scrive diretto sul percorso vivo.
+ */
+function senzaArchivio() {
+  const chiave = require.resolve('../backend/richiami-route');
+  const salvato = require.cache[chiave];
+  const vero = Module._load;
+  Module._load = function (richiesta, ...resto) {
+    if (richiesta === ARCHIVIO) throw new Error('archivio illeggibile (finto)');
+    return vero.call(this, richiesta, ...resto);
+  };
+  try {
+    delete require.cache[chiave];
+    return require('../backend/richiami-route');
+  } finally {
+    // La copia senza archivio non deve restare in cache: gli altri test caricano lo stesso modulo.
+    Module._load = vero;
+    delete require.cache[chiave];
+    if (salvato) require.cache[chiave] = salvato;
+  }
+}
+
 test('ricerca senza archivio: risponde ok:false col motivo, non finge', () => {
   // Se il file non c'e', si dice perche' e come costruirlo invece di restituire zero risultati
-  // che sembrerebbero "nessun richiamo".
-  if (D) return;
-  const r = rica.cerca({ marca: 'Fiat' });
+  // che sembrerebbero "nessun richiamo": su un dato di sicurezza «archivio muto» e «nessun
+  // richiamo» sono due risposte diverse, e l'interfaccia le distingue proprio da ok:false.
+  const muto = senzaArchivio();
+  assert.strictEqual(muto._dati, null, 'l\'archivio doveva risultare assente');
+  const r = muto.cerca({ marca: 'Fiat' });
   assert.strictEqual(r.ok, false);
   assert.match(r.motivo, /build-safety-gate/);
 });

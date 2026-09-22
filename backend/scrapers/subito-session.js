@@ -60,18 +60,29 @@ function loadStorageState() {
  * sincrone, quindi due salvataggi non possono intrecciarsi. Resta vero che vince l'ULTIMO
  * che chiama, e se quello porta uno stato catturato prima si perde il cookie piu' fresco —
  * ma quello non lo risolve un lock: lo risolverebbe datare lo stato, ed e' un'altra cosa.
+ *
+ * ATTENZIONE: quella sincronia vale DENTRO un processo, e il percorso e' lo stesso per tutti.
+ * Il keep-alive (server.js, ogni 15 minuti piu' quello al boot) gira in ogni backend vivo, e
+ * un backend che ha perso la porta esegue lo stesso la callback di listen: e' l'orfano gia'
+ * documentato in electron/main.js. Con un `.tmp` a nome fisso il rename di uno pubblicava il
+ * file che l'altro stava ancora riempiendo — `loadStorageState` non lo interpreta, torna null,
+ * la sessione risulta mai configurata e il CAPTCHA si rifa' a mano. Il PID nel nome separa i
+ * temporanei, come in cache-disco.js.
  */
 function saveStorageState(state) {
   const file = getSessionPath();
+  const tmp = file + '.' + process.pid + '.tmp';
   const scrivi = () => {
     try {
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      const tmp = file + '.tmp';
       fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
       fs.renameSync(tmp, file);            // atomica: chi legge vede il vecchio o il nuovo, mai meta'
       epoca++;                             // sessione nuova: le osservazioni di prima non valgono piu'
       return true;
     } catch (err) {
+      // Il mezzo file non resta in giro: ora che il nome porta il PID nessuno lo riusa, e
+      // un temporaneo mai rinominato resterebbe li' per sempre accanto alla sessione.
+      try { fs.unlinkSync(tmp); } catch (_) { /* non c'era: meglio cosi' */ }
       console.warn('[subito-session] save failed: ' + err.message);
       return false;
     }

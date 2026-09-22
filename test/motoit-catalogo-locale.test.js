@@ -14,7 +14,17 @@ test('i modelli vengono dal catalogo, che e\' piu\' ricco della vista mercato', 
 });
 
 test('le versioni portano gli anni dal catalogo, non estratti dal nome a forza di regex', async () => {
-  const v = await mm.getModelBikes('yamaha', 'mt-07');
+  // La spia inchioda la fonte al disco: l'API viva, per MT-07, risponde gli STESSI 9 codici
+  // e gli stessi nomi (verificato sulla fonte), quindi se qualcuno togliesse il ramo che
+  // legge le versioni dal catalogo i controlli qui sotto passerebbero uguali e la regressione
+  // — piu' il ritorno in rete, che la prima riga del file esclude — non la vedrebbe nessuno.
+  const https = require('https');
+  const veroGet = https.get;
+  let uscite = 0;
+  https.get = () => { uscite++; throw new Error('rete vietata in questo test'); };
+  let v;
+  try { v = await mm.getModelBikes('yamaha', 'mt-07'); } finally { https.get = veroGet; }
+  assert.equal(uscite, 0, 'le versioni vengono dal catalogo su disco, non da www.moto.it');
   assert.equal(v.length, 9);
   const base = v.find(x => x.code === 'R9Lybg');
   assert.ok(base, 'il codice del catalogo E\' il param bike= (verificato sulla fonte)');
@@ -70,8 +80,36 @@ test('marca fuori catalogo → non esplode (poi ripiega sull\'API)', async () =>
 test('modello del catalogo senza versioni → lista vuota, non un\'invenzione', async () => {
   const senza = Object.entries(CAT.marche.yamaha.modelli).find(([, m]) => !Object.keys(m.versioni || {}).length);
   if (!senza) return;   // se un giorno il catalogo e' completo, il caso non esiste piu'
-  // L'UNICA chiamata del file che puo' uscire in rete: qui il ripiego sull'API e'
-  // esattamente cio' che si sta controllando, e una richiesta non e' una raffica.
-  const v = await mm.getModelBikes('yamaha', senza[0]);
-  assert.ok(Array.isArray(v));
+  // Qui il catalogo non ha versioni e getModelBikes ripiega sull'API: e' l'unica chiamata del
+  // file che uscirebbe in rete, e usciva davvero — Yamaha ha 10 modelli senza versioni, quindi
+  // a ogni `npm test` partiva una richiesta vera a www.moto.it, in un file che in cima promette
+  // il contrario. Si devia su un server locale, come negli altri test del repo.
+  // E l'esito si controlla su DUE strade, perche' senza `rilancia` il `.catch(() => [])` di
+  // motoit-models rende array QUALUNQUE cosa succeda: con la sola `Array.isArray` l'asserzione
+  // era vera per costruzione — dati veri, 403, timeout e macchina offline passavano uguali.
+  const http = require('http'), https = require('https');
+  const chieste = [];
+  let stato = 500;
+  const srv = http.createServer((req, res) => {
+    chieste.push(req.url);
+    if (stato !== 200) { res.writeHead(stato); return res.end(); }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ result: 'OK', data: [] }));
+  });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const porta = srv.address().port;
+  const veroGet = https.get;
+  https.get = (url, opts, cb) => http.get(String(url).replace(/^https:\/\/[^/]+/, `http://127.0.0.1:${porta}`), opts, cb);
+  try {
+    // Il KO per primo: l'errore non finisce in cache, quindi la chiamata dopo ripete davvero
+    // la richiesta invece di riusare un risultato di dodici ore prima.
+    await assert.rejects(mm.getModelBikes('yamaha', senza[0], { rilancia: true }), /HTTP 500/,
+      'un KO di rete non e\' «questo modello non ha versioni»');
+    stato = 200;
+    assert.deepStrictEqual(await mm.getModelBikes('yamaha', senza[0]), [],
+      'nessuna versione inventata dal nome del modello');
+    assert.equal(chieste.length, 2, 'il ripiego sull\'API e\' partito: senza, il vuoto sarebbe solo il .catch');
+    assert.ok(chieste.every(u => u.includes(encodeURIComponent('yamaha|' + senza[0]))),
+      'e ha chiesto proprio quel modello');
+  } finally { https.get = veroGet; srv.close(); }
 });

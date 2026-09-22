@@ -407,12 +407,12 @@ async function resolveScheda({ tipo, marca, modello: modelloGrezzo, anno, genSlu
   const voci = Object.values(brand.models);
   let model = null;
   for (const q of candidates) { model = matchModel(voci, q); if (model) break; }
-  if (model) return await resolveModelPage(brand, model, genSlug);
+  if (model) return await paginaModello(brand, model, genSlug);
   // Il nome porta modello E allestimento insieme ("CLA 200"): si chiede il modello e si
   // tiene da parte l'allestimento, che serve a scegliere la motorizzazione.
   for (const q of candidates) {
     const t = testaEAllestimento(voci, q);
-    if (t) return { ...(await resolveModelPage(brand, t.model, genSlug)), allestimento: t.allestimento };
+    if (t) return { ...(await paginaModello(brand, t.model, genSlug)), allestimento: t.allestimento };
   }
   // Fallback: la ricerca interna di auto-data.net risolve le sigle-motore/varianti che NON sono
   // modelli ("318"→trim Serie 3, "CT 200h"→trim Lexus CT). Delego il matching alla fonte, niente liste.
@@ -464,6 +464,16 @@ async function resolveModelPage(brand, model, genSlug) {
   };
 }
 
+// `resolveModelPage` scende a `fetchCached` → `httpGetText`, che RIGETTA su 403/429, su
+// qualunque HTTP>=400, sul socket caduto e sul timeout. Senza questa guardia il throw risaliva
+// fino al catch della rotta e usciva come «il catalogo non ha questo modello»: un fatto sul
+// catalogo affermato senza che il catalogo avesse risposto — proprio sul percorso piu' comune,
+// il modello che sta nell'indice locale. Stessa porta gia' aperta per `searchScheda` (riga 475).
+async function paginaModello(brand, model, genSlug) {
+  try { return await resolveModelPage(brand, model, genSlug); }
+  catch (e) { return { notFound: 'modello', erroreFonte: (e && e.message) || 'auto-data.net non raggiungibile' }; }
+}
+
 // Ricerca interna auto-data.net (get-words.php): se indica un modello del nostro indice usa il flusso
 // generazioni; altrimenti "atterra sui trim" — le versioni trovate diventano le motorizzazioni.
 async function searchScheda(brand, marca, modello, genSlug) {
@@ -474,12 +484,23 @@ async function searchScheda(brand, marca, modello, genSlug) {
   try { body = await fetchCached(url, PAGE_TTL); }
   catch (e) { return { erroreFonte: (e && e.message) || 'ricerca interna non raggiungibile' }; }
   const bn = norm(brand.name);
-  const items = vs.parseSearchWords(body).filter(x => norm(x.label).startsWith(bn));   // solo la marca cercata
+  const parole = vs.parseSearchWords(body);
+  // Un 200 che non e' nemmeno nel formato della ricerca (corpo vuoto, interstitial anti-bot)
+  // non e' "la fonte non conosce questo modello": senza declassare il TTL quel nulla restava
+  // in cache 12 ore sotto la chiave dell'URL, e per mezza giornata la scheda affermava un
+  // fatto sul catalogo che il catalogo non ha mai detto. Stesso trattamento della
+  // pagina-modello muta (riga 438). Un corpo CON i separatori e zero voci resta "assente":
+  // li' la fonte ha risposto, e la risposta e' che non ha niente.
+  if (!parole.length && !String(body || '').includes('###')) {
+    cacheSet(url, body, EMPTY_TTL);
+    return { erroreFonte: 'ricerca interna servita fuori formato (probabile pagina di transizione della fonte)' };
+  }
+  const items = parole.filter(x => norm(x.label).startsWith(bn));   // solo la marca cercata
   if (!items.length) return null;
   // la ricerca indica un MODELLO che abbiamo in indice → flusso generazioni (griglia foto)
   const modelHit = items.find(x => x.kind === 'model');
   const model = modelHit && Object.values(brand.models).find(m => m.slug === modelHit.slug);
-  if (model) return await resolveModelPage(brand, model, genSlug);
+  if (model) return await paginaModello(brand, model, genSlug);
   // altrimenti atterra sui trim (le versioni che la fonte associa alla sigla cercata)
   const trims = items.filter(x => x.kind === 'trim').slice(0, 40);
   if (!trims.length) return null;
@@ -909,7 +930,11 @@ function mount(app, deps = {}) {
     if (!g.ok) return res.status(429).json({ error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
     try {
       const out = await schedaPerAnnuncio({ tipo, marca, modello, anno, cv, carburante, cambio, carrozzeria, titolo, variante, cilindrata });
-      cacheSet(key, out, out.ok ? PAGE_TTL : EMPTY_TTL);
+      // Una deduzione fatta su un elenco MONCO non vale mezza giornata. La pagina-generazione
+      // muta viene gia' declassata a EMPTY_TTL per riprovare fra pochi minuti (riga 460), ma la
+      // scheda costruita su di essa restava appesa a QUESTO annuncio per 12 ore: la fonte si
+      // riprendeva e l'annuncio continuava a rispondere con mezzo catalogo.
+      cacheSet(key, out, out.ok && !out.genNonLette ? PAGE_TTL : EMPTY_TTL);
       res.json(out);
     } catch (_) { res.json({ ok: false, motivo: 'scheda non disponibile' }); }
   });

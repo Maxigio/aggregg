@@ -192,6 +192,79 @@ test('il portale che non risponde e\' un 502, e intanto si serve il magazzino', 
   assert.ok(res.body.url, 'e il link al portale resta, per andarci a mano');
 }));
 
+/**
+ * IL LOTTO RITIRATO NON E' IL PORTALE GIU'. `json()` di pvp.js lancia su QUALUNQUE status diverso
+ * da 200, quindi il 403 con cui il portale copre un lotto ritirato («Operazione non consentita»,
+ * misurato) e il 400 di un id che non esiste finivano nel `catch` del dettaglio: 502 «il portale
+ * non risponde: PVP /ve-xxxxxxxx-yyyyyyyy/ve-ms/vendite/4626312/restricted: HTTP 403», e la card
+ * lo stampa tale e quale. Due cose sbagliate in una riga sola — il portale sta benissimo, e' il
+ * lotto che non c'e' piu', e per giunta a schermo finisce il percorso interno del microservizio
+ * del ministero. Chi legge «non risponde» ci sente un intoppo di passaggio e ripreme: un altro
+ * gettone di `limitePortale` e un'altra chiamata al portale, ogni volta. Il messaggio giusto
+ * c'era gia' (riga 189) ma era irraggiungibile proprio nel caso per cui era stato scritto.
+ * Qui gira il `pvp` VERO con la rete finta sotto, perche' il punto e' la traduzione dello status.
+ */
+test('il lotto ritirato si dice per quello che e\', senza il percorso interno dell\'endpoint', async () => conCartella(async () => {
+  const { EventEmitter } = require('events');
+  const https = require('https');
+  const pvp = require('../backend/scrapers/pvp');
+  db.sostituisci('moto', [lotto(4626312)], Date.now());
+
+  let statusLotto = 403;
+  const veroRequest = https.request;
+  https.request = (opts, cb) => {
+    const r = new EventEmitter();
+    r.setTimeout = () => {}; r.write = () => {}; r.destroy = () => {};
+    r.end = () => {
+      const res = new EventEmitter();
+      res.setEncoding = () => {};
+      let payload;
+      if (opts.path.includes('fe-config')) {
+        res.statusCode = 200;
+        payload = JSON.stringify({ msUrl: { ricerca: 'ric-3f723b85-986a1b71/ric-ms', vendite: 've-3f723b85-986a1b71/ve-ms' } });
+      } else {
+        res.statusCode = statusLotto;
+        payload = '{"messaggio":"Operazione non consentita","body":null}';
+      }
+      setImmediate(() => { cb(res); res.emit('data', payload); res.emit('end'); });
+    };
+    return r;
+  };
+
+  try {
+    pvp._test.resetCache();
+    const { H } = monta();                 // niente `pvp` finto: e' lui che deve leggere lo status
+    let res = resFinta();
+    await H['GET /api/aste/:id'](req({ tipo: 'moto' }, { id: '4626312' }), res);
+    assert.equal(res.code, 404, 'il portale sta benissimo: e\' il lotto che non c\'e\' piu\'');
+    assert.equal(res.body.error, 'lotto non trovato sul portale');
+    assert.equal(res.body.lotto && res.body.lotto.id, 4626312, 'quello che abbiamo gia\' si serve lo stesso');
+    assert.ok(!JSON.stringify(res.body).includes('ve-ms'), 'il percorso interno del microservizio non va a schermo');
+
+    // L'id che non esiste ha la faccia del 400 (misurato): stessa risposta onesta.
+    statusLotto = 400;
+    res = resFinta();
+    await H['GET /api/aste/:id'](req({ tipo: 'moto' }, { id: '4626312' }), res);
+    assert.equal(res.code, 404, 'anche il 400 parla del lotto, non del portale');
+
+    // IL 404 NO, ED E' IL CONFINE: e' cosi' che risponde un percorso morto dopo un rilascio del
+    // ministero. Leggerlo come «lotto sparito» spegnerebbe la riscoperta degli endpoint e
+    // lascerebbe l'area a raccontare lotti inesistenti finche' non si riavvia.
+    statusLotto = 404;
+    res = resFinta();
+    await H['GET /api/aste/:id'](req({ tipo: 'moto' }, { id: '4626312' }), res);
+    assert.equal(res.code, 502, 'un percorso morto non e\' un lotto sparito');
+
+    // Il portale muto DAVVERO resta un 502, col suo numero: quello che sparisce e' solo il percorso.
+    statusLotto = 503;
+    res = resFinta();
+    await H['GET /api/aste/:id'](req({ tipo: 'moto' }, { id: '4626312' }), res);
+    assert.equal(res.code, 502, 'un 5xx e\' la fonte che sta male, e resta un 502');
+    assert.match(res.body.error, /HTTP 503/, 'il guasto vero si dice, con il suo numero');
+    assert.ok(!JSON.stringify(res.body).includes('ve-ms'), 'nemmeno qui il percorso interno esce');
+  } finally { https.request = veroRequest; pvp._test.resetCache(); }
+}));
+
 test('un id non numerico non arriva alla fonte', async () => conCartella(async () => {
   let chiamato = false;
   const { H } = monta({ pvp: { dettaglio: async () => { chiamato = true; return null; }, urlAnnuncio: () => '', urlAllegato: l => l } });

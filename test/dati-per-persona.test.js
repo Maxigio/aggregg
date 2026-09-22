@@ -96,7 +96,7 @@ test('ricerche salvate: senza un padrone non si scrive niente', () => {
   }
 });
 
-test('archivio di prima: entra una volta sola e a nome del proprietario', () => {
+test('archivio di prima: viene eliminato e non rientra nel database', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-archivio-'));
   const vecchio = process.env.USER_DATA_PATH;
   try {
@@ -107,59 +107,27 @@ test('archivio di prima: entra una volta sola e a nome del proprietario', () => 
       { id: 'vecchia1', label: 'Golf di prima', params: { tipo: 'auto', marca: 'Volkswagen' }, alerts: [], seen: {} },
       { id: 'vecchia2', label: 'Panda di prima', params: { tipo: 'auto', marca: 'Fiat' }, alerts: [], seen: {} },
     ], null, 2));
-    const prima = fs.readFileSync(file);
-
-    delete require.cache[require.resolve('../backend/saved')];
-    const s2 = require('../backend/saved');
-
-    assert.deepStrictEqual(s2.listSaved('owner').map(x => x.label), ['Golf di prima', 'Panda di prima']);
-    assert.deepStrictEqual(s2.listSaved('anna'), [], 'l\'archivio e\' del proprietario, non di tutti');
-    assert.strictEqual(Buffer.compare(prima, fs.readFileSync(file)), 0,
-      'il file di prima resta intatto: e\' l\'unica copia e non si cancella per una migrazione');
-
-    // Seconda apertura: non si importa una seconda volta sopra a quello che c'e' gia'.
-    s2.removeSaved('owner', 'vecchia1');
-    dbmod.chiudi();
-    delete require.cache[require.resolve('../backend/saved')];
-    const s3 = require('../backend/saved');
-    assert.deepStrictEqual(s3.listSaved('owner').map(x => x.label), ['Panda di prima'],
-      'la ricerca cancellata e\' tornata: l\'archivio si e\' reimportato sopra');
+    const db = dbmod.apri();
+    assert.ok(db, dbmod.guasto());
+    assert.strictEqual(fs.existsSync(file), false, 'il vecchio archivio JSON e\' ancora sul disco');
+    assert.strictEqual(Number(db.prepare('SELECT COUNT(*) AS n FROM ricerche').get().n), 0,
+      'le vecchie ricerche sono rientrate nel database');
   } finally {
     dbmod.chiudi();
     if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
-    delete require.cache[require.resolve('../backend/saved')];
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-// ── Annunci, ricambi, codici preferiti, impostazioni di prezzo ────────────────
+// ── Impostazioni di prezzo ──────────────────────────────────────────────────
 
-test('le mie cose: tre elenchi, e quelli di un altro non si vedono', () => {
+test('le mie cose: l’API espone solo preferenze, senza elenchi salvati', () => {
   daCapo();
-  miei.scriviElenco('anna', 'annuncio', [{ url: 'a1', titolo: 'Golf' }]);
-  miei.scriviElenco('anna', 'oem', [{ q: '1K0615301AA', mode: 'oem' }]);
-  miei.scriviElenco('bruno', 'annuncio', [{ url: 'b1', titolo: 'Panda' }, { url: 'b2' }]);
-
-  assert.deepStrictEqual(miei.leggiElenco('anna', 'annuncio').map(x => x.url), ['a1']);
-  assert.deepStrictEqual(miei.leggiElenco('bruno', 'annuncio').map(x => x.url), ['b1', 'b2']);
-  assert.deepStrictEqual(miei.leggiElenco('bruno', 'oem'), [], 'i preferiti di Anna non sono di Bruno');
-  assert.deepStrictEqual(miei.leggiElenco('carlo', 'ricambio'), []);
-
-  // L'ORDINE conta: i codici preferiti si mettono in cima, e un elenco che torna rimescolato
-  // e' un elenco diverso da quello che si era lasciato.
-  miei.scriviElenco('anna', 'oem', [{ q: 'B' }, { q: 'A' }, { q: 'C' }]);
-  assert.deepStrictEqual(miei.leggiElenco('anna', 'oem').map(x => x.q), ['B', 'A', 'C']);
-});
-
-test('le mie cose: il tetto e\' quello dello schermo, non uno piu\' largo', () => {
-  daCapo();
-  // Se qui ne stessero 1000 e nello schermo 200, la differenza si scoprirebbe il giorno che
-  // qualcuno perde qualcosa senza capire perche'.
-  const tanti = Array.from({ length: miei.GENERI.oem.cap + 10 }, (_, i) => ({ q: 'C' + i }));
-  const tenuti = miei.scriviElenco('anna', 'oem', tanti);
-  assert.strictEqual(tenuti, miei.GENERI.oem.cap);
-  assert.strictEqual(miei.leggiElenco('anna', 'oem').length, miei.GENERI.oem.cap);
-  assert.strictEqual(miei.leggiElenco('anna', 'oem')[0].q, 'C0', 'si taglia dal fondo, non dall\'inizio');
+  const t = miei.tutto('anna');
+  assert.deepStrictEqual(t.preferenze, {});
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(t, 'salvataggi'), false);
+  assert.strictEqual(typeof miei.scriviElenco, 'undefined');
+  assert.strictEqual(typeof miei.leggiElenco, 'undefined');
 });
 
 test('le mie cose: preferenze per persona, e solo quelle dichiarate', () => {
@@ -174,26 +142,173 @@ test('le mie cose: preferenze per persona, e solo quelle dichiarate', () => {
   // Una chiave qualunque non entra: il magazzino non e' un deposito per quello che passa.
   assert.throws(() => miei.scriviPreferenza('anna', 'qualunque', 'x'), e => e.code === 'PREFERENZA_SCONOSCIUTA');
   assert.throws(() => miei.scriviPreferenza('anna', 'amr_price_v', 'x'.repeat(5000)), e => e.code === 'TROPPO_GRANDE');
-  assert.throws(() => miei.scriviElenco('anna', 'inventato', []), /genere sconosciuto/);
   for (const vuoto of [undefined, null, '']) {
-    assert.throws(() => miei.scriviElenco(vuoto, 'oem', []), /manca l'utente/);
+    assert.throws(() => miei.leggiPreferenze(vuoto), /manca l'utente/);
   }
 });
 
-test('le mie cose: magazzino guasto = elenco vuoto DICHIARATO, e nessuna scrittura', () => {
+test('le mie cose: magazzino guasto dichiarato e nessuna scrittura', () => {
   const vecchio = process.env.USER_DATA_PATH;
   try {
     dbmod.chiudi();
     process.env.USER_DATA_PATH = path.join(os.tmpdir(), `amr-miei-sparito-${process.pid}`);
     const t = miei.tutto('anna');
-    assert.deepStrictEqual(t.salvataggi.annuncio, []);
-    assert.ok(t.guasto, 'un elenco vuoto per guasto NON e\' "non hai niente salvato", e va detto');
-    assert.throws(() => miei.scriviElenco('anna', 'oem', [{ q: 'X' }]), e => e.code === 'DATI_NON_DISPONIBILI');
+    assert.deepStrictEqual(t.preferenze, {});
+    assert.ok(t.guasto, 'il guasto del magazzino va dichiarato');
     assert.throws(() => miei.scriviPreferenza('anna', 'amr_price_v', '{}'), e => e.code === 'DATI_NON_DISPONIBILI');
   } finally {
     dbmod.chiudi();
     if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
   }
+});
+
+test('le mie cose: un ciclo di PUT si ferma, prima del corpo, e solo per chi insiste', () => {
+  daCapo();
+  let parsati = 0;
+  const json = (req, res, next) => { parsati++; next(); };
+  const rotte = [];
+  const app = {
+    get: (p, ...mw) => rotte.push({ m: 'GET', p, mw }),
+    put: (p, ...mw) => rotte.push({ m: 'PUT', p, mw }),
+  };
+  miei.mount(app, { json, utenteDi: req => req.chi, chiaveLimite: req => 'u:' + req.chi });
+
+  const chiama = (m, p, req) => {
+    const r = rotte.find(x => x.m === m && x.p === p);
+    assert.ok(r, `rotta ${m} ${p} non montata`);
+    let stato = 200;
+    let corpo = null;
+    const res = {
+      status(n) { stato = n; return this; },
+      set() { return this; },
+      json(b) { corpo = b; return this; },
+    };
+    let i = 0;
+    const next = () => { const f = r.mw[i++]; if (f) f(req, res, next); };
+    next();
+    return { stato, corpo };
+  };
+  const put = chi => chiama('PUT', '/api/miei/preferenze/:chiave',
+    { chi, params: { chiave: 'amr_price_v' }, body: { valore: '{}' } });
+
+  let passate = 0;
+  let fermata = null;
+  for (let i = 0; i < 500 && !fermata; i++) {
+    const r = put('anna');
+    if (r.stato === 429) fermata = r;
+    else { assert.strictEqual(r.stato, 200); passate++; }
+  }
+  assert.ok(fermata, 'il ciclo non si ferma mai: e\' proprio il blocco dell\'event loop che si voleva evitare');
+  assert.ok(passate >= 100, `il freno stringe troppo per una persona vera: solo ${passate} colpi`);
+  assert.ok(fermata.corpo.riprovaFra > 0, 'chi viene fermato deve sapere fra quanto riprovare');
+
+  const finQui = parsati;
+  put('anna');
+  assert.strictEqual(parsati, finQui, 'una PUT gia\' rifiutata non deve nemmeno far parsare il corpo');
+  assert.strictEqual(put('bruno').stato, 200, 'il tetto e\' di chi insiste, non di tutti');
+});
+
+test('il browser elimina tutte le vecchie cache e non offre salvataggi ricambi', () => {
+  daCapo();
+  const APP = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const HTML = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
+  for (const key of ['amr_salvati', 'amr_salvati_ricambi', 'amr_oem_preferiti']) {
+    assert.ok(APP.includes(`'${key}'`), `la cache legacy ${key} non viene eliminata`);
+  }
+  assert.doesNotMatch(APP, /mieiManda|rcToggleSave|rcToggleFav|rc-btn-save|rcSaveCode/);
+  assert.doesNotMatch(HTML, /btnSaved|offcanvasSaved|Ricambi salvati/);
+});
+
+/**
+ * REGRESSIONE, e di quelle che cancellano i soldi del proprietario. Il menu "Prezzo €" dei
+ * veicoli lo disegna `init()` UNA volta sola, col cfg di QUESTO browser, e l'unico altro
+ * ridisegno (la rete di sicurezza di `renderResults`) non scatta mai perche' il <summary> c'e'
+ * gia'. Quando poi arrivavano le preferenze dell'account, `priceCfgV` cambiava e il menu no: su
+ * un computer nuovo le righe erano gia' rettificate di +500 mentre i campi mostravano zero. E
+ * siccome `readPriceMenu` rilegge TUTTI i campi dal DOM, non solo quello toccato, bastava
+ * scrivere in UN campo perche' gli altri quattro tornassero su stantii — commissione cancellata
+ * dall'account, quindi anche dall'altro computer, senza un avviso. Qui gira il codice VERO di
+ * frontend/app.js (mieiCarica + il menu prezzi) su un DOM finto ricostruito dal suo stesso HTML.
+ */
+test('le mie cose: le impostazioni prezzo dell\'account entrano anche NEL menu, non solo nei conti', async () => {
+  daCapo();
+  const CFG = { comm: 500, commUnit: 'eur', spese: 0, margine: 10, iva: false, passaggio: 0 };
+  miei.scriviPreferenza('anna', 'amr_price_v', JSON.stringify(CFG));
+  const payload = miei.tutto('anna');
+  assert.deepStrictEqual(Object.keys(payload.preferenze), ['amr_price_v'], 'il presupposto: di la\' c\'e\' solo il prezzo');
+
+  const APP = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const pezzo = (da, finoA) => {
+    const i = APP.indexOf(da);
+    assert.ok(i > 0, `non trovo piu' \`${da}\` in frontend/app.js`);
+    const j = APP.indexOf(finoA, i);
+    assert.ok(j > i, `non trovo piu' la fine di \`${da}\``);
+    return APP.slice(i, j);
+  };
+
+  // DOM minimo: gli <input> non sono scritti a mano, si ricostruiscono dall'HTML che genera
+  // `priceMenuHTML` — cosi' la prova misura il menu vero e non una sua imitazione.
+  const campi = new Map();
+  const dettagli = { open: false, classList: { toggle() {} } };
+  const host = {
+    _h: '',
+    get innerHTML() { return this._h; },
+    set innerHTML(h) {
+      this._h = h;
+      campi.clear();
+      for (const m of h.matchAll(/<input\b[^>]*\bid="([^"]+)"([^>]*)>/g)) {
+        const v = /\bvalue="([^"]*)"/.exec(m[2]);
+        campi.set(m[1], { value: v ? v[1] : '', checked: /\bchecked\b/.test(m[2]), addEventListener() {} });
+      }
+    },
+    querySelector: () => dettagli,
+  };
+  const store = new Map();                    // browser nuovo: qui dentro non c'e' niente
+  const saliti = [];
+  const globali = {
+    fetch: async () => ({ ok: true, json: async () => payload }),
+    localStorage: {
+      getItem: k => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => store.set(k, String(v)),
+      removeItem: k => store.delete(k),
+    },
+    document: { getElementById: id => (id === 'priceMenuV' ? host : campi.get(id) || null) },
+    console: { warn() {} },
+    PRICE_DEFAULT: require('../frontend/pricing.js').PRICE_DEFAULT,
+    priceAdjActive: require('../frontend/pricing.js').priceAdjActive,
+    priceCfgV: null, priceCfgR: null,
+    mieiPronti: false,
+    rcData: null, currentResults: [],
+    renderRicambiPanel() {}, renderResults() {},
+    mieiPreferenza: (k, v) => saliti.push([k, v]),
+  };
+  const corpo = [
+    pezzo('async function mieiCarica()', '\nlet searchActive'),
+    pezzo('function loadPriceCfg(key)', '\nlet priceCfgV'),
+    pezzo('function priceMenuHTML(cfg, ns)', '\n// Colonne/celle extra'),
+    pezzo('function renderPriceMenuV()', '\n// Il dropdown "Prezzo €"'),
+    `return (async () => {
+       priceCfgV = loadPriceCfg('amr_price_v');    // init(), su un browser dove non c'e' niente
+       renderPriceMenuV();
+       const prima = document.getElementById('pmComm_v').value;
+       await mieiCarica();                          // arrivano le preferenze dell'account
+       const dopo = document.getElementById('pmComm_v').value;
+       document.getElementById('pmMarg_v').value = '5';   // e lui tocca SOLO il margine
+       priceCfgV = readPriceMenu('v', priceCfgV);
+       savePriceCfg('amr_price_v', priceCfgV);
+       return { prima, dopo, priceCfgV };
+     })();`,
+  ].join('\n');
+  const chiavi = Object.keys(globali);
+  const esito = await new Function(...chiavi, corpo)(...chiavi.map(k => globali[k]));
+
+  assert.strictEqual(esito.prima, '', 'il presupposto: all\'avvio il menu e\' a zero');
+  assert.strictEqual(esito.dopo, '500', 'il menu e\' rimasto indietro rispetto ai prezzi gia\' rettificati');
+  assert.strictEqual(esito.priceCfgV.comm, 500, 'toccare il margine ha cancellato la commissione');
+  assert.strictEqual(esito.priceCfgV.margine, 5);
+  const ultimo = saliti.filter(([k]) => k === 'amr_price_v').pop();
+  assert.ok(ultimo, 'il gesto deve comunque salire sull\'account');
+  assert.strictEqual(JSON.parse(ultimo[1]).comm, 500, 'e sull\'account non deve salire uno zero al posto dei 500 €');
 });
 
 test('parco concorrenti: uno per persona, e i gruppi non si sovrascrivono', () => {
@@ -212,32 +327,10 @@ test('parco concorrenti: uno per persona, e i gruppi non si sovrascrivono', () =
   assert.throws(() => comp.scrivi('', []), /manca l'utente/);
 });
 
-test('le ricerche degli altri: il proprietario legge il meno possibile', () => {
-  daCapo();
-  // Che `listSaved` restituisca anche la coda degli avvisi non e' un dettaglio: significa che
-  // NON esporla e' una scelta, non un caso. Se un giorno la rotta passasse `listSaved` intera,
-  // il proprietario si troverebbe a leggere gli annunci e i prezzi che un altro sta seguendo.
-  const s = saved.addSaved('anna', { label: 'Golf', params: { tipo: 'auto', marca: 'Volkswagen' } });
-  const base = [R('a', 10000), R('b', 9000), R('c', 9500)];
-  saved.recordCheck('anna', s.id, base);
-  saved.recordCheck('anna', s.id, [...base, R('d', 8800)]);
-  const mia = saved.listSaved('anna')[0];
-  assert.ok(Array.isArray(mia.alerts) && mia.alerts.length, 'listSaved deve restituire la coda: e\' su quella che si taglia');
-  assert.ok(mia.alerts[0].url, 'e dentro ci sono gli annunci trovati');
-
+test('annunci, ricambi e ricerche salvate non hanno piu\' una superficie HTTP', () => {
   const SRV = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
-  const i = SRV.indexOf("app.get('/api/saved/altri'");
-  assert.ok(i > 0, 'la rotta delle ricerche altrui non c\'e\' piu\'');
-  const blocco = SRV.slice(i, SRV.indexOf('\n});', i));
-
-  for (const vietato of ['alerts', 'digest', 'seen', 'alerted', 'fontiMute']) {
-    assert.ok(!new RegExp(`\\b${vietato}\\b`).test(blocco),
-      `la rotta espone "${vietato}": sapere che qualcuno segue "BMW Serie 3" e' una cosa, leggergli il taccuino un'altra`);
-  }
-  for (const atteso of ['label', 'params', 'lastChecked', 'novita']) {
-    assert.ok(blocco.includes(atteso), `manca "${atteso}": serve a capire se lo strumento viene usato`);
-  }
-  // E solo da guardare: niente cancellazione, niente controllo per conto di un altro.
-  assert.ok(!/delete|removeSaved|checkSaved|recordCheck/i.test(blocco),
-    'la rotta fa qualcosa oltre a leggere: cancellare farebbe sparire roba senza spiegazione, e controllare spenderebbe richieste alle fonti per conto di un altro');
+  const MIEI = fs.readFileSync(path.join(__dirname, '..', 'backend', 'dati-utente.js'), 'utf8');
+  assert.doesNotMatch(SRV, /require\(['"]\.\/saved['"]\)/);
+  assert.doesNotMatch(SRV, /app\.(?:get|post|put|delete)\(['"]\/api\/saved/);
+  assert.doesNotMatch(MIEI, /\/api\/miei\/elenco|salvataggi/);
 });

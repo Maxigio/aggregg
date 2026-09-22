@@ -246,7 +246,7 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
       // "blocked" il registro salute non arrivava mai a classificarli come guasti
       // passeggeri, e una manutenzione momentanea di Moto.it faceva saltare la fonte per
       // sei ore su tutti i target. Qui si porta fuori lo stato e chi chiama decide.
-      if (i === 0) return { pages: [], statoKo: status, truncated: false };
+      if (i === 0) return { pages: [], statoKo: status, truncated: false, cadute: 0 };
       // Pagina >1 caduta: le pagine gia' prese si tengono, ma la vista NON e' completa.
       // Senza dirlo, `truncated` restava falso (il calcolo sotto e' condizionato a
       // `pages.length === urls.length`, mai vero dopo un break) e il crawler faceva
@@ -280,6 +280,11 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
   // Un break per deriva a pagina >1 non e' una vista completa: senza `truncated` il
   // crawler, quando tornera' attivo, farebbe markGone su una lista parziale.
   if (driftBreak) truncated = true;
+  // Le PAGINE PERSE viaggiano a parte da `truncated`: quel flag lo alza anche il caso
+  // ordinario qui sotto (got < total col cap esaurito), che e' normale e cachabile, quindi
+  // non puo' reggere un avviso. `cadute` dice solo "abbiamo smesso prima": e' l'unico
+  // segnale con cui chi chiama puo' dichiarare l'elenco monco.
+  const cadute = driftBreak ? urls.length - pages.length : 0;
   // review: prima truncated=true su QUALSIASI ultima pagina non vuota (Moto.it non ha un
   // PAGE_SIZE fisso: ~10-13/pag → niente check raw<PAGE_SIZE come Subito/AS24) → un target
   // esaurito ESATTAMENTE al cap restava "troncato" per sempre (escalation cap + markGone mai +
@@ -290,8 +295,23 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
     const got = pages.reduce((n, p) => n + p.length, 0);
     if (total == null || got < total) truncated = true;
   }
-  return { pages, blocked: false, truncated, total };
+  return { pages, blocked: false, truncated, cadute, total };
 }
+
+/**
+ * TENERE LE PAGINE SUPERSTITI E' GIUSTO, NON DIRLO NO — la regola gia' scritta nel gemello
+ * a browser (autoscout-playwright.js:385). Con la pagina 2 caduta (un 503 di manutenzione,
+ * o card che smettono di mapparsi) l'esito usciva come un 'ok' pieno: `truncated` non
+ * sopravvive a `sciogli()` in server.js, che copia campi fissi, quindi `sources.moto.parziale`
+ * restava null, la pastiglia era VERDE senza un avviso e `cacheable()` — che il campo
+ * `parziale` lo legge apposta — congelava tre minuti la risposta monca, rendendo inutile
+ * l'unico gesto di rimedio (ripremere Cerca). E siccome le pagine si chiedono con
+ * `sort=price-a`, quel che manca e' sempre la parte piu' cara: la fetta Moto.it entrava nel
+ * confronto piu' povera del solito senza che nulla lo dichiarasse.
+ */
+const avvisoCadute = (cadute, tot) => cadute
+  ? `${cadute} pagine su ${tot} non si sono lasciate leggere da Moto.it: l'elenco e' parziale (mancano gli annunci piu' cari)`
+  : null;
 
 // ─── Rate limiting: minimo 1.5s tra ricerche ─────────────────────────────────
 let lastSearchAt = 0;
@@ -340,7 +360,7 @@ async function scrapeMotoIt(params, opts = {}) {
   const urls = Array.from({ length: maxPages }, (_, i) => buildUrl(params, salta + i + 1));
 
   if (deep) {
-    const { pages, statoKo, truncated, total } = await scrapeMotoViaHttp(urls, {
+    const { pages, statoKo, truncated, cadute, total } = await scrapeMotoViaHttp(urls, {
     ...opts, modelSlug: params.motoitModelSlug, httpTimeoutMs: HTTP_TIMEOUT_DEFAULT });
     // L'etichetta la calcola `kindForStatus`: 5xx = passeggero, non blocco. E il messaggio
     // non dice piu' "pagina-1 vuota", che era un residuo di codice tolto tempo fa e mandava
@@ -357,13 +377,13 @@ async function scrapeMotoIt(params, opts = {}) {
    * spacciarsi per tuo.
    */
   const totaleLargo = !params.motoitModelSlug || null;
-  return opts.withMeta ? { items: risultati, truncated, total, totaleLargo, sospetto: sospettoPrezzi(risultati) } : risultati;
+  return opts.withMeta ? { items: risultati, truncated, total, totaleLargo, parziale: avvisoCadute(cadute, urls.length), sospetto: sospettoPrezzi(risultati) } : risultati;
   }
 
   // ON-SEARCH: HTTP sequenziale gentile (come il crawler). Niente browser, niente
   // fallback. Il ramo onora `withMeta` (totale F50 e "Carica altri" ne dipendono) e
   // `fetta`: senza, tornato vivo questo ramo, sarebbero regrediti entrambi.
-  const { pages, statoKo, truncated, total } = await scrapeMotoViaHttp(urls, {
+  const { pages, statoKo, truncated, cadute, total } = await scrapeMotoViaHttp(urls, {
     modelSlug: params.motoitModelSlug,   // per leggere la versione dallo slug dell'annuncio
     pageDelayMs: ONSEARCH_DELAY_MS, httpTimeoutMs: ONSEARCH_TIMEOUT_MS, fetta: opts.fetta || 0,
   });
@@ -384,7 +404,9 @@ async function scrapeMotoIt(params, opts = {}) {
    * spacciarsi per tuo.
    */
   const totaleLargo = !params.motoitModelSlug || null;
-  return opts.withMeta ? { items: risultati, truncated, total, totaleLargo, sospetto: sospettoPrezzi(risultati) } : risultati;
+  const parziale = avvisoCadute(cadute, urls.length);
+  if (parziale) console.warn(`[Moto.it] ${parziale}`);
+  return opts.withMeta ? { items: risultati, truncated, total, totaleLargo, parziale, sospetto: sospettoPrezzi(risultati) } : risultati;
 }
 
 module.exports = scrapeMotoIt;

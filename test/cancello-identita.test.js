@@ -4,14 +4,14 @@
  *
  * La regola di prima — "ruolo demo = sola lettura" — era l'unica possibile finche' il demo era
  * una password condivisa senza un nome. Da quando le persone si registrano, quella regola e' il
- * contrario di quel che serve: un iscritto DEVE poter salvare le sue ricerche.
+ * contrario di quel che serve: un iscritto deve poter scrivere i dati personali ancora
+ * previsti dal prodotto, come ricambi/OEM e parco concorrenti.
  *
  * Qui si prova la regola nuova, e soprattutto i suoi confini:
  *   · il proprietario e' un'identita' PIU' un ruolo, mai l'id da solo;
  *   · una persona con un nome scrive, ma non tocca le cose che esistono in una copia sola;
  *   · l'ospite anonimo resta in sola lettura;
- *   · i prefissi coprono anche il percorso SENZA slash finale, senza pero' chiudere il ramo che
- *     sta sotto (`/api/saved/altri` e' del proprietario, `/api/saved` e' di ognuno);
+ *   · i prefissi coprono anche il percorso SENZA slash finale;
  *   · la gestione degli account non e' piu' raggiungibile dal web, e non ci deve tornare;
  *   · la grafia non apre e non chiude niente: si decide su un percorso normalizzato.
  */
@@ -63,7 +63,6 @@ function chiama(cookie, metodo, percorso, accept) {
 // minuto un accesso che sopravvive alla scadenza del cookie. Vive in `scripts/richieste.js`.
 const DELLA_MACCHINA = [
   '/api/logs',
-  '/api/saved/altri',
   '/api/subito/bootstrap', '/api/subito/keep-alive',
 ];
 
@@ -71,21 +70,21 @@ test('cancello: il proprietario passa dappertutto', () => {
   for (const p of DELLA_MACCHINA) {
     assert.strictEqual(chiama(PROPRIETARIO, 'GET', p).passato, true, `il proprietario e' stato fermato su ${p}`);
   }
-  assert.strictEqual(chiama(PROPRIETARIO, 'POST', '/api/saved').passato, true);
+  assert.strictEqual(chiama(PROPRIETARIO, 'POST', '/api/competitor').passato, true);
 });
 
 test('cancello: chi ha un nome puo\' SCRIVERE le sue cose', () => {
   // E' il rovesciamento: prima "ruolo demo" voleva dire nessuna scrittura, e un iscritto non
-  // avrebbe potuto salvare niente. L'isolamento fra persone non lo fa il cancello — da qui non
+  // avrebbe potuto scrivere niente. L'isolamento fra persone non lo fa il cancello — da qui non
   // si vede di chi e' una riga — lo fa lo strato dati.
-  for (const [m, p] of [['POST', '/api/saved'], ['DELETE', '/api/saved/abc'], ['POST', '/api/saved/abc/read'],
-                        ['POST', '/api/competitor'], ['DELETE', '/api/competitor/7'], ['GET', '/api/saved']]) {
+  for (const [m, p] of [['POST', '/api/competitor'], ['DELETE', '/api/competitor/7'],
+                        ['PUT', '/api/miei/preferenze/amr_price_v'], ['GET', '/api/miei']]) {
     const r = chiama(REGISTRATA, m, p);
     assert.strictEqual(r.passato, true, `la persona registrata e' stata fermata su ${m} ${p}`);
   }
   // E il cancello le mette in mano la sua identita', che e' quella che filtrera' le righe.
   assert.deepStrictEqual(
-    [chiama(REGISTRATA, 'GET', '/api/saved').req.authId, chiama(REGISTRATA, 'GET', '/api/saved').req.authRole],
+    [chiama(REGISTRATA, 'GET', '/api/miei').req.authId, chiama(REGISTRATA, 'GET', '/api/miei').req.authRole],
     ['anna-ospite', 'demo']);
 });
 
@@ -97,12 +96,9 @@ test('cancello: chi ha un nome NON tocca le cose della macchina, in nessuna graf
       assert.strictEqual(r.status, 403, `${grafia} doveva dare 403, ha dato ${r.status}`);
     }
   }
-  // Il prefisso senza slash e' il caso che si dimentica: `startsWith('/api/saved/altri/')` da
-  // solo lascerebbe fuori proprio l'elenco.
-  assert.strictEqual(chiama(REGISTRATA, 'GET', '/api/saved/altri').status, 403);
-  // Ma le SUE ricerche restano sue: il prefisso non deve chiudere tutto /api/saved.
-  assert.strictEqual(chiama(REGISTRATA, 'GET', '/api/saved').passato, true);
-  assert.strictEqual(chiama(REGISTRATA, 'POST', '/api/saved').passato, true);
+  // I suoi dati personali restano raggiungibili.
+  assert.strictEqual(chiama(REGISTRATA, 'GET', '/api/miei').passato, true);
+  assert.strictEqual(chiama(REGISTRATA, 'PUT', '/api/miei/preferenze/amr_price_v').passato, true);
 });
 
 test('cancello: la gestione delle persone non e\' piu\' raggiungibile dal web', () => {
@@ -131,18 +127,17 @@ test('cancello: un collega "full" non e\' il proprietario', () => {
   // Il ruolo pieno vuol dire "puo' scrivere", non "e' la sua macchina": il registro degli
   // accessi contiene le ricerche e gli indirizzi di tutti, e la sessione del portale e' una sola.
   assert.strictEqual(chiama(COLLEGA, 'GET', '/api/logs').passato, false);
-  assert.strictEqual(chiama(COLLEGA, 'GET', '/api/saved/altri').passato, false);
   assert.strictEqual(chiama(COLLEGA, 'POST', '/api/subito/bootstrap').passato, false);
   // Ma tutto il resto e' suo come prima.
-  assert.strictEqual(chiama(COLLEGA, 'POST', '/api/saved').passato, true);
+  assert.strictEqual(chiama(COLLEGA, 'POST', '/api/competitor').passato, true);
   assert.strictEqual(chiama(COLLEGA, 'GET', '/api/search').passato, true);
 });
 
 test('cancello: l\'ospite ANONIMO resta in sola lettura', () => {
   // Senza un nome non si sa di chi sarebbe la riga che salva: e' l'unico motivo per cui la
   // sola lettura esisteva, e per lui vale ancora.
-  for (const [m, p] of [['POST', '/api/saved'], ['GET', '/api/saved'], ['POST', '/api/competitor'],
-                        ['DELETE', '/api/competitor/7'], ['GET', '/API/SAVED'], ['GET', '/api/saved/']]) {
+  for (const [m, p] of [['POST', '/api/competitor'], ['DELETE', '/api/competitor/7'],
+                        ['PUT', '/api/miei/preferenze/amr_price_v']]) {
     const r = chiama(ANONIMO, m, p);
     assert.strictEqual(r.passato, false, `l'ospite anonimo e' passato su ${m} ${p}`);
     assert.strictEqual(r.status, 403);
@@ -154,12 +149,12 @@ test('cancello: l\'ospite ANONIMO resta in sola lettura', () => {
   // Il cookie che nessun login produce ma che si puo' costruire a mano: ruolo 'demo' con id
   // 'owner' (il valore predefinito di makeToken). Nel dubbio, la porta piu' stretta.
   const chimera = cookieDi('demo', 'owner');
-  assert.strictEqual(chiama(chimera, 'POST', '/api/saved').passato, false, 'ruolo demo con id owner non e\' il proprietario');
+  assert.strictEqual(chiama(chimera, 'POST', '/api/competitor').passato, false, 'ruolo demo con id owner non e\' il proprietario');
   assert.strictEqual(chiama(chimera, 'GET', '/api/logs').passato, false);
 });
 
 test('cancello: la grafia non apre e non chiude le porte pubbliche', () => {
-  assert.strictEqual(srv._percorsoGate('/API/Saved/'), '/api/saved');
+  assert.strictEqual(srv._percorsoGate('/API/Logs/'), '/api/logs');
   assert.strictEqual(srv._percorsoGate('/invito/'), '/invito');
   assert.strictEqual(srv._percorsoGate('/'), '/');
   assert.strictEqual(srv._percorsoGate('///'), '/');
@@ -171,7 +166,7 @@ test('cancello: la grafia non apre e non chiude le porte pubbliche', () => {
   }
   // E cio' che pubblico non e', non lo diventa cambiando le maiuscole.
   assert.strictEqual(chiama('amr_auth=niente', 'GET', '/api/search').status, 401);
-  assert.strictEqual(chiama('amr_auth=niente', 'GET', '/API/SAVED/ALTRI').status, 401);
+  assert.strictEqual(chiama('amr_auth=niente', 'GET', '/API/LOGS').status, 401);
 });
 
 // ── Il tetto giornaliero ─────────────────────────────────────────────────────

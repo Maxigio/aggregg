@@ -281,17 +281,52 @@ function versioniPreparate(tipo, marcaId, modelloId, modelloNome) {
   return out;
 }
 
-/** L'annuncio mappato + `versioneDedotta`, quando la versione manca e il testo la dice. */
-function conVersioneDedotta(m, ad, tipo) {
-  if (!m || m.variante || tipo !== 'auto') return m;
+/**
+ * Marca e modello contro cui dedurre la versione di questo annuncio. `null` quando la
+ * versione c'e' gia' (dichiarata dal venditore) o quando non c'e' abbastanza per cercarla.
+ */
+function chiaveVersione(m, ad, tipo) {
+  if (!m || m.variante || tipo !== 'auto') return null;
   const liv = livelliAnnuncio(ad);
   const marcaId = liv.marca && liv.marca.id;
   const mod = liv.modello;
-  if (!marcaId || !mod || !mod.id || mod.id === NON_DICHIARATO) return m;
-  const versioni = versioniPreparate(tipo, marcaId, mod.id, mod.nome || '');
-  if (!versioni || !versioni.length) return m;
-  const r = dedotta.deduci(versioni, dedotta.datiAnnuncio(m));
-  return r ? { ...m, versioneDedotta: r } : m;
+  if (!marcaId || !mod || !mod.id || mod.id === NON_DICHIARATO) return null;
+  return { k: marcaId + '/' + mod.id, marcaId, modId: mod.id, modNome: mod.nome || '' };
+}
+
+/**
+ * LA DEDUZIONE SI FA IN BLOCCO, MARCA PER MARCA — non annuncio per annuncio.
+ *
+ * Le due cache qui sopra sono tarate sulla ricerca di UN modello: 40 modelli qui, 8 marche
+ * in versioni-unificate. La vetrina di un concessionario (`subitoUid`, fino a 2.000 annunci)
+ * di marche ne mescola decine, e nell'ordine in cui la fonte le manda — mescolato, perche'
+ * un piazzale si carica mano a mano — le due LRU vanno in thrashing: ogni miss e' un
+ * readFileSync + JSON.parse SINCRONO del file della marca, e i piu' grossi sono 800 KB.
+ * Misurato su 900 auto di 20 marche alternate: 900 letture, 353 MB riletti dal disco, 25 s
+ * di event loop fermo con punte di 5 s (la stessa passata con una marca sola: 1 lettura).
+ * Il processo e' uno solo e node:sqlite e' sincrono, quindi per tutto quel tempo ogni altra
+ * ricerca e ogni pagina servita restano in coda.
+ *
+ * Ordinati per marca e modello gli stessi annunci costano 20 letture: ogni file si legge una
+ * volta, e i tetti restano dove sono — in memoria non ci finiscono piu' marche di prima.
+ *
+ * Ridurre il lavoro non basta pero' a non bloccare: raggruppato e tutto di fila diventava un
+ * blocco UNICO di 2,5 s (misurato al tetto della vetrina, 2.000 annunci di 40 marche), cioe'
+ * la stessa punta di prima. L'event loop si restituisce a ogni cambio di marca — e' li' che
+ * sta la lettura del file — e la punta scende a un fetta di marca. Si cede PRIMA di caricare
+ * la marca nuova, mai in mezzo alla stessa: durante la pausa un'altra ricerca potrebbe
+ * sfrattarla dalle 8 della LRU e si tornerebbe a rileggere lo stesso file.
+ */
+async function deduciInBlocco(attesa) {
+  attesa.sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : 0));
+  let marcaInCorso = null;
+  for (const x of attesa) {
+    if (x.marcaId !== marcaInCorso) { marcaInCorso = x.marcaId; await sleep(0); }
+    const versioni = versioniPreparate('auto', x.marcaId, x.modId, x.modNome);
+    if (!versioni || !versioni.length) continue;
+    const r = dedotta.deduci(versioni, dedotta.datiAnnuncio(x.riga));
+    if (r) x.riga.versioneDedotta = r;
+  }
 }
 
 // Filtri NATIVI hades (verificati live): regione `r`, prezzo `ps`/`pe`, anno
@@ -705,6 +740,7 @@ async function scrapeSubitoApi(params, opts = {}) {
   const titoloCombacia = faTitolo(params.modello);
   const rico = { generazioni: gen, titoloCombacia };
   const out = [];
+  const attesa = [];                         // righe in attesa della versione dedotta, vedi deduciInBlocco
   let truncated = false;
   let total = null;                          // F50 count_all (tetto), additivo
   let scartati = 0;
@@ -725,7 +761,7 @@ async function scrapeSubitoApi(params, opts = {}) {
       }
       const come = riconosci(ad, nodo, rico);
       if (!come) { scartati++; continue; }
-      const m = conVersioneDedotta(mapAd(ad, opts), ad, tipo);
+      const m = mapAd(ad, opts);
       if (!m) continue;
       /**
        * L'ANNUNCIO SENZA PREZZO NON SPARISCE: SI MARCA.
@@ -740,7 +776,10 @@ async function scrapeSubitoApi(params, opts = {}) {
        * caso — e il frontend lo sa scrivere ("su richiesta").
        */
       if (m.prezzo == null) { m.prezzoSuRichiesta = true; senzaPrezzo++; }
-      out.push(come === 'testo-libero' ? m : { ...m, dichiarazione: come });
+      const riga = come === 'testo-libero' ? m : { ...m, dichiarazione: come };
+      out.push(riga);
+      const kv = chiaveVersione(riga, ad, tipo);
+      if (kv) attesa.push({ riga, ...kv });
     }
     if (page.ads.length < PAGE_SIZE) break;  // lista esaurita = vista completa
     if (p === maxPages - 1) truncated = true; // ultima pagina piena al cap → forse altro
@@ -761,16 +800,20 @@ async function scrapeSubitoApi(params, opts = {}) {
           if (r && r.toLowerCase() !== regione) continue;
         }
         if (riconosci(ad, nodo, rico) !== 'senza-modello') continue;
-        const m = conVersioneDedotta(mapAd(ad, opts), ad, tipo);
+        const m = mapAd(ad, opts);
         if (!m || visti.has(m.url)) continue;
         if (m.prezzo == null) { m.prezzoSuRichiesta = true; senzaPrezzo++; }   // vedi sopra
-        visti.add(m.url); out.push({ ...m, dichiarazione: 'senza-modello' });
+        const riga = { ...m, dichiarazione: 'senza-modello' };
+        visti.add(m.url); out.push(riga);
+        const kv = chiaveVersione(riga, ad, tipo);
+        if (kv) attesa.push({ riga, ...kv });
       }
     } catch (e) {
       // Il recupero e' un di piu': se cade, la ricerca vale lo stesso.
       console.warn('[subito] recupero non dichiarati KO: ' + e.message);
     }
   }
+  if (attesa.length) await deduciInBlocco(attesa);
   if (nodo && scartati) console.log(`[subito] per id "${params.marca} ${params.modello || ''}": ${out.length} tenuti, ${scartati} scartati (altro modello)`);
   /**
    * SE NON QUOTA PIU' NIENTE, E' IL PARSER, NON IL MERCATO.

@@ -233,6 +233,19 @@ function chiUsaPassword(cfg, pw, esclusoId = null) {
   return null;
 }
 
+/**
+ * QUESTA PASSWORD E' GIA' DI QUALCUNO? Si'/no, mai di CHI: il nome sarebbe un oracolo sulle
+ * password degli altri (vedi erroreOccupata), e chi chiede ha in mano il .env, non le password
+ * di chi si e' iscritto dal sito.
+ *
+ * Esiste perche' `scripts/utenti-da-env.js` deve poterlo chiedere PRIMA di scrivere: prima
+ * l'unico modo di scoprire la collisione era prendersela da `setPersona`, cioe' a giro gia'
+ * iniziato. `esclusoId` e' chi la sta riprendendo per se' ('owner', 'demo' o un id di persona).
+ */
+function passwordOccupata(pw, esclusoId = null) {
+  return Boolean(chiUsaPassword(load(), pw, esclusoId));
+}
+
 // Non si dice MAI con chi ha fatto collisione: sarebbe un oracolo sulle password degli altri.
 function erroreOccupata() {
   const e = new Error('Questa password e\' gia\' in uso: scegline un\'altra.');
@@ -558,7 +571,7 @@ module.exports = {
   creaPersona:        (...a) => conLock(() => creaPersona(...a)),
   togliPersona:       (...a) => conLock(() => togliPersona(...a)),
   setTelefono:        (...a) => conLock(() => setTelefono(...a)),
-  persone, verifica, verifyRole, makeToken, checkToken, checkSessione,
+  persone, verifica, verifyRole, passwordOccupata, makeToken, checkToken, checkSessione,
   personaDaTelefono,
   idDaNome, ID_RISERVATI, MIN_LEN, TTL_MS,
 };

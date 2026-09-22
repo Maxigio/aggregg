@@ -37,7 +37,6 @@ const iptCalc        = require('./ipt');          // costo passaggio di propriet
 const provSigla      = require('./province-sigla'); // localita' dell'annuncio -> sigla provincia
 const motornet       = require('./scrapers/motornet');  // kW ufficiali di listino (SPENTO se AMR_MOTORNET!=1)
 const carburanti     = require('./carburanti');   // prezzi carburante MIMIT per provincia
-const saved = require('./saved');
 const budget = require('./budget-richieste');     // quante richieste costa una ricerca: contate, non stimate
 const { risolviNodo, marcaPseudo } = require('./scrapers/subito-nodo');   // testo digitato → id del catalogo Subito
 const { unisciGemelli, marcheNascoste, sinonimiTendina } = require('./menu-gemelli');   // due strade nel menu, la stessa lista
@@ -117,6 +116,19 @@ function lookupModelGroup(tipo, brandName, modelText) {
 }
 
 const app = express();
+// Il server e' raggiungibile dal Funnel: non dichiara il framework e applica le difese che non
+// dipendono dal contenuto della pagina. La CSP resta fuori da qui finche' il frontend usa script
+// e stili inline: una policy finta con `unsafe-inline` darebbe solo una falsa garanzia.
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  });
+  next();
+});
 const PORT = process.env.PORT || 3000;
 // Timeout per-scraper. Serve a coprire: lancio Chromium (primo avvio ~3-5s),
 // caricamento pagina (DOMContentLoaded), fino a 5 pagine sequenziali.
@@ -173,7 +185,26 @@ async function scrapeAutoscoutSmart(params, opts = {}) {
   if (params.autoscoutVersionText) params.as24VersioneNonInviata = true;
   // La fetta e' paginazione, non un vincolo: si inoltra. Senza, "Carica altri" col ripiego
   // attivo rifaceva per sempre le pagine 1-3 e non portava mai un annuncio nuovo.
-  return scrapeAutoscout(params, opts.fetta || 0);   // il ripiego Playwright non conta: totale null
+  const esito = await scrapeAutoscout(params, opts.fetta || 0);   // il ripiego Playwright non conta: totale null
+  /**
+   * UN CODICE SOLO CONTRO UNDICI. Il GraphQL chiede in UNA query tutti i modelli che il ponte
+   * ha unito (`params.autoscoutModelli`); `buildUrl` manda soltanto `mmmv=autoscoutMmmv`, cioe'
+   * il primo della lista. Su "BMW Serie 3" — famiglia che il ponte spezza in 11 codici AS24 —
+   * la colonna resta un sottomodello su undici.
+   *
+   * Non e' un vincolo che deve FERMARE il ripiego (quel che torna e' comunque roba chiesta, e
+   * `vincoloNonTraducibile` protegge i filtri che falserebbero le righe): e' un elenco MONCO, e
+   * un monco che non si dichiara e' il difetto che `parziale` chiude — lo stesso stampo delle
+   * grafie AS24 cadute e delle famiglie Subito non chieste. Senza, la risposta usciva 'ok' con
+   * `parziale` null e `cacheable()` la congelava tre minuti: ripremere Cerca non rimediava.
+   */
+  const modelli = Array.isArray(params.autoscoutModelli) ? params.autoscoutModelli : [];
+  if (modelli.length < 2) return esito;
+  const monco = `Autoscout e' stato letto col ripiego a browser, che cerca un codice-modello per volta: `
+    + `${modelli.length - 1} dei ${modelli.length} modelli di "${params.modello}" non sono stati chiesti`;
+  const s = Array.isArray(esito) ? { items: esito, total: null } : { ...esito };
+  s.parziale = [s.parziale, monco].filter(Boolean).join(' \u00b7 ');
+  return s;
 }
 
 // F50 fase 1b — UNIONE MULTI-GRAFIA. AS24 filtra per parola intera e non ha OR: una
@@ -313,10 +344,9 @@ const MSG_AUTH_ROTTA = 'Configurazione di accesso illeggibile: nessuno puo\' ent
 /**
  * IL PERCORSO SU CUI SI DECIDE — minuscole e senza slash finale, calcolato UNA volta in cima.
  *
- * Due lezioni gia' pagate, unite in una riga. Express instrada senza distinguere le maiuscole
- * (`case sensitive routing` non e' impostato) mentre il gate confrontava la grafia arrivata:
- * `GET /API/saved` finiva all'handler giusto ma passava il cancello (misurato: /api/saved → 403,
- * /API/saved → 200). E `AUTH_FREE.has(req.path)` e' un confronto ESATTO: `/invito/` — lo slash
+ * Express instrada senza distinguere le maiuscole (`case sensitive routing` non e' impostato),
+ * mentre i confronti del gate sono esatti. Anche `AUTH_FREE.has(req.path)` e' esatto: `/invito/`
+ * — lo slash
  * che il telefono aggiunge quando si incolla un indirizzo — non ci cadeva dentro, e l'invitato
  * finiva sulla pagina di accesso, dove una password non ce l'ha ancora.
  */
@@ -332,7 +362,6 @@ function percorsoGate(p) {
  * Non sono "cose da amministratore": sono cose che esistono in UNA sola copia per macchina, e
  * che quindi non possono essere di nessun altro — il registro degli accessi di tutti, la
  * sessione del portale (una sola, e il CAPTCHA lo risolve chi e' fisicamente davanti al Mac).
- * Piu' una lettura sola: le ricerche salvate degli altri.
  *
  * La GESTIONE degli account non e' piu' in questo elenco perche' non e' piu' sul web: approvare
  * una richiesta creava una credenziale PERMANENTE, cioe' trasformava una sessione presa in
@@ -347,7 +376,7 @@ function percorsoGate(p) {
  * lascerebbe scoperta `GET /api/richieste`, che e' proprio l'elenco delle persone.
  */
 const SOLO_OWNER = [
-  '/api/logs', '/api/saved/altri',
+  '/api/logs',
   '/api/subito/bootstrap', '/api/subito/keep-alive',
 ];
 const soloOwner = p => SOLO_OWNER.some(x => p === x || p.startsWith(x + '/'));
@@ -388,22 +417,8 @@ function gateAuth(req, res, next) {
   const proprietario = ses.id === 'owner' && role === 'full';
   if (soloOwner(pn) && !proprietario) return nega(req, res, pn, 403, 'solo il proprietario', '/');
 
-  /**
-   * I DIRITTI SEGUONO L'IDENTITA', NON IL RUOLO.
-   *
-   * La regola di prima era "ruolo demo = sola lettura", ed era l'unica possibile: il demo era
-   * una password condivisa, senza un nome, quindi qualunque cosa avesse scritto sarebbe finita
-   * in un mucchio comune — e leggere le ricerche salvate voleva dire leggere quelle del
-   * proprietario, perche' l'elenco era uno solo.
-   *
-   * Da quando ogni persona ha un nome suo, quella regola e' il contrario di quel che serve: un
-   * iscritto DEVE poter salvare le sue ricerche e i suoi annunci. In sola lettura resta soltanto
-   * l'ospite anonimo — `id === 'demo'`, la vecchia password condivisa — perche' di lui non si sa
-   * di chi sarebbe la riga.
-   *
-   * L'isolamento fra persone NON lo fa questo cancello: da qui non si vede di chi e' una riga.
-   * Lo fa lo strato dati, dove ogni interrogazione e' filtrata per utente.
-   */
+  // L'ospite anonimo resta in sola lettura. Le persone registrate possono scrivere solo i dati
+  // ancora previsti dal prodotto (preferenze e parco), isolati per identita'.
   // Anonimo = qualunque sessione che non sia il proprietario e non abbia un nome proprio.
   // `checkSessione` lascia passare tre famiglie di id: 'owner', 'demo', e le persone vere (che
   // riconfronta con l'elenco vivo). Quindi "non proprietario e id d'ufficio" copre sia l'ospite
@@ -416,10 +431,7 @@ function gateAuth(req, res, next) {
     // browser ha gia' in mano, quindi negarlo non proteggerebbe nessun dato.
     const isReport = pn === '/api/report' || pn === '/api/report-pdf';
     const isWrite = req.method !== 'GET' && req.method !== 'HEAD';
-    // Il metodo non basta: `GET /api/saved` non scrive niente ed e' comunque l'elenco privato
-    // di qualcun altro.
-    const isPrivate = pn === '/api/saved' || pn.startsWith('/api/saved/');
-    if ((isWrite || isPrivate) && !isReport) {
+    if (isWrite && !isReport) {
       return nega(req, res, pn, 403, 'modalità demo: sola lettura', '/');
     }
   }
@@ -520,7 +532,7 @@ app.get('/logout', (req, res) => {
   res.redirect(302, '/login');
 });
 
-// Ruolo della sessione corrente (per la UI: nasconde salvataggi/admin in demo).
+// Ruolo della sessione corrente (per la UI: nasconde i comandi mutabili in demo).
 // Auth disattivata (app locale) → 'full'. Sotto /api/ → già protetta dal middleware.
 app.get('/api/me', (req, res) => {
   if (!auth.isEnabled()) return res.json({ role: 'full', id: 'owner', proprietario: true, authDisabled: true });
@@ -821,8 +833,7 @@ app.get('/api/brands', (req, res) => {
    * LE MARCHE NASCOSTE non stanno in tendina (decisione del proprietario, 2026-08-08:
    * «Solo Piaggio, Vespa sparisce»): i loro modelli vivono nella gemella via unione
    * inversa (menu-gemelli), e chi digita il nome nascosto viene portato sulla gemella
-   * coi `sinonimi` qui sotto. Le ricerche salvate con la marca nascosta funzionano
-   * ancora: il ponte degli ospiti non guarda la tendina.
+   * coi `sinonimi` qui sotto. Il ponte degli ospiti non guarda la tendina.
    */
   const nascoste = marcheNascoste(tipo);
   const visibili = lista.filter(b => !nascoste.has(b.nome));
@@ -1168,7 +1179,7 @@ function parseSearchParams(query) {
       mmmvAutoscout:    mmmvAutoscout    || null,
       motoitBrandSlug:  motoitBrandSlug  || null,
       // la correzione vale anche per chi arriva con lo slug vecchio in tasca (menu in
-      // cache del browser, ricerche salvate): kx-250 rispondeva 404 per sempre
+      // cache del browser o link costruiti con lo slug vecchio): kx-250 rispondeva 404 per sempre
       motoitModelSlug:  correggiModelSlug(motoitModelSlug || '') || null,
       motoitBikeCode:   motoitBikeCode   || null,   // versione/allestimento Moto.it (param `bike=`)
       /**
@@ -1381,10 +1392,8 @@ app.get('/api/search', async (req, res) => {
 // distingue le maiuscole un pannello protetto da un solo handler si scaricherebbe con
 // `GET /richieste.html`.
 require('./registrazioni-route').mount(app, { json: express.json({ limit: '4kb' }), chiaveLimite, clientIp });
-// Annunci e ricambi salvati, codici preferiti, impostazioni di prezzo: erano nel localStorage
-// del browser, cioe' per DISPOSITIVO. Il limite e' generoso perche' l'elenco viaggia intero
-// (fino a 200 annunci), ed e' comunque il modulo stesso a tagliare ai suoi tetti.
-require('./dati-utente').mount(app, { json: express.json({ limit: '2mb' }), utenteDi: req => req.authId || 'owner' });
+// Le sole impostazioni di prezzo seguono l'account invece del dispositivo.
+require('./dati-utente').mount(app, { json: express.json({ limit: '8kb' }), utenteDi: req => req.authId || 'owner', chiaveLimite });
 require('./ricambi-route').mount(app, { chiaveLimite });
 
 // ─── Scheda tecnica veicolo (auto-data.net) — vedi scheda-veicolo-route.js ──────────
@@ -2391,255 +2400,6 @@ async function runSearchCore(params) {
   };
 }
 
-// ─── §11 Ricerche salvate + avvisi ───────────────────────────────────────────
-const SAVED_STALE_MS  = 6 * 60 * 60 * 1000;  // ricontrolla al boot solo se più vecchio di 6h
-const SAVED_BOOT_CAP  = 5;                    // max ricerche processate per avvio
-
-// MUTEX unico: TUTTI i check (singolo, tutti, boot) passano da qui → SERIALIZZA
-// gli scraping concorrenti (risorse/anti-block). NB l'integrità-file è già
-// garantita a parte: recordCheck è sincrono (load→save senza await) e ri-legge
-// fresh, quindi atomico anche vs CRUD. Single-processo (Electron forka 1 server).
-let savedLock = Promise.resolve();
-function withSavedLock(fn) {
-  const run = savedLock.then(fn, fn);   // esegue dopo il precedente, anche se errore
-  savedLock = run.then(() => {}, () => {});
-  return run;
-}
-
-// Normalizza i params salvati (stringhe dal frontend) negli stessi tipi che
-// l'endpoint produce, riusando parseSearchParams (validazione + int). Fallback
-// ai grezzi se non validi.
-function normalizeSavedParams(raw) {
-  const parsed = parseSearchParams(raw || {});
-  return parsed.errors ? { ...raw } : parsed.params;
-}
-
-/**
- * Questa fonte, in questo giro, NON ha detto la sua? Allora i suoi annunci non si sfrattano da
- * `seen`: senza questa regola, al ritorno della fonte arriverebbero tutti come "nuovi".
- *
- * 'skipped' di norma NON e' muta: la marca su quella fonte non c'e' e non ci sara' fra sei ore.
- * Ma c'e' uno skip temporaneo — la pausa dopo un blocco, che dura un quarto d'ora — e quella
- * fonte torna. Per questo si guarda anche il MOTIVO, non solo lo stato.
- */
-const fonteMuta = v => v.status === 'error' || v.status === 'timeout' || v.status === 'needs_bootstrap'
-  || (v.status === 'skipped' && v.reason === salute.MOTIVO_PAUSA);
-
-// Check di UNA ricerca (SENZA lock — usato dentro il lock). `s` = oggetto con
-// {id, params, label} (da listSaved o getSaved) → niente reload (fix review §19).
-async function _checkSavedOne(utente, s) {
-  if (!s) return null;
-  const out = await runSearch(normalizeSavedParams(s.params));
-  // Le fonti che in questo giro non hanno parlato: i loro annunci restano in `seen` e non
-  // vanno sfrattati, senno' al ritorno della fonte arrivano tutti come "nuovi".
-  //
-  // 'skipped' di norma non conta: la marca su quella fonte non c'e' e non ci sara' fra sei ore.
-  // MA c'e' uno skip che e' TEMPORANEO — la pausa dopo un blocco (`fonti-salute`), che dura un
-  // quarto d'ora. Quella fonte torna, e se intanto le sfrattiamo gli annunci al ritorno li
-  // riporta tutti come novita': una raffica di avvisi falsi, proprio la cosa che questo elenco
-  // esiste per impedire. Per questo qui si guarda anche il MOTIVO, non solo lo stato.
-  const fontiMute = Object.entries(out.sources || {})
-    .filter(([, v]) => v && fonteMuta(v)).map(([f]) => f);
-  const alerts = saved.recordCheck(utente, s.id, out.risultati || [], { fontiMute });
-  return { id: s.id, label: s.label, nuovi: alerts.length, sources: out.sources };
-}
-
-// Check di tutte (o le stantie), SENZA lock. Salta se Subito è bloccato.
-async function _checkAll(utente, { onlyStale = false, cap = Infinity } = {}) {
-  const esiti = [];
-  if (subitoSession.isSubitoBlocked()) {
-    console.log('[saved] Subito bloccato → salto il check automatico.');
-    return esiti;
-  }
-  const now = Date.now();
-  let done = 0;
-  /**
-   * LA CODA GIRA: PRIMA CHI E' STATO GUARDATO DA PIU' TEMPO.
-   *
-   * `listSaved` rende le ricerche nell'ordine in cui sono state salvate (`ORDER BY rowid`), e
-   * l'upsert di `saveAll` quell'ordine non lo cambia mai — il rowid resta quello del primo
-   * inserimento. Con un tetto (20 dal bottone «Controlla», 5 dal boot-check) si ripartiva
-   * sempre dalla stessa testa: chi aveva piu' ricerche del tetto non vedeva controllata MAI la
-   * coda dell'elenco, e da li' non arrivava nessun avviso per quanto insistesse.
-   *
-   * `lastChecked` lo scrive `recordCheck` su disco, quindi il giro prosegue anche fra riavvii;
-   * chi non e' mai stato controllato (null → 0) passa per primo, e a parita' resta l'ordine di
-   * salvataggio. Serve anche a `onlyStale`, che cosi' incontra per prime proprio le stantie.
-   */
-  const coda = saved.listSaved(utente).sort((a, b) => (a.lastChecked || 0) - (b.lastChecked || 0));
-  for (const s of coda) {   // s ha già params/label → passato diretto
-    if (done >= cap) break;
-    if (onlyStale && s.lastChecked && now - s.lastChecked < SAVED_STALE_MS) continue;
-    // `done` conta i TENTATIVI: il costo verso le fonti si paga anche quando il controllo
-    // fallisce, e con l'incremento dopo l'await il tetto non limitava niente di reale.
-    done++;
-    try { esiti.push(await _checkSavedOne(utente, s)); }
-    catch (e) { console.warn(`[saved] check ${s.id} fallito: ${e.message}`); }
-  }
-  return esiti;
-}
-
-const checkAllSaved = (u, opts) => withSavedLock(() => _checkAll(u, opts));
-
-// CRUD
-/**
- * Un elenco ILLEGGIBILE non e' un elenco vuoto: le scritture si rifiutano (503) invece di
- * riscrivere il file con la sola voce nuova, e la lettura dichiara il guasto — senza,
- * «Nessuna ricerca salvata» era un'affermazione sui dati fatta su un file rotto, e il
- * gesto istintivo (risalvare) rendeva la perdita definitiva.
- */
-const saved503 = (res, e) => {
-  if (e && e.code === 'ELENCO_ILLEGGIBILE') { res.status(503).json({ error: e.message }); return true; }
-  return false;
-};
-/**
- * CHI STA CHIEDENDO. Quando l'autenticazione e' spenta (app locale, nessun auth.json) non c'e'
- * nessuna sessione: quella e' la macchina di casa e chi la usa e' il proprietario. In ogni
- * altro caso l'identita' la mette `gateAuth`, e da li' in poi ogni riga salvata porta quel nome.
- */
-const utenteDi = req => req.authId || 'owner';
-
-app.get('/api/saved', (req, res) => {
-  try { res.json({ saved: saved.listSaved(utenteDi(req)), erroreElenco: saved.ultimoErroreElenco() || null }); }
-  catch (e) { if (!saved503(res, e)) throw e; }
-});
-
-/**
- * LE RICERCHE DEGLI ALTRI, IN SOLA LETTURA — solo il proprietario (`SOLO_OWNER`).
- *
- * È una deroga voluta, decisa dal proprietario sapendo cosa costa: tutto il resto della gestione
- * delle persone è uscito dal web proprio per non lasciare poteri a una sessione presa in
- * prestito. Questa resta perché è di un'altra specie — si LEGGE, non si crea niente di
- * permanente — e perché serve a sapere se lo strumento viene usato.
- *
- * Si legge il meno possibile: etichetta, criteri, quando è stata controllata e quanti avvisi
- * ha. NON la coda degli avvisi, che contiene gli annunci trovati e i loro prezzi: sapere che
- * qualcuno segue "BMW Serie 3 in Lombardia" è una cosa, leggergli il taccuino un'altra.
- *
- * E non si tocca niente: cancellare o far ripartire il controllo di una ricerca altrui
- * resta fuori — la prima farebbe sparire roba senza spiegazione, la seconda spenderebbe
- * richieste alle fonti per conto di un altro.
- */
-app.get('/api/saved/altri', (req, res) => {
-  try {
-    const persone = auth.persone().filter(p => p.id !== 'owner');
-    res.set('Cache-Control', 'no-store').json({
-      persone: persone.map(p => ({
-        id: p.id, nome: p.nome, origine: p.origine,
-        ricerche: saved.listSaved(p.id).map(s => ({
-          id: s.id, label: s.label, params: s.params, createdAt: s.createdAt,
-          lastChecked: s.lastChecked, lastCheckedFull: s.lastCheckedFull, novita: s.novita,
-        })),
-      })),
-      erroreElenco: saved.ultimoErroreElenco() || null,
-    });
-  } catch (e) { if (!saved503(res, e)) throw e; }
-});
-
-/**
- * FRENI ANCHE SUL SALVARE. Era l'unica scrittura senza: niente limitatore (le otto rotte care
- * lo hanno), body al default di express (100kb) mentre ogni altra scrittura ha un limite
- * piccolo esplicito, e nessun tetto sul numero di righe (quello sta in `addSaved`). Ogni riga
- * e' un blob che `loadAll` riparsa in sincrono a ogni lettura: un ciclo di POST riempiva il
- * disco e bloccava l'event loop di tutto il server. I `params` veri sono i criteri di una
- * ricerca — poche centinaia di byte — quindi 8kb basta con largo margine.
- */
-const limiteSalvataggi = require('./limite-richieste').crea({
-  max: 15, finestra: 10 * 60 * 1000, cosa: 'ricerche salvate',
-});
-app.post('/api/saved', express.json({ limit: '8kb' }), (req, res) => {
-  const gSal = limiteSalvataggi.consuma(chiaveLimite(req));
-  if (!gSal.ok) return res.status(429).json({ error: limiteSalvataggi.messaggio(gSal), riprovaFra: gSal.attesa, restanti: 0 });
-  const { label, params } = req.body || {};
-  if (!params || !params.tipo || !params.marca) {
-    return res.status(400).json({ error: 'params con tipo+marca obbligatori' });
-  }
-  try { res.json({ saved: saved.addSaved(utenteDi(req), { label, params }) }); }
-  catch (e) {
-    // Tetto per persona raggiunto: non e' un guasto, e' un no con la spiegazione.
-    if (e && e.code === 'TROPPE_RICERCHE') return res.status(409).json({ error: e.message });
-    if (!saved503(res, e)) throw e;
-  }
-});
-
-app.delete('/api/saved/:id', (req, res) => {
-  // `removeSaved` cerca fra le SUE: la ricerca di un altro non e' "non tua", e' "non c'e'".
-  try { res.json({ ok: saved.removeSaved(utenteDi(req), req.params.id) }); }
-  catch (e) { if (!saved503(res, e)) throw e; }
-});
-
-// `?url=` segna QUELL'avviso; senza, segna tutta la coda (il bottone "segna tutti letti").
-app.post('/api/saved/:id/read', (req, res) => {
-  try { res.json({ ok: saved.markRead(utenteDi(req), req.params.id, String(req.query.url || '') || null) }); }
-  catch (e) { if (!saved503(res, e)) throw e; }
-});
-
-/**
- * Controlla ora: una (?id=) o tutte. Restituisce gli esiti + la lista aggiornata.
- *
- * FRENO. Questa e' la rotta piu' cara dell'app: senza `?id=` rifa' fino a VENTI ricerche
- * complete, cioe' qualche centinaio di richieste alle tre fonti, e non aveva nessun limitatore —
- * era l'unica delle otto rotte care a non averlo. Finche' solo il proprietario poteva
- * chiamarla non si vedeva; da quando ogni iscritto ha le sue ricerche salvate, ripeterla in
- * ciclo e' il modo piu' economico di far bandire la macchina. E le fonti bandiscono la
- * MACCHINA, non la persona: il conto lo pagano tutti.
- */
-const limiteControlli = require('./limite-richieste').crea({
-  max: 3, finestra: 10 * 60 * 1000, cosa: 'controlli delle ricerche salvate',
-});
-app.post('/api/saved/check', express.json(), async (req, res) => {
-  const gCtrl = limiteControlli.consuma(chiaveLimite(req));
-  if (!gCtrl.ok) return res.status(429).json({ error: limiteControlli.messaggio(gCtrl), riprovaFra: gCtrl.attesa, restanti: 0 });
-  try {
-    const id = req.query.id;
-    const chi = utenteDi(req);
-    // IL TETTO GIORNALIERO VALE ANCHE QUI. Un controllo e' una ricerca completa verso le tre
-    // fonti, e "tutte" ne fa fino a 20: senza questo, un ospite registrato poteva fare 3 giri
-    // ogni dieci minuti (limiteControlli) da 20 ricerche l'uno e il tetto delle 50 al giorno non
-    // contava niente. Si addebita PRIMA di partire, una unita' per ricerca che si fara' davvero:
-    // se il credito del giorno non basta, si ferma prima di spendere traffico.
-    // Si conta SOLO quello che si fara' davvero: con `id` una sola, e solo se esiste; con
-    // "tutte" quelle salvate fino al tetto di 20, e zero se Subito e' bloccato (allora
-    // `_checkAll` non parte nemmeno). Poi l'addebito e' ATOMICO: o c'e' credito per tutte, o
-    // non se ne spende nessuna — consumarle una a una e fermarsi a meta' bruciava il credito
-    // senza fare il lavoro, e chiudeva fuori l'utente anche dalla ricerca normale fino a domani.
-    //
-    // CONTEGGIO E ADDEBITO DENTRO IL LOCK. Fuori, fra l'addebito e l'esecuzione poteva passare
-    // la coda del lock (minuti, se un altro check lo tiene): in quel buco la lista cresceva
-    // (POST /api/saved e' istantaneo e non passa dal lock) e si eseguivano 20 ricerche
-    // pagandone 1 — o Subito veniva marcato bloccato e si pagavano 20 ricerche per un [].
-    // Dentro il lock, lista e stato di blocco sono quelli su cui si lavora davvero: fra il
-    // conteggio e la partenza non c'e' nessun await (consumaRicerche e' sincrono), quindi
-    // lo snapshot che `_checkAll` rilegge e' lo stesso che e' stato addebitato.
-    const esito = await withSavedLock(async () => {
-      const daFare = id
-        ? (saved.getSaved(chi, id) ? 1 : 0)
-        : (subitoSession.isSubitoBlocked() ? 0 : Math.min(20, saved.listSaved(chi).length));
-      if (daFare && auth.isEnabled() && req.authRole === 'demo' && req.authId) {
-        let g;
-        try { g = utentiDb.consumaRicerche(req.authId, daFare, TETTO_GIORNALIERO); }
-        catch (e) { return { rifiuto: { status: 503, corpo: { error: 'Il registro delle persone non e\' raggiungibile: riprova piu\' tardi.' } } }; }
-        if (!g.ok) {
-          return { rifiuto: { status: 429, corpo: {
-            error: `Ti restano ${Math.max(0, g.max - g.usate)} ricerche oggi e questo controllo ne farebbe ${g.servono}. Il conto riparte domani.`,
-            tetto: g.max, usate: g.usate, servono: g.servono, riprovaDomani: true,
-          } } };
-        }
-      }
-      // Il cap e' `daFare`, non 20: si esegue esattamente quello che si e' pagato.
-      const esiti = id
-        ? [await _checkSavedOne(chi, saved.getSaved(chi, id))].filter(Boolean)
-        : await _checkAll(chi, { cap: daFare });
-      return { esiti };
-    });
-    if (esito.rifiuto) return res.status(esito.rifiuto.status).json(esito.rifiuto.corpo);
-    res.json({ esiti: esito.esiti, saved: saved.listSaved(chi) });
-  } catch (e) {
-    console.error('[saved/check]', e.message);
-    res.status(500).json({ error: 'Errore durante il controllo' });
-  }
-});
-
 // ─── Subito session bootstrap ────────────────────────────────────────────────
 // L'utente clicca "Aggiorna sessione Subito" → questo endpoint apre Chrome
 // non-headless puntato a subito.it; quando l'utente risolve il CAPTCHA, lo
@@ -2781,6 +2541,42 @@ if (WHATSAPP_ON) {
   console.log('[wa] webhook NON montata (AMR_WHATSAPP non vale 1): /api/whatsapp/webhook risponde 404');
 }
 
+/**
+ * L'ULTIMA RETE. Va DOPO ogni rotta: e' l'ultimo `app.use` del file, e i quattro argomenti
+ * sono cio' che lo rende un gestore d'errore per Express (tre non basterebbero).
+ *
+ * Senza, la risposta a un errore non catturato la scrive il finalizzatore di Express, e
+ * `app.get('env')` qui vale 'development' — NODE_ENV non lo imposta nessuno: ne' il codice, ne'
+ * il launchd del M2, ne' il .env. In quello stato il finalizzatore mette `err.stack` NEL CORPO.
+ * Due cose rotte insieme:
+ *   - il corpo e' `text/html`, non `{ok:false,error}`: il `r.json()` del frontend muore e il
+ *     `.catch` da' la colpa alla RETE mentre il server ha risposto (pagine/invito.html:108,125);
+ *   - il server e' pubblicato su internet dal Funnel (docs/DEPLOY-M2.md), e quel corpo regala
+ *     percorsi assoluti e sorgenti a chiunque mandi un `{"token":` monco a /api/invito, che sta
+ *     in AUTH_FREE e non chiede nessuna sessione.
+ * Il repo il sintomo lo conosceva gia' (commento a parseSearchParams), ma aveva chiuso IL CASO
+ * con una validazione, non la causa.
+ *
+ * Lo stack non si perde: va nel log, che e' il posto dove serve. Fuori esce solo il perche'.
+ */
+app.use((err, req, res, next) => {
+  // Risposta gia' partita (uno stream di PDF che muore a meta'): lo stato non si puo' piu'
+  // cambiare, e l'unica cosa sensata e' lasciare che Express chiuda la connessione.
+  if (res.headersSent) return next(err);
+  const s = Number(err && (err.status || err.statusCode));
+  const codice = Number.isInteger(s) && s >= 400 && s <= 599 ? s : 500;
+  // Un 4xx e' un errore del CHIAMANTE (corpo monco, corpo troppo grosso) e nel log ne basta il
+  // tipo: il messaggio di JSON.parse puo' portarsi dietro un pezzo del corpo ricevuto, e il
+  // corpo di /api/invito contiene una password. Torna a chi l'ha scritta, non finisce su disco.
+  if (codice < 500) console.warn(`[errore] ${req.method} ${req.path} → ${codice} ${(err && err.name) || 'Error'}`);
+  else              console.error(`[errore] ${req.method} ${req.path} → ${codice}`, err);
+  res.status(codice).set('Cache-Control', 'no-store').json({
+    ok: false,
+    // Il messaggio di un 500 e' un guasto NOSTRO e puo' dire piu' di quanto vada detto fuori.
+    error: codice < 500 && err && err.message ? String(err.message) : 'Errore interno del server. Riprova fra poco.',
+  });
+});
+
 // Si mette in ascolto SOLO se questo file e' il programma avviato, mai se qualcuno lo
 // richiede come modulo. Serve ai test: la catena di risoluzione marca/modello vive qui dentro
 // e finora nessun test poteva toccarla, perche' bastava il require ad aprire una porta
@@ -2836,23 +2632,6 @@ const server = !avviaAscolto ? null : app.listen(PORT, () => {
     }
     startKeepAlive();
 
-    // §11 — boot-check ricerche salvate (gentile): solo le stantie (>6h), cap 5,
-    // sequenziale, non bloccante, salta se Subito è bloccato. Ritardo per non
-    // competere col keep-alive boot.
-    //
-    // SOLO QUELLE DEL PROPRIETARIO, per decisione presa: ogni controllo automatico interroga
-    // le tre fonti dall'IP di casa, e farlo per conto di ogni iscritto moltiplicherebbe quel
-    // traffico per il numero di ospiti — traffico che nessuno ha chiesto, in un momento in cui
-    // nessuno sta guardando. Gli iscritti hanno il bottone "Controlla", che parte da un gesto.
-    setTimeout(() => {
-      checkAllSaved('owner', { onlyStale: true, cap: SAVED_BOOT_CAP })
-        .then(esiti => {
-          const tot = esiti.reduce((a, e) => a + (e?.nuovi || 0), 0);
-          if (esiti.length) console.log(`[saved] boot-check: ${esiti.length} ricerche, ${tot} nuovi avvisi.`);
-        })
-        .catch(e => console.warn('[saved] boot-check KO:', e.message));
-    }, 8000).unref?.();
-
     // Aste: il giro sul portale del ministero, uno al giorno. Si sveglia da solo e quasi
     // sempre non fa niente — decide `stantio()`, che guarda l'ETA' dell'ultimo giro riuscito
     // e non l'orologio, cosi' funziona uguale su una macchina sempre accesa e su una che si
@@ -2878,5 +2657,5 @@ module.exports = { server, app, _lookupBrand: lookupBrand, _lookupModelGroup: lo
   // prova ESEGUENDOLI (con lo stub HTTP di subito-api), non leggendo il sorgente — la
   // guardia a parole era verde mentre runSubito buttava il campo, perche' combaciava con
   // la copia gemella di runSource.
-  _runSource: runSource, _runSubito: runSubito, _fonteMuta: fonteMuta,
+  _runSource: runSource, _runSubito: runSubito,
   _as24LivelloAllargamento: as24LivelloAllargamento };
