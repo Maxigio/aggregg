@@ -1213,12 +1213,10 @@ test('minori: un errore non si mette in cache', () => {
     'una risposta mancata di /api/models torna a spegnere la tendina per tutta la sessione');
 });
 
-test('minori: il conto delle richieste comprende i ripieghi a browser', () => {
-  // Il contatore esiste proprio per i rami che partono solo in certi casi, e i due ripieghi
-  // a browser — quelli piu' cari — non entravano nel conto.
-  for (const f of ['subito-playwright.js', 'autoscout-playwright.js']) {
-    const src = fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', f), 'utf8');
-    assert.match(src, /budget\.conta\([^)]*ripiego browser/, `${f} non conta le sue aperture di pagina`);
+test('ricerca Auto/Moto: nessun modulo browser resta nel percorso', () => {
+  const base = path.join(__dirname, '..', 'backend', 'scrapers');
+  for (const f of ['subito-playwright.js', 'subito-bootstrap.js', 'subito-session.js', 'autoscout-playwright.js']) {
+    assert.ok(!fs.existsSync(path.join(base, f)), `${f} e' ancora nel percorso di ricerca`);
   }
 });
 
@@ -1299,23 +1297,9 @@ test('annullo: le tre fonti chiedono il segnale al momento della richiesta', () 
   assert.match(srv, /ctrl\.abort\(\)/, 'runSource deve annullare quando il tempo scade');
 });
 
-test('minori: una sessione sola, e il file si scrive intero o niente', () => {
+test('minori: le richieste eBay condividono la sessione browser dei Ricambi', () => {
   const ebay = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ebay-scrape.js'), 'utf8');
-  assert.match(ebay, /_ctxInVolo/,
-    'due richieste eBay partite insieme tornano ad aprire due sessioni di Chromium');
-  const sess = fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'subito-session.js'), 'utf8');
-  // La CHIAMATA, a commenti tolti: `renameSync` compare anche nel JSDoc dello stesso file,
-  // e questa guardia era verde leggendo la prosa — la regola poteva morire nel codice
-  // senza che nessuno se ne accorgesse.
-  assert.match(codice(sess), /fs\.renameSync\(tmp, file\)/,
-    'la sessione Subito torna a scriversi sul posto: un lettore puo\' trovarla a meta\'');
-  // E il temporaneo porta il PID. Il keep-alive gira in OGNI backend vivo — anche in quello
-  // che ha perso la porta e la callback di listen la esegue lo stesso — sullo STESSO percorso:
-  // con un `.tmp` a nome fisso il rename di uno pubblicava il file che l'altro stava ancora
-  // riempiendo. Misurato con due processi veri: 168 letture rotte su 11836 e meta' dei
-  // salvataggi in ENOENT, cioe' un CAPTCHA appena risolto buttato (subito-bootstrap.js).
-  assert.match(codice(sess), /const tmp = file \+ '\.' \+ process\.pid \+ '\.tmp'/,
-    'il temporaneo della sessione Subito torna a un nome fisso: due backend vivi se lo pestano');
+  assert.match(ebay, /_ctxInVolo/);
 });
 
 test('minori: uno schermo vuoto per un filtro non e\' un mercato vuoto', () => {
@@ -1713,51 +1697,22 @@ test('inSella: i dichiarati della casa non passano dal formattatore dei numeri',
 });
 
 // ─── Il ripiego dichiara le sue regole, o non parte ──────────────────────────
-test('subito: con l\'interruttore di servizio la ricerca a parole si dichiara', () => {
-  // Lo scraper a browser manda solo `q=marca modello`: ignora gli id di catalogo, i filtri
-  // avanzati e la versione. Il commento del file lo racconta gia' (Audi 80 → zero giusti),
-  // ma il codice partiva lo stesso e lo stato diceva `come:'id'`. Stessa regola di
-  // Autoscout (`vincoloNonTraducibile`): quel che non sa tradurre non parte, e cio' che
-  // resta a parole si dichiara.
+test('subito: Auto e Moto usano solo Hades, senza sessione browser', () => {
   const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8'));
   const smart = srv.slice(srv.indexOf('async function scrapeSubitoSmart'), srv.indexOf('// ─── Auth'));
-  assert.ok(/filtriAuto\.attivi\(params\.filtriAuto\)/.test(smart) && /throw new Error/.test(smart),
-    'coi filtri avanzati il ripiego a browser di Subito deve rifiutarsi, non cercare a parole');
-  assert.ok(/params\.versione \?/.test(smart), 'la versione e\' un vincolo che quel percorso non porta');
-  assert.ok(/params\.subitoTestoLibero = true/.test(smart), 'la ricerca a parole non si dichiara');
-  assert.ok(/params\.subitoTestoLibero \? 'testo libero'/.test(srv),
-    'lo stato della fonte continua a dire \'id\' per una ricerca che id non ne ha usati');
+  assert.match(smart, /return scrapeSubitoApi\(params, \{ sort: 'priceasc', withMeta: true, fetta: params\.fetta \|\| 0 \}\)/);
+  assert.doesNotMatch(srv, /require\(['"]\.\/scrapers\/subito-playwright['"]\)/);
+  assert.doesNotMatch(srv, /USE_SUBITO_API|keepAliveSubito|runBootstrap|subitoSession|\/api\/subito\/(?:bootstrap|keep-alive|status)/);
 });
 
-test('autoscout: un raggio mai spedito non spegne la colonna', () => {
-  // Il campo «Raggio km (Autoscout)» sta accanto a «Regione» e non e' mai disabilitato, ma senza
-  // regione non c'e' centro da cui misurarlo: `autoscoutGeo` resta vuoto e il GraphQL cerca in
-  // tutta Italia. La guardia guardava `p.raggio` DA SOLO, quindi col GraphQL giu' (o con
-  // USE_AS24_GRAPHQL=0) rifiutava il ripiego a browser — colonna rossa — per proteggere un
-  // vincolo che il percorso principale aveva gia' buttato. Il ripiego avrebbe dato lo STESSO
-  // insieme che il GraphQL stava restituendo ignorando i km.
-  const SRV = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
-  // La regola ESEGUITA, non letta: `filtriAuto` finto per isolare il ramo del raggio.
-  const filtriAuto = { attivi: v => Boolean(v) };
-  let guardia;
-  eval(SRV.slice(SRV.indexOf('const vincoloNonTraducibile'), SRV.indexOf('async function scrapeAutoscoutSmart'))
-    .replace('const vincoloNonTraducibile =', 'guardia ='));
-  assert.strictEqual(typeof guardia, 'function', 'la guardia non si estrae piu\' dal sorgente');
-
-  assert.strictEqual(guardia({ raggio: 30 }), null,
-    'senza regione i 30 km non partono verso nessuna fonte: non sono un vincolo da proteggere');
-  assert.ok(guardia({ raggio: 30, regione: 'lombardia', autoscoutGeo: { lat: 45, lng: 9, radius: 30 } }),
-    'col cerchio spedito davvero «entro 30 km» resta quel che buildUrl non sa dire: legge la tabella zipr');
-  assert.strictEqual(guardia({ regione: 'sicilia', autoscoutGeo: { lat: 38, lng: 13, radius: 250 } }), null,
-    'la regione da sola il ripiego a browser la sa tradurre, come prima');
-  assert.ok(guardia({ filtriAuto: true }), 'i filtri avanzati restano un vincolo non traducibile');
-
-  // Il legame che regge tutto: il raggio raggiunge la fonte SOLO dentro il blocco della regione.
-  const blocco = SRV.indexOf('if (params.regione && asMakeId) {');
-  const fine = SRV.indexOf('// ── Skip tollerante (P6)');
-  const geo = [...SRV.matchAll(/params\.autoscoutGeo =/g)].map(m => m.index);
-  assert.ok(geo.length === 2 && blocco > 0 && fine > blocco && geo.every(i => i > blocco && i < fine),
-    'se `autoscoutGeo` si assegnasse anche fuori dalla regione, questa guardia andrebbe rifatta');
+test('autoscout: la ricerca Auto/Moto resta GraphQL anche quando fallisce', () => {
+  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8'));
+  const smart = srv.slice(srv.indexOf('async function scrapeAutoscoutSmart'), srv.indexOf('// F50 fase 1b'));
+  const union = srv.slice(srv.indexOf('async function scrapeAutoscoutUnion'), srv.indexOf('// Auto e Moto usano sempre hades'));
+  assert.match(smart, /return scrapeAutoscoutGraphql\(params, opts\)/);
+  assert.match(union, /if \(errori\.length >= grafie\.length\) throw errori\[0\]/);
+  assert.doesNotMatch(srv, /require\(['"]\.\/scrapers\/autoscout-playwright['"]\)|USE_AS24_GRAPHQL/);
+  assert.match(srv, /runSource\(\(\) => scrapeAutoscoutUnion/);
 });
 
 test('ebay: una serp senza risultati esatti non e\' un elenco di offerte', () => {
@@ -1815,111 +1770,28 @@ test('tendina: la normalizzazione dei nomi e\' quella condivisa, e le marche pos
 });
 
 // ─── Chi ha osservato prima non decide dopo ──────────────────────────────────
-test('subito-session: un blocco visto nell\'epoca vecchia non rimette in blocco la sessione nuova', () => {
-  // Una ricerca partita PRIMA del bootstrap puo' finire DOPO: trovando il CAPTCHA della
-  // sessione VECCHIA chiamava markSubitoBlocked() dopo il clear, rimettendo il blocco su
-  // una sessione appena rinnovata e valida — e l'utente rifaceva il CAPTCHA per niente.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-epoca-'));
-  const vecchio = process.env.USER_DATA_PATH;
-  process.env.USER_DATA_PATH = dir;
-  delete require.cache[require.resolve('../backend/scrapers/subito-session')];
-  const s = require('../backend/scrapers/subito-session');
+test('subito: Hades non prende cookie dalla sessione Playwright', () => {
+  const api = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'subito-api.js'), 'utf8'));
+  const get = api.slice(api.indexOf('function httpGetJson('), api.indexOf('// La porta HTTP'));
+  assert.match(get, /host: HOST, path/);
+  assert.doesNotMatch(get, /subitoSession|storageState|cookie/i);
+});
+
+test('subito: una risposta Hades 403 resta un errore, anche con la vecchia opzione bootstrap', async () => {
+  const srv = require('../backend/server');
+  const sub = require('../backend/scrapers/subito-api');
+  const prima = process.env.HIDE_SUBITO_BOOTSTRAP;
+  process.env.HIDE_SUBITO_BOOTSTRAP = '1';
+  sub._setHttpGetJson(async () => ({ status: 403, body: '' }));
   try {
-    const prima = s.epocaSessione();
-    s.saveStorageState({ cookies: [], origins: [] });          // bootstrap riuscito
-    assert.notStrictEqual(s.epocaSessione(), prima, 'un salvataggio riuscito deve cambiare epoca');
-    assert.strictEqual(s.markSubitoBlocked(prima), false, 'l\'osservazione stantia si scarta');
-    assert.strictEqual(s.isSubitoBlocked(), false, 'la sessione nuova resta buona');
-    assert.strictEqual(s.markSubitoBlocked(s.epocaSessione()), true, 'un blocco visto ORA vale');
-    assert.strictEqual(s.isSubitoBlocked(), true);
-    // Senza argomento resta il comportamento di prima: marca e basta.
-    s.clearSubitoBlocked();
-    s.markSubitoBlocked();
-    assert.strictEqual(s.isSubitoBlocked(), true);
+    const r = await srv._runSubito({ tipo: 'auto', marca: 'Honda', modello: 'Civic', fetta: 0 }, 3000);
+    assert.strictEqual(r.status, 'error');
+    assert.notStrictEqual(r.status, 'needs_bootstrap');
+    assert.ok(!srv._cacheable({ totale: 1, sources: { subito: r } }));
   } finally {
-    if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
-    delete require.cache[require.resolve('../backend/scrapers/subito-session')];
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('subito: il keep-alive non pesta la sessione appena rinnovata col CAPTCHA', () => {
-  // `saveStorageState` e' last-writer-wins: il keep-alive legge lo stato in cima, naviga
-  // per secondi, e salvava a fine giro uno stato DERIVATO da quello vecchio. Se in mezzo
-  // finiva un bootstrap (minuti, c'e' un CAPTCHA umano), il cookie appena conquistato
-  // spariva in silenzio e le ricerche restavano sulla sessione scaduta. Tre guardie:
-  // timer e rotta saltano durante il bootstrap, e il salvataggio del keep-alive si
-  // scarta se l'epoca e' cambiata mentre navigava.
-  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8'));
-  assert.match(srv, /if \(bootstrapInFlight\) return;/,
-    'il timer keep-alive torna a girare durante il bootstrap: lo stato vecchio puo\' riscrivere quello del CAPTCHA');
-  assert.match(srv, /bootstrap_in_progress/,
-    'la rotta keep-alive on-demand torna a girare durante il bootstrap');
-  const pw = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'subito-playwright.js'), 'utf8'));
-  const keepAlive = pw.slice(pw.indexOf('async function keepAliveSubito'));
-  assert.ok(/epocaSessione\(\) !== epocaVista[\s\S]{0,300}saveStorageState/.test(keepAlive),
-    'keepAliveSubito salva senza controllare l\'epoca: uno stato derivato dal vecchio pesta quello fresco');
-});
-
-test('subito: la pausa fra ricerche vale anche per chi arriva insieme', async () => {
-  // Era un read-modify-write attraverso un await: tre chiamate concorrenti leggevano lo
-  // STESSO lastSearchAt, calcolavano la stessa attesa e ripartivano nello stesso istante —
-  // la pausa che esiste per non farsi bloccare valeva solo in fila indiana.
-  const src = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'subito-playwright.js'), 'utf8'));
-  assert.ok(/prossimoSlot = quando \+ 2000/.test(src),
-    'lo slot non si prenota piu\' nello stesso tick: le concorrenti tornano a partire insieme');
-  assert.ok(/coda = run\.then/.test(src), 'le partenze non sono piu\' incatenate');
-  // E la regola, ESEGUITA sulla stessa forma: tre concorrenti si spaziano di 2 s.
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-  let prossimoSlot = 0, coda = Promise.resolve();
-  const throttle = () => {
-    const attesa = () => {
-      const ora = Date.now(), quando = Math.max(ora, prossimoSlot);
-      prossimoSlot = quando + 2000;
-      return quando > ora ? sleep(quando - ora) : Promise.resolve();
-    };
-    const run = coda.then(attesa, attesa);
-    coda = run.then(() => {}, () => {});
-    return run;
-  };
-  const t0 = Date.now();
-  const a = await Promise.all([throttle(), throttle(), throttle()].map(p => p.then(() => Date.now() - t0)));
-  assert.ok(a[1] - a[0] >= 1900 && a[2] - a[1] >= 1900, `partenze non spaziate: ${a.join(', ')}`);
-});
-
-test('autoscout: la pausa fra ricerche vale anche per chi arriva insieme', async () => {
-  // Stesso read-modify-write attraverso un await gia' corretto in subito-playwright e
-  // motoit: questa terza copia era rimasta quella vecchia. Con GraphQL giu', N fallback
-  // a browser passavano il throttle insieme e sparavano in parallelo contro AS24.
-  const src = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'autoscout-playwright.js'), 'utf8'));
-  assert.ok(/const mio = Math\.max\(Date\.now\(\), lastSearchAt \+ 2000\);\s*\n\s*lastSearchAt = mio;/.test(src),
-    'lo slot non si prenota piu\' nello stesso tick: le concorrenti tornano a partire insieme');
-  // E la regola, ESEGUITA sulla stessa forma: tre concorrenti si spaziano di 2 s.
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-  let lastSearchAt = 0;
-  const throttle = async () => {
-    const mio = Math.max(Date.now(), lastSearchAt + 2000);
-    lastSearchAt = mio;
-    const wait = mio - Date.now();
-    if (wait > 0) await sleep(wait);
-  };
-  const t0 = Date.now();
-  const a = await Promise.all([throttle(), throttle(), throttle()].map(p => p.then(() => Date.now() - t0)));
-  a.sort((x, y) => x - y);
-  assert.ok(a[1] - a[0] >= 1900 && a[2] - a[1] >= 1900, `partenze non spaziate: ${a.join(', ')}`);
-});
-
-test('playwright: due chiamate concorrenti aspettano lo STESSO Chromium', () => {
-  // Fra `if (browserInstance)` e l'assegnazione c'e' un await: due chiamate arrivate
-  // insieme (keep-alive da timer + rotta on-demand) lanciavano DUE Chromium e il primo
-  // restava orfano per sempre (~100-150 MB). E il gestore 'disconnected' senza controllo
-  // di identita' azzerava il singleton buono se a morire era l'istanza vecchia.
-  for (const f of ['subito-playwright.js', 'autoscout-playwright.js']) {
-    const src = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', f), 'utf8'));
-    assert.ok(/if \(avvio\) return avvio;/.test(src),
-      `${f}: manca la promessa di lancio condivisa — due concorrenti lanciano due Chromium`);
-    assert.ok(/if \(browserInstance === b\) browserInstance = null;/.test(src),
-      `${f}: il 'disconnected' di un'istanza vecchia azzera il singleton buono`);
+    sub._setHttpGetJson(null);
+    if (prima == null) delete process.env.HIDE_SUBITO_BOOTSTRAP;
+    else process.env.HIDE_SUBITO_BOOTSTRAP = prima;
   }
 });
 

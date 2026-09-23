@@ -44,10 +44,6 @@ const themeToggle     = document.getElementById('themeToggle');
 const prezzoSliderEl  = document.getElementById('prezzoSlider');
 const btnStatCsv      = document.getElementById('btnStatCsv');
 const btnStatPdf      = document.getElementById('btnStatPdf');
-const subitoBanner    = document.getElementById('subitoBootstrapBanner');
-const btnBootstrap    = document.getElementById('btnBootstrapSubito');
-const bootstrapBtnText    = document.getElementById('bootstrapBtnText');
-const bootstrapBtnSpinner = document.getElementById('bootstrapBtnSpinner');
 // Confronto
 const compareBar   = document.getElementById('compareBar');
 const compareCount = document.getElementById('compareCount');
@@ -466,16 +462,10 @@ function sincronizzaFiltriAuto(tipo) {
 /**
  * Quello che NON e' del proprietario sparisce dallo schermo.
  *
- * Non e' cosmesi: la sessione del portale e' una sola per macchina e il CAPTCHA lo risolve chi
- * e' fisicamente davanti al Mac, quindi «Aggiorna sessione» premuto da un ospite non poteva
- * funzionare — apriva una finestra a casa di qualcun altro. Lasciare a schermo un comando che
- * prende 403 e' peggio che non averlo: sembra un guasto.
+ * Le funzioni riservate al proprietario si distinguono dalle azioni personali.
  */
 function applySoloProprietario() {
   document.body.classList.add('non-proprietario');
-  ['btnBootstrapSubito'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.style.display = 'none';
-  });
 }
 
 function applyDemoMode() {
@@ -558,10 +548,6 @@ async function init() {
     // L'ospite anonimo resta in sola lettura anche per tutte le altre funzioni mutabili.
     if (myRole === 'demo' && myId === 'demo') applyDemoMode();
     if (!sonoProprietario) applySoloProprietario();
-    // Il primo poll dello stato Subito parte al caricamento pagina, quando l'identita' non e'
-    // ancora nota e il default e' ospite: al proprietario il banner va rivalutato adesso,
-    // non al prossimo giro fra 60 secondi.
-    if (sonoProprietario) fetchSubitoStatus();
   } catch (_) {}
 
   themeToggle?.addEventListener('click', () => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
@@ -2487,8 +2473,6 @@ async function doSearch() {
     lastSources = data.sources || null;
     renderSourceStatus();
 
-    if (data.subitoStatus === 'needs_bootstrap') showBootstrapBanner(); else hideBootstrapBanner();
-    fetchSubitoStatus();
 
     initPrezzoSlider(currentResults);
     if (!prezzoSliderInstance) renderResults(currentResults);
@@ -2500,82 +2484,6 @@ async function doSearch() {
     if (myGen === searchGen) showError('Impossibile contattare il server. Assicurati che sia avviato con "npm start".');
   } finally { if (myGen === searchGen) hideLoading(); }
 }
-
-// ─── Subito bootstrap ─────────────────────────────────────────────────────────
-function showBootstrapBanner() { statusBox.classList.remove('d-none'); subitoBanner.classList.remove('d-none'); subitoBanner.classList.add('d-flex'); }
-function hideBootstrapBanner() { subitoBanner.classList.add('d-none'); subitoBanner.classList.remove('d-flex'); }
-async function runSubitoBootstrap() {
-  // La finestra col CAPTCHA si apre sull'iMac dove gira AMR, non su questo schermo: se non
-  // sei tu quello seduto li', premere non ti fa vedere niente. Il server lo dichiara
-  // (campo `dove`), e lo si dice PRIMA, mentre il bottone gira.
-  bootstrapBtnText.textContent = 'Apertura finestra…';
-  bootstrapBtnSpinner.classList.remove('d-none');
-  btnBootstrap.disabled = true;
-  try {
-    const res = await fetch('/api/subito/bootstrap', { method: 'POST' });
-    const data = await res.json();
-    if (data.ok) {
-      hideBootstrapBanner(); hideError(); fetchSubitoStatus();   // review: showError('') mostrava un alert rosso VUOTO
-      const note = document.createElement('div');
-      note.className = 'alert alert-success';
-      const hours = data.expiresInHours ? ` (valida ~${data.expiresInHours} ore)` : '';
-      note.textContent = `Sessione Subito aggiornata${hours}. Puoi rilanciare la ricerca.`;
-      if (data.dove === 'iMac') note.textContent += ' Il CAPTCHA è stato risolto sull\'iMac.';
-      statusBox.appendChild(note);
-      setTimeout(() => note.remove(), 6000);
-    } else {
-      // `dove: 'iMac'` = la richiesta non e' arrivata dalla macchina che ospita AMR, quindi
-      // la finestra si e' aperta altrove: senza dirlo, da qui si vede solo un errore muto.
-      const altrove = data.dove === 'iMac' ? ' La finestra del CAPTCHA si apre sull\'iMac dove gira AMR: va risolta lì.' : '';
-      const reasonMap = {
-        window_closed: 'Hai chiuso la finestra Chrome prima del completamento.',
-        timeout: 'Tempo scaduto (5 minuti): il CAPTCHA non è stato completato.',
-        chrome_launch_failed: 'Impossibile aprire Chrome. Riprova o contatta lo sviluppatore.',
-        error: 'Errore tecnico durante il bootstrap.',
-      };
-      const reasonText = reasonMap[data.reason] || `Errore: ${data.reason || 'sconosciuto'}`;
-      const hint = data.hint ? ` ${data.hint}` : '';
-      showError(`Bootstrap Subito fallito. ${reasonText}${hint}${altrove}`);
-    }
-  } catch (err) {
-    showError('Errore comunicazione con il server durante il bootstrap.');
-  } finally {
-    bootstrapBtnText.textContent = 'Aggiorna sessione';
-    bootstrapBtnSpinner.classList.add('d-none');
-    btnBootstrap.disabled = false;
-  }
-}
-if (btnBootstrap) btnBootstrap.addEventListener('click', runSubitoBootstrap);
-
-let subitoBlocked = false;
-async function fetchSubitoStatus() {
-  try {
-    const res = await fetch('/api/subito/status');
-    const data = await res.json();
-    subitoBlocked = (data.health === 'blocked' || data.health === 'never_configured');
-    /**
-     * IL BANNER COMPARE SOLO QUANDO DICE IL VERO.
-     *
-     * Col percorso API (il default) le ricerche non usano MAI la sessione browser: e'
-     * una riserva. Il banner pero' guardava il solo `health`, che senza bootstrap vale
-     * 'never_configured' per sempre — restava acceso a promettere che «le ricerche
-     * torneranno a funzionare» mentre funzionavano, e chiedeva un CAPTCHA che in quel
-     * momento non serviva a nessuna funzione. Ora lo si mostra quando la sessione serve
-     * davvero (interruttore di servizio acceso) oppure dopo un blocco vero, che e'
-     * l'unico caso in cui una ricerca l'ha incontrata.
-     * Il pannello resta raggiungibile: la riserva si mantiene quando vuoi, non quando
-     * te lo chiede una riga rossa.
-     */
-    // E lo si mostra solo a chi puo' farci qualcosa: il CAPTCHA si risolve davanti al Mac dove
-    // gira AMR, quindi a un ospite quell'avviso chiede una cosa che non puo' fare.
-    const serve = (data.ricercheUsanoSessione !== false || data.blocked === true) && sonoProprietario;
-    if (subitoBlocked && serve) showBootstrapBanner(); else hideBootstrapBanner();
-    return data;
-  } catch (_) { return null; }
-}
-const SUBITO_POLL_INTERVAL = 60 * 1000;
-fetchSubitoStatus();
-setInterval(fetchSubitoStatus, SUBITO_POLL_INTERVAL);
 
 // ─── Slider prezzo ──────────────────────────────────────────────────────────
 /** Le maniglie sono state mosse a mano? (cioe' non stanno agli estremi del binario) */
@@ -3824,7 +3732,7 @@ function updateStats() {}
 const SOURCE_STATUS = {
   ok: { cls: 'src-ok' }, empty: { cls: 'src-muted', txt: 'nessun risultato' },
   skipped: { cls: 'src-muted' }, timeout: { cls: 'src-bad', txt: 'timeout' },
-  error: { cls: 'src-bad', txt: 'errore' }, needs_bootstrap: { cls: 'src-warn', txt: 'verifica richiesta' },
+  error: { cls: 'src-bad', txt: 'errore' },
 };
 // La chiave e' il `reason` che arriva dal server, uguale identico. 'in pausa dopo un blocco'
 // lo scrive backend/fonti-salute.js quando la fonte ci ha respinti due volte di fila: non e'
@@ -4266,11 +4174,10 @@ function hideLoading() {
   stopLoadingTips(loadingState);
   loadingState.classList.add('d-none');
   const errorVisible = !errorState.classList.contains('d-none');
-  const bannerVisible = !subitoBanner.classList.contains('d-none');
-  if (!errorVisible && !bannerVisible) statusBox.classList.add('d-none');
+  if (!errorVisible) statusBox.classList.add('d-none');
 }
 function showError(msg) { statusBox.classList.remove('d-none'); loadingState.classList.add('d-none'); errorState.classList.remove('d-none'); errorText.textContent = msg; }
-function hideError() { errorState.classList.add('d-none'); if (subitoBanner.classList.contains('d-none')) statusBox.classList.add('d-none'); }
+function hideError() { errorState.classList.add('d-none'); statusBox.classList.add('d-none'); }
 /**
  * IL CONTESTO E' CAMBIATO. Un punto solo, chiamato da chiunque cambi cosa si sta guardando.
  *

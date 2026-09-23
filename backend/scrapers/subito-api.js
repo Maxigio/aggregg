@@ -2,9 +2,8 @@
 /**
  * Scraper Subito via API di prima parte (hades.subito.it).
  *
- * Path PRIMARIO per Subito: GET JSON diretto, niente browser/DataDome/bootstrap
- * CAPTCHA → elimina il punto più fragile dell'app. Su errore/blocco → throw, così
- * server.js fa fallback a subito-playwright (browser+stealth).
+ * Ricerca Auto/Moto su Subito: GET JSON diretto. Un errore viene dichiarato al
+ * chiamante; non cambia metodo o filtri passando a una ricerca a parole.
  *
  * Schema verificato:
  *  GET /v1/search/items?c=<cat>&t=s&q=<marca modello>&lim=<n>&start=<off>
@@ -121,7 +120,7 @@ function mapAd(ad, opts = {}) {
   // "98000 Km") — e la fascia viene prima. Cercando per label si prendeva sempre quella e se
   // ne teneva l'estremo inferiore: sul fixture del repo un'auto con "Km 98.000 certificati"
   // scritto dal venditore usciva come 95.000, e sopra i 200.000 l'errore arriva a -49.999.
-  // Si sceglie per `uri`, come fa gia' subito-playwright.js:124 sullo stesso dato.
+  // Si sceglie per `uri`: la label 'Km' compare su fascia e valore esatto.
   // La fascia resta il RIPIEGO dichiarato: quando lo scalare non c'e', meglio l'estremo
   // inferiore che nessun chilometraggio.
   // La fascia si prende per `uri` e, se l'uri non c'e', per label ESCLUDENDO lo scalare —
@@ -134,7 +133,7 @@ function mapAd(ad, opts = {}) {
   const kmEsatto = digits(primoValore(fScal));
   const fascia = primoValore(fFascia);
   const kmFascia = fascia ? digits(String(fascia).split('-')[0]) : null;
-  // 9999999 e' il segnaposto di "non dichiarato" (stesso guard di subito-playwright.js:125):
+  // 9999999 e' il segnaposto di "non dichiarato":
   // stamparlo come chilometraggio sarebbe peggio che non stampare niente.
   const km = (kmEsatto != null && kmEsatto < 9999999) ? kmEsatto : kmFascia;
   // DATA DI PUBBLICAZIONE. Il commento di prima dichiarava `ad.date`, che nel payload vero
@@ -522,7 +521,7 @@ async function fetchPage(params, start) {
 }
 
 /**
- * Annunci Subito via API. Throw su errore → fallback Playwright.
+ * Annunci Subito via API. Throw su errore: la fonte resta dichiarata non letta.
  * @param opts.maxPages  override profondità (crawler: 10-20; on-search: 2)
  * @param opts.attachRaw allega `_raw` (foto grezza) per il DB
  * @param opts.withMeta  ritorna {items, truncated} invece dell'array (back-compat).

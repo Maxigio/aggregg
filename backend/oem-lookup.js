@@ -16,8 +16,7 @@ chromium.use(stealth);
 const { resolveChromiumExecutable } = require('./scrapers/utils');
 
 // pw-browsers come negli scraper (bundle Electron → resources/pw-browsers).
-// Con `existsSync`, come fanno gli altri tre moduli con browser (autoscout-playwright.js:76,
-// subito-playwright.js:53, subito-bootstrap.js:30): electron/main.js inietta RESOURCES_PATH
+// Con `existsSync`: electron/main.js inietta RESOURCES_PATH
 // SEMPRE, anche non impacchettato, e in `npm run electron` quel percorso e'
 // node_modules/electron/dist/Electron.app/Contents/Resources — dove pw-browsers non c'e'.
 // Senza il controllo, li' tutta l'area Ricambi che passa dal browser (Autodoc, CMSNL, eBay)

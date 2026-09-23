@@ -5,11 +5,11 @@
  * Path PRIMARIO per Autoscout24: single POST autenticato → dati strutturati,
  * niente browser/DataDome, paginazione vera (size 50), filtro Italia + prezzo
  * server-side. Se l'API fallisce (401 = credenziale ruotata, errori, blocco)
- * → throw, così server.js fa fallback allo scraper Playwright (autoscout-playwright).
+ * → throw: il chiamante dichiara il problema senza cambiare tipo di ricerca.
  *
  * Credenziale: header Basic STATICO embeddato nel frontend AS24 (client pubblico
- * `as24-search-funnel`). Non è un nostro segreto; se smette (401) → fallback +
- * ri-catturare dal Network tab di autoscout24.it.
+ * `as24-search-funnel`). Non è un nostro segreto; se smette (401), la fonte
+ * dichiara il guasto finché non si aggiorna l'integrazione.
  */
 const https = require('https');
 const annullo = require('../annullo');
@@ -25,7 +25,7 @@ const provinciaSigla = (testo, cap) => { const r = risolviProvincia(testo, cap);
 const HOST = 'listing-search.api.autoscout24.com';
 const AUTH = 'Basic YXMyNC1zZWFyY2gtZnVubmVsOnZucmZiYkJqSTMyT2wxV2thNnVOSFJwM0VZbjRkag==';
 const PAGE_SIZE = 50;
-const MAX_PAGES = 2;          // 2×50 = 100 (più del path Playwright: 3×~17)
+const MAX_PAGES = 2;          // 2×50 = 100 annunci per fetta
 const TIMEOUT_MS = 15000;
 
 /**
@@ -476,7 +476,7 @@ async function fetchPage(params, page, opts = {}) {
   const variables = buildVariables(params, page, opts);
   if (!variables) return { items: [], raw: 0 };
   const res = await httpPost(JSON.stringify({ query: QUERY, variables }));
-  if (res.status === 401) throw fail('AS24 GraphQL 401 (credenziale)', { status: 401, kind: 'auth' });   // → fallback
+  if (res.status === 401) throw fail('AS24 GraphQL 401 (credenziale)', { status: 401, kind: 'auth' });
   if (res.status !== 200) throw fail(`AS24 GraphQL HTTP ${res.status}`, { status: res.status, kind: kindForStatus(res.status) });
   let j;
   try { j = JSON.parse(res.body); } catch (_) { throw fail('AS24 GraphQL: body non-JSON', { status: res.status, kind: 'blocked' }); }
@@ -493,7 +493,7 @@ async function fetchPage(params, page, opts = {}) {
 }
 
 /**
- * Ritorna gli annunci AS24 via API. Throw su errore → fallback Playwright.
+ * Ritorna gli annunci AS24 via API. Throw su errore: la fonte non e' stata letta.
  * @param opts.maxPages   override profondità (crawler: 10-20; on-search: 2)
  * @param opts.attachRaw  allega `_raw` (foto grezza) per il DB
  * @param opts.sortByDate ordina per età crescente (più recenti prima)

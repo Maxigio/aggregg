@@ -9,7 +9,7 @@
  *
  * Qui si prova la regola nuova, e soprattutto i suoi confini:
  *   · il proprietario e' un'identita' PIU' un ruolo, mai l'id da solo;
- *   · una persona con un nome scrive, ma non tocca le cose che esistono in una copia sola;
+ *   · una persona con un nome scrive, ma non tocca il registro della macchina;
  *   · l'ospite anonimo resta in sola lettura;
  *   · i prefissi coprono anche il percorso SENZA slash finale;
  *   · la gestione degli account non e' piu' raggiungibile dal web, e non ci deve tornare;
@@ -54,16 +54,13 @@ function chiama(cookie, metodo, percorso, accept) {
   return { passato, status: res.statusCode, dove: res.redirectTo, corpo: res.corpo, req };
 }
 
-// Tutto quello che esiste in UNA copia sola per macchina, e che quindi non puo' essere di
-// nessun altro — piu' l'unica lettura riservata al proprietario. Ogni voce va provata anche
-// SENZA slash finale.
+// L'unica lettura riservata al proprietario. Va provata anche SENZA slash finale.
 //
 // La GESTIONE delle persone non e' piu' in questo elenco perche' non e' piu' sul web: approvare
 // creava una credenziale permanente, cioe' faceva di una sessione presa in prestito per un
 // minuto un accesso che sopravvive alla scadenza del cookie. Vive in `scripts/richieste.js`.
 const DELLA_MACCHINA = [
   '/api/logs',
-  '/api/subito/bootstrap', '/api/subito/keep-alive',
 ];
 
 test('cancello: il proprietario passa dappertutto', () => {
@@ -125,9 +122,8 @@ test('cancello: la gestione delle persone non e\' piu\' raggiungibile dal web', 
 
 test('cancello: un collega "full" non e\' il proprietario', () => {
   // Il ruolo pieno vuol dire "puo' scrivere", non "e' la sua macchina": il registro degli
-  // accessi contiene le ricerche e gli indirizzi di tutti, e la sessione del portale e' una sola.
+  // accessi contiene le ricerche e gli indirizzi di tutti.
   assert.strictEqual(chiama(COLLEGA, 'GET', '/api/logs').passato, false);
-  assert.strictEqual(chiama(COLLEGA, 'POST', '/api/subito/bootstrap').passato, false);
   // Ma tutto il resto e' suo come prima.
   assert.strictEqual(chiama(COLLEGA, 'POST', '/api/competitor').passato, true);
   assert.strictEqual(chiama(COLLEGA, 'GET', '/api/search').passato, true);

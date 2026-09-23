@@ -6,8 +6,8 @@
  * 6891 annunci) e che `/moto-usate/ricerca?...&sort=price-a` ritorna i risultati
  * ordinati dal più economico. Il path browser (F35) divergeva → ricerca infedele.
  * → on-search = HTTP **sequenziale gentile** (mai parallelo: il parallelo a raffica
- *   era l'unica cosa che soft-bloccava). Zero fallback: su blocco → fonte vuota,
- *   Subito/AS24 portano la ricerca.
+ *   era l'unica cosa che soft-bloccava). Zero fallback: su blocco la fonte
+ *   dichiara l'errore, mentre Subito/AS24 possono comunque rispondere.
  *
  * Architettura ricerca (entrambi i consumatori):
  * - Motore /moto-usate/ricerca (non la landing SEO), filtri server-side
@@ -299,8 +299,7 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
 }
 
 /**
- * TENERE LE PAGINE SUPERSTITI E' GIUSTO, NON DIRLO NO — la regola gia' scritta nel gemello
- * a browser (autoscout-playwright.js:385). Con la pagina 2 caduta (un 503 di manutenzione,
+ * TENERE LE PAGINE SUPERSTITI E' GIUSTO, NON DIRLO NO. Con la pagina 2 caduta (un 503 di manutenzione,
  * o card che smettono di mapparsi) l'esito usciva come un 'ok' pieno: `truncated` non
  * sopravvive a `sciogli()` in server.js, che copia campi fissi, quindi `sources.moto.parziale`
  * restava null, la pastiglia era VERDE senza un avviso e `cacheable()` — che il campo
@@ -390,7 +389,7 @@ async function scrapeMotoIt(params, opts = {}) {
   // Stessa condizione del ramo `deep`, stesso esito: prima qui si tornava una lista vuota,
   // quindi `runSource` classificava 'empty', la pill diceva "Moto.it nessun risultato" in
   // grigio come per un piazzale davvero vuoto, e `cacheable()` — che considera rotti solo
-  // 'error', 'needs_bootstrap' e 'timeout' — congelava per tre minuti una risposta a cui
+  // 'error' e 'timeout' — congelava per tre minuti una risposta a cui
   // mancava una fonte intera. Una manutenzione di Moto.it non e' un mercato vuoto.
   if (statoKo) throw fail(`Moto.it-HTTP ${statoKo}`, { status: statoKo, kind: kindForStatus(statoKo) });
   const risultati = filtraPerSlug(dedup(pages), params.motoitSlugAmmessi);

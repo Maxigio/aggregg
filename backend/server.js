@@ -18,15 +18,11 @@ const auth = require('./auth');
 const utentiDb = require('./utenti-db');                                // il magazzino delle persone (SQLite)
 const salute = require('./fonti-salute');                               // chi ci sta bloccando, e per quanto la saltiamo
 const qrcode = require('qrcode-generator');
-const scrapeSubito    = require('./scrapers/subito-playwright');
-const scrapeAutoscout = require('./scrapers/autoscout-playwright');
 const scrapeAutoscoutGraphql = require('./scrapers/autoscout-graphql');
 const { combaciaModello } = require('./scrapers/autoscout-graphql');   // modello dichiarato vs cercato
 const scrapeSubitoApi = require('./scrapers/subito-api');
 const scrapeMotoIt    = require('./scrapers/motoit');
 const { renderReportPdf } = require('./report-pdf');   // un solo layout: lo usa anche il bottone del frontend
-const subitoSession   = require('./scrapers/subito-session');
-const { runBootstrap } = require('./scrapers/subito-bootstrap');
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
 const { famiglieMotoit, getBrandModels, getModelBikes, resolveMotoitVersionEntry, correggiModelSlug } = require('./scrapers/motoit-models');
 const motoitVersione = require('./scrapers/motoit-versione');   // testo libero → codice/slug versione Moto.it
@@ -53,32 +49,6 @@ const comuneRegione = require('../data/comune-regione.json');
 // Il raggio che copre davvero la regione: sta accanto alla tabella dei raggi AS24, non qui.
 const { cerchioRegione } = require('./scrapers/utils');
 const modelsData      = require('../data/models.json');
-
-const { SubitoBlockedError, keepAliveSubito } = scrapeSubito;
-
-// Auto-refresh: keep-alive periodico a Subito per estendere il cookie DataDome
-// finché l'app resta aperta. Riduce il bootstrap manuale a "quasi-mai".
-//   - INTERVAL: ogni 15 minuti (tipico TTL DataDome è 24h, ma DataDome estende
-//     spesso il cookie ad ogni request valida — 15 min è abbondante per stare
-//     dentro qualunque finestra ragionevole).
-//   - Solo se esiste già una session (no point chiamare keep-alive senza state).
-const KEEP_ALIVE_INTERVAL_MS = 15 * 60 * 1000;
-let keepAliveTimer = null;
-function startKeepAlive() {
-  if (keepAliveTimer) return;
-  keepAliveTimer = setInterval(async () => {
-    const state = subitoSession.loadStorageState();
-    if (!state) return;  // niente da rinfrescare
-    if (subitoSession.isSubitoBlocked()) return;  // già bloccato, l'utente farà bootstrap
-    // Bootstrap in corso (minuti: c'e' un CAPTCHA umano di mezzo): il keep-alive partirebbe
-    // dallo stato VECCHIO e a fine giro lo risalverebbe sopra quello appena rinnovato
-    // (saveStorageState e' last-writer-wins). Si salta il giro, il prossimo e' fra 15 min.
-    if (bootstrapInFlight) return;
-    const res = await keepAliveSubito();
-    console.log('[keep-alive] ' + (res.ok ? 'OK' : 'FAIL ' + res.reason));
-  }, KEEP_ALIVE_INTERVAL_MS);
-  keepAliveTimer.unref?.();
-}
 
 // `norm` arriva da scrapers/brand-match: e' LA normalizzazione dei nomi di veicolo, una sola per
 // tutti. Qui ce n'era una copia che non toglieva gli accenti, e bastava che l'annuncio scrivesse
@@ -130,89 +100,20 @@ app.use((req, res, next) => {
   next();
 });
 const PORT = process.env.PORT || 3000;
-// Timeout per-scraper. Serve a coprire: lancio Chromium (primo avvio ~3-5s),
-// caricamento pagina (DOMContentLoaded), fino a 5 pagine sequenziali.
-// Pre-warming al boot toglie il costo del lancio dalla prima richiesta,
-// ma manteniamo il timeout generoso per siti lenti (Subito spesso >20s full sort).
+// Timeout per-fonte: copre anche le ricerche che leggono più pagine o famiglie.
 const TIMEOUT_MS = 45000;
 
-// AS24: API GraphQL ufficiale come path PRIMARIO (veloce, dati strutturati,
-// niente browser). Su errore/401 (credenziale ruotata) → fallback allo scraper
-// Playwright. Spegnibile con USE_AS24_GRAPHQL=0. Il post-filter titolo (§12) e i
-// filtri numerici lato server restano validi anche sui risultati GraphQL.
-const USE_AS24_GRAPHQL = process.env.USE_AS24_GRAPHQL !== '0';
-// I vincoli che il ramo a browser NON sa dire alla fonte. Un ripiego che li ignorasse
-// riempirebbe la colonna di annunci piu' larghi della domanda, marcati come giusti.
-// Il raggio vale come vincolo solo se e' PARTITO davvero: senza regione non c'e' centro da cui
-// misurarlo, `autoscoutGeo` resta vuoto (si assegna solo dentro `if (params.regione && asMakeId)`)
-// e il GraphQL cerca in tutta Italia. Rifiutare il ripiego a browser per un vincolo che nemmeno
-// il percorso principale ha applicato spegneva la colonna in cambio di niente.
-const vincoloNonTraducibile = p =>
-  filtriAuto.attivi(p.filtriAuto) ? 'i filtri avanzati non passano'
-  : p.raggio && p.autoscoutGeo ? 'il raggio in km non passa'
-  : null;
+// Auto e Moto su AS24 usano GraphQL. Un errore resta un errore della fonte:
+// il ripiego su HTML/Chromium cambierebbe filtri, versione e ampiezza dei modelli.
 async function scrapeAutoscoutSmart(params, opts = {}) {
-  if (USE_AS24_GRAPHQL) {
-    // Anno/km ora NATIVI (buildVariables: firstRegistration + mileageInKm) → pagina 1
-    // già in-range, niente più hack sort-by-date/maxPages (prima serviva perché il
-    // post-filter su una pesca cheapest-first azzerava `annoMin`).
-    try { return await scrapeAutoscoutGraphql(params, opts); }
-    catch (e) {
-      // La ricerca e' gia' stata abbandonata (timeout/annullo): un ripiego adesso spende
-      // 1 POST + 3 GET e magari un Chromium per un risultato che nessuno leggera' — e li
-      // spende FUORI dalla finestra in cui budget-richieste scrive la sua riga, quindi il
-      // conto delle richieste sottostimerebbe proprio i casi peggiori.
-      if (annullo.annullata()) throw e;
-      // Decisione del proprietario: un ripiego che non sa tradurre un vincolo NON parte.
-      // buildFilters legge solo prezzo/anno/km — gli otto filtri avanzati non partirebbero
-      // e la colonna si riempirebbe di annunci piu' larghi della domanda, marcati 'esatto'.
-      // E il raggio in km e' lo stesso caso: buildUrl legge la TABELLA della regione (zipr
-      // fisso), non il tuo cerchio — "entro 30 km" diventava "in tutta la regione".
-      const cosa = vincoloNonTraducibile(params);
-      if (cosa) throw new Error(`Autoscout24 non raggiungibile, e ${cosa} dal ripiego a browser (${e.message})`);
-      console.warn(`[AS24] GraphQL fallito (${e.message}) → fallback Playwright`);
-    }
-  } else {
-    // Stessa regola quando il GraphQL e' spento dall'interruttore di servizio: lo scraper
-    // a browser quei vincoli non li sa dire, e ignorarli in silenzio e' peggio.
-    const cosa = vincoloNonTraducibile(params);
-    if (cosa) throw new Error(`${cosa} dallo scraper a browser di Autoscout`);
-  }
-  // Il ripiego Playwright NON legge autoscoutVersionText (buildFilters non lo usa): la versione
-  // scritta non parte. Chi etichetta piu' sotto leggeva `params.autoscoutVersionText` — cioe'
-  // l'INTENZIONE — e concludeva che la fonte l'avesse confrontata, marcando 'esatto' righe di
-  // qualunque allestimento. Qui lo si dichiara, e l'etichetta torna onesta.
-  if (params.autoscoutVersionText) params.as24VersioneNonInviata = true;
-  // La fetta e' paginazione, non un vincolo: si inoltra. Senza, "Carica altri" col ripiego
-  // attivo rifaceva per sempre le pagine 1-3 e non portava mai un annuncio nuovo.
-  const esito = await scrapeAutoscout(params, opts.fetta || 0);   // il ripiego Playwright non conta: totale null
-  /**
-   * UN CODICE SOLO CONTRO UNDICI. Il GraphQL chiede in UNA query tutti i modelli che il ponte
-   * ha unito (`params.autoscoutModelli`); `buildUrl` manda soltanto `mmmv=autoscoutMmmv`, cioe'
-   * il primo della lista. Su "BMW Serie 3" — famiglia che il ponte spezza in 11 codici AS24 —
-   * la colonna resta un sottomodello su undici.
-   *
-   * Non e' un vincolo che deve FERMARE il ripiego (quel che torna e' comunque roba chiesta, e
-   * `vincoloNonTraducibile` protegge i filtri che falserebbero le righe): e' un elenco MONCO, e
-   * un monco che non si dichiara e' il difetto che `parziale` chiude — lo stesso stampo delle
-   * grafie AS24 cadute e delle famiglie Subito non chieste. Senza, la risposta usciva 'ok' con
-   * `parziale` null e `cacheable()` la congelava tre minuti: ripremere Cerca non rimediava.
-   */
-  const modelli = Array.isArray(params.autoscoutModelli) ? params.autoscoutModelli : [];
-  if (modelli.length < 2) return esito;
-  const monco = `Autoscout e' stato letto col ripiego a browser, che cerca un codice-modello per volta: `
-    + `${modelli.length - 1} dei ${modelli.length} modelli di "${params.modello}" non sono stati chiesti`;
-  const s = Array.isArray(esito) ? { items: esito, total: null } : { ...esito };
-  s.parziale = [s.parziale, monco].filter(Boolean).join(' \u00b7 ');
-  return s;
+  return scrapeAutoscoutGraphql(params, opts);
 }
 
 // F50 fase 1b — UNIONE MULTI-GRAFIA. AS24 filtra per parola intera e non ha OR: una
 // sola grafia perde gli annunci scritti diversamente ("800MT-X" non aggancia
 // "800 MT X" né "Mtx"). Interroghiamo le grafie in parallelo e uniamo per url.
 // Costo: 1 richiesta per grafia (le query strette esauriscono la lista a pagina 1),
-// e solo sul ramo dei modelli senza codice-modello. Va diretto al GraphQL: passando
-// da scrapeAutoscoutSmart un GraphQL rotto aprirebbe un browser Playwright PER GRAFIA.
+// e solo sul ramo dei modelli senza codice-modello. Ogni grafia usa GraphQL.
 async function scrapeAutoscoutUnion(params, opts = {}) {
   const grafie = params.autoscoutSpellings;
   if (!grafie || grafie.length < 2) return scrapeAutoscoutSmart(params, opts);
@@ -234,9 +135,8 @@ async function scrapeAutoscoutUnion(params, opts = {}) {
     try { return await scrapeAutoscoutGraphql({ ...params, autoscoutVersionText: conVersione(g) }, { fetta: opts.fetta || 0, ...(opts.maxPages ? { maxPages: opts.maxPages } : {}) }); }
     catch (e) { errori.push(e); return []; }
   }));
-  // Tutte le grafie cadute: si riprova una volta sola per la via classica. NON si toglie qui il
-  // testo-versione — chi lo toglie deve dirlo, e scrapeAutoscoutSmart lo dichiara da se'.
-  if (errori.length >= grafie.length) return scrapeAutoscoutSmart(params, opts);   // GraphQL giù → un solo tentativo classico
+  // Tutte le grafie cadute: non ripetere la stessa ricerca né passare al browser.
+  if (errori.length >= grafie.length) throw errori[0];
   const byUrl = new Map();
   for (const lista of liste) for (const r of lista) if (r && r.url && !byUrl.has(r.url)) byUrl.set(r.url, r);
   // Superstiti a zero item CON grafie cadute: quelle cadute potevano essere proprio la
@@ -261,45 +161,9 @@ async function scrapeAutoscoutUnion(params, opts = {}) {
   return { items: [...byUrl.values()], total: null, parziale, bloccoParziale };
 }
 
-// Subito: API di prima parte hades.subito.it come PRIMARIO (JSON diretto, niente
-// DataDome/bootstrap CAPTCHA). Su errore/blocco → fallback allo scraper Playwright
-// (browser+stealth, che gestisce SubitoBlockedError → needs_bootstrap). Così il
-// CAPTCHA serve solo se ANCHE l'API fallisce. Spegnibile con USE_SUBITO_API=0.
-/**
- * NIENTE RIPIEGO. Se l'API cade, Subito e' caduta.
- *
- * Qui, su qualunque errore di hades, partiva in silenzio lo scraper Playwright. Ma quello
- * cerca in un modo DIVERSO da quello che hai chiesto: `buildUrl` costruisce solo `?q=marca
- * modello` e ignora gli id di catalogo, la versione scritta e la fetta. Quindi non gira
- * nemmeno `riconosci()`, il controllo sui livelli che l'annuncio dichiara — mentre il
- * post-filtro del server salta le righe Subito proprio perche' le assume gia' filtrate dalla
- * fonte. Il risultato era una ricerca a parole spacciata per una ricerca per catalogo: sulla
- * query "Audi 80" il repo ha misurato zero risultati giusti, perche' "80" pesca dentro
- * "180 CV" e "80.000 km".
- *
- * Un secondo tentativo che cambia le regole senza dirlo e' peggio di una fonte che manca:
- * una fonte che manca si vede, questa no. Adesso l'errore sale e Subito risulta caduta, come
- * qualunque altra fonte. (Lo scraper Playwright resta: serve al bootstrap della sessione.)
- */
-const USE_SUBITO_API = process.env.USE_SUBITO_API !== '0';
+// Auto e Moto usano sempre hades: gli ID di catalogo e i filtri non vengono sostituiti
+// da una ricerca browser a parole quando l'API non risponde.
 async function scrapeSubitoSmart(params) {
-  if (!USE_SUBITO_API) {
-    /**
-     * L'INTERRUTTORE DI SERVIZIO CERCA IN UN ALTRO MODO, e lo deve dire — la stessa regola
-     * applicata ad Autoscout (`vincoloNonTraducibile`): `buildUrl` dello scraper a browser
-     * manda solo `q=marca modello` e ignora gli id di catalogo, i filtri avanzati e la
-     * fetta. Con quei vincoli attivi una ricerca a parole verrebbe spacciata per una
-     * ricerca per catalogo — il difetto che il commento qui sopra racconta gia'.
-     */
-    const cosa = filtriAuto.attivi(params.filtriAuto) ? 'i filtri avanzati non passano'
-      : params.versione ? 'la versione non passa'
-      : null;
-    if (cosa) throw new Error(`${cosa} dallo scraper a browser di Subito (USE_SUBITO_API=0)`);
-    // E la ricerca resta a PAROLE: chi etichetta a valle non deve crederla per catalogo.
-    params.subitoTestoLibero = true;
-    return scrapeSubito(params);   // interruttore di servizio, non un ripiego
-  }
-  // on-search: economici in cima (sort nativo). Regione/prezzo/anno nativi via buildPath.
   return scrapeSubitoApi(params, { sort: 'priceasc', withMeta: true, fetta: params.fetta || 0 });
 }
 
@@ -360,24 +224,18 @@ function percorsoGate(p) {
  * LE ZONE DELLA MACCHINA E DEL PROPRIETARIO.
  *
  * Non sono "cose da amministratore": sono cose che esistono in UNA sola copia per macchina, e
- * che quindi non possono essere di nessun altro — il registro degli accessi di tutti, la
- * sessione del portale (una sola, e il CAPTCHA lo risolve chi e' fisicamente davanti al Mac).
+ * che quindi non possono essere di nessun altro — il registro degli accessi di tutti.
  *
  * La GESTIONE degli account non e' piu' in questo elenco perche' non e' piu' sul web: approvare
  * una richiesta creava una credenziale PERMANENTE, cioe' trasformava una sessione presa in
  * prestito per un minuto in un accesso che sopravvive alla scadenza del cookie. Vive in
  * `scripts/richieste.js`, sulla macchina.
  *
- * `/api/subito/status` NON e' qui: e' una lettura senza effetti che ogni client interroga ogni
- * minuto per sapere se mostrare l'avviso. Owner-only sono le due rotte che la sessione la
- * TOCCANO.
- *
  * Ogni voce vale esatta E come prefisso. Scrivere solo `startsWith('/api/richieste/')`
  * lascerebbe scoperta `GET /api/richieste`, che e' proprio l'elenco delle persone.
  */
 const SOLO_OWNER = [
   '/api/logs',
-  '/api/subito/bootstrap', '/api/subito/keep-alive',
 ];
 const soloOwner = p => SOLO_OWNER.some(x => p === x || p.startsWith(x + '/'));
 
@@ -1308,8 +1166,7 @@ async function runSource(lavoro, ms, nomeSito, chiaveFonte) {
   } finally { clearTimeout(scattato); }
 }
 
-// Wrapper Subito-specifico: distingue fra bloccato (CAPTCHA/403 → needs_bootstrap)
-// e altri errori (timeout/parsing → 'error'). Ritorna { items, status }.
+// Il ramo Hades dichiara gli errori: non esiste una sessione browser da rinnovare.
 async function runSubito(params, ms, chiaveFonte) {
   // Come in runSource: senza chiave non si registra niente, cosi' una prova che simula un
   // blocco non mette in pausa Subito nell'archivio vero di chi sviluppa.
@@ -1343,16 +1200,6 @@ async function runSubito(params, ms, chiaveFonte) {
     return { ...s, status: s.items.length ? 'ok' : 'empty', reason: s.parziale || null };
   } catch (err) {
     ctrl.abort();
-    if (err instanceof SubitoBlockedError) {
-      // CAPTCHA / sessione scaduta: NON e' un ban da cui allontanarsi, e' una credenziale da
-      // rinnovare. Registrato come 'auth' proprio perche' non faccia scattare la pausa —
-      // fermare Subito per ore quando basta rifare il bootstrap sarebbe un autogol.
-      segna(Object.assign(new Error(err.reason || 'sessione'), { kind: 'auth' }), 0);
-      // Senza fallback browser (es. M2) il bootstrap non è proponibile → degrada a
-      // "vuoto" silenzioso (AS24/Moto.it portano la ricerca), niente banner-errore.
-      if (process.env.HIDE_SUBITO_BOOTSTRAP) return { items: [], status: 'empty', reason: null };
-      return { items: [], status: 'needs_bootstrap', reason: err.reason };
-    }
     segna(err, 0);
     console.warn('[WARN] ' + err.message);
     return { items: [], status: 'error', reason: err.message };
@@ -1424,7 +1271,7 @@ require('./aste-route').mount(app, { chiaveLimite });
 
 // ─── Cache ricerche recenti (§17.4) ───────────────────────────────────────────
 // Stessa ricerca entro il TTL → risposta istantanea. NON cacha se una fonte è
-// error/needs_bootstrap/timeout (non congelare uno stato-bloccato) né i 0-risultati totali.
+// error/timeout (non congelare uno stato-bloccato) né i 0-risultati totali.
 const SEARCH_CACHE_TTL = 3 * 60 * 1000;
 const SEARCH_CACHE_MAX = 50;
 const searchCache = new Map();   // key → { ts, data }
@@ -1452,7 +1299,7 @@ function cacheable(data) {
   // vedeva il badge rosso, ripremeva Cerca e riceveva istantaneamente la stessa risposta senza
   // che nessuna richiesta ripartisse: l'unico gesto per rimediare non faceva nulla.
   // Stessa regola gia' scritta in ricambi-route.js:27.
-  const bad = s => s === 'error' || s === 'needs_bootstrap' || s === 'timeout';
+  const bad = s => s === 'error' || s === 'timeout';
   const src = data.sources || {};
   if (bad(src.subito?.status) || bad(src.autoscout?.status) || bad(src.moto?.status)) return false;
   // Un risultato PARZIALE (grafie AS24 cadute con item superstiti) e' monco quanto un
@@ -1976,7 +1823,7 @@ async function runSearchCore(params) {
   const inPausaSubito = pausa('subito'), inPausaAs = pausa('autoscout'), inPausaMoto = pausa('moto');
 
   // Ogni fonte ritorna { items, status, reason }. Subito ha wrapper dedicato
-  // (propaga 'needs_bootstrap'). Lo skip è uno stato esplicito, non un [] muto.
+  // Lo skip è uno stato esplicito, non un [] muto.
   const [subitoRes, asRes0, motoRes] = await Promise.all([
     skipSubito
       ? Promise.resolve({ items: [], status: 'skipped', reason: subitoSkipReason })
@@ -2089,10 +1936,7 @@ async function runSearchCore(params) {
     // autoscoutVersionText (fase 1) = AS24 ha già filtrato per modello server-side; il
     // filtro-titolo locale qui taglierebbe grafie legittime ("CFMOTO 800 MT X" non
     // contiene "800mtx") proprio sul ramo che vogliamo recuperare.
-    // `as24VersioneNonInviata` = si e' finiti sul ripiego Playwright, che il testo NON lo manda:
-    // li' il filtro server-side per modello non c'e' stato, e spegnere anche quello locale
-    // lasciava passare la marca intera. Il testo vale come filtro solo se e' partito davvero.
-    const as24TestoPartito = Boolean(params.autoscoutVersionText) && !params.as24VersioneNonInviata;
+    const as24TestoPartito = Boolean(params.autoscoutVersionText);
     const autoscoutModelFiltered = r.fonte === 'autoscout' && (Boolean(params.mmmvAutoscout) || as24TestoPartito) && !params.asFilterToken;
     // Moto.it filtra per modello quando il client/server ha risolto motoitModelSlug
     const motoitModelFiltered    = r.fonte === 'moto'      && Boolean(params.motoitModelSlug);
@@ -2165,10 +2009,10 @@ async function runSearchCore(params) {
     // 7779/7779 nel catalogo). Leggerlo qui marcava "modello garantito" le righe dei
     // FRATELLI (Dorsoduro 750/900 cercando la 1200). Il codice PROPRIO e' solo
     // `mmmvAutoscout`; sul ramo padre la garanzia esiste solo se il testo-modello nativo
-    // e' partito davvero (non tolto dal retry, non sul ripiego Playwright).
+    // e' partito davvero (non tolto dal retry).
     const codiceProprio = Boolean(String(params.mmmvAutoscout || '').split('|')[1]);
     const testoModelloArrivato = Boolean(params.autoscoutVersionText)
-      && !params.as24VersioneNonInviata && (!as24Allargato || Boolean(asRes.viaSoloModello));
+      && (!as24Allargato || Boolean(asRes.viaSoloModello));
     const as24HaFiltrato = codiceProprio || (Boolean(params.as24Padre) && testoModelloArrivato);
     // I nomi che valgono come risposta: quello digitato PIU' i membri della serie
     // commerciale. Cercando "Serie 3" gli annunci tornano come "320" o "318": senza i
@@ -2190,13 +2034,12 @@ async function runSearchCore(params) {
      * che valeva — modello garantito dalla fonte — e non va declassato.
      */
     const versioneChiesta = Boolean(params.versione);
-    // `params.autoscoutVersionText` dice cosa VOLEVAMO mandare, non cosa e' partito: i due rami
-    // che lo tolgono (riallargamento e ripiego Playwright) lavorano su una COPIA dei parametri e
+    // `params.autoscoutVersionText` dice cosa VOLEVAMO mandare, non cosa e' partito: il
+    // riallargamento lavora su una COPIA dei parametri e
     // lasciano intatto l'originale. Leggendo solo quello, dopo un riallargamento ogni riga con
     // una variante usciva marcata 'esatto' — cioe' "versione confrontata" — su annunci di
     // qualunque allestimento, e senza nessun segno a schermo. Ora si guarda anche se e' partita.
-    const as24HaVistoLaVersione = Boolean(params.autoscoutVersionText)
-      && !as24Allargato && !params.as24VersioneNonInviata;
+    const as24HaVistoLaVersione = Boolean(params.autoscoutVersionText) && !as24Allargato;
     const etichettaAs24 = r => (versioneChiesta && !as24HaVistoLaVersione)
       ? 'versione-non-verificata'
       : (r.variante ? 'esatto' : 'senza-versione');
@@ -2318,8 +2161,7 @@ async function runSearchCore(params) {
   // `subitoFamiglieNonChieste`). Il warn nel log non arriva a schermo: si dichiara in
   // `parziale`, lo stesso campo con cui lo scraper dichiara le famiglie oltre il tetto —
   // un risultato monco che non si dice e' esattamente il difetto che quel campo chiude.
-  // Con l'interruttore di servizio la ricerca e' a parole e la frase non varrebbe piu'.
-  const nonChieste = (!params.subitoTestoLibero && Array.isArray(params.subitoFamiglieNonChieste))
+  const nonChieste = Array.isArray(params.subitoFamiglieNonChieste)
     ? params.subitoFamiglieNonChieste : [];
   const subitoNonChieste = nonChieste.length
     ? (nonChieste.length === 1
@@ -2334,8 +2176,8 @@ async function runSearchCore(params) {
     versioneChiesta: params.versione || null,
     versioneConto:   versioneConto ? versioneConto.conto : null,
     versionePerFonte: versioneConto ? versioneConto.perFonte : null,
-    subitoStatus: subitoRes.status,           // 'ok' | 'empty' | 'needs_bootstrap' | 'error'
-    subitoReason: subitoRes.reason || null,   // 'captcha' | '403' | 'no_data' | timeout msg
+    subitoStatus: subitoRes.status,
+    subitoReason: subitoRes.reason || null,
     // Stato per-fonte: la UI distingue saltato / vuoto / errore / ok.
     sources: {
       // `come` dice SU COSA si e' cercato: gli id del catalogo Subito, oppure il testo.
@@ -2350,11 +2192,8 @@ async function runSearchCore(params) {
                    // cadute). Le famiglie mai chieste — oltre il tetto, o agganciate dal ponte
                    // qui sopra — sono deterministiche e non lo alzano: cacheable() le cacha.
                    parzialeRete: subitoRes.parzialeRete || null,
-                   // Con l'interruttore di servizio la ricerca E' a parole, anche quando il
-                   // nodo di catalogo era stato risolto: dirla 'id' la spaccerebbe per una
-                   // ricerca precisa che non e'.
-                   come: params.subitoTestoLibero ? 'testo libero'
-                     : (params.subitoNodo ? (params.subitoNodo.come || 'id') : 'testo libero'),
+      // Senza nodo di catalogo la ricerca Hades usa il testo libero.
+                   come: params.subitoNodo ? (params.subitoNodo.come || 'id') : 'testo libero',
                    // La famiglia da cui e' partita la ricerca: serve all'avviso
                    // dell'allestimento, che senza il nome direbbe meta' della verita'.
                    famigliaNome: (params.subitoNodo && params.subitoNodo.famigliaNome) || null,
@@ -2399,100 +2238,6 @@ async function runSearchCore(params) {
     },
   };
 }
-
-// ─── Subito session bootstrap ────────────────────────────────────────────────
-// L'utente clicca "Aggiorna sessione Subito" → questo endpoint apre Chrome
-// non-headless puntato a subito.it; quando l'utente risolve il CAPTCHA, lo
-// storageState viene salvato e le ricerche tornano a funzionare in headless.
-
-let bootstrapInFlight = null;  // promise in corso, evita lanci multipli concorrenti
-
-/**
- * IL CAPTCHA SI RISOLVE DAVANTI ALLA MACCHINA, e chi preme da fuori deve saperlo.
- *
- * `runBootstrap` apre una finestra Chrome con la UI: quella finestra nasce sull'iMac dove
- * gira il server, non sullo schermo di chi ha premuto. Un collega collegato dal Funnel
- * premeva e non succedeva niente da lui — nessun errore, nessuna spiegazione, solo una
- * richiesta che restava appesa finche' qualcuno non passava davanti all'iMac.
- * La rotta continua a fare il suo lavoro; in piu' lo DICE.
- */
-const DA_LOCALE = req => {
-  const r = (req.socket && req.socket.remoteAddress) || '';
-  const loopback = r === '127.0.0.1' || r === '::1' || r === '::ffff:127.0.0.1';
-  // Anche il Funnel arriva da 127.0.0.1 (vedi clientIp): loopback CON X-Forwarded-For
-  // e' un visitatore remoto proxato, non chi siede davanti all'iMac. Senza questo
-  // distinguo, proprio chi premeva dal Funnel — il caso raccontato sopra — risultava
-  // "locale" e la nota non partiva mai.
-  return loopback && !req.headers['x-forwarded-for'];
-};
-app.post('/api/subito/bootstrap', express.json(), async (req, res) => {
-  if (bootstrapInFlight) {
-    return res.status(409).json({ ok: false, reason: 'already_in_progress' });
-  }
-  // Chi non e' seduto davanti all'iMac non vedra' mai quella finestra: glielo si dice
-  // subito, invece di lasciarlo aspettare. Il bootstrap parte lo stesso — se qualcuno
-  // passa di la' lo risolve — ma la risposta e' onesta su dove sta il CAPTCHA.
-  const daLontano = !DA_LOCALE(req);
-  bootstrapInFlight = runBootstrap({
-    onProgress: msg => console.log('[bootstrap] ' + msg),
-  });
-  try {
-    const result = await bootstrapInFlight;
-    res.json(daLontano
-      ? { ...result, dove: 'iMac', nota: 'La finestra del CAPTCHA si apre sull\'iMac dove gira AMR: va risolta li\'.' }
-      : result);
-  } catch (err) {
-    res.status(500).json({ ok: false, reason: 'exception', error: err.message });
-  } finally {
-    bootstrapInFlight = null;
-  }
-});
-
-app.get('/api/subito/status', (req, res) => {
-  // Deploy senza fallback browser (es. M2): il bootstrap è impossibile e inutile →
-  // stato "ok" così il frontend non mostra il banner-errore a vuoto ogni 60s.
-  if (process.env.HIDE_SUBITO_BOOTSTRAP) {
-    return res.json({ health: 'ok', blocked: false, hasSession: true, hasDataDome: true,
-      ricercheUsanoSessione: false,
-      expiresIn: null, bootstrapping: false, lastRefresh: null, lastRefreshOk: true });
-  }
-  const state = subitoSession.loadStorageState();
-  const info  = subitoSession.inspectSession(state);
-  const last  = subitoSession.getLastRefresh();
-  res.json({
-    health:        subitoSession.getSessionHealth(),  // 'ok' | 'expiring_soon' | 'blocked' | 'never_configured'
-    /**
-     * LE RICERCHE USANO DAVVERO QUESTA SESSIONE?
-     *
-     * Col percorso API (il default) la sessione browser e' solo una RISERVA: `scrapeSubito`
-     * non viene mai chiamato, `SubitoBlockedError` lo lancia solo subito-playwright.js, e
-     * quindi una ricerca non puo' nemmeno produrre 'needs_bootstrap'. Il banner pero'
-     * guardava il solo `health`, che su un'installazione senza bootstrap vale
-     * 'never_configured' per sempre: restava acceso a promettere che «le ricerche
-     * torneranno a funzionare» mentre funzionavano gia'. Con questo campo il browser puo'
-     * chiedere il CAPTCHA solo quando serve davvero.
-     */
-    ricercheUsanoSessione: !USE_SUBITO_API,
-    blocked:       subitoSession.isSubitoBlocked(),
-    hasSession:    Boolean(state),
-    hasDataDome:   info.hasDataDome,
-    expiresIn:     info.expiresIn,        // secondi residui o null
-    bootstrapping: Boolean(bootstrapInFlight),
-    lastRefresh:   last.at,               // timestamp ms ultimo keep-alive riuscito (o null)
-    lastRefreshOk: last.ok,               // bool: ultimo tentativo
-  });
-});
-
-// Endpoint per forzare un keep-alive on-demand (es. utente clicca "rinfresca ora")
-app.post('/api/subito/keep-alive', express.json(), async (req, res) => {
-  // Stessa guardia del timer: durante il bootstrap il keep-alive leggerebbe lo stato
-  // vecchio e lo risalverebbe sopra la sessione appena rinnovata col CAPTCHA.
-  if (bootstrapInFlight) {
-    return res.status(409).json({ ok: false, reason: 'bootstrap_in_progress' });
-  }
-  const result = await keepAliveSubito();
-  res.json(result);
-});
 
 // Closure di ricerca AMR condivisa (bot WhatsApp + assistente web "AI mode"): il modello LLM può
 // omettere tipo (default auto) o passare una regione libera non valida → normalizza prima di
@@ -2580,7 +2325,7 @@ app.use((err, req, res, next) => {
 // Si mette in ascolto SOLO se questo file e' il programma avviato, mai se qualcuno lo
 // richiede come modulo. Serve ai test: la catena di risoluzione marca/modello vive qui dentro
 // e finora nessun test poteva toccarla, perche' bastava il require ad aprire una porta
-// e scaldare due browser headless.
+// e avviare lavoro di rete non richiesto.
 // Produzione invariata: sia `node backend/server.js` sia il fork di Electron eseguono questo
 // file come principale, quindi require.main === module e' vero in entrambi i casi.
 /**
@@ -2608,36 +2353,9 @@ if (avviaAscolto && auth.stato() === 'assente') {
 const server = !avviaAscolto ? null : app.listen(PORT, () => {
   console.log(`Server avviato su http://localhost:${PORT}`);
 
-  // Pre-warm Chromium: primo lancio sposta il costo (3-5s × 3 browser) dal
-  // primo /api/search al boot, eliminando il rischio di timeout sulla prima
-  // ricerca quando i 3 scraper partono in parallelo.
-  Promise.allSettled([
-    scrapeSubito.warmup?.(),
-    scrapeAutoscout.warmup?.(),
-    // Moto.it: niente warmup (F33: pure-HTTP, nessun browser da pre-avviare).
-  ]).then(res => {
-    const names = ['Subito', 'AS24'];
-    res.forEach((r, i) => {
-      if (r.status === 'rejected') console.warn(`[prewarm] ${names[i]} KO: ${r.reason?.message || r.reason}`);
-      else                         console.log(`[prewarm] ${names[i]} OK`);
-    });
-
-    // Boot keep-alive immediato (se c'è già una session) — rinfresca il cookie
-    // all'avvio dell'app, prima che l'utente lanci la prima ricerca.
-    const state = subitoSession.loadStorageState();
-    if (state) {
-      keepAliveSubito().then(r => {
-        console.log('[keep-alive boot] ' + (r.ok ? 'OK' : 'FAIL ' + r.reason));
-      });
-    }
-    startKeepAlive();
-
     // Aste: il giro sul portale del ministero, uno al giorno. Si sveglia da solo e quasi
-    // sempre non fa niente — decide `stantio()`, che guarda l'ETA' dell'ultimo giro riuscito
-    // e non l'orologio, cosi' funziona uguale su una macchina sempre accesa e su una che si
-    // riaccende dopo una settimana. Ritardo suo per non accavallarsi ai due giri qui sopra.
+    // sempre non fa niente — decide `stantio()`, che guarda l'ETA' dell'ultimo giro riuscito.
     require('./aste').avvia();
-  });
 });
 // Esposte per i test di caratterizzazione: sono le funzioni con cui inizia OGNI risoluzione
 // marca/modello, e finora non erano raggiungibili da fuori. Prefisso _ = superficie interna.
