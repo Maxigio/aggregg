@@ -36,6 +36,9 @@ function fetchText(url, hops = 0) {
     if (hops > 5) return reject(new Error('too many redirects'));
     if (!hostOk(url)) return reject(new Error('host not allowed'));
     const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'it-IT,it;q=0.9' } }, res => {
+      res.on('error', reject);
+      res.on('aborted', () => reject(new Error('risposta interrotta')));
+      res.on('close', () => { if (!res.complete) reject(new Error('risposta incompleta')); });
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
         const next = res.headers.location.startsWith('http')

@@ -60,10 +60,25 @@ function baseSparita() {
   try { fs.accessSync(path.dirname(filePath())); return false; } catch { return true; }
 }
 
+// Un file gia' letto correttamente non puo' trasformarsi a runtime in "nessuna
+// password impostata": potrebbe essere stato cancellato o il volume potrebbe
+// aver perso soltanto quel file. L'identita' del percorso evita di contaminare
+// le installazioni di prova che usano USER_DATA_PATH diversi nello stesso processo.
+const configurati = new Set();
 function load() {
   if (baseSparita()) return ILLEGGIBILE;
-  try { return JSON.parse(fs.readFileSync(filePath(), 'utf8')); }
-  catch (e) { return (e && e.code === 'ENOENT') ? null : ILLEGGIBILE; }
+  const p = filePath();
+  try {
+    const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+    // Un file presente ma senza credenziali valide non equivale a un file assente.
+    if (!cfg || Array.isArray(cfg) || typeof cfg !== 'object'
+        || !cfg.salt || typeof cfg.salt !== 'string'
+        || !cfg.hash || typeof cfg.hash !== 'string'
+        || !cfg.secret || typeof cfg.secret !== 'string') return ILLEGGIBILE;
+    configurati.add(p);
+    return cfg;
+  }
+  catch (e) { return (e && e.code === 'ENOENT' && !configurati.has(p)) ? null : ILLEGGIBILE; }
 }
 
 // La configurazione c'e' ed e' utilizzabile. Il sentinella non lo e': ogni
@@ -571,7 +586,7 @@ module.exports = {
   creaPersona:        (...a) => conLock(() => creaPersona(...a)),
   togliPersona:       (...a) => conLock(() => togliPersona(...a)),
   setTelefono:        (...a) => conLock(() => setTelefono(...a)),
-  persone, verifica, verifyRole, passwordOccupata, makeToken, checkToken, checkSessione,
+  persone, verifica, verifyRole, passwordOccupata, passwordOccupataIn: (cfg, pw) => Boolean(chiUsaPassword(cfg, pw)), makeToken, checkToken, checkSessione,
   personaDaTelefono,
   idDaNome, ID_RISERVATI, MIN_LEN, TTL_MS,
 };

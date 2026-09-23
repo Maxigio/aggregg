@@ -2,6 +2,9 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { _motoitImages } = require('../backend/scrapers/detail');
+const https = require('node:https');
+const { EventEmitter } = require('node:events');
+const { getDetail } = require('../backend/scrapers/detail');
 
 const CDN = 'https://cdn-img.moto.it/images';
 
@@ -53,4 +56,33 @@ test('motoitImages: dedup per id e cap 10', () => {
 
 test('motoitImages: nessuna foto → array vuoto', () => {
   assert.deepStrictEqual(_motoitImages('<html><body>niente</body></html>'), []);
+});
+
+test('detail: una risposta interrotta termina il fetch e consente un nuovo tentativo', async () => {
+  const originale = https.get;
+  let chiamate = 0;
+  https.get = (_url, _opts, risposta) => {
+    chiamate++;
+    const req = new EventEmitter();
+    req.setTimeout = () => {};
+    const res = new EventEmitter();
+    res.statusCode = 200;
+    res.setEncoding = () => {};
+    process.nextTick(() => {
+      risposta(res);
+      if (chiamate === 1) res.emit('aborted');
+      else { res.emit('data', '<html></html>'); res.emit('end'); }
+    });
+    return req;
+  };
+  try {
+    const url = 'https://www.moto.it/moto-usate/prova-interruzione-' + Date.now();
+    const primo = await Promise.race([
+      getDetail(url),
+      new Promise(resolve => setTimeout(() => resolve('appeso'), 100)),
+    ]);
+    assert.strictEqual(primo, null, 'la risposta interrotta non deve lasciare la Promise in sospeso');
+    await getDetail(url);
+    assert.strictEqual(chiamate, 2, 'il secondo tentativo deve aprire una nuova richiesta');
+  } finally { https.get = originale; }
 });

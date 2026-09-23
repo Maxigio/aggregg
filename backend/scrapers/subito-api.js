@@ -33,6 +33,7 @@ const CAT = { auto: '2', moto: '3', accessoriAuto: '5', accessoriMoto: '36' };
 const PAGE_SIZE = 50;
 const MAX_PAGES = 2;            // 2×50 = 100
 const TIMEOUT_MS = 12000;
+const AVVISO_429 = 'Subito ha limitato temporaneamente le richieste (429). La ricerca potrebbe essere incompleta; riprova più tardi.';
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1';
 
 function httpGetJson(path) {
@@ -664,14 +665,21 @@ async function unioneFamiglieMoto(params, opts) {
   const chieste = tutte.slice(0, MAX_FAMIGLIE_MOTO);
   const perUrl = new Map();
   let truncated = false, total = null, errori = 0, peggiore = null;
+  let successi = 0, tentate = 0, interrotto429 = false, parzialeRete = false, bloccoParziale = null;
+  const parziali = [];
   const sospetti = [];
   for (let i = 0; i < chieste.length; i++) {
     if (i > 0) await sleep(opts.pageDelayMs || 400);      // mai raffica verso la stessa fonte
+    tentate++;
     const uno = { ...params, subitoNodo: { ...nodo, famigliaIds: [chieste[i]] } };
     try {
       const r = await scrapeSubitoApi(uno, { ...opts, withMeta: true });
+      successi++;
       for (const x of r.items) if (x && x.url && !perUrl.has(x.url)) perUrl.set(x.url, x);
       if (r.truncated) truncated = true;
+      if (r.parziale) parziali.push(r.parziale);
+      if (r.parzialeRete) parzialeRete = true;
+      if (r.bloccoParziale) bloccoParziale = r.bloccoParziale;
       // «Il parser del prezzo e' rotto» lo dichiara la singola passata: l'unione lo
       // buttava, e la stessa rottura dava pastiglia rossa su un'auto e verde su cento
       // moto — la fonte mentiva solo nel ramo scritto per i casi difficili.
@@ -679,6 +687,7 @@ async function unioneFamiglieMoto(params, opts) {
       // I totali si sommano: sono famiglie DISGIUNTE del catalogo, non insiemi che si
       // sovrappongono (e' la stessa somma che l'API fa da sola sulle auto con la virgola).
       if (Number.isFinite(r.total)) total = (total || 0) + r.total;
+      if (r.bloccoParziale?.status === 429) { interrotto429 = true; break; }
     } catch (e) {
       errori++;
       // Si conserva l'errore PIU' GRAVE: un 403/429 su una famiglia e' un blocco della fonte, e
@@ -686,36 +695,39 @@ async function unioneFamiglieMoto(params, opts) {
       // scattasse mai sulle moto. Ordine: bloccato > auth > transitorio > errore.
       const peso = k => ({ blocked: 3, auth: 2, transient: 1 }[k] || 0);
       if (!peggiore || peso(e.kind) > peso(peggiore.kind)) peggiore = e;
+      if (e.kind === 'blocked') bloccoParziale = e;
       console.warn(`[subito] famiglia moto ${chieste[i]} KO: ${e.message}`);
+      if (e.status === 429) { peggiore = e; interrotto429 = true; break; }
     }
   }
   // Tutte cadute: e' un errore della fonte, non un mercato vuoto. E il genere e' quello del
   // peggiore, cosi' chi sta a valle sa se e' un blocco o un singhiozzo.
-  if (errori === chieste.length) {
-    throw fail(`Subito: nessuna delle ${chieste.length} famiglie ha risposto`,
+  if (!successi) {
+    throw fail(`Subito: nessuna delle ${tentate} famiglie interrogate ha risposto`,
       { kind: (peggiore && peggiore.kind) || 'error', status: peggiore && peggiore.status });
   }
   // Qualcuna ha risposto ma almeno una e' stata RESPINTA: viaggia come campo proprio, non come
   // `sospetto` — `sospetto` fa uscire la colonna in errore e il freno lo leggerebbe come 'error'
-  // generico. Cosi' lo stato resta 'ok' + parziale (gli annunci ci sono) e runSubito passa al
-  // freno la respinta col suo genere vero.
-  const bloccoParziale = (peggiore && peggiore.kind === 'blocked')
-    ? Object.assign(new Error(`Subito ha respinto ${errori} famiglie su ${chieste.length} (${peggiore.message})`), { kind: 'blocked', status: peggiore.status })
-    : null;
+  // generico. Con annunci lo stato resta 'ok' + parziale; senza annunci runSubito dichiara
+  // errore. In entrambi i casi il freno riceve la respinta col suo genere vero.
   const fuori = tutte.length - chieste.length;
+  const nonChieste = chieste.length - tentate;
   const parziale = [
     fuori ? `${fuori} famiglie Subito oltre il tetto di ${MAX_FAMIGLIE_MOTO} non sono state chieste` : null,
-    errori ? `${errori} famiglie su ${chieste.length} non hanno risposto` : null,
+    errori ? `${errori} su ${tentate} famiglie interrogate non hanno risposto` : null,
+    nonChieste ? `${nonChieste} ${nonChieste === 1 ? 'famiglia non chiesta' : 'famiglie non chieste'} dopo il blocco` : null,
+    ...parziali,
+    interrotto429 && !parziali.some(x => x.includes(AVVISO_429)) ? AVVISO_429 : null,
   ].filter(Boolean).join(' · ') || null;
   // Le due righe qui sopra sono monchi di natura DIVERSA, e nella stringa unica non si
   // distinguono piu': le famiglie cadute sono transitorie (ritentare puo' cambiare esito),
   // quelle oltre il tetto no — ritentare rifa' le stesse otto richieste in fila per lo stesso
   // identico risultato. Il flag serve a cacheable(), che senno' leggerebbe la stringa e
   // non cacherebbe MAI le moto a famiglia frammentata. Stampo di `versioneKoRete` (Moto.it).
-  const parzialeRete = errori > 0;
+  parzialeRete ||= errori > 0;
   if (parziale) console.warn(`[subito] moto "${params.marca} ${params.modello || ''}": ${parziale}`);
   const items = [...perUrl.values()];
-  console.log(`[subito] moto "${params.marca} ${params.modello || ''}": ${chieste.length} famiglie → ${items.length} annunci`);
+  console.log(`[subito] moto "${params.marca} ${params.modello || ''}": ${tentate}/${chieste.length} famiglie interrogate → ${items.length} annunci`);
   return opts.withMeta ? { items, truncated, total, parziale, parzialeRete, sospetto: sospetti[0] || null, bloccoParziale } : items;
 }
 
@@ -744,12 +756,21 @@ async function scrapeSubitoApi(params, opts = {}) {
   let total = null;                          // F50 count_all (tetto), additivo
   let scartati = 0;
   let senzaPrezzo = 0;   // quanti annunci il payload non quota: vedi il commento piu' sotto
+  let parziale = null, parzialeRete = false, bloccoParziale = null;
   // "Carica altri": si riparte da dove si era arrivati. Il tetto di hades sta fra
   // start 9.850 e 10.000 (misurato per bisezione), quindi c'e' spazio per ~200 fette.
   const salta = Math.max(0, opts.fetta || 0) * maxPages * PAGE_SIZE;
   for (let p = 0; p < maxPages; p++) {
     if (p > 0 && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
-    const page = await fetchPage(reqParams, salta + p * PAGE_SIZE);
+    let page;
+    try { page = await fetchPage(reqParams, salta + p * PAGE_SIZE); }
+    catch (e) {
+      if (p === 0) throw e; // nessuna pagina letta in questa fetta: non inventare risultati
+      parzialeRete = true;
+      bloccoParziale = e.kind === 'blocked' ? e : null;
+      parziale = e.status === 429 ? AVVISO_429 : 'Subito non ha restituito tutte le pagine della ricerca.';
+      break;
+    }
     if (p === 0) total = page.total;         // count_all dalla 1ª pagina (uguale su tutte)
     for (const ad of page.ads) {
       // Doppia rete regione: `buildPath` filtra già nativo via `r=<key>` quando la
@@ -790,7 +811,7 @@ async function scrapeSubitoApi(params, opts = {}) {
   // e in cache: la stessa lista serve ogni modello di quella marca.
   // Il recupero gira SOLO sulla prima fetta: non e' paginato, e sulle fette successive
   // rimandava indietro gli stessi annunci. Misurato: 9 doppioni su 109 a ogni "carica altri".
-  if (nodo && nodo.marcaId && gen.size && titoloCombacia && !opts.senzaRecupero && !salta) {
+  if (nodo && nodo.marcaId && gen.size && titoloCombacia && !opts.senzaRecupero && !salta && bloccoParziale?.status !== 429) {
     try {
       const visti = new Set(out.map(x => x.url));
       for (const ad of await paginaRecupero(reqParams)) {
@@ -810,6 +831,9 @@ async function scrapeSubitoApi(params, opts = {}) {
     } catch (e) {
       // Il recupero e' un di piu': se cade, la ricerca vale lo stesso.
       console.warn('[subito] recupero non dichiarati KO: ' + e.message);
+      parzialeRete = true;
+      if (e.kind === 'blocked') bloccoParziale = e;
+      parziale = [parziale, e.status === 429 ? AVVISO_429 : 'Subito non ha completato la ricerca degli annunci senza modello dichiarato.'].filter(Boolean).join(' · ');
     }
   }
   if (attesa.length) await deduciInBlocco(attesa);
@@ -826,7 +850,7 @@ async function scrapeSubitoApi(params, opts = {}) {
   const sospetto = (out.length && senzaPrezzo === out.length)
     ? `nessuno dei ${out.length} annunci porta un prezzo leggibile: l'etichetta del payload puo' essere cambiata`
     : null;
-  return opts.withMeta ? { items: out, truncated, total, sospetto } : out;
+  return opts.withMeta ? { items: out, truncated, total, sospetto, parziale, parzialeRete, bloccoParziale } : out;
 }
 
 // Ricerca ACCESSORI/RICAMBI per keyword libera (OEM o nome pezzo) nelle categorie
@@ -854,6 +878,7 @@ module.exports.searchAccessori = searchAccessori;
 module.exports._mapAd = mapAd;
 module.exports._buildPath = buildPath;
 module.exports._extractTotal = extractTotal;   // F50 copertura
+module.exports.AVVISO_429 = AVVISO_429;
 module.exports._riconosci = riconosci;         // filtro sui livelli dichiarati dall'annuncio
 module.exports._faTitolo = faTitolo;
 // Quanto e' largo DAVVERO il filtro km chiesto, sui due lati: `ms` e `me` sono categorie.

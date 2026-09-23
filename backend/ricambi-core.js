@@ -26,8 +26,13 @@ function subitoToPart(it) {
   };
 }
 async function subitoSource(term, opts = {}) {
-  const items = await scrapeSubito.searchAccessori(term, { cat: opts.cat });   // può lanciare (blocco hades) → runSource lo cattura
-  return { articoli: items.map(subitoToPart) };
+  try {
+    const items = await scrapeSubito.searchAccessori(term, { cat: opts.cat });
+    return { articoli: items.map(subitoToPart) };
+  } catch (e) {
+    if (e.status === 429) return { blocked: true, error: scrapeSubito.AVVISO_429 };
+    throw e;
+  }
 }
 async function ebaySource(term) {
   const items = await ebayScrape.searchEbay(term);   // 403/timeout → runSource lo cattura

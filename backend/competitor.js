@@ -397,22 +397,29 @@ async function parco(voce, dip = {}) {
       // L'esito va al freno PRIMA di qualunque uscita: e' qui che `e` porta ancora `kind` e
       // `status` messi da `fail()`, mentre il rilancio piu' sotto li perde nel messaggio.
       salute.registra(voce.fonte, { errore: e });
-      if (!veicoli.length) throw new Error(`${voce.fonte}: ${e.message}`);
+      const motivo = voce.fonte === 'subito' && e.status === 429 ? subito.AVVISO_429 : e.message;
+      if (!veicoli.length) throw new Error(`${voce.fonte}: ${motivo}`);
       // NON e' `troncato`. Le due cause finivano sotto la stessa bandiera e il pannello
       // raccontava sempre la prima: "elenco troncato al tetto di sicurezza, questo parco e'
       // piu' grande di quello mostrato". Con una passata caduta quella frase e' falsa due
       // volte — nessun tetto e' stato toccato, e non si sa affatto se il parco sia piu'
       // grande: si sa solo che la fonte non ha risposto.
-      passateKo.push({ tipo, motivo: e.message });
+      passateKo.push({ tipo, motivo });
       totaleCopreTutto = false;   // una passata fallita rende qualunque somma parziale
       console.warn(`[competitor] passata ${tipo} fallita (${e.message}) → parco parziale`);
+      if (voce.fonte === 'subito' && e.status === 429) break;
       continue;
     }
     const items = Array.isArray(r) ? r : (r.items || []);
     // Una passata VUOTA non si registra: qui zero non e' un silenzio sospetto ma il caso
     // quotidiano (il concessionario di sole auto, passata moto), e contarlo fra i vuoti
     // renderebbe la fonte "sospetta" nel pannello per un fatto sul venditore, non su di lei.
-    if (items.length) salute.registra(voce.fonte, { errore: null, conteggio: items.length });
+    if (r.bloccoParziale) salute.registra(voce.fonte, { errore: r.bloccoParziale, conteggio: items.length });
+    else if (items.length) salute.registra(voce.fonte, { errore: null, conteggio: items.length });
+    if (r.parzialeRete) {
+      passateKo.push({ tipo, motivo: r.parziale || 'la fonte ha risposto solo in parte' });
+      totaleCopreTutto = false;
+    }
     if (!Array.isArray(r) && r.truncated) troncato = true;
     // QUANTI NE HA LA FONTE. Lo dichiara lei nella stessa risposta e finora lo buttavamo:
     // senza, "veicoli presi 180" non si sa se sono tutti o la punta di un piazzale da 400.
@@ -424,6 +431,7 @@ async function parco(voce, dip = {}) {
     if (!Array.isArray(r) && Number.isFinite(r.total)) totaleFonte = (totaleFonte || 0) + r.total;
     else if (items.length) totaleCopreTutto = false;
     for (const v of items) veicoli.push({ ...v, tipo });
+    if (voce.fonte === 'subito' && r.bloccoParziale?.status === 429) break;
   }
   return { veicoli, troncato, passateKo, illeggibili: 0, totaleFonte: totaleCopreTutto ? totaleFonte : null };
 }

@@ -35,14 +35,15 @@ Sono l'unica copia al mondo di quello che contengono. Un `rsync` che li porta vi
 - **`data/amr-utenti.db`** (e i suoi `-wal` / `-shm`) — **il magazzino delle persone**: richieste
   di registrazione, inviti, ricerche salvate, annunci salvati, ricambi, impostazioni di prezzo,
   parco concorrenti, contatori del tetto giornaliero. Dal 2026-08-12 è il posto dove vivono i dati
-  di chi si registra dal sito.
+  di chi si registra dal sito. Le vecchie ricerche e gli annunci salvati sono stati rimossi
+  dal prodotto: non usare questa descrizione come elenco delle funzioni ancora attive.
 
 Sono entrambi in `.gitignore`, quindi **non** compaiono in `git ls-files` e il perimetro qui sotto
 non li tocca. Il `.gitignore` è la difesa; il fatto che siano scritti qui è la seconda.
 
-**Come si salvano.** Il `tar` del passo 1, che prende tutta la cartella `data/` — il database
-però NON come copia del file vivo ma come snapshot `sqlite3 .backup` (vedi passo 1): è l'**unico**
-backup che esiste, quindi il passo 1 non è una formalità. (Fino al 2026-08-17 c'era anche
+**Come si salvano.** Il `tar` del passo 1 prende l'installazione, incluse le dipendenze e
+`data/`; ogni SQLite viene aggiunto come snapshot `sqlite3 .backup`, non come copia del file
+vivo. Il backup va provato con un ripristino separato prima del deploy. (Fino al 2026-08-17 c'era anche
 `scripts/backup-db.js`, che faceva `pg_dump` di Postgres e questi due file non li toccava
 comunque: è stato cancellato con tutto il resto di Postgres.)
 
@@ -56,32 +57,40 @@ comunque: è stato cancellato con tutto il resto di Postgres.)
 ssh -i ~/.ssh/amr_m2_ed25519 -o IdentitiesOnly=yes massimo@100.66.119.62 '
   set -e
   rm -rf ~/amr-rollback && mkdir -p ~/amr-rollback/AutoMotoRadar/data
-  /usr/bin/sqlite3 ~/AutoMotoRadar/data/amr-utenti.db ".backup /Users/massimo/amr-rollback/AutoMotoRadar/data/amr-utenti.db"
-  : > ~/amr-rollback/AutoMotoRadar/data/amr-utenti.db-wal
-  : > ~/amr-rollback/AutoMotoRadar/data/amr-utenti.db-shm
+  for db in ~/AutoMotoRadar/data/*.db; do
+    [ -f "$db" ] || continue
+    nome=${db##*/}
+    snap=~/amr-rollback/AutoMotoRadar/data/$nome
+    /usr/bin/sqlite3 "$db" ".backup $snap"
+    [ "$(/usr/bin/sqlite3 "$snap" "PRAGMA integrity_check")" = ok ]
+    : > "$snap-wal"
+    : > "$snap-shm"
+  done
   B=~/AutoMotoRadar-backup-$(date +%Y%m%d-%H%M).tar
-  cd ~ && tar --exclude=node_modules \
-    --exclude=AutoMotoRadar/data/amr-utenti.db \
-    --exclude=AutoMotoRadar/data/amr-utenti.db-wal \
-    --exclude=AutoMotoRadar/data/amr-utenti.db-shm \
+  cd ~ && tar \
+    --exclude="AutoMotoRadar/data/*.db" \
+    --exclude="AutoMotoRadar/data/*.db-wal" \
+    --exclude="AutoMotoRadar/data/*.db-shm" \
     -cf "$B" AutoMotoRadar
-  tar -rf "$B" -C ~/amr-rollback \
-    AutoMotoRadar/data/amr-utenti.db AutoMotoRadar/data/amr-utenti.db-wal AutoMotoRadar/data/amr-utenti.db-shm
+  tar -rf "$B" -C ~/amr-rollback AutoMotoRadar/data
   gzip -f "$B"
+  gzip -t "$B.gz"
+  tar -tzf "$B.gz" >/dev/null
   rm -rf ~/amr-rollback
   ls -lh ~/AutoMotoRadar-backup-*.tar.gz | tail -1
 '
 ```
 
-Circa 7 MB. È il rollback: se qualcosa va storto, si riestrae questo e si riparte.
+Include anche `node_modules`: è più grande dei vecchi archivi, ma ripristina le dipendenze
+che `npm install` può cambiare. Non riestrarlo sopra il servizio in esecuzione: fermare il
+servizio, ripristinare codice, dipendenze e dati insieme, quindi riavviare e verificare.
 
 Perché non un semplice `tar` di tutto: `amr-utenti.db` è in WAL e lo scrive il server vivo —
 db, `-wal` e `-shm` fotografati in istanti diversi non sono uno snapshot consistente
 (riestratto può risultare "database disk image is malformed" o perdere transazioni). Il db
 entra nel tar SOLO come snapshot `sqlite3 .backup` (la stessa regola di
-`scripts/backup-dati-m2.sh`), e le `-wal`/`-shm` nel tar sono vuote apposta: riestraendo sopra
-la cartella viva troncano quelle stantie, che altrimenti verrebbero rigiocate sul db
-ripristinato corrompendolo.
+`scripts/backup-dati-m2.sh`), e le `-wal`/`-shm` nel tar sono vuote apposta: un ripristino
+non deve rigiocare vecchie transazioni sul database fotografato.
 
 ### 2. Si sincronizza da HEAD, MAI dal working tree
 
@@ -136,7 +145,7 @@ Le dipendenze divergono da quelle dell'iMac (jspdf, jspdf-autotable, @anthropic-
 
 ```bash
 ssh … 'cd ~/AutoMotoRadar && find backend scripts -name "*.js" | xargs -n1 /opt/homebrew/bin/node --check && echo TUTTO-OK'
-ssh … 'ls ~/AutoMotoRadar/pagine/'          # invito.html, richieste.html
+ssh … 'ls ~/AutoMotoRadar/pagine/'          # invito.html
 ```
 
 ### 5. Riavvio e verifica
@@ -146,6 +155,14 @@ ssh … 'launchctl kickstart -k gui/$(id -u)/com.automotoradar.m2 && sleep 4 && 
 ssh … 'tail -25 ~/Library/Logs/automotoradar.log'
 ssh … 'curl -s -o /dev/null -w "%{http_code}\n" http://localhost:47321/api/brands?tipo=auto'   # 401 = muro in piedi
 ```
+
+Il 401 verifica solo che la rotta protetta chieda una sessione. Per un rilascio
+servono anche login con una credenziale autorizzata, rifiuto di una credenziale
+non valida e prove rappresentative di Auto, Moto, Ricambi, Competitor ed export
+sul codice **effettivamente trasferito**. `scripts/deploy-m2.sh` non esegue
+ancora queste prove né un rollback automatico: il suo
+`TRASFERIMENTO-VERIFICATO` non è un'approvazione del rilascio. La situazione è in
+`docs/REVISIONE-M2-2026-09-23.md`.
 
 Nel log di avvio devono comparire `[frontend] minify OK v…` e `[guida] montata v… (11 sezioni)`,
 con **gli stessi hash** del dev server locale: se differiscono, è arrivato codice diverso.
@@ -175,8 +192,11 @@ diff <(sort /tmp/md5-head.txt) <(sort /tmp/md5-m2.txt) && echo "IDENTICI"
 ssh … 'ls -l ~/AutoMotoRadar/data/auth.json ~/AutoMotoRadar/data/amr-utenti.db 2>/dev/null'
 ```
 
-La data di modifica dev'essere **quella di prima del deploy**. Se è cambiata, qualcosa nel
-perimetro non era quello che credi: fermati e riestrai il backup del passo 1.
+La data di modifica di `auth.json` dev'essere **quella di prima del deploy**.
+Il database SQLite e il suo WAL sono scritti dal server vivo, quindi la loro
+data può cambiare legittimamente. La protezione del database è l'esclusione
+esplicita dal perimetro di rsync; se cambia `auth.json`, fermati e verifica
+prima di qualsiasi ripristino.
 
 ---
 
@@ -187,7 +207,10 @@ Chi entra sta in `data/auth.json`, in due modi che non vanno confusi:
 - **dal `.env`** — `node scripts/utenti-da-env.js` rispecchia l'elenco scritto nel `.env`
   dell'iMac: chi c'è entra, chi non c'è più non entra più, e le credenziali vengono copiate anche
   sulle destinazioni di `AMR_AUTH_ANCHE` (compreso l'M2 via `scp`). ⚠ **Rigenera il segreto dei
-  cookie: dopo un giro, tutti rifanno il login.**
+  cookie: dopo un giro, tutti rifanno il login.** La copia remota legge e poi
+  scrive `auth.json` in due operazioni distinte: se una registrazione arriva nel
+  frattempo, può perdere l'aggiornamento. Non usarla come sincronizzazione
+  concorrente finché la scrittura sul destinatario non è coordinata.
 - **dal sito** — chi si registra da `/login`, viene approvato **da questa macchina** e si sceglie
   la password col link d'invito. Queste persone hanno `origine: "web"` e **`utenti-da-env.js` NON
   le tocca**: non stanno nel `.env` e non è una dimenticanza.

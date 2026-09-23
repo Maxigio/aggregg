@@ -239,6 +239,23 @@ function personeAltrove(d, env) {
 /** Le voci 'web' di la' che qui non esistono: sono quelle che una copia secca cancellerebbe. */
 const soloDiLa = (persone, idQui) => persone.filter(p => p && p.origine === 'web' && !idQui.has(String(p.id)));
 
+// Gli iscritti web di un'altra installazione sopravvivono alla copia. Le loro password
+// vanno quindi confrontate con il piano PRIMA di cambiare l'auth.json locale.
+function verificaWebAltrove(piano, dest, env) {
+  const ids = new Set(piano.voci.map(v => v.id));
+  for (const d of dest) {
+    const la = personeAltrove(d, env);
+    if (la.stato === 'illeggibile') throw new Error(`${d.dove}: auth.json non leggibile; non cambio nessuna credenziale.`);
+    const web = la.persone.filter(p => p && p.origine === 'web');
+    if (web.some(p => ids.has(String(p.id)))) throw new Error(`${d.dove}: un id del piano appartiene gia' a un iscritto web.`);
+    for (const pw of [piano.admin, ...piano.voci.map(v => v.pw)]) {
+      if (auth.passwordOccupataIn({ persone: web }, pw)) {
+        throw new Error(`${d.dove}: password gia' usata da un iscritto web; non cambio nessuna credenziale.`);
+      }
+    }
+  }
+}
+
 /**
  * Copia auth.json in ogni destinazione. Torna un resoconto, mai il contenuto.
  *
@@ -299,6 +316,9 @@ function applica({ admin, voci }, env) {
   const dest = destinazioni(env);
   verificaDestinazioni(dest, env);                           // prima di scrivere ovunque, anche qui
   verificaPasswordLibere({ admin, voci });                   // idem: setPersona lo direbbe a giro iniziato
+  verificaWebAltrove({ admin, voci }, dest, env);
+  const webQui = new Set(auth.persone().filter(p => p.origine === 'web').map(p => p.id));
+  if (voci.some(v => webQui.has(v.id))) throw new Error("Un id del .env appartiene gia' a un iscritto web locale.");
   const file = auth.setPassword(admin);                      // per primo: gli altri hanno bisogno che il file esista
   for (const v of voci) auth.setPersona(v.nome, v.pw, v.ruolo);
   const tenuti = new Set(voci.map(v => v.id));

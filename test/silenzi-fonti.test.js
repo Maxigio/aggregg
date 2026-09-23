@@ -39,6 +39,14 @@ test('auth: auth.json illeggibile chiude il cancello invece di aprirlo', () => {
     assert.strictEqual(auth.verifyRole('qualunque-password'), null);
     assert.strictEqual(auth.makeToken('full'), null);
     assert.strictEqual(auth.checkToken('1.full.deadbeef'), null);
+
+    // JSON valido ma semanticamente rotto: non deve diventare «nessuna password».
+    for (const contenuto of ['null', '[]', '{}', '{"salt":"aa","hash":"bb"}']) {
+      fs.writeFileSync(path.join(dir, 'auth.json'), contenuto);
+      assert.strictEqual(auth.stato(), 'illeggibile', contenuto);
+      assert.strictEqual(auth.isEnabled(), true, contenuto);
+      assert.strictEqual(auth.verifyRole('qualunque-password'), null, contenuto);
+    }
   } finally {
     if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
     delete require.cache[require.resolve('../backend/auth')];
@@ -60,6 +68,27 @@ test('auth: la password si scrive in modo atomico (niente finestra di file tronc
   } finally {
     if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
     delete require.cache[require.resolve('../backend/auth')];
+  }
+});
+
+test('auth: un file gia configurato che sparisce non riapre il cancello', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-auth-sparito-'));
+  const vecchio = process.env.USER_DATA_PATH;
+  process.env.USER_DATA_PATH = dir;
+  delete require.cache[require.resolve('../backend/auth')];
+  const auth = require('../backend/auth');
+  try {
+    assert.strictEqual(auth.stato(), 'assente');
+    auth.setPassword('unapasswordlunga');
+    assert.strictEqual(auth.stato(), 'ok');
+    fs.unlinkSync(path.join(dir, 'auth.json'));
+    assert.strictEqual(auth.stato(), 'illeggibile');
+    assert.strictEqual(auth.isEnabled(), true);
+    assert.strictEqual(auth.verifyRole('unapasswordlunga'), null);
+  } finally {
+    if (vecchio == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = vecchio;
+    delete require.cache[require.resolve('../backend/auth')];
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 

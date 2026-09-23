@@ -100,6 +100,8 @@ app.use((req, res, next) => {
   next();
 });
 const PORT = process.env.PORT || 3000;
+// Le Aste sono una prova locale: sul servizio M2, senza opt-in, niente UI, API o giro PVP.
+const ASTE_LOCALE = process.env.AMR_ASTE_LOCALE === '1';
 // Timeout per-fonte: copre anche le ricerche che leggono più pagine o famiglie.
 const TIMEOUT_MS = 45000;
 
@@ -586,8 +588,13 @@ app.get(['/', '/index.html'], (req, res, next) => {
     // giro riparte identico.
     aggiornaFE();
     const v = minFE.ver || String(Date.now());
-    const html = fs.readFileSync(path.join(__dirname, '../frontend/index.html'), 'utf8')
+    let html = fs.readFileSync(path.join(__dirname, '../frontend/index.html'), 'utf8')
       .replace(/(src|href)="(app\.js|style\.css|pricing\.js)"/g, `$1="$2?v=${v}"`);
+    html = html
+      .replace('<!-- AMR_ASTE_BUTTON -->', ASTE_LOCALE
+        ? '<button type="button" class="mode-btn" data-mode="aste" role="tab">Aste</button>' : '')
+      .replace('<!-- AMR_ASTE_PANEL -->', ASTE_LOCALE
+        ? '<div id="astePanel" class="d-none"></div>' : '');
     res.set('Cache-Control', 'no-cache').type('html').send(html);
   } catch (_) { next(); }
 });
@@ -1188,21 +1195,23 @@ async function runSubito(params, ms, chiaveFonte) {
     const s = sciogli(await Promise.race([avviato, timeout]));
     // Come in runSource: una fonte che dichiara di non aver letto bene non e' 'empty'.
     if (s.sospetto) {
-      segna(Object.assign(new Error(s.sospetto), { kind: 'error' }), 0);
+      segna(s.bloccoParziale || Object.assign(new Error(s.sospetto), { kind: 'error' }), 0);
       return { ...s, status: 'error', reason: s.sospetto };
     }
     // BLOCCO PARZIALE: qualche famiglia moto e' stata RESPINTA (403/429) ma altre hanno risposto.
     // Non e' un errore di lettura e non e' "mercato parziale": lo stato resta 'ok' con la nota
-    // `parziale` (gli annunci ci sono), ma il freno anti-ban deve vedere la respinta col suo
+    // `parziale` (se ci sono annunci), ma il freno anti-ban deve vedere la respinta col suo
     // genere vero — non un 'error' generico, che non ferma mai.
     if (s.bloccoParziale) segna(s.bloccoParziale, s.items.length);
+    else if (s.parzialeRete && !s.items.length) segna(Object.assign(new Error(s.parziale || 'risposta parziale'), { kind: 'transient' }), 0);
     else segna(null, s.items.length);
-    return { ...s, status: s.items.length ? 'ok' : 'empty', reason: s.parziale || null };
+    return { ...s, status: s.items.length ? 'ok' : s.parzialeRete ? 'error' : 'empty', reason: s.parziale || null };
   } catch (err) {
     ctrl.abort();
     segna(err, 0);
     console.warn('[WARN] ' + err.message);
-    return { items: [], status: 'error', reason: err.message };
+    const avviso = err.status === 429 ? scrapeSubitoApi.AVVISO_429 : null;
+    return { items: [], status: 'error', reason: avviso || err.message, parziale: avviso };
   } finally { clearTimeout(scattato); }
 }
 
@@ -1267,7 +1276,7 @@ require('./prove-route').mount(app, { chiaveLimite });
 // ─── Aste giudiziarie: i lotti del PVP, in magazzino locale — vedi aste-route.js ──
 // Fonte unica per legge (art. 490 c.p.c.), copiata una volta al giorno in `amr-aste.db`:
 // i filtri a schermo non costano niente al portale del ministero.
-require('./aste-route').mount(app, { chiaveLimite });
+if (ASTE_LOCALE) require('./aste-route').mount(app, { chiaveLimite });
 
 // ─── Cache ricerche recenti (§17.4) ───────────────────────────────────────────
 // Stessa ricerca entro il TTL → risposta istantanea. NON cacha se una fonte è
@@ -2355,7 +2364,7 @@ const server = !avviaAscolto ? null : app.listen(PORT, () => {
 
     // Aste: il giro sul portale del ministero, uno al giorno. Si sveglia da solo e quasi
     // sempre non fa niente — decide `stantio()`, che guarda l'ETA' dell'ultimo giro riuscito.
-    require('./aste').avvia();
+    if (ASTE_LOCALE) require('./aste').avvia();
 });
 // Esposte per i test di caratterizzazione: sono le funzioni con cui inizia OGNI risoluzione
 // marca/modello, e finora non erano raggiungibili da fuori. Prefisso _ = superficie interna.
