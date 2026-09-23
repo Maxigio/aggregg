@@ -1977,6 +1977,7 @@ function renderRicambiPanel() {
     : '';
   const subitoAvviso = d.sources?.subito?.status === 'blocked' && d.sources.subito.reason
     ? `<div class="src-avviso">${escapeHtml(d.sources.subito.reason)}</div>` : '';
+  const subitoPausa = fontePausaHTML(RC_FONTE.subito || 'Subito.it', d.sources?.subito?.pausa);
   /**
    * PAGINE TROVATE SUL WEB, non offerte.
    *
@@ -1993,7 +1994,7 @@ function renderRicambiPanel() {
           + `<span class="rc-pagina-d">${escapeHtml(x.dominio || '')}</span></a>`).join('')
       + '</div>'
     : '';
-  const head = `<div class="rc-head">${rcSchedaHTML(d)}${statusLine}${subitoAvviso}${budgetHTML(rcRestanti, 'ricerca', 'ricerche')}${pagineLine}</div>`;
+  const head = `<div class="rc-head">${rcSchedaHTML(d)}${statusLine}${subitoAvviso}${subitoPausa}${budgetHTML(rcRestanti, 'ricerca', 'ricerche')}${pagineLine}</div>`;
   // barra confronto (mirror auto: "Selezionati N · Apri confronto · Svuota") + sezione matrice separata
   const bar = confrontoRicambi.length ? rcCompareBarHTML() : '';
   const cmp = (rcCompareOpen && confrontoRicambi.length) ? rcCompareSection() : '';
@@ -2673,8 +2674,11 @@ function renderResults(results) {
 async function enrichMotoRow(url) {
   const r = trovaResult(url);
   if (!r || r._enriched) return;   // già arricchita (cover-only NON conta: ha solo 1 foto)
+  const myGen = searchGen;
   try {
     const j = await fetch(`/api/detail?url=${encodeURIComponent(url)}`).then(x => x.json());
+    if (myGen !== searchGen || !currentResults.includes(r)) return;
+    segnalaPausaDettaglio(j);
     if (j.ok && j.detail) {
       // QUANTI CAMPI HA PORTATO DAVVERO. `{ok:true, detail:{...tutto null}}` e' la risposta
       // che il parser da' su una pagina che non ha detto niente: marcandola comunque
@@ -2689,7 +2693,7 @@ async function enrichMotoRow(url) {
       if (portati) r._enriched = true;   // solo a merge riuscito: un fetch fallito resta ri-tentabile
     }
   } catch (_) {}
-  updateRowThumb(url);
+  if (myGen === searchGen && currentResults.includes(r)) updateRowThumb(url);
 }
 function updateRowThumb(url) {
   // LE DUE VISTE, non una. Qui c'era solo `.result-row`, e la vista predefinita e' quella a
@@ -3769,7 +3773,7 @@ function renderSourceStatus() {
         txt += ` <em>di ${Number(s.totale).toLocaleString('it-IT')}${s.totaleLargo ? ' sulla marca' : ''}</em>`;
       }
     }
-    else if (s.status === 'skipped') txt = SKIP_REASON_TXT[s.reason] || s.reason || 'saltato';
+    else if (s.status === 'skipped') txt = escapeHtml(SKIP_REASON_TXT[s.reason] || s.reason || 'saltato');
     else txt = meta.txt || s.status;
     const dim = s.status === 'ok' ? '' : ' src-dim';
     return `<span class="src ${meta.cls}${dim}">${FONTE_LABEL[f]} <b>${txt}</b></span>`;
@@ -3794,6 +3798,8 @@ function renderSourceStatus() {
    */
   for (const f of order) {
     const s = lastSources[f];
+    fonteBreakdown.innerHTML += fontePausaHTML(FONTE_LABEL[f], s?.pausa)
+      || (s?.erroreDettaglio ? `<div class="src-avviso">${escapeHtml(`Dettagli ${FONTE_LABEL[f]}: ${s.erroreDettaglio}`)}</div>` : '');
     if (s && (s.status === 'ok' || s.status === 'error') && s.parziale && !(f === 'autoscout' && s.allargato)) {
       fonteBreakdown.innerHTML += `<span class="src-avviso">${escapeHtml(String(s.parziale))}</span>`;
     }
@@ -3860,6 +3866,52 @@ function renderSourceStatus() {
     if (sub.kmDa) pezzi.push(`da ${km(sub.kmDa)}`);
     if (sub.kmFino) pezzi.push(`fino a ${km(sub.kmFino)}`);
     fonteBreakdown.innerHTML += `<span class="src-avviso">Subito filtra i km a fasce: possono arrivare annunci ${pezzi.join(' e ')} km</span>`;
+  }
+}
+
+function fontePausaHTML(nome, pausa) {
+  const testo = fontePausaTesto(nome, pausa);
+  return testo ? `<div class="src-avviso">${escapeHtml(testo)}</div>` : '';
+}
+
+function fontePausaTesto(nome, pausa) {
+  if (!pausa) return '';
+  const ora = new Date();
+  const fine = Number.isFinite(pausa.fino) && pausa.fino > 0 ? new Date(pausa.fino) : null;
+  const valida = fine && Number.isFinite(fine.getTime());
+  let testo;
+  if (pausa.verifica === true && pausa.fermo === true) {
+    testo = `Verifica della disponibilità di ${nome} in corso.`;
+  } else if (pausa.verifica === true || (valida && fine <= ora)) {
+    testo = `Pausa terminata: la prossima richiesta verificherà se ${nome} è nuovamente disponibile.`;
+  } else if (pausa.fermo === true) {
+    const quando = valida
+      ? fine.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+        + (fine.toDateString() !== ora.toDateString() ? ` del ${fine.toLocaleDateString('it-IT')}` : '')
+      : null;
+    testo = `Fonte ${nome}: richieste sospese. ` + (quando ? `Potrai riprovare dalle ${quando}; la` : 'La')
+      + ' disponibilità sarà verificata alla prossima richiesta.';
+  } else return '';
+  return testo;
+}
+
+// Al massimo un avviso per fonte/stato nel contesto corrente, anche fra dettaglio e confronto.
+const avvisiPausaDettaglio = new Map();
+function segnalaPausaDettaglio(data) {
+  if (typeof data?.ok !== 'boolean' || !data.pausa || !['subito', 'autoscout', 'moto'].includes(data.fonte)) return;
+  const f = data.fonte;
+  const errore = data.ok ? null : data.error || 'Dettaglio temporaneamente non disponibile.';
+  if (lastSources) {
+    lastSources[f] = { status: 'error', ...lastSources[f], pausa: data.pausa, erroreDettaglio: errore };
+    renderSourceStatus();
+  } else {
+    const testo = fontePausaTesto(FONTE_LABEL[f], data.pausa) || (errore ? `Dettagli ${FONTE_LABEL[f]}: ${errore}` : '');
+    if (!testo) return;
+    const stato = JSON.stringify([searchGen, data.pausa.fermo, data.pausa.fino, data.pausa.verifica]);
+    if (avvisiPausaDettaglio.get(f) === stato) return;
+    avvisiPausaDettaglio.set(f, stato);
+    // toast usa textContent: il testo della fonte non diventa HTML.
+    toast(testo);
   }
 }
 
@@ -4092,15 +4144,18 @@ function renderMatrix() {
 async function enrichMotoSpecs(list) {
   const targets = list.filter(r => r.fonte === 'moto' && !hasSpec(r) && /^https?:/.test(r.url || ''));
   if (!targets.length) return;
+  const myGen = searchGen;
   await Promise.all(targets.map(async r => {
     if (r._detailLoaded) return;
     try {
       const j = await fetch(`/api/detail?url=${encodeURIComponent(r.url)}`).then(x => x.json());
+      if (myGen !== searchGen || !matrixList.includes(r)) return;
+      segnalaPausaDettaglio(j);
       // review: marca _detailLoaded SOLO sul successo, sennò un errore transitorio blocca per sempre l'arricchimento
       if (j.ok && j.detail) { Object.keys(j.detail).forEach(k => { if (r[k] == null && j.detail[k] != null) r[k] = j.detail[k]; }); r._detailLoaded = true; }
     } catch (_) {}
   }));
-  if (!cmatrixPanel.classList.contains('d-none')) renderMatrix();
+  if (myGen === searchGen && matrixList === list && !cmatrixPanel.classList.contains('d-none')) renderMatrix();
 }
 
 // ─── Segnalazioni (bug-report) ───────────────────────────────────────────────
@@ -6056,7 +6111,8 @@ function cpSchedaHTML(v) {
   const corpo = !st ? '<div class="cp-att">Il parco non e\' ancora stato scaricato.</div>'
     : st.stato === 'carico' ? '<div class="cp-att">Scarico il parco… su un concessionario grande ci vuole un minuto.</div>'
     : st.stato === 'ko' ? `<div class="cp-att">Non riuscito: ${escapeHtml(st.errore || 'la fonte non risponde')}</div>`
-    : cpNumeriChiave(st.dati.numeri, st.dati.storico, v, st.dati.troncato, st.dati.illeggibili, st.dati.totaleFonte, st.dati.passateKo);
+    : (st.dati.avvisoCache ? `<div class="cp-avviso">${escapeHtml(st.dati.avvisoCache)}</div>` : '')
+      + cpNumeriChiave(st.dati.numeri, st.dati.storico, v, st.dati.troncato, st.dati.illeggibili, st.dati.totaleFonte, st.dati.passateKo);
   const quando = st && st.stato === 'ok' && st.dati.quando
     ? `<span class="cp-quando">dati del ${new Date(st.dati.quando).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${st.dati.daCache ? ' · dalla cache' : ''}</span>` : '';
   const aperto = cpApertoId === cpChiave(v);

@@ -26,7 +26,7 @@ const { renderReportPdf } = require('./report-pdf');   // un solo layout: lo usa
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
 const { famiglieMotoit, getBrandModels, getModelBikes, resolveMotoitVersionEntry, correggiModelSlug } = require('./scrapers/motoit-models');
 const motoitVersione = require('./scrapers/motoit-versione');   // testo libero → codice/slug versione Moto.it
-const { getDetail } = require('./scrapers/detail');
+const { getDetail, fonteFromUrl } = require('./scrapers/detail');
 const liquidita      = require('./liquidita');    // liquidita modello (ACI Autoritratto)
 const annullo        = require('./annullo');       // il segnale che chiude le richieste abbandonate
 const iptCalc        = require('./ipt');          // costo passaggio di proprieta per provincia
@@ -128,17 +128,17 @@ async function scrapeAutoscoutUnion(params, opts = {}) {
   // Gli errori per-grafia NON si inghiottono: una grafia caduta e' una fetta di risultati
   // che manca, e prima spariva in silenzio — risultato parziale spacciato per 'ok' (e
   // cachato), o 'empty' che innescava un riallargamento su un errore transitorio.
-  const errori = [];
+  const errori = [], parziali = [];
   const liste = await Promise.all(grafie.map(async g => {
-    // `maxPages` viaggia con la fetta: e' la compensazione misurata per il taglio sul CAP
-    // (regione senza raggio, riga ~1657) e perderla qui voleva dire leggere 100 annunci per
-    // grafia invece di 150 prima del post-filtro. NON si inoltra tutto `opts`: `withMeta`
-    // cambierebbe la forma del ritorno e il ciclo di unione qui sotto legge un array.
-    try { return await scrapeAutoscoutGraphql({ ...params, autoscoutVersionText: conVersione(g) }, { fetta: opts.fetta || 0, ...(opts.maxPages ? { maxPages: opts.maxPages } : {}) }); }
-    catch (e) { errori.push(e); return []; }
+    try {
+      const r = await scrapeAutoscoutGraphql({ ...params, autoscoutVersionText: conVersione(g) },
+        { fetta: opts.fetta || 0, withMeta: true, ...(opts.maxPages ? { maxPages: opts.maxPages } : {}) });
+      if (r.parziale) parziali.push(r.parziale);
+      if (r.bloccoParziale) errori.push(r.bloccoParziale);
+      return r.items;
+    } catch (e) { errori.push(e); return []; }
   }));
   // Tutte le grafie cadute: non ripetere la stessa ricerca né passare al browser.
-  if (errori.length >= grafie.length) throw errori[0];
   const byUrl = new Map();
   for (const lista of liste) for (const r of lista) if (r && r.url && !byUrl.has(r.url)) byUrl.set(r.url, r);
   // Superstiti a zero item CON grafie cadute: quelle cadute potevano essere proprio la
@@ -150,16 +150,15 @@ async function scrapeAutoscoutUnion(params, opts = {}) {
   // della fonte NON e' definito, e si dice null invece di inventarlo.
   // `parziale` viaggia anche senza withMeta: sciogli() normalizza entrambe le forme, e un
   // risultato monco che non si dichiara e' esattamente il difetto che questo campo chiude.
-  const parziale = errori.length
-    ? `${errori.length}/${grafie.length} grafie AS24 fallite: ${errori[0].message}` : null;
+  const parziale = [errori.length ? `${errori.length}/${grafie.length} grafie AS24 non lette per intero: ${errori[0].message}` : null, ...parziali].filter(Boolean).join(' · ') || null;
   // Il GraphQL tagga gia' 403/429 come `blocked`: quel genere NON va sciolto nella stringa
   // `parziale`, senno' runSource registra 'ok' (gli item delle grafie superstiti ci sono) e il
   // freno azzera i colpi proprio mentre AS24 ci sta respingendo. Come subito-api.js:668.
   const respinte = errori.filter(e => e && e.kind === 'blocked');
-  const bloccoParziale = respinte.length
-    ? Object.assign(new Error(`AS24 ha respinto ${respinte.length} grafie su ${grafie.length} (${respinte[0].message})`),
-      { kind: 'blocked', status: respinte[0].status })
-    : null;
+  // Non ricreare l'errore: perderemmo FONTE_IN_PAUSA e conteremmo un rifiuto
+  // locale come una nuova risposta del portale. Il messaggio completo e' in parziale.
+  const bloccoParziale = respinte.find(e => e.status === 429)
+    || respinte.find(e => e.code !== 'FONTE_IN_PAUSA') || respinte[0] || null;
   return { items: [...byUrl.values()], total: null, parziale, bloccoParziale };
 }
 
@@ -939,8 +938,12 @@ app.get('/api/detail', async (req, res) => {
   try {
     const detail = await getDetail(url);
     if (!detail) return res.json({ ok: false, detail: null });
-    res.json({ ok: true, detail });
+    const fonte = fonteFromUrl(url);
+    res.json({ ok: true, detail, fonte, pausa: salute.fermo(fonte) });
   } catch (e) {
+    if (e.status === 429 || e.code === 'FONTE_IN_PAUSA') {
+      return res.status(502).json({ ok: false, error: e.message, fonte: e.fonte, pausa: salute.fermo(e.fonte) });
+    }
     return res.status(400).json({ error: e.message });   // host non in allowlist / schema non-https
   }
 });
@@ -1160,7 +1163,7 @@ async function runSource(lavoro, ms, nomeSito, chiaveFonte) {
     // Un risultato parziale con item resta 'ok' (il flag sta ACCANTO allo status, mai al
     // posto suo — stessa regola di `allargato`), ma il perche' viaggia in `reason` e il
     // campo `parziale` arriva fino a `sources`, dove cacheable() lo legge.
-    return { ...s, status: s.items.length ? 'ok' : 'empty', reason: s.parziale || null };
+    return { ...s, status: s.items.length ? 'ok' : s.parzialeRete ? 'error' : 'empty', reason: s.parziale || null };
   } catch (err) {
     const isTimeout = err.message === '__timeout__';
     // Anche su un errore: se la fonte ha risposto male, quello che resta in volo non serve.
@@ -1310,6 +1313,7 @@ function cacheable(data) {
   // Stessa regola gia' scritta in ricambi-route.js:27.
   const bad = s => s === 'error' || s === 'timeout';
   const src = data.sources || {};
+  if (Object.values(src).some(s => s?.pausa?.fermo || s?.pausa?.verifica)) return false;
   if (bad(src.subito?.status) || bad(src.autoscout?.status) || bad(src.moto?.status)) return false;
   // Un risultato PARZIALE (grafie AS24 cadute con item superstiti) e' monco quanto un
   // timeout: congelarlo tre minuti renderebbe inutile il gesto di ripremere Cerca.
@@ -1345,9 +1349,9 @@ async function runSearch(params) {
   const hit = searchCache.get(key);
   if (hit && Date.now() - hit.ts < SEARCH_CACHE_TTL) {
     searchCache.delete(key); searchCache.set(key, hit);   // LRU touch
-    return hit.data;
+    return salute.conStatoFonti(hit.data);
   }
-  if (searchInFlight.has(key)) return searchInFlight.get(key);
+  if (searchInFlight.has(key)) return salute.conStatoFonti(await searchInFlight.get(key));
   // Il conto delle richieste si apre QUI, non attorno a runSearch: una risposta servita
   // dalla cache non costa richieste, e contarla come "0" annacquerebbe la misura.
   const etichetta = [params.tipo, params.marca, params.modello].filter(Boolean).join(' ');
@@ -1363,7 +1367,7 @@ async function runSearch(params) {
   // un errore transitorio incollerebbe tutte le richieste successive a una Promise gia'
   // rifiutata. Chi era attaccato riceve lo stesso errore, che e' la verita' per tutti.
   searchInFlight.set(key, p);
-  try { return await p; } finally { searchInFlight.delete(key); }
+  try { return salute.conStatoFonti(await p); } finally { searchInFlight.delete(key); }
 }
 
 /**
@@ -2195,7 +2199,7 @@ async function runSearchCore(params) {
       // `count` = quanti ne mostriamo dopo i nostri filtri. `totale` = quanti ne ha la
       // FONTE per questa ricerca. Sono due popolazioni diverse e restano due numeri.
       subito:    { status: subitoRes.status, reason: subitoRes.reason || null, count: countBy('subito'),
-                   totale: subitoRes.total ?? null,
+                   totale: subitoRes.total ?? null, pausa: salute.fermo('subito'),
                    parziale: [subitoRes.parziale, subitoNonChieste].filter(Boolean).join(' · ') || null,
                    // Vero SOLO se dentro quella stringa c'e' un monco TRANSITORIO (famiglie
                    // cadute). Le famiglie mai chieste — oltre il tetto, o agganciate dal ponte
@@ -2218,12 +2222,12 @@ async function runSearchCore(params) {
       // solo per le fonti 'skipped', e queste frasi nascono proprio a status 'ok': il
       // riallargamento veniva calcolato, spedito, e non arrivava mai sotto gli occhi di nessuno.
       autoscout: { status: asRes.status,     reason: asReason,                 count: asCount,
-                   totale: asRes.total ?? null, allargato: asAllargatoA,
+                   totale: asRes.total ?? null, pausa: salute.fermo('autoscout'), allargato: asAllargatoA,
                    // Grafie AS24 cadute con superstiti: gli item ci sono ma ne mancano
                    // altri. cacheable() lo legge per non congelare la risposta monca.
                    parziale: asRes.parziale || null },
       moto:      { status: motoRes.status,   reason: motoRes.reason || null,   count: countBy('moto'),
-                   totale: motoRes.total ?? null,
+                   totale: motoRes.total ?? null, pausa: salute.fermo('moto'),
                    // Senza lo slug del modello la ricerca si allarga alla MARCA, e il totale
                    // in pagina e' quello della marca: la pill scriveva "39 di 148" come se
                    // quel 148 fosse del modello chiesto. Il numero resta, e dice di chi e'.

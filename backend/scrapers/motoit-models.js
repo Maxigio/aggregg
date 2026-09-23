@@ -13,6 +13,7 @@
  * Cache in-memory 12h per chiave + dedup richieste concorrenti.
  */
 const https = require('https');
+const salute = require('../fonti-salute');
 const { makeModelResolver, confiniDi } = require('./brand-match');
 const budget = require('../budget-richieste');        // conta le richieste, non le limita
 
@@ -28,17 +29,20 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 // GET JSON con segui-redirect. L'API risponde a GET (verificato) — niente cookie.
 function fetchJson(url, hops = 0) {
+  return salute.richiesta('moto', async () => {
   // Questi menu hanno cache 12h: quando si contano, e' perche' la cache era fredda.
   budget.conta('motoit', hops ? 'redirect' : 'menu cache-miss');
   return new Promise((resolve, reject) => {
     if (hops > 5) return reject(new Error('too many redirects'));
     const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept': 'application/json', 'Accept-Language': 'it-IT,it;q=0.9' } }, res => {
+      res.on('error', reject);
+      res.on('aborted', () => reject(new Error('risposta interrotta')));
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
         const next = res.headers.location.startsWith('http') ? res.headers.location : BASE + res.headers.location;
         return fetchJson(next, hops + 1).then(resolve, reject);
       }
-      if (res.statusCode !== 200) { res.resume(); return reject(new Error(`HTTP ${res.statusCode}`)); }
+      if (res.statusCode !== 200) { res.resume(); return reject(salute.erroreHttp('moto', res.statusCode, res.headers)); }
       let d = ''; res.setEncoding('utf8');
       res.on('data', c => d += c);
       res.on('end', () => { try { resolve(JSON.parse(d)); } catch (e) { reject(new Error('JSON non valido: ' + e.message)); } });
@@ -47,11 +51,10 @@ function fetchJson(url, hops = 0) {
       // INATTIVITA': a presa chiusa non scatta) e l'inflight di `cached` — mai ripulito —
       // incastrava ogni richiesta successiva per quella chiave. Stesso difetto misurato in
       // subito-api.js.
-      res.on('error', reject);
-      res.on('aborted', () => reject(new Error('risposta interrotta')));
     });
     req.on('error', reject);
     req.setTimeout(12000, () => req.destroy(new Error('timeout')));
+  });
   });
 }
 

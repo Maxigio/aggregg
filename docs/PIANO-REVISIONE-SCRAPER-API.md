@@ -61,3 +61,19 @@ vuoti; i filtri e i conteggi mostrati sono spiegabili; i percorsi che usano
 la fonte sono collaudati; i limiti delle prove live sono registrati. Solo
 allora passare alla fonte successiva. Nessuna prova puntuale garantisce che
 un portale non cambierà in futuro.
+
+## Decisioni del 23 settembre 2026
+
+La pausa al primo 429 e la verifica della ripartenza sono condivise da Subito,
+AutoScout24 e Moto.it nei quattro moduli. Le fonti specifiche dei Ricambi
+restano alle rispettive revisioni. Prima destinazione: M2; clienti dopo.
+
+La sostituzione di «Carica altri» con «Pagine» è sospesa in attesa del confronto
+sulla copertura: l'utente richiede **una sola richiesta di annunci per fonte**.
+Non è autorizzata l'equivalenza «pagina N = pagina N di ogni famiglia» quando
+richiederebbe più interrogazioni. Verificare le unioni native possibili e poi
+discutere esplicitamente i casi in cui una sola chiamata cambia la copertura.
+
+Prove, correzioni e limiti del lavoro sui 429 sono registrati in
+[REVISIONE-429-RIPARTENZA-2026-09-23.md](REVISIONE-429-RIPARTENZA-2026-09-23.md).
+Nessuna distribuzione sull'M2 senza un nuovo ordine dell'utente.

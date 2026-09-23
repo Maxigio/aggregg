@@ -32,6 +32,7 @@
  *   si legge com'e' scritto — e' chi fa le medie che deve sapere che quell'uno esiste.
  */
 const cheerio = require('cheerio');
+const salute = require('../fonti-salute');
 const motoit = require('./motoit');          // `_get`: HTTP gentile + conteggio richieste
 
 const BASE = 'https://dealer.moto.it';
@@ -84,15 +85,24 @@ function urlAnnuncio(id, marca, modello) {
 }
 
 /* ─── anagrafica ──────────────────────────────────────────────────────────── */
+// La struttura dei contatti identifica la vetrina anche senza annunci. Un
+// titolo generico o il nome ricavato dallo slug non provano la ripartenza.
+const vetrinaRiconoscibile = body => cheerio.load(body)('.dlr-map__box__info, .dlr-map__box__address').length > 0;
+
 /**
  * Chi e' il concessionario: nome, dove sta, come lo si chiama.
  * @returns {Promise<{fonte,id,nome,dove,via,telefono,sito,url}>}
  */
 async function scheda(slug) {
   if (!SLUG_OK.test(String(slug || ''))) throw new Error('slug della vetrina non valido');
-  const { status, body } = await motoit._get(`${BASE}/${slug}`);
-  if (status !== 200) throw new Error(`la vetrina risponde ${status}`);
-  return schedaDaHtml(body, slug);
+  return salute.richiesta('moto', async () => {
+    const { status, body, headers } = await motoit._get(`${BASE}/${slug}`);
+    if (status !== 200) throw salute.erroreHttp('moto', status, headers);
+    if (salute.fermo('moto').verifica && !vetrinaRiconoscibile(body)) {
+      throw new Error('Moto.it: vetrina non riconoscibile, disponibilità non verificata');
+    }
+    return schedaDaHtml(body, slug);
+  });
 }
 
 function schedaDaHtml(body, slug) {
@@ -198,34 +208,31 @@ async function parco(slug, opts = {}) {
   const items = [];
   const visti = new Set();
   let troncato = false;
+  let errorePagina = null;
   let illeggibili = 0;      // card presenti che non si sono lasciate leggere: si dicono, non si nascondono
 
   for (let p = 1; p <= maxPagine; p++) {
     const url = `${BASE}/${slug}/${sezione}` + (p > 1 ? `/pagina-${p}` : '');
-    const { status, body } = await motoit._get(url);
-    if (status !== 200) {
-      if (p === 1) throw new Error(`la vetrina risponde ${status}`);
-      // NON e' "una pagina in fondo che sparisce": e' una pagina che non si e' lasciata
-      // leggere, e sotto ce ne possono essere altre cinque. Uscendo in silenzio il parco
-      // tornava con meta' dei veicoli e `troncato: false`, cioe' dichiarato completo — e il
-      // pannello Competitor calcolava prezzo minimo, mediana, giacenze e arrivi su quella
-      // meta'. Il gemello della ricerca (motoit.js) su questa stessa condizione alza la
-      // bandiera: qui mancava.
-      troncato = true;
+    let letta;
+    try {
+      letta = await salute.richiesta('moto', async () => {
+        const { status, body, headers } = await motoit._get(url);
+        if (status !== 200) throw salute.erroreHttp('moto', status, headers);
+        const pagina = leggiPagina(body, ctx);
+        if (pagina.grezze > 0 && !pagina.items.length) throw Object.assign(
+          new Error('le card della vetrina non si leggono più: la pagina della fonte è cambiata'), { illeggibili: pagina.grezze });
+        if (salute.fermo('moto').verifica && !pagina.items.length && !vetrinaRiconoscibile(body)) {
+          throw new Error('Moto.it: vetrina non riconoscibile, disponibilità non verificata');
+        }
+        return pagina;
+      });
+    } catch (e) {
+      if (p === 1) throw e;
+      errorePagina = e;
+      if (e.illeggibili) { illeggibili += e.illeggibili; troncato = true; }
       break;
     }
-    const { items: pagina, grezze } = leggiPagina(body, ctx);
-    // CARD PRESENTI MA ILLEGGIBILI = il markup della fonte e' cambiato, non il piazzale e'
-    // vuoto. Dichiararlo, invece di archiviare un parco vuoto come se fosse completo.
-    if (grezze > 0 && !pagina.length) {
-      if (p === 1) throw new Error('le card della vetrina non si leggono piu\': la pagina della fonte e\' cambiata');
-      // Dalla pagina 2 in poi si tiene quello che si e' preso, ma la vista non e' completa e
-      // le card che non si sono lette si contano: prima l'uscita saltava anche la riga che le
-      // conta (`illeggibili += ...` sta sotto), quindi sparivano due volte.
-      illeggibili += grezze;
-      troncato = true;
-      break;
-    }
+    const { items: pagina, grezze } = letta;
     if (!grezze) break;                        // e' cosi' che finisce il parco, non col widget
     const prima = items.length;
     for (const v of pagina) { if (!visti.has(v.url)) { visti.add(v.url); items.push(v); } }
@@ -241,7 +248,7 @@ async function parco(slug, opts = {}) {
     if (p === maxPagine) troncato = true;
     await sleep(DELAY_MS);
   }
-  return { items, troncato, illeggibili };
+  return { items, troncato, illeggibili, errorePagina };
 }
 
 module.exports = { slugVetrina, scheda, parco, _mapCards: mapCards, _scheda: schedaDaHtml, _urlAnnuncio: urlAnnuncio };

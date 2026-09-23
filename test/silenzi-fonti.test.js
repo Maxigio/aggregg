@@ -1739,7 +1739,7 @@ test('autoscout: la ricerca Auto/Moto resta GraphQL anche quando fallisce', () =
   const smart = srv.slice(srv.indexOf('async function scrapeAutoscoutSmart'), srv.indexOf('// F50 fase 1b'));
   const union = srv.slice(srv.indexOf('async function scrapeAutoscoutUnion'), srv.indexOf('// Auto e Moto usano sempre hades'));
   assert.match(smart, /return scrapeAutoscoutGraphql\(params, opts\)/);
-  assert.match(union, /if \(errori\.length >= grafie\.length\) throw errori\[0\]/);
+  assert.match(union, /if \(errori\.length && byUrl\.size === 0\) throw errori\[0\]/);
   assert.doesNotMatch(srv, /require\(['"]\.\/scrapers\/autoscout-playwright['"]\)|USE_AS24_GRAPHQL/);
   assert.match(srv, /runSource\(\(\) => scrapeAutoscoutUnion/);
 });

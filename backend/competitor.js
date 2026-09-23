@@ -145,25 +145,21 @@ function scrivi(utente, voci) {
 
 /* ─── dal link della vetrina all'id ───────────────────────────────────────── */
 function getTesto(url, redirect = 0) {
-  return new Promise((resolve, reject) => {
-    let u; try { u = new URL(url); } catch (_) { return reject(new Error('link non valido')); }
+  let u; try { u = new URL(url); } catch (_) { return Promise.reject(new Error('link non valido')); }
+  const fonte = /(^|\.)subito\.it$/i.test(u.hostname) ? 'subito' : 'autoscout';
+  return fontiSalute.richiesta(fonte, () => new Promise((resolve, reject) => {
     // Anti-SSRF: si parla solo con le due fonti, e vale anche dopo un redirect.
     if (!/(^|\.)(autoscout24\.it|subito\.it)$/i.test(u.hostname)) return reject(new Error('host non consentito'));
-    const suSubito = /(^|\.)subito\.it$/i.test(u.hostname);
-    // Anche la rilettura della scheda costa una richiesta, prima del parco.
-    if (suSubito && fontiSalute.fermo('subito').fermo) {
-      return reject(Object.assign(new Error('Subito è in pausa dopo un blocco. Riprova più tardi.'), { code: 'FONTE_IN_PAUSA' }));
-    }
     const req = https.get(u.href, { headers: { 'user-agent': UA, 'accept-language': 'it-IT,it;q=0.9', 'accept-encoding': 'gzip, deflate' } }, res => {
+      res.on('error', reject);
+      res.on('aborted', () => reject(new Error('risposta interrotta')));
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirect < 4) {
         res.resume();
         return resolve(getTesto(new URL(res.headers.location, u).href, redirect + 1));
       }
       if (res.statusCode >= 400) {
         res.resume();
-        const e = Object.assign(new Error(suSubito && res.statusCode === 429
-          ? scrapeSubito.AVVISO_429 : 'la pagina risponde ' + res.statusCode), { status: res.statusCode });
-        if (suSubito && res.statusCode === 429) fontiSalute.registra('subito', { errore: e });
+        const e = fontiSalute.erroreHttp(fonte, res.statusCode, res.headers);
         return reject(e);
       }
       const ch = []; let s = res;
@@ -175,12 +171,10 @@ function getTesto(url, redirect = 0) {
       s.on('error', reject);
       // `pipe()` non propaga gli errori: se la connessione cade dopo gli header l'errore esce su
       // `res`, non sul gunzip, e la Promise restava appesa. Un gestore anche qui.
-      res.on('error', reject);
-      res.on('aborted', () => reject(new Error('risposta interrotta')));
     });
     req.on('error', reject);
     req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error('la fonte non risponde')));
-  });
+  }));
 }
 
 const pulisci = s => String(s || '').replace(/\s+/g, ' ').trim();
@@ -275,6 +269,7 @@ async function risolviVetrina(urlRaw) {
   if (slugMoto) return await vetrinaMoto.scheda(slugMoto);
 
   if (/autoscout24\.it\/concessionari\//i.test(url)) {
+    return fontiSalute.richiesta('autoscout', async () => {
     const html = await getTesto(url);
     const id = (html.match(/"customerId"\s*:\s*"?(\d{3,})"?/) || [])[1];
     if (!id) throw new Error('in questa pagina Autoscout non c\'e\' l\'id del concessionario');
@@ -289,9 +284,11 @@ async function risolviVetrina(urlRaw) {
       || (tit.match(/\bin\s+([^|]+?)\s*\|/i) || [])[1] || '');
     const via = pulisci((html.match(/"streetAddress"\s*:\s*"([^"]{3,80})"/) || [])[1] || '');
     return { fonte: 'autoscout', id, nome, dove: dove || null, via: via || null, url, ...schedaLd(html) };
+    });
   }
 
   if (/subito\.it\/shops\//i.test(url) || /subito\.it\/.*\/shops\//i.test(url)) {
+    return fontiSalute.richiesta('subito', async () => {
     // L'URL porta l'id NEGOZIO; il filtro vuole l'id UTENTE. Si prende da un suo annuncio.
     const shop = (url.match(/\/shops\/(\d+)/) || [])[1];
     if (!shop) throw new Error('non riesco a leggere l\'id del negozio da questo link');
@@ -333,6 +330,7 @@ async function risolviVetrina(urlRaw) {
       descrizione: pulisci($('.shop_description').first().text()) || ld.descrizione || null,
       annunciDichiarati: (() => { const n = parseInt(pulisci($('#result_numb').first().text()).replace(/[^\d]/g, ''), 10); return Number.isFinite(n) ? n : null; })(),
     };
+    });
   }
 
   throw new Error('per ora riconosco le vetrine di Autoscout (/concessionari/...), di Subito (/shops/...) e di Moto.it (dealer.moto.it/...)');
@@ -358,7 +356,8 @@ async function parco(voce, dip = {}) {
    * un colpo, quindi la pausa non si allungava mai. Stessa chiave delle ricerche (`voce.fonte`
    * vale 'subito' | 'autoscout' | 'moto'), cosi' i due lati vedono lo stesso stato.
    */
-  if (salute.fermo(voce.fonte).fermo) throw new Error(`${voce.fonte}: ${salute.MOTIVO_PAUSA}`);
+  if (salute.fermo(voce.fonte).fermo) throw Object.assign(new Error(
+    salute.avvisoPausa ? salute.avvisoPausa(voce.fonte) : `${voce.fonte}: ${salute.MOTIVO_PAUSA}`), { code: 'FONTE_IN_PAUSA' });
   const veicoli = [];
   let troncato = false;        // il TETTO nostro (40 pagine): il parco e' piu' grande
   const passateKo = [];        // passate cadute: non si sa quanto manca, e non e' un tetto
@@ -390,7 +389,7 @@ async function parco(voce, dip = {}) {
       } catch (_) { /* lo storico e' un di piu': se non arriva, il parco resta */ }
     }
     // Moto.it la vetrina non dichiara un totale: si conta finche' le pagine finiscono.
-    return { veicoli: r.items.map(v => ({ ...v, tipo: 'moto' })), troncato: r.troncato, passateKo: [], illeggibili: r.illeggibili || 0, totaleFonte: null, storico };
+    return { veicoli: r.items.map(v => ({ ...v, tipo: 'moto' })), troncato: r.troncato, passateKo: r.errorePagina ? [{ tipo: 'moto', motivo: r.errorePagina.message, status: r.errorePagina.status }] : [], illeggibili: r.illeggibili || 0, totaleFonte: null, storico };
   }
 
   for (const tipo of ['auto', 'moto']) {
@@ -418,7 +417,7 @@ async function parco(voce, dip = {}) {
       passateKo.push({ tipo, motivo, ...(e.status ? { status: e.status } : {}) });
       totaleCopreTutto = false;   // una passata fallita rende qualunque somma parziale
       console.warn(`[competitor] passata ${tipo} fallita (${e.message}) → parco parziale`);
-      if (voce.fonte === 'subito' && e.status === 429) break;
+      if (e.status === 429 || e.code === 'FONTE_IN_PAUSA') break;
       continue;
     }
     const items = Array.isArray(r) ? r : (r.items || []);

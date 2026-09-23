@@ -20,6 +20,7 @@ const https = require('https');
 
 const { kindForStatus, fail } = require('./utils');   // classificazione salute crawler (F1.5)
 const budget = require('../budget-richieste');
+const salute = require('../fonti-salute');
 const annullo = require('../annullo');        // il segnale che chiude le richieste abbandonate
 const { livelliAnnuncio, dichiarato } = require('./subito-nodo'); // cosa l'annuncio dichiara di se'
 const dedotta = require('./versione-dedotta');        // la versione che il venditore non ha scelto dal menu
@@ -46,13 +47,15 @@ function httpGetJson(path) {
       // scaricare una risposta che nessuno leggera'. Vedi backend/annullo.js.
       signal: annullo.segnale(),
     }, res => {
+      // Anche un body rifiutato può interrompersi dopo gli header.
+      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+      res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
+      if (res.statusCode === 429) { res.resume(); return reject(salute.erroreHttp('subito', 429, res.headers)); }
       let d = ''; res.setEncoding('utf8');
       res.on('data', c => d += c);
       res.on('end', () => resolve({ status: res.statusCode, body: d }));
       // Se la presa cade DOPO gli header, l'errore esce su `res`, non su `req`: senza questi due
       // la Promise restava appesa per sempre e la ricerca aspettava il timeout esterno ogni volta.
-      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
-      res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
     });
     req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
     req.setTimeout(TIMEOUT_MS, () => req.destroy(fail('timeout', { kind: 'transient' })));
@@ -513,12 +516,15 @@ function extractTotal(j) {
 }
 
 async function fetchPage(params, start) {
+  return salute.richiesta('subito', async () => {
   const res = await _http(buildPath(params, start));
+  if (res.status === 429) throw salute.erroreHttp('subito', 429, res.headers);
   if (res.status !== 200) throw fail(`Subito hades HTTP ${res.status}`, { status: res.status, kind: kindForStatus(res.status) });
   let j;
   try { j = JSON.parse(res.body); } catch (_) { throw fail('Subito hades: body non-JSON (blocco?)', { status: res.status, kind: 'blocked' }); }
   if (j.errors) throw fail('Subito hades errors: ' + JSON.stringify(j.errors).slice(0, 100), { kind: 'error' });
   return { ads: Array.isArray(j.ads) ? j.ads : [], total: extractTotal(j) };
+  });
 }
 
 /**
@@ -703,8 +709,7 @@ async function unioneFamiglieMoto(params, opts) {
   // Tutte cadute: e' un errore della fonte, non un mercato vuoto. E il genere e' quello del
   // peggiore, cosi' chi sta a valle sa se e' un blocco o un singhiozzo.
   if (!successi) {
-    throw fail(`Subito: nessuna delle ${tentate} famiglie interrogate ha risposto`,
-      { kind: (peggiore && peggiore.kind) || 'error', status: peggiore && peggiore.status });
+    throw peggiore || fail(`Subito: nessuna delle ${tentate} famiglie interrogate ha risposto`);
   }
   // Qualcuna ha risposto ma almeno una e' stata RESPINTA: viaggia come campo proprio, non come
   // `sospetto` — `sospetto` fa uscire la colonna in errore e il freno lo leggerebbe come 'error'

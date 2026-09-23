@@ -119,14 +119,14 @@ const cardOk = id => '<div class="dlr-card">' + `<a data-target="#annuncio_${id}
   + '<span class="dlr-card__meta">10.000 km del 2019</span></div>';
 const paginaPiena = base => `<html><body>${Array.from({ length: 12 }, (_, i) => cardOk(base + i)).join('')}</body></html>`;
 
-test('parco: una pagina non-200 a meta\' dichiara il parco TRONCATO', async () => {
+test('parco: una pagina non-200 a meta\' conserva i veicoli e dichiara la pagina fallita', async () => {
   const motoit = require('../backend/scrapers/motoit');
   const orig = motoit._get;
   motoit._get = async url => (/pagina-3/.test(url) ? { status: 503, body: '' } : { status: 200, body: paginaPiena(/pagina-2/.test(url) ? 2000 : 1000) });
   try {
     const r = await v.parco('prova', { maxPagine: 5 });
     assert.strictEqual(r.items.length, 24, 'le due pagine buone si tengono');
-    assert.strictEqual(r.troncato, true, 'senza questo il parco esce dichiarato completo e le mediane si calcolano su meta\' piazzale');
+    assert.strictEqual(r.errorePagina.status, 503, 'senza questo il parco esce dichiarato completo e le mediane si calcolano su meta\' piazzale');
   } finally { motoit._get = orig; }
 });
 

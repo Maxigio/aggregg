@@ -106,7 +106,9 @@ function combaciaModello(dichiarato, cercato) {
   return senzaSpazi(dichiarato) === senzaSpazi(cercato);
 }
 
+const salute = require('../fonti-salute');
 function httpPost(body, auth = AUTH) {
+  return salute.richiesta('autoscout', async () => {
   budget.conta('as24');
   return new Promise((resolve, reject) => {
     const data = Buffer.from(body, 'utf8');
@@ -126,17 +128,20 @@ function httpPost(body, auth = AUTH) {
         'content-length': data.length,
       },
     }, res => {
+      // Anche un body rifiutato può interrompersi dopo gli header.
+      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+      res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
+      if (res.statusCode !== 200) { res.resume(); return reject(salute.erroreHttp('autoscout', res.statusCode, res.headers)); }
       let d = ''; res.setEncoding('utf8');
       res.on('data', c => d += c);
       res.on('end', () => resolve({ status: res.statusCode, body: d }));
       // Se la presa cade DOPO gli header, l'errore esce su `res`, non su `req`: senza questi due
       // la Promise resta appesa per sempre (e req.setTimeout non scatta a connessione chiusa).
-      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
-      res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
     });
     req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
     req.setTimeout(TIMEOUT_MS, () => req.destroy(fail('timeout', { kind: 'transient' })));
     req.write(data); req.end();
+  });
   });
 }
 
@@ -475,6 +480,7 @@ function mapListing(node, opts = {}) {
 async function fetchPage(params, page, opts = {}) {
   const variables = buildVariables(params, page, opts);
   if (!variables) return { items: [], raw: 0 };
+  return salute.richiesta('autoscout', async () => {
   const res = await httpPost(JSON.stringify({ query: QUERY, variables }));
   if (res.status === 401) throw fail('AS24 GraphQL 401 (credenziale)', { status: 401, kind: 'auth' });
   if (res.status !== 200) throw fail(`AS24 GraphQL HTTP ${res.status}`, { status: res.status, kind: kindForStatus(res.status) });
@@ -490,6 +496,7 @@ async function fetchPage(params, page, opts = {}) {
   const tot = arr && arr.metadata && arr.metadata.totalItems;
   return { items: list.map(n => mapListing(n, opts)).filter(Boolean), raw: list.length,
            total: Number.isFinite(tot) ? tot : null };
+  });
 }
 
 /**
@@ -517,10 +524,19 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
   // successiva. Ogni fonte la traduce nella SUA paginazione, perche' le pagine hanno
   // dimensioni diverse — qui 50 per pagina, due pagine per fetta.
   const salta = Math.max(0, opts.fetta || 0) * maxPages;
+  let parziale = null, bloccoParziale = null;
   let rawTot = 0;                   // annunci grezzi visti: se mappati 0, e' il parser
   for (let p = 1 + salta; p <= salta + maxPages; p++) {
     if (p > 1 + salta && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
-    const { items, raw, total: tot } = await fetchPage(params, p, opts);
+    let pagina;
+    try { pagina = await fetchPage(params, p, opts); }
+    catch (e) {
+      if (p === 1 + salta || !opts.withMeta) throw e;
+      parziale = `AutoScout24: pagine successive non lette. ${e.message}`;
+      bloccoParziale = e.kind === 'blocked' ? e : null;
+      break;
+    }
+    const { items, raw, total: tot } = pagina;
     if (p === 1 + salta) total = tot;   // uguale su tutte le pagine: si prende la prima
     rawTot += raw;
     out.push(...items);
@@ -538,7 +554,7 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
   if (rawTot > 0 && out.length === 0) {
     throw new Error(`Autoscout: ${rawTot} annunci grezzi e nessuno leggibile — lo schema del payload puo' essere cambiato`);
   }
-  return opts.withMeta ? { items: out, truncated, total } : out;
+  return opts.withMeta ? { items: out, truncated, total, parziale, parzialeRete: !!parziale, bloccoParziale } : out;
 }
 
 // ─── F50 copertura: conteggio totale per-query (count-query LEGGERA, separata) ───
@@ -601,11 +617,13 @@ async function fetchTotalCount({ mmmv, tipo, annoMin, annoMax, prezzoMin, prezzo
   const qs = countQueryString(mmmv, tipo, { annoMin, annoMax, prezzoMin, prezzoMax });
   if (!qs) return null;
   try {
+    return await salute.richiesta('autoscout', async () => {
     const res = await httpPost(JSON.stringify({ query: COUNT_QUERY, variables: { queryString: qs, locale: 'it_IT' } }), COUNT_AUTH);
     if (res.status !== 200) { avvisaConteggio('HTTP ' + res.status); return null; }
     const n = parseTotalCount(JSON.parse(res.body));
-    if (n == null) avvisaConteggio('risposta senza totalItems — forma della risposta cambiata');
+    if (n == null) throw new Error('risposta senza totalItems — forma della risposta cambiata');
     return n;
+    });
   } catch (e) {
     avvisaConteggio(e && e.message ? e.message : 'errore di rete');
     return null;

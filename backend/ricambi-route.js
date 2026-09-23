@@ -1,4 +1,5 @@
 'use strict';
+const salute = require('./fonti-salute');
 // Rotta GET /api/ricambi?oen=... — codice OEM → articoli MULTI-FONTE (Autodoc + Web).
 // Estratta da server.js per testabilità in isolamento (deps iniettabili) senza avviare
 // l'intero server né toccare le fonti. Montata da server.js con mount(app).
@@ -58,7 +59,7 @@ function mount(app, deps = {}) {
     // che una raffica si faccia bloccare da Autodoc o eBay, non per contare i clic.
     if (hit && Date.now() - hit.ts < hit.ttl) {
       cache.delete(key); cache.set(key, hit);   // LRU touch
-      return res.json({ ...hit.data, restanti: limite.stato(chiaveLimite(req)).restanti });
+      return res.json({ ...salute.conStatoFonti(hit.data), restanti: limite.stato(chiaveLimite(req)).restanti });
     }
     const g = limite.consuma(chiaveLimite(req));
     if (!g.ok) return res.status(429).json({ error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });

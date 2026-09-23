@@ -25,6 +25,7 @@ const zlib = require('zlib');
 const cheerio = require('cheerio');
 const { fail, kindForStatus } = require('./utils');
 const { classifyKey, GROUP_ORDER } = require('./vehicle-specs');
+const salute = require('../fonti-salute');
 
 const HOST = 'https://www.moto.it';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
@@ -33,15 +34,19 @@ const TIMEOUT_MS = 20000;
 // Anti-SSRF: questo scraper parla SOLO con moto.it (URL iniziale E ogni redirect).
 const isAllowedHost = h => /(^|\.)moto\.it$/i.test(String(h || ''));
 
-function httpGetText(url, redirects = 0) {
-  return new Promise((resolve, reject) => {
-    let u; try { u = new URL(url); } catch (_) { return reject(fail('url non valido', { kind: 'error' })); }
-    if (!isAllowedHost(u.hostname)) return reject(fail('host non consentito', { kind: 'blocked' }));
+async function httpGetText(url, redirects = 0) {
+  let u; try { u = new URL(url); } catch (_) { throw fail('url non valido', { kind: 'error' }); }
+  if (!isAllowedHost(u.hostname)) throw fail('host non consentito', { kind: 'blocked' });
+  return salute.richiesta('moto', () => new Promise((resolve, reject) => {
     const req = https.get(url, { headers: {
       'user-agent': UA, 'accept-encoding': 'gzip, deflate',
       accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'accept-language': 'it-IT,it;q=0.9',
     } }, res => {
+      // Anche le risposte scartate (429/redirect) possono interrompersi dopo gli header.
+      // `pipe()` non propaga gli errori: il listener serve sul messaggio originale.
+      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+      res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
       const code = res.statusCode;
       if ([301, 302, 303, 307, 308].includes(code) && res.headers.location && redirects < 5) {
         res.resume();
@@ -49,8 +54,12 @@ function httpGetText(url, redirects = 0) {
         if (!isAllowedHost(next.hostname)) return reject(fail('redirect fuori host', { kind: 'blocked' }));
         return resolve(httpGetText(next.href, redirects + 1));
       }
-      if (code === 403 || code === 429) { res.resume(); return reject(fail(`http ${code}`, { status: code, kind: 'blocked' })); }
-      if (code >= 400) { res.resume(); return reject(fail(`http ${code}`, { status: code, kind: kindForStatus(code) })); }
+      if (code !== 200) {
+        const errore = salute.erroreHttp('moto', code, res.headers);
+        errore.kind = kindForStatus(code);
+        res.resume();
+        return reject(errore);
+      }
       const chunks = [];
       let s = res;
       const enc = (res.headers['content-encoding'] || '').toLowerCase();
@@ -58,15 +67,11 @@ function httpGetText(url, redirects = 0) {
       else if (enc === 'deflate') s = res.pipe(zlib.createInflate());
       s.on('data', c => chunks.push(c));
       s.on('end', () => resolve({ status: code, body: Buffer.concat(chunks).toString('utf8') }));
-      s.on('error', e => reject(fail(e.message, { kind: 'transient' })));
-      // `pipe()` non propaga gli errori: se la connessione cade dopo gli header l'errore esce su
-      // `res`, non sul gunzip, e la Promise restava appesa. Un gestore anche qui.
-      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
-      res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
+      if (s !== res) s.on('error', e => reject(fail(e.message, { kind: 'transient' })));
     });
     req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
     req.setTimeout(TIMEOUT_MS, () => req.destroy(fail('timeout', { kind: 'transient' })));
-  });
+  }));
 }
 
 const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
@@ -137,14 +142,16 @@ function parseMotoitSpecs(html) {
 }
 
 async function fetchMotoitSpecs(url) {
-  const { body } = await httpGetText(url);
-  const parsed = parseMotoitSpecs(body);
-  // "Allestimento" è il marcatore di pagina valida: su moto.it un modello inesistente
-  // NON dà 404, reindirizza alla pagina-marca (HTTP 200 ingannevole). Verificato.
-  if (!parsed.head.allestimento || !parsed.groups.length) {
-    throw fail('scheda non disponibile su Moto.it', { kind: 'error' });
-  }
-  return { ...parsed, source: 'moto.it', url };
+  return salute.richiesta('moto', async () => {
+    const { body } = await httpGetText(url);
+    const parsed = parseMotoitSpecs(body);
+    // "Allestimento" è il marcatore di pagina valida: su moto.it un modello inesistente
+    // NON dà 404, reindirizza alla pagina-marca (HTTP 200 ingannevole). Verificato.
+    if (!parsed.head.allestimento || !parsed.groups.length) {
+      throw fail('scheda non disponibile su Moto.it', { kind: 'error' });
+    }
+    return { ...parsed, source: 'moto.it', url };
+  });
 }
 
 // URL della pagina-modello (elenco versioni con foto/prezzo).

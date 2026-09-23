@@ -16,6 +16,7 @@
  * In cache dieci minuti, cosi' riaprire la stessa scheda non ripaga il conto.
  */
 const comp = require('./competitor');
+const salute = require('./fonti-salute');
 
 const TTL = 10 * 60 * 1000;
 const cache = new Map();   // `${fonte}:${id}` → { ts, dati }
@@ -185,19 +186,21 @@ function mount(app, deps = {}) {
    * L'utente arriva come argomento: qui dentro `req` non c'e', e l'elenco da cui si pesca la
    * vetrina e' il SUO — non un elenco comune.
    */
-  async function scaricaParco(utente, chiave, forza) {
+  async function scaricaParco(utente, chiave, forza, blocco = null) {
     let voce = vociLette(utente).find(v => chiaveDi(v) === String(chiave));
     if (!voce) { const e = new Error('non e\' nell\'elenco'); e.stato = 404; throw e; }
     const k = chiaveDi(voce);
     const hit = cache.get(k);
-    if (!forza && hit && Date.now() - hit.ts < TTL) {
+    if ((!forza || blocco) && hit && Date.now() - hit.ts < TTL) {
       // LA CACHE NON HA PADRONE, LA `voce` SI'. La chiave e' `fonte:id` — la vetrina e' la stessa
       // per tutti, ed e' giusto che i veicoli scaricati si condividano — ma `voce` porta i campi
       // PERSONALI di chi guarda (il gruppo che ha assegnato, `mio`, il nome che ha scelto): quella
       // di chi ha scaricato per primo non deve finire sullo schermo del secondo. Si sostituisce
       // con la riga del chiamante, appena riletta.
-      return { ...hit.dati, voce, daCache: true, quando: new Date(hit.ts).toISOString() };
+      return { ...hit.dati, voce, daCache: true, quando: new Date(hit.ts).toISOString(),
+        avvisoCache: blocco ? `${blocco} Mostriamo i dati in cache del ${new Date(hit.ts).toLocaleString('it-IT')}, non aggiornati.` : null };
     }
+    if (blocco) throw Object.assign(new Error(blocco), { stato: 502, code: 'FONTE_IN_PAUSA' });
     // Le vetrine salvate prima avevano tre campi: nome, dove, via. Ora la pagina ne da'
     // molti di piu' (telefoni, orari, valutazione, servizi, logo) e chi ce l'ha gia' in
     // elenco non deve toglierla e rimetterla per vederli: si rilegge una volta sola,
@@ -232,7 +235,7 @@ function mount(app, deps = {}) {
         voce = { ...voce, ...fresca, id: attuale.id, mio: attuale.mio, aggiunto: attuale.aggiunto, gruppo: attuale.gruppo, schedaLetta: true };
         if (!C.leggi.ultimoErrore) C.scrivi(utente, tutte.map(v => (chiaveDi(v) === String(chiave) ? voce : v)));
       } catch (e) {
-        if (voce.fonte === 'subito' && (e.status === 429 || e.code === 'FONTE_IN_PAUSA')) {
+        if (e.status === 429 || e.code === 'FONTE_IN_PAUSA') {
           e.stato = 502;
           throw e;
         }
@@ -266,7 +269,13 @@ function mount(app, deps = {}) {
        */
       veicoli: p.veicoli.map(v => { const { _raw, ...pulito } = v; return pulito; }),
     };
-    cache.set(k, { ts: Date.now(), dati });
+    // Un aggiornamento monco si mostra, ma non cancella una copia completa ancora fresca.
+    // Si rilegge dopo l'await: anche un altro scarico puo' aver appena riempito la cache.
+    const precedente = cache.get(k);
+    const parziale = d => d.passateKo?.length || d.troncato || d.illeggibili;
+    if (!parziale(dati) || !precedente || parziale(precedente.dati) || !inCacheFresca(k)) {
+      cache.set(k, { ts: Date.now(), dati });
+    }
     // Un annuncio pesa ~3 KB (misurato su Autoscout: 16 annunci, 50 KB, meta' sono gli URL
     // delle foto). Un parco al tetto sono 6 MB: sessanta in cache erano 370 MB di roba che
     // nessuno riguarda. Otto vetrine sono piu' di quante se ne aprano in dieci minuti.
@@ -280,17 +289,18 @@ function mount(app, deps = {}) {
     // La cache non conta come scarico: riaprire una scheda gia' letta non costa niente alle
     // fonti, e non deve consumare il budget. Il limite morde solo quando si va davvero in rete.
     const chiave = String(req.params.id);   // `fonte:id`
-    const daCache = !forza && inCacheFresca(chiave);
     try {
       // E PRIMA DEL LIMITATORE. Un magazzino che non si apre e' un guasto nostro: addebitare
       // uno scarico che non partira' mai lo maschera una seconda volta — al settimo clic la
       // risposta diventa 429, e quando il magazzino torna restano fuori anche gli scarichi veri.
-      vociLette(chiDi(req));
-      if (!daCache && !parcoOk(ip)) {
+      const voce = vociLette(chiDi(req)).find(v => chiaveDi(v) === chiave);
+      const blocco = voce && salute.fermo(voce.fonte).fermo ? salute.avvisoPausa(voce.fonte) : null;
+      const daCache = (!forza || blocco) && inCacheFresca(chiave);
+      if (!daCache && !blocco && !parcoOk(ip)) {
         const st = limiteParco.stato(ip);
         return res.status(429).json({ ok: false, error: limiteParco.messaggio(st, MSG_LIMITE), riprovaFra: st.attesa, restanti: 0 });
       }
-      const d = await scaricaParco(chiDi(req), chiave, forza);
+      const d = await scaricaParco(chiDi(req), chiave, forza, blocco);
       res.json({ ok: true, ...d, scarichiRestanti: parcoRestanti(ip) });
     } catch (e) {
       const corpo = { ok: false, error: e.message };
@@ -351,14 +361,17 @@ function mount(app, deps = {}) {
     // risparmia N letture inutili una volta finito il budget, ma non e' piu' una toppa: il
     // limitatore comune non addebita niente quando rifiuta, quindi chiamarlo in un ciclo non
     // gonfia piu' la finestra.
-    let esaurito = false, subitoLimitato = false;
+    let esaurito = false;
+    const fontiLimitate = new Set();
     for (const v of voci) {
       const chiave = chiaveDi(v);
-      const daCache = !forza && inCacheFresca(chiave);
-      // Un 429 ferma anche le altre vetrine Subito di QUESTO aggiornamento.
+      const blocco = salute.fermo(v.fonte).fermo ? salute.avvisoPausa(v.fonte)
+        : fontiLimitate.has(v.fonte) ? `${v.fonte}: vetrina non aggiornata dopo il blocco (429).` : null;
+      const daCache = (!forza || blocco) && inCacheFresca(chiave);
+      // Un 429 ferma anche le altre vetrine della stessa fonte in QUESTO aggiornamento.
       // La cache non fa rete: puo' ancora servire dati gia' ottenuti.
-      if (v.fonte === 'subito' && subitoLimitato && !daCache) {
-        errori.push({ id: v.id, nome: v.nome, error: 'Subito: vetrina non aggiornata dopo il blocco (429).' });
+      if (!daCache && blocco) {
+        errori.push({ id: v.id, nome: v.nome, error: blocco });
         continue;
       }
       if (!daCache && (esaurito || !parcoOk(ip))) {
@@ -367,11 +380,12 @@ function mount(app, deps = {}) {
         continue;
       }
       try {
-        const p = await scaricaParco(chiDi(req), chiave, forza);
+        const p = await scaricaParco(chiDi(req), chiave, forza, blocco);
         parti.push(p);
-        if (v.fonte === 'subito' && !p.daCache && p.passateKo?.some(x => x.status === 429)) subitoLimitato = true;
+        if (p.avvisoCache) errori.push({ id: v.id, nome: v.nome, error: p.avvisoCache });
+        if (!p.daCache && p.passateKo?.some(x => x.status === 429)) fontiLimitate.add(v.fonte);
       } catch (e) {
-        if (v.fonte === 'subito' && e.status === 429) subitoLimitato = true;
+        if (e.status === 429) fontiLimitate.add(v.fonte);
         errori.push({ id: v.id, nome: v.nome, error: e.message });
       }
     }
@@ -391,7 +405,7 @@ function mount(app, deps = {}) {
         voce: p.voce, numeri: p.numeri, storico: p.storico, troncato: p.troncato,
         passateKo: (p.passateKo && p.passateKo.length) ? p.passateKo : null,
         illeggibili: p.illeggibili || 0,
-        quando: p.quando, daCache: p.daCache,
+        quando: p.quando, daCache: p.daCache, avvisoCache: p.avvisoCache || null,
       })),
       numeri: C.aggrega(veicoli),
       veicoli,

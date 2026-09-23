@@ -10,6 +10,7 @@
  * Cache per-URL (TTL 12h) con cap LRU + dedup richieste in-flight.
  */
 const https = require('https');
+const salute = require('../fonti-salute');
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 const ALLOWED = new Set([
@@ -31,10 +32,11 @@ function hostOk(u) {
 }
 
 // Fetch con cap redirect + ri-validazione hostname AD OGNI hop (anti-SSRF).
-function fetchText(url, hops = 0) {
-  return new Promise((resolve, reject) => {
-    if (hops > 5) return reject(new Error('too many redirects'));
-    if (!hostOk(url)) return reject(new Error('host not allowed'));
+async function fetchText(url, hops = 0) {
+  if (hops > 5) throw new Error('too many redirects');
+  if (!hostOk(url)) throw new Error('host not allowed');
+  const fonte = fonteFromUrl(url);
+  return salute.richiesta(fonte, () => new Promise((resolve, reject) => {
     const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'it-IT,it;q=0.9' } }, res => {
       res.on('error', reject);
       res.on('aborted', () => reject(new Error('risposta interrotta')));
@@ -46,14 +48,18 @@ function fetchText(url, hops = 0) {
           : new URL(res.headers.location, url).href;
         return fetchText(next, hops + 1).then(resolve, reject);   // hostOk ri-controllato nel prossimo giro
       }
-      if (res.statusCode !== 200) { res.resume(); return reject(new Error(`HTTP ${res.statusCode}`)); }
+      if (res.statusCode !== 200) {
+        const errore = salute.erroreHttp(fonte, res.statusCode, res.headers);
+        res.resume();
+        return reject(errore);
+      }
       let d = ''; res.setEncoding('utf8');
       res.on('data', c => d += c);
       res.on('end', () => resolve(d));
     });
     req.on('error', reject);
     req.setTimeout(12000, () => req.destroy(new Error('timeout')));
-  });
+  }));
 }
 
 const EMPTY = { cambio: null, potenzaCv: null, cilindrata: null, proprietari: null, allestimento: null, revisione: null };
@@ -233,9 +239,9 @@ const PARSERS = { autoscout: parseAutoscout, moto: parseMotoit, subito: parseSub
 function fonteFromUrl(u) {
   try {
     const h = new URL(u).hostname;
-    if (h.includes('autoscout')) return 'autoscout';
-    if (h.includes('moto.it'))   return 'moto';
-    if (h.includes('subito'))    return 'subito';
+    if (/(^|\.)autoscout24\.it$/i.test(h)) return 'autoscout';
+    if (/(^|\.)moto\.it$/i.test(h))       return 'moto';
+    if (/(^|\.)subito\.it$/i.test(h))     return 'subito';
   } catch (_) {}
   return null;
 }
@@ -251,36 +257,39 @@ async function getDetail(url) {
   if (hit && Date.now() - hit.ts < (hit.ttl || TTL_MS)) { cache.delete(url); cache.set(url, hit); return hit.data; }  // LRU touch
   if (inflight.has(url)) return inflight.get(url);
 
-  const p = (async () => {
-    try {
-      const parser = PARSERS[fonteFromUrl(url)];
-      if (!parser) return null;
-      const html = await fetchText(url);
-      const data = parser(html) || { ...EMPTY };
-      /**
-       * UNA PAGINA CHE NON DICE NIENTE NON E' UN ANNUNCIO SENZA DATI.
-       *
-       * I parser non lanciano mai: se il blocco "Tipo offerta" non c'e' — pagina di
-       * transizione, manutenzione, o il giorno in cui la fonte cambia impaginazione — tornano
-       * l'oggetto con tutti i campi a null, e nessuno guardava dentro. Quel vuoto finiva in
-       * cache per DODICI ORE, con il client che scriveva `_enriched = true`: da li' in poi,
-       * per mezza giornata, quell'annuncio risultava "gia' arricchito, non ha altro da dire".
-       * Ora il vuoto vale poco e si riprova presto, come fanno tutte le altre cache del repo.
-       */
-      const nulla = senzaNiente(data);
-      cache.set(url, { ts: Date.now(), data, ttl: nulla ? VUOTO_TTL_MS : TTL_MS });
-      if (nulla) console.warn(`[detail] ${String(url).slice(0, 70)}: pagina letta ma nessun campo riconosciuto (markup cambiato?) — cache breve`);
-      if (cache.size > MAX_CACHE) cache.delete(cache.keys().next().value);  // evict oldest
-      return data;
-    } catch (e) {
-      console.warn(`[detail] ${String(url).slice(0, 70)}: ${e.message}`);
-      return null;   // best-effort: la UI mostra "dettagli non disponibili"
-    } finally {
-      inflight.delete(url);
+  const p = salute.richiesta(fonteFromUrl(url), async () => {
+    const parser = PARSERS[fonteFromUrl(url)];
+    if (!parser) return null;
+    const html = await fetchText(url);
+    const data = parser(html) || { ...EMPTY };
+    /**
+     * UNA PAGINA CHE NON DICE NIENTE NON E' UN ANNUNCIO SENZA DATI.
+     *
+     * I parser non lanciano mai: se il blocco "Tipo offerta" non c'e' — pagina di
+     * transizione, manutenzione, o il giorno in cui la fonte cambia impaginazione — tornano
+     * l'oggetto con tutti i campi a null, e nessuno guardava dentro. Quel vuoto finiva in
+     * cache per DODICI ORE, con il client che scriveva `_enriched = true`: da li' in poi,
+     * per mezza giornata, quell'annuncio risultava "gia' arricchito, non ha altro da dire".
+     * Ora il vuoto vale poco e si riprova presto, come fanno tutte le altre cache del repo.
+     */
+    const nulla = senzaNiente(data);
+    if (nulla && salute.fermo(fonteFromUrl(url)).verifica) {
+      // Il vuoto best-effort resta lecito fuori dalla verifica. Durante la
+      // ripartenza non dimostra che la fonte sia di nuovo leggibile.
+      throw Object.assign(new Error('Verifica della fonte non riuscita: nessun dato del dettaglio riconosciuto. La fonte resta in pausa.'),
+        { code: 'FONTE_IN_PAUSA', fonte: fonteFromUrl(url), kind: 'error' });
     }
-  })();
+    cache.set(url, { ts: Date.now(), data, ttl: nulla ? VUOTO_TTL_MS : TTL_MS });
+    if (nulla) console.warn(`[detail] ${String(url).slice(0, 70)}: pagina letta ma nessun campo riconosciuto (markup cambiato?) — cache breve`);
+    if (cache.size > MAX_CACHE) cache.delete(cache.keys().next().value);  // evict oldest
+    return data;
+  }).catch(e => {
+    console.warn(`[detail] ${String(url).slice(0, 70)}: ${e.message}`);
+    if (e.status === 429 || e.code === 'FONTE_IN_PAUSA') throw e;
+    return null;   // best-effort: la UI mostra "dettagli non disponibili"
+  }).finally(() => { inflight.delete(url); });
   inflight.set(url, p);
   return p;
 }
 
-module.exports = { getDetail, _hostOk: hostOk, _motoitImages: motoitImages, _parseMotoit: parseMotoit, _senzaNiente: senzaNiente, _VUOTO_TTL_MS: VUOTO_TTL_MS };
+module.exports = { getDetail, fonteFromUrl, _hostOk: hostOk, _motoitImages: motoitImages, _parseMotoit: parseMotoit, _senzaNiente: senzaNiente, _VUOTO_TTL_MS: VUOTO_TTL_MS };

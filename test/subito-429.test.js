@@ -42,6 +42,7 @@ test('Subito: ads vuoto e risposta valida restano un risultato vuoto', async () 
 
 test('Subito: seconda pagina 429 conserva la prima e dichiara il blocco', async () => {
   const chiamate = [];
+  salute.azzera('subito');
   subito._setHttpGetJson(async path => {
     const start = Number(new URL('https://local.invalid' + path).searchParams.get('start'));
     chiamate.push(start);
@@ -71,6 +72,7 @@ test('Subito: 429 ferma le famiglie moto ancora in coda e non dichiara un vuoto 
     assert.equal(r.parzialeRete, true);
     assert.equal(r.bloccoParziale?.status, 429);
     assert.match(r.parziale, /Subito ha limitato temporaneamente le richieste/);
+    salute.azzera('subito'); // secondo scenario indipendente: il primo ha già attivato la pausa
     const stato = await server._runSubito(params('moto', ['111', '222', '333']), 30000);
     assert.equal(stato.status, 'error');
     assert.match(stato.parziale, /Subito ha limitato temporaneamente le richieste/);
@@ -105,6 +107,7 @@ test('Subito: il 429 sulla prima pagina e il risultato parziale hanno stati dive
     assert.match(negato.parziale, /Subito ha limitato temporaneamente le richieste/);
   } finally { subito._setHttpGetJson(null); }
 
+  salute.azzera('subito');
   subito._setHttpGetJson(async path => {
     const start = Number(new URL('https://local.invalid' + path).searchParams.get('start'));
     return start === 0 ? ok(Array.from({ length: 50 }, (_, i) => annuncio(i)), 60) : limitato();
@@ -215,7 +218,7 @@ test('Ricambi: la pausa Subito non invia richieste e lascia funzionare eBay', as
     });
     assert.equal(chiamate, 0);
     assert.equal(r.sources.subito.status, 'blocked');
-    assert.match(r.sources.subito.reason, /pausa/);
+    assert.match(r.sources.subito.reason, /sospese|pausa/);
     assert.equal(r.sources.ebay.status, 'ok');
     assert.equal(r.count, 1);
   } finally { subito._setHttpGetJson(null); }
@@ -229,11 +232,11 @@ test('Ricambi: i 429 aggiornano la pausa condivisa e il tentativo successivo non
   try {
     const primo = await ricambi.searchRicambi('faro prova', opts);
     assert.equal(primo.sources.subito.httpStatus, 429);
-    assert.equal(salute.fermo('subito').fermo, false);
+    assert.equal(salute.fermo('subito').fermo, true);
     await ricambi.searchRicambi('faro prova', opts);
     assert.equal(salute.fermo('subito').fermo, true);
     await ricambi.searchRicambi('faro prova', opts);
-    assert.equal(chiamate, 2);
+    assert.equal(chiamate, 1);
   } finally { subito._setHttpGetJson(null); }
 });
 
@@ -298,17 +301,17 @@ test('Competitor: la pagina della vetrina conserva il 429, lo registra una volta
     chiamate++;
     const req = new EventEmitter();
     req.setTimeout = () => {};
-    process.nextTick(() => callback({ statusCode: 429, headers: {}, resume() {} }));
+    process.nextTick(() => callback(Object.assign(new EventEmitter(), { statusCode: 429, headers: {}, resume() {} })));
     return req;
   };
   try {
     const url = 'https://www.subito.it/shops/123-prova';
     await assert.rejects(competitor.risolviVetrina(url), e => e.status === 429 && e.message === subito.AVVISO_429);
-    assert.equal(salute.fermo('subito').fermo, false);
-    await assert.rejects(competitor.risolviVetrina(url), e => e.status === 429);
     assert.equal(salute.fermo('subito').fermo, true);
     await assert.rejects(competitor.risolviVetrina(url), e => e.code === 'FONTE_IN_PAUSA');
-    assert.equal(chiamate, 2);
+    assert.equal(salute.fermo('subito').fermo, true);
+    await assert.rejects(competitor.risolviVetrina(url), e => e.code === 'FONTE_IN_PAUSA');
+    assert.equal(chiamate, 1);
   } finally { https.get = originale; }
 });
 

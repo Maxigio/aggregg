@@ -28,7 +28,7 @@ function subitoToPart(it) {
 }
 async function subitoSource(term, opts = {}) {
   if (salute.fermo('subito').fermo) {
-    return { blocked: true, error: 'Subito è in pausa dopo un blocco. Riprova più tardi.' };
+    return { blocked: true, error: salute.avvisoPausa('subito') };
   }
   try {
     const items = await scrapeSubito.searchAccessori(term, { cat: opts.cat });
@@ -36,6 +36,7 @@ async function subitoSource(term, opts = {}) {
     return { articoli: items.map(subitoToPart) };
   } catch (e) {
     salute.registra('subito', { errore: e });
+    if (e.code === 'FONTE_IN_PAUSA') return { blocked: true, error: e.message };
     if (e.status === 429) return { blocked: true, error: scrapeSubito.AVVISO_429, httpStatus: 429 };
     throw e;
   }
@@ -166,6 +167,7 @@ async function searchRicambi(qRaw, opts = {}) {
   order.forEach(k => {
     if (!res[k]) return;
     sources[k] = { status: res[k].status, reason: res[k].reason, count: res[k].items.length };
+    if (k === 'subito' && !opts.subito) sources[k].pausa = salute.fermo('subito');
     if (res[k].meta?.httpStatus) sources[k].httpStatus = res[k].meta.httpStatus;
     // fonte non riuscita → logga tag + reason (prima era muto: causa del "Web error" invisibile)
     if (res[k].status !== 'ok' && res[k].status !== 'empty') logger.warn('[ricambi]', `fonte ${k} "${term}" (${mode}/${veicolo}): ${res[k].status} — ${res[k].reason || 'n/d'}`);

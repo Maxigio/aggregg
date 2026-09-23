@@ -38,6 +38,13 @@ function conCartella(fn) {
   return esito;
 }
 
+async function riapri(fonte) {
+  const now = Date.now;
+  const fine = salute.fermo(fonte).fino;
+  Date.now = () => fine + 1;
+  try { await salute.richiesta(fonte, async () => []); } finally { Date.now = now; }
+}
+
 const err = (msg, status, kind) => Object.assign(new Error(msg), { status, kind });
 
 // ─── classifica: gli stessi casi che difendeva la versione Postgres ──────────────────────────
@@ -86,18 +93,18 @@ test('una risposta buona in mezzo azzera il conto', () => {
   });
 });
 
-test('la fonte torna interrogabile appena arriva una risposta buona', () => {
+test('una risposta vecchia buona non cancella una pausa già decisa', () => {
   conCartella(() => {
     salute.registra('as24', { errore: err('429', 429) });
     salute.registra('as24', { errore: err('429', 429) });
     assert.strictEqual(salute.fermo('as24').fermo, true);
     salute.registra('as24', { conteggio: 3 });
-    assert.strictEqual(salute.fermo('as24').fermo, false, 'un esito ok toglie la pausa');
+    assert.strictEqual(salute.fermo('as24').fermo, true, 'solo una verifica dopo la pausa può riaprire');
   });
 });
 
-test('la pausa parte corta e si allunga solo se ricapita', () => {
-  conCartella(() => {
+test('la pausa parte corta e si allunga solo se ricapita', async () => {
+  await conCartella(async () => {
     const stop = () => {
       salute.registra('motoit', { errore: err('403', 403) });
       salute.registra('motoit', { errore: err('403', 403) });
@@ -105,23 +112,23 @@ test('la pausa parte corta e si allunga solo se ricapita', () => {
     };
     const prima = stop();
     assert.ok(prima <= salute.FINESTRE[0] + 1000, `la prima pausa deve essere la piu' corta, era ${prima}`);
-    salute.registra('motoit', { conteggio: 1 });           // esce dalla pausa
+    await riapri('motoit');           // esce dalla pausa
     const seconda = stop();
     assert.ok(seconda > prima, `la seconda pausa deve essere piu' lunga (${seconda} vs ${prima})`);
   });
 });
 
-test('la scala si scorda: dopo mesi di pace un doppio 403 vale 15 minuti, non sei ore', () => {
-  conCartella(dir => {
+test('la scala si scorda: dopo mesi di pace un doppio 403 vale 15 minuti, non sei ore', async () => {
+  await conCartella(async dir => {
     const stop = () => {
       salute.registra('subito', { errore: err('403', 403) });
       salute.registra('subito', { errore: err('403', 403) });
       return salute.fermo('subito').fino - Date.now();
     };
     stop();
-    salute.registra('subito', { conteggio: 1 });
+    await riapri('subito');
     stop();
-    salute.registra('subito', { conteggio: 1 });
+    await riapri('subito');
     assert.ok(stop() > salute.FINESTRE[1], 'tre pause attaccate devono arrivare al gradino lungo');
 
     // Mesi dopo, processo nuovo: sul disco `stop_fatti` e' ancora quello, la pausa e' finita da
@@ -288,13 +295,13 @@ test('runSource registra SOLO se gli si dice quale fonte e\'', async () => {
   });
 });
 
-test('una risposta buona da runSource toglie la pausa', async () => {
+test('runSource non toglie la pausa con una risposta partita prima del blocco', async () => {
   await conCartella(async () => {
     await srv._runSource(fallito, 500, 'Moto.it', 'moto');
     await srv._runSource(fallito, 500, 'Moto.it', 'moto');
     assert.strictEqual(salute.fermo('moto').fermo, true);
     await srv._runSource(async () => ({ items: [{ url: 'x' }], total: 1 }), 500, 'Moto.it', 'moto');
-    assert.strictEqual(salute.fermo('moto').fermo, false);
+    assert.strictEqual(salute.fermo('moto').fermo, true);
   });
 });
 
