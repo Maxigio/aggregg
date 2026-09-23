@@ -1975,7 +1975,7 @@ function renderRicambiPanel() {
   const statusLine = badSrc.length
     ? `<div class="rc-srcline">${badSrc.map(([k, s]) => `<span class="rc-src rc-src-bad"${s.reason ? ` title="${escapeHtml(s.reason)}"` : ''}>${escapeHtml(RC_FONTE[k] || k)}: ${s.status === 'blocked' ? 'bloccato' : escapeHtml(s.status)}</span>`).join('')}</div>`
     : '';
-  const subito429 = d.sources?.subito?.status === 'blocked' && /\(429\)/.test(d.sources.subito.reason || '')
+  const subitoAvviso = d.sources?.subito?.status === 'blocked' && d.sources.subito.reason
     ? `<div class="src-avviso">${escapeHtml(d.sources.subito.reason)}</div>` : '';
   /**
    * PAGINE TROVATE SUL WEB, non offerte.
@@ -1993,7 +1993,7 @@ function renderRicambiPanel() {
           + `<span class="rc-pagina-d">${escapeHtml(x.dominio || '')}</span></a>`).join('')
       + '</div>'
     : '';
-  const head = `<div class="rc-head">${rcSchedaHTML(d)}${statusLine}${subito429}${budgetHTML(rcRestanti, 'ricerca', 'ricerche')}${pagineLine}</div>`;
+  const head = `<div class="rc-head">${rcSchedaHTML(d)}${statusLine}${subitoAvviso}${budgetHTML(rcRestanti, 'ricerca', 'ricerche')}${pagineLine}</div>`;
   // barra confronto (mirror auto: "Selezionati N · Apri confronto · Svuota") + sezione matrice separata
   const bar = confrontoRicambi.length ? rcCompareBarHTML() : '';
   const cmp = (rcCompareOpen && confrontoRicambi.length) ? rcCompareSection() : '';
@@ -6130,7 +6130,7 @@ function cpGruppoNumeriHTML(dati, voci) {
   const guai = [];
   for (const p of parti) {
     if (p.passateKo && p.passateKo.length) {
-      const limite429 = p.passateKo.map(x => x.motivo).find(x => /\(429\)/.test(x || ''));
+      const limite429 = p.passateKo.find(x => x.status === 429)?.motivo;
       guai.push(`${nomeDi(p)}: ${limite429 || `la passata ${p.passateKo.map(x => x.tipo).join(' e ')} non e' riuscita`}`);
     }
     else if (p.troncato) guai.push(`${nomeDi(p)}: elenco troncato al tetto, ha piu' mezzi di quelli presi`);

@@ -1,5 +1,5 @@
 'use strict';
-const { test, after } = require('node:test');
+const { test, after, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -7,13 +7,16 @@ const path = require('node:path');
 const vm = require('node:vm');
 const subito = require('../backend/scrapers/subito-api');
 const prova = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-subito-429-'));
-after(() => fs.rmSync(prova, { recursive: true, force: true }));
 process.env.USER_DATA_PATH = prova;
 process.env.AMR_LOG_DIR = prova;
 require('dotenv').config = () => ({ parsed: {} });
 const server = require('../backend/server');
 const competitor = require('../backend/competitor');
 const ricambi = require('../backend/ricambi-core');
+const salute = require('../backend/fonti-salute');
+const routeCompetitor = require('../backend/competitor-route');
+afterEach(() => salute.azzera());
+after(() => { salute._reset(); fs.rmSync(prova, { recursive: true, force: true }); });
 
 const params = (tipo = 'auto', famiglie = null) => ({
   tipo, marca: 'Prova', modello: 'Modello',
@@ -197,4 +200,146 @@ test('Schermo Auto/Moto: il 429 senza annunci compare come avviso sotto le fonti
   vm.runInNewContext(src.slice(inizio, fine) + '\nrenderSourceStatus();', stato);
   assert.match(stato.fonteBreakdown.innerHTML, /src-avviso/);
   assert.match(stato.fonteBreakdown.innerHTML, /Subito ha limitato temporaneamente le richieste/);
+});
+
+test('Ricambi: la pausa Subito non invia richieste e lascia funzionare eBay', async () => {
+  const errore = Object.assign(new Error('429 simulato'), { status: 429, kind: 'blocked' });
+  salute.registra('subito', { errore });
+  salute.registra('subito', { errore });
+  let chiamate = 0;
+  subito._setHttpGetJson(async () => { chiamate++; return ok([], 0); });
+  try {
+    const r = await ricambi.searchRicambi('faro prova', { mode: 'nome', veicolo: 'auto',
+      ebay: async () => ({ articoli: [{ nome: 'faro prova', fonte: 'ebay' }] }),
+      web: async () => { throw new Error('il web non deve partire'); },
+    });
+    assert.equal(chiamate, 0);
+    assert.equal(r.sources.subito.status, 'blocked');
+    assert.match(r.sources.subito.reason, /pausa/);
+    assert.equal(r.sources.ebay.status, 'ok');
+    assert.equal(r.count, 1);
+  } finally { subito._setHttpGetJson(null); }
+});
+
+test('Ricambi: i 429 aggiornano la pausa condivisa e il tentativo successivo non parte', async () => {
+  let chiamate = 0;
+  subito._setHttpGetJson(async () => { chiamate++; return limitato(); });
+  const opts = { mode: 'nome', veicolo: 'moto',
+    ebay: async () => ({ articoli: [] }), web: async () => ({ articoli: [] }) };
+  try {
+    const primo = await ricambi.searchRicambi('faro prova', opts);
+    assert.equal(primo.sources.subito.httpStatus, 429);
+    assert.equal(salute.fermo('subito').fermo, false);
+    await ricambi.searchRicambi('faro prova', opts);
+    assert.equal(salute.fermo('subito').fermo, true);
+    await ricambi.searchRicambi('faro prova', opts);
+    assert.equal(chiamate, 2);
+  } finally { subito._setHttpGetJson(null); }
+});
+
+function rotteParco(voci, parco, risolviVetrina = async () => { throw new Error('rilettura inattesa'); }) {
+  const handlers = {};
+  const app = Object.fromEntries(['get', 'post', 'delete'].map(m => [m,
+    (p, ...h) => { handlers[m + ' ' + p] = h.at(-1); }]));
+  routeCompetitor.mount(app, { competitor: {
+    leggi: () => voci, scrivi: () => {}, parco, risolviVetrina, aggrega: competitor.aggrega,
+  }, chiaveLimite: () => voci[0].id });
+  return async (rotta, params, query = {}) => {
+    const res = { code: 200, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; } };
+    await handlers['get ' + rotta]({ params, query }, res);
+    return res;
+  };
+}
+
+for (const parziale of [true, false]) test(`Competitor: gruppo ferma Subito dopo 429 ${parziale ? 'parziale' : 'totale'}, continua AS24`, async () => {
+  const prefisso = parziale ? 'gruppo-parziale' : 'gruppo-totale';
+  const voci = ['subito', 'subito', 'autoscout'].map((fonte, i) => ({
+    fonte, id: prefisso + i, gruppo: prefisso, nome: 'Vetrina ' + i, schedaLetta: true,
+  }));
+  const chiamate = [];
+  const errore = Object.assign(new Error('limite fonte'), { status: 429, kind: 'blocked' });
+  const scr = async p => {
+    chiamate.push(p.subitoUid || p.as24Customer);
+    if (p.subitoUid) {
+      if (!parziale) throw errore;
+      return { items: [{ url: 'https://www.subito.it/auto/prova.htm' }], parzialeRete: true,
+        bloccoParziale: errore, parziale: 'Messaggio modificabile senza codice numerico' };
+    }
+    return { items: [{ url: 'https://www.autoscout24.it/annunci/prova' }] };
+  };
+  const chiedi = rotteParco(voci, voce => competitor.parco(voce, { scrapeSubito: scr, scrapeAs24: scr }));
+  const r = await chiedi('/api/competitor/gruppo/:g/parco', { g: prefisso });
+  assert.equal(r.code, 200);
+  assert.ok(!chiamate.includes(voci[1].id), 'la seconda vetrina Subito non va interrogata');
+  assert.ok(chiamate.includes(voci[2].id), 'le altre fonti continuano');
+  assert.ok(r.body.errori.some(e => e.id === voci[1].id));
+  if (parziale) {
+    assert.equal(r.body.parti[0].passateKo[0].status, 429);
+    assert.ok(r.body.veicoli.some(v => v.url.includes('subito')));
+  }
+});
+
+test('Competitor: un 429 nella rilettura della scheda non avvia il parco', async () => {
+  let scarichi = 0;
+  const voci = [{ fonte: 'subito', id: 'scheda429', url: 'https://www.subito.it/shops/123-prova' }];
+  const chiedi = rotteParco(voci, async () => { scarichi++; return { veicoli: [] }; },
+    async () => { throw Object.assign(new Error('limite fonte'), { status: 429, kind: 'blocked' }); });
+  const r = await chiedi('/api/competitor/:id/parco', { id: 'subito:scheda429' });
+  assert.equal(scarichi, 0);
+  assert.equal(r.body.ok, false);
+});
+
+test('Competitor: la pagina della vetrina conserva il 429, lo registra una volta e rispetta la pausa', async () => {
+  const https = require('node:https');
+  const { EventEmitter } = require('node:events');
+  const originale = https.get;
+  let chiamate = 0;
+  https.get = (_url, _opts, callback) => {
+    chiamate++;
+    const req = new EventEmitter();
+    req.setTimeout = () => {};
+    process.nextTick(() => callback({ statusCode: 429, headers: {}, resume() {} }));
+    return req;
+  };
+  try {
+    const url = 'https://www.subito.it/shops/123-prova';
+    await assert.rejects(competitor.risolviVetrina(url), e => e.status === 429 && e.message === subito.AVVISO_429);
+    assert.equal(salute.fermo('subito').fermo, false);
+    await assert.rejects(competitor.risolviVetrina(url), e => e.status === 429);
+    assert.equal(salute.fermo('subito').fermo, true);
+    await assert.rejects(competitor.risolviVetrina(url), e => e.code === 'FONTE_IN_PAUSA');
+    assert.equal(chiamate, 2);
+  } finally { https.get = originale; }
+});
+
+test('Competitor: dopo un 429 i dati in cache restano disponibili e un blocco vecchio non ferma il gruppo', async () => {
+  const voci = ['a', 'b'].map(id => ({ fonte: 'subito', id: 'cache429-' + id, gruppo: 'cache429', schedaLetta: true }));
+  const chiamate = [];
+  const chiedi = rotteParco(voci, async v => {
+    chiamate.push(v.id);
+    return { veicoli: [{ url: 'https://www.subito.it/auto/' + v.id + '.htm' }],
+      passateKo: v === voci[0] ? [{ tipo: 'auto', status: 429, motivo: 'avviso senza numero' }] : [] };
+  });
+  await chiedi('/api/competitor/:id/parco', { id: 'subito:' + voci[1].id });
+  const primo = await chiedi('/api/competitor/gruppo/:g/parco', { g: 'cache429' });
+  assert.equal(primo.body.veicoli.length, 2);
+  assert.equal(primo.body.parti[1].daCache, true);
+  assert.deepEqual(chiamate, [voci[1].id, voci[0].id]);
+  // La prima vetrina e' ora in cache con un vecchio 429. Una terza non in cache deve partire.
+  voci.push({ fonte: 'subito', id: 'cache429-c', gruppo: 'cache429', schedaLetta: true });
+  const secondo = await chiedi('/api/competitor/gruppo/:g/parco', { g: 'cache429' });
+  assert.equal(secondo.body.parti.length, 3);
+  assert.equal(chiamate.at(-1), 'cache429-c');
+});
+
+test('Schermo Competitor: il messaggio 429 resta visibile anche senza il numero nel testo', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../frontend/app.js'), 'utf8');
+  const inizio = src.indexOf('function cpGruppoNumeriHTML(');
+  const fine = src.indexOf('\nfunction cpGruppoHTML(', inizio);
+  assert.ok(inizio >= 0 && fine > inizio);
+  const contesto = { cpRiga: () => '', cpNum: String, escapeHtml: String };
+  vm.runInNewContext(src.slice(inizio, fine), contesto);
+  const html = contesto.cpGruppoNumeriHTML({ parti: [{ voce: { nome: 'Prova' },
+    passateKo: [{ tipo: 'auto', status: 429, motivo: 'Testo approvato senza numero' }] }] }, [{}]);
+  assert.match(html, /Testo approvato senza numero/);
 });

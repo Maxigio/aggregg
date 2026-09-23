@@ -232,6 +232,10 @@ function mount(app, deps = {}) {
         voce = { ...voce, ...fresca, id: attuale.id, mio: attuale.mio, aggiunto: attuale.aggiunto, gruppo: attuale.gruppo, schedaLetta: true };
         if (!C.leggi.ultimoErrore) C.scrivi(utente, tutte.map(v => (chiaveDi(v) === String(chiave) ? voce : v)));
       } catch (e) {
+        if (voce.fonte === 'subito' && (e.status === 429 || e.code === 'FONTE_IN_PAUSA')) {
+          e.stato = 502;
+          throw e;
+        }
         // Muto no: una vetrina che non risponde piu' e' l'unico segno che il concessionario
         // ha chiuso la pagina, e il parco che segue non lo dice.
         console.warn(`[competitor] scheda ${k} non riletta (${e.message}) — si va avanti con quello che c'e'.`);
@@ -347,17 +351,29 @@ function mount(app, deps = {}) {
     // risparmia N letture inutili una volta finito il budget, ma non e' piu' una toppa: il
     // limitatore comune non addebita niente quando rifiuta, quindi chiamarlo in un ciclo non
     // gonfia piu' la finestra.
-    let esaurito = false;
+    let esaurito = false, subitoLimitato = false;
     for (const v of voci) {
       const chiave = chiaveDi(v);
       const daCache = !forza && inCacheFresca(chiave);
+      // Un 429 ferma anche le altre vetrine Subito di QUESTO aggiornamento.
+      // La cache non fa rete: puo' ancora servire dati gia' ottenuti.
+      if (v.fonte === 'subito' && subitoLimitato && !daCache) {
+        errori.push({ id: v.id, nome: v.nome, error: 'Subito: vetrina non aggiornata dopo il blocco (429).' });
+        continue;
+      }
       if (!daCache && (esaurito || !parcoOk(ip))) {
         esaurito = true;
         errori.push({ id: v.id, nome: v.nome, error: MSG_LIMITE });
         continue;
       }
-      try { parti.push(await scaricaParco(chiDi(req), chiave, forza)); }
-      catch (e) { errori.push({ id: v.id, nome: v.nome, error: e.message }); }
+      try {
+        const p = await scaricaParco(chiDi(req), chiave, forza);
+        parti.push(p);
+        if (v.fonte === 'subito' && !p.daCache && p.passateKo?.some(x => x.status === 429)) subitoLimitato = true;
+      } catch (e) {
+        if (v.fonte === 'subito' && e.status === 429) subitoLimitato = true;
+        errori.push({ id: v.id, nome: v.nome, error: e.message });
+      }
     }
     // Tutto rifiutato per budget e niente da mostrare: un "ok con zero veicoli" sembrerebbe
     // un gruppo vuoto. Si risponde come la rotta singola, cosi' la UI dice il perche'.

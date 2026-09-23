@@ -149,12 +149,23 @@ function getTesto(url, redirect = 0) {
     let u; try { u = new URL(url); } catch (_) { return reject(new Error('link non valido')); }
     // Anti-SSRF: si parla solo con le due fonti, e vale anche dopo un redirect.
     if (!/(^|\.)(autoscout24\.it|subito\.it)$/i.test(u.hostname)) return reject(new Error('host non consentito'));
+    const suSubito = /(^|\.)subito\.it$/i.test(u.hostname);
+    // Anche la rilettura della scheda costa una richiesta, prima del parco.
+    if (suSubito && fontiSalute.fermo('subito').fermo) {
+      return reject(Object.assign(new Error('Subito è in pausa dopo un blocco. Riprova più tardi.'), { code: 'FONTE_IN_PAUSA' }));
+    }
     const req = https.get(u.href, { headers: { 'user-agent': UA, 'accept-language': 'it-IT,it;q=0.9', 'accept-encoding': 'gzip, deflate' } }, res => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirect < 4) {
         res.resume();
         return resolve(getTesto(new URL(res.headers.location, u).href, redirect + 1));
       }
-      if (res.statusCode >= 400) { res.resume(); return reject(new Error('la pagina risponde ' + res.statusCode)); }
+      if (res.statusCode >= 400) {
+        res.resume();
+        const e = Object.assign(new Error(suSubito && res.statusCode === 429
+          ? scrapeSubito.AVVISO_429 : 'la pagina risponde ' + res.statusCode), { status: res.statusCode });
+        if (suSubito && res.statusCode === 429) fontiSalute.registra('subito', { errore: e });
+        return reject(e);
+      }
       const ch = []; let s = res;
       const enc = (res.headers['content-encoding'] || '').toLowerCase();
       if (enc === 'gzip') s = res.pipe(zlib.createGunzip());
@@ -398,13 +409,13 @@ async function parco(voce, dip = {}) {
       // `status` messi da `fail()`, mentre il rilancio piu' sotto li perde nel messaggio.
       salute.registra(voce.fonte, { errore: e });
       const motivo = voce.fonte === 'subito' && e.status === 429 ? subito.AVVISO_429 : e.message;
-      if (!veicoli.length) throw new Error(`${voce.fonte}: ${motivo}`);
+      if (!veicoli.length) throw Object.assign(new Error(`${voce.fonte}: ${motivo}`), { status: e.status, kind: e.kind });
       // NON e' `troncato`. Le due cause finivano sotto la stessa bandiera e il pannello
       // raccontava sempre la prima: "elenco troncato al tetto di sicurezza, questo parco e'
       // piu' grande di quello mostrato". Con una passata caduta quella frase e' falsa due
       // volte — nessun tetto e' stato toccato, e non si sa affatto se il parco sia piu'
       // grande: si sa solo che la fonte non ha risposto.
-      passateKo.push({ tipo, motivo });
+      passateKo.push({ tipo, motivo, ...(e.status ? { status: e.status } : {}) });
       totaleCopreTutto = false;   // una passata fallita rende qualunque somma parziale
       console.warn(`[competitor] passata ${tipo} fallita (${e.message}) → parco parziale`);
       if (voce.fonte === 'subito' && e.status === 429) break;
@@ -417,7 +428,8 @@ async function parco(voce, dip = {}) {
     if (r.bloccoParziale) salute.registra(voce.fonte, { errore: r.bloccoParziale, conteggio: items.length });
     else if (items.length) salute.registra(voce.fonte, { errore: null, conteggio: items.length });
     if (r.parzialeRete) {
-      passateKo.push({ tipo, motivo: r.parziale || 'la fonte ha risposto solo in parte' });
+      passateKo.push({ tipo, motivo: r.parziale || 'la fonte ha risposto solo in parte',
+        ...(r.bloccoParziale?.status ? { status: r.bloccoParziale.status } : {}) });
       totaleCopreTutto = false;
     }
     if (!Array.isArray(r) && r.truncated) troncato = true;

@@ -9,6 +9,7 @@ const { searchWebParts } = require('./web-parts');
 const scrapeSubito = require('./scrapers/subito-api');   // .searchAccessori(keyword)
 const ebayScrape = require('./ebay-scrape');             // scrape-bridge in attesa API ufficiale
 const logger = require('./logger');
+const salute = require('./fonti-salute');
 
 const TIMEOUT_MS = parseInt(process.env.RICAMBI_TIMEOUT_MS, 10) || 45000;
 
@@ -26,11 +27,16 @@ function subitoToPart(it) {
   };
 }
 async function subitoSource(term, opts = {}) {
+  if (salute.fermo('subito').fermo) {
+    return { blocked: true, error: 'Subito è in pausa dopo un blocco. Riprova più tardi.' };
+  }
   try {
     const items = await scrapeSubito.searchAccessori(term, { cat: opts.cat });
+    salute.registra('subito', { conteggio: items.length });
     return { articoli: items.map(subitoToPart) };
   } catch (e) {
-    if (e.status === 429) return { blocked: true, error: scrapeSubito.AVVISO_429 };
+    salute.registra('subito', { errore: e });
+    if (e.status === 429) return { blocked: true, error: scrapeSubito.AVVISO_429, httpStatus: 429 };
     throw e;
   }
 }
@@ -160,6 +166,7 @@ async function searchRicambi(qRaw, opts = {}) {
   order.forEach(k => {
     if (!res[k]) return;
     sources[k] = { status: res[k].status, reason: res[k].reason, count: res[k].items.length };
+    if (res[k].meta?.httpStatus) sources[k].httpStatus = res[k].meta.httpStatus;
     // fonte non riuscita → logga tag + reason (prima era muto: causa del "Web error" invisibile)
     if (res[k].status !== 'ok' && res[k].status !== 'empty') logger.warn('[ricambi]', `fonte ${k} "${term}" (${mode}/${veicolo}): ${res[k].status} — ${res[k].reason || 'n/d'}`);
   });
