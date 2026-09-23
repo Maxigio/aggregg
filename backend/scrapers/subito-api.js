@@ -672,6 +672,7 @@ async function unioneFamiglieMoto(params, opts) {
   const perUrl = new Map();
   let truncated = false, total = null, errori = 0, peggiore = null;
   let successi = 0, tentate = 0, interrotto429 = false, parzialeRete = false, bloccoParziale = null;
+  let hasMore = false, erroreTipo = null, erroreHttp = null;
   const parziali = [];
   const sospetti = [];
   for (let i = 0; i < chieste.length; i++) {
@@ -686,6 +687,8 @@ async function unioneFamiglieMoto(params, opts) {
       if (r.parziale) parziali.push(r.parziale);
       if (r.parzialeRete) parzialeRete = true;
       if (r.bloccoParziale) bloccoParziale = r.bloccoParziale;
+      if (r.hasMore) hasMore = true;
+      if (r.erroreTipo) { erroreTipo = r.erroreTipo; erroreHttp = r.erroreHttp; }
       // «Il parser del prezzo e' rotto» lo dichiara la singola passata: l'unione lo
       // buttava, e la stessa rottura dava pastiglia rossa su un'auto e verde su cento
       // moto — la fonte mentiva solo nel ramo scritto per i casi difficili.
@@ -702,6 +705,7 @@ async function unioneFamiglieMoto(params, opts) {
       const peso = k => ({ blocked: 3, auth: 2, transient: 1 }[k] || 0);
       if (!peggiore || peso(e.kind) > peso(peggiore.kind)) peggiore = e;
       if (e.kind === 'blocked') bloccoParziale = e;
+      erroreTipo = e.kind || 'transient'; erroreHttp = e.status || null;
       console.warn(`[subito] famiglia moto ${chieste[i]} KO: ${e.message}`);
       if (e.status === 429) { peggiore = e; interrotto429 = true; break; }
     }
@@ -733,7 +737,8 @@ async function unioneFamiglieMoto(params, opts) {
   if (parziale) console.warn(`[subito] moto "${params.marca} ${params.modello || ''}": ${parziale}`);
   const items = [...perUrl.values()];
   console.log(`[subito] moto "${params.marca} ${params.modello || ''}": ${tentate}/${chieste.length} famiglie interrogate → ${items.length} annunci`);
-  return opts.withMeta ? { items, truncated, total, parziale, parzialeRete, sospetto: sospetti[0] || null, bloccoParziale } : items;
+  return opts.withMeta ? { items, truncated, total, hasMore, parziale, parzialeRete,
+    erroreTipo, erroreHttp, sospetto: sospetti[0] || null, bloccoParziale } : items;
 }
 
 async function scrapeSubitoApi(params, opts = {}) {
@@ -762,6 +767,7 @@ async function scrapeSubitoApi(params, opts = {}) {
   let scartati = 0;
   let senzaPrezzo = 0;   // quanti annunci il payload non quota: vedi il commento piu' sotto
   let parziale = null, parzialeRete = false, bloccoParziale = null;
+  let hasMore = false, erroreTipo = null, erroreHttp = null;
   // "Carica altri": si riparte da dove si era arrivati. Il tetto di hades sta fra
   // start 9.850 e 10.000 (misurato per bisezione), quindi c'e' spazio per ~200 fette.
   const salta = Math.max(0, opts.fetta || 0) * maxPages * PAGE_SIZE;
@@ -772,6 +778,7 @@ async function scrapeSubitoApi(params, opts = {}) {
     catch (e) {
       if (p === 0) throw e; // nessuna pagina letta in questa fetta: non inventare risultati
       parzialeRete = true;
+      erroreTipo = e.kind || 'transient'; erroreHttp = e.status || null;
       bloccoParziale = e.kind === 'blocked' ? e : null;
       parziale = e.status === 429 ? AVVISO_429 : 'Subito non ha restituito tutte le pagine della ricerca.';
       break;
@@ -806,6 +813,7 @@ async function scrapeSubitoApi(params, opts = {}) {
       const kv = chiaveVersione(riga, ad, tipo);
       if (kv) attesa.push({ riga, ...kv });
     }
+    hasMore = page.ads.length === PAGE_SIZE && (total == null || salta + (p + 1) * PAGE_SIZE < total);
     if (page.ads.length < PAGE_SIZE) break;  // lista esaurita = vista completa
     if (p === maxPages - 1) truncated = true; // ultima pagina piena al cap → forse altro
   }
@@ -837,6 +845,7 @@ async function scrapeSubitoApi(params, opts = {}) {
       // Il recupero e' un di piu': se cade, la ricerca vale lo stesso.
       console.warn('[subito] recupero non dichiarati KO: ' + e.message);
       parzialeRete = true;
+      erroreTipo = e.kind || 'transient'; erroreHttp = e.status || null;
       if (e.kind === 'blocked') bloccoParziale = e;
       parziale = [parziale, e.status === 429 ? AVVISO_429 : 'Subito non ha completato la ricerca degli annunci senza modello dichiarato.'].filter(Boolean).join(' · ');
     }
@@ -855,7 +864,8 @@ async function scrapeSubitoApi(params, opts = {}) {
   const sospetto = (out.length && senzaPrezzo === out.length)
     ? `nessuno dei ${out.length} annunci porta un prezzo leggibile: l'etichetta del payload puo' essere cambiata`
     : null;
-  return opts.withMeta ? { items: out, truncated, total, sospetto, parziale, parzialeRete, bloccoParziale } : out;
+  return opts.withMeta ? { items: out, truncated, total, hasMore, sospetto, parziale, parzialeRete,
+    erroreTipo, erroreHttp, bloccoParziale } : out;
 }
 
 // Ricerca ACCESSORI/RICAMBI per keyword libera (OEM o nome pezzo) nelle categorie

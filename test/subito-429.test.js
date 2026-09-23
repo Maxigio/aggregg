@@ -196,6 +196,7 @@ test('Schermo Auto/Moto: il 429 senza annunci compare come avviso sotto le fonti
   const stato = {
     fonteBreakdown: { innerHTML: '' },
     lastSources: { subito: { status: 'error', parziale: subito.AVVISO_429 } },
+    paginaErrore: null,
     SOURCE_STATUS: { error: { cls: 'src-bad', txt: 'errore' } },
     FONTE_LABEL: { subito: 'Subito' }, SKIP_REASON_TXT: {},
     escapeHtml: s => String(s),

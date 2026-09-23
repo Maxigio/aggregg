@@ -524,7 +524,8 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
   // successiva. Ogni fonte la traduce nella SUA paginazione, perche' le pagine hanno
   // dimensioni diverse — qui 50 per pagina, due pagine per fetta.
   const salta = Math.max(0, opts.fetta || 0) * maxPages;
-  let parziale = null, bloccoParziale = null;
+  let parziale = null, bloccoParziale = null, erroreTipo = null, erroreHttp = null;
+  let hasMore = false;
   let rawTot = 0;                   // annunci grezzi visti: se mappati 0, e' il parser
   for (let p = 1 + salta; p <= salta + maxPages; p++) {
     if (p > 1 + salta && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
@@ -534,12 +535,14 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
       if (p === 1 + salta || !opts.withMeta) throw e;
       parziale = `AutoScout24: pagine successive non lette. ${e.message}`;
       bloccoParziale = e.kind === 'blocked' ? e : null;
+      erroreTipo = e.kind || 'transient'; erroreHttp = e.status || null;
       break;
     }
     const { items, raw, total: tot } = pagina;
     if (p === 1 + salta) total = tot;   // uguale su tutte le pagine: si prende la prima
     rawTot += raw;
     out.push(...items);
+    hasMore = raw === PAGE_SIZE && (total == null || p * PAGE_SIZE < total);
     if (raw < PAGE_SIZE) break;       // lista esaurita (conteggio GREZZO) = vista completa
     if (p === salta + maxPages) truncated = true;   // ultima pagina piena al cap → forse altro
   }
@@ -554,7 +557,8 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
   if (rawTot > 0 && out.length === 0) {
     throw new Error(`Autoscout: ${rawTot} annunci grezzi e nessuno leggibile — lo schema del payload puo' essere cambiato`);
   }
-  return opts.withMeta ? { items: out, truncated, total, parziale, parzialeRete: !!parziale, bloccoParziale } : out;
+  return opts.withMeta ? { items: out, truncated, total, hasMore, parziale,
+    parzialeRete: !!parziale, erroreTipo, erroreHttp, bloccoParziale } : out;
 }
 
 // ─── F50 copertura: conteggio totale per-query (count-query LEGGERA, separata) ───

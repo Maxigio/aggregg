@@ -28,7 +28,7 @@ function schermo(sources = {}, articoli = []) {
   const vietato = () => { throw new Error('La UI non deve avviare rete o timer'); };
   const c = vm.createContext({
     Date: Orologio, fetch: vietato, setTimeout: vietato, setInterval: vietato,
-    fonteBreakdown: { innerHTML: '' }, lastSources: sources,
+    fonteBreakdown: { innerHTML: '' }, lastSources: sources, paginaErrore: null,
     FONTE_LABEL: { subito: 'Subito.it', autoscout: 'Autoscout24', moto: 'Moto.it' },
     RC_FONTE: { subito: 'Subito.it' },
     document: { getElementById: id => { assert.equal(id, 'ricambiPanel'); return panel; } },
@@ -295,4 +295,12 @@ test('Competitor: cache mantenuta durante la pausa mostra un avviso testuale', (
   const html = c.cpSchedaHTML({ fonte: 'subito', id: '1', nome: 'Vetrina' });
   assert.match(html, /Dati non aggiornati/); assert.match(html, /NUMERI PRESENTI/);
   assert.match(html, /&lt;img/); assert.doesNotMatch(html, /<img onerror/);
+});
+
+test('avviso di pagina interrotta: testo del server escapato prima di inserirlo nel DOM', () => {
+  const { c } = schermo({ subito: { status: 'ok', count: 10 } });
+  c.paginaErrore = { testo: '<img src=x onerror=alert(1)>', riprovabile: true };
+  c.renderSourceStatus();
+  assert.match(c.fonteBreakdown.innerHTML, /&lt;img/);
+  assert.doesNotMatch(c.fonteBreakdown.innerHTML, /<img src=x/);
 });

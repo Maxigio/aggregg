@@ -294,11 +294,6 @@
     <!-- RISULTATI -->
     <div id="resultsSection" class="d-none">
       <div id="resultsGrid"></div>
-      <!-- "Carica altri": la fetta successiva, chiesta al click. Compare solo se una
-           fonte ha ancora annunci — il totale lo dice lei nella risposta. -->
-      <div id="caricaAltri" class="carica-altri d-none">
-        <button type="button" class="btn-ghost">Carica altri annunci</button>
-      </div>
       <div class="text-center mt-4">
         <button class="btn-ghost" id="backToSearch">Torna alla ricerca</button>
       </div>
@@ -309,6 +304,11 @@
       <p class="fs-5">Nessun risultato trovato.</p>
       <p class="small">Prova a modificare i filtri o selezionare una regione più ampia.</p>
       <button class="btn-ghost mt-2" onclick="window.scrollTo({top:0,behavior:'smooth'})">Modifica ricerca</button>
+    </div>
+
+    <!-- Resta disponibile anche quando AMR ha filtrato tutti gli annunci della prima pagina. -->
+    <div id="caricaAltri" class="carica-altri d-none">
+      <button type="button" class="btn-ghost">Carica altri annunci</button>
     </div>
 
     <!-- FOOTER -->

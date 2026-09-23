@@ -45,8 +45,8 @@ function httpGetText(url, hops = 0, timeoutMs = HTTP_TIMEOUT_DEFAULT) {
     if (hops > 5) return reject(new Error('too many redirects'));
     const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'it-IT,it;q=0.9' },
       signal: annullo.segnale() }, res => {   // ricerca abbandonata → la presa si chiude (annullo.js)
-      res.on('error', reject);
-      res.on('close', () => reject(new Error('risposta troncata')));
+      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+      res.on('close', () => reject(fail('risposta troncata', { kind: 'transient' })));
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
         const next = res.headers.location.startsWith('http') ? res.headers.location : new URL(res.headers.location, url).href;
@@ -60,8 +60,8 @@ function httpGetText(url, hops = 0, timeoutMs = HTTP_TIMEOUT_DEFAULT) {
       // niente errore su req, e il timeout muore col socket → Promise pendente per
       // sempre. 'close' arriva comunque; dopo 'end' il reject e' un no-op innocuo.
     });
-    req.on('error', reject);
-    req.setTimeout(timeoutMs, () => req.destroy(new Error('timeout')));
+    req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+    req.setTimeout(timeoutMs, () => req.destroy(fail('timeout', { kind: 'transient' })));
   });
   });
 }
@@ -289,11 +289,14 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
   // 'in fill' perenne). Ora: troncato solo se abbiamo usato TUTTE le pagine richieste E il sito
   // dichiara più annunci di quanti ne abbiamo presi. Se il tetto è ignoto → conservativo (assume
   // altro, così non si marca falsamente 'venduto'). got>=total = provato completo → markGone sicuro.
-  if (pages.length === urls.length) {
-    const got = pages.reduce((n, p) => n + p.length, 0);
-    if (total == null || got < total) truncated = true;
-  }
-  return { pages, blocked: false, truncated, cadute, total, errorePagina };
+  const got = pages.reduce((n, p) => n + p.length, 0);
+  // Moto.it non ha una dimensione di pagina costante: oltre la prima fetta il totale
+  // non permette di ricostruire quante card grezze abbiamo gia' attraversato.
+  // Una fetta piena resta navigabile; la prima pagina vuota chiudera' la fonte.
+  const hasMore = !driftBreak && pages.length === urls.length
+    && ((opts.fetta || 0) > 0 || total == null || got < total);
+  if (hasMore) truncated = true;
+  return { pages, blocked: false, truncated, cadute, total, hasMore, errorePagina };
 }
 
 /**
@@ -357,7 +360,7 @@ async function scrapeMotoIt(params, opts = {}) {
   const urls = Array.from({ length: maxPages }, (_, i) => buildUrl(params, salta + i + 1));
 
   if (deep) {
-    const { pages, statoKo, truncated, cadute, total, errorePagina } = await scrapeMotoViaHttp(urls, {
+    const { pages, statoKo, truncated, cadute, total, hasMore, errorePagina } = await scrapeMotoViaHttp(urls, {
     ...opts, modelSlug: params.motoitModelSlug, httpTimeoutMs: HTTP_TIMEOUT_DEFAULT });
     // L'etichetta la calcola `kindForStatus`: 5xx = passeggero, non blocco. E il messaggio
     // non dice piu' "pagina-1 vuota", che era un residuo di codice tolto tempo fa e mandava
@@ -374,13 +377,16 @@ async function scrapeMotoIt(params, opts = {}) {
    * spacciarsi per tuo.
    */
   const totaleLargo = !params.motoitModelSlug || null;
-  return opts.withMeta ? { items: risultati, truncated, total, totaleLargo, parziale: [avvisoCadute(cadute, urls.length), errorePagina?.message].filter(Boolean).join(' · ') || null, parzialeRete: !!cadute, bloccoParziale: errorePagina?.kind === 'blocked' ? errorePagina : null, sospetto: sospettoPrezzi(risultati) } : risultati;
+  return opts.withMeta ? { items: risultati, truncated, total, hasMore, totaleLargo,
+    parziale: [avvisoCadute(cadute, urls.length), errorePagina?.message].filter(Boolean).join(' · ') || null,
+    parzialeRete: !!cadute, erroreTipo: errorePagina?.kind || null, erroreHttp: errorePagina?.status || null,
+    bloccoParziale: errorePagina?.kind === 'blocked' ? errorePagina : null, sospetto: sospettoPrezzi(risultati) } : risultati;
   }
 
   // ON-SEARCH: HTTP sequenziale gentile (come il crawler). Niente browser, niente
   // fallback. Il ramo onora `withMeta` (totale F50 e "Carica altri" ne dipendono) e
   // `fetta`: senza, tornato vivo questo ramo, sarebbero regrediti entrambi.
-  const { pages, statoKo, truncated, cadute, total, errorePagina } = await scrapeMotoViaHttp(urls, {
+  const { pages, statoKo, truncated, cadute, total, hasMore, errorePagina } = await scrapeMotoViaHttp(urls, {
     modelSlug: params.motoitModelSlug,   // per leggere la versione dallo slug dell'annuncio
     pageDelayMs: ONSEARCH_DELAY_MS, httpTimeoutMs: ONSEARCH_TIMEOUT_MS, fetta: opts.fetta || 0,
   });
@@ -403,7 +409,9 @@ async function scrapeMotoIt(params, opts = {}) {
   const totaleLargo = !params.motoitModelSlug || null;
   const parziale = [avvisoCadute(cadute, urls.length), errorePagina?.message].filter(Boolean).join(' · ') || null;
   if (parziale) console.warn(`[Moto.it] ${parziale}`);
-  return opts.withMeta ? { items: risultati, truncated, total, totaleLargo, parziale, parzialeRete: !!cadute, bloccoParziale: errorePagina?.kind === 'blocked' ? errorePagina : null, sospetto: sospettoPrezzi(risultati) } : risultati;
+  return opts.withMeta ? { items: risultati, truncated, total, hasMore, totaleLargo, parziale,
+    parzialeRete: !!cadute, erroreTipo: errorePagina?.kind || null, erroreHttp: errorePagina?.status || null,
+    bloccoParziale: errorePagina?.kind === 'blocked' ? errorePagina : null, sospetto: sospettoPrezzi(risultati) } : risultati;
 }
 
 module.exports = scrapeMotoIt;
