@@ -698,6 +698,9 @@ body.has-results .search { padding: 14px 0 12px; }
 .src-bad, .src-bad b { color: var(--neg); }
 .src-warn, .src-warn b { color: var(--warn); }
 .src-dim b { color: var(--text-muted); font-weight: 600; }
+.src-total-ignoto { display: inline-flex; align-items: center; justify-content: center; position: relative; width: 1.2em; height: 1.2em; margin-left: .25em; border: 1px solid currentColor; border-radius: 50%; font-size: .9em; font-weight: 700; cursor: help; }
+.src-total-ignoto::after { content: attr(data-tip); display: none; position: absolute; z-index: 10; bottom: calc(100% + 6px); left: 0; width: max-content; max-width: min(270px, 80vw); padding: 6px 9px; border-radius: 5px; background: var(--text); color: var(--bg); font: 500 .74rem/1.35 var(--sans); white-space: normal; box-shadow: 0 3px 12px #0003; }
+.src-total-ignoto:hover::after, .src-total-ignoto:focus-visible::after { display: block; }
 /* L'avviso di allargamento va su una riga sua (#fonteBreakdown e' un flex con wrap), cosi'
    non spezza il ritmo delle tre pill. Misure copiate da .veh-liq-avviso. */
 .src-avviso { flex-basis: 100%; font-size: 0.74rem; color: var(--warn); }

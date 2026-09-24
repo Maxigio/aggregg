@@ -1012,10 +1012,11 @@ const REGIONE_BY_NORM = new Map([...REGIONI_VALIDE].map(slug => [normReg(slug), 
 const canonRegione = s => REGIONE_BY_NORM.get(normReg(s)) || null;
 
 // Validazione e sanitizzazione parametri ricerca
+const FONTI_PAGINA = ['subito', 'autoscout', 'moto'];
 function parseSearchParams(query) {
   const {
     tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione, raggio,
-    mmmvAutoscout, motoitBrandSlug, motoitModelSlug, motoitBikeCode, versione, fetta,
+    mmmvAutoscout, motoitBrandSlug, motoitModelSlug, motoitBikeCode, versione, fetta, fonti,
   } = query;
 
   const errors = [];
@@ -1026,6 +1027,13 @@ function parseSearchParams(query) {
   // e il messaggio dava la colpa alla rete. Un 400 col perche', come per marca.
   if (modello != null && typeof modello !== 'string') errors.push('modello deve essere una stringa sola');
   if (regione && !canonRegione(regione)) errors.push(`regione non valida: ${regione}`);
+  let fontiPagina = null;
+  if (fonti != null) {
+    const voci = typeof fonti === 'string' ? fonti.split(',') : [];
+    if (!(Number(fetta) > 0) || !voci.length || new Set(voci).size !== voci.length
+        || voci.some(f => !FONTI_PAGINA.includes(f))) errors.push('fonti della pagina non valide');
+    else fontiPagina = FONTI_PAGINA.filter(f => voci.includes(f)).join(',');
+  }
   if (errors.length) return { errors };
 
   const toInt = (val) => {
@@ -1052,6 +1060,7 @@ function parseSearchParams(query) {
       // Il tetto tiene lontano da richieste assurde e dai limiti veri delle fonti
       // (hades si ferma fra start 9.850 e 10.000; qui si ferma alla fetta 50).
       fetta:            Math.min(50, Math.max(0, toInt(fetta) || 0)),
+      fontiPagina,
       mmmvAutoscout:    mmmvAutoscout    || null,
       motoitBrandSlug:  motoitBrandSlug  || null,
       // la correzione vale anche per chi arriva con lo slug vecchio in tasca (menu in
@@ -1199,22 +1208,23 @@ async function runSubito(params, ms, chiaveFonte) {
   const ctrl = new AbortController();
   let scattato;
   const timeout = new Promise((_, reject) => {
-    scattato = setTimeout(() => { ctrl.abort(); reject(new Error('Timeout su Subito.it')); }, ms);
+    scattato = setTimeout(() => {
+      reject(Object.assign(new Error('Timeout su Subito.it'), { code: 'AMR_TIMEOUT', kind: 'transient' }));
+      ctrl.abort();
+    }, ms);
   });
   try {
     const avviato = annullo.dentro(ctrl.signal, () => scrapeSubitoSmart(params));
     // Stesso stampo di runSource: lo spread di sciogli(), MAI una destrutturazione a mano.
-    // Qui `{ items, total, sospetto }` buttava `parziale`: la ricerca moto a meta' (una
-    // famiglia caduta, o le famiglie oltre il tetto di 8) usciva senza dichiarazione,
-    // cacheable() non aveva niente da leggere e congelava tre minuti una risposta monca —
-    // ripremere Cerca non faceva ripartire nulla. E «Subito N di M» usciva senza segno.
+    // Qui una vecchia destrutturazione buttava `parziale`: una pagina interrotta
+    // usciva senza dichiarazione e poteva entrare in cache per tre minuti.
     const s = sciogli(await Promise.race([avviato, timeout]));
     // Come in runSource: una fonte che dichiara di non aver letto bene non e' 'empty'.
     if (s.sospetto) {
       segna(s.bloccoParziale || Object.assign(new Error(s.sospetto), { kind: 'error' }), 0);
       return { ...s, status: 'error', reason: s.sospetto, erroreTipo: 'error' };
     }
-    // BLOCCO PARZIALE: qualche famiglia moto e' stata RESPINTA (403/429) ma altre hanno risposto.
+    // BLOCCO PARZIALE: una pagina aggiuntiva o il recupero e' stato RESPINTO (403/429).
     // Non e' un errore di lettura e non e' "mercato parziale": lo stato resta 'ok' con la nota
     // `parziale` (se ci sono annunci), ma il freno anti-ban deve vedere la respinta col suo
     // genere vero — non un 'error' generico, che non ferma mai.
@@ -1226,9 +1236,10 @@ async function runSubito(params, ms, chiaveFonte) {
     ctrl.abort();
     segna(err, 0);
     console.warn('[WARN] ' + err.message);
+    const isTimeout = err.code === 'AMR_TIMEOUT';
     const avviso = err.status === 429 ? scrapeSubitoApi.AVVISO_429 : null;
-    return { items: [], status: 'error', reason: avviso || err.message, parziale: avviso,
-      erroreTipo: err.kind || 'error', erroreHttp: err.status || null,
+    return { items: [], status: isTimeout ? 'timeout' : 'error', reason: avviso || err.message, parziale: avviso,
+      erroreTipo: isTimeout ? 'transient' : err.kind || 'error', erroreHttp: err.status || null,
       erroriSubito: err.erroriSubito || [] };
   } finally { clearTimeout(scattato); }
 }
@@ -1321,7 +1332,7 @@ function searchCacheKey(p) {
   const avanzati = filtriAuto.chiaveCache(p.filtriAuto);
   return ['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax',
           'regione', 'raggio', 'mmmvAutoscout', 'motoitBrandSlug', 'motoitModelSlug', 'motoitBikeCode',
-          'versione', 'fetta']
+          'versione', 'fetta', 'fontiPagina']
     .map(f => `${f}=${p[f] ?? ''}`).concat(`avanzati=${avanzati}`).join('&').toLowerCase();
 }
 function cacheable(data) {
@@ -1337,11 +1348,7 @@ function cacheable(data) {
   // Un risultato PARZIALE (grafie AS24 cadute con item superstiti) e' monco quanto un
   // timeout: congelarlo tre minuti renderebbe inutile il gesto di ripremere Cerca.
   if (src.autoscout?.parziale || src.moto?.parziale) return false;
-  // SUBITO no: nel suo `parziale` finiscono anche i monchi DETERMINISTICI — le famiglie oltre
-  // il tetto di 8 (subito-api.js) e quelle agganciate dal ponte che `bm` non puo' chiedere
-  // insieme. Ritentare rifa' otto richieste in fila a hades (con le pause) per lo stesso
-  // identico esito, quindi quella ricerca non entrava in cache MAI: doppio traffico verso la
-  // fonte proprio sulle ricerche piu' care. Si guarda il flag, come per Moto.it qui sotto.
+  // Per Subito conta il flag di incompletezza di rete, non il testo dell’avviso.
   if (src.subito?.parzialeRete) return false;
   // Il menu versioni Moto.it caduto per RETE: la ricerca parte senza filtro versione (o con
   // un elenco monco che puo' agganciare la versione sbagliata) ma lo status resta 'ok'.
@@ -1848,13 +1855,15 @@ async function runSearchCore(params) {
   const sospesa = chiavePagina && pagineInSospeso.get(chiavePagina);
   if (sospesa && Date.now() - sospesa.ts >= SEARCH_CACHE_TTL) pagineInSospeso.delete(chiavePagina);
   const salvate = sospesa && Date.now() - sospesa.ts < SEARCH_CACHE_TTL ? sospesa : null;
+  const richiesta = f => !params.fontiPagina || params.fontiPagina.split(',').includes(f);
+  const esaurita = () => ({ items: [], status: 'skipped', reason: 'fonte esaurita nelle pagine precedenti', hasMore: false });
   const [subitoRes, asRes0, motoRes] = await Promise.all([
-    salvate?.subito ? Promise.resolve(salvate.subito) : skipSubito
+    !richiesta('subito') ? Promise.resolve(esaurita()) : salvate?.subito ? Promise.resolve(salvate.subito) : skipSubito
       ? Promise.resolve({ items: [], status: 'skipped', reason: subitoSkipReason })
       : inPausaSubito
         ? Promise.resolve({ items: [], status: 'skipped', reason: salute.MOTIVO_PAUSA })
         : runSubito(params, TIMEOUT_MS, 'subito'),
-    salvate?.autoscout ? Promise.resolve(salvate.autoscout.risposta) : skipAutoscout
+    !richiesta('autoscout') ? Promise.resolve(esaurita()) : salvate?.autoscout ? Promise.resolve(salvate.autoscout.risposta) : skipAutoscout
       ? Promise.resolve({ items: [], status: 'skipped', reason: asSkipReason })
       : inPausaAs
       ? Promise.resolve({ items: [], status: 'skipped', reason: salute.MOTIVO_PAUSA })
@@ -1864,7 +1873,7 @@ async function runSearchCore(params) {
       // pur pescando da un insieme piu' grande (75 contro 83). Costa una richiesta.
       : runSource(() => scrapeAutoscoutUnion(params, { withMeta: true, fetta: params.fetta || 0,
           ...(params.as24RegioneDaCap ? { maxPages: 3 } : {}) }), TIMEOUT_MS, 'Autoscout24', 'autoscout'),
-    salvate?.moto ? Promise.resolve(salvate.moto) : skipMotoIt
+    !richiesta('moto') ? Promise.resolve(esaurita()) : salvate?.moto ? Promise.resolve(salvate.moto) : skipMotoIt
       ? Promise.resolve({ items: [], status: 'skipped', reason: motoSkipReason })
       : inPausaMoto
         ? Promise.resolve({ items: [], status: 'skipped', reason: salute.MOTIVO_PAUSA })

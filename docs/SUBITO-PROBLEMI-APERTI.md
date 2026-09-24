@@ -1,52 +1,47 @@
-# Subito: problemi verificati da riprendere
+# Subito — problemi verificati e stato
 
-I cinque problemi sono stati riprodotti con risposte Hades controllate e
-risolti separatamente dal flusso Versione.
+Le verifiche usano risposte Hades controllate: i test non fanno richieste al portale.
+La regola approvata per Auto e Moto è una famiglia nativa per voce univoca;
+quando la voce AMR corrisponde a più famiglie Subito si usa `q=marca+modello`.
 
-1. **Risolto localmente — richiesta superflua e falso avviso 429.** La pagina standard
-   di Subito ora legge 50 annunci grezzi con una sola chiamata; `fetta: 1` chiede
-   `start=50` solo dopo «Carica altri annunci». Anche un giro esplicitamente piu'
-   profondo si ferma quando `count_all` e' stato raggiunto. Il totale assente o
-   incoerente non autorizza a scartare annunci. Test di regressione in
-   `test/subito-429.test.js`; resta da verificare il comportamento sul dev server.
-2. **Risolto localmente — recupero duplicato nelle ricerche simultanee.** Due chiamate
-   identiche a `paginaRecupero()` attendevano entrambe una risposta Hades separata.
-   Ora condividono la richiesta in corso per chiave e la liberano su successo o errore;
-   i dati grezzi mantengono la scadenza di dieci minuti. Un 429 non avvia altri tentativi;
-   se viene annullata soltanto la ricerca che ha aperto la connessione, un'altra ricerca
-   ancora attiva puo' riprovare. Prove controllate in `test/subito-recupero-cache.test.js`.
-   La cache resta condivisa fra account, come prima: l'isolamento per cliente andra'
-   affrontato insieme alle altre cache quando si prepareranno le installazioni dedicate.
-3. **Risolto localmente — piu' 403 contati come uno solo.** Il freno anti-blocco
-   vedeva solo il riepilogo della ricerca Moto e lasciava interrogare altre
-   famiglie dopo due risposte Hades 403. Gli errori delle singole chiamate ora
-   arrivano al freno subito; una risposta valida con annunci azzera i colpi,
-   una pausa locale non conta come risposta del portale e il ciclo dichiara le
-   famiglie non interrogate. Prove controllate in `test/subito-429.test.js`.
-4. **Risolto localmente — l'ultimo errore nasconde un blocco precedente.** In una ricerca Moto
-   su piu' famiglie, se una chiamata Hades riceve 403, la successiva 503 e un'altra
-   famiglia risponde, l'unione conserva `bloccoParziale: 403` ma restituisce
-   `erroreTipo: transient` e `erroreHttp: 503`. Ora la risposta contiene l'elenco
-   distinto degli errori effettivi, con famiglia, fase, pagina e codice HTTP; il
-   frontend lo mostra e decide se riprovare leggendo l'intero elenco. I campi
-   singoli restano per compatibilita', ma non guidano la riprova quando c'e'
-   l'elenco. `fonti-salute` continua a contare gli errori originali delle
-   singole chiamate, senza contarli di nuovo quando si mostra il riepilogo.
-   Prove controllate in `test/subito-429.test.js`, `test/paginazione-ricerca.test.js`
-   e `test/fonti-pausa-ui.test.js`, senza interrogare il portale.
-5. **Risolto localmente — una famiglia senza prezzi fa fallire anche quella valida.** Se una
-   famiglia Moto restituisce un annuncio realmente senza prezzo e una seconda
-   famiglia restituisce un annuncio con prezzo, `sospetto` della prima viene
-   propagato all'unione e l'intera fonte esce con `status: error`. Riprodotto
-   con due risposte Hades controllate, una senza prezzo e una con prezzo.
-   Ora il campo assente produce prezzo non disponibile (`n/d`) senza inventare
-   «su richiesta»; quest'ultima dicitura resta solo se il campo la dichiara.
-   Un campo prezzo presente ma illeggibile resta segnalato.
-   Se un'altra famiglia porta prezzi validi, la fonte resta `ok` con avviso
-   sulla famiglia anomala. L'annuncio non viene scartato in nessun caso.
-   L'URI `/price` permette anche di leggere il prezzo se cambia solo l'etichetta.
-   Prove controllate in `test/silenzi-fonti.test.js`. Se la fonte cambiasse
-   contemporaneamente URI ed etichetta, il payload sarebbe indistinguibile da
-   un annuncio che non dichiara il prezzo: questo limite resta esplicito.
+## Risolti
 
-Queste riproduzioni non richiedono interrogazioni ripetute al portale reale.
+1. **Richiesta superflua alla pagina successiva.** La prima pagina chiede 50 annunci;
+   la seguente parte solo quando l'utente sceglie «Carica altri annunci» e
+   `count_all` arresta una pagina profonda già completa. Prova in
+   `test/subito-429.test.js`.
+2. **Recupero duplicato nelle ricerche simultanee.** `paginaRecupero()` condivide
+   la richiesta in corso e conserva i dati grezzi solo per il TTL previsto.
+   Prove in `test/subito-recupero-cache.test.js`. L'isolamento delle cache per
+   installazione cliente resta un lavoro separato.
+3. **Più famiglie Moto, conteggi e blocchi parziali.** Le vecchie sequenze Hades
+   per più famiglie e le unioni di ID Auto sono state rimosse nel commit `db5f8ac`.
+   I vecchi scenari «due 403 contati come uno», «l'ultimo errore nasconde il
+   precedente» e «una famiglia senza prezzo guasta l'unione» non sono più
+   percorsi raggiungibili nella ricerca Auto/Moto. La gestione dei 403/429,
+   delle pagine interrotte e dei prezzi mancanti resta coperta da test sulla
+   singola ricerca.
+4. **Una fonte esaurita interrogata ancora.** Il pulsante compare se almeno una
+   fonte ha `hasMore: true`, ma prima il server chiedeva comunque la pagina a
+   tutte e tre. Ora il client indica le sole fonti ancora aperte; il server
+   valida l'elenco, lo include nella chiave della cache e dichiara le altre
+   come non richieste. Lo schermo conserva anche lo stato `empty` delle fonti
+   già esaurite. Riproduzione precedente e regressioni in
+   `test/paginazione-fonti.test.js` e `test/paginazione-ricerca.test.js`.
+5. **Timeout complessivo Subito classificato come errore definitivo.**
+   `runSubito()` ora distingue il proprio timer dagli errori della fonte:
+   restituisce `status: timeout`, `erroreTipo: transient` e registra un esito
+   transitorio in `fonti-salute`. La pagina può essere riprovata; un 403, un
+   429 o un body illeggibile mantengono la loro classificazione. Riproduzione
+   prima del fix e regressione in `test/subito-429.test.js`.
+6. **Totale Subito sconosciuto senza segnale visibile.** Se `count_all` manca,
+   il backend mantiene `totale: null` e la pill di Subito mostra un'icona con
+   spiegazione immediata al passaggio del puntatore o al fuoco da tastiera.
+   Non inventa un totale e non cambia la paginazione. Il segnale compare solo
+   con risposta valida (`ok` o `empty`), non su timeout o fonte saltata.
+   Riproduzione prima del fix e regressione in `test/fonti-pausa-ui.test.js`.
+
+## Aperti
+
+Nessuno dei problemi elencati in questo registro resta aperto. Questo non
+costituisce una verifica completa dello scraper né delle fonti reali.

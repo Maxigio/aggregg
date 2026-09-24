@@ -101,7 +101,7 @@ test('pagina fallita: il retry non richiama una fonte che aveva completato la pa
     });
     return req;
   };
-  const q = { tipo: 'auto', marca: 'Audi', fetta: 1 };
+  const q = { tipo: 'auto', marca: 'Audi', fetta: 1, fonti: 'subito,autoscout' };
   const primo = await server._amrSearchFn(q);
   assert.equal(primo.sources.autoscout.status, 'error');
   assert.equal(primo.sources.subito.status, 'ok');
@@ -109,4 +109,42 @@ test('pagina fallita: il retry non richiama una fonte che aveva completato la pa
   assert.equal(secondo.sources.autoscout.status, 'ok');
   assert.equal(richiesteSubito, 1);
   assert.equal(richiesteAs, 2);
+});
+
+test('pagina successiva: una fonte esaurita non riceve altre richieste', async () => {
+  let chiamateSubito = 0, chiamateAs = 0;
+  subito._setHttpGetJson(async () => {
+    chiamateSubito++;
+    return { status: 200, body: JSON.stringify({ ads: [], count_all: 0 }) };
+  });
+  https.request = (...args) => {
+    const cb = args.at(-1), req = new EventEmitter();
+    req.write = () => {}; req.end = () => {}; req.setTimeout = () => {};
+    process.nextTick(() => {
+      const res = new EventEmitter();
+      res.statusCode = 200; res.headers = {}; res.setEncoding = () => {};
+      cb(res); chiamateAs++;
+      res.emit('data', JSON.stringify({ data: { search: { listings: { listings: [nodo(950)],
+        metadata: { totalItems: 1 } } } } }));
+      res.emit('end');
+    });
+    return req;
+  };
+  const r = await server._amrSearchFn({ tipo: 'auto', marca: 'Audi', fetta: 23, fonti: 'autoscout' });
+  assert.equal(chiamateSubito, 0);
+  assert.ok(chiamateAs > 0);
+  assert.equal(r.sources.subito.status, 'skipped');
+  assert.equal(r.sources.subito.hasMore, false);
+});
+
+test('la scelta delle fonti accetta solo nomi univoci nelle pagine successive', async () => {
+  for (const q of [
+    { fetta: 0, fonti: 'subito' },
+    { fetta: 1, fonti: 'subito,subito' },
+    { fetta: 1, fonti: '__proto__' },
+    { fetta: 1, fonti: ['subito', 'moto'] },
+  ]) {
+    const r = await server._amrSearchFn({ tipo: 'auto', marca: 'Audi', ...q });
+    assert.match(r.error, /fonti della pagina non valide/);
+  }
 });

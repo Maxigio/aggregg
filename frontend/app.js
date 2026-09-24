@@ -2314,13 +2314,14 @@ let caricandoAltri = false;
 let paginaErrore = null;
 let paginaRetryTimer = null;
 
-function altriDisponibili() {
+function fontiConAltri() {
   const s = lastSources || {};
-  return ['subito', 'autoscout', 'moto'].some(f => {
+  return ['subito', 'autoscout', 'moto'].filter(f => {
     const x = s[f];
     return x && (x.status === 'ok' || x.status === 'empty') && x.hasMore === true;
   });
 }
+function altriDisponibili() { return fontiConAltri().length > 0; }
 // Quanti ne abbiamo gia' presi da quella fonte, contando tutte le fette caricate.
 function presiDa(fonte) {
   return currentResults.filter(r => r.fonte === fonte).length;
@@ -2329,10 +2330,12 @@ function presiDa(fonte) {
 async function caricaAltri() {
   if (caricandoAltri || !lastSearchParams || (paginaErrore &&
       (!paginaErrore.riprovabile || Date.now() < paginaErrore.dopo))) return;
+  const fonti = fontiConAltri();
+  if (!fonti.length) return;
   caricandoAltri = true; renderAltriBtn();
   const myGen = searchGen;
   try {
-    const q = new URLSearchParams({ ...lastSearchParams, fetta: String(fettaPresa + 1) });
+    const q = new URLSearchParams({ ...lastSearchParams, fetta: String(fettaPresa + 1), fonti: fonti.join(',') });
     const res = await fetch(`/api/search?${q}`);
     const data = await res.json();
     if (myGen !== searchGen) return;         // una ricerca nuova ha preso il posto
@@ -2426,7 +2429,8 @@ function fondiTotali(nuove) {
     const n = (nuove || {})[f] || null;
     if (!vecchia && !n) continue;
     // Una fetta vuota non cancella gli annunci gia' mostrati da questa fonte.
-    if (vecchia && vecchia.status === 'ok' && n && (n.status === 'empty' || n.status === 'skipped')) {
+    if (vecchia && (vecchia.status === 'ok' || vecchia.status === 'empty')
+        && n && (n.status === 'empty' || n.status === 'skipped')) {
       out[f] = { ...vecchia, count: presiDa(f), hasMore: n.status === 'empty' ? n.hasMore ?? false : vecchia.hasMore,
         pausa: n.pausa || vecchia.pausa };
       continue;
@@ -3879,7 +3883,10 @@ function renderSourceStatus() {
     else if (s.status === 'skipped') txt = escapeHtml(SKIP_REASON_TXT[s.reason] || s.reason || 'saltato');
     else txt = meta.txt || s.status;
     const dim = s.status === 'ok' ? '' : ' src-dim';
-    return `<span class="src ${meta.cls}${dim}">${FONTE_LABEL[f]} <b>${txt}</b></span>`;
+    const totaleIgnoto = f === 'subito' && (s.status === 'ok' || s.status === 'empty') && s.totale == null
+      ? ' <span class="src-total-ignoto" tabindex="0" role="img" aria-label="Totale annunci non comunicato da Subito" data-tip="Totale annunci non comunicato da Subito">?</span>'
+      : '';
+    return `<span class="src ${meta.cls}${dim}">${FONTE_LABEL[f]} <b>${txt}</b>${totaleIgnoto}</span>`;
   }).join('');
   // L'AVVISO DI ALLARGAMENTO. `reason` veniva stampata solo per le fonti 'skipped', ma la frase
   // "nessun X su Autoscout: mostro Y" nasce a status 'ok' — quindi non compariva mai, e si

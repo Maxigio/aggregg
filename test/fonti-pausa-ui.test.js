@@ -66,6 +66,25 @@ test('Subito mostra separatamente gli errori delle famiglie, senza HTML dalla ri
   assert.doesNotMatch(html, /<img/);
 });
 
+test('Subito segnala il totale sconosciuto senza inventare uno zero', () => {
+  for (const status of ['ok', 'empty']) {
+    const { c } = schermo({ subito: { status, count: status === 'ok' ? 50 : 0, totale: null } });
+    c.renderSourceStatus();
+    assert.match(c.fonteBreakdown.innerHTML, /src-total-ignoto/);
+    assert.match(c.fonteBreakdown.innerHTML, /Totale annunci non comunicato da Subito/);
+    assert.doesNotMatch(c.fonteBreakdown.innerHTML, /di 0\b/);
+  }
+  for (const stato of [
+    { status: 'ok', count: 50, totale: 70 },
+    { status: 'timeout', count: 0, totale: null },
+    { status: 'skipped', count: 0, totale: null },
+  ]) {
+    const { c } = schermo({ subito: stato });
+    c.renderSourceStatus();
+    assert.doesNotMatch(c.fonteBreakdown.innerHTML, /src-total-ignoto/);
+  }
+});
+
 test('pausa scaduta e verifica distinguono un prossimo tentativo da una verifica in corso', () => {
   const { c } = schermo();
   for (const stato of [

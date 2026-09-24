@@ -189,6 +189,18 @@ test('Subito: un body illeggibile con HTTP 200 non viene presentato come errore 
   } finally { subito._setHttpGetJson(null); }
 });
 
+test('Subito: il timeout complessivo e transitorio e permette di riprovare la pagina', async () => {
+  subito._setHttpGetJson(() => new Promise(() => {}));
+  try {
+    const r = await server._runSubito(params(), 10, 'subito');
+    assert.equal(r.status, 'timeout');
+    assert.equal(r.erroreTipo, 'transient');
+    assert.equal(r.items.length, 0);
+    assert.equal(salute.stato().fonti.find(f => f.fonte === 'subito')?.esito, 'transitorio');
+    assert.equal(salute.fermo('subito').fermo, false);
+  } finally { subito._setHttpGetJson(null); }
+});
+
 test('Subito: 429 nel recupero conserva il risultato principale e arriva al freno', async () => {
   const chiamate = [];
   subito._setHttpGetJson(async path => {

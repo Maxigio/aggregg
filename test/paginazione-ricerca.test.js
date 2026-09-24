@@ -10,7 +10,7 @@ const pagina = app.slice(app.indexOf('let fettaPresa = 0;'), app.indexOf('\nasyn
 const riga = id => ({ fonte: 'subito', url: `https://www.subito.it/auto/prova-${id}.htm`, prezzo: 1000 + id });
 
 function schermo(risposte, sources = { subito: { status: 'ok', count: 50, totale: 1000, hasMore: true } }) {
-  const richieste = [], avvisi = [];
+  const richieste = [], urls = [], avvisi = [];
   const pulsante = { disabled: false, textContent: '' };
   const box = { classList: { toggle(_classe, nascosto) { box.nascosto = nascosto; } }, querySelector: () => pulsante };
   const ctx = vm.createContext({
@@ -21,14 +21,37 @@ function schermo(risposte, sources = { subito: { status: 'ok', count: 50, totale
     document: { getElementById: id => id === 'caricaAltri' ? box : null },
     renderSourceStatus() {}, renderResults() {}, initPrezzoSlider() {},
     toast: s => avvisi.push(s), manigliePrezzoStrette: () => null, prezzoSliderInstance: null,
-    fetch: async url => { richieste.push(Number(new URL('https://prova.invalid' + url).searchParams.get('fetta')));
+    fetch: async url => { urls.push(url); richieste.push(Number(new URL('https://prova.invalid' + url).searchParams.get('fetta')));
       return { ok: true, json: async () => { const r = risposte.shift(); return { ...r, sources: {
         subito: { status: 'skipped' }, autoscout: { status: 'skipped' }, moto: { status: 'skipped' }, ...r.sources,
       } }; } }; },
   });
   vm.runInContext(pagina, ctx);
-  return { ctx, richieste, avvisi, box, pulsante };
+  return { ctx, richieste, urls, avvisi, box, pulsante };
 }
+
+test('chiede la pagina solo alle fonti ancora aperte e conserva la fonte esaurita', async () => {
+  const s = schermo([{ risultati: [{ fonte: 'autoscout', url: 'https://autoscout24.it/nuovo', prezzo: 2000 }],
+    sources: { autoscout: { status: 'ok', count: 1, hasMore: true } } }], {
+    subito: { status: 'ok', count: 50, hasMore: false },
+    autoscout: { status: 'ok', count: 20, hasMore: true },
+  });
+  await s.ctx.caricaAltri();
+  assert.equal(new URL('https://prova.invalid' + s.urls[0]).searchParams.get('fonti'), 'autoscout');
+  assert.equal(s.ctx.lastSources.subito.status, 'ok');
+  assert.equal(s.ctx.lastSources.subito.hasMore, false);
+  assert.equal(s.ctx.currentResults.length, 51);
+});
+
+test('una fonte vuota ed esaurita resta vuota mentre avanzano le altre', async () => {
+  const s = schermo([{ risultati: [], sources: { autoscout: { status: 'empty', hasMore: false } } }], {
+    subito: { status: 'empty', count: 0, hasMore: false },
+    autoscout: { status: 'ok', count: 20, hasMore: true },
+  });
+  await s.ctx.caricaAltri();
+  assert.equal(s.ctx.lastSources.subito.status, 'empty');
+  assert.equal(s.ctx.lastSources.subito.hasMore, false);
+});
 
 test('pagina intermedia fallita: nessuna riga nuova, stessa pagina riprovabile', async () => {
   const s = schermo([
