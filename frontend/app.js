@@ -165,6 +165,7 @@ const ICONS = {
   square:            '<rect x="3" y="3" width="18" height="18" rx="2"/>',
   'square-check':    '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 12 2 2 4-4"/>',
   info:              '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
+  alert:             '<path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5"/><path d="M12 18h.01"/>',
   chevron:           '<path d="m6 9 6 6 6-6"/>',
   search:            '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>',
   x:                 '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
@@ -816,12 +817,35 @@ async function init() {
       if (r && Array.isArray(r.immagini) && r.immagini.length) openLightbox(r.immagini);
       return;
     }
+    const avviso = e.target.closest('.btn-avvisi');
+    if (avviso) { alternaAvvisi(avviso); return; }
     // Mobile: tap sulla riga (non sulla thumb) → apre il dettaglio (azioni dentro). Desktop: titolo→annuncio, bottoni espliciti.
     if (window.matchMedia('(max-width: 860px)').matches) { toggleDetail(row); return; }
     if (e.target.closest('.row-titolo')) { openAd(url); return; }
     if (e.target.closest('.btn-confronta'))  { toggleConfronto(url); return; }
     if (e.target.closest('.btn-info'))       { toggleDetail(row); return; }
   });
+  resultsGrid.addEventListener('pointerover', e => {
+    const btn = e.target.closest('.btn-avvisi');
+    if (btn) mostraAvvisi(btn);
+  });
+  resultsGrid.addEventListener('pointerout', e => {
+    if (e.target.closest('.btn-avvisi') && !e.relatedTarget?.closest?.('.btn-avvisi')) nascondiAvvisi();
+  });
+  resultsGrid.addEventListener('focusin', e => {
+    const btn = e.target.closest('.btn-avvisi');
+    if (btn) mostraAvvisi(btn);
+  });
+  resultsGrid.addEventListener('focusout', e => {
+    if (e.target.closest('.btn-avvisi')) nascondiAvvisi();
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.btn-avvisi')) nascondiAvvisi(true);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') nascondiAvvisi(true);
+  });
+  document.addEventListener('scroll', () => nascondiAvvisi(true), true);
 
   // Sezioni richiudibili dentro il pannello annuncio. `toggle` non risale il DOM: cattura.
   resultsGrid.addEventListener('toggle', e => miniToggle(e, (cosa, d) => {
@@ -2599,6 +2623,7 @@ function rigaVersione(tolti) {
 }
 
 function renderResults(results) {
+  nascondiAvvisi(true); // le righe vengono ricreate: il pulsante aperto non esiste piu'
   // Nessuna ricerca attiva: niente toolbar/risultati.
   // La toolbar appare solo dopo una ricerca vera.
   if (!searchActive) {
@@ -2839,7 +2864,7 @@ function escapeHtml(str) {
  */
 const DICHIARAZIONE = {
   'senza-versione': { et: 'versione n.d.', cl: 'med', tit: 'Il venditore non ha indicato la versione: il modello e\' quello giusto, l\'allestimento non e\' dichiarato.' },
-  'senza-modello':  { et: 'da verificare', cl: 'med', tit: 'Il venditore non ha indicato il modello: riconosciuto dal titolo, non dal catalogo.' },
+  'senza-modello':  { et: 'modello non dichiarato', cl: 'med', tit: 'Il venditore non ha indicato il modello: riconosciuto dal titolo, non dal catalogo.' },
   'altro-modello':  { et: 'altro modello', cl: 'ko',  tit: 'Questa fonte non ha il modello cercato: la ricerca si e\' allargata alla marca e questo e\' un modello diverso.' },
   // Diverso da "versione n.d.": li' e' il venditore a non averla scritta, qui siamo noi
   // a non aver potuto controllare. Su Autoscout la versione e' testo libero, e certe
@@ -2856,33 +2881,63 @@ function corrispondenzaDi(r) {
   return d || { et: 'corrisponde' };
 }
 
-/**
- * LA PASTIGLIA DELLA CORRISPONDENZA, in un posto solo.
- *
- * Stava dentro `rowHTML`, quindi la vista a schede — che dal commit 853ce47 e' quella
- * PREDEFINITA — mostrava i titoli nudi: un annuncio di un altro modello arrivava a schermo
- * senza nessun segnale, proprio dove si guarda. Ogni vista nuova ripartirebbe cieca allo
- * stesso modo finche' la regola vive dentro una funzione di disegno.
- *
- * La regola resta quella decisa a suo tempo: sulla riga (e sulla scheda) solo i casi in cui
- * il VEICOLO potrebbe non essere quello cercato — "altro modello", "da verificare" — perche'
- * sono rari e cambiano cosa stai guardando; la versione mancante capita di continuo e una
- * chip su una riga su due non segnala piu' niente, quindi si legge nel pannello dell'annuncio
- * (`detailSpecsHTML` → riga "Corrispondenza"). Nel PDF e nel CSV, dove c'e' una colonna
- * apposta e nessun ingombro, compaiono tutte.
- */
-function dichBadgeHTML(item) {
-  if (item.versioneEsito === 'smentita') {
-    const d = corrispondenzaDi(item);
-    return `<span class="dich-badge dich-${d.cl}" title="Versione dichiarata diversa">${escapeHtml(d.et)}</span>`;
+/** Gli avvisi della riga si raccolgono in un solo pulsante, separato dal titolo cliccabile. */
+function avvisiAnnuncio(item) {
+  const out = [];
+  if (item.dichiarazione === 'altro-modello')
+    out.push({ tipo: 'critico', titolo: 'Altro modello', testo: 'La fonte dichiara un modello diverso da quello cercato.' });
+  if (item.dichiarazione === 'senza-modello')
+    out.push({ tipo: 'attenzione', titolo: 'Modello non dichiarato', testo: 'Riconosciuto dal titolo, non dal catalogo della fonte.' });
+  if (item.versioneEsito === 'smentita')
+    out.push({ tipo: 'critico', titolo: 'Versione diversa', testo: 'L’annuncio dichiara una versione diversa da quella cercata.' });
+  else if (item.versioneEsito === 'ignota' || item.dichiarazione === 'versione-non-verificata')
+    out.push({ tipo: 'attenzione', titolo: 'Versione non verificata', testo: 'I dati dell’annuncio non permettono di confermare la versione cercata.' });
+  return out;
+}
+
+function avvisiPulsanteHTML(item) {
+  const avvisi = avvisiAnnuncio(item);
+  if (!avvisi.length) return '';
+  const critico = avvisi.some(a => a.tipo === 'critico') ? ' critico' : '';
+  return `<button type="button" class="row-act btn-avvisi${critico}" aria-label="Avvisi sull'annuncio: ${avvisi.length}" aria-expanded="false">${icon('alert')}</button>`;
+}
+
+let avvisiAperto = null, avvisiFisso = false;
+function nascondiAvvisi(forza = false) {
+  if (avvisiFisso && !forza) return;
+  const pop = document.getElementById('avvisiAnnuncioPopup');
+  if (pop) pop.hidden = true;
+  if (avvisiAperto) {
+    avvisiAperto.setAttribute('aria-expanded', 'false');
+    avvisiAperto.removeAttribute('aria-describedby');
   }
-  if (item.versioneEsito === 'ignota' && item.versioneDove === 'titolo'
-    && !['altro-modello', 'senza-modello'].includes(item.dichiarazione)) {
-    return '<span class="dich-info" role="img" aria-label="Versione non verificata" title="Versione non verificata">ⓘ</span>';
+  avvisiAperto = null; avvisiFisso = false;
+}
+function mostraAvvisi(btn, fisso = false) {
+  if (avvisiFisso && avvisiAperto === btn && !fisso) return;
+  if (avvisiFisso && avvisiAperto !== btn && !fisso) return;
+  const item = trovaResult(btn.closest('[data-url]')?.dataset.url);
+  const avvisi = item && avvisiAnnuncio(item);
+  if (!avvisi?.length) return;
+  let pop = document.getElementById('avvisiAnnuncioPopup');
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.id = 'avvisiAnnuncioPopup'; pop.className = 'ann-avvisi-pop'; pop.setAttribute('role', 'tooltip');
+    document.body.appendChild(pop); // fuori dalla scheda e dalla lista: entrambe tagliano l'overflow
   }
-  const dich = DICHIARAZIONE[item.dichiarazione];
-  if (!dich || /versione/.test(item.dichiarazione || '')) return '';
-  return `<span class="dich-badge dich-${dich.cl}" title="${escapeHtml(dich.tit)}">${escapeHtml(dich.et)}</span>`;
+  if (avvisiAperto && avvisiAperto !== btn) nascondiAvvisi(true);
+  pop.innerHTML = `<strong>Avvisi sull'annuncio</strong>${avvisi.map(a =>
+    `<div class="ann-avviso ann-avviso-${a.tipo}"><b>${escapeHtml(a.titolo)}</b><span>${escapeHtml(a.testo)}</span></div>`).join('')}`;
+  pop.hidden = false;
+  const r = btn.getBoundingClientRect();
+  pop.style.left = `${Math.max(8, Math.min(r.right - pop.offsetWidth, window.innerWidth - pop.offsetWidth - 8))}px`;
+  pop.style.top = `${r.top > pop.offsetHeight + 12 ? r.top - pop.offsetHeight - 6 : r.bottom + 6}px`;
+  btn.setAttribute('aria-expanded', 'true'); btn.setAttribute('aria-describedby', pop.id);
+  avvisiAperto = btn; avvisiFisso = fisso;
+}
+function alternaAvvisi(btn) {
+  if (avvisiAperto === btn && avvisiFisso) nascondiAvvisi(true);
+  else mostraAvvisi(btn, true);
 }
 
 function rowHTML(item, bestSet) {
@@ -2905,18 +2960,7 @@ function rowHTML(item, bestSet) {
 
   const conc = item.venditore && /conc/i.test(item.venditore);
   const vendBadge = item.venditore ? `<span class="vend-badge vend-${conc ? 'conc' : 'priv'}">${conc ? 'Conc.' : 'Privato'}</span>` : '';
-  // Quanto e' sicuro che QUESTO annuncio sia il veicolo che hai chiesto. Il backend lo
-  // sa per certo — Subito dai livelli che l'annuncio dichiara, Autoscout dal modello che
-  // dichiara — e finora restava nel JSON. Un annuncio di un altro modello, o senza la
-  // versione, deve dirlo sulla riga: il totale in cima non basta a fidarsi di una riga.
-  // `esatto` non si marca: e' la normalita', e un pallino su ogni riga non e' un segnale.
-  //
-  // SULLA RIGA restano solo i casi in cui il VEICOLO potrebbe non essere quello cercato
-  // ("altro modello", "da verificare"): sono rari e cambiano cosa stai guardando.
-  // La versione mancante invece capita di continuo, e una chip su una riga su due e' un
-  // ingombro che non segnala piu' niente: quella si legge aprendo l'annuncio, insieme a
-  // tutti gli altri dati (`detailSpecsHTML` → riga "Corrispondenza").
-  const dichBadge = dichBadgeHTML(item);
+  const avvisiBtn = avvisiPulsanteHTML(item);
   const sub = [item.provincia ? escapeHtml(item.provincia) : '', vendBadge].filter(Boolean).join(' ');
   const ggV = giorniInVendita(item);
   const subM = [item.anno || null, item.km != null ? `${item.km.toLocaleString('it-IT')} km` : null, item.carburante || null, item.potenzaCv != null ? `${item.potenzaCv} CV` : null, ggV != null ? `in vendita da ${ggV} gg` : null, fonteLabel].filter(Boolean).join(' · ');
@@ -2925,7 +2969,7 @@ function rowHTML(item, bestSet) {
     switch (key) {
       case 'foto':    return thumbHTML;
       case 'veicolo': return `<div class="row-main">
-          <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}${dichBadge}</div>
+          <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}</div>
           ${item.variante ? `<div class="row-variante">${escapeHtml(item.variante)}</div>` : ''}
           ${sub ? `<div class="row-sub">${sub}</div>` : ''}
           <div class="row-sub-m">${escapeHtml(subM)}${liqBadgeHTML(item)}</div>
@@ -2936,7 +2980,8 @@ function rowHTML(item, bestSet) {
       case 'cv':     return `<div class="row-cell num muted">${item.potenzaCv != null ? item.potenzaCv : '—'}</div>`;
       case 'prezzo': return `<div class="row-prezzo">${prezzoStr}<span class="row-extra">${priceRowExtraHTML(pr, null, notaIva(item))}</span></div>`;
       case 'fonte':  return `<div class="row-fonte"><span class="tag ${fonteTag}">${escapeHtml(fonteLabel)}</span></div>`;
-      case 'azioni': return `<div class="row-actions">
+      case 'azioni': return `<div class="row-actions${avvisiBtn ? ' has-alerts' : ''}">
+          ${avvisiBtn}
           <button class="row-act btn-info" title="Dettagli e foto">${icon('info')}</button>
           <button class="row-act btn-confronta${inConfronto ? ' attivo' : ''}" title="Aggiungi al confronto">${icon(inConfronto ? 'square-check' : 'square')}</button>
         </div>`;
@@ -2990,10 +3035,11 @@ function cardHTML(item, bestSet) {
     vis.includes('cv') && item.potenzaCv != null ? `${item.potenzaCv} CV` : null,
     ggV != null ? `in vendita da ${ggV} gg` : null].filter(Boolean).join(' · ');
   const inConfronto = confronto.some(r => stessoAnnuncio(r, item));
+  const avvisiBtn = avvisiPulsanteHTML(item);
   return `<article class="ann-card${bestSet && bestSet.has(item.url) ? ' best' : ''}${inConfronto ? ' selected' : ''}" data-url="${urlSafe}">
       <div class="ann-foto">${foto}</div>
       <div class="ann-corpo">
-        <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}${dichBadgeHTML(item)}</div>
+        <div class="row-titolo" title="Apri annuncio">${escapeHtml(item.titolo)}</div>
         ${item.variante ? `<div class="ann-variante">${escapeHtml(item.variante)}</div>` : ''}
         <div class="ann-meta">${escapeHtml(meta) || '&nbsp;'}</div>
         <div class="ann-riga">
@@ -3003,7 +3049,8 @@ function cardHTML(item, bestSet) {
         </div>
         <div class="ann-piede">
           <span class="ann-prezzo">${pr ? eurRound(pr.finale) : (item.prezzoSuRichiesta ? 'su richiesta' : 'n/d')}</span>
-          <div class="row-actions">
+          <div class="row-actions${avvisiBtn ? ' has-alerts' : ''}">
+            ${avvisiBtn}
             <button class="row-act btn-info" title="Dettagli e foto">${icon('info')}</button>
             <button class="row-act btn-confronta${inConfronto ? ' attivo' : ''}" title="Aggiungi al confronto">${icon(inConfronto ? 'square-check' : 'square')}</button>
           </div>

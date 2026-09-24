@@ -820,6 +820,22 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
 }
 .row-act:hover { border-color: var(--accent); color: var(--accent); }
 .row-act.attivo { background: var(--accent-weak); border-color: var(--accent); color: var(--accent); }
+.btn-avvisi { color: var(--warn); }
+.btn-avvisi.critico { color: var(--neg); }
+.btn-avvisi:hover, .btn-avvisi:focus-visible { border-color: var(--warn); color: var(--warn); background: var(--warn-weak); }
+.btn-avvisi.critico:hover, .btn-avvisi.critico:focus-visible { border-color: var(--neg); color: var(--neg); background: var(--neg-weak); }
+.ann-avvisi-pop[hidden] { display: none; }
+.ann-avvisi-pop {
+  position: fixed; z-index: 1000; width: min(290px, calc(100vw - 16px));
+  padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--r2);
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow);
+  pointer-events: none; font-size: .8rem; line-height: 1.4;
+}
+.ann-avvisi-pop > strong { display: block; margin-bottom: 6px; }
+.ann-avviso + .ann-avviso { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.ann-avviso b { display: block; color: var(--warn); }
+.ann-avviso-critico b { color: var(--neg); }
+.ann-avviso span { display: block; color: var(--text-muted); }
 .ico { width: 16px; height: 16px; display: inline-block; flex-shrink: 0; }
 
 /* ─── Gruppi (facet) ─────────────────────────────────────────────────────────── */
@@ -1086,14 +1102,6 @@ body.demo-mode .cp-separa { display: none; }
 .vend-priv { background: var(--surface-2); color: var(--text-muted); }
 .vend-conc { background: var(--accent-weak); color: var(--accent); }
 
-/* Quanto e' certo che la riga sia il veicolo cercato. Compare SOLO quando c'e' un
-   dubbio: marcare anche i casi esatti renderebbe invisibile l'eccezione. */
-.dich-badge { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.02em; padding: 1px 5px;
-  border-radius: 3px; white-space: nowrap; margin-left: 6px; vertical-align: middle; }
-.dich-med { background: var(--warn-weak); color: var(--warn); }
-.dich-ko  { background: var(--neg-weak);  color: var(--neg); }
-.dich-info { color: var(--warn); font-size: 0.85rem; margin-left: 6px; vertical-align: middle; cursor: help; }
-
 /* ─── Dettaglio inline (ℹ → fisarmonica sotto la riga) ──────────────────────── */
 .row-detail { background: var(--surface-2); border-bottom: 1px solid var(--line); }
 .row-detail .det-inner, .rc-detail .det-inner { padding: 12px 14px; }
@@ -1208,6 +1216,10 @@ body.demo-mode .cp-separa { display: none; }
   .row-fonte { display: none; }                  /* fonte va in .row-sub-m */
   .row-sub-m { display: block; font-family: var(--num); font-size: 0.74rem; color: var(--text-muted); margin-top: 4px; }
   .row-actions { display: none; }                /* azioni nel pannello dettaglio (tap riga) */
+  .row-actions.has-alerts { display: flex; }
+  .row-actions.has-alerts .btn-info, .row-actions.has-alerts .btn-confronta { display: none; }
+  .result-row .row-actions.has-alerts { grid-column: 2; grid-row: 2; justify-self: end; }
+  .result-row:has(.row-actions.has-alerts) .row-prezzo { padding-right: 44px; }
   .cmatrix thead th { min-width: 150px; }
   .adv-grid { grid-template-columns: 1fr 1fr; }
   .search-fields { flex-direction: column; }

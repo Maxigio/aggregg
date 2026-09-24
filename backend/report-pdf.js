@@ -28,7 +28,7 @@ const { autoTable } = require('jspdf-autotable');
 // Se un giorno servisse davvero condividerla, il posto e' un file servito a entrambi.
 const CORRISPONDENZA = {
   'senza-versione': 'versione n.d.',
-  'senza-modello': 'da verificare',
+  'senza-modello': 'modello non dichiarato',
   'altro-modello': 'ALTRO MODELLO',
   'versione-non-verificata': 'versione non verificata',
 };

@@ -135,7 +135,7 @@ test('una versione ignota non diventa «corrisponde» negli export', () => {
   const vm = require('node:vm');
   const app = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
   const start = app.indexOf('const DICHIARAZIONE =');
-  const end = app.indexOf('/**\n * LA PASTIGLIA', start);
+  const end = app.indexOf('function avvisiAnnuncio(', start);
   assert.ok(start >= 0 && end > start);
   const ctx = {};
   vm.runInNewContext(app.slice(start, end) + '\nthis.corrispondenzaDi = corrispondenzaDi;', ctx);
@@ -144,7 +144,7 @@ test('una versione ignota non diventa «corrisponde» negli export', () => {
   assert.strictEqual(ctx.corrispondenzaDi({ versioneEsito: 'ignota', dichiarazione: 'altro-modello' }).et, 'altro modello');
 });
 
-test('mostrali: le versioni smentite tornano con un avviso sulla singola scheda', () => {
+test('gli avvisi di modello e versione condividono un pulsante fuori dal titolo', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const vm = require('node:vm');
@@ -153,12 +153,22 @@ test('mostrali: le versioni smentite tornano con un avviso sulla singola scheda'
   const end = app.indexOf('function rowHTML(', start);
   assert.ok(start >= 0 && end > start);
   const ctx = {};
-  vm.runInNewContext('const escapeHtml = s => s;\n' + app.slice(start, end)
-    + '\nthis.dichBadgeHTML = dichBadgeHTML;', ctx);
-  assert.match(ctx.dichBadgeHTML({ versioneEsito: 'smentita', dichiarazione: 'esatto' }), /non e' quella versione/);
-  const ignota = ctx.dichBadgeHTML({ versioneEsito: 'ignota', versioneDove: 'titolo', dichiarazione: 'esatto' });
-  assert.match(ignota, /title="Versione non verificata"/);
-  assert.match(ignota, /aria-label="Versione non verificata"/);
-  assert.match(ignota, /ⓘ/);
-  assert.doesNotMatch(ignota, />versione non verificata</);
+  vm.runInNewContext('const escapeHtml = s => s; const icon = () => "<svg></svg>";\n' + app.slice(start, end)
+    + '\nthis.avvisiAnnuncio = avvisiAnnuncio; this.avvisiPulsanteHTML = avvisiPulsanteHTML;', ctx);
+  const ignota = { versioneEsito: 'ignota', dichiarazione: 'esatto' };
+  assert.strictEqual(ctx.avvisiAnnuncio(ignota)[0].titolo, 'Versione non verificata');
+  assert.match(ctx.avvisiPulsanteHTML(ignota), /class="row-act btn-avvisi"/);
+  assert.doesNotMatch(ctx.avvisiPulsanteHTML(ignota), /title=/);
+  const doppio = { versioneEsito: 'ignota', dichiarazione: 'senza-modello' };
+  assert.deepStrictEqual(Array.from(ctx.avvisiAnnuncio(doppio), a => a.titolo),
+    ['Modello non dichiarato', 'Versione non verificata']);
+  assert.match(ctx.avvisiPulsanteHTML(doppio), /Avvisi sull'annuncio: 2/);
+  assert.match(ctx.avvisiPulsanteHTML({ versioneEsito: 'smentita', dichiarazione: 'altro-modello' }), /btn-avvisi critico/);
+  assert.strictEqual(ctx.avvisiPulsanteHTML({ versioneEsito: 'confermata', dichiarazione: 'esatto' }), '');
+  const row = app.slice(app.indexOf('function rowHTML('), app.indexOf('function vistaChipsRender('));
+  const card = app.slice(app.indexOf('function cardHTML('), app.indexOf('function ridisegnaTenendoAperti('));
+  for (const html of [row, card]) {
+    assert.match(html, /<div class="row-actions\$\{avvisiBtn/);
+    assert.doesNotMatch(html, /\$\{dichBadgeHTML/);
+  }
 });
