@@ -2299,7 +2299,7 @@ function setRcVeicolo(v) {
 // ─── Ricerca ──────────────────────────────────────────────────────────────────
 let searchGen = 0;   // review: token di generazione — solo la ricerca PIÙ RECENTE applica i risultati
 /**
- * "CARICA ALTRI 100" — la fetta successiva, chiesta quando la chiedi tu.
+ * "CARICA ALTRI ANNUNCI" — la fetta successiva, chiesta quando la chiedi tu.
  *
  * NON e' una pagina 2 che sostituisce la 1, ed e' una scelta, non una scorciatoia:
  * l'app ordina per prezzo e FONDE tre fonti, quindi la fetta successiva di Subito puo'

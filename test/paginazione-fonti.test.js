@@ -34,10 +34,15 @@ test('Subito: 80 righe grezze in due pagine esauriscono la fonte', async () => {
     const ads = Array.from({ length: start ? 30 : 50 }, (_, i) => ad(start + i));
     return { status: 200, body: JSON.stringify({ ads, count_all: 80 }) };
   });
-  const r = await subito({ tipo: 'auto', marca: 'Prova' }, { withMeta: true, senzaRecupero: true });
+  const params = { tipo: 'auto', marca: 'Prova' };
+  const prima = await subito(params, { withMeta: true, senzaRecupero: true });
+  assert.deepEqual(avvii, [0]);
+  assert.equal(prima.items.length, 50);
+  assert.equal(prima.hasMore, true);
+  const seconda = await subito(params, { withMeta: true, senzaRecupero: true, fetta: 1 });
   assert.deepEqual(avvii, [0, 50]);
-  assert.equal(r.items.length, 80);
-  assert.equal(r.hasMore, false);
+  assert.equal(seconda.items.length, 30);
+  assert.equal(seconda.hasMore, false);
 });
 
 test('AutoScout24: pagine piene mantengono continua la navigazione', async () => {

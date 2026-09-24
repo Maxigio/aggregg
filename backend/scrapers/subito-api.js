@@ -32,7 +32,7 @@ const HOST = 'hades.subito.it';
 // Categorie hades (macro Motori=1). accessoriAuto/Moto scoperti live 2026-07-07 per la sezione Ricambi.
 const CAT = { auto: '2', moto: '3', accessoriAuto: '5', accessoriMoto: '36' };
 const PAGE_SIZE = 50;
-const MAX_PAGES = 2;            // 2×50 = 100
+const MAX_PAGES = 1;            // una pagina Hades per ricerca; la successiva si chiede con "Carica altri annunci"
 const TIMEOUT_MS = 12000;
 const AVVISO_429 = 'Subito ha limitato temporaneamente le richieste (429). La ricerca potrebbe essere incompleta; riprova più tardi.';
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1';
@@ -529,7 +529,7 @@ async function fetchPage(params, start) {
 
 /**
  * Annunci Subito via API. Throw su errore: la fonte resta dichiarata non letta.
- * @param opts.maxPages  override profondità (crawler: 10-20; on-search: 2)
+ * @param opts.maxPages  override profondità (ricerca standard: 1 pagina da 50)
  * @param opts.attachRaw allega `_raw` (foto grezza) per il DB
  * @param opts.withMeta  ritorna {items, truncated} invece dell'array (back-compat).
  *                       truncated=true se fermato al cap con ultima pagina PIENA
@@ -827,9 +827,16 @@ async function scrapeSubitoApi(params, opts = {}) {
       const kv = chiaveVersione(riga, ad, tipo);
       if (kv) attesa.push({ riga, ...kv });
     }
-    hasMore = page.ads.length === PAGE_SIZE && (total == null || salta + (p + 1) * PAGE_SIZE < total);
-    if (page.ads.length < PAGE_SIZE) break;  // lista esaurita = vista completa
-    if (p === maxPages - 1) truncated = true; // ultima pagina piena al cap → forse altro
+    // `count_all` conta la risposta GREZZA della fonte, non le righe che i nostri filtri
+    // tengono. Se la pagina arriva esattamente al totale, un'altra chiamata puo' solo
+    // creare un falso parziale (o un 429) su una ricerca gia' completa. Un totale assente
+    // o inferiore agli annunci effettivamente ricevuti non e' affidabile: resta il
+    // comportamento prudente della pagina piena, senza scartare annunci.
+    const fine = salta + p * PAGE_SIZE + page.ads.length;
+    const totaleCoerente = total != null && total >= fine;
+    hasMore = page.ads.length === PAGE_SIZE && (!totaleCoerente || fine < total);
+    if (!hasMore) break;
+    if (p === maxPages - 1) truncated = true;
   }
 
   // RECUPERO. Cercando per id, gli annunci che il venditore ha archiviato come "Altro

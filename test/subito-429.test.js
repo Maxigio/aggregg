@@ -40,6 +40,79 @@ test('Subito: ads vuoto e risposta valida restano un risultato vuoto', async () 
   } finally { subito._setHttpGetJson(null); }
 });
 
+test('Subito: cinquanta annunci sono una pagina; il totale esatto non provoca un 429 superfluo', async () => {
+  const chiamate = [];
+  subito._setHttpGetJson(async path => {
+    const start = Number(new URL('https://local.invalid' + path).searchParams.get('start'));
+    chiamate.push(start);
+    return start ? limitato() : ok(Array.from({ length: 50 }, (_, i) => annuncio(i)), 50);
+  });
+  try {
+    // Anche chi chiede esplicitamente piu' profondita' deve fermarsi al totale letto.
+    const r = await subito(params(), { withMeta: true, maxPages: 2, senzaRecupero: true });
+    assert.deepEqual(chiamate, [0]);
+    assert.equal(r.items.length, 50);
+    assert.equal(r.hasMore, false);
+    assert.equal(r.truncated, false);
+    assert.equal(r.parzialeRete, false);
+    assert.equal(salute.fermo('subito')?.fermo, false);
+  } finally { subito._setHttpGetJson(null); }
+});
+
+test('Subito: la pagina standard e Carica altri usano start=0 e start=50', async () => {
+  const chiamate = [];
+  subito._setHttpGetJson(async path => {
+    const start = Number(new URL('https://local.invalid' + path).searchParams.get('start'));
+    chiamate.push(start);
+    return ok(Array.from({ length: 50 }, (_, i) => annuncio(start + i)), 100);
+  });
+  try {
+    const prima = await subito(params(), { withMeta: true, senzaRecupero: true });
+    assert.deepEqual(chiamate, [0], 'la seconda pagina non parte senza interazione');
+    assert.equal(prima.items.length, 50);
+    assert.equal(prima.hasMore, true);
+    assert.equal(prima.truncated, true);
+    const seconda = await subito(params(), { withMeta: true, fetta: 1, senzaRecupero: true });
+    assert.deepEqual(chiamate, [0, 50]);
+    assert.equal(seconda.items.length, 50);
+    assert.equal(seconda.hasMore, false);
+    assert.equal(seconda.truncated, false);
+  } finally { subito._setHttpGetJson(null); }
+});
+
+test('Subito: meno di 50 annunci, totale assente e filtri locali non cambiano il numero di pagine', async () => {
+  const chiamate = [];
+  subito._setHttpGetJson(async path => {
+    const start = Number(new URL('https://local.invalid' + path).searchParams.get('start'));
+    chiamate.push(start);
+    return ok(Array.from({ length: 37 }, (_, i) => annuncio(i)), 37);
+  });
+  try {
+    const corta = await subito(params(), { withMeta: true, senzaRecupero: true });
+    assert.deepEqual(chiamate, [0]);
+    assert.equal(corta.items.length, 37);
+    assert.equal(corta.hasMore, false);
+  } finally { subito._setHttpGetJson(null); }
+
+  chiamate.length = 0;
+  subito._setHttpGetJson(async path => {
+    const start = Number(new URL('https://local.invalid' + path).searchParams.get('start'));
+    chiamate.push(start);
+    const ads = start ? [] : Array.from({ length: 50 }, (_, i) => ({
+      ...annuncio(i), geo: { region: { friendly_name: 'Veneto' } },
+    }));
+    return { status: 200, body: JSON.stringify({ ads }) }; // count_all assente
+  });
+  try {
+    const filtrata = await subito({ ...params(), regione: 'lombardia' },
+      { withMeta: true, senzaRecupero: true });
+    assert.deepEqual(chiamate, [0]);
+    assert.equal(filtrata.items.length, 0);
+    assert.equal(filtrata.hasMore, true, 'il filtro locale non rende esaurita la fonte');
+    assert.equal(filtrata.total, null);
+  } finally { subito._setHttpGetJson(null); }
+});
+
 test('Subito: seconda pagina 429 conserva la prima e dichiara il blocco', async () => {
   const chiamate = [];
   salute.azzera('subito');
@@ -98,7 +171,7 @@ test('Subito: 429 nel recupero conserva il risultato principale e arriva al fren
   } finally { subito._setHttpGetJson(null); }
 });
 
-test('Subito: il 429 sulla prima pagina e il risultato parziale hanno stati diversi', async () => {
+test('Subito: il 429 sulla prima pagina e sulla pagina richiesta dopo hanno stati diversi', async () => {
   subito._setHttpGetJson(async () => limitato());
   try {
     const negato = await server._runSubito(params(), 30000);
@@ -113,11 +186,15 @@ test('Subito: il 429 sulla prima pagina e il risultato parziale hanno stati dive
     return start === 0 ? ok(Array.from({ length: 50 }, (_, i) => annuncio(i)), 60) : limitato();
   });
   try {
-    const parziale = await server._runSubito(params(), 30000);
-    assert.equal(parziale.status, 'ok');
-    assert.equal(parziale.items.length, 50);
-    assert.match(parziale.parziale, /Subito ha limitato temporaneamente le richieste/);
-    assert.equal(server._cacheable({ sources: { subito: parziale }, totale: 50 }), false);
+    const prima = await server._runSubito(params(), 30000);
+    assert.equal(prima.status, 'ok');
+    assert.equal(prima.items.length, 50);
+    assert.equal(prima.hasMore, true);
+    assert.equal(prima.parziale, null);
+    const seconda = await server._runSubito({ ...params(), fetta: 1 }, 30000);
+    assert.equal(seconda.status, 'error');
+    assert.equal(seconda.items.length, 0);
+    assert.match(seconda.parziale, /Subito ha limitato temporaneamente le richieste/);
   } finally { subito._setHttpGetJson(null); }
 });
 

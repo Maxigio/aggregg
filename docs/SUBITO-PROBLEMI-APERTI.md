@@ -1,15 +1,15 @@
 # Subito: problemi verificati da riprendere
 
-Priorita' attuale: completare e provare la scelta obbligatoria della versione in Auto/Moto.
-Questi due problemi sono stati riprodotti con risposte Hades controllate; non correggerli
-insieme al flusso Versione, per poter valutare separatamente la copertura delle ricerche.
+I due problemi sono stati riprodotti con risposte Hades controllate e affrontati
+separatamente dal flusso Versione.
 
-1. **Richiesta superflua e falso avviso 429.** In `backend/scrapers/subito-api.js`,
-   con 50 annunci e `count_all: 50` la ricerca chiede anche `start=50`. Se quella
-   richiesta superflua riceve 429, AMR dichiara incompleti i 50 annunci gia' ricevuti
-   e registra un blocco della fonte. Fermare il ciclo quando il totale dichiarato e'
-   raggiunto, verificando anche il caso di totale assente e le pagine filtrate.
-2. **Recupero duplicato nelle ricerche simultanee.** Due chiamate identiche a
+1. **Risolto localmente — richiesta superflua e falso avviso 429.** La pagina standard
+   di Subito ora legge 50 annunci grezzi con una sola chiamata; `fetta: 1` chiede
+   `start=50` solo dopo «Carica altri annunci». Anche un giro esplicitamente piu'
+   profondo si ferma quando `count_all` e' stato raggiunto. Il totale assente o
+   incoerente non autorizza a scartare annunci. Test di regressione in
+   `test/subito-429.test.js`; resta da verificare il comportamento sul dev server.
+2. **Aperto — recupero duplicato nelle ricerche simultanee.** Due chiamate identiche a
    `paginaRecupero()` prima che la prima finisca trovano entrambe la cache vuota e
    inviano due richieste Hades. Riproduzione: due Promise contemporanee per la stessa
    chiave producono due chiamate. Condividere la Promise in corso per chiave, poi

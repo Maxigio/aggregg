@@ -1050,7 +1050,7 @@ function parseSearchParams(query) {
       raggio:           toInt(raggio),   // km raggio AS24 attorno al capoluogo regione (default 100 in runSearchCore)
       // "Carica altri": quale fetta di risultati chiedere alle fonti. 0 = la prima.
       // Il tetto tiene lontano da richieste assurde e dai limiti veri delle fonti
-      // (hades si ferma fra start 9.850 e 10.000, cioe' fetta 98).
+      // (hades si ferma fra start 9.850 e 10.000; qui si ferma alla fetta 50).
       fetta:            Math.min(50, Math.max(0, toInt(fetta) || 0)),
       mmmvAutoscout:    mmmvAutoscout    || null,
       motoitBrandSlug:  motoitBrandSlug  || null,
