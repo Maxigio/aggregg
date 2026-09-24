@@ -9,10 +9,13 @@ separatamente dal flusso Versione.
    profondo si ferma quando `count_all` e' stato raggiunto. Il totale assente o
    incoerente non autorizza a scartare annunci. Test di regressione in
    `test/subito-429.test.js`; resta da verificare il comportamento sul dev server.
-2. **Aperto — recupero duplicato nelle ricerche simultanee.** Due chiamate identiche a
-   `paginaRecupero()` prima che la prima finisca trovano entrambe la cache vuota e
-   inviano due richieste Hades. Riproduzione: due Promise contemporanee per la stessa
-   chiave producono due chiamate. Condividere la Promise in corso per chiave, poi
-   rimuoverla sia su successo sia su errore; mantenere la scadenza dei dati grezzi.
+2. **Risolto localmente — recupero duplicato nelle ricerche simultanee.** Due chiamate
+   identiche a `paginaRecupero()` attendevano entrambe una risposta Hades separata.
+   Ora condividono la richiesta in corso per chiave e la liberano su successo o errore;
+   i dati grezzi mantengono la scadenza di dieci minuti. Un 429 non avvia altri tentativi;
+   se viene annullata soltanto la ricerca che ha aperto la connessione, un'altra ricerca
+   ancora attiva puo' riprovare. Prove controllate in `test/subito-recupero-cache.test.js`.
+   La cache resta condivisa fra account, come prima: l'isolamento per cliente andra'
+   affrontato insieme alle altre cache quando si prepareranno le installazioni dedicate.
 
 Nessuna prova di questi due casi richiede interrogazioni ripetute al portale reale.

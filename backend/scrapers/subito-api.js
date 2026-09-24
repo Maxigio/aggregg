@@ -57,7 +57,7 @@ function httpGetJson(path) {
       // Se la presa cade DOPO gli header, l'errore esce su `res`, non su `req`: senza questi due
       // la Promise restava appesa per sempre e la ricerca aspettava il timeout esterno ogni volta.
     });
-    req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
+    req.on('error', e => reject(Object.assign(fail(e.message, { kind: 'transient' }), { code: e.code })));
     req.setTimeout(TIMEOUT_MS, () => req.destroy(fail('timeout', { kind: 'transient' })));
   });
 }
@@ -623,6 +623,7 @@ function faTitolo(testo) {
 /** Recupero per marca: la stessa lista serve OGNI modello di quella marca → in cache. */
 const RECUPERO_TTL = 10 * 60 * 1000;
 const recuperoCache = new Map();   // query completa → { ts, ads, timer }
+const recuperoInVolo = new Map();  // stessa query → { promessa, segnale della ricerca che l'ha avviata }
 let recuperoId = 0;
 
 async function paginaRecupero(params) {
@@ -648,22 +649,40 @@ async function paginaRecupero(params) {
   const hit = recuperoCache.get(chiave);
   if (hit && Date.now() - hit.ts < RECUPERO_TTL) return hit.ads;
   if (hit) { clearTimeout(hit.timer); recuperoCache.delete(chiave); }
-  const page = await fetchPage({ ...params, subitoSoloNonDichiarati: true }, 0);
-  const id = ++recuperoId;
-  // Il callback conserva solo chiave e id: nessun annuncio grezzo sopravvive nel timer.
-  const timer = setTimeout(() => {
-    if (recuperoCache.get(chiave)?.id === id) recuperoCache.delete(chiave);
-  }, RECUPERO_TTL);
-  timer.unref?.();
-  const vecchio = recuperoCache.get(chiave);
-  if (vecchio) clearTimeout(vecchio.timer); // una fetch concorrente ha gia' riempito la chiave
-  recuperoCache.set(chiave, { id, ts: Date.now(), ads: page.ads, timer });
-  if (recuperoCache.size > 200) {
-    const prima = recuperoCache.keys().next().value;
-    clearTimeout(recuperoCache.get(prima).timer);
-    recuperoCache.delete(prima);
+  const inVolo = recuperoInVolo.get(chiave);
+  if (inVolo) {
+    try { return await inVolo.promessa; }
+    catch (e) {
+      // Solo l'annullamento della ricerca che ha aperto la presa consente a una seconda
+      // ricerca ancora viva di riprovare. Un 429 resta condiviso anche se runSubito,
+      // dopo averlo ricevuto, annulla il suo controller nel catch.
+      if (e.code !== 'ABORT_ERR' || !inVolo.segnale?.aborted || annullo.annullata()) throw e;
+      if (recuperoInVolo.get(chiave)?.promessa === inVolo.promessa) recuperoInVolo.delete(chiave);
+      return paginaRecupero(params);
+    }
   }
-  return page.ads;
+  const segnale = annullo.segnale();
+  const promessa = (async () => {
+    const page = await fetchPage({ ...params, subitoSoloNonDichiarati: true }, 0);
+    const id = ++recuperoId;
+    // Il callback conserva solo chiave e id: nessun annuncio grezzo sopravvive nel timer.
+    const timer = setTimeout(() => {
+      if (recuperoCache.get(chiave)?.id === id) recuperoCache.delete(chiave);
+    }, RECUPERO_TTL);
+    timer.unref?.();
+    recuperoCache.set(chiave, { id, ts: Date.now(), ads: page.ads, timer });
+    if (recuperoCache.size > 200) {
+      const prima = recuperoCache.keys().next().value;
+      clearTimeout(recuperoCache.get(prima).timer);
+      recuperoCache.delete(prima);
+    }
+    return page.ads;
+  })();
+  recuperoInVolo.set(chiave, { promessa, segnale });
+  try { return await promessa; }
+  finally {
+    if (recuperoInVolo.get(chiave)?.promessa === promessa) recuperoInVolo.delete(chiave);
+  }
 }
 
 /**
