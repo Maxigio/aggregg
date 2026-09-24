@@ -2367,6 +2367,7 @@ async function caricaAltri() {
       });
       const bloccata = stati.find(s => s.erroreHttp === 429 || s.pausa?.fermo
         || (Array.isArray(s.errori) && s.errori.some(e => e.http === 429)));
+      const troppoGrande = stati.some(s => s.erroreCodice === 'SUBITO_BODY_TOO_LARGE');
       const definitiva = errori.some(e => e.http === 403 || e.tipo === 'auth' || e.tipo === 'error');
       const transitoria = errori.every(e => e.tipo === 'transient' || e.http >= 500)
         || stati.every(s => s.status === 'timeout');
@@ -2375,7 +2376,8 @@ async function caricaAltri() {
       const dopo = bloccata
         ? (Number.isSafeInteger(fino) && fino > Date.now() && fino < 8640000000000000 ? fino : Date.now() + 60000)
         : Date.now() + 15000;
-      const motivo = errori.some(e => e.http === 403) ? 'accesso rifiutato dalla fonte (403)'
+      const motivo = troppoGrande ? 'risposta di Subito oltre il limite di dimensione'
+        : errori.some(e => e.http === 403) ? 'accesso rifiutato dalla fonte (403)'
         : errori.some(e => e.tipo === 'auth') ? 'accesso alla fonte non valido (401)'
           : definitiva ? 'risposta della fonte non leggibile'
             : errori.some(e => e.http === 429) ? 'la fonte ha limitato le richieste (429)'
@@ -3913,12 +3915,16 @@ function renderSourceStatus() {
     if (s && (s.status === 'ok' || s.status === 'error') && s.parziale && !(f === 'autoscout' && s.allargato)) {
       fonteBreakdown.innerHTML += `<span class="src-avviso">${escapeHtml(String(s.parziale))}</span>`;
     }
+    if (f === 'subito' && s?.erroreCodice === 'SUBITO_BODY_TOO_LARGE' && !s.parziale) {
+      fonteBreakdown.innerHTML += '<div class="src-avviso" role="alert">Subito ha inviato una risposta oltre il limite di dimensione. La richiesta è stata interrotta: gli annunci di questa pagina non sono stati letti.</div>';
+    }
     if (f === 'subito' && Array.isArray(s?.errori) && s.errori.length) {
       const righe = s.errori.map(e => {
         const dove = Number.isInteger(e.famiglia) ? `Famiglia ${e.famiglia}` : 'Ricerca';
         const fase = e.fase === 'recupero' ? 'recupero annunci senza modello'
           : Number.isInteger(e.pagina) ? `pagina ${e.pagina}` : 'pagina';
-        const esito = Number.isInteger(e.http) ? `HTTP ${e.http}`
+        const esito = e.codice === 'SUBITO_BODY_TOO_LARGE' ? 'risposta oltre il limite di dimensione'
+          : Number.isInteger(e.http) ? `HTTP ${e.http}`
           : e.tipo === 'transient' ? 'errore di rete' : 'risposta non leggibile';
         return `<li>${escapeHtml(`${dove}: ${fase} — ${esito}`)}</li>`;
       }).join('');

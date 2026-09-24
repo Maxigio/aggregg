@@ -34,6 +34,10 @@ const CAT = { auto: '2', moto: '3', accessoriAuto: '5', accessoriMoto: '36' };
 const PAGE_SIZE = 50;
 const MAX_PAGES = 1;            // una pagina Hades per ricerca; la successiva si chiede con "Carica altri annunci"
 const TIMEOUT_MS = 12000;
+// Una pagina reale da 50 annunci (Auto, 2026-09-24) pesava 269.430 byte.
+// Triplo concordato: oltre si interrompe la presa, senza interpretare il body troncato come zero annunci.
+const MAX_BODY_BYTES = 808290;
+const AVVISO_BODY = 'Subito ha inviato una risposta oltre il limite di dimensione. La richiesta è stata interrotta e i suoi annunci non sono stati letti.';
 const AVVISO_429 = 'Subito ha limitato temporaneamente le richieste (429). La ricerca potrebbe essere incompleta; riprova più tardi.';
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1';
 
@@ -51,9 +55,20 @@ function httpGetJson(path) {
       res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
       res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
       if (res.statusCode === 429) { res.resume(); return reject(salute.erroreHttp('subito', 429, res.headers)); }
-      let d = ''; res.setEncoding('utf8');
-      res.on('data', c => d += c);
-      res.on('end', () => resolve({ status: res.statusCode, body: d }));
+      let d = '', bytes = 0, interrotta = false; res.setEncoding('utf8');
+      res.on('data', c => {
+        if (interrotta) return;
+        bytes += Buffer.byteLength(c, 'utf8');
+        if (bytes > MAX_BODY_BYTES) {
+          interrotta = true;
+          d = '';
+          reject(Object.assign(fail(AVVISO_BODY, { kind: 'error' }), { code: 'SUBITO_BODY_TOO_LARGE' }));
+          req.destroy();
+          return;
+        }
+        d += c;
+      });
+      res.on('end', () => { if (!interrotta) resolve({ status: res.statusCode, body: d }); });
       // Se la presa cade DOPO gli header, l'errore esce su `res`, non su `req`: senza questi due
       // la Promise restava appesa per sempre e la ricerca aspettava il timeout esterno ogni volta.
     });
@@ -548,7 +563,8 @@ async function fetchPage(params, start) {
 function erroreRichiesta(e, fase, pagina = null) {
   if (e.code === 'FONTE_IN_PAUSA') return null; // rifiuto locale, non risposta del portale
   return { fase, pagina, http: Number.isInteger(e.status) && e.status !== 200 ? e.status : null,
-    tipo: ['blocked', 'auth', 'transient', 'error'].includes(e.kind) ? e.kind : 'error' };
+    tipo: ['blocked', 'auth', 'transient', 'error'].includes(e.kind) ? e.kind : 'error',
+    codice: e.code === 'SUBITO_BODY_TOO_LARGE' ? e.code : null };
 }
 
 /**
@@ -733,7 +749,7 @@ async function scrapeSubitoApi(params, opts = {}) {
   let scartati = 0;
   let prezziIlleggibili = 0; // campo prezzo presente, ma senza cifra interpretabile
   let parziale = null, parzialeRete = false, bloccoParziale = null;
-  let hasMore = false, erroreTipo = null, erroreHttp = null;
+  let hasMore = false, erroreTipo = null, erroreHttp = null, erroreCodice = null;
   const erroriSubito = [];
   // "Carica altri": si riparte da dove si era arrivati. Il tetto di hades sta fra
   // start 9.850 e 10.000 (misurato per bisezione), quindi c'e' spazio per ~200 fette.
@@ -814,8 +830,11 @@ async function scrapeSubitoApi(params, opts = {}) {
       console.warn('[subito] recupero non dichiarati KO: ' + e.message);
       parzialeRete = true;
       erroreTipo = e.kind || 'transient'; erroreHttp = e.status || null;
+      if (e.code === 'SUBITO_BODY_TOO_LARGE') erroreCodice = e.code;
       if (e.kind === 'blocked') bloccoParziale = e;
-      parziale = [parziale, e.status === 429 ? AVVISO_429 : 'Subito non ha completato la ricerca degli annunci senza modello dichiarato.'].filter(Boolean).join(' · ');
+      parziale = [parziale, e.status === 429 ? AVVISO_429
+        : e.code === 'SUBITO_BODY_TOO_LARGE' ? AVVISO_BODY
+          : 'Subito non ha completato la ricerca degli annunci senza modello dichiarato.'].filter(Boolean).join(' · ');
     }
   }
   if (attesa.length) await deduciInBlocco(attesa);
@@ -830,7 +849,7 @@ async function scrapeSubitoApi(params, opts = {}) {
     parziale = [parziale, `${prezziIlleggibili} annunci hanno un campo prezzo non leggibile`].filter(Boolean).join(' · ');
   }
   return opts.withMeta ? { items: out, truncated, total, hasMore, sospetto, parziale, parzialeRete,
-    erroreTipo, erroreHttp, bloccoParziale, erroriSubito } : out;
+    erroreTipo, erroreHttp, erroreCodice, bloccoParziale, erroriSubito } : out;
 }
 
 // Ricerca ACCESSORI/RICAMBI per keyword libera (OEM o nome pezzo) nelle categorie

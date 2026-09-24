@@ -40,6 +40,20 @@ test('Subito: ads vuoto e risposta valida restano un risultato vuoto', async () 
   } finally { subito._setHttpGetJson(null); }
 });
 
+test('Subito: risposta oltre soglia conserva il motivo specifico fino alla fonte', async () => {
+  subito._setHttpGetJson(async () => {
+    throw Object.assign(new Error('Subito ha inviato una risposta oltre il limite di dimensione.'),
+      { code: 'SUBITO_BODY_TOO_LARGE', kind: 'error' });
+  });
+  try {
+    const r = await server._runSubito(params(), 30000);
+    assert.equal(r.status, 'error');
+    assert.equal(r.items.length, 0);
+    assert.equal(r.erroreCodice, 'SUBITO_BODY_TOO_LARGE');
+    assert.match(r.reason, /oltre il limite di dimensione/);
+  } finally { subito._setHttpGetJson(null); }
+});
+
 test('Subito: cinquanta annunci sono una pagina; il totale esatto non provoca un 429 superfluo', async () => {
   const chiamate = [];
   subito._setHttpGetJson(async path => {

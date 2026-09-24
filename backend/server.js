@@ -1115,6 +1115,7 @@ function sciogli(r) {
     hasMore: (r && typeof r.hasMore === 'boolean') ? r.hasMore : null,
     erroreTipo: (r && r.erroreTipo) || null,
     erroreHttp: (r && r.erroreHttp) || null,
+    erroreCodice: (r && r.erroreCodice) || null,
     erroriSubito: (r && r.erroriSubito) || [],
     // Il risultato copre TUTTE le richieste fatte alla fonte? La union multi-grafia lo
     // dichiara quando una grafia e' caduta: gli item ci sono ma ne mancano altri.
@@ -1240,6 +1241,7 @@ async function runSubito(params, ms, chiaveFonte) {
     const avviso = err.status === 429 ? scrapeSubitoApi.AVVISO_429 : null;
     return { items: [], status: isTimeout ? 'timeout' : 'error', reason: avviso || err.message, parziale: avviso,
       erroreTipo: isTimeout ? 'transient' : err.kind || 'error', erroreHttp: err.status || null,
+      erroreCodice: err.code === 'SUBITO_BODY_TOO_LARGE' ? err.code : null,
       erroriSubito: err.erroriSubito || [] };
   } finally { clearTimeout(scattato); }
 }
@@ -2227,6 +2229,7 @@ async function runSearchCore(params) {
       subito:    { status: subitoRes.status, reason: subitoRes.reason || null, count: countBy('subito'),
                    totale: subitoRes.total ?? null, hasMore: subitoRes.hasMore ?? null,
                    erroreTipo: subitoRes.erroreTipo || null, erroreHttp: subitoRes.erroreHttp || null,
+                   erroreCodice: subitoRes.erroreCodice || null,
                    errori: subitoRes.erroriSubito || [],
                    pausa: salute.fermo('subito'),
                    parziale: subitoRes.parziale || null,

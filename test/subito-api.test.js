@@ -1,6 +1,8 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
+const { EventEmitter } = require('node:events');
+const https = require('node:https');
 const scrape = require('../backend/scrapers/subito-api');
 const mapAd = scrape._mapAd;
 const buildPath = scrape._buildPath;
@@ -132,4 +134,39 @@ test('privato: il testo aiuta a dedurre la versione Auto ma non arriva al client
     assert.equal(r.items[0].venditoreId, null);
     assert.equal(JSON.stringify(r.items).includes('Persona Test'), false);
   } finally { scrape._setHttpGetJson(null); }
+});
+
+test('Subito: il body al limite è valido; oltre il limite si interrompe senza dichiarare zero annunci', async () => {
+  const get = https.get;
+  let distrutta = false;
+  let body;
+  https.get = (_options, cb) => {
+    const req = new EventEmitter();
+    req.setTimeout = () => req;
+    req.destroy = () => { distrutta = true; };
+    process.nextTick(() => {
+      const res = new EventEmitter();
+      res.statusCode = 200;
+      res.headers = {};
+      res.setEncoding = () => {};
+      cb(res);
+      res.emit('data', body);
+      if (!distrutta) res.emit('end');
+    });
+    return req;
+  };
+  try {
+    const vuoto = '{"ads":[],"count_all":0,"pad":""}';
+    body = vuoto.replace('""}', '"' + 'x'.repeat(808290 - Buffer.byteLength(vuoto)) + '"}');
+    assert.equal(Buffer.byteLength(body), 808290);
+    const ok = await scrape({ tipo: 'auto', marca: 'Volkswagen' }, { withMeta: true, senzaRecupero: true });
+    assert.equal(ok.items.length, 0);
+    assert.equal(distrutta, false);
+
+    body += ' ';
+    await assert.rejects(
+      scrape({ tipo: 'moto', marca: 'Ducati' }, { withMeta: true, senzaRecupero: true }),
+      e => e.kind === 'error' && e.code === 'SUBITO_BODY_TOO_LARGE' && /oltre il limite/.test(e.message));
+    assert.equal(distrutta, true);
+  } finally { https.get = get; }
 });
