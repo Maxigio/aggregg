@@ -1073,9 +1073,16 @@ async function loadModels(tipo, marca) {
   return modelCache[key];
 }
 
-// Si svuota il testo, ma il campo RESTA a schermo: e' facoltativo e a testo libero, e
-// nasconderlo nascondeva anche il fatto che esistesse. L'unico posto che lo toglie sono i
-// Ricambi, dove non c'entra niente.
+// Una scelta vuota non equivale a una ricerca generale: per quella c'e' una voce esplicita.
+const VERSIONE_NESSUNA = 'Nessuna Versione';
+const senzaVersione = valore => acn(valore) === acn(VERSIONE_NESSUNA);
+function sceltaVersione(valore, modelloScelto) {
+  const testo = String(valore || '').trim();
+  if (!testo) return { errore: 'Scegli una versione oppure Nessuna Versione prima di cercare.' };
+  if (senzaVersione(testo)) return { versione: null };
+  if (!modelloScelto) return { errore: 'Per cercare una versione specifica, scegli prima il modello dalla lista.' };
+  return { versione: testo.slice(0, 80) };
+}
 function resetVersioneOnly() {
   if (versioneInput) versioneInput.value = '';
   syncVersione();
@@ -1083,22 +1090,15 @@ function resetVersioneOnly() {
 function resetModelloVersione() { selectedModel = null; resetVersioneOnly(); }
 
 /**
- * LA VERSIONE SI SCRIVE SOLO SOPRA UN MODELLO SCELTO DALL'ELENCO.
- *
- * Il campo accettava testo sempre, ma `doSearch` lo spediva solo dentro il ramo
- * `selectedModel`: scritta senza aver scelto un modello dalla tendina, la versione veniva
- * buttata in silenzio e partiva una ricerca piu' larga di quella che si era chiesta —
- * senza che niente lo dicesse. Delle tre fonti solo Autoscout e Moto.it saprebbero
- * usarla da sola; su Subito serve il nodo di catalogo, che senza modello scelto non c'e'.
- * Decisione del proprietario: non permetterlo. Il campo resta spento, e dice perche'.
+ * La ricerca generale richiede «Nessuna Versione», anche senza modello. Una versione
+ * specifica si puo' scrivere solo dopo aver scelto un modello dalla lista: doSearch
+ * verifica la scelta prima di inviare una richiesta che altrimenti ignorerebbe il testo.
  */
 function syncVersione() {
   if (!versioneInput) return;
-  const ok = !!selectedModel;
-  versioneInput.disabled = !ok;
-  versioneInput.placeholder = ok
-    ? 'facoltativa — es. Highline, GTI, S line, ABS'
-    : 'scegli prima un modello dall’elenco';
+  versioneInput.placeholder = selectedModel
+    ? 'Scegli una versione o Nessuna Versione'
+    : 'Seleziona Nessuna Versione o scegli un modello';
 }
 
 /**
@@ -1109,7 +1109,7 @@ function syncVersione() {
 function mostraVersione(model) {
   if (versioneInput) versioneInput.value = '';
   if (selectedModel) selectedModel._familySlug = model.slugMotoIt || null;
-  syncVersione();   // il modello c'e': il campo si accende
+  syncVersione();
 }
 
 function setupModelloAutocomplete() {
@@ -1199,15 +1199,15 @@ function setupVersioneAutocomplete() {
   };
   const pick = i => { if (matches[i] != null) { versioneInput.value = matches[i]; close(); } };
   const compute = async () => {
-    if (!selectedModel) { matches = []; return close(); }
-    const versioni = await loadVersioni();
+    const versioni = selectedModel ? await loadVersioni() : [];
     const q = acn(versioneInput.value);
+    const opzioni = [VERSIONE_NESSUNA, ...versioni.filter(v => !senzaVersione(v))];
     if (q) {
       const scored = [];
-      for (const v of versioni) { const n = acn(v); const i = n.indexOf(q); if (i >= 0) scored.push({ v, rank: n.startsWith(q) ? 0 : 1, i, n }); }
+      for (const v of opzioni) { const n = acn(v); const i = n.indexOf(q); if (i >= 0) scored.push({ v, rank: n.startsWith(q) ? 0 : 1, i, n }); }
       scored.sort((a, c) => a.rank - c.rank || a.i - c.i || a.n.localeCompare(c.n));
       matches = scored.map(s => s.v);
-    } else matches = versioni;   // tutte, come per marca e modello: la lista scorre
+    } else matches = opzioni;   // la ricerca generale resta selezionabile anche senza modello
     active = matches.length ? 0 : -1; render();
   };
   versioneInput.addEventListener('input', compute);
@@ -2430,6 +2430,13 @@ async function doSearch() {
   const marca = brand.nome;
 
   const modelloLibero = document.getElementById('modello').value.trim();
+  const modelloScelto = selectedModel && selectedModel._marca === marca && acn(selectedModel.nome) === acn(modelloLibero);
+  const scelta = sceltaVersione(versioneInput?.value, modelloScelto);
+  if (scelta.errore) {
+    showError(scelta.errore);
+    (versioneInput?.value.trim() ? modelloSelect : versioneInput)?.focus();
+    return;
+  }
   const params = {
     tipo, marca, modello: modelloLibero,
     prezzoMin: document.getElementById('prezzoMin').value,
@@ -2442,19 +2449,16 @@ async function doSearch() {
   };
   if (regioneSelect.value) params.regione = regioneSelect.value;
   // F43 — modello strutturato: se l'utente ha SCELTO un modello (force-select) per
-  // questa marca, manda gli ID esatti → niente fuzzy lato server. Versione solo moto.
-  if (selectedModel && selectedModel._marca === marca && acn(selectedModel.nome) === acn(modelloLibero)) {
+  // questa marca, manda gli ID esatti → niente fuzzy lato server.
+  if (modelloScelto) {
     if (selectedModel.mmmvAutoscout) params.mmmvAutoscout = selectedModel.mmmvAutoscout;
     const motoSlug = selectedModel._familySlug || selectedModel.slugMotoIt;   // famiglia risolta (Lazy-T2) o slug diretto
     if (motoSlug) params.motoitModelSlug = motoSlug;
-    // LA VERSIONE, com'e' stata scritta. Una sola, e il server la smista:
-    //   Subito     va in `q=` SOPRA gli id di marca e modello — la fonte restringe, noi
-    //              non ci mettiamo in mezzo
-    //   Autoscout  va nel suo `modelVersionInput`, che e' nativo
-    //   Moto.it    e' l'unica dove va tradotta, e contro il SUO catalogo
-    const vt = (versioneInput?.value || '').trim();
-    if (vt) params.versione = vt.slice(0, 80);
   }
+  // Una versione specifica passa com'e' stata scritta: Subito la mette in `q=`,
+  // AutoScout24 nel campo testuale nativo e Moto.it prova a tradurla nel suo catalogo.
+  // «Nessuna Versione» non deve diventare una parola nella richiesta alle fonti.
+  if (scelta.versione) params.versione = scelta.versione;
   // I filtri avanzati delle auto: il server li ignora sulle moto, ma non glieli mandiamo
   // nemmeno — un parametro che viaggia e non fa niente e' un parametro che un giorno
   // qualcuno legge e crede applicato.
@@ -5970,7 +5974,9 @@ async function applyUrlParams() {
     if (p.has('regione')) regioneSelect.value = p.get('regione');
     validateMarca();
     // Replay programmatico: bypassa il force-select se la marca combacia col catalogo.
-    if (isValidMarca()) doSearch();
+    // Un link di ricerca precedente alla scelta obbligatoria della versione esprime una
+    // ricerca generale: il replay lo rende esplicito senza chiedere un clic aggiuntivo.
+    if (isValidMarca()) { versioneInput.value = VERSIONE_NESSUNA; doSearch(); }
   }
   return true;
 }

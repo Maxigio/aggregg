@@ -14,6 +14,7 @@ const assert = require('node:assert');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+const vm = require('node:vm');
 
 // Ogni ricerca salvata ha un padrone. Qui e' sempre lo stesso: l'isolamento fra persone si
 // prova in dati-per-persona.test.js.
@@ -865,17 +866,23 @@ test('scheda: chi scarta una risposta vecchia non lascia il blocco in attesa per
   }
 });
 
-test('versione: il campo e\' spento esattamente quando la ricerca non la userebbe', () => {
-  // `doSearch` spedisce `params.versione` SOLO dentro il ramo del modello scelto. Finche' e'
-  // cosi', scriverla senza aver scelto un modello significa buttarla in silenzio.
+test('versione: scelta esplicita, ricerca generale senza filtro e versione specifica solo col modello scelto', () => {
+  const norm = APP.slice(APP.indexOf('const acn ='), APP.indexOf('\n', APP.indexOf('const acn =')));
+  const scelta = APP.slice(APP.indexOf('const VERSIONE_NESSUNA ='), APP.indexOf('function resetVersioneOnly()'));
+  const ctx = {};
+  vm.runInNewContext(norm + '\n' + scelta + '\nthis.sceltaVersione = sceltaVersione;', ctx);
+  assert.match(ctx.sceltaVersione('', false).errore, /Scegli una versione/);
+  assert.strictEqual(ctx.sceltaVersione('Nessuna Versione', false).versione, null);
+  assert.strictEqual(ctx.sceltaVersione(' nessuna versione ', true).versione, null);
+  assert.match(ctx.sceltaVersione('R', false).errore, /scegli prima il modello/);
+  assert.strictEqual(ctx.sceltaVersione('R', true).versione, 'R');
   const ds = corpoDi(APP, 'async function doSearch(');
-  const ramo = ds.indexOf('if (selectedModel && selectedModel._marca === marca');
-  const invio = ds.indexOf('params.versione = vt');
-  assert.ok(ramo > 0 && invio > ramo, 'params.versione non e\' piu\' dentro il ramo del modello scelto');
-  assert.ok(/versioneInput\.disabled = !ok/.test(APP) && /const ok = !!selectedModel/.test(APP),
-    'syncVersione non lega piu\' l\'accensione del campo alla scelta del modello');
-  assert.ok(/id="versione"[^>]*\bdisabled\b/.test(INDEX),
-    'il campo versione deve nascere spento: al primo disegno nessun modello e\' stato scelto');
+  assert.ok(ds.includes('sceltaVersione(versioneInput?.value, modelloScelto)')
+    && ds.includes('if (scelta.errore)') && ds.includes('if (scelta.versione) params.versione = scelta.versione'),
+  'la validazione deve precedere ogni chiamata di ricerca, e Nessuna Versione non deve diventare un filtro');
+  assert.ok(INDEX.includes('id="versione"') && INDEX.includes('aria-required="true"')
+    && !/id="versione"[^>]*\bdisabled\b/.test(INDEX),
+  'la scelta Nessuna Versione deve essere possibile anche per la sola marca');
 });
 
 test('foto: niente richieste allo scorrimento, e la miniatura si aggiorna nelle due viste', () => {

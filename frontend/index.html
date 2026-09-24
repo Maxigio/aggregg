@@ -93,7 +93,7 @@
         </div>
         <div class="field-note" id="marcaNote"></div>
         <!--
-          UN CAMPO SOLO, a testo libero, facoltativo.
+          UN CAMPO SOLO, a testo libero, con scelta esplicita.
           Prima erano tre — uno per catalogo — perche' le fonti non chiamano "versione" la
           stessa cosa: Subito ha un id, Autoscout un testo, Moto.it un codice legato agli
           anni. Ma scegliere una voce da un catalogo NON sceglie la stessa nell'altro, e
@@ -101,21 +101,17 @@
           Ora quello che scrivi va alle fonti com'e': Subito e Autoscout hanno una ricerca
           testuale loro, Moto.it e' l'unica dove il testo va tradotto in un codice.
         -->
-        <!-- SEMPRE VISIBILE. Prima compariva solo dopo aver scelto un modello dalla tendina:
-             il campo e' testo libero e facoltativo, quindi nascondendolo si nascondeva anche
-             il fatto che esistesse, e chi cercava per sola marca non poteva usarlo affatto. -->
+        <!-- SEMPRE VISIBILE. «Nessuna Versione» e' una scelta esplicita che non aggiunge
+             un filtro alla ricerca, anche quando si cerca per sola marca. -->
         <div class="riga-libera" id="versioniRow" style="margin-top:8px">
           <div class="campo-libero">
-            <label class="ver-lab" for="versione">Versione</label>
-            <!-- Spento finche' non si sceglie un modello dall'elenco: senza, la versione
-                 non partirebbe (vedi syncVersione in app.js) e la ricerca sarebbe piu'
-                 larga di quella chiesta. Lo riaccende la scelta del modello.
-                 La tendina SUGGERISCE (nomi-versione del catalogo Subito per la famiglia
-                 scelta); il campo resta testo libero: scegliere riempie il testo, non
-                 seleziona un id. -->
+            <label class="ver-lab" for="versione">Versione (scegli una voce)</label>
+            <!-- La tendina offre sempre «Nessuna Versione»; dopo la scelta del modello
+                 aggiunge i nomi del catalogo. Il testo resta libero per le versioni che
+                 non sono nel catalogo, ma deve riferirsi a un modello scelto. -->
             <div class="ac-wrap">
-              <input type="text" id="versione" autocomplete="off" disabled role="combobox" aria-autocomplete="list" aria-expanded="false"
-                     class="field-input" placeholder="scegli prima un modello dall&rsquo;elenco" />
+              <input type="text" id="versione" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-required="true"
+                     class="field-input" placeholder="Seleziona Nessuna Versione o scegli un modello" />
               <ul id="versioneAC" class="ac-list d-none" role="listbox"></ul>
             </div>
           </div>
