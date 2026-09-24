@@ -1401,11 +1401,11 @@ test('moto.it: l\'etichetta segue la stessa regola delle altre due fonti', () =>
   assert.match(srv, /else if \(versioneChiesta\) r\.dichiarazione = 'versione-non-verificata';/);
 });
 
-test('subito: l\'annuncio senza prezzo entra marcato — eseguito, non letto', async () => {
+test('subito: l\'annuncio senza prezzo resta visibile senza inventare «su richiesta»', async () => {
   // Prima erano quattro asserzioni di GRAFIA: bastava un `if (m.prezzo == null) continue;`
   // due righe sopra il punto guardato per far tornare a sparire gli annunci con tutte le
   // asserzioni verdi. Qui il percorso si ESEGUE con lo stub HTTP: uno con prezzo e uno
-  // senza, tutti e due in lista, il muto marcato «su richiesta».
+  // senza, tutti e due in lista; l'assenza del campo non dice «su richiesta».
   const sub = require('../backend/scrapers/subito-api');
   const conPrezzo = { urn: 'a', urls: { default: 'https://www.subito.it/x/a.htm' }, subject: 'Golf A',
     features: [{ label: 'Prezzo', uri: '/price', values: [{ key: '9000', value: '9.000 €' }] }] };
@@ -1416,12 +1416,89 @@ test('subito: l\'annuncio senza prezzo entra marcato — eseguito, non letto', a
     assert.strictEqual(r.items.length, 2, 'l\'annuncio senza prezzo NON sparisce dalla lista');
     const muto = r.items.find(x => /b\.htm$/.test(x.url));
     assert.strictEqual(muto.prezzo, null);
-    assert.strictEqual(muto.prezzoSuRichiesta, true,
-      'entra MARCATO: il venditore il prezzo ce l\'ha, ha scelto di non scriverlo');
+    assert.ok(!muto.prezzoSuRichiesta,
+      'nessuna dichiarazione della fonte autorizza «su richiesta»');
     assert.strictEqual(r.sospetto, null, 'UNO senza prezzo non e\' un parser rotto');
   } finally { sub._setHttpGetJson(null); }
-  // Il caso «TUTTI senza prezzo → errore dichiarato, non mercato vuoto» e' provato — sempre
-  // eseguendo — dal test dei wrapper («parziale e sospetto ATTRAVERSANO runSubito»).
+  // Il caso «campo prezzo presente ma illeggibile» e' provato nel test sotto.
+});
+
+test('subito: famiglie Moto miste e prezzi assenti non simulano un parser guasto', async () => {
+  const sub = require('../backend/scrapers/subito-api');
+  const srv = require('../backend/server');
+  const ad = (id, prezzo) => ({
+    urls: { default: `https://www.subito.it/moto/prova-${id}.htm` },
+    subject: `Prova Modello ${id}`,
+    features: prezzo == null ? [] : [{ uri: '/price', label: 'Prezzo', values: [{ value: `${prezzo} €` }] }],
+  });
+  const params = { tipo: 'moto', marca: 'Prova', modello: 'Modello',
+    subitoNodo: { marcaId: '987654', famigliaIds: ['111', '222'] } };
+  const prova = async annunci => {
+    sub._setHttpGetJson(async path => {
+      const bm = new URL('https://local.invalid' + path).searchParams.get('bm');
+      return { status: 200, body: JSON.stringify({ ads: annunci[bm], count_all: annunci[bm].length }) };
+    });
+    return srv._runSubito(params, 30000);
+  };
+  try {
+    const mista = await prova({ 111: [ad(1, null)], 222: [ad(2, 5000)] });
+    assert.strictEqual(mista.status, 'ok');
+    assert.strictEqual(mista.sospetto, null);
+    assert.deepStrictEqual(mista.items.map(x => x.prezzo), [null, 5000]);
+    assert.ok(!mista.items[0].prezzoSuRichiesta);
+    const assente = await prova({ 111: [ad(3, null)], 222: [] });
+    assert.strictEqual(assente.status, 'ok', 'anche un unico annuncio senza campo prezzo non prova un guasto');
+    assert.strictEqual(assente.sospetto, null);
+    const campoRotto = { ...ad(4, null), features: [
+      { uri: '/price', label: 'Prezzo', values: [{ value: 'dato illeggibile' }] },
+    ] };
+    const mistaConAnomalia = await prova({ 111: [campoRotto], 222: [ad(5, 6000)] });
+    assert.strictEqual(mistaConAnomalia.status, 'ok', 'una famiglia valida non diventa guasta');
+    assert.match(mistaConAnomalia.parziale, /prezzo non leggibile/,
+      'l\'anomalia della famiglia non deve sparire');
+    assert.strictEqual(srv._cacheable({ sources: { subito: mistaConAnomalia,
+      autoscout: { status: 'ok' }, moto: { status: 'ok' } }, totale: mistaConAnomalia.items.length }), true,
+    'ripetere la stessa ricerca non renderebbe leggibile quel campo');
+  } finally { sub._setHttpGetJson(null); }
+});
+
+test('subito: URI prezzo valido sopravvive alla nuova etichetta; campo illeggibile resta dichiarato', async () => {
+  const sub = require('../backend/scrapers/subito-api');
+  const srv = require('../backend/server');
+  const ad = (id, feature) => ({
+    urls: { default: `https://www.subito.it/auto/prova-${id}.htm` },
+    subject: `Prova Modello ${id}`, features: feature ? [feature] : [],
+  });
+  sub._setHttpGetJson(async () => ({ status: 200, body: JSON.stringify({ ads: [
+    ad(1, { uri: '/price', label: 'Prezzo cambiato', values: [{ value: '5000 €' }] }),
+  ], count_all: 1 }) }));
+  try {
+    const valido = await srv._runSubito({ tipo: 'auto', marca: 'Prova' }, 30000);
+    assert.strictEqual(valido.status, 'ok');
+    assert.strictEqual(valido.items[0].prezzo, 5000);
+    sub._setHttpGetJson(async () => ({ status: 200, body: JSON.stringify({ ads: [
+      ad(3, null),
+    ], count_all: 1 }) }));
+    const nonDichiarato = await srv._runSubito({ tipo: 'auto', marca: 'Prova' }, 30000);
+    assert.strictEqual(nonDichiarato.status, 'ok');
+    assert.strictEqual(nonDichiarato.items[0].prezzo, null);
+    assert.ok(!nonDichiarato.items[0].prezzoSuRichiesta);
+    sub._setHttpGetJson(async () => ({ status: 200, body: JSON.stringify({ ads: [
+      ad(4, { uri: '/price', label: 'Prezzo', values: [{ value: 'Prezzo su richiesta' }] }),
+    ], count_all: 1 }) }));
+    const dichiarato = await srv._runSubito({ tipo: 'auto', marca: 'Prova' }, 30000);
+    assert.strictEqual(dichiarato.status, 'ok');
+    assert.strictEqual(dichiarato.items[0].prezzo, null);
+    assert.strictEqual(dichiarato.items[0].prezzoSuRichiesta, true);
+    sub._setHttpGetJson(async () => ({ status: 200, body: JSON.stringify({ ads: [
+      ad(2, { uri: '/price', label: 'Prezzo', values: [{ value: 'dato illeggibile' }] }),
+    ], count_all: 1 }) }));
+    const rotto = await srv._runSubito({ tipo: 'auto', marca: 'Prova' }, 30000);
+    assert.strictEqual(rotto.status, 'error');
+    assert.match(rotto.reason, /prezzo/i);
+    assert.strictEqual(rotto.items[0].prezzo, null, 'l\'annuncio resta visibile');
+    assert.ok(!rotto.items[0].prezzoSuRichiesta);
+  } finally { sub._setHttpGetJson(null); }
 });
 
 test('subito: parziale e sospetto ATTRAVERSANO runSubito — eseguito, non letto', async () => {
@@ -1480,10 +1557,11 @@ test('subito: parziale e sospetto ATTRAVERSANO runSubito — eseguito, non letto
       'un monco deterministico di Subito resta cachabile: ritentare non cambia');
   } finally { sub._setHttpGetJson(null); }
 
-  // (b) nessun annuncio porta un prezzo → il SOSPETTO della singola famiglia risale
-  // dall'unione e runSubito lo traduce in 'error', non in "nessun annuncio".
+  // (b) il campo prezzo c'e' ma nessun valore e' leggibile: il SOSPETTO della
+  // singola famiglia risale dall'unione, senza inventare "nessun annuncio".
   sub._setHttpGetJson(async () => ({
-    status: 200, body: JSON.stringify({ count_all: 4, ads: [annuncio('a', null), annuncio('b', null)] }),
+    status: 200, body: JSON.stringify({ count_all: 4, ads: [annuncio('a', null), annuncio('b', null)]
+      .map(ad => ({ ...ad, features: [{ uri: '/price', label: 'Prezzo', values: [{ value: 'illeggibile' }] }] })) }),
   }));
   try {
     const r = await srv._runSubito(params(), 30000);

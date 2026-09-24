@@ -74,6 +74,12 @@ function feat(ad, label) {
   return (v && (v.value != null ? v.value : v.key)) || null;
 }
 
+// L'URI resta utilizzabile anche se la fonte cambia la scritta «Prezzo».
+function featurePrezzo(ad) {
+  const features = ad.features || [];
+  return features.find(f => f && f.uri === '/price') || features.find(f => f && f.label === 'Prezzo') || null;
+}
+
 // Sub-valore per label dentro una feature multi-livello (es. feature 'Auto'/'Moto'
 // → values con label Marca/Modello/Versione). Solo nativo: null se assente.
 function subFeat(ad, parentLabel, subLabel) {
@@ -152,6 +158,8 @@ function mapAd(ad, opts = {}) {
   const nuovo = cond == null ? null : (cond === 'Nuovo' || cond === 'Km 0');
   // Neopatentati: 'Sì'/'No' nativo → bool; assente → null.
   const neo = feat(ad, 'Per neopatentati');
+  const prezzoRaw = primoValore(featurePrezzo(ad));
+  const prezzoSuRichiesta = typeof prezzoRaw === 'string' && /\bsu richiesta\b/i.test(prezzoRaw);
   // I tre livelli che l'annuncio dichiara di se'. Letti UNA volta: servono sia alla marca
   // sia alla versione, e prima si leggevano due volte in due modi diversi.
   const liv = livelliAnnuncio(ad);
@@ -173,7 +181,8 @@ function mapAd(ad, opts = {}) {
      */
     id: idSubito(ad),
     titolo: ad.subject || 'Annuncio senza titolo',
-    prezzo: digits(feat(ad, 'Prezzo')),
+    prezzo: prezzoSuRichiesta ? null : digits(prezzoRaw),
+    prezzoSuRichiesta: prezzoSuRichiesta || null,
     km,
     anno: yearOf(feat(ad, 'Immatricolazione') || feat(ad, 'Anno di immatricolazione')),
     carburante: feat(ad, 'Carburante'),
@@ -727,6 +736,7 @@ async function unioneFamiglieMoto(params, opts) {
   const parziali = [];
   const sospetti = [];
   const erroriDettaglio = [];
+  let prezziLeggibili = false;
   for (let i = 0; i < chieste.length; i++) {
     if (i > 0) await sleep(opts.pageDelayMs || 400);      // mai raffica verso la stessa fonte
     tentate++;
@@ -742,9 +752,9 @@ async function unioneFamiglieMoto(params, opts) {
       if (r.hasMore) hasMore = true;
       if (r.erroreTipo) { erroreTipo = r.erroreTipo; erroreHttp = r.erroreHttp; }
       for (const e of r.erroriSubito || []) erroriDettaglio.push({ ...e, famiglia: i + 1 });
-      // «Il parser del prezzo e' rotto» lo dichiara la singola passata: l'unione lo
-      // buttava, e la stessa rottura dava pastiglia rossa su un'auto e verde su cento
-      // moto — la fonte mentiva solo nel ramo scritto per i casi difficili.
+      if (r.items.some(x => x.prezzo != null)) prezziLeggibili = true;
+      // Il sospetto riguarda un campo prezzo PRESENTE ma illeggibile, non una famiglia
+      // che semplicemente non dichiara prezzi.
       if (r.sospetto) sospetti.push(r.sospetto);
       // I totali si sommano: sono famiglie DISGIUNTE del catalogo, non insiemi che si
       // sovrappongono (e' la stessa somma che l'API fa da sola sulle auto con la virgola).
@@ -798,7 +808,7 @@ async function unioneFamiglieMoto(params, opts) {
   // errore. In entrambi i casi il freno riceve la respinta col suo genere vero.
   const fuori = tutte.length - chieste.length;
   const nonChieste = chieste.length - tentate;
-  const parziale = [
+  let parziale = [
     fuori ? `${fuori} famiglie Subito oltre il tetto di ${MAX_FAMIGLIE_MOTO} non sono state chieste` : null,
     errori ? `${errori} su ${tentate} famiglie interrogate non hanno risposto` : null,
     nonChieste ? `${nonChieste} ${nonChieste === 1 ? 'famiglia non chiesta' : 'famiglie non chieste'} dopo il blocco` : null,
@@ -811,11 +821,15 @@ async function unioneFamiglieMoto(params, opts) {
   // identico risultato. Il flag serve a cacheable(), che senno' leggerebbe la stringa e
   // non cacherebbe MAI le moto a famiglia frammentata. Stampo di `versioneKoRete` (Moto.it).
   parzialeRete ||= errori > 0;
-  if (parziale) console.warn(`[subito] moto "${params.marca} ${params.modello || ''}": ${parziale}`);
   const items = [...perUrl.values()];
+  const sospetto = prezziLeggibili ? null : sospetti[0] || null;
+  if (prezziLeggibili && sospetti.length) {
+    parziale = [parziale, `${sospetti.length} famiglie con un campo prezzo non leggibile`].filter(Boolean).join(' · ');
+  }
+  if (parziale) console.warn(`[subito] moto "${params.marca} ${params.modello || ''}": ${parziale}`);
   console.log(`[subito] moto "${params.marca} ${params.modello || ''}": ${tentate}/${chieste.length} famiglie interrogate → ${items.length} annunci`);
   return opts.withMeta ? { items, truncated, total, hasMore, parziale, parzialeRete,
-    erroreTipo, erroreHttp, sospetto: sospetti[0] || null, bloccoParziale,
+    erroreTipo, erroreHttp, sospetto, bloccoParziale,
     erroriSubito: erroriDettaglio } : items;
 }
 
@@ -843,7 +857,7 @@ async function scrapeSubitoApi(params, opts = {}) {
   let truncated = false;
   let total = null;                          // F50 count_all (tetto), additivo
   let scartati = 0;
-  let senzaPrezzo = 0;   // quanti annunci il payload non quota: vedi il commento piu' sotto
+  let prezziIlleggibili = 0; // campo prezzo presente, ma senza cifra interpretabile
   let parziale = null, parzialeRete = false, bloccoParziale = null;
   let hasMore = false, erroreTipo = null, erroreHttp = null;
   const erroriSubito = [];
@@ -876,19 +890,9 @@ async function scrapeSubitoApi(params, opts = {}) {
       if (!come) { scartati++; continue; }
       const m = mapAd(ad, opts);
       if (!m) continue;
-      /**
-       * L'ANNUNCIO SENZA PREZZO NON SPARISCE: SI MARCA.
-       *
-       * Qui c'era `m.prezzo != null`, e chi non aveva il prezzo veniva buttato via in
-       * silenzio — sparendo dallo schermo, e facendosi archiviare dal crawler come venduto
-       * (che confronta le liste). Sui veicoli il caso oggi non capita: misurato su 200
-       * annunci veri, zero senza prezzo. Ma il vero pericolo non e' l'annuncio raro: e'
-       * che basta un cambio dell'etichetta "Prezzo" nel payload perche' questo controllo
-       * scarti TUTTO in silenzio, e la fonte sembri un mercato vuoto invece di un parser
-       * rotto. Il campo `prezzoSuRichiesta` esiste gia' — lo usa Autoscout per lo stesso
-       * caso — e il frontend lo sa scrivere ("su richiesta").
-       */
-      if (m.prezzo == null) { m.prezzoSuRichiesta = true; senzaPrezzo++; }
+      // Senza feature Prezzo sappiamo solo che il dato manca; «su richiesta» richiederebbe
+      // una dichiarazione della fonte. Se la feature c'e' ma non e' leggibile, lo segnaliamo.
+      if (m.prezzo == null && !m.prezzoSuRichiesta && featurePrezzo(ad)) prezziIlleggibili++;
       const riga = come === 'testo-libero' ? m : { ...m, dichiarazione: come };
       out.push(riga);
       const kv = chiaveVersione(riga, ad, tipo);
@@ -923,7 +927,7 @@ async function scrapeSubitoApi(params, opts = {}) {
         if (riconosci(ad, nodo, rico) !== 'senza-modello') continue;
         const m = mapAd(ad, opts);
         if (!m || visti.has(m.url)) continue;
-        if (m.prezzo == null) { m.prezzoSuRichiesta = true; senzaPrezzo++; }   // vedi sopra
+        if (m.prezzo == null && !m.prezzoSuRichiesta && featurePrezzo(ad)) prezziIlleggibili++; // vedi sopra
         const riga = { ...m, dichiarazione: 'senza-modello' };
         visti.add(m.url); out.push(riga);
         const kv = chiaveVersione(riga, ad, tipo);
@@ -942,18 +946,15 @@ async function scrapeSubitoApi(params, opts = {}) {
   }
   if (attesa.length) await deduciInBlocco(attesa);
   if (nodo && scartati) console.log(`[subito] per id "${params.marca} ${params.modello || ''}": ${out.length} tenuti, ${scartati} scartati (altro modello)`);
-  /**
-   * SE NON QUOTA PIU' NIENTE, E' IL PARSER, NON IL MERCATO.
-   *
-   * Un annuncio senza prezzo capita (raro, e si marca — vedi sopra). Ma se NESSUN annuncio
-   * della pagina ha un prezzo, non e' il mercato: e' l'etichetta "Prezzo" che nel payload
-   * si chiama in un altro modo. Senza questo, la ricerca uscirebbe con dei titoli e nessuna
-   * cifra, e nessuno saprebbe che il numero non c'e' perche' non lo sappiamo piu' leggere.
-   * Si dichiara `sospetto`, che `runSource` traduce in 'error' (non 'empty', non cachato).
-   */
-  const sospetto = (out.length && senzaPrezzo === out.length)
-    ? `nessuno dei ${out.length} annunci porta un prezzo leggibile: l'etichetta del payload puo' essere cambiata`
+  // La sola ASSENZA del campo prezzo non dimostra un parser guasto. Un campo prezzo
+  // presente e illeggibile invece e' un problema reale di lettura: lo dichiariamo senza
+  // scartare l'annuncio. Se almeno un prezzo e' leggibile, la fonte nel complesso funziona.
+  const sospetto = prezziIlleggibili && !out.some(x => x.prezzo != null)
+    ? `${prezziIlleggibili} annunci hanno un campo prezzo che non riesco a leggere`
     : null;
+  if (prezziIlleggibili && !sospetto) {
+    parziale = [parziale, `${prezziIlleggibili} annunci hanno un campo prezzo non leggibile`].filter(Boolean).join(' · ');
+  }
   return opts.withMeta ? { items: out, truncated, total, hasMore, sospetto, parziale, parzialeRete,
     erroreTipo, erroreHttp, bloccoParziale, erroriSubito } : out;
 }

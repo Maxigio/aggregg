@@ -1,7 +1,7 @@
 # Subito: problemi verificati da riprendere
 
-I primi quattro problemi sono stati riprodotti con risposte Hades controllate
-e risolti separatamente dal flusso Versione. Il quinto resta aperto.
+I cinque problemi sono stati riprodotti con risposte Hades controllate e
+risolti separatamente dal flusso Versione.
 
 1. **Risolto localmente — richiesta superflua e falso avviso 429.** La pagina standard
    di Subito ora legge 50 annunci grezzi con una sola chiamata; `fetta: 1` chiede
@@ -34,14 +34,19 @@ e risolti separatamente dal flusso Versione. Il quinto resta aperto.
    singole chiamate, senza contarli di nuovo quando si mostra il riepilogo.
    Prove controllate in `test/subito-429.test.js`, `test/paginazione-ricerca.test.js`
    e `test/fonti-pausa-ui.test.js`, senza interrogare il portale.
-5. **Aperto — una famiglia senza prezzi fa fallire anche quella valida.** Se una
+5. **Risolto localmente — una famiglia senza prezzi fa fallire anche quella valida.** Se una
    famiglia Moto restituisce un annuncio realmente senza prezzo e una seconda
    famiglia restituisce un annuncio con prezzo, `sospetto` della prima viene
    propagato all'unione e l'intera fonte esce con `status: error`. Riprodotto
    con due risposte Hades controllate, una senza prezzo e una con prezzo.
-   Occorre distinguere il singolo annuncio senza prezzo, gia' marcato
-   `prezzoSuRichiesta`, dal caso in cui il parser non riconosce piu' i prezzi
-   di una risposta, e non scartare
-   l'esito valido dell'altra famiglia.
+   Ora il campo assente produce prezzo non disponibile (`n/d`) senza inventare
+   «su richiesta»; quest'ultima dicitura resta solo se il campo la dichiara.
+   Un campo prezzo presente ma illeggibile resta segnalato.
+   Se un'altra famiglia porta prezzi validi, la fonte resta `ok` con avviso
+   sulla famiglia anomala. L'annuncio non viene scartato in nessun caso.
+   L'URI `/price` permette anche di leggere il prezzo se cambia solo l'etichetta.
+   Prove controllate in `test/silenzi-fonti.test.js`. Se la fonte cambiasse
+   contemporaneamente URI ed etichetta, il payload sarebbe indistinguibile da
+   un annuncio che non dichiara il prezzo: questo limite resta esplicito.
 
 Queste riproduzioni non richiedono interrogazioni ripetute al portale reale.
