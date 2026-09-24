@@ -109,3 +109,27 @@ test('posted_at: si legge display_iso8601, non la stringa locale senza fuso', ()
   assert.strictEqual(mapAd({ ...AD, dates: { display: '2026-06-24 11:17:20' } }, {}).posted_at, null);
   assert.strictEqual(mapAd({ ...AD }, {}).posted_at, null);
 });
+
+test('privato: il testo aiuta a dedurre la versione Auto ma non arriva al client', async () => {
+  const ad = {
+    subject: 'Volkswagen Golf del 2016', body: 'Vendo Golf 1.6 TDI 110 CV 5p. Highline BlueMotion Technology, unico proprietario',
+    urls: { default: 'https://www.subito.it/auto/golf-prova-456.htm' },
+    advertiser: { company: false, name: 'Persona Test', user_id: 77 },
+    features: [f('Prezzo', '9.500 €'), { type: 'pack', uri: '/car', label: 'Auto', values: [
+      { label: 'Marca', key: '000101', value: 'Volkswagen' },
+      { label: 'Modello', key: '004152', value: 'Golf 7ª serie' },
+      { label: 'Versione', key: '000000', value: 'Altro allestimento' },
+    ] }],
+  };
+  scrape._setHttpGetJson(async () => ({ status: 200, body: JSON.stringify({ ads: [ad], count_all: 1 }) }));
+  try {
+    const r = await scrape({ tipo: 'auto', marca: 'Volkswagen', modello: 'Golf' },
+      { withMeta: true, maxPages: 1, senzaRecupero: true });
+    assert.equal(r.items.length, 1);
+    assert.equal(r.items[0].versioneDedotta?.versione, 'Golf 1.6 TDI 110 CV 5p. Highline BlueMotion Technology');
+    assert.equal(r.items[0].descrizione, null);
+    assert.equal(r.items[0].venditoreNome, null);
+    assert.equal(r.items[0].venditoreId, null);
+    assert.equal(JSON.stringify(r.items).includes('Persona Test'), false);
+  } finally { scrape._setHttpGetJson(null); }
+});

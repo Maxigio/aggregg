@@ -121,9 +121,10 @@ function idSubito(ad) {
   return t ? 'subito:' + t[1] : null;
 }
 
-function mapAd(ad, opts = {}) {
+function mapAd(ad) {
   const url = ad.urls && (ad.urls.default || ad.urls.mobile);
   if (!url) return null;
+  const concessionario = ad.advertiser?.company === true;
   // KM: il VALORE ESATTO, non la fascia. Nel payload di hades l'etichetta 'Km' compare DUE
   // volte — `/mileage` (la fascia: "95.000 - 99.999") e `/mileage_scalar` (il valore vero:
   // "98000 Km") — e la fascia viene prima. Cercando per label si prendeva sempre quella e se
@@ -215,8 +216,8 @@ function mapAd(ad, opts = {}) {
     // buttavamo: senza, la scheda tecnica di un annuncio doveva pescare il modello dai
     // filtri di ricerca, e in Competitor una ricerca non c'e' mai stata.
     modello: dichiarato(liv.modello) ? liv.modello.nome : null,
-    venditoreId: (ad.advertiser && ad.advertiser.user_id) ? String(ad.advertiser.user_id) : null,
-    venditoreNome: (ad.advertiser && (ad.advertiser.shop_name || ad.advertiser.name)) || null,
+    venditoreId: concessionario && ad.advertiser.user_id ? String(ad.advertiser.user_id) : null,
+    venditoreNome: concessionario ? (ad.advertiser.shop_name || ad.advertiser.name || null) : null,
     potenzaCv: cvFrom(feat(ad, 'Potenza')),
     potenzaKw: kwFrom(feat(ad, 'Potenza')),
     // Specs ricche NATIVE (già nel payload, zero richieste extra); null se assenti.
@@ -242,12 +243,12 @@ function mapAd(ad, opts = {}) {
     spedizione: featBool(ad, 'Disponibile alla spedizione'),
     // Il codice di magazzino del venditore: e' come lui chiama quel veicolo nel suo
     // gestionale, e permette di riconoscere lo stesso mezzo riesposto.
-    refVenditore: feat(ad, 'Ref.'),
-    descrizione: typeof ad.body === 'string' && ad.body.trim() ? ad.body.trim() : null,
+    refVenditore: concessionario ? feat(ad, 'Ref.') : null,
+    descrizione: concessionario && typeof ad.body === 'string' && ad.body.trim() ? ad.body.trim() : null,
     // Il COMUNE, non la provincia — con il codice ISTAT, che e' la chiave con cui si
     // aggancia qualunque dato pubblico territoriale.
-    comune: (ad.geo && ad.geo.town && ad.geo.town.value) || null,
-    istat: (ad.geo && ad.geo.town && ad.geo.town.istat) || null,
+    comune: concessionario ? ((ad.geo && ad.geo.town && ad.geo.town.value) || null) : null,
+    istat: concessionario ? ((ad.geo && ad.geo.town && ad.geo.town.istat) || null) : null,
     // Immagini NATIVE (già nel payload, zero richieste extra): URL webp dalla CDN
     // costruiti dal cdn_base_url + rule (thumb mobile per la lista, fullscreen per lo slider).
     immagini: (Array.isArray(ad.images) ? ad.images : [])
@@ -263,7 +264,6 @@ function mapAd(ad, opts = {}) {
     danni: null,
     posted_at: posted,
   };
-  if (opts.attachRaw) out._raw = ad;   // foto grezza per raw_json (keep-last)
   return out;
 }
 
@@ -335,7 +335,8 @@ async function deduciInBlocco(attesa) {
     if (x.marcaId !== marcaInCorso) { marcaInCorso = x.marcaId; await sleep(0); }
     const versioni = versioniPreparate('auto', x.marcaId, x.modId, x.modNome);
     if (!versioni || !versioni.length) continue;
-    const r = dedotta.deduci(versioni, dedotta.datiAnnuncio(x.riga));
+    // Il testo di un privato serve solo qui, per riconoscere la versione: non entra nella riga API.
+    const r = dedotta.deduci(versioni, dedotta.datiAnnuncio({ ...x.riga, descrizione: x.descrizione }));
     if (r) x.riga.versioneDedotta = r;
   }
 }
@@ -553,7 +554,6 @@ function erroreRichiesta(e, fase, pagina = null) {
 /**
  * Annunci Subito via API. Throw su errore: la fonte resta dichiarata non letta.
  * @param opts.maxPages  override profondità (ricerca standard: 1 pagina da 50)
- * @param opts.attachRaw allega `_raw` (foto grezza) per il DB
  * @param opts.withMeta  ritorna {items, truncated} invece dell'array (back-compat).
  *                       truncated=true se fermato al cap con ultima pagina PIENA
  *                       (vista parziale → il crawler NON deve rilevare venduti).
@@ -770,7 +770,7 @@ async function scrapeSubitoApi(params, opts = {}) {
       const riga = come === 'testo-libero' ? m : { ...m, dichiarazione: come };
       out.push(riga);
       const kv = chiaveVersione(riga, ad, tipo);
-      if (kv) attesa.push({ riga, ...kv });
+      if (kv) attesa.push({ riga, descrizione: ad.body, ...kv });
     }
     // `count_all` conta la risposta GREZZA della fonte, non le righe che i nostri filtri
     // tengono. Se la pagina arriva esattamente al totale, un'altra chiamata puo' solo
@@ -805,7 +805,7 @@ async function scrapeSubitoApi(params, opts = {}) {
         const riga = { ...m, dichiarazione: 'senza-modello' };
         visti.add(m.url); out.push(riga);
         const kv = chiaveVersione(riga, ad, tipo);
-        if (kv) attesa.push({ riga, ...kv });
+        if (kv) attesa.push({ riga, descrizione: ad.body, ...kv });
       }
     } catch (e) {
       // Il recupero e' un di piu': se cade, la ricerca vale lo stesso.

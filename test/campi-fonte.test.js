@@ -50,6 +50,7 @@ test('subito: IVA e garanzia dalla chiave nativa; assenti restano null', () => {
 
 test('subito: comune con codice ISTAT e testo dell\'annuncio', () => {
   const r = _mapAd(adSubito([], {
+    advertiser: { company: true },
     body: '  Ottime condizioni  ',
     geo: { region: { friendly_name: 'lombardia' }, city: { value: 'Pavia' },
            town: { value: 'Badia Pavese', istat: '018006' } },

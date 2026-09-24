@@ -89,6 +89,44 @@ test('moto: versione sotto feature Moto + venditore privato + carrozzeria da Tip
   assert.strictEqual(m.nuovo, true);                     // 'Nuovo' → true
 });
 
+test('privati Auto e Moto: testo, identita e riferimenti non escono dalla mappatura', () => {
+  for (const ad of [adAuto, adMoto]) {
+    const r = mapAd({ ...ad, advertiser: { company: false, name: 'Persona Test', user_id: 123,
+      phone: '3330000000' }, body: 'Contattami al 3330000000',
+      geo: { town: { value: 'Borgo Prova', istat: '012345' }, city: { short_name: 'RM' } },
+      features: [...ad.features, { label: 'Ref.', values: [{ value: 'Persona Test' }] }] }, { attachRaw: true });
+    assert.equal(r.descrizione, null);
+    assert.equal(r.venditoreNome, null);
+    assert.equal(r.venditoreId, null);
+    assert.equal(r.refVenditore, null);
+    assert.equal(r.comune, null);
+    assert.equal(r.istat, null);
+    assert.equal(r.provincia, 'RM');
+    assert.equal(Object.hasOwn(r, '_raw'), false);
+    assert.equal(JSON.stringify(r).includes('3330000000'), false);
+  }
+});
+
+test('concessionari mantengono testo, nome, id e riferimento; tipo ignoto non rivela campi', () => {
+  const ad = { ...adAuto, advertiser: { company: true, shop_name: 'Salone Prova', user_id: 45 },
+    body: 'Veicolo garantito', geo: { town: { value: 'Borgo Prova', istat: '012345' } },
+    features: [...adAuto.features, { label: 'Ref.', values: [{ value: 'ST-45' }] }] };
+  const r = mapAd(ad);
+  assert.equal(r.descrizione, 'Veicolo garantito');
+  assert.equal(r.venditoreNome, 'Salone Prova');
+  assert.equal(r.venditoreId, '45');
+  assert.equal(r.refVenditore, 'ST-45');
+  assert.equal(r.comune, 'Borgo Prova');
+  assert.equal(r.istat, '012345');
+  const ignoto = mapAd({ ...ad, advertiser: { name: 'Persona Test', user_id: 123 } });
+  assert.equal(ignoto.descrizione, null);
+  assert.equal(ignoto.venditoreNome, null);
+  assert.equal(ignoto.venditoreId, null);
+  assert.equal(ignoto.refVenditore, null);
+  assert.equal(ignoto.comune, null);
+  assert.equal(ignoto.istat, null);
+});
+
 test('immagini: URL webp da cdn_base_url + rule; entry senza url scartata', () => {
   const m = mapAd(adAuto);
   assert.strictEqual(m.immagini.length, 2);   // la terza (senza cdn_base_url) scartata
