@@ -516,15 +516,26 @@ function extractTotal(j) {
 }
 
 async function fetchPage(params, start) {
-  return salute.richiesta('subito', async () => {
-  const res = await _http(buildPath(params, start));
-  if (res.status === 429) throw salute.erroreHttp('subito', 429, res.headers);
-  if (res.status !== 200) throw fail(`Subito hades HTTP ${res.status}`, { status: res.status, kind: kindForStatus(res.status) });
-  let j;
-  try { j = JSON.parse(res.body); } catch (_) { throw fail('Subito hades: body non-JSON (blocco?)', { status: res.status, kind: 'blocked' }); }
-  if (j.errors) throw fail('Subito hades errors: ' + JSON.stringify(j.errors).slice(0, 100), { kind: 'error' });
-  return { ads: Array.isArray(j.ads) ? j.ads : [], total: extractTotal(j) };
-  });
+  try {
+    const page = await salute.richiesta('subito', async () => {
+      const res = await _http(buildPath(params, start));
+      if (res.status === 429) throw salute.erroreHttp('subito', 429, res.headers);
+      if (res.status !== 200) throw fail(`Subito hades HTTP ${res.status}`, { status: res.status, kind: kindForStatus(res.status) });
+      let j;
+      try { j = JSON.parse(res.body); } catch (_) { throw fail('Subito hades: body non-JSON (blocco?)', { status: res.status, kind: 'blocked' }); }
+      if (j.errors) throw fail('Subito hades errors: ' + JSON.stringify(j.errors).slice(0, 100), { kind: 'error' });
+      return { ads: Array.isArray(j.ads) ? j.ads : [], total: extractTotal(j) };
+    });
+    // Il riepilogo registra gia' il vuoto; qui conta solo il successo che azzera
+    // i 403 precedenti prima che parta un'altra famiglia.
+    if (page.ads.length) salute.registra('subito', { conteggio: page.ads.length });
+    return page;
+  } catch (e) {
+    // Un 429 e' gia' registrato da richiesta(); lo stesso oggetto non conta due volte.
+    // Anche FONTE_IN_PAUSA e' ignorato: non e' una nuova risposta Hades.
+    salute.registra('subito', { errore: e });
+    throw e;
+  }
 }
 
 /**
@@ -730,7 +741,26 @@ async function unioneFamiglieMoto(params, opts) {
       // sovrappongono (e' la stessa somma che l'API fa da sola sulle auto con la virgola).
       if (Number.isFinite(r.total)) total = (total || 0) + r.total;
       if (r.bloccoParziale?.status === 429) { interrotto429 = true; break; }
+      if (salute.fermo('subito').fermo) {
+        parzialeRete = true;
+        if (!bloccoParziale) {
+          bloccoParziale = Object.assign(new Error(salute.avvisoPausa('subito')),
+            { code: 'FONTE_IN_PAUSA', kind: 'blocked' });
+          erroreTipo = 'blocked';
+          parziali.push(bloccoParziale.message);
+        }
+        break;
+      }
     } catch (e) {
+      if (e.code === 'FONTE_IN_PAUSA') {
+        tentate--; // il freno locale non ha interrogato questa famiglia
+        parzialeRete = true;
+        bloccoParziale ||= e;
+        erroreTipo = 'blocked';
+        parziali.push(e.message);
+        if (!peggiore) peggiore = e;
+        break;
+      }
       errori++;
       // Si conserva l'errore PIU' GRAVE: un 403/429 su una famiglia e' un blocco della fonte, e
       // rilanciarlo come 'error' generico faceva si' che il freno anti-ban (fonti-salute) non
@@ -741,6 +771,7 @@ async function unioneFamiglieMoto(params, opts) {
       erroreTipo = e.kind || 'transient'; erroreHttp = e.status || null;
       console.warn(`[subito] famiglia moto ${chieste[i]} KO: ${e.message}`);
       if (e.status === 429) { peggiore = e; interrotto429 = true; break; }
+      if (salute.fermo('subito').fermo) break;
     }
   }
   // Tutte cadute: e' un errore della fonte, non un mercato vuoto. E il genere e' quello del

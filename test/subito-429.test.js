@@ -152,6 +152,90 @@ test('Subito: 429 ferma le famiglie moto ancora in coda e non dichiara un vuoto 
   } finally { subito._setHttpGetJson(null); }
 });
 
+test('Subito Moto: due 403 effettivi fermano le famiglie successive', async () => {
+  const chiamate = [];
+  subito._setHttpGetJson(async path => {
+    const famiglia = new URL('https://local.invalid' + path).searchParams.get('bm');
+    chiamate.push(famiglia);
+    return famiglia === '111' ? ok([], 0) : { status: 403, body: '{}' };
+  });
+  try {
+    const r = await subito(params('moto', ['111', '222', '333', '444']),
+      { withMeta: true, senzaRecupero: true, pageDelayMs: 1 });
+    assert.deepEqual(chiamate, ['111', '222', '333']);
+    assert.equal(salute.fermo('subito').fermo, true);
+    assert.match(r.parziale, /1 famiglia non chiesta dopo il blocco/);
+    assert.equal(r.bloccoParziale?.status, 403);
+  } finally { subito._setHttpGetJson(null); }
+});
+
+test('Subito Moto: il 403 su una seconda pagina conta prima della famiglia seguente', async () => {
+  const chiamate = [];
+  subito._setHttpGetJson(async path => {
+    const q = new URL('https://local.invalid' + path).searchParams;
+    const famiglia = q.get('bm'), start = Number(q.get('start'));
+    chiamate.push([famiglia, start]);
+    if (famiglia === '111' && !start) return ok(Array.from({ length: 50 }, (_, i) => annuncio(i)), 60);
+    return { status: 403, body: '{}' };
+  });
+  try {
+    const r = await subito(params('moto', ['111', '222', '333']),
+      { withMeta: true, maxPages: 2, senzaRecupero: true, pageDelayMs: 1 });
+    assert.deepEqual(chiamate, [['111', 0], ['111', 50], ['222', 0]]);
+    assert.equal(r.items.length, 50);
+    assert.equal(r.parzialeRete, true);
+    assert.equal(r.bloccoParziale?.status, 403);
+    assert.match(r.parziale, /1 famiglia non chiesta dopo il blocco/);
+    assert.equal(salute.fermo('subito').fermo, true);
+  } finally { subito._setHttpGetJson(null); }
+});
+
+test('Subito Moto: una risposta buona fra due 403 azzera i colpi', async () => {
+  const chiamate = [];
+  subito._setHttpGetJson(async path => {
+    const famiglia = new URL('https://local.invalid' + path).searchParams.get('bm');
+    chiamate.push(famiglia);
+    return famiglia === '111' || famiglia === '333'
+      ? { status: 403, body: '{}' } : ok([annuncio(famiglia)], 1);
+  });
+  try {
+    await subito(params('moto', ['111', '222', '333', '444']),
+      { withMeta: true, senzaRecupero: true, pageDelayMs: 1 });
+    assert.deepEqual(chiamate, ['111', '222', '333', '444']);
+    assert.equal(salute.fermo('subito').fermo, false);
+  } finally { subito._setHttpGetJson(null); }
+});
+
+test('Subito Moto: la pausa locale non diventa una famiglia interrogata', async () => {
+  salute.registra('subito', { errore: Object.assign(new Error('429'), { status: 429 }) });
+  const chiamate = [];
+  subito._setHttpGetJson(async path => { chiamate.push(path); return ok([], 0); });
+  try {
+    await assert.rejects(() => subito(params('moto', ['111', '222']),
+      { withMeta: true, senzaRecupero: true, pageDelayMs: 1 }),
+    e => e.code === 'FONTE_IN_PAUSA');
+    assert.deepEqual(chiamate, []);
+  } finally { subito._setHttpGetJson(null); }
+});
+
+test('Subito Moto: una pausa concorrente lascia il risultato parziale e non chiama altre famiglie', async () => {
+  const chiamate = [];
+  subito._setHttpGetJson(async path => {
+    chiamate.push(new URL('https://local.invalid' + path).searchParams.get('bm'));
+    salute.registra('subito', { errore: Object.assign(new Error('429 concorrente'), { status: 429 }) });
+    return ok([annuncio(1)], 1);
+  });
+  try {
+    const r = await subito(params('moto', ['111', '222', '333']),
+      { withMeta: true, senzaRecupero: true, pageDelayMs: 1 });
+    assert.deepEqual(chiamate, ['111']);
+    assert.equal(r.parzialeRete, true);
+    assert.equal(r.bloccoParziale?.code, 'FONTE_IN_PAUSA');
+    assert.match(r.parziale, /2 famiglie non chieste dopo il blocco/);
+    assert.match(r.parziale, /richieste sospese/);
+  } finally { subito._setHttpGetJson(null); }
+});
+
 test('Subito: 429 nel recupero conserva il risultato principale e arriva al freno', async () => {
   const chiamate = [];
   subito._setHttpGetJson(async path => {
