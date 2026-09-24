@@ -46,7 +46,7 @@ function parole(s) {
     .replace(/[^a-z0-9.]+/g, ' ')
     .split(/\s+/)
     .map(t => t.replace(/^\.+|\.+$/g, ''))
-    .filter(t => t.length >= 2 || /^\d$/.test(t));
+    .filter(Boolean);
 }
 
 /** Il campo dichiarato, o null se il venditore ha scelto "altro". */
@@ -80,7 +80,10 @@ function verifica(annuncio, richiesta) {
   const titolo = String((annuncio && annuncio.titolo) || '').trim();
   if (!titolo) return { esito: 'ignota', dove: null };
   const dentro = new Set(parole(titolo));
-  return { esito: cercate.every(p => dentro.has(p)) ? 'confermata' : 'smentita', dove: 'titolo' };
+  // Una lettera nel titolo puo' appartenere al modello (BMW R 1200 GS), non alla versione.
+  const distintive = cercate.filter(p => !/^[a-z]$/.test(p));
+  if (!distintive.every(p => dentro.has(p))) return { esito: 'smentita', dove: 'titolo' };
+  return { esito: cercate.length === distintive.length ? 'confermata' : 'ignota', dove: 'titolo' };
 }
 
 /**
@@ -88,11 +91,12 @@ function verifica(annuncio, richiesta) {
  * Togliere qui vorrebbe dire che il browser non puo' piu' rimetterli, e la riga
  * "mostrali" non avrebbe cosa mostrare.
  */
-function marca(risultati, richiesta) {
+function marca(risultati, richiesta, fonte = null, verificaRiga = verifica) {
   const conto = { confermata: 0, smentita: 0, ignota: 0 };
   const perFonte = {};
   for (const r of risultati || []) {
-    const v = verifica(r, richiesta);
+    if (fonte && r.fonte !== fonte) continue;
+    const v = verificaRiga(r, richiesta);
     r.versioneEsito = v.esito;
     r.versioneDove = v.dove;
     conto[v.esito]++;
@@ -102,4 +106,30 @@ function marca(risultati, richiesta) {
   return { conto, perFonte };
 }
 
-module.exports = { verifica, marca, parole, dichiarata, SEGNAPOSTO };
+function siglaNelTitolo(titolo, nodo) {
+  const testo = parole(titolo), famiglia = parole(nodo.famigliaNome);
+  const note = new Set(nodo.modelloSigle || []);
+  const trovate = new Set();
+  if (!famiglia.length) return null;
+  for (let i = 0; i <= testo.length - famiglia.length - 1; i++) {
+    if (!famiglia.every((p, j) => p === testo[i + j])) continue;
+    const dopo = testo[i + famiglia.length];
+    // "748 R/S" non sceglie fra R e S: nessuna delle due e' provata dal titolo.
+    if (note.has(dopo) && note.has(testo[i + famiglia.length + 1])) return null;
+    if (note.has(dopo)) trovate.add(dopo);
+  }
+  return trovate.size === 1 ? [...trovate][0] : null;
+}
+
+function marcaRicerca(risultati, richiesta, subitoNodo) {
+  if (richiesta) return marca(risultati, richiesta);
+  return subitoNodo && subitoNodo.modelloSigla
+    ? marca(risultati, subitoNodo.modelloSigla, 'subito', (r, sigla) => {
+      const v = verifica(r, sigla);
+      if (v.esito !== 'ignota') return v;
+      const titolo = siglaNelTitolo(r.titolo, subitoNodo);
+      return titolo ? { esito: titolo === sigla.toLowerCase() ? 'confermata' : 'smentita', dove: 'titolo' } : v;
+    }) : null;
+}
+
+module.exports = { verifica, marca, marcaRicerca, parole, dichiarata, SEGNAPOSTO };

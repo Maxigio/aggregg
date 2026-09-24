@@ -183,6 +183,23 @@ test('testoDedotto: si pretende il confine di parola, e niente resti minuscoli',
   assert.strictEqual(rn('auto', 'Volkswagen', 'Golf').testoDedotto, undefined);
 });
 
+test('sigla finale del modello: solo se Subito la cataloga sotto quella famiglia', () => {
+  // Non dipende dalla Ducati: la stessa regola vale per ogni modello del menu
+  // che Subito suddivide in famiglia + versione a una lettera.
+  for (const [marca, modello, sigla] of [
+    ['Ducati', '748 R', 'R'], ['Ducati', '748 S', 'S'],
+    ['Aprilia', 'RSV 1000 R', 'R'],
+  ]) {
+    const n = rn('moto', marca, modello);
+    assert.equal(n.modelloSigla, sigla, `${marca} ${modello}`);
+    assert.ok(n.famigliaId);
+  }
+  assert.equal(rn('moto', 'Ducati', '748').modelloSigla, undefined);
+  assert.equal(rn('moto', 'BMW', 'R 90 S').modelloSigla, undefined,
+    'una famiglia nativa esatta non si trasforma in versione');
+  assert.equal(rn('moto', 'BMW', 'R 1200 GS').modelloSigla, undefined);
+});
+
 test('moto: un prefisso che spezza un numero non aggancia la famiglia', () => {
   // 'Pegaso 500' agganciava la famiglia 'Pegaso 50' e i cinquantini passavano da risultati
   // normali: sulle moto la 'generazione' E' la famiglia stessa, quindi `riconosci` li

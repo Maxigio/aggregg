@@ -44,6 +44,21 @@ test('senza campo e senza titolo non si inventa: e\' ignota', () => {
   assert.strictEqual(v.verifica({ variante: 'Altro allestimento', titolo: '' }, 'GTI').esito, 'ignota');
 });
 
+test('una lettera e\' una versione: Ducati 1098 R non e\' Ducati 1098 S', () => {
+  assert.strictEqual(v.verifica(ad('S', 'Ducati 1098 S'), 'R').esito, 'smentita');
+  assert.strictEqual(v.verifica(ad('R', 'Ducati 1098 R'), 'R').esito, 'confermata');
+  // La corrispondenza per sottoinsieme resta: R include R Troy Bayliss.
+  assert.strictEqual(v.verifica(ad('R Troy Bayliss', ''), 'R').esito, 'confermata');
+  assert.strictEqual(v.verifica(ad('Factory', ''), 'R Factory').esito, 'smentita');
+});
+
+test('una lettera nel solo titolo non prova la versione', () => {
+  assert.strictEqual(v.verifica(ad(null, 'BMW R 1200 GS'), 'R').esito, 'ignota');
+  assert.strictEqual(v.verifica(ad(null, 'Aprilia RSV 1000 R Factory'), 'R Factory').esito, 'ignota');
+  assert.strictEqual(v.verifica(ad(null, 'Aprilia RSV 1000 R'), 'R Factory').esito, 'smentita');
+  assert.strictEqual(v.verifica(ad(null, 'Golf GTI'), 'GTI').esito, 'confermata');
+});
+
 test('i numeri con la virgola restano interi', () => {
   // "2.0" spezzato in "2" e "0" combacerebbe con qualunque cosa contenga un 2 e uno 0 —
   // e i nomi-versione italiani sono per due terzi fatti cosi'.
@@ -79,6 +94,28 @@ test('marca() conta per fonte e non toglie niente', () => {
   for (const x of lista) assert.ok(x.versioneEsito, 'ogni annuncio deve uscire marcato');
 });
 
+test('sigla nel modello: il campo nativo Subito distingue R, S e versione assente', () => {
+  const { risolviNodo } = require('../backend/scrapers/subito-nodo');
+  const lista = [
+    ad('R', 'Ducati 748 R'),
+    ad('S', 'Ducati 748 S'),
+    ad(null, 'Ducati 748 S'),
+    ad(null, 'Ducati 748 R'),
+    ad(null, 'Ducati 748 R/S'),
+    ad(null, 'Ducati 748 Superbike'),
+    { fonte: 'autoscout', variante: 'S', titolo: 'Ducati 748 S' },
+  ];
+  const { conto } = v.marcaRicerca(lista, '', risolviNodo('moto', 'Ducati', '748 R'));
+  assert.deepStrictEqual(conto, { confermata: 2, smentita: 2, ignota: 2 });
+  assert.deepStrictEqual(lista.slice(0, 6).map(r => r.versioneEsito),
+    ['confermata', 'smentita', 'smentita', 'confermata', 'ignota', 'ignota']);
+  assert.equal(lista[6].versioneEsito, undefined, 'il modello su AS24 non e\' la versione Subito');
+  assert.equal(lista.length, 7, 'nessun annuncio grezzo viene eliminato');
+  const normale = [{ fonte: 'subito', variante: 'S', titolo: 'Ducati 748 S' }];
+  assert.equal(v.marcaRicerca(normale, '', risolviNodo('moto', 'Ducati', '748')), null);
+  assert.equal(normale[0].versioneEsito, undefined, 'la famiglia senza sigla non va filtrata');
+});
+
 test('il browser toglie solo gli smentiti, e lo dice', () => {
   // A COMMENTI TOLTI, come le guardie di silenzi-fonti (lezione 34941e8): `mostrali` sta
   // anche in un commento di resetContesto, e questa guardia era gia' oggi soddisfatta
@@ -90,4 +127,38 @@ test('il browser toglie solo gli smentiti, e lo dice', () => {
   assert.ok(/Nascosti \$\{tolti\}/.test(app) || /Nascosti \$/.test(app),
     'quanti ne sono stati tolti deve essere scritto: nascondere in silenzio e\' l\'unica cosa che qui non si fa');
   assert.ok(/'mostrali'/.test(app), 'devono potersi rivedere: la stringa del bottone, non una parola qualunque');
+});
+
+test('una versione ignota non diventa «corrisponde» negli export', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const vm = require('node:vm');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const start = app.indexOf('const DICHIARAZIONE =');
+  const end = app.indexOf('/**\n * LA PASTIGLIA', start);
+  assert.ok(start >= 0 && end > start);
+  const ctx = {};
+  vm.runInNewContext(app.slice(start, end) + '\nthis.corrispondenzaDi = corrispondenzaDi;', ctx);
+  assert.strictEqual(ctx.corrispondenzaDi({ versioneEsito: 'ignota', dichiarazione: 'esatto' }).et, 'versione non verificata');
+  assert.strictEqual(ctx.corrispondenzaDi({ versioneEsito: 'smentita', dichiarazione: 'esatto' }).et, 'non e\' quella versione');
+  assert.strictEqual(ctx.corrispondenzaDi({ versioneEsito: 'ignota', dichiarazione: 'altro-modello' }).et, 'altro modello');
+});
+
+test('mostrali: le versioni smentite tornano con un avviso sulla singola scheda', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const vm = require('node:vm');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const start = app.indexOf('const DICHIARAZIONE =');
+  const end = app.indexOf('function rowHTML(', start);
+  assert.ok(start >= 0 && end > start);
+  const ctx = {};
+  vm.runInNewContext('const escapeHtml = s => s;\n' + app.slice(start, end)
+    + '\nthis.dichBadgeHTML = dichBadgeHTML;', ctx);
+  assert.match(ctx.dichBadgeHTML({ versioneEsito: 'smentita', dichiarazione: 'esatto' }), /non e' quella versione/);
+  const ignota = ctx.dichBadgeHTML({ versioneEsito: 'ignota', versioneDove: 'titolo', dichiarazione: 'esatto' });
+  assert.match(ignota, /title="Versione non verificata"/);
+  assert.match(ignota, /aria-label="Versione non verificata"/);
+  assert.match(ignota, /ⓘ/);
+  assert.doesNotMatch(ignota, />versione non verificata</);
 });

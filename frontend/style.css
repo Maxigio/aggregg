@@ -1092,6 +1092,7 @@ body.demo-mode .cp-separa { display: none; }
   border-radius: 3px; white-space: nowrap; margin-left: 6px; vertical-align: middle; }
 .dich-med { background: var(--warn-weak); color: var(--warn); }
 .dich-ko  { background: var(--neg-weak);  color: var(--neg); }
+.dich-info { color: var(--warn); font-size: 0.85rem; margin-left: 6px; vertical-align: middle; cursor: help; }
 
 /* ─── Dettaglio inline (ℹ → fisarmonica sotto la riga) ──────────────────────── */
 .row-detail { background: var(--surface-2); border-bottom: 1px solid var(--line); }

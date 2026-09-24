@@ -622,7 +622,8 @@ function faTitolo(testo) {
 
 /** Recupero per marca: la stessa lista serve OGNI modello di quella marca → in cache. */
 const RECUPERO_TTL = 10 * 60 * 1000;
-const recuperoCache = new Map();   // `${tipo}|${marcaId}` → { ts, ads }
+const recuperoCache = new Map();   // query completa → { ts, ads, timer }
+let recuperoId = 0;
 
 async function paginaRecupero(params) {
   /**
@@ -646,9 +647,22 @@ async function paginaRecupero(params) {
     filtriAuto.chiaveCache(params.filtriAuto)].join('|');
   const hit = recuperoCache.get(chiave);
   if (hit && Date.now() - hit.ts < RECUPERO_TTL) return hit.ads;
+  if (hit) { clearTimeout(hit.timer); recuperoCache.delete(chiave); }
   const page = await fetchPage({ ...params, subitoSoloNonDichiarati: true }, 0);
-  recuperoCache.set(chiave, { ts: Date.now(), ads: page.ads });
-  if (recuperoCache.size > 200) recuperoCache.delete(recuperoCache.keys().next().value);
+  const id = ++recuperoId;
+  // Il callback conserva solo chiave e id: nessun annuncio grezzo sopravvive nel timer.
+  const timer = setTimeout(() => {
+    if (recuperoCache.get(chiave)?.id === id) recuperoCache.delete(chiave);
+  }, RECUPERO_TTL);
+  timer.unref?.();
+  const vecchio = recuperoCache.get(chiave);
+  if (vecchio) clearTimeout(vecchio.timer); // una fetch concorrente ha gia' riempito la chiave
+  recuperoCache.set(chiave, { id, ts: Date.now(), ads: page.ads, timer });
+  if (recuperoCache.size > 200) {
+    const prima = recuperoCache.keys().next().value;
+    clearTimeout(recuperoCache.get(prima).timer);
+    recuperoCache.delete(prima);
+  }
   return page.ads;
 }
 

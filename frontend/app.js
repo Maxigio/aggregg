@@ -2584,8 +2584,8 @@ function rigaVersione(tolti) {
   if (!tolti) { el.classList.add('d-none'); el.innerHTML = ''; return; }
   el.classList.remove('d-none');
   el.textContent = mostraVersioniSmentite
-    ? `${tolti} annunci non dichiarano questa versione: li stai vedendo. `
-    : `Nascosti ${tolti} annunci che non dichiarano questa versione. `;
+    ? `${tolti} annunci dichiarano una versione diversa: li stai vedendo. `
+    : `Nascosti ${tolti} annunci che dichiarano una versione diversa da quella cercata. `;
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'avviso-versione-btn';
@@ -2841,8 +2841,16 @@ const DICHIARAZIONE = {
   // a non aver potuto controllare. Su Autoscout la versione e' testo libero, e certe
   // versioni ("320 2 porte") non lasciano un testo da confrontare — la carrozzeria li'
   // sta in un campo numerico. Dirlo "esatto" sarebbe una corrispondenza mai guardata.
-  'versione-non-verificata': { et: 'versione non verificata', cl: 'med', tit: 'Il modello e\' quello giusto, ma su questa fonte la versione che hai scelto non si e\' potuta confrontare: potrebbe essere un altro allestimento.' },
+  'versione-non-verificata': { et: 'versione non verificata', cl: 'med', tit: 'Il modello e\' quello giusto, ma la versione cercata non si e\' potuta confrontare: potrebbe essere un altro allestimento.' },
 };
+
+function corrispondenzaDi(r) {
+  if (r.versioneEsito === 'smentita') return { et: 'non e\' quella versione', cl: 'ko' };
+  const d = DICHIARAZIONE[r.dichiarazione];
+  if (r.versioneEsito === 'ignota' && !['altro-modello', 'senza-modello'].includes(r.dichiarazione))
+    return DICHIARAZIONE['versione-non-verificata'];
+  return d || { et: 'corrisponde' };
+}
 
 /**
  * LA PASTIGLIA DELLA CORRISPONDENZA, in un posto solo.
@@ -2860,6 +2868,14 @@ const DICHIARAZIONE = {
  * apposta e nessun ingombro, compaiono tutte.
  */
 function dichBadgeHTML(item) {
+  if (item.versioneEsito === 'smentita') {
+    const d = corrispondenzaDi(item);
+    return `<span class="dich-badge dich-${d.cl}" title="Versione dichiarata diversa">${escapeHtml(d.et)}</span>`;
+  }
+  if (item.versioneEsito === 'ignota' && item.versioneDove === 'titolo'
+    && !['altro-modello', 'senza-modello'].includes(item.dichiarazione)) {
+    return '<span class="dich-info" role="img" aria-label="Versione non verificata" title="Versione non verificata">ⓘ</span>';
+  }
   const dich = DICHIARAZIONE[item.dichiarazione];
   if (!dich || /versione/.test(item.dichiarazione || '')) return '';
   return `<span class="dich-badge dich-${dich.cl}" title="${escapeHtml(dich.tit)}">${escapeHtml(dich.et)}</span>`;
@@ -3038,8 +3054,9 @@ function detailSpecsHTML(r) {
   // Quanto la fonte dichiara su QUESTO annuncio: se la versione manca, o se il modello
   // e' stato riconosciuto dal titolo invece che dal catalogo, si legge qui — non piu' con
   // una chip in mezzo alla riga dei risultati.
-  const dich = DICHIARAZIONE[r.dichiarazione];
-  const dett = dich ? [['Corrispondenza', dich.et]] : [];
+  const dich = corrispondenzaDi(r);
+  const dett = r.versioneEsito === 'ignota' || r.versioneEsito === 'smentita' || DICHIARAZIONE[r.dichiarazione]
+    ? [['Corrispondenza', dich.et]] : [];
   const all = base.concat(extra, versioneDedottaRiga(r), dett, campiNativi(r));
   if (!all.length) return '<span class="spec-empty">Nessun dettaglio aggiuntivo</span>';
   return coppieHTML(all);
@@ -4084,8 +4101,7 @@ const MATRIX_ROWS = [
   // niente diceva che uno dei due poteva essere un altro modello.
   // «Corrispondenza» legge TUTTI E DUE i canali del fuori-bersaglio: senza il secondo,
   // una riga che l'app aveva marcato «smentita» qui usciva «corrisponde».
-  { key: 'dichiarazione', label: 'Corrispondenza', fmt: (v, r) => (r && r.versioneEsito === 'smentita')
-    ? 'non e\' quella versione' : (DICHIARAZIONE[v] ? DICHIARAZIONE[v].et : 'corrisponde') },
+  { key: 'dichiarazione', label: 'Corrispondenza', fmt: (v, r) => corrispondenzaDi(r).et },
 ];
 function showMatrix(title) {
   cmatrixTitle.textContent = `${title} (${matrixList.length})`;
@@ -5867,10 +5883,7 @@ function exportCsv(results) {
   const cols = ['Fonte', 'Titolo', 'Prezzo (€)', 'Anno', 'KM', 'Carburante', 'Provincia', ...priceExtraHeaders(cfg, conPass), 'Corrispondenza', 'URL'];
   const rows = results.map(r => {
     const pr = vPricing(r.prezzo, passDi(r), r);
-    const d = DICHIARAZIONE[r.dichiarazione];
-    // L'export non porta con se' il contesto dello schermo («li stai vedendo»): una riga
-    // smentita che esce «corrisponde» in un foglio di calcolo e' una certificazione falsa.
-    const corr = r.versioneEsito === 'smentita' ? 'non e\' quella versione' : (d ? d.et : 'corrisponde');
+    const corr = corrispondenzaDi(r).et;
     return [r.fonte, r.titolo, pr ? Math.round(pr.finale) : '', r.anno != null ? r.anno : '', r.km != null ? r.km : '', r.carburante || '', r.provincia || '', ...priceExtraValues(pr, cfg, conPass), corr, r.url].map(cell).join(',');
   });
   const csv = [cols.join(','), ...rows].join('\r\n');
@@ -5906,7 +5919,6 @@ function exportPdf(results) {
   const colonne = ['Fonte', 'Veicolo', conConti ? 'Prezzo finale' : 'Prezzo', 'Anno', 'Km', 'Carburante', 'Provincia', ...extraH, 'Corrispondenza'];
   const righe = results.map(r => {
     const pr = vPricing(r.prezzo, passDi(r), r);
-    const d = DICHIARAZIONE[r.dichiarazione];
     return [
       ' ',                                   // la cella della fonte la disegna il server (chip)
       r.titolo,
@@ -5917,7 +5929,7 @@ function exportPdf(results) {
       r.provincia || '-',
       ...priceExtraValues(pr, cfg, conPass).map(x => x === '' ? '-' : fmtEur(x)),
       // Come nel CSV: il PDF viaggia da solo, e una smentita non puo' uscire \u00abcorrisponde\u00bb.
-      r.versioneEsito === 'smentita' ? 'non e\' quella versione' : (d ? d.et : 'corrisponde'),
+      corrispondenzaDi(r).et,
     ];
   });
   scaricaPdf({

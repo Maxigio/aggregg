@@ -2204,7 +2204,10 @@ async function runSearchCore(params) {
    * Qui si marca soltanto — togliere e' compito del browser, cosi' il totale resta onesto e la
    * riga "mostrali" ha ancora cosa mostrare. Vedi backend/versione-verifica.js.
    */
-  const versioneConto = params.versione ? versioneVerifica.marca(risultati, params.versione) : null;
+  // Se il modello AMR include una sigla che Subito cataloga come versione della
+  // famiglia (es. 748 R sotto 748), confrontiamo il campo nativo degli annunci
+  // Subito. Le altre fonti possono modellare quella sigla come modello autonomo.
+  const versioneConto = versioneVerifica.marcaRicerca(risultati, params.versione, params.subitoNodo);
 
   // MOTO MULTI-FAMIGLIA DAL PONTE: `bm` accetta un valore solo, quindi la ricerca Subito e'
   // partita sulla prima famiglia e le altre sono rimaste fuori (vedi sopra, dove nasce

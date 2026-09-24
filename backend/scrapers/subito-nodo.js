@@ -259,14 +259,34 @@ function risolviNodo(tipo, marca, modello, opts = {}) {
    * Si portano tutte, e chi interroga Subito le mette in AND-lista dove la fonte lo
    * permette (auto: `cm=a,b` — verificato; moto: la virgola da' 400, quindi la prima).
    */
-  const perFamiglie = lista => ({
-    ...base,
-    famigliaId: lista[0].id,
-    famigliaIds: lista.map(f => f.id),
-    famigliaNome: lista[0].nome,
-    generazioni: lista.flatMap(f => f.gen || []),
-    come: lista.length > 1 ? 'famiglia (nome doppio nel catalogo)' : 'famiglia',
-  });
+  const perFamiglie = lista => {
+    const nodo = {
+      ...base,
+      famigliaId: lista[0].id,
+      famigliaIds: lista.map(f => f.id),
+      famigliaNome: lista[0].nome,
+      generazioni: lista.flatMap(f => f.gen || []),
+      come: lista.length > 1 ? 'famiglia (nome doppio nel catalogo)' : 'famiglia',
+    };
+    // Alcuni modelli del nostro menu sono versioni di una famiglia Subito: "748 R"
+    // vive sotto "748". Una lettera non va in q= (troppo ambigua), ma il catalogo
+    // della fonte puo' confermare che e' una versione di QUESTA famiglia. L'esatto
+    // sopra ha precedenza: "R 90 S" nativa non diventa la versione S di "R 90".
+    if (lista.length === 1) {
+      const cercate = tokDi(modello), famiglia = tokDi(lista[0].nome);
+      const sigla = cercate.length === famiglia.length + 1
+        && famiglia.every((x, i) => x === cercate[i]) ? cercate.at(-1) : null;
+      const sigle = sigla && /^[a-z]$/.test(sigla)
+        ? [...new Set((catalogo()[t].get(norm(m.nome)) || [])
+          .filter(v => norm(v.fam) === norm(lista[0].nome) && v.t.length === 1 && /^[a-z]$/.test(v.t[0]))
+          .map(v => v.t[0]))] : [];
+      if (sigle.includes(sigla)) {
+        nodo.modelloSigla = sigla.toUpperCase();
+        nodo.modelloSigle = sigle;
+      }
+    }
+    return nodo;
+  };
   const perFamiglia = f => perFamiglie([f]);
   const perGenerazione = x => ({ ...base, famigliaId: x.f.id, famigliaIds: [x.f.id], famigliaNome: x.f.nome, generazioni: [x.g], come: 'generazione' });
 
