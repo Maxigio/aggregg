@@ -131,79 +131,24 @@ test('Subito: seconda pagina 429 conserva la prima e dichiara il blocco', async 
   } finally { subito._setHttpGetJson(null); }
 });
 
-test('Subito: 429 ferma le famiglie moto ancora in coda e non dichiara un vuoto completo', async () => {
-  const chiamate = [];
-  subito._setHttpGetJson(async path => {
-    const famiglia = new URL('https://local.invalid' + path).searchParams.get('bm');
-    chiamate.push(famiglia);
-    return famiglia === '222' ? limitato() : ok([], 0);
-  });
-  try {
-    const r = await subito(params('moto', ['111', '222', '333']), { withMeta: true, maxPages: 1, senzaRecupero: true });
-    assert.deepEqual(chiamate, ['111', '222']);
-    assert.equal(r.items.length, 0);
-    assert.equal(r.parzialeRete, true);
-    assert.equal(r.bloccoParziale?.status, 429);
-    assert.match(r.parziale, /Subito ha limitato temporaneamente le richieste/);
-    salute.azzera('subito'); // secondo scenario indipendente: il primo ha già attivato la pausa
-    const stato = await server._runSubito(params('moto', ['111', '222', '333']), 30000);
-    assert.equal(stato.status, 'error');
-    assert.match(stato.parziale, /Subito ha limitato temporaneamente le richieste/);
-  } finally { subito._setHttpGetJson(null); }
-});
-
-test('Subito Moto: due 403 effettivi fermano le famiglie successive', async () => {
-  const chiamate = [];
-  subito._setHttpGetJson(async path => {
-    const famiglia = new URL('https://local.invalid' + path).searchParams.get('bm');
-    chiamate.push(famiglia);
-    return famiglia === '111' ? ok([], 0) : { status: 403, body: '{}' };
-  });
-  try {
-    const r = await subito(params('moto', ['111', '222', '333', '444']),
-      { withMeta: true, senzaRecupero: true, pageDelayMs: 1 });
-    assert.deepEqual(chiamate, ['111', '222', '333']);
-    assert.equal(salute.fermo('subito').fermo, true);
-    assert.match(r.parziale, /1 famiglia non chiesta dopo il blocco/);
-    assert.equal(r.bloccoParziale?.status, 403);
-  } finally { subito._setHttpGetJson(null); }
-});
-
-test('Subito Moto: il 403 su una seconda pagina conta prima della famiglia seguente', async () => {
-  const chiamate = [];
-  subito._setHttpGetJson(async path => {
-    const q = new URL('https://local.invalid' + path).searchParams;
-    const famiglia = q.get('bm'), start = Number(q.get('start'));
-    chiamate.push([famiglia, start]);
-    if (famiglia === '111' && !start) return ok(Array.from({ length: 50 }, (_, i) => annuncio(i)), 60);
-    return { status: 403, body: '{}' };
-  });
-  try {
-    const r = await subito(params('moto', ['111', '222', '333']),
-      { withMeta: true, maxPages: 2, senzaRecupero: true, pageDelayMs: 1 });
-    assert.deepEqual(chiamate, [['111', 0], ['111', 50], ['222', 0]]);
-    assert.equal(r.items.length, 50);
-    assert.equal(r.parzialeRete, true);
-    assert.equal(r.bloccoParziale?.status, 403);
-    assert.match(r.parziale, /1 famiglia non chiesta dopo il blocco/);
-    assert.equal(salute.fermo('subito').fermo, true);
-  } finally { subito._setHttpGetJson(null); }
-});
-
-test('Subito Moto: una risposta buona fra due 403 azzera i colpi', async () => {
-  const chiamate = [];
-  subito._setHttpGetJson(async path => {
-    const famiglia = new URL('https://local.invalid' + path).searchParams.get('bm');
-    chiamate.push(famiglia);
-    return famiglia === '111' || famiglia === '333'
-      ? { status: 403, body: '{}' } : ok([annuncio(famiglia)], 1);
-  });
-  try {
-    await subito(params('moto', ['111', '222', '333', '444']),
-      { withMeta: true, senzaRecupero: true, pageDelayMs: 1 });
-    assert.deepEqual(chiamate, ['111', '222', '333', '444']);
-    assert.equal(salute.fermo('subito').fermo, false);
-  } finally { subito._setHttpGetJson(null); }
+test('Subito: una voce ambigua fa una sola ricerca testuale, Auto e Moto', async () => {
+  for (const tipo of ['auto', 'moto']) {
+    const chiamate = [];
+    subito._setHttpGetJson(async path => {
+      const q = new URL('https://local.invalid' + path).searchParams;
+      chiamate.push(q);
+      return ok([annuncio(tipo)], 1);
+    });
+    try {
+      const r = await subito(params(tipo, ['111', '222', '333']),
+        { withMeta: true, senzaRecupero: true });
+      assert.equal(r.items.length, 1);
+      assert.equal(chiamate.length, 1);
+      assert.equal(chiamate[0].get('q'), 'Prova Modello');
+      assert.equal(chiamate[0].get(tipo === 'auto' ? 'cm' : 'bm'), null);
+      assert.equal(chiamate[0].get(tipo === 'auto' ? 'cb' : 'bb'), null);
+    } finally { subito._setHttpGetJson(null); }
+  }
 });
 
 test('Subito Moto: la pausa locale non diventa una famiglia interrogata', async () => {
@@ -215,39 +160,6 @@ test('Subito Moto: la pausa locale non diventa una famiglia interrogata', async 
       { withMeta: true, senzaRecupero: true, pageDelayMs: 1 }),
     e => e.code === 'FONTE_IN_PAUSA');
     assert.deepEqual(chiamate, []);
-  } finally { subito._setHttpGetJson(null); }
-});
-
-test('Subito Moto: una pausa concorrente lascia il risultato parziale e non chiama altre famiglie', async () => {
-  const chiamate = [];
-  subito._setHttpGetJson(async path => {
-    chiamate.push(new URL('https://local.invalid' + path).searchParams.get('bm'));
-    salute.registra('subito', { errore: Object.assign(new Error('429 concorrente'), { status: 429 }) });
-    return ok([annuncio(1)], 1);
-  });
-  try {
-    const r = await subito(params('moto', ['111', '222', '333']),
-      { withMeta: true, senzaRecupero: true, pageDelayMs: 1 });
-    assert.deepEqual(chiamate, ['111']);
-    assert.equal(r.parzialeRete, true);
-    assert.equal(r.bloccoParziale?.code, 'FONTE_IN_PAUSA');
-    assert.match(r.parziale, /2 famiglie non chieste dopo il blocco/);
-    assert.match(r.parziale, /richieste sospese/);
-  } finally { subito._setHttpGetJson(null); }
-});
-
-test('Subito Moto: 403 e 503 di famiglie diverse restano entrambi nella risposta', async () => {
-  const stati = [403, 503, 200];
-  subito._setHttpGetJson(async () => {
-    const status = stati.shift();
-    return status === 200 ? ok([annuncio(3)], 1) : { status, body: '{}' };
-  });
-  try {
-    const r = await server._runSubito(params('moto', ['111', '222', '333']), 30000);
-    assert.deepEqual(r.erroriSubito.map(e => [e.famiglia, e.fase, e.http]),
-      [[1, 'pagina', 403], [2, 'pagina', 503]]);
-    assert.equal(r.bloccoParziale?.status, 403);
-    assert.equal(salute.fermo('subito').fermo, false);
   } finally { subito._setHttpGetJson(null); }
 });
 
@@ -320,39 +232,6 @@ test('Subito: il 429 sulla prima pagina e sulla pagina richiesta dopo hanno stat
     assert.equal(seconda.status, 'error');
     assert.equal(seconda.items.length, 0);
     assert.match(seconda.parziale, /Subito ha limitato temporaneamente le richieste/);
-  } finally { subito._setHttpGetJson(null); }
-});
-
-test('Subito Moto: il 429 sulla seconda pagina di una famiglia ferma le altre famiglie', async () => {
-  const chiamate = [];
-  subito._setHttpGetJson(async path => {
-    const q = new URL('https://local.invalid' + path).searchParams;
-    chiamate.push([q.get('bm'), Number(q.get('start'))]);
-    return Number(q.get('start')) === 0
-      ? ok(Array.from({ length: 50 }, (_, i) => annuncio(i)), 60) : limitato();
-  });
-  try {
-    const r = await subito(params('moto', ['111', '222']), { withMeta: true, maxPages: 2, senzaRecupero: true });
-    assert.deepEqual(chiamate, [['111', 0], ['111', 50]]);
-    assert.equal(r.items.length, 50);
-    assert.equal(r.total, 60);
-    assert.equal(r.bloccoParziale.status, 429);
-    assert.equal(r.parziale.match(/Subito ha limitato temporaneamente le richieste/g).length, 1);
-  } finally { subito._setHttpGetJson(null); }
-});
-
-test('Subito Moto: un 429 dopo un 403 resta il motivo del blocco visibile', async () => {
-  const chiamate = [];
-  subito._setHttpGetJson(async path => {
-    const famiglia = new URL('https://local.invalid' + path).searchParams.get('bm');
-    chiamate.push(famiglia);
-    return famiglia === '111' ? { status: 403, body: '{}' } : limitato();
-  });
-  try {
-    const r = await server._runSubito(params('moto', ['111', '222', '333']), 30000);
-    assert.deepEqual(chiamate, ['111', '222']);
-    assert.equal(r.status, 'error');
-    assert.match(r.parziale, /Subito ha limitato temporaneamente le richieste/);
   } finally { subito._setHttpGetJson(null); }
 });
 

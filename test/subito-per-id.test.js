@@ -3,6 +3,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const api = require('../backend/scrapers/subito-api');
+const { risolviNodo } = require('../backend/scrapers/subito-nodo');
 const buildPath = api._buildPath;
 const riconosci = api._riconosci;
 const faTitolo = api._faTitolo;
@@ -27,10 +28,32 @@ test('moto: i parametri sono bb/bm, NON cb/cm (sbagliarli da\' zero risultati)',
   assert.ok(!('cb' in p) && !('cm' in p));
 });
 
-test('auto: piu famiglie → virgola (verificato sulla fonte); moto: la prima (virgola = 400)', () => {
+test('Auto e Moto: piu famiglie → testo libero, nessun id scelto a caso', () => {
   const due = ['002022', '001531'];
-  assert.strictEqual(qp(buildPath({ tipo: 'auto', subitoNodo: { marcaId: '000039', famigliaIds: due } }, 0)).cm, '002022,001531');
-  assert.strictEqual(qp(buildPath({ tipo: 'moto', subitoNodo: { marcaId: '000039', famigliaIds: due } }, 0)).bm, '002022');
+  for (const tipo of ['auto', 'moto']) {
+    const p = qp(buildPath({ tipo, marca: 'Ford', modello: 'Tourneo Custom',
+      subitoNodo: { marcaId: '000039', famigliaIds: due } }, 0));
+    assert.strictEqual(p.q, 'Ford Tourneo Custom');
+    assert.ok(!('cb' in p) && !('cm' in p) && !('bb' in p) && !('bm' in p));
+  }
+});
+
+test('Dorsoduro specifica usa il suo ID; Dorsoduro generica e Auto ambigua usano testo', () => {
+  const specifica = qp(buildPath({ tipo: 'moto', marca: 'Aprilia', modello: 'Dorsoduro 750',
+    subitoNodo: risolviNodo('moto', 'Aprilia', 'Dorsoduro 750') }, 0));
+  assert.strictEqual(specifica.bm, '001471');
+  assert.ok(!('q' in specifica));
+
+  const generica = qp(buildPath({ tipo: 'moto', marca: 'Aprilia', modello: 'Dorsoduro',
+    subitoNodo: risolviNodo('moto', 'Aprilia', 'Dorsoduro') }, 0));
+  assert.strictEqual(generica.q, 'Aprilia Dorsoduro');
+  assert.ok(!('bm' in generica));
+
+  const auto = qp(buildPath({ tipo: 'auto', marca: 'Ford', modello: 'Tourneo Custom',
+    subitoNodo: risolviNodo('auto', 'Ford', 'Tourneo Custom'),
+    subitoVersioneTesto: 'Titanium' }, 0));
+  assert.strictEqual(auto.q, 'Ford Tourneo Custom Titanium');
+  assert.ok(!('cm' in auto));
 });
 
 test('la passata di recupero chiede il segnaposto "Altro modello"', () => {

@@ -62,8 +62,7 @@ function httpGetJson(path) {
   });
 }
 
-// La porta HTTP, in una variabile: e' l'unico modo di provare l'unione delle famiglie moto
-// (una richiesta per famiglia) senza uscire davvero verso Subito.
+// La porta HTTP e' sostituibile nei test: nessuna richiesta reale per verificare Hades.
 let _http = httpGetJson;
 
 // feature per label → primo value
@@ -417,14 +416,11 @@ const PARAM = {
 const NON_DICHIARATO = '000000';
 
 /**
- * Il valore per il parametro-modello. Sulle auto la virgola unisce piu' voci (verificato:
- * `cm=001704,000000` → 1618 = 1250 + 368, la somma esatta). Sulle moto la stessa virgola
- * risponde 400 — il menu di Subito per le moto dichiara il solo filtro marca, e la lettura
- * multi-valore li' non l'hanno mai scritta. Quindi: auto tutte, moto la prima.
+ * Un ID nativo solo quando la voce AMR identifica una famiglia sola. Le voci ambigue
+ * usano q=marca+modello, sia per Auto sia per Moto.
  */
-function valoreModello(tipo, ids) {
-  if (!ids || !ids.length) return null;
-  return tipo === 'moto' ? String(ids[0]) : ids.map(String).join(',');
+function valoreModello(ids) {
+  return ids?.length === 1 ? String(ids[0]) : null;
 }
 
 function buildPath(params, start) {
@@ -439,7 +435,7 @@ function buildPath(params, start) {
   // sola famiglia, le Golf sono 11.646 e le GTI nei primi cento erano UNA; con `q=gti`
   // l'insieme scende a 1.631 e la finestra si riempie di candidate. Verificato che i due
   // parametri lavorano insieme, e che il costo resta di una richiesta.
-  const nodo = params.subitoNodo;
+  const nodo = params.subitoNodo?.famigliaIds?.length > 1 ? null : params.subitoNodo;
   const p = PARAM[params.tipo === 'moto' ? 'moto' : 'auto'];
   /**
    * IL PARCO DI UN VENDITORE. `uid` e' l'id UTENTE (advertiser.user_id), non l'id del
@@ -458,7 +454,7 @@ function buildPath(params, start) {
     qs.set(p.marca, String(nodo.marcaId));
     const v = params.subitoSoloNonDichiarati
       ? NON_DICHIARATO                       // la passata di RECUPERO, vedi scrapeSubitoApi
-      : valoreModello(params.tipo, nodo.famigliaIds);
+      : valoreModello(nodo.famigliaIds);
     if (v) qs.set(p.modello, v);
     /**
      * DUE TESTI, UNO SOLO `q`. Sono cose diverse e vanno tenute distinte:
@@ -712,132 +708,10 @@ async function paginaRecupero(params) {
   }
 }
 
-/**
- * LE MOTO SI CHIEDONO UNA FAMIGLIA PER VOLTA.
- *
- * `valoreModello` manda `ids[0]` per le moto perche' `bm` con la virgola risponde 400
- * (rimisurato oggi: due famiglie Yamaha insieme → HTTP 400, mentre sulle auto `cm` con la
- * virgola risponde la somma esatta). Il resto della lista veniva costruito, portato in giro
- * e buttato: 437 famiglie moto non venivano mai chieste, e il totale accanto alla fonte era
- * quello di una sola. Cercando "Ducati Monster" arrivavano solo i Monster 1000.
- *
- * Quindi si fa come Moto.it: una richiesta per famiglia, in fila e con la pausa che c'e'
- * gia', e si uniscono i risultati per url. Il tetto e' dichiarato, non silenzioso.
- */
-const MAX_FAMIGLIE_MOTO = 8;
-async function unioneFamiglieMoto(params, opts) {
-  const nodo = params.subitoNodo;
-  const tutte = nodo.famigliaIds.map(String);
-  const chieste = tutte.slice(0, MAX_FAMIGLIE_MOTO);
-  const perUrl = new Map();
-  let truncated = false, total = null, errori = 0, peggiore = null;
-  let successi = 0, tentate = 0, interrotto429 = false, parzialeRete = false, bloccoParziale = null;
-  let hasMore = false, erroreTipo = null, erroreHttp = null;
-  const parziali = [];
-  const sospetti = [];
-  const erroriDettaglio = [];
-  let prezziLeggibili = false;
-  for (let i = 0; i < chieste.length; i++) {
-    if (i > 0) await sleep(opts.pageDelayMs || 400);      // mai raffica verso la stessa fonte
-    tentate++;
-    const uno = { ...params, subitoNodo: { ...nodo, famigliaIds: [chieste[i]] } };
-    try {
-      const r = await scrapeSubitoApi(uno, { ...opts, withMeta: true });
-      successi++;
-      for (const x of r.items) if (x && x.url && !perUrl.has(x.url)) perUrl.set(x.url, x);
-      if (r.truncated) truncated = true;
-      if (r.parziale) parziali.push(r.parziale);
-      if (r.parzialeRete) parzialeRete = true;
-      if (r.bloccoParziale) bloccoParziale = r.bloccoParziale;
-      if (r.hasMore) hasMore = true;
-      if (r.erroreTipo) { erroreTipo = r.erroreTipo; erroreHttp = r.erroreHttp; }
-      for (const e of r.erroriSubito || []) erroriDettaglio.push({ ...e, famiglia: i + 1 });
-      if (r.items.some(x => x.prezzo != null)) prezziLeggibili = true;
-      // Il sospetto riguarda un campo prezzo PRESENTE ma illeggibile, non una famiglia
-      // che semplicemente non dichiara prezzi.
-      if (r.sospetto) sospetti.push(r.sospetto);
-      // I totali si sommano: sono famiglie DISGIUNTE del catalogo, non insiemi che si
-      // sovrappongono (e' la stessa somma che l'API fa da sola sulle auto con la virgola).
-      if (Number.isFinite(r.total)) total = (total || 0) + r.total;
-      if (r.bloccoParziale?.status === 429) { interrotto429 = true; break; }
-      if (salute.fermo('subito').fermo) {
-        parzialeRete = true;
-        if (!bloccoParziale) {
-          bloccoParziale = Object.assign(new Error(salute.avvisoPausa('subito')),
-            { code: 'FONTE_IN_PAUSA', kind: 'blocked' });
-          erroreTipo = 'blocked';
-          parziali.push(bloccoParziale.message);
-        }
-        break;
-      }
-    } catch (e) {
-      if (e.code === 'FONTE_IN_PAUSA') {
-        tentate--; // il freno locale non ha interrogato questa famiglia
-        parzialeRete = true;
-        bloccoParziale ||= e;
-        erroreTipo = 'blocked';
-        parziali.push(e.message);
-        if (!peggiore) peggiore = e;
-        break;
-      }
-      errori++;
-      for (const errore of e.erroriSubito || [erroreRichiesta(e, 'pagina', (opts.fetta || 0) + 1)]) {
-        if (errore) erroriDettaglio.push({ ...errore, famiglia: i + 1 });
-      }
-      // Si conserva l'errore PIU' GRAVE: un 403/429 su una famiglia e' un blocco della fonte, e
-      // rilanciarlo come 'error' generico faceva si' che il freno anti-ban (fonti-salute) non
-      // scattasse mai sulle moto. Ordine: bloccato > auth > transitorio > errore.
-      const peso = k => ({ blocked: 3, auth: 2, transient: 1 }[k] || 0);
-      if (!peggiore || peso(e.kind) > peso(peggiore.kind)) peggiore = e;
-      if (e.kind === 'blocked') bloccoParziale = e;
-      erroreTipo = e.kind || 'transient'; erroreHttp = e.status || null;
-      console.warn(`[subito] famiglia moto ${chieste[i]} KO: ${e.message}`);
-      if (e.status === 429) { peggiore = e; interrotto429 = true; break; }
-      if (salute.fermo('subito').fermo) break;
-    }
-  }
-  // Tutte cadute: e' un errore della fonte, non un mercato vuoto. E il genere e' quello del
-  // peggiore, cosi' chi sta a valle sa se e' un blocco o un singhiozzo.
-  if (!successi) {
-    if (peggiore) peggiore.erroriSubito = erroriDettaglio;
-    throw peggiore || fail(`Subito: nessuna delle ${tentate} famiglie interrogate ha risposto`);
-  }
-  // Qualcuna ha risposto ma almeno una e' stata RESPINTA: viaggia come campo proprio, non come
-  // `sospetto` — `sospetto` fa uscire la colonna in errore e il freno lo leggerebbe come 'error'
-  // generico. Con annunci lo stato resta 'ok' + parziale; senza annunci runSubito dichiara
-  // errore. In entrambi i casi il freno riceve la respinta col suo genere vero.
-  const fuori = tutte.length - chieste.length;
-  const nonChieste = chieste.length - tentate;
-  let parziale = [
-    fuori ? `${fuori} famiglie Subito oltre il tetto di ${MAX_FAMIGLIE_MOTO} non sono state chieste` : null,
-    errori ? `${errori} su ${tentate} famiglie interrogate non hanno risposto` : null,
-    nonChieste ? `${nonChieste} ${nonChieste === 1 ? 'famiglia non chiesta' : 'famiglie non chieste'} dopo il blocco` : null,
-    ...parziali,
-    interrotto429 && !parziali.some(x => x.includes(AVVISO_429)) ? AVVISO_429 : null,
-  ].filter(Boolean).join(' · ') || null;
-  // Le due righe qui sopra sono monchi di natura DIVERSA, e nella stringa unica non si
-  // distinguono piu': le famiglie cadute sono transitorie (ritentare puo' cambiare esito),
-  // quelle oltre il tetto no — ritentare rifa' le stesse otto richieste in fila per lo stesso
-  // identico risultato. Il flag serve a cacheable(), che senno' leggerebbe la stringa e
-  // non cacherebbe MAI le moto a famiglia frammentata. Stampo di `versioneKoRete` (Moto.it).
-  parzialeRete ||= errori > 0;
-  const items = [...perUrl.values()];
-  const sospetto = prezziLeggibili ? null : sospetti[0] || null;
-  if (prezziLeggibili && sospetti.length) {
-    parziale = [parziale, `${sospetti.length} famiglie con un campo prezzo non leggibile`].filter(Boolean).join(' · ');
-  }
-  if (parziale) console.warn(`[subito] moto "${params.marca} ${params.modello || ''}": ${parziale}`);
-  console.log(`[subito] moto "${params.marca} ${params.modello || ''}": ${tentate}/${chieste.length} famiglie interrogate → ${items.length} annunci`);
-  return opts.withMeta ? { items, truncated, total, hasMore, parziale, parzialeRete,
-    erroreTipo, erroreHttp, sospetto, bloccoParziale,
-    erroriSubito: erroriDettaglio } : items;
-}
-
 async function scrapeSubitoApi(params, opts = {}) {
-  const nodoIn = params.subitoNodo;
-  if (params.tipo === 'moto' && nodoIn && Array.isArray(nodoIn.famigliaIds) && nodoIn.famigliaIds.length > 1) {
-    return unioneFamiglieMoto(params, opts);
-  }
+  // Anche i chiamanti diretti non devono scegliere la prima famiglia moto o unire
+  // famiglie auto: una voce ambigua usa la stessa ricerca testuale delle altre.
+  if (params.subitoNodo?.famigliaIds?.length > 1) params = { ...params, subitoNodo: null };
   const regione = params.regione ? String(params.regione).trim().toLowerCase() : null;
   const maxPages = opts.maxPages || MAX_PAGES;
   const pageDelay = opts.pageDelayMs || 0;   // pausa tra le pagine (anti-ban su crawl profondi)
@@ -855,7 +729,7 @@ async function scrapeSubitoApi(params, opts = {}) {
   const out = [];
   const attesa = [];                         // righe in attesa della versione dedotta, vedi deduciInBlocco
   let truncated = false;
-  let total = null;                          // F50 count_all (tetto), additivo
+  let total = null;                          // count_all dalla prima pagina
   let scartati = 0;
   let prezziIlleggibili = 0; // campo prezzo presente, ma senza cifra interpretabile
   let parziale = null, parzialeRete = false, bloccoParziale = null;

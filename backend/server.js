@@ -1457,30 +1457,14 @@ async function runSearchCore(params) {
   // di id su cui filtrare. Visto succedere: "BMW 320" + versione "320d" tornava cento
   // annunci e nessuno marcato esatto, perche' il nodo restava vuoto.
   if (!params.subitoNodo && params.versione && params.mmmvAutoscout) {
-    /**
-     * TUTTE LE FAMIGLIE CHE QUEL CODICE AGGANCIA, non la prima.
-     *
-     * Il ponte letto al contrario ne teneva una sola, scelta dall'ordine con cui l'indice era
-     * stato costruito: 207 codici ne agganciano piu' d'una, e la ricerca Subito partiva su un
-     * altro veicolo. Sulle AUTO chiederle tutte e' gratis — misurato sull'API: due famiglie
-     * insieme rispondono la somma esatta delle due separate, in una richiesta sola.
-     * Sulle MOTO no: `bm` con la virgola risponde 400 (misurato oggi, come dice il commento
-     * in subito-api.js), quindi li' resta la prima e lo si dichiara.
-     */
+    // Il ponte puo' proporre piu' famiglie: nessuna e' la scelta univoca dell'utente.
+    // In quel caso la ricerca resta a testo libero, anche sulle auto.
     const famiglie = famiglieSubito(params.tipo, params.mmmvAutoscout);
     const nodi = famiglie.map(f => risolviNodo(params.tipo, params.marca, f)).filter(n => n && n.famigliaIds);
     if (nodi.length) {
-      const primo = nodi[0];
-      if (params.tipo !== 'moto' && nodi.length > 1) {
-        const ids = [...new Set(nodi.flatMap(n => n.famigliaIds.map(String)))];
-        params.subitoNodo = { ...primo, famigliaIds: ids };
-        console.log(`[ponte] Subito "${params.marca} ${params.modello}": ${nodi.length} famiglie dal ponte (${famiglie.join(', ')}) → ${ids.length} id`);
-      } else {
-        params.subitoNodo = primo;
-        if (nodi.length > 1) {
-          params.subitoFamiglieNonChieste = famiglie.slice(1);
-          console.warn(`[ponte] Subito moto "${params.marca} ${params.modello}": ${famiglie.length} famiglie agganciate, chiesta solo "${famiglie[0]}" (bm non accetta piu' valori)`);
-        }
+      const ids = [...new Set(nodi.flatMap(n => n.famigliaIds.map(String)))];
+      if (ids.length === 1) {
+        params.subitoNodo = nodi[0];
         console.log(`[ponte] Subito "${params.marca} ${params.modello}": famiglia "${famiglie[0]}" dal ponte, per portare la versione`);
       }
     }
@@ -1562,6 +1546,10 @@ async function runSearchCore(params) {
       console.log(`[ponte] AS24 "${params.marca} ${params.modello}": codice dal ponte ${uniti[0]} (l'app non lo trovava)`);
     }
   }
+
+  // Il ponte AS24 sopra puo' ancora usare la famiglia risolta. Per la richiesta Hades,
+  // una voce AMR che aggancia piu' famiglie non identifica un solo filtro nativo.
+  if (params.subitoNodo?.famigliaIds?.length > 1) params.subitoNodo = null;
 
   // ── Slug brand Moto.it — SOLO slug REALI (niente guess) ───────────────────
   // Fonte 1: catalogo (brandEntry.motoit.brandSlug, quando presente).
@@ -2211,19 +2199,6 @@ async function runSearchCore(params) {
   // Subito. Le altre fonti possono modellare quella sigla come modello autonomo.
   const versioneConto = versioneVerifica.marcaRicerca(risultati, params.versione, params.subitoNodo);
 
-  // MOTO MULTI-FAMIGLIA DAL PONTE: `bm` accetta un valore solo, quindi la ricerca Subito e'
-  // partita sulla prima famiglia e le altre sono rimaste fuori (vedi sopra, dove nasce
-  // `subitoFamiglieNonChieste`). Il warn nel log non arriva a schermo: si dichiara in
-  // `parziale`, lo stesso campo con cui lo scraper dichiara le famiglie oltre il tetto —
-  // un risultato monco che non si dice e' esattamente il difetto che quel campo chiude.
-  const nonChieste = Array.isArray(params.subitoFamiglieNonChieste)
-    ? params.subitoFamiglieNonChieste : [];
-  const subitoNonChieste = nonChieste.length
-    ? (nonChieste.length === 1
-        ? `la famiglia Subito agganciata "${nonChieste[0]}" non e' stata chiesta`
-        : `${nonChieste.length} famiglie Subito agganciate (${nonChieste.join(', ')}) non sono state chieste`)
-    : null;
-
   return {
     risultati,
     totale:       risultati.length,
@@ -2245,10 +2220,8 @@ async function runSearchCore(params) {
                    erroreTipo: subitoRes.erroreTipo || null, erroreHttp: subitoRes.erroreHttp || null,
                    errori: subitoRes.erroriSubito || [],
                    pausa: salute.fermo('subito'),
-                   parziale: [subitoRes.parziale, subitoNonChieste].filter(Boolean).join(' · ') || null,
-                   // Vero SOLO se dentro quella stringa c'e' un monco TRANSITORIO (famiglie
-                   // cadute). Le famiglie mai chieste — oltre il tetto, o agganciate dal ponte
-                   // qui sopra — sono deterministiche e non lo alzano: cacheable() le cacha.
+                   parziale: subitoRes.parziale || null,
+                   // Un risultato parziale per guasto di rete non va congelato in cache.
                    parzialeRete: subitoRes.parzialeRete || null,
       // Senza nodo di catalogo la ricerca Hades usa il testo libero.
                    come: params.subitoNodo ? (params.subitoNodo.come || 'id') : 'testo libero',

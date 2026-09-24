@@ -462,33 +462,25 @@ test('ponte: un codice che aggancia piu\' famiglie le porta TUTTE', () => {
   assert.deepStrictEqual(famiglieSubito('auto', '13|||'), []);
 });
 
-// ─── Le moto: una famiglia per richiesta, e il tetto si dichiara ──────────────
-test('subito: sulle moto le famiglie si chiedono tutte, non solo la prima', async () => {
+// ─── Una voce ambigua resta una sola richiesta testuale ──────────────────────
+test('subito: Auto e Moto non interrogano più famiglie per una voce ambigua', async () => {
   const sub = require('../backend/scrapers/subito-api');
-  const chieste = [];
-  // Si stuba la porta HTTP: ogni famiglia risponde un annuncio suo, piu' uno in comune
-  // (che deve essere unito, non ripetuto).
-  const annuncio = (id, prezzo) => ({
-    urn: id, urls: { default: `https://www.subito.it/x/${id}` }, subject: 'Moto ' + id,
-    features: [{ label: 'Prezzo', uri: '/price', values: [{ key: String(prezzo), value: `${prezzo} €` }] }],
-  });
-  sub._setHttpGetJson(async path => {
-    const bm = (path.match(/[?&]bm=([^&]+)/) || [])[1];
-    chieste.push(bm);
-    return { status: 200, body: JSON.stringify({ count_all: 10, ads: [annuncio(bm, 5000), annuncio('comune', 6000)] }) };
-  });
-  try {
-    const r = await sub({
-      tipo: 'moto', marca: 'Ducati', modello: 'Monster',
-      subitoNodo: { marcaId: '000123', famigliaIds: ['111', '222', '333'] },
-    }, { withMeta: true, pageDelayMs: 0 });
-    assert.deepStrictEqual(chieste, ['111', '222', '333'],
-      'una richiesta per famiglia: prima ne partiva UNA sola e le altre venivano costruite e buttate');
-    assert.strictEqual(r.total, 30, 'i totali delle famiglie si sommano: sono insiemi disgiunti del catalogo');
-    const urls = r.items.map(x => x.url);
-    assert.strictEqual(urls.filter(u => /comune/.test(u)).length, 1, 'il doppione si unisce, non si ripete');
-    assert.strictEqual(r.items.length, 4, '3 propri + 1 comune');
-  } finally { sub._setHttpGetJson(null); }
+  for (const tipo of ['auto', 'moto']) {
+    const chieste = [];
+    sub._setHttpGetJson(async path => {
+      chieste.push(new URL('https://local.invalid' + path).searchParams);
+      return { status: 200, body: JSON.stringify({ count_all: 0, ads: [] }) };
+    });
+    try {
+      const r = await sub({ tipo, marca: 'Aprilia', modello: 'Dorsoduro',
+        subitoNodo: { marcaId: '000123', famigliaIds: ['111', '222', '333'] },
+      }, { withMeta: true });
+      assert.strictEqual(r.total, 0);
+      assert.strictEqual(chieste.length, 1);
+      assert.strictEqual(chieste[0].get('q'), 'Aprilia Dorsoduro');
+      assert.strictEqual(chieste[0].get(tipo === 'moto' ? 'bm' : 'cm'), null);
+    } finally { sub._setHttpGetJson(null); }
+  }
 });
 
 // ─── Fuori bersaglio: due canali, un verdetto, browser e avvisi d'accordo ────
@@ -1423,7 +1415,7 @@ test('subito: l\'annuncio senza prezzo resta visibile senza inventare «su richi
   // Il caso «campo prezzo presente ma illeggibile» e' provato nel test sotto.
 });
 
-test('subito: famiglie Moto miste e prezzi assenti non simulano un parser guasto', async () => {
+test('subito: prezzo assente e prezzo illeggibile restano distinti nella stessa ricerca', async () => {
   const sub = require('../backend/scrapers/subito-api');
   const srv = require('../backend/server');
   const ad = (id, prezzo) => ({
@@ -1431,34 +1423,28 @@ test('subito: famiglie Moto miste e prezzi assenti non simulano un parser guasto
     subject: `Prova Modello ${id}`,
     features: prezzo == null ? [] : [{ uri: '/price', label: 'Prezzo', values: [{ value: `${prezzo} €` }] }],
   });
-  const params = { tipo: 'moto', marca: 'Prova', modello: 'Modello',
-    subitoNodo: { marcaId: '987654', famigliaIds: ['111', '222'] } };
-  const prova = async annunci => {
-    sub._setHttpGetJson(async path => {
-      const bm = new URL('https://local.invalid' + path).searchParams.get('bm');
-      return { status: 200, body: JSON.stringify({ ads: annunci[bm], count_all: annunci[bm].length }) };
-    });
-    return srv._runSubito(params, 30000);
-  };
+  let annunci = [ad(1, null), ad(2, 5000)];
+  sub._setHttpGetJson(async () => ({ status: 200,
+    body: JSON.stringify({ ads: annunci, count_all: annunci.length }) }));
   try {
-    const mista = await prova({ 111: [ad(1, null)], 222: [ad(2, 5000)] });
+    const params = { tipo: 'moto', marca: 'Prova', modello: 'Modello',
+      subitoNodo: { marcaId: '987654', famigliaIds: ['111'] } };
+    const mista = await srv._runSubito(params, 30000);
     assert.strictEqual(mista.status, 'ok');
     assert.strictEqual(mista.sospetto, null);
     assert.deepStrictEqual(mista.items.map(x => x.prezzo), [null, 5000]);
-    assert.ok(!mista.items[0].prezzoSuRichiesta);
-    const assente = await prova({ 111: [ad(3, null)], 222: [] });
-    assert.strictEqual(assente.status, 'ok', 'anche un unico annuncio senza campo prezzo non prova un guasto');
+    annunci = [ad(3, null)];
+    const assente = await srv._runSubito(params, 30000);
+    assert.strictEqual(assente.status, 'ok');
     assert.strictEqual(assente.sospetto, null);
-    const campoRotto = { ...ad(4, null), features: [
+    annunci = [{ ...ad(4, null), features: [
       { uri: '/price', label: 'Prezzo', values: [{ value: 'dato illeggibile' }] },
-    ] };
-    const mistaConAnomalia = await prova({ 111: [campoRotto], 222: [ad(5, 6000)] });
-    assert.strictEqual(mistaConAnomalia.status, 'ok', 'una famiglia valida non diventa guasta');
-    assert.match(mistaConAnomalia.parziale, /prezzo non leggibile/,
-      'l\'anomalia della famiglia non deve sparire');
-    assert.strictEqual(srv._cacheable({ sources: { subito: mistaConAnomalia,
-      autoscout: { status: 'ok' }, moto: { status: 'ok' } }, totale: mistaConAnomalia.items.length }), true,
-    'ripetere la stessa ricerca non renderebbe leggibile quel campo');
+    ] }, ad(5, 6000)];
+    const anomala = await srv._runSubito(params, 30000);
+    assert.strictEqual(anomala.status, 'ok');
+    assert.match(anomala.parziale, /prezzo non leggibile/);
+    assert.strictEqual(srv._cacheable({ sources: { subito: anomala,
+      autoscout: { status: 'ok' }, moto: { status: 'ok' } }, totale: anomala.items.length }), true);
   } finally { sub._setHttpGetJson(null); }
 });
 
@@ -1499,101 +1485,6 @@ test('subito: URI prezzo valido sopravvive alla nuova etichetta; campo illeggibi
     assert.strictEqual(rotto.items[0].prezzo, null, 'l\'annuncio resta visibile');
     assert.ok(!rotto.items[0].prezzoSuRichiesta);
   } finally { sub._setHttpGetJson(null); }
-});
-
-test('subito: parziale e sospetto ATTRAVERSANO runSubito — eseguito, non letto', async () => {
-  // La regola difesa: nessun wrapper puo' restituire meno campi-dichiarazione di quanti ne
-  // riceve. runSubito destrutturava {items,total,sospetto} e perdeva `parziale`: la ricerca
-  // moto a meta' (una famiglia caduta) entrava in cache per tre minuti senza dire niente,
-  // e ripremere Cerca non faceva ripartire nulla.
-  const srv = require('../backend/server');
-  const sub = require('../backend/scrapers/subito-api');
-  const annuncio = (id, prezzo) => ({
-    urn: id, urls: { default: `https://www.subito.it/x/${id}` }, subject: 'Moto ' + id,
-    features: prezzo != null
-      ? [{ label: 'Prezzo', uri: '/price', values: [{ key: String(prezzo), value: `${prezzo} €` }] }]
-      : [],
-  });
-  const params = base => ({
-    tipo: 'moto', marca: 'Ducati', modello: 'Monster',
-    subitoNodo: { marcaId: '000123', famigliaIds: ['111', '222', '333'] }, ...base,
-  });
-
-  // (a) una famiglia su tre risponde 500 → il PARZIALE esce dal wrapper e blocca la cache.
-  sub._setHttpGetJson(async p => {
-    const bm = (p.match(/[?&]bm=([^&]+)/) || [])[1];
-    if (bm === '222') return { status: 500, body: 'KO' };
-    return { status: 200, body: JSON.stringify({ count_all: 10, ads: [annuncio(bm, 5000)] }) };
-  });
-  try {
-    const r = await srv._runSubito(params(), 30000);
-    assert.strictEqual(r.status, 'ok', 'le famiglie superstiti restano: parziale sta ACCANTO allo status');
-    assert.match(String(r.parziale), /non hanno risposto/,
-      'il parziale dell\'unione deve USCIRE da runSubito, non morire nella destrutturazione');
-    assert.match(String(r.reason), /non hanno risposto/, 'il perche\' viaggia anche in reason, per la pastiglia');
-    assert.strictEqual(r.parzialeRete, true,
-      'una famiglia caduta e\' un monco TRANSITORIO, e il flag deve attraversare il wrapper come la stringa');
-    const sources = { subito: r, autoscout: { status: 'ok' }, moto: { status: 'ok' } };
-    assert.strictEqual(srv._cacheable({ sources, totale: r.items.length }), false,
-      'una ricerca a meta\' non si congela: ripremere Cerca deve far ripartire le fonti');
-  } finally { sub._setHttpGetJson(null); }
-
-  // (a-bis) le famiglie OLTRE IL TETTO di 8: stessa stringa `parziale`, natura opposta.
-  // Ritentare rifarebbe le stesse otto richieste in fila a hades per lo stesso identico esito,
-  // quindi questa risposta si cacha — senza, i modelli a famiglia frammentata (Softail 21
-  // famiglie, Vespa 125 17, Scarabeo 9) non entravano in cache MAI e ogni Cerca ripagava tutto.
-  sub._setHttpGetJson(async p => {
-    const bm = (p.match(/[?&]bm=([^&]+)/) || [])[1];
-    return { status: 200, body: JSON.stringify({ count_all: 10, ads: [annuncio(bm, 5000)] }) };
-  });
-  try {
-    const noveFamiglie = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
-    const r = await srv._runSubito(params({ subitoNodo: { marcaId: '000123', famigliaIds: noveFamiglie } }), 30000);
-    assert.strictEqual(r.status, 'ok');
-    assert.match(String(r.parziale), /oltre il tetto/, 'il tetto si dichiara a schermo, come prima');
-    assert.ok(!r.parzialeRete, 'ma non e\' un KO di rete: e\' deterministico');
-    const sources = { subito: r, autoscout: { status: 'ok' }, moto: { status: 'ok' } };
-    assert.strictEqual(srv._cacheable({ sources, totale: r.items.length }), true,
-      'un monco deterministico di Subito resta cachabile: ritentare non cambia');
-  } finally { sub._setHttpGetJson(null); }
-
-  // (b) il campo prezzo c'e' ma nessun valore e' leggibile: il SOSPETTO della
-  // singola famiglia risale dall'unione, senza inventare "nessun annuncio".
-  sub._setHttpGetJson(async () => ({
-    status: 200, body: JSON.stringify({ count_all: 4, ads: [annuncio('a', null), annuncio('b', null)]
-      .map(ad => ({ ...ad, features: [{ uri: '/price', label: 'Prezzo', values: [{ value: 'illeggibile' }] }] })) }),
-  }));
-  try {
-    const r = await srv._runSubito(params(), 30000);
-    assert.strictEqual(r.status, 'error', 'il parser rotto e\' un errore della fonte, non un mercato vuoto');
-    assert.match(String(r.reason), /prezzo/, 'e il perche\' nomina il prezzo');
-  } finally { sub._setHttpGetJson(null); }
-
-  // (c) una famiglia su tre viene RESPINTA (429), le altre rispondono → lo stato resta 'ok' con
-  // la nota parziale (gli annunci ci sono) ma il freno anti-ban vede la respinta col suo genere
-  // vero, 'bloccato', non un 'errore' generico che non ferma mai. Revisione 2026-08-22: il primo
-  // fix faceva passare la respinta da `sospetto`, che accendeva la colonna in rosso E arrivava al
-  // freno come 'error' — peggio di prima su entrambi i fronti.
-  const salute = require('../backend/fonti-salute');
-  const dirSal = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-sal-'));
-  const udpPrima = process.env.USER_DATA_PATH;
-  process.env.USER_DATA_PATH = dirSal; salute._reset();
-  sub._setHttpGetJson(async p => {
-    const bm = (p.match(/[?&]bm=([^&]+)/) || [])[1];
-    if (bm === '222') return { status: 429, body: '' };
-    return { status: 200, body: JSON.stringify({ count_all: 10, ads: [annuncio(bm, 5000)] }) };
-  });
-  try {
-    const r = await srv._runSubito(params(), 30000, 'subito');
-    assert.strictEqual(r.status, 'ok', 'una respinta parziale NON spegne la colonna: gli annunci delle altre famiglie ci sono');
-    assert.match(String(r.reason), /non hanno risposto/, 'la nota parziale resta');
-    const st = salute.stato().fonti.find(f => f.fonte === 'subito');
-    assert.ok(st, 'il freno deve aver registrato qualcosa per subito');
-    assert.strictEqual(st.esito, 'bloccato', `il freno deve vedere la RESPINTA col suo genere, non "${st.esito}"`);
-  } finally {
-    sub._setHttpGetJson(null); salute._reset();
-    if (udpPrima == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = udpPrima;
-  }
 });
 
 test('il totale della pill dice a quale ricerca appartiene', () => {

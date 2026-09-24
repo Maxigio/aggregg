@@ -256,8 +256,9 @@ function risolviNodo(tipo, marca, modello, opts = {}) {
    * Una o PIU' famiglie. Subito tiene 6 nomi doppi dentro la stessa marca (Ford "Ka"
    * due volte, BMW "Serie 2 Gran Coupé" due volte, Opel "Combo Life" due volte): sono
    * lo stesso veicolo spezzato in due voci, e sceglierne una a caso ne perderebbe meta'.
-   * Si portano tutte, e chi interroga Subito le mette in AND-lista dove la fonte lo
-   * permette (auto: `cm=a,b` — verificato; moto: la virgola da' 400, quindi la prima).
+   * Si portano tutte fino al chiamante: piu' di un ID significa che la voce AMR non
+   * identifica una sola famiglia. La richiesta Hades passa allora a q=marca+modello;
+   * non si sceglie la prima e non si uniscono piu' famiglie nella stessa ricerca.
    */
   const perFamiglie = lista => {
     const nodo = {

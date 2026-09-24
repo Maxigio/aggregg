@@ -9,7 +9,7 @@ const vm = require('node:vm');
 function prepara() {
   const source = fs.readFileSync(path.join(__dirname, '..', 'backend/scrapers/subito-api.js'), 'utf8');
   const start = source.indexOf('const RECUPERO_TTL =');
-  const end = source.indexOf('const MAX_FAMIGLIE_MOTO', start);
+  const end = source.indexOf('async function scrapeSubitoApi', start);
   assert.ok(start >= 0 && end > start);
   let now = 0, richieste = 0, signal;
   let risposta = async () => ({ ads: [{ n: ++richieste }] });
