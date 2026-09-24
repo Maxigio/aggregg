@@ -236,6 +236,47 @@ test('Subito Moto: una pausa concorrente lascia il risultato parziale e non chia
   } finally { subito._setHttpGetJson(null); }
 });
 
+test('Subito Moto: 403 e 503 di famiglie diverse restano entrambi nella risposta', async () => {
+  const stati = [403, 503, 200];
+  subito._setHttpGetJson(async () => {
+    const status = stati.shift();
+    return status === 200 ? ok([annuncio(3)], 1) : { status, body: '{}' };
+  });
+  try {
+    const r = await server._runSubito(params('moto', ['111', '222', '333']), 30000);
+    assert.deepEqual(r.erroriSubito.map(e => [e.famiglia, e.fase, e.http]),
+      [[1, 'pagina', 403], [2, 'pagina', 503]]);
+    assert.equal(r.bloccoParziale?.status, 403);
+    assert.equal(salute.fermo('subito').fermo, false);
+  } finally { subito._setHttpGetJson(null); }
+});
+
+test('Subito Moto: pagina e recupero falliti nella stessa famiglia sono due errori', async () => {
+  subito._setHttpGetJson(async path => {
+    const q = new URL('https://local.invalid' + path).searchParams;
+    if (q.get('bm') === '000000') return { status: 503, body: '{}' };
+    return Number(q.get('start')) ? { status: 403, body: '{}' }
+      : ok(Array.from({ length: 50 }, (_, i) => annuncio(i)), 60);
+  });
+  try {
+    const p = params('moto', ['111']);
+    p.subitoNodo.marcaId = 'errori-recupero';
+    p.subitoNodo.generazioni = [{ id: '111' }];
+    const r = await subito(p, { withMeta: true, maxPages: 2 });
+    assert.deepEqual(r.erroriSubito.map(e => [e.fase, e.http]),
+      [['pagina', 403], ['recupero', 503]]);
+  } finally { subito._setHttpGetJson(null); }
+});
+
+test('Subito: un body illeggibile con HTTP 200 non viene presentato come errore HTTP 200', async () => {
+  subito._setHttpGetJson(async () => ({ status: 200, body: '{' }));
+  try {
+    const r = await server._runSubito(params(), 30000);
+    assert.equal(r.status, 'error');
+    assert.deepEqual(r.erroriSubito.map(e => [e.http, e.tipo]), [[null, 'blocked']]);
+  } finally { subito._setHttpGetJson(null); }
+});
+
 test('Subito: 429 nel recupero conserva il risultato principale e arriva al freno', async () => {
   const chiamate = [];
   subito._setHttpGetJson(async path => {

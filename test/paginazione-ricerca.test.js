@@ -104,6 +104,19 @@ test('403 e formato illeggibile interrompono la pagina, senza ripetizione automa
   }
 });
 
+test('403 e 503 sulla stessa fonte: la pagina elenca entrambi e non promette un retry immediato', async () => {
+  const s = schermo([{ risultati: [], sources: { subito: {
+    status: 'error', parzialeRete: true, erroreTipo: 'transient', erroreHttp: 503,
+    errori: [{ famiglia: 1, fase: 'pagina', http: 403, tipo: 'blocked' },
+      { famiglia: 2, fase: 'pagina', http: 503, tipo: 'transient' }],
+  } } }]);
+  await s.ctx.caricaAltri();
+  assert.equal(vm.runInContext('paginaErrore.riprovabile', s.ctx), false);
+  assert.match(s.avvisi.at(-1), /403/);
+  assert.match(s.avvisi.at(-1), /503/);
+  assert.equal(vm.runInContext('fettaPresa', s.ctx), 0);
+});
+
 test('pagina completa senza annunci supera i filtri e può chiudere la fonte', async () => {
   const s = schermo([{ risultati: [], sources: { subito: {
     status: 'empty', totale: 80, count: 0, hasMore: false,

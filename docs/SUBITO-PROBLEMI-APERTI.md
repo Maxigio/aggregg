@@ -1,8 +1,7 @@
 # Subito: problemi verificati da riprendere
 
-I primi tre problemi sono stati riprodotti con risposte Hades controllate e
-risolti separatamente dal flusso Versione. Gli ultimi due sono confermati ma
-restano aperti.
+I primi quattro problemi sono stati riprodotti con risposte Hades controllate
+e risolti separatamente dal flusso Versione. Il quinto resta aperto.
 
 1. **Risolto localmente — richiesta superflua e falso avviso 429.** La pagina standard
    di Subito ora legge 50 annunci grezzi con una sola chiamata; `fetta: 1` chiede
@@ -24,15 +23,17 @@ restano aperti.
    arrivano al freno subito; una risposta valida con annunci azzera i colpi,
    una pausa locale non conta come risposta del portale e il ciclo dichiara le
    famiglie non interrogate. Prove controllate in `test/subito-429.test.js`.
-4. **Aperto — l'ultimo errore nasconde un blocco precedente.** In una ricerca Moto
+4. **Risolto localmente — l'ultimo errore nasconde un blocco precedente.** In una ricerca Moto
    su piu' famiglie, se una chiamata Hades riceve 403, la successiva 503 e un'altra
    famiglia risponde, l'unione conserva `bloccoParziale: 403` ma restituisce
-   `erroreTipo: transient` e `erroreHttp: 503`. Chi usa i campi di errore per
-   avvisi o decisioni di riprova legge cosi' un esito incoerente. Riprodotto
-   con tre risposte Hades controllate (403, 503, 200), senza chiamare il portale.
-   Risoluzione da progettare separatamente: mantenere
-   distinti gli errori effettivi e scegliere un esito finale coerente con il
-   blocco, senza nascondere il guasto transitorio o i risultati parziali.
+   `erroreTipo: transient` e `erroreHttp: 503`. Ora la risposta contiene l'elenco
+   distinto degli errori effettivi, con famiglia, fase, pagina e codice HTTP; il
+   frontend lo mostra e decide se riprovare leggendo l'intero elenco. I campi
+   singoli restano per compatibilita', ma non guidano la riprova quando c'e'
+   l'elenco. `fonti-salute` continua a contare gli errori originali delle
+   singole chiamate, senza contarli di nuovo quando si mostra il riepilogo.
+   Prove controllate in `test/subito-429.test.js`, `test/paginazione-ricerca.test.js`
+   e `test/fonti-pausa-ui.test.js`, senza interrogare il portale.
 5. **Aperto — una famiglia senza prezzi fa fallire anche quella valida.** Se una
    famiglia Moto restituisce un annuncio realmente senza prezzo e una seconda
    famiglia restituisce un annuncio con prezzo, `sospetto` della prima viene

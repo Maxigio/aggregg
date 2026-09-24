@@ -2357,20 +2357,29 @@ async function caricaAltri() {
     if (cadute.length) {
       const fonte = cadute.map(f => FONTE_LABEL[f] || f).join(' e ');
       const stati = cadute.map(f => data.sources[f]);
-      const bloccata = stati.find(s => s.erroreHttp === 429 || (s.status === 'skipped' && s.pausa?.fermo));
-      const definitiva = stati.some(s => s.erroreHttp === 403 || s.erroreTipo === 'auth' || s.erroreTipo === 'error');
-      const transitoria = stati.every(s => s.erroreTipo === 'transient' || s.status === 'timeout');
+      const errori = cadute.flatMap(f => {
+        const s = data.sources[f];
+        return (Array.isArray(s.errori) && s.errori.length ? s.errori
+          : [{ http: s.erroreHttp, tipo: s.erroreTipo }]).map(e => ({ ...e, fonte: f }));
+      });
+      const bloccata = stati.find(s => s.erroreHttp === 429 || s.pausa?.fermo
+        || (Array.isArray(s.errori) && s.errori.some(e => e.http === 429)));
+      const definitiva = errori.some(e => e.http === 403 || e.tipo === 'auth' || e.tipo === 'error');
+      const transitoria = errori.every(e => e.tipo === 'transient' || e.http >= 500)
+        || stati.every(s => s.status === 'timeout');
       const riprovabile = !definitiva && (!!bloccata || transitoria);
       const fino = bloccata && Number(bloccata.pausa?.fino);
       const dopo = bloccata
         ? (Number.isSafeInteger(fino) && fino > Date.now() && fino < 8640000000000000 ? fino : Date.now() + 60000)
         : Date.now() + 15000;
-      const motivo = stati.some(s => s.erroreHttp === 403) ? 'accesso rifiutato dalla fonte (403)'
-        : stati.some(s => s.erroreTipo === 'auth') ? 'accesso alla fonte non valido (401)'
+      const motivo = errori.some(e => e.http === 403) ? 'accesso rifiutato dalla fonte (403)'
+        : errori.some(e => e.tipo === 'auth') ? 'accesso alla fonte non valido (401)'
           : definitiva ? 'risposta della fonte non leggibile'
-            : bloccata?.erroreHttp === 429 ? 'la fonte ha limitato le richieste (429)'
+            : errori.some(e => e.http === 429) ? 'la fonte ha limitato le richieste (429)'
               : bloccata ? 'la fonte è ancora in pausa' : 'errore di rete temporaneo';
-      paginaErrore = { testo: `${fonte}: pagina non completata (${motivo}). Nessun nuovo annuncio è stato aggiunto.${riprovabile && bloccata ? ` Riprova dal ${new Date(dopo).toLocaleString('it-IT')}.` : riprovabile ? ' Riprova fra 15 secondi.' : ''}`,
+      const elenco = errori.filter(e => Number.isInteger(e.http)).map(e =>
+        `${FONTE_LABEL[e.fonte] || e.fonte}${Number.isInteger(e.famiglia) ? ` famiglia ${e.famiglia}` : ''}: HTTP ${e.http}`).join('; ');
+      paginaErrore = { testo: `${fonte}: pagina non completata (${motivo}).${elenco ? ` Errori: ${elenco}.` : ''} Nessun nuovo annuncio è stato aggiunto.${riprovabile && bloccata ? ` Riprova dal ${new Date(dopo).toLocaleString('it-IT')}.` : riprovabile ? ' Riprova fra 15 secondi.' : ''}`,
         riprovabile,
         dopo };
       renderSourceStatus(); toast(paginaErrore.testo); return;
@@ -3896,6 +3905,17 @@ function renderSourceStatus() {
       || (s?.erroreDettaglio ? `<div class="src-avviso">${escapeHtml(`Dettagli ${FONTE_LABEL[f]}: ${s.erroreDettaglio}`)}</div>` : '');
     if (s && (s.status === 'ok' || s.status === 'error') && s.parziale && !(f === 'autoscout' && s.allargato)) {
       fonteBreakdown.innerHTML += `<span class="src-avviso">${escapeHtml(String(s.parziale))}</span>`;
+    }
+    if (f === 'subito' && Array.isArray(s?.errori) && s.errori.length) {
+      const righe = s.errori.map(e => {
+        const dove = Number.isInteger(e.famiglia) ? `Famiglia ${e.famiglia}` : 'Ricerca';
+        const fase = e.fase === 'recupero' ? 'recupero annunci senza modello'
+          : Number.isInteger(e.pagina) ? `pagina ${e.pagina}` : 'pagina';
+        const esito = Number.isInteger(e.http) ? `HTTP ${e.http}`
+          : e.tipo === 'transient' ? 'errore di rete' : 'risposta non leggibile';
+        return `<li>${escapeHtml(`${dove}: ${fase} — ${esito}`)}</li>`;
+      }).join('');
+      fonteBreakdown.innerHTML += `<div class="src-avviso">Subito: errori delle richieste<ul class="src-error-list">${righe}</ul></div>`;
     }
   }
   // La pagina fallita non entra nella lista: il motivo resta visibile qui e sul pulsante.

@@ -701,6 +701,7 @@ body.has-results .search { padding: 14px 0 12px; }
 /* L'avviso di allargamento va su una riga sua (#fonteBreakdown e' un flex con wrap), cosi'
    non spezza il ritmo delle tre pill. Misure copiate da .veh-liq-avviso. */
 .src-avviso { flex-basis: 100%; font-size: 0.74rem; color: var(--warn); }
+.src-error-list { margin: .2rem 0 0; padding-left: 1.2rem; }
 
 /* ─── Griglia risultati ──────────────────────────────────────────────────────
    Colonne dinamiche: `grid-template-columns` calcolato in JS e applicato inline

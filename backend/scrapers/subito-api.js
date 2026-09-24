@@ -538,6 +538,13 @@ async function fetchPage(params, start) {
   }
 }
 
+// Solo metadati della chiamata: nessun body Hades o annuncio entra negli avvisi.
+function erroreRichiesta(e, fase, pagina = null) {
+  if (e.code === 'FONTE_IN_PAUSA') return null; // rifiuto locale, non risposta del portale
+  return { fase, pagina, http: Number.isInteger(e.status) && e.status !== 200 ? e.status : null,
+    tipo: ['blocked', 'auth', 'transient', 'error'].includes(e.kind) ? e.kind : 'error' };
+}
+
 /**
  * Annunci Subito via API. Throw su errore: la fonte resta dichiarata non letta.
  * @param opts.maxPages  override profondità (ricerca standard: 1 pagina da 50)
@@ -719,6 +726,7 @@ async function unioneFamiglieMoto(params, opts) {
   let hasMore = false, erroreTipo = null, erroreHttp = null;
   const parziali = [];
   const sospetti = [];
+  const erroriDettaglio = [];
   for (let i = 0; i < chieste.length; i++) {
     if (i > 0) await sleep(opts.pageDelayMs || 400);      // mai raffica verso la stessa fonte
     tentate++;
@@ -733,6 +741,7 @@ async function unioneFamiglieMoto(params, opts) {
       if (r.bloccoParziale) bloccoParziale = r.bloccoParziale;
       if (r.hasMore) hasMore = true;
       if (r.erroreTipo) { erroreTipo = r.erroreTipo; erroreHttp = r.erroreHttp; }
+      for (const e of r.erroriSubito || []) erroriDettaglio.push({ ...e, famiglia: i + 1 });
       // «Il parser del prezzo e' rotto» lo dichiara la singola passata: l'unione lo
       // buttava, e la stessa rottura dava pastiglia rossa su un'auto e verde su cento
       // moto — la fonte mentiva solo nel ramo scritto per i casi difficili.
@@ -762,6 +771,9 @@ async function unioneFamiglieMoto(params, opts) {
         break;
       }
       errori++;
+      for (const errore of e.erroriSubito || [erroreRichiesta(e, 'pagina', (opts.fetta || 0) + 1)]) {
+        if (errore) erroriDettaglio.push({ ...errore, famiglia: i + 1 });
+      }
       // Si conserva l'errore PIU' GRAVE: un 403/429 su una famiglia e' un blocco della fonte, e
       // rilanciarlo come 'error' generico faceva si' che il freno anti-ban (fonti-salute) non
       // scattasse mai sulle moto. Ordine: bloccato > auth > transitorio > errore.
@@ -777,6 +789,7 @@ async function unioneFamiglieMoto(params, opts) {
   // Tutte cadute: e' un errore della fonte, non un mercato vuoto. E il genere e' quello del
   // peggiore, cosi' chi sta a valle sa se e' un blocco o un singhiozzo.
   if (!successi) {
+    if (peggiore) peggiore.erroriSubito = erroriDettaglio;
     throw peggiore || fail(`Subito: nessuna delle ${tentate} famiglie interrogate ha risposto`);
   }
   // Qualcuna ha risposto ma almeno una e' stata RESPINTA: viaggia come campo proprio, non come
@@ -802,7 +815,8 @@ async function unioneFamiglieMoto(params, opts) {
   const items = [...perUrl.values()];
   console.log(`[subito] moto "${params.marca} ${params.modello || ''}": ${tentate}/${chieste.length} famiglie interrogate → ${items.length} annunci`);
   return opts.withMeta ? { items, truncated, total, hasMore, parziale, parzialeRete,
-    erroreTipo, erroreHttp, sospetto: sospetti[0] || null, bloccoParziale } : items;
+    erroreTipo, erroreHttp, sospetto: sospetti[0] || null, bloccoParziale,
+    erroriSubito: erroriDettaglio } : items;
 }
 
 async function scrapeSubitoApi(params, opts = {}) {
@@ -832,6 +846,7 @@ async function scrapeSubitoApi(params, opts = {}) {
   let senzaPrezzo = 0;   // quanti annunci il payload non quota: vedi il commento piu' sotto
   let parziale = null, parzialeRete = false, bloccoParziale = null;
   let hasMore = false, erroreTipo = null, erroreHttp = null;
+  const erroriSubito = [];
   // "Carica altri": si riparte da dove si era arrivati. Il tetto di hades sta fra
   // start 9.850 e 10.000 (misurato per bisezione), quindi c'e' spazio per ~200 fette.
   const salta = Math.max(0, opts.fetta || 0) * maxPages * PAGE_SIZE;
@@ -840,7 +855,9 @@ async function scrapeSubitoApi(params, opts = {}) {
     let page;
     try { page = await fetchPage(reqParams, salta + p * PAGE_SIZE); }
     catch (e) {
-      if (p === 0) throw e; // nessuna pagina letta in questa fetta: non inventare risultati
+      const dettaglio = erroreRichiesta(e, 'pagina', Math.floor(salta / PAGE_SIZE) + p + 1);
+      if (dettaglio) erroriSubito.push(dettaglio);
+      if (p === 0) { e.erroriSubito = erroriSubito; throw e; } // nessuna pagina letta: non inventare risultati
       parzialeRete = true;
       erroreTipo = e.kind || 'transient'; erroreHttp = e.status || null;
       bloccoParziale = e.kind === 'blocked' ? e : null;
@@ -914,6 +931,8 @@ async function scrapeSubitoApi(params, opts = {}) {
       }
     } catch (e) {
       // Il recupero e' un di piu': se cade, la ricerca vale lo stesso.
+      const dettaglio = erroreRichiesta(e, 'recupero');
+      if (dettaglio) erroriSubito.push(dettaglio);
       console.warn('[subito] recupero non dichiarati KO: ' + e.message);
       parzialeRete = true;
       erroreTipo = e.kind || 'transient'; erroreHttp = e.status || null;
@@ -936,7 +955,7 @@ async function scrapeSubitoApi(params, opts = {}) {
     ? `nessuno dei ${out.length} annunci porta un prezzo leggibile: l'etichetta del payload puo' essere cambiata`
     : null;
   return opts.withMeta ? { items: out, truncated, total, hasMore, sospetto, parziale, parzialeRete,
-    erroreTipo, erroreHttp, bloccoParziale } : out;
+    erroreTipo, erroreHttp, bloccoParziale, erroriSubito } : out;
 }
 
 // Ricerca ACCESSORI/RICAMBI per keyword libera (OEM o nome pezzo) nelle categorie

@@ -54,6 +54,18 @@ test('cooldown: orario locale, data solo se diversa da oggi, nessuna promessa di
     .includes(`del ${new Date(domani).toLocaleDateString('it-IT')}`));
 });
 
+test('Subito mostra separatamente gli errori delle famiglie, senza HTML dalla risposta', () => {
+  const { c } = schermo({ subito: { status: 'ok', count: 1,
+    errori: [{ famiglia: 1, fase: 'pagina', http: 403, tipo: 'blocked' },
+      { famiglia: 2, fase: 'recupero', http: 503, tipo: '<img src=x onerror=alert(1)>' }],
+  } });
+  c.renderSourceStatus();
+  const html = c.fonteBreakdown.innerHTML;
+  assert.match(html, /Famiglia 1.*HTTP 403/);
+  assert.match(html, /Famiglia 2.*HTTP 503/);
+  assert.doesNotMatch(html, /<img/);
+});
+
 test('pausa scaduta e verifica distinguono un prossimo tentativo da una verifica in corso', () => {
   const { c } = schermo();
   for (const stato of [
