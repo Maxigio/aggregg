@@ -43,6 +43,26 @@ test('chiede la pagina solo alle fonti ancora aperte e conserva la fonte esaurit
   assert.equal(s.ctx.currentResults.length, 51);
 });
 
+test('dopo che Subito si esaurisce, il pulsante unico continua solo con AutoScout', async () => {
+  const s = schermo([
+    { risultati: [riga(50)], sources: {
+      subito: { status: 'ok', hasMore: false },
+      autoscout: { status: 'ok', hasMore: true },
+    } },
+    { risultati: [{ fonte: 'autoscout', url: 'https://autoscout24.it/2', prezzo: 2000 }],
+      sources: { autoscout: { status: 'ok', hasMore: false } } },
+  ], {
+    subito: { status: 'ok', hasMore: true },
+    autoscout: { status: 'ok', hasMore: true },
+  });
+  await s.ctx.caricaAltri();
+  assert.equal(s.pulsante.textContent, 'Carica altro');
+  await s.ctx.caricaAltri();
+  assert.deepEqual(s.urls.map(url => new URL('https://prova.invalid' + url).searchParams.get('fonti')),
+    ['subito,autoscout', 'autoscout']);
+  assert.equal(s.box.nascosto, true);
+});
+
 test('una fonte vuota ed esaurita resta vuota mentre avanzano le altre', async () => {
   const s = schermo([{ risultati: [], sources: { autoscout: { status: 'empty', hasMore: false } } }], {
     subito: { status: 'empty', count: 0, hasMore: false },
@@ -91,6 +111,16 @@ test('fonte esaurita: il totale grezzo non confronta le righe filtrate', () => {
   const s = schermo([], { subito: { status: 'ok', totale: 80, count: 20, hasMore: false } });
   s.ctx.currentResults = Array.from({ length: 20 }, (_, i) => riga(i));
   assert.equal(s.ctx.altriDisponibili(), false);
+});
+
+test('oltre la fetta massima non richiede di nuovo la stessa pagina', async () => {
+  const s = schermo([]);
+  vm.runInContext('fettaPresa = 50', s.ctx);
+  s.ctx.renderAltriBtn();
+  assert.equal(s.pulsante.disabled, true);
+  assert.match(s.pulsante.textContent, /limite/i);
+  await s.ctx.caricaAltri();
+  assert.deepEqual(s.richieste, []);
 });
 
 test('nessuna riga visibile ma la fonte ha altre pagine: il pulsante resta accessibile', () => {

@@ -2310,6 +2310,7 @@ let searchGen = 0;   // review: token di generazione — solo la ricerca PIÙ RE
  * risposte, quindi non si tira a indovinare.
  */
 let fettaPresa = 0;            // ultima fetta caricata (0 = la prima ricerca)
+const MAX_FETTE = 50;          // stesso tetto di parseSearchParams: oltre il server ripeterebbe la fetta 50
 let caricandoAltri = false;
 let paginaErrore = null;
 let paginaRetryTimer = null;
@@ -2328,7 +2329,7 @@ function presiDa(fonte) {
 }
 
 async function caricaAltri() {
-  if (caricandoAltri || !lastSearchParams || (paginaErrore &&
+  if (caricandoAltri || fettaPresa >= MAX_FETTE || !lastSearchParams || (paginaErrore &&
       (!paginaErrore.riprovabile || Date.now() < paginaErrore.dopo))) return;
   const fonti = fontiConAltri();
   if (!fonti.length) return;
@@ -2451,13 +2452,15 @@ function renderAltriBtn() {
   const el = document.getElementById('caricaAltri');
   if (!el) return;
   if (paginaRetryTimer) { clearTimeout(paginaRetryTimer); paginaRetryTimer = null; }
-  const mostra = searchActive && (paginaErrore ? paginaErrore.riprovabile : altriDisponibili());
+  const alLimite = fettaPresa >= MAX_FETTE && altriDisponibili();
+  const mostra = searchActive && (alLimite || (paginaErrore ? paginaErrore.riprovabile : altriDisponibili()));
   el.classList.toggle('d-none', !mostra);
   const b = el.querySelector('button');
   if (b) {
     const attesa = paginaErrore && Date.now() < paginaErrore.dopo;
-    b.disabled = caricandoAltri || !!attesa;
-    b.textContent = caricandoAltri ? 'Carico…' : paginaErrore ? 'Riprova questa pagina' : 'Carica altri annunci';
+    b.disabled = caricandoAltri || !!attesa || alLimite;
+    b.textContent = alLimite ? 'Limite di pagine raggiunto'
+      : caricandoAltri ? 'Carico…' : paginaErrore ? 'Riprova questa pagina' : 'Carica altro';
     if (attesa) paginaRetryTimer = setTimeout(renderAltriBtn, Math.min(paginaErrore.dopo - Date.now() + 100, 2147483647));
   }
 }
