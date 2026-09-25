@@ -49,7 +49,24 @@ test('gli annunci grezzi scadono anche senza un nuovo accesso', async () => {
   assert.equal(c.richieste(), 1);
   c.avanza(c.RECUPERO_TTL);
   assert.equal(c.recuperoCache.size, 0);
-  assert.equal((await c.paginaRecupero(params('ducati')))[0].n, 2);
+  assert.equal((await c.paginaRecupero(params('ducati'))).ads[0].n, 2);
+});
+
+test('il recupero profondo ha il proprio offset e non conserva annunci grezzi nella cache', async () => {
+  const c = prepara();
+  const startVisti = [];
+  c.setFetchPage(async (_params, start) => {
+    startVisti.push(start);
+    return { ads: [{ n: start }], total: 51 };
+  });
+  await c.paginaRecupero(params('ducati'), 0);
+  const profonda = await c.paginaRecupero(params('ducati'), 50);
+  assert.equal(profonda.ads[0].n, 50);
+  assert.equal(profonda.total, 51);
+  assert.deepEqual(startVisti, [0, 50]);
+  assert.equal(c.recuperoCache.size, 1);
+  await c.paginaRecupero(params('ducati'), 50);
+  assert.deepEqual(startVisti, [0, 50, 50]);
 });
 
 test('l’espulsione non lascia timer attivi che trattengono la cache', async () => {
@@ -76,7 +93,7 @@ test('due modelli della stessa marca attendono un solo recupero, senza fondere m
   const altraMarca = c.paginaRecupero(params('beta'));
   assert.equal(pendenti.length, 2);
   pendenti[1]({ ads: [{ id: 2 }] });
-  assert.equal((await altraMarca)[0].id, 2);
+  assert.equal((await altraMarca).ads[0].id, 2);
 });
 
 test('un 429 raggiunge entrambi gli attesi, non genera un secondo tentativo e libera la chiave', async () => {
@@ -118,7 +135,7 @@ test('se il primo tentativo viene annullato, chi attende è ancora attivo ripro
   for (let i = 0; i < 5 && pendenti.length < 2; i++) await Promise.resolve();
   assert.equal(pendenti.length, 2);
   pendenti[1].resolve({ ads: [{ id: 3 }] });
-  assert.equal((await secondo)[0].id, 3);
+  assert.equal((await secondo).ads[0].id, 3);
   assert.equal(c.recuperoInVolo.size, 0);
 });
 

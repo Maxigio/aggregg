@@ -148,3 +148,17 @@ test('la scelta delle fonti accetta solo nomi univoci nelle pagine successive', 
     assert.match(r.error, /fonti della pagina non valide/);
   }
 });
+
+test('i cursori Subito rifiutano offset arbitrari o incompleti', async () => {
+  for (const cursori of [
+    { subitoMainStart: '1', subitoRecuperoStart: '50' },
+    { subitoMainStart: '2550', subitoRecuperoStart: '50' },
+    { subitoMainStart: '50' },
+    { subitoMainStart: '50', subitoRecuperoStart: '50', fetta: 0 },
+    { subitoMainStart: '50', subitoRecuperoStart: '50', fonti: 'autoscout' },
+  ]) {
+    const r = await server._amrSearchFn({ tipo: 'auto', marca: 'Audi', fetta: 1,
+      fonti: 'subito', ...cursori });
+    assert.match(r.error, /cursori Subito non validi/);
+  }
+});

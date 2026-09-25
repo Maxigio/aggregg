@@ -1705,7 +1705,8 @@ test('inSella: i dichiarati della casa non passano dal formattatore dei numeri',
 test('subito: Auto e Moto usano solo Hades, senza sessione browser', () => {
   const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8'));
   const smart = srv.slice(srv.indexOf('async function scrapeSubitoSmart'), srv.indexOf('// ─── Auth'));
-  assert.match(smart, /return scrapeSubitoApi\(params, \{ sort: 'priceasc', withMeta: true, fetta: params\.fetta \|\| 0 \}\)/);
+  assert.match(smart, /return scrapeSubitoApi\(params, \{ sort: 'priceasc', withMeta: true, fetta: params\.fetta \|\| 0,/);
+  assert.match(smart, /mainStart: params\.subitoMainStart, recuperoStart: params\.subitoRecuperoStart/);
   assert.doesNotMatch(srv, /require\(['"]\.\/scrapers\/subito-playwright['"]\)/);
   assert.doesNotMatch(srv, /USE_SUBITO_API|keepAliveSubito|runBootstrap|subitoSession|\/api\/subito\/(?:bootstrap|keep-alive|status)/);
 });

@@ -63,6 +63,63 @@ test('dopo che Subito si esaurisce, il pulsante unico continua solo con AutoScou
   assert.equal(s.box.nascosto, true);
 });
 
+test('Subito: il pulsante conserva due cursori e non richiede il ramo nativo esaurito', async () => {
+  const s = schermo([
+    { risultati: [], sources: { subito: {
+      status: 'empty', hasMore: true, mainNextStart: null, recuperoNextStart: 100,
+    } } },
+    { risultati: [], sources: { subito: {
+      status: 'empty', hasMore: false, mainNextStart: null, recuperoNextStart: null,
+    } } },
+  ], { subito: { status: 'ok', hasMore: true, mainNextStart: 50, recuperoNextStart: 50 } });
+  await s.ctx.caricaAltri();
+  await s.ctx.caricaAltri();
+  const cursori = s.urls.map(url => {
+    const q = new URL('https://prova.invalid' + url).searchParams;
+    return [q.get('subitoMainStart'), q.get('subitoRecuperoStart')];
+  });
+  assert.deepEqual(cursori, [['50', '50'], ['-1', '100']]);
+  assert.equal(s.box.nascosto, true);
+});
+
+test('Subito: se fallisce il recupero, il retry non ripete la pagina nativa riuscita', async () => {
+  const s = schermo([
+    { risultati: [riga(50)], sources: { subito: {
+      status: 'ok', count: 1, totale: 100, hasMore: true,
+      mainNextStart: 100, recuperoNextStart: 50,
+      parzialeRete: true, erroreTipo: 'transient', errori: [{ fase: 'recupero', tipo: 'transient' }],
+    } } },
+    { risultati: [], sources: { subito: {
+      status: 'error', count: 0, hasMore: true,
+      mainNextStart: null, recuperoNextStart: 50,
+      parzialeRete: true, erroreTipo: 'transient', errori: [{ fase: 'recupero', tipo: 'transient' }],
+    } } },
+    { risultati: [riga(51)], sources: { subito: {
+      status: 'ok', count: 1, totale: null, hasMore: false,
+      mainNextStart: null, recuperoNextStart: null,
+    } } },
+  ], { subito: { status: 'ok', hasMore: true, mainNextStart: 50, recuperoNextStart: 50 } });
+  await s.ctx.caricaAltri();
+  assert.equal(s.ctx.currentResults.length, 50);
+  assert.equal(s.ctx.lastSources.subito.mainNextStart, 50);
+  assert.equal(s.ctx.lastSources.subito.recuperoNextStart, 50);
+  assert.equal(vm.runInContext('fettaPresa', s.ctx), 0);
+  vm.runInContext('paginaErrore.dopo = 0', s.ctx);
+  await s.ctx.caricaAltri();
+  assert.equal(s.ctx.currentResults.length, 50);
+  vm.runInContext('paginaErrore.dopo = 0', s.ctx);
+  await s.ctx.caricaAltri();
+  const cursori = s.urls.map(url => {
+    const q = new URL('https://prova.invalid' + url).searchParams;
+    return [q.get('subitoMainStart'), q.get('subitoRecuperoStart')];
+  });
+  assert.deepEqual(cursori, [['50', '50'], ['-1', '50'], ['-1', '50']]);
+  assert.equal(s.ctx.currentResults.length, 52);
+  assert.equal(s.ctx.lastSources.subito.mainNextStart, 100);
+  assert.equal(s.ctx.lastSources.subito.recuperoNextStart, null);
+  assert.equal(vm.runInContext('fettaPresa', s.ctx), 1);
+});
+
 test('una fonte vuota ed esaurita resta vuota mentre avanzano le altre', async () => {
   const s = schermo([{ risultati: [], sources: { autoscout: { status: 'empty', hasMore: false } } }], {
     subito: { status: 'empty', count: 0, hasMore: false },

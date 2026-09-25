@@ -661,11 +661,11 @@ function faTitolo(testo) {
 
 /** Recupero per marca: la stessa lista serve OGNI modello di quella marca → in cache. */
 const RECUPERO_TTL = 10 * 60 * 1000;
-const recuperoCache = new Map();   // query completa → { ts, ads, timer }
+const recuperoCache = new Map();   // prima pagina della query → { ts, page, timer }
 const recuperoInVolo = new Map();  // stessa query → { promessa, segnale della ricerca che l'ha avviata }
 let recuperoId = 0;
 
-async function paginaRecupero(params) {
+async function paginaRecupero(params, start = 0) {
   /**
    * LA CHIAVE DEVE CONTENERE TUTTO QUELLO CHE ENTRA NELLA RICHIESTA. Con `tipo|marca` la
    * stessa lista veniva riusata per dieci minuti anche cambiando regione, prezzo, anno,
@@ -673,7 +673,7 @@ async function paginaRecupero(params) {
    * Sui chilometri, che a valle non si ricontrollano per scelta, entravano annunci fuori
    * dal filtro impostato.
    */
-  const chiave = [params.tipo, params.subitoNodo.marcaId, params.regione, params.prezzoMin, params.prezzoMax,
+  const chiave = [params.tipo, params.subitoNodo.marcaId, start, params.regione, params.prezzoMin, params.prezzoMax,
     // `_sort`, non `sort`: l'ordinamento arriva in `opts.sort` e viene copiato in `_sort`
     // (vedi scrapeSubitoApi), ed e' `_sort` che buildPath spedisce a hades. Leggendo un
     // campo che nessun chiamante imposta, due recuperi che differivano SOLO per
@@ -686,7 +686,7 @@ async function paginaRecupero(params) {
     // 2 annunci e ne consegnava 13, berline col cambio manuale comprese.
     filtriAuto.chiaveCache(params.filtriAuto)].join('|');
   const hit = recuperoCache.get(chiave);
-  if (hit && Date.now() - hit.ts < RECUPERO_TTL) return hit.ads;
+  if (hit && Date.now() - hit.ts < RECUPERO_TTL) return hit.page;
   if (hit) { clearTimeout(hit.timer); recuperoCache.delete(chiave); }
   const inVolo = recuperoInVolo.get(chiave);
   if (inVolo) {
@@ -697,25 +697,27 @@ async function paginaRecupero(params) {
       // dopo averlo ricevuto, annulla il suo controller nel catch.
       if (e.code !== 'ABORT_ERR' || !inVolo.segnale?.aborted || annullo.annullata()) throw e;
       if (recuperoInVolo.get(chiave)?.promessa === inVolo.promessa) recuperoInVolo.delete(chiave);
-      return paginaRecupero(params);
+      return paginaRecupero(params, start);
     }
   }
   const segnale = annullo.segnale();
   const promessa = (async () => {
-    const page = await fetchPage({ ...params, subitoSoloNonDichiarati: true }, 0);
+    const page = await fetchPage({ ...params, subitoSoloNonDichiarati: true }, start);
+    // Le pagine profonde non restano in memoria: il cursore le chiede solo al clic.
+    if (start !== 0) return page;
     const id = ++recuperoId;
     // Il callback conserva solo chiave e id: nessun annuncio grezzo sopravvive nel timer.
     const timer = setTimeout(() => {
       if (recuperoCache.get(chiave)?.id === id) recuperoCache.delete(chiave);
     }, RECUPERO_TTL);
     timer.unref?.();
-    recuperoCache.set(chiave, { id, ts: Date.now(), ads: page.ads, timer });
+    recuperoCache.set(chiave, { id, ts: Date.now(), page, timer });
     if (recuperoCache.size > 200) {
       const prima = recuperoCache.keys().next().value;
       clearTimeout(recuperoCache.get(prima).timer);
       recuperoCache.delete(prima);
     }
-    return page.ads;
+    return page;
   })();
   recuperoInVolo.set(chiave, { promessa, segnale });
   try { return await promessa; }
@@ -750,11 +752,15 @@ async function scrapeSubitoApi(params, opts = {}) {
   let prezziIlleggibili = 0; // campo prezzo presente, ma senza cifra interpretabile
   let parziale = null, parzialeRete = false, bloccoParziale = null;
   let hasMore = false, erroreTipo = null, erroreHttp = null, erroreCodice = null;
+  let mainNextStart = null, recuperoNextStart = null;
   const erroriSubito = [];
   // "Carica altri": si riparte da dove si era arrivati. Il tetto di hades sta fra
   // start 9.850 e 10.000 (misurato per bisezione), quindi c'e' spazio per ~200 fette.
-  const salta = Math.max(0, opts.fetta || 0) * maxPages * PAGE_SIZE;
-  for (let p = 0; p < maxPages; p++) {
+  const salta = opts.mainStart === null ? null : Number.isInteger(opts.mainStart)
+    ? opts.mainStart : Math.max(0, opts.fetta || 0) * maxPages * PAGE_SIZE;
+  const recuperoStart = opts.recuperoStart === null ? null : Number.isInteger(opts.recuperoStart)
+    ? opts.recuperoStart : (opts.fetta || 0) === 0 ? 0 : null;
+  for (let p = 0; salta !== null && p < maxPages; p++) {
     if (p > 0 && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
     let page;
     try { page = await fetchPage(reqParams, salta + p * PAGE_SIZE); }
@@ -799,17 +805,24 @@ async function scrapeSubitoApi(params, opts = {}) {
     if (!hasMore) break;
     if (p === maxPages - 1) truncated = true;
   }
+  if (salta !== null && hasMore) mainNextStart = salta + maxPages * PAGE_SIZE;
 
   // RECUPERO. Cercando per id, gli annunci che il venditore ha archiviato come "Altro
   // modello" diventano irraggiungibili: misurati sul 3,7% del totale, e sono spesso
   // quelli compilati male — cioe' dove sta l'affare. Una richiesta in piu', per MARCA
   // e in cache: la stessa lista serve ogni modello di quella marca.
-  // Il recupero gira SOLO sulla prima fetta: non e' paginato, e sulle fette successive
-  // rimandava indietro gli stessi annunci. Misurato: 9 doppioni su 109 a ogni "carica altri".
-  if (nodo && nodo.marcaId && gen.size && titoloCombacia && !opts.senzaRecupero && !salta && bloccoParziale?.status !== 429) {
+  // Ha un cursore proprio: una pagina vuota DOPO il filtro sul titolo non significa
+  // che la fonte abbia esaurito le pagine grezze.
+  if (nodo && nodo.marcaId && gen.size && titoloCombacia && !opts.senzaRecupero
+      && recuperoStart !== null && bloccoParziale?.status !== 429) {
     try {
       const visti = new Set(out.map(x => x.url));
-      for (const ad of await paginaRecupero(reqParams)) {
+      const page = await paginaRecupero(reqParams, recuperoStart);
+      const fine = recuperoStart + page.ads.length;
+      const totaleCoerente = page.total != null && page.total >= fine;
+      recuperoNextStart = page.ads.length === PAGE_SIZE && (!totaleCoerente || fine < page.total)
+        ? recuperoStart + PAGE_SIZE : null;
+      for (const ad of page.ads) {
         if (regione) {
           const r = ad.geo && ad.geo.region && ad.geo.region.friendly_name;
           if (r && r.toLowerCase() !== regione) continue;
@@ -835,6 +848,7 @@ async function scrapeSubitoApi(params, opts = {}) {
       parziale = [parziale, e.status === 429 ? AVVISO_429
         : e.code === 'SUBITO_BODY_TOO_LARGE' ? AVVISO_BODY
           : 'Subito non ha completato la ricerca degli annunci senza modello dichiarato.'].filter(Boolean).join(' · ');
+      recuperoNextStart = recuperoStart; // il tentativo non ha consumato questa pagina
     }
   }
   if (attesa.length) await deduciInBlocco(attesa);
@@ -848,7 +862,9 @@ async function scrapeSubitoApi(params, opts = {}) {
   if (prezziIlleggibili && !sospetto) {
     parziale = [parziale, `${prezziIlleggibili} annunci hanno un campo prezzo non leggibile`].filter(Boolean).join(' · ');
   }
-  return opts.withMeta ? { items: out, truncated, total, hasMore, sospetto, parziale, parzialeRete,
+  hasMore = mainNextStart !== null || recuperoNextStart !== null;
+  return opts.withMeta ? { items: out, truncated, total, hasMore, mainNextStart, recuperoNextStart,
+    sospetto, parziale, parzialeRete,
     erroreTipo, erroreHttp, erroreCodice, bloccoParziale, erroriSubito } : out;
 }
 

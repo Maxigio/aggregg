@@ -173,7 +173,8 @@ async function scrapeAutoscoutUnion(params, opts = {}) {
 // Auto e Moto usano sempre hades: gli ID di catalogo e i filtri non vengono sostituiti
 // da una ricerca browser a parole quando l'API non risponde.
 async function scrapeSubitoSmart(params) {
-  return scrapeSubitoApi(params, { sort: 'priceasc', withMeta: true, fetta: params.fetta || 0 });
+  return scrapeSubitoApi(params, { sort: 'priceasc', withMeta: true, fetta: params.fetta || 0,
+    mainStart: params.subitoMainStart, recuperoStart: params.subitoRecuperoStart });
 }
 
 // ─── Auth (attiva SOLO se è stata impostata una password) ────────────────────
@@ -1017,6 +1018,7 @@ function parseSearchParams(query) {
   const {
     tipo, marca, modello, prezzoMin, prezzoMax, annoMin, annoMax, kmMin, kmMax, regione, raggio,
     mmmvAutoscout, motoitBrandSlug, motoitModelSlug, motoitBikeCode, versione, fetta, fonti,
+    subitoMainStart, subitoRecuperoStart,
   } = query;
 
   const errors = [];
@@ -1034,6 +1036,13 @@ function parseSearchParams(query) {
         || voci.some(f => !FONTI_PAGINA.includes(f))) errors.push('fonti della pagina non valide');
     else fontiPagina = FONTI_PAGINA.filter(f => voci.includes(f)).join(',');
   }
+  const cursoriSubito = subitoMainStart !== undefined || subitoRecuperoStart !== undefined;
+  const cursoreSubito = v => v === '-1' ? null
+    : typeof v === 'string' && /^(?:[1-9]\d*)$/.test(v) && Number(v) % 50 === 0
+      && Number(v) <= 2500 ? Number(v) : undefined;
+  if (cursoriSubito && (!(Number(fetta) > 0) || !fontiPagina?.split(',').includes('subito')
+      || cursoreSubito(subitoMainStart) === undefined
+      || cursoreSubito(subitoRecuperoStart) === undefined)) errors.push('cursori Subito non validi');
   if (errors.length) return { errors };
 
   const toInt = (val) => {
@@ -1061,6 +1070,8 @@ function parseSearchParams(query) {
       // (hades si ferma fra start 9.850 e 10.000; qui si ferma alla fetta 50).
       fetta:            Math.min(50, Math.max(0, toInt(fetta) || 0)),
       fontiPagina,
+      subitoMainStart: cursoriSubito ? cursoreSubito(subitoMainStart) : undefined,
+      subitoRecuperoStart: cursoriSubito ? cursoreSubito(subitoRecuperoStart) : undefined,
       mmmvAutoscout:    mmmvAutoscout    || null,
       motoitBrandSlug:  motoitBrandSlug  || null,
       // la correzione vale anche per chi arriva con lo slug vecchio in tasca (menu in
@@ -1113,6 +1124,8 @@ function sciogli(r) {
     items: (r && r.items) || [],
     total: (r && Number.isFinite(r.total)) ? r.total : null,
     hasMore: (r && typeof r.hasMore === 'boolean') ? r.hasMore : null,
+    mainNextStart: r?.mainNextStart ?? null,
+    recuperoNextStart: r?.recuperoNextStart ?? null,
     erroreTipo: (r && r.erroreTipo) || null,
     erroreHttp: (r && r.erroreHttp) || null,
     erroreCodice: (r && r.erroreCodice) || null,
@@ -1334,7 +1347,7 @@ function searchCacheKey(p) {
   const avanzati = filtriAuto.chiaveCache(p.filtriAuto);
   return ['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax',
           'regione', 'raggio', 'mmmvAutoscout', 'motoitBrandSlug', 'motoitModelSlug', 'motoitBikeCode',
-          'versione', 'fetta', 'fontiPagina']
+          'versione', 'fetta', 'fontiPagina', 'subitoMainStart', 'subitoRecuperoStart']
     .map(f => `${f}=${p[f] ?? ''}`).concat(`avanzati=${avanzati}`).join('&').toLowerCase();
 }
 function cacheable(data) {
@@ -2228,6 +2241,8 @@ async function runSearchCore(params) {
       // FONTE per questa ricerca. Sono due popolazioni diverse e restano due numeri.
       subito:    { status: subitoRes.status, reason: subitoRes.reason || null, count: countBy('subito'),
                    totale: subitoRes.total ?? null, hasMore: subitoRes.hasMore ?? null,
+                   mainNextStart: subitoRes.mainNextStart ?? null,
+                   recuperoNextStart: subitoRes.recuperoNextStart ?? null,
                    erroreTipo: subitoRes.erroreTipo || null, erroreHttp: subitoRes.erroreHttp || null,
                    erroreCodice: subitoRes.erroreCodice || null,
                    errori: subitoRes.erroriSubito || [],

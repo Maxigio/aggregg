@@ -94,6 +94,42 @@ test('Subito: la pagina standard e Carica altri usano start=0 e start=50', async
   } finally { subito._setHttpGetJson(null); }
 });
 
+test('Subito Auto e Moto: i due cursori avanzano e si esauriscono indipendentemente', async () => {
+  for (const tipo of ['auto', 'moto']) {
+    const chiamate = [];
+    const p = params(tipo, ['111']);
+    p.subitoNodo.marcaId = `cursori-${tipo}`;
+    p.subitoNodo.generazioni = [{ id: '111' }];
+    subito._setHttpGetJson(async path => {
+      const q = new URL('https://local.invalid' + path).searchParams;
+      const ramo = q.get(tipo === 'auto' ? 'cm' : 'bm') === '000000' ? 'recupero' : 'nativo';
+      const start = Number(q.get('start'));
+      chiamate.push([ramo, start]);
+      if (ramo === 'nativo') return ok(Array.from({ length: 50 }, (_, i) => annuncio(start + i)), 100);
+      if (start < 100) return ok(Array.from({ length: 50 }, (_, i) => ({
+        ...annuncio(1000 + start + i), subject: 'Altro veicolo',
+      })), 101);
+      return ok([annuncio(1200)], 101);
+    });
+    try {
+      const prima = await subito(p, { withMeta: true });
+      assert.deepEqual([prima.mainNextStart, prima.recuperoNextStart, prima.hasMore], [50, 50, true]);
+      const seconda = await subito(p, { withMeta: true, fetta: 1,
+        mainStart: prima.mainNextStart, recuperoStart: prima.recuperoNextStart });
+      assert.deepEqual([seconda.mainNextStart, seconda.recuperoNextStart, seconda.hasMore], [null, 100, true]);
+      assert.equal(seconda.items.length, 50, 'zero candidati nel recupero non chiude il suo cursore');
+      const terza = await subito(p, { withMeta: true, fetta: 2,
+        mainStart: seconda.mainNextStart, recuperoStart: seconda.recuperoNextStart });
+      assert.deepEqual(chiamate, [
+        ['nativo', 0], ['recupero', 0], ['nativo', 50], ['recupero', 50], ['recupero', 100],
+      ]);
+      assert.equal(terza.items.length, 1);
+      assert.equal(terza.items[0].dichiarazione, 'senza-modello');
+      assert.deepEqual([terza.mainNextStart, terza.recuperoNextStart, terza.hasMore], [null, null, false]);
+    } finally { subito._setHttpGetJson(null); }
+  }
+});
+
 test('Subito: meno di 50 annunci, totale assente e filtri locali non cambiano il numero di pagine', async () => {
   const chiamate = [];
   subito._setHttpGetJson(async path => {

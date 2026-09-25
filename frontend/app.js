@@ -2314,6 +2314,7 @@ const MAX_FETTE = 50;          // stesso tetto di parseSearchParams: oltre il se
 let caricandoAltri = false;
 let paginaErrore = null;
 let paginaRetryTimer = null;
+let paginaSubitoInSospeso = null; // solo righe normalizzate della pagina nativa riuscita
 
 function fontiConAltri() {
   const s = lastSources || {};
@@ -2337,6 +2338,12 @@ async function caricaAltri() {
   const myGen = searchGen;
   try {
     const q = new URLSearchParams({ ...lastSearchParams, fetta: String(fettaPresa + 1), fonti: fonti.join(',') });
+    const subito = lastSources?.subito;
+    if (fonti.includes('subito') && subito && 'mainNextStart' in subito && 'recuperoNextStart' in subito) {
+      q.set('subitoMainStart', String(paginaSubitoInSospeso ? -1 : subito.mainNextStart ?? -1));
+      q.set('subitoRecuperoStart', String(paginaSubitoInSospeso
+        ? paginaSubitoInSospeso.recuperoStart : subito.recuperoNextStart ?? -1));
+    }
     const res = await fetch(`/api/search?${q}`);
     const data = await res.json();
     if (myGen !== searchGen) return;         // una ricerca nuova ha preso il posto
@@ -2359,6 +2366,12 @@ async function caricaAltri() {
         || (s.status === 'skipped' && s.pausa?.fermo && lastSources?.[f]?.hasMore));
     });
     if (cadute.length) {
+      const s = data.sources.subito;
+      if (!paginaSubitoInSospeso && fonti.includes('subito') && subito?.mainNextStart != null
+          && s?.parzialeRete && s.errori?.some(e => e.fase === 'recupero')) {
+        paginaSubitoInSospeso = { risultati: data.risultati.filter(r => r.fonte === 'subito'),
+          source: s, recuperoStart: subito.recuperoNextStart };
+      }
       const fonte = cadute.map(f => FONTE_LABEL[f] || f).join(' e ');
       const stati = cadute.map(f => data.sources[f]);
       const errori = cadute.flatMap(f => {
@@ -2389,6 +2402,16 @@ async function caricaAltri() {
         riprovabile,
         dopo };
       renderSourceStatus(); toast(paginaErrore.testo); return;
+    }
+    if (paginaSubitoInSospeso) {
+      const p = paginaSubitoInSospeso;
+      const s = data.sources.subito;
+      data.risultati = p.risultati.concat(data.risultati);
+      data.sources.subito = { ...s, status: p.risultati.length ? 'ok' : s.status,
+        count: p.risultati.length + (s.count || 0), totale: p.source.totale ?? s.totale,
+        mainNextStart: p.source.mainNextStart,
+        hasMore: p.source.mainNextStart != null || s.recuperoNextStart != null };
+      paginaSubitoInSospeso = null;
     }
     paginaErrore = null;
     fettaPresa++;
@@ -2435,6 +2458,9 @@ function fondiTotali(nuove) {
     if (vecchia && (vecchia.status === 'ok' || vecchia.status === 'empty')
         && n && (n.status === 'empty' || n.status === 'skipped')) {
       out[f] = { ...vecchia, count: presiDa(f), hasMore: n.status === 'empty' ? n.hasMore ?? false : vecchia.hasMore,
+        ...(f === 'subito' && n.status === 'empty'
+          ? { mainNextStart: n.mainNextStart ?? null, recuperoNextStart: n.recuperoNextStart ?? null }
+          : {}),
         pausa: n.pausa || vecchia.pausa };
       continue;
     }
@@ -2542,6 +2568,7 @@ async function doSearch() {
     document.body.classList.add('has-results');
     fettaPresa = 0;                      // ricerca nuova: si riparte dalla prima fetta
     paginaErrore = null;
+    paginaSubitoInSospeso = null;
     lastSources = data.sources || null;
     renderSourceStatus();
 
@@ -4383,6 +4410,7 @@ function resetContesto() {
   lastSources = null;
   fettaPresa = 0;
   paginaErrore = null;
+  paginaSubitoInSospeso = null;
   if (paginaRetryTimer) { clearTimeout(paginaRetryTimer); paginaRetryTimer = null; }
   ultimiVisti = null;
   soloIva = false;
