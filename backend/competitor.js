@@ -160,6 +160,9 @@ function getTesto(url, redirect = 0) {
       if (res.statusCode >= 400) {
         res.resume();
         const e = fontiSalute.erroreHttp(fonte, res.statusCode, res.headers);
+        // Lo stesso errore attraversa anche la verifica: la deduplica evita doppi
+        // colpi, incluso il 429 gia' registrato da erroreHttp.
+        fontiSalute.registra(fonte, { errore: e });
         return reject(e);
       }
       const ch = []; let s = res;
@@ -268,7 +271,13 @@ async function risolviVetrina(urlRaw) {
   const slugMoto = vetrinaMoto.slugVetrina(url);
   if (slugMoto) return await vetrinaMoto.scheda(slugMoto);
 
-  if (/autoscout24\.it\/concessionari\//i.test(url)) {
+  // Un errore locale non deve consumare la verifica dopo la pausa. Il trasporto
+  // sottostante accetta HTTPS; host e percorso si leggono dalla URL, non dalla query.
+  let u; try { u = new URL(url); } catch (_) { throw new Error('link non valido'); }
+  if (u.protocol !== 'https:') throw new Error('serve il link della vetrina, che comincia con https://');
+  if (!/(^|\.)(autoscout24\.it|subito\.it)$/i.test(u.hostname)) throw new Error('host non consentito');
+
+  if (/(^|\.)autoscout24\.it$/i.test(u.hostname) && /^\/concessionari\//i.test(u.pathname)) {
     return fontiSalute.richiesta('autoscout', async () => {
     const html = await getTesto(url);
     const id = (html.match(/"customerId"\s*:\s*"?(\d{3,})"?/) || [])[1];
@@ -283,15 +292,17 @@ async function risolviVetrina(urlRaw) {
     const dove = pulisci((html.match(/"addressLocality"\s*:\s*"([^"]{2,60})"/) || [])[1]
       || (tit.match(/\bin\s+([^|]+?)\s*\|/i) || [])[1] || '');
     const via = pulisci((html.match(/"streetAddress"\s*:\s*"([^"]{3,80})"/) || [])[1] || '');
-    return { fonte: 'autoscout', id, nome, dove: dove || null, via: via || null, url, ...schedaLd(html) };
+    const voce = { fonte: 'autoscout', id, nome, dove: dove || null, via: via || null, url, ...schedaLd(html) };
+    fontiSalute.registra('autoscout', { conteggio: 1 });
+    return voce;
     });
   }
 
-  if (/subito\.it\/shops\//i.test(url) || /subito\.it\/.*\/shops\//i.test(url)) {
-    return fontiSalute.richiesta('subito', async () => {
+  if (/(^|\.)subito\.it$/i.test(u.hostname) && /\/shops\//i.test(u.pathname)) {
     // L'URL porta l'id NEGOZIO; il filtro vuole l'id UTENTE. Si prende da un suo annuncio.
-    const shop = (url.match(/\/shops\/(\d+)/) || [])[1];
+    const shop = (u.pathname.match(/\/shops\/(\d+)/) || [])[1];
     if (!shop) throw new Error('non riesco a leggere l\'id del negozio da questo link');
+    return fontiSalute.richiesta('subito', async () => {
     const html = await getTesto(url);
     /**
      * L'id UTENTE c'e', ma non si chiama `user_id`. Sta nel data layer che la pagina
@@ -314,7 +325,7 @@ async function risolviVetrina(urlRaw) {
     // Roba che sta nella pagina e che Autoscout non ha: chi risponde al telefono e con che
     // ruolo, e quanti annunci il negozio dichiara di avere.
     const referente = pulisci($('.referent .ref_name').first().text()) || null;
-    return {
+    const voce = {
       fonte: 'subito', id: uid, shopId: shop, url,
       nome,
       dove: pulisci((String(ld.indirizzo || '').match(/,\s*\d{5}\s+([^,]+)/) || [])[1] || '') || null,
@@ -330,6 +341,8 @@ async function risolviVetrina(urlRaw) {
       descrizione: pulisci($('.shop_description').first().text()) || ld.descrizione || null,
       annunciDichiarati: (() => { const n = parseInt(pulisci($('#result_numb').first().text()).replace(/[^\d]/g, ''), 10); return Number.isFinite(n) ? n : null; })(),
     };
+    fontiSalute.registra('subito', { conteggio: 1 });
+    return voce;
     });
   }
 

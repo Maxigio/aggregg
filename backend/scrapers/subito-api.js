@@ -677,6 +677,17 @@ const recuperoCache = new Map();   // prima pagina della query → { ts, page, t
 const recuperoInVolo = new Map();  // stessa query → { promessa, segnale della ricerca che l'ha avviata }
 let recuperoId = 0;
 
+function scartaPaginaRecupero(page) {
+  // Il retry deve poter rileggere una pagina che non sappiamo interpretare. L'identità
+  // protegge una risposta più recente e le altre query che condividono questa cache.
+  for (const [chiave, entry] of recuperoCache) {
+    if (entry.page !== page) continue;
+    clearTimeout(entry.timer);
+    recuperoCache.delete(chiave);
+    return;
+  }
+}
+
 async function paginaRecupero(params, start = 0) {
   /**
    * LA CHIAVE DEVE CONTENERE TUTTO QUELLO CHE ENTRA NELLA RICHIESTA. Con `tipo|marca` la
@@ -827,9 +838,10 @@ async function scrapeSubitoApi(params, opts = {}) {
   // che la fonte abbia esaurito le pagine grezze.
   if (nodo && nodo.marcaId && gen.size && titoloCombacia && !opts.senzaRecupero
       && recuperoStart !== null && bloccoParziale?.status !== 429) {
+    let page;
     try {
       const visti = new Set(out.map(x => x.url));
-      const page = await paginaRecupero(reqParams, recuperoStart);
+      page = await paginaRecupero(reqParams, recuperoStart);
       const fine = recuperoStart + page.ads.length;
       const totaleCoerente = page.total != null && page.total >= fine;
       recuperoNextStart = page.ads.length === PAGE_SIZE && (!totaleCoerente || fine < page.total)
@@ -849,6 +861,7 @@ async function scrapeSubitoApi(params, opts = {}) {
         if (kv) attesa.push({ riga, descrizione: ad.body, ...kv });
       }
     } catch (e) {
+      if (page) scartaPaginaRecupero(page);
       // Il recupero e' un di piu': se cade, la ricerca vale lo stesso.
       const dettaglio = erroreRichiesta(e, 'recupero');
       if (dettaglio) erroriSubito.push(dettaglio);

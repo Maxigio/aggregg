@@ -10,6 +10,7 @@ const scrapeSubito = require('./scrapers/subito-api');   // .searchAccessori(key
 const ebayScrape = require('./ebay-scrape');             // scrape-bridge in attesa API ufficiale
 const logger = require('./logger');
 const salute = require('./fonti-salute');
+const annullo = require('./annullo');
 
 const TIMEOUT_MS = parseInt(process.env.RICAMBI_TIMEOUT_MS, 10) || 45000;
 
@@ -71,9 +72,13 @@ function relevantToQuery(items, query) {
 
 // Avvolge la promise di una fonte (che risolve al SUO envelope) in { items, status, reason, meta }.
 // status: ok | empty | blocked | error | timeout. Non rigetta mai.
-async function runSource(promise, ms) {
+async function runSource(promise, ms, annulla) {
   let timer;
-  const timeout = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('__timeout__')), ms); });
+  const timeout = new Promise((_, rej) => { timer = setTimeout(() => {
+    // Prima si fissa l'esito timeout: l'AbortError del trasporto non deve sostituirlo.
+    rej(new Error('__timeout__'));
+    if (annulla) annulla();
+  }, ms); });
   try {
     const res = await Promise.race([promise, timeout]);
     if (!res) return { items: [], status: 'error', reason: 'nessuna risposta', meta: null };
@@ -114,8 +119,13 @@ async function searchRicambi(qRaw, opts = {}) {
 
   // Fan-out SOLO fonti strutturate. Il catalogo OEM segue il veicolo: auto → Autodoc, moto → CMSNL.
   // Subito interroga la sola categoria del veicolo (c=5 auto / c=36 moto).
+  // Un controller per lavoro, non per scheda: chi condivide questa ricerca ne
+  // condivide la scadenza, senza poter annullare la richiesta degli altri chiamanti.
+  const controlloSubito = new AbortController();
+  const subitoJob = annullo.dentro(controlloSubito.signal,
+    () => Promise.resolve().then(() => subitoFn(term, { cat: veicolo })));
   const jobs = {
-    subito: runSource(Promise.resolve().then(() => subitoFn(term, { cat: veicolo })), TIMEOUT_MS),
+    subito: runSource(subitoJob, TIMEOUT_MS, () => controlloSubito.abort()),
     ebay: runSource(Promise.resolve().then(() => ebayFn(term)), TIMEOUT_MS),
   };
   if (mode === 'oem') {

@@ -17,7 +17,8 @@ const autoscout = require('../backend/scrapers/autoscout-graphql');
 const motoit = require('../backend/scrapers/motoit');
 const server = require('../backend/server');
 const request = https.request;
-afterEach(() => { subito._setHttpGetJson(null); motoit._get = getMoto; https.request = request; salute.azzera(); });
+const get = https.get;
+afterEach(() => { subito._setHttpGetJson(null); motoit._get = getMoto; https.request = request; https.get = get; salute.azzera(); });
 after(() => { salute._reset(); fs.rmSync(dir, { recursive: true, force: true }); });
 const getMoto = motoit._get;
 
@@ -205,4 +206,52 @@ test('retry con cursore Subito diverso riusa AutoScout, ma un filtro diverso no'
   assert.equal(asCalls, 1, 'stessa pagina AutoScout non dipende dal cursore Subito');
   await server._amrSearchFn({ ...q, subitoMainStart: '-1', prezzoMin: '123' });
   assert.equal(asCalls, 2, 'filtri diversi non condividono la colonna');
+});
+
+test('riallargamento AutoScout respinto: conserva HTTP e tipo per riprovare la pagina', async () => {
+  subito._setHttpGetJson(async () => ({ status: 200, body: '{"ads":[],"count_all":0}' }));
+  const chiamate = [];
+  https.request = (...args) => {
+    const cb = args.at(-1), req = new EventEmitter();
+    let body = '';
+    req.write = x => { body += x; };
+    req.setTimeout = () => {};
+    req.end = () => process.nextTick(() => {
+      const conVersione = JSON.stringify(JSON.parse(body).variables).includes('Cross');
+      chiamate.push(conVersione ? 'versione' : 'riallargamento');
+      const res = new EventEmitter();
+      res.statusCode = conVersione ? 200 : 503;
+      res.headers = {}; res.setEncoding = () => {}; res.resume = () => {};
+      cb(res);
+      if (conVersione) {
+        res.emit('data', JSON.stringify({ data: { search: { listings: {
+          listings: [], metadata: { totalItems: 0 },
+        } } } }));
+        res.emit('end');
+      }
+    });
+    return req;
+  };
+  const r = await server._amrSearchFn({ tipo: 'auto', marca: 'Fiat', modello: 'Panda',
+    versione: 'Cross', fetta: 1, fonti: 'autoscout', prezzoMin: 197 });
+  assert.deepEqual(chiamate, ['versione', 'riallargamento']);
+  assert.equal(r.sources.autoscout.status, 'error');
+  assert.equal(r.sources.autoscout.erroreTipo, 'transient');
+  assert.equal(r.sources.autoscout.erroreHttp, 503);
+});
+
+test('una pagina richiesta solo a Subito non consulta il catalogo remoto Moto.it', async () => {
+  let menuMoto = 0, hades = 0;
+  https.get = () => { menuMoto++; throw new Error('catalogo Moto.it non richiesto'); };
+  subito._setHttpGetJson(async () => {
+    hades++;
+    return { status: 200, body: '{"ads":[],"count_all":0}' };
+  });
+  const r = await server._amrSearchFn({ tipo: 'moto', marca: 'Talaria', modello: 'Sting L1E',
+    motoitBrandSlug: 'talaria-moto', fetta: 1, fonti: 'subito',
+    subitoMainStart: '0', subitoRecuperoStart: '-1', prezzoMin: 198 });
+  assert.equal(r.error, undefined);
+  assert.equal(r.sources.moto.status, 'skipped');
+  assert.equal(menuMoto, 0);
+  assert.equal(hades, 1);
 });

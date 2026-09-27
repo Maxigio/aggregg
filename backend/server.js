@@ -1444,6 +1444,7 @@ function as24LivelloAllargamento(params, asRes, as24Allargato) {
 // stato per-fonte. Chiamato da GET /api/search E dal motore avvisi (saved-check),
 // così UI e avvisi danno risultati/rating coerenti. Ritorna l'oggetto-response.
 async function runSearchCore(params) {
+  const richiesta = f => !params.fontiPagina || params.fontiPagina.split(',').includes(f);
   // ── Risoluzione metadata per-sito dal catalogo unificato ──────────────────
   // Subito: gli id del suo catalogo (cb/cm auto, bb/bm moto) — vedi subito-nodo.
   // Autoscout24: serve mmmvAutoscout (livello modello, fallback livello brand).
@@ -1606,7 +1607,7 @@ async function runSearchCore(params) {
     // = undersampling, es. 2 Hornet su 39 honda economici). È una SINGOLA richiesta
     // HTTP cacheable 12h (NON il burst parallelo soft-bloccato) → veloce e affidabile
     // in uso normale. Risolto lo slug, il browser cerca server-side `model=`.
-    if (!params.motoitModelSlug && params.motoitBrandSlug && params.modello) {
+    if (richiesta('moto') && !params.motoitModelSlug && params.motoitBrandSlug && params.modello) {
       try {
         // TUTTE le famiglie che il nome aggancia, non una sorteggiata: su Moto.it la stessa
         // moto e' spezzata per cilindrata ("Scarabeo" sono nove famiglie) e prima si teneva la
@@ -1711,7 +1712,8 @@ async function runSearchCore(params) {
    * E MOTO.IT? E' l'unica che vuole un codice, quindi l'unica dove il testo va tradotto.
    * Vedi backend/scrapers/motoit-versione.js per il come e per i numeri.
    */
-  if (params.versione && params.tipo === 'moto' && params.motoitBrandSlug && params.motoitModelSlug && !params.motoitBikeCode) {
+  if (richiesta('moto') && params.versione && params.tipo === 'moto'
+      && params.motoitBrandSlug && params.motoitModelSlug && !params.motoitBikeCode) {
     try {
       // `motoitModelSlug` puo' essere una LISTA di famiglie (vedi famiglieMotoit): getModelBikes
       // ne vuole una sola, quindi si raccolgono le versioni di tutte. Le richieste sono cachate
@@ -1888,7 +1890,6 @@ async function runSearchCore(params) {
     if (hit && Date.now() - hit.ts < SEARCH_CACHE_TTL) salvate[f] = hit.data;
     else if (hit) pagineInSospeso.delete(chiaviPagina[f]);
   }
-  const richiesta = f => !params.fontiPagina || params.fontiPagina.split(',').includes(f);
   const esaurita = () => ({ items: [], status: 'skipped', reason: 'fonte esaurita nelle pagine precedenti', hasMore: false });
   const [subitoRes, asRes0, motoRes] = await Promise.all([
     !richiesta('subito') ? Promise.resolve(esaurita()) : salvate?.subito ? Promise.resolve(salvate.subito) : skipSubito
@@ -1941,7 +1942,7 @@ async function runSearchCore(params) {
       // Un ritentativo SCADUTO non e' "la fonte non ha nulla": lasciando 'empty' la risposta
       // monca finiva pure in cache per tre minuti (vedi `cacheable`). Si porta fuori lo stato
       // vero, cosi' il badge e' rosso e la ricerca si puo' rifare davvero.
-      else if (retry.status === 'timeout' || retry.status === 'error') asRes = { ...asRes, status: retry.status, reason: retry.reason };
+      else if (retry.status === 'timeout' || retry.status === 'error') asRes = retry;
     }
   }
 

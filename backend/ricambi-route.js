@@ -41,6 +41,7 @@ function mount(app, deps = {}) {
 
 
   const cache = new Map();                   // normOen → { ts, ttl, data }
+  const inVolo = new Map();                  // account + parametri → lavoro condiviso fra schede
   const ebayCache = new Map();               // itm url → { ts, data } (enrich lazy annunci eBay)
   const autodocCache = new Map();            // product url → { ts, data } (specs lazy variante Autodoc)
   const crea = require('./limite-richieste').crea;
@@ -61,16 +62,27 @@ function mount(app, deps = {}) {
       cache.delete(key); cache.set(key, hit);   // LRU touch
       return res.json({ ...salute.conStatoFonti(hit.data), restanti: limite.stato(chiaveLimite(req)).restanti });
     }
-    const g = limite.consuma(chiaveLimite(req));
-    if (!g.ok) return res.status(429).json({ error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
+    const persona = chiaveLimite(req);
+    // Il raw serve al fallback Web anche quando l'OEM normalizzato coincide.
+    const lavoroKey = JSON.stringify([persona, mode, veicolo, q]);
+    let lavoro = inVolo.get(lavoroKey);
+    if (!lavoro) {
+      const g = limite.consuma(persona);
+      if (!g.ok) return res.status(429).json({ error: limite.messaggio(g), riprovaFra: g.attesa, restanti: 0 });
+      // Il lavoro, inclusi i suoi timeout, non appartiene alla connessione di una scheda.
+      lavoro = Promise.resolve().then(() => searchRicambi(q, { mode, veicolo })).then(data => {
+        if (cacheable(data)) {
+          const ttl = data.count > 0 ? RICAMBI_TTL : RICAMBI_EMPTY_TTL;
+          cache.set(key, { ts: Date.now(), ttl, data });
+          if (cache.size > RICAMBI_CACHE_MAX) cache.delete(cache.keys().next().value);
+        }
+        return data;
+      }).finally(() => inVolo.delete(lavoroKey));
+      inVolo.set(lavoroKey, lavoro);
+    }
     try {
-      const data = await searchRicambi(q, { mode, veicolo });
-      if (cacheable(data)) {
-        const ttl = data.count > 0 ? RICAMBI_TTL : RICAMBI_EMPTY_TTL;
-        cache.set(key, { ts: Date.now(), ttl, data });
-        if (cache.size > RICAMBI_CACHE_MAX) cache.delete(cache.keys().next().value);
-      }
-      res.json({ ...data, restanti: g.restanti });
+      const data = await lavoro;
+      res.json({ ...data, restanti: limite.stato(persona).restanti });
     } catch (e) {
       console.error('[ricambi]', e.message);
       res.status(500).json({ error: 'Errore interno durante il lookup.' });

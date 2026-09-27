@@ -36,6 +36,7 @@ function ambiente(t, risposta) {
     './oem-lookup': oem, './cmsnl-lookup': { lookupCmsnl: vuota },
     './web-parts': { searchWebParts: vuota }, './ebay-scrape': ebay,
     './logger': { info() {}, warn() {} }, './fonti-salute': salute,
+    './annullo': require('../backend/annullo'),
     './scrapers/subito-api': { searchAccessori: async (q, opts) => {
       chiamate.push({ q, opts });
       const r = await risposta();

@@ -26,7 +26,7 @@ function prepara() {
     },
     clearTimeout(timer) { timer.active = false; },
   };
-  vm.runInNewContext(source.slice(start, end) + '\nthis.api = { paginaRecupero, recuperoCache, recuperoInVolo, RECUPERO_TTL };', context);
+  vm.runInNewContext(source.slice(start, end) + '\nthis.api = { paginaRecupero, scartaPaginaRecupero, recuperoCache, recuperoInVolo, RECUPERO_TTL };', context);
   return {
     ...context.api,
     richieste: () => richieste,
@@ -76,6 +76,36 @@ test('l’espulsione non lascia timer attivi che trattengono la cache', async ()
   assert.equal(c.attivi(), 200);
   c.avanza(c.RECUPERO_TTL);
   assert.equal(c.recuperoCache.size, 0);
+});
+
+test('scartare la pagina illeggibile rimuove solo la sua entry e il suo timer', async () => {
+  const c = prepara();
+  const guasta = await c.paginaRecupero(params('alfa'));
+  const sana = await c.paginaRecupero(params('beta'));
+  assert.equal(c.attivi(), 2);
+  c.scartaPaginaRecupero(guasta);
+  assert.equal(c.recuperoCache.size, 1);
+  assert.equal(c.attivi(), 1);
+  assert.strictEqual(await c.paginaRecupero(params('beta')), sana);
+  assert.equal(c.richieste(), 2);
+});
+
+test('un consumatore della vecchia pagina non cancella il recupero nuovo in volo né la sua risposta', async () => {
+  const c = prepara();
+  const vecchia = await c.paginaRecupero(params('alfa'));
+  c.avanza(c.RECUPERO_TTL);
+  let termina;
+  c.setFetchPage(() => new Promise(resolve => { termina = resolve; }));
+  const inCorso = c.paginaRecupero(params('alfa'));
+  c.scartaPaginaRecupero(vecchia);
+  assert.equal(c.recuperoInVolo.size, 1);
+  const nuova = { ads: [{ id: 2 }] };
+  termina(nuova);
+  assert.strictEqual(await inCorso, nuova);
+  c.scartaPaginaRecupero(vecchia);
+  assert.equal(c.recuperoCache.size, 1);
+  assert.equal(c.attivi(), 1);
+  assert.strictEqual(await c.paginaRecupero(params('alfa')), nuova);
 });
 
 test('due modelli della stessa marca attendono un solo recupero, senza fondere marche diverse', async () => {

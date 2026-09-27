@@ -20,6 +20,10 @@ const salute = require('./fonti-salute');
 
 const TTL = 10 * 60 * 1000;
 const cache = new Map();   // `${fonte}:${id}` → { ts, dati }
+// Le scritture si ordinano anche tra account diversi; gli scarichi in volo invece
+// si condividono solo tra schede dello stesso account (singolo e gruppo).
+const aggiornamenti = new Map();
+let generazioneParco = 0;
 
 /**
  * IL LIMITATORE, che qui mancava mentre ogni altra rotta ce l'ha (ricambi-route:44,
@@ -38,12 +42,12 @@ const MSG_LIMITE = `Troppi scarichi di parco: sono ${PARCO_MAX} ogni ${PARCO_FIN
 const limiteParco = require('./limite-richieste').crea({
   max: PARCO_MAX, finestra: PARCO_FINESTRA, cosa: 'scarichi di parco', maxChiavi: 500,
 });
-const parcoOk = ip => limiteParco.consuma(ip).ok;
 /** Quanti scarichi restano, per dirlo invece di far sembrare rotta la sezione. */
 const parcoRestanti = ip => limiteParco.stato(ip).restanti;
 
 function mount(app, deps = {}) {
   const C = deps.competitor || comp;
+  const inVolo = new Map();
   // La chiave dei limiti: la PERSONA quando e' entrata, l'indirizzo quando no.
   const chiaveLimite = deps.chiaveLimite || deps.clientIp || (req => req.ip || '');
   // Il body JSON si monta per-rotta in questa app, non globalmente: arriva da server.js.
@@ -186,7 +190,7 @@ function mount(app, deps = {}) {
    * L'utente arriva come argomento: qui dentro `req` non c'e', e l'elenco da cui si pesca la
    * vetrina e' il SUO — non un elenco comune.
    */
-  async function scaricaParco(utente, chiave, forza, blocco = null) {
+  async function scaricaParco(utente, chiave, forza, blocco, ip) {
     let voce = vociLette(utente).find(v => chiaveDi(v) === String(chiave));
     if (!voce) { const e = new Error('non e\' nell\'elenco'); e.stato = 404; throw e; }
     const k = chiaveDi(voce);
@@ -201,6 +205,34 @@ function mount(app, deps = {}) {
         avvisoCache: blocco ? `${blocco} Mostriamo i dati in cache del ${new Date(hit.ts).toLocaleString('it-IT')}, non aggiornati.` : null };
     }
     if (blocco) throw Object.assign(new Error(blocco), { stato: 502, code: 'FONTE_IN_PAUSA' });
+    const lavoroKey = JSON.stringify([utente, k]);
+    let lavoro = inVolo.get(lavoroKey);
+    if (!lavoro) {
+      const g = limiteParco.consuma(ip);
+      if (!g.ok) throw Object.assign(new Error(limiteParco.messaggio(g, MSG_LIMITE)),
+        { stato: 429, limiteParco: true, attesa: g.attesa });
+      const generazione = ++generazioneParco;
+      const stato = aggiornamenti.get(k) || { attivi: 0, scritta: 0 };
+      stato.attivi++;
+      aggiornamenti.set(k, stato);
+      // Anche forza si unisce a uno scarico gia' in corso. Dopo la sua conclusione
+      // un nuovo forza continua a saltare la cache e paga un nuovo scarico.
+      lavoro = Promise.resolve().then(() => scaricaNuovo(utente, voce, k, generazione, stato))
+        .finally(() => {
+          inVolo.delete(lavoroKey);
+          if (--stato.attivi === 0) aggiornamenti.delete(k);
+        });
+      inVolo.set(lavoroKey, lavoro);
+    }
+    const dati = await lavoro;
+    // La cache contiene veicoli condivisi, il nome/gruppo/mio appartengono al
+    // chiamante. Si ricontrolla anche dopo l'attesa: la voce puo' essere stata tolta.
+    voce = vociLette(utente).find(v => chiaveDi(v) === k);
+    if (!voce) throw Object.assign(new Error('non e\' nell\'elenco'), { stato: 404 });
+    return { ...dati, voce };
+  }
+
+  async function scaricaNuovo(utente, voce, k, generazione, stato) {
     // Le vetrine salvate prima avevano tre campi: nome, dove, via. Ora la pagina ne da'
     // molti di piu' (telefoni, orari, valutazione, servizi, logo) e chi ce l'ha gia' in
     // elenco non deve toglierla e rimetterla per vederli: si rilegge una volta sola,
@@ -231,9 +263,9 @@ function mount(app, deps = {}) {
          * fatto SUBITO dopo leggi(), nello stesso tick, mai dopo un await» — e qui non era
          * rispettata. I campi di identita' si prendono dal record FRESCO appena riletto.
          */
-        const attuale = tutte.find(v => chiaveDi(v) === String(chiave)) || voce;
+        const attuale = tutte.find(v => chiaveDi(v) === k) || voce;
         voce = { ...voce, ...fresca, id: attuale.id, mio: attuale.mio, aggiunto: attuale.aggiunto, gruppo: attuale.gruppo, schedaLetta: true };
-        if (!C.leggi.ultimoErrore) C.scrivi(utente, tutte.map(v => (chiaveDi(v) === String(chiave) ? voce : v)));
+        if (!C.leggi.ultimoErrore) C.scrivi(utente, tutte.map(v => (chiaveDi(v) === k ? voce : v)));
       } catch (e) {
         if (e.status === 429 || e.code === 'FONTE_IN_PAUSA') {
           e.stato = 502;
@@ -274,8 +306,15 @@ function mount(app, deps = {}) {
     // Si rilegge dopo l'await: anche un altro scarico puo' aver appena riempito la cache.
     const precedente = cache.get(k);
     const parziale = d => d.passateKo?.length || d.troncato || d.illeggibili || d.avvisiLettura?.length;
-    if (!parziale(dati) || !precedente || parziale(precedente.dati) || !inCacheFresca(k)) {
-      cache.set(k, { ts: Date.now(), dati });
+    const miglioraCompletezza = precedente && !parziale(dati) && parziale(precedente.dati);
+    const successiva = generazione > (precedente?.generazione ?? stato.scritta);
+    // A parita' di completezza vince la richiesta piu' recente. Una copia completa
+    // resta preferibile a una parziale; una parziale non rinnova il TTL della sana.
+    // scritta protegge anche dall'arrivo tardivo dopo un'espulsione LRU della cache.
+    if ((successiva || miglioraCompletezza) &&
+        (!parziale(dati) || !precedente || parziale(precedente.dati) || !inCacheFresca(k))) {
+      cache.set(k, { ts: Date.now(), dati, generazione });
+      stato.scritta = Math.max(stato.scritta, generazione);
     }
     // Un annuncio pesa ~3 KB (misurato su Autoscout: 16 annunci, 50 KB, meta' sono gli URL
     // delle foto). Un parco al tetto sono 6 MB: sessanta in cache erano 370 MB di roba che
@@ -296,16 +335,12 @@ function mount(app, deps = {}) {
       // risposta diventa 429, e quando il magazzino torna restano fuori anche gli scarichi veri.
       const voce = vociLette(chiDi(req)).find(v => chiaveDi(v) === chiave);
       const blocco = voce && salute.fermo(voce.fonte).fermo ? salute.avvisoPausa(voce.fonte) : null;
-      const daCache = (!forza || blocco) && inCacheFresca(chiave);
-      if (!daCache && !blocco && !parcoOk(ip)) {
-        const st = limiteParco.stato(ip);
-        return res.status(429).json({ ok: false, error: limiteParco.messaggio(st, MSG_LIMITE), riprovaFra: st.attesa, restanti: 0 });
-      }
-      const d = await scaricaParco(chiDi(req), chiave, forza, blocco);
+      const d = await scaricaParco(chiDi(req), chiave, forza, blocco, ip);
       res.json({ ok: true, ...d, scarichiRestanti: parcoRestanti(ip) });
     } catch (e) {
       const corpo = { ok: false, error: e.message };
       if (e.corrotto) corpo.corrotto = true;
+      if (e.limiteParco) Object.assign(corpo, { riprovaFra: e.attesa, restanti: 0 });
       res.status(e.stato || 500).json(corpo);
     }
   });
@@ -358,10 +393,9 @@ function mount(app, deps = {}) {
     // dal budget: un gruppo di 10 vetrine con un doppio clic (il secondo parte gia' con
     // forza=1, il frontend valorizza lo stato PRIMA della fetch) erano fino a 1.600 pagine
     // di richieste alle fonti, e il contatore della rotta singola restava vergine. Le voci
-    // servite da cache non si addebitano, come sulla rotta singola. `esaurito` resta perche'
-    // risparmia N letture inutili una volta finito il budget, ma non e' piu' una toppa: il
-    // limitatore comune non addebita niente quando rifiuta, quindi chiamarlo in un ciclo non
-    // gonfia piu' la finestra.
+    // servite da cache o dallo stesso lavoro in volo non si addebitano. L'ammissione
+    // vive in scaricaParco, comune alla rotta singola: anche a budget finito si puo'
+    // attendere un lavoro gia' pagato. I rifiuti non allungano la finestra.
     let esaurito = false;
     const fontiLimitate = new Set();
     for (const v of voci) {
@@ -375,19 +409,15 @@ function mount(app, deps = {}) {
         errori.push({ id: v.id, nome: v.nome, error: blocco });
         continue;
       }
-      if (!daCache && (esaurito || !parcoOk(ip))) {
-        esaurito = true;
-        errori.push({ id: v.id, nome: v.nome, error: MSG_LIMITE });
-        continue;
-      }
       try {
-        const p = await scaricaParco(chiDi(req), chiave, forza, blocco);
+        const p = await scaricaParco(chiDi(req), chiave, forza, blocco, ip);
         parti.push(p);
         if (p.avvisoCache) errori.push({ id: v.id, nome: v.nome, error: p.avvisoCache });
         if (!p.daCache && p.passateKo?.some(x => x.status === 429)) fontiLimitate.add(v.fonte);
       } catch (e) {
+        if (e.limiteParco) esaurito = true;
         if (e.status === 429) fontiLimitate.add(v.fonte);
-        errori.push({ id: v.id, nome: v.nome, error: e.message });
+        errori.push({ id: v.id, nome: v.nome, error: e.limiteParco ? MSG_LIMITE : e.message });
       }
     }
     // Tutto rifiutato per budget e niente da mostrare: un "ok con zero veicoli" sembrerebbe
