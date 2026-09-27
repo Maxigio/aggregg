@@ -331,22 +331,23 @@ test('Ricambi: il 429 Subito diventa un blocco con avviso visibile, non un merca
   } finally { subito._setHttpGetJson(null); }
 });
 
-test('Schermo Auto/Moto: il 429 senza annunci compare come avviso sotto le fonti', () => {
+test('Schermo Auto/Moto: il 429 senza annunci compare negli avvisi sulla ricerca', () => {
   const src = fs.readFileSync(path.join(__dirname, '../frontend/app.js'), 'utf8');
   const inizio = src.indexOf('function renderSourceStatus()');
   const fine = src.indexOf('\n// ─── Spec (dettaglio)', inizio);
   assert.ok(inizio >= 0 && fine > inizio);
   const stato = {
-    fonteBreakdown: { innerHTML: '' },
+    fonteBreakdown: { innerHTML: '' }, searchAlerts: { innerHTML: '', classList: { toggle() {} } },
     lastSources: { subito: { status: 'error', parziale: subito.AVVISO_429 } },
     paginaErrore: null,
     SOURCE_STATUS: { error: { cls: 'src-bad', txt: 'errore' } },
     FONTE_LABEL: { subito: 'Subito' }, SKIP_REASON_TXT: {},
     escapeHtml: s => String(s),
+    renderSearchAlerts(avvisi) { stato.searchAlerts.innerHTML = avvisi.join(' '); },
   };
   vm.runInNewContext(src.slice(inizio, fine) + '\nrenderSourceStatus();', stato);
-  assert.match(stato.fonteBreakdown.innerHTML, /src-avviso/);
-  assert.match(stato.fonteBreakdown.innerHTML, /Subito ha limitato temporaneamente le richieste/);
+  assert.equal(stato.fonteBreakdown.innerHTML.includes('src-avviso'), false);
+  assert.match(stato.searchAlerts.innerHTML, /Subito ha limitato temporaneamente le richieste/);
 });
 
 test('Ricambi: la pausa Subito non invia richieste e lascia funzionare eBay', async () => {

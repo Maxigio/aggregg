@@ -28,8 +28,9 @@ function schermo(sources = {}, articoli = []) {
   const vietato = () => { throw new Error('La UI non deve avviare rete o timer'); };
   const c = vm.createContext({
     Date: Orologio, fetch: vietato, setTimeout: vietato, setInterval: vietato,
-    fonteBreakdown: { innerHTML: '' }, lastSources: sources, paginaErrore: null,
+    fonteBreakdown: { innerHTML: '' }, searchAlerts: { innerHTML: '', open: false, classList: { toggle() {} } }, lastSources: sources, paginaErrore: null,
     FONTE_LABEL: { subito: 'Subito.it', autoscout: 'Autoscout24', moto: 'Moto.it' },
+    icon: () => '<svg aria-hidden="true"></svg>',
     RC_FONTE: { subito: 'Subito.it' },
     document: { getElementById: id => { assert.equal(id, 'ricambiPanel'); return panel; } },
     rcData: { sources, articoli }, rcVeicolo: 'auto', rcRestanti: null,
@@ -60,10 +61,30 @@ test('Subito mostra separatamente gli errori delle famiglie, senza HTML dalla ri
       { famiglia: 2, fase: 'recupero', http: 503, tipo: '<img src=x onerror=alert(1)>' }],
   } });
   c.renderSourceStatus();
-  const html = c.fonteBreakdown.innerHTML;
+  const html = c.searchAlerts.innerHTML;
   assert.match(html, /Famiglia 1.*HTTP 403/);
   assert.match(html, /Famiglia 2.*HTTP 503/);
   assert.doesNotMatch(html, /<img/);
+});
+
+test('avvisi ricerca: menu separato dalle fonti, testo escapato e segnalazione precompilata', () => {
+  const { c } = schermo({ autoscout: { status: 'ok', count: 1, allargato: 'marca', reason: '<b>modello</b> non presente' } });
+  c.renderSourceStatus();
+  assert.doesNotMatch(c.fonteBreakdown.innerHTML, /modello/);
+  assert.match(c.searchAlerts.innerHTML, /Avvisi sulla ricerca \(1\)/);
+  assert.match(c.searchAlerts.innerHTML, /&lt;b&gt;modello&lt;\/b&gt;/);
+  assert.match(c.searchAlerts.innerHTML, /data-search-alert="0"/);
+  const aperto = c.searchAlerts.innerHTML;
+  c.renderSourceStatus();
+  assert.equal(c.searchAlerts.innerHTML, aperto);
+  const msg = { value: '', focus() {} }, stato = { textContent: '' }, attach = { checked: false, parentElement: { style: {} } };
+  const modal = { classList: { remove() {} } };
+  c.document.getElementById = id => ({ reportModal: modal, reportMsg: msg, reportStatus: stato, reportAttach: attach })[id];
+  c.lastSearchParams = { marca: 'Ducati' };
+  vm.runInContext(estrai('function openReport(', '\nfunction closeReport('), c);
+  c.openReport(vm.runInContext('searchAlertTexts[0]', c));
+  assert.match(msg.value, /Avviso sulla ricerca: <b>modello<\/b> non presente/);
+  assert.equal(attach.checked, true);
 });
 
 test('Subito segnala il totale sconosciuto senza inventare uno zero', () => {
@@ -114,8 +135,8 @@ test('Auto/Moto: tutte le fonti mostrano la pausa anche se skipped, vuote, blocc
     for (const status of ['skipped', 'blocked', 'empty', 'error', 'timeout', 'ok']) {
       const { c } = schermo({ [fonte]: { status, count: 1, pausa, parziale: 'Risposta parziale' } });
       c.renderSourceStatus();
-      assert.ok(c.fonteBreakdown.innerHTML.includes(`Fonte ${c.FONTE_LABEL[fonte]}: richieste sospese.`));
-      if (status === 'ok' || status === 'error') assert.match(c.fonteBreakdown.innerHTML, /Risposta parziale/);
+      assert.ok(c.searchAlerts.innerHTML.includes(`Fonte ${c.FONTE_LABEL[fonte]}: richieste sospese.`));
+      if (status === 'ok' || status === 'error') assert.match(c.searchAlerts.innerHTML, /Risposta parziale/);
     }
   }
 });
@@ -157,9 +178,9 @@ test('senza metadati pausa: conservati motivi noti, avvisi parziali e di allarga
   });
   c.renderSourceStatus();
   assert.match(c.fonteBreakdown.innerHTML, /Subito\.it <b>in pausa<\/b>/);
-  assert.match(c.fonteBreakdown.innerHTML, /Modello &lt;allargato&gt;/);
-  assert.match(c.fonteBreakdown.innerHTML, /Fonte &lt;parziale&gt;/);
-  assert.doesNotMatch(c.fonteBreakdown.innerHTML, /richieste sospese|Pausa terminata|verificata alla prossima/);
+  assert.match(c.searchAlerts.innerHTML, /Modello &lt;allargato&gt;/);
+  assert.match(c.searchAlerts.innerHTML, /Fonte &lt;parziale&gt;/);
+  assert.doesNotMatch(c.searchAlerts.innerHTML, /richieste sospese|Pausa terminata|verificata alla prossima/);
   c.renderRicambiPanel();
   assert.doesNotMatch(panel.innerHTML, /richieste sospese|Pausa terminata|verificata alla prossima/);
 });
@@ -193,11 +214,11 @@ test('detail HTTP 502: pausa persistente per ogni fonte senza perdere i dati del
     await c.enrichMotoRow(c.currentResults[0].url);
     assert.strictEqual(c.lastSources[fonte].pausa, pausa);
     for (const [k, v] of Object.entries(stato)) assert.equal(c.lastSources[fonte][k], v);
-    assert.match(c.fonteBreakdown.innerHTML, /richieste sospese/);
+    assert.match(c.searchAlerts.innerHTML, /richieste sospese/);
     assert.equal(c.currentResults[0]._enriched, undefined);
     assert.equal(avvisi.length, 0, 'la ricerca ha già un avviso persistente');
     c.renderSourceStatus();
-    assert.match(c.fonteBreakdown.innerHTML, /richieste sospese/);
+    assert.match(c.searchAlerts.innerHTML, /richieste sospese/);
   }
 });
 
@@ -205,8 +226,8 @@ test('detail senza pausa attiva: il messaggio upstream rimane visibile ed escape
   const { c } = dettagli({ moto: { status: 'ok', count: 1 } });
   c.fetch = async () => risposta(detailKo('moto', { fermo: false, fino: null, verifica: false }));
   await c.enrichMotoSpecs(c.matrixList);
-  assert.match(c.fonteBreakdown.innerHTML, /Dettagli Moto\.it: Fonte &lt;bloccata&gt;/);
-  assert.doesNotMatch(c.fonteBreakdown.innerHTML, /<bloccata>/);
+  assert.match(c.searchAlerts.innerHTML, /Dettagli Moto\.it: Fonte &lt;bloccata&gt;/);
+  assert.doesNotMatch(c.searchAlerts.innerHTML, /<bloccata>/);
   assert.equal(c.currentResults[0]._detailLoaded, undefined);
 });
 
@@ -240,7 +261,7 @@ test('detail tardivo: un cambio contesto blocca avvisi, merge e ridisegni anche 
       completa(risposta(data));
       await pending;
       assert.deepEqual(c.lastSources, { moto: { status: 'empty' } });
-      assert.equal(c.fonteBreakdown.innerHTML, '');
+      assert.equal(c.searchAlerts.innerHTML, '');
       assert.equal(originale.cilindrata, undefined);
       assert.equal(avvisi.length, 0);
       assert.equal(miniature.length, 0);
@@ -272,7 +293,7 @@ test('errori ordinari restano silenziosi e ritentabili; i dettagli riusciti si u
     const arg = metodo === 'enrichMotoRow' ? r.url : c.matrixList;
     c.fetch = async () => risposta({ ok: false, error: 'Errore ordinario' });
     await c[metodo](arg);
-    assert.equal(c.fonteBreakdown.innerHTML, '');
+    assert.equal(c.searchAlerts.innerHTML, '');
     assert.equal(avvisi.length, 0);
     assert.equal(r._enriched, undefined);
     assert.equal(r._detailLoaded, undefined);
@@ -289,7 +310,7 @@ test('detail riuscito: sincronizza la pausa e cancella il vecchio errore senza c
       const { c, avvisi } = dettagli({ moto: { status: 'empty', count: 0, totale: 42 } });
       const arg = metodo === 'enrichMotoRow' ? c.currentResults[0].url : c.matrixList;
       await c[metodo](arg);
-      assert.match(c.fonteBreakdown.innerHTML, /richieste sospese/);
+      assert.match(c.searchAlerts.innerHTML, /richieste sospese/);
       assert.equal(c.lastSources.moto.erroreDettaglio, 'Fonte <bloccata>');
       c.fetch = async () => risposta({ ok: true, detail: { cilindrata: 900 }, fonte: 'moto', pausa: pausaDopo });
       await c[metodo](arg);
@@ -299,9 +320,9 @@ test('detail riuscito: sincronizza la pausa e cancella il vecchio errore senza c
       assert.equal(c.lastSources.moto.count, 0);
       assert.equal(c.lastSources.moto.totale, 42);
       assert.equal(avvisi.length, 0);
-      assert.doesNotMatch(c.fonteBreakdown.innerHTML, /bloccata/);
-      if (pausaDopo.fermo) assert.match(c.fonteBreakdown.innerHTML, /richieste sospese/);
-      else assert.doesNotMatch(c.fonteBreakdown.innerHTML, /richieste sospese|Dettagli Moto/);
+      assert.doesNotMatch(c.searchAlerts.innerHTML, /bloccata/);
+      if (pausaDopo.fermo) assert.match(c.searchAlerts.innerHTML, /richieste sospese/);
+      else assert.doesNotMatch(c.searchAlerts.innerHTML, /richieste sospese|Dettagli Moto/);
     }
   }
 });
@@ -332,6 +353,6 @@ test('avviso di pagina interrotta: testo del server escapato prima di inserirlo 
   const { c } = schermo({ subito: { status: 'ok', count: 10 } });
   c.paginaErrore = { testo: '<img src=x onerror=alert(1)>', riprovabile: true };
   c.renderSourceStatus();
-  assert.match(c.fonteBreakdown.innerHTML, /&lt;img/);
-  assert.doesNotMatch(c.fonteBreakdown.innerHTML, /<img src=x/);
+  assert.match(c.searchAlerts.innerHTML, /&lt;img/);
+  assert.doesNotMatch(c.searchAlerts.innerHTML, /<img src=x/);
 });

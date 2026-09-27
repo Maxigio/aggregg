@@ -1912,10 +1912,10 @@ async function runSearchCore(params) {
       ? Promise.resolve({ items: [], status: 'skipped', reason: salute.MOTIVO_PAUSA })
       // UNA PAGINA IN PIU' QUANDO IL CAP FILTRA. Il cerchio regione sborda nelle regioni
       // confinanti — misurato in Sicilia: dei 100 letti, 25 calabresi — e quelli il filtro
-      // sul CAP li toglie. Senza compensare, la regione mostrerebbe MENO annunci di prima
-      // pur pescando da un insieme piu' grande (75 contro 83). Costa una richiesta.
+      // sul CAP li toglie. La fetta resta una pagina nativa da 50: le altre si chiedono
+      // con «Carica altro», senza anticipare pagine solo per compensare il post-filtro.
       : runSource(() => scrapeAutoscoutUnion(params, { withMeta: true, fetta: params.fetta || 0,
-          ...(params.as24RegioneDaCap ? { maxPages: 3 } : {}), ...as24Retry }), TIMEOUT_MS, 'Autoscout24', 'autoscout'),
+          ...as24Retry }), TIMEOUT_MS, 'Autoscout24', 'autoscout'),
     !richiesta('moto') ? Promise.resolve(esaurita()) : salvate?.moto ? Promise.resolve(salvate.moto) : skipMotoIt
       ? Promise.resolve({ items: [], status: 'skipped', reason: motoSkipReason })
       : inPausaMoto

@@ -25,7 +25,7 @@ const provinciaSigla = (testo, cap) => { const r = risolviProvincia(testo, cap);
 const HOST = 'listing-search.api.autoscout24.com';
 const AUTH = 'Basic YXMyNC1zZWFyY2gtZnVubmVsOnZucmZiYkJqSTMyT2wxV2thNnVOSFJwM0VZbjRkag==';
 const PAGE_SIZE = 50;
-const MAX_PAGES = 2;          // 2×50 = 100 annunci per fetta
+const MAX_PAGES = 1;          // una pagina nativa da 50 annunci per fetta
 const TIMEOUT_MS = 15000;
 // Una pagina reale di 50 Golf misurata il 2026-09-27: 248.930 byte. Il tetto
 // lascia ampio margine per annunci piu' ricchi, ma impedisce stream illimitati.
@@ -536,7 +536,7 @@ async function fetchPage(params, page, opts = {}) {
 
 /**
  * Ritorna gli annunci AS24 via API. Throw su errore: la fonte non e' stata letta.
- * @param opts.maxPages   override profondità (crawler: 10-20; on-search: 2)
+ * @param opts.maxPages   override profondità (Competitor scorre tutto il parco; ricerca: 1)
  * @param opts.attachRaw  allega `_raw` (foto grezza) per il DB
  * @param opts.sortByDate ordina per età crescente (più recenti prima)
  * @param opts.withMeta   ritorna {items, truncated} invece dell'array (back-compat).
@@ -572,7 +572,7 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
   // piu' sotto vale per altro: qui la pagina 60 risponde ancora roba nuova.
   // `fetta` e' UN concetto per tutte e tre le fonti: la 0 e' la prima schermata, la 1 la
   // successiva. Ogni fonte la traduce nella SUA paginazione, perche' le pagine hanno
-  // dimensioni diverse — qui 50 per pagina, due pagine per fetta.
+  // dimensioni diverse — qui 50 per pagina, una pagina per fetta.
   const salta = Math.max(0, opts.fetta || 0) * maxPages;
   let parziale = null, bloccoParziale = null, erroreTipo = null, erroreHttp = null, erroreCodice = null;
   let hasMore = false;

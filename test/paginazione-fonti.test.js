@@ -64,7 +64,7 @@ test('AutoScout24: pagine piene mantengono continua la navigazione', async () =>
     return req;
   };
   const r = await autoscout({ tipo: 'auto', as24Customer: '1' }, { withMeta: true });
-  assert.equal(chiamate, 2);
+  assert.equal(chiamate, 1);
   assert.equal(r.hasMore, true);
 });
 

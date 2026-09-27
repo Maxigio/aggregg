@@ -9,6 +9,7 @@ const resultsSection  = document.getElementById('resultsSection');
 const resultsGrid     = document.getElementById('resultsGrid');
 const resultsCount    = document.getElementById('resultsCount');
 const fonteBreakdown  = document.getElementById('fonteBreakdown');
+const searchAlerts    = document.getElementById('searchAlerts');
 const noResults       = document.getElementById('noResults');
 const marcaSelect     = document.getElementById('marca');
 const marcaNote       = document.getElementById('marcaNote');
@@ -755,6 +756,13 @@ async function init() {
 
   // Segnalazioni (bug-report)
   document.getElementById('btnReport')?.addEventListener('click', () => openReport());
+  searchAlerts?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-search-alert]');
+    if (!btn || !searchAlerts.contains(btn)) return;
+    const i = Number(btn.dataset.searchAlert);
+    if (!Number.isInteger(i) || !searchAlertTexts[i]) return;
+    openReport(searchAlertTexts[i]);
+  });
   document.getElementById('reportClose')?.addEventListener('click', closeReport);
   document.getElementById('reportSend')?.addEventListener('click', submitReport);
   document.getElementById('reportModal')?.addEventListener('click', e => { if (e.target.id === 'reportModal') closeReport(); });
@@ -3948,9 +3956,22 @@ const SOURCE_STATUS = {
 // lo scrive backend/fonti-salute.js quando la fonte ci ha respinti due volte di fila: non e'
 // un guasto nostro e non e' "non disponibile", e' una scelta di non insistere per un po'.
 const SKIP_REASON_TXT = { 'solo moto': 'solo moto', 'marca non su Moto.it': 'non disponibile', 'marca non su Autoscout': 'non disponibile', 'in pausa dopo un blocco': 'in pausa' };
+let searchAlertTexts = [];
+function renderSearchAlerts(avvisi) {
+  const uguali = avvisi.length === searchAlertTexts.length && avvisi.every((v, i) => v === searchAlertTexts[i]);
+  searchAlertTexts = avvisi;
+  if (!searchAlerts) return;
+  searchAlerts.classList.toggle('d-none', !avvisi.length);
+  if (!avvisi.length) { searchAlerts.open = false; searchAlerts.innerHTML = ''; return; }
+  if (uguali && searchAlerts.innerHTML) return; // preserva il fuoco mentre un dettaglio si aggiorna
+  searchAlerts.innerHTML = `<summary class="tb-btn btn-avvisi" aria-label="Avvisi sulla ricerca: ${avvisi.length}">${icon('alert')} Avvisi sulla ricerca (${avvisi.length})</summary>`
+    + `<div class="search-alerts-menu">${avvisi.map((testo, i) => `<div class="search-alert-item"><span>${escapeHtml(testo)}</span><button type="button" class="tb-btn" data-search-alert="${i}" aria-label="Segnala l'avviso ${i + 1} all'assistenza">Segnala</button></div>`).join('')}</div>`;
+}
 function renderSourceStatus() {
   if (!fonteBreakdown) return;
-  if (!lastSources) { fonteBreakdown.innerHTML = ''; return; }
+  if (!lastSources) { fonteBreakdown.innerHTML = ''; renderSearchAlerts([]); return; }
+  const avvisi = [];
+  const aggiungi = testo => { if (testo) avvisi.push(testo); };
   const order = ['subito', 'autoscout', 'moto'];
   fonteBreakdown.innerHTML = order.map(f => {
     const s = lastSources[f]; if (!s) return '';
@@ -3991,7 +4012,7 @@ function renderSourceStatus() {
   // Riga propria sotto le pill, come `.veh-liq-avviso` per la liquidita'.
   const as = lastSources.autoscout;
   if (as && as.allargato && as.reason) {
-    fonteBreakdown.innerHTML += `<span class="src-avviso">${escapeHtml(as.reason)}</span>`;
+    aggiungi(as.reason);
   }
   /**
    * IL RISULTATO PARZIALE, che il server calcola e finora buttavamo qui.
@@ -4005,13 +4026,13 @@ function renderSourceStatus() {
    */
   for (const f of order) {
     const s = lastSources[f];
-    fonteBreakdown.innerHTML += fontePausaHTML(FONTE_LABEL[f], s?.pausa)
-      || (s?.erroreDettaglio ? `<div class="src-avviso">${escapeHtml(`Dettagli ${FONTE_LABEL[f]}: ${s.erroreDettaglio}`)}</div>` : '');
+    aggiungi(fontePausaTesto(FONTE_LABEL[f], s?.pausa)
+      || (s?.erroreDettaglio ? `Dettagli ${FONTE_LABEL[f]}: ${s.erroreDettaglio}` : ''));
     if (s && (s.status === 'ok' || s.status === 'error') && s.parziale && !(f === 'autoscout' && s.allargato)) {
-      fonteBreakdown.innerHTML += `<span class="src-avviso">${escapeHtml(String(s.parziale))}</span>`;
+      aggiungi(String(s.parziale));
     }
     if (f === 'subito' && s?.erroreCodice === 'SUBITO_BODY_TOO_LARGE' && !s.parziale) {
-      fonteBreakdown.innerHTML += '<div class="src-avviso" role="alert">Subito ha inviato una risposta oltre il limite di dimensione. La richiesta è stata interrotta: gli annunci di questa pagina non sono stati letti.</div>';
+      aggiungi('Subito ha inviato una risposta oltre il limite di dimensione. La richiesta è stata interrotta: gli annunci di questa pagina non sono stati letti.');
     }
     if (f === 'subito' && Array.isArray(s?.errori) && s.errori.length) {
       const righe = s.errori.map(e => {
@@ -4021,13 +4042,13 @@ function renderSourceStatus() {
         const esito = e.codice === 'SUBITO_BODY_TOO_LARGE' ? 'risposta oltre il limite di dimensione'
           : Number.isInteger(e.http) ? `HTTP ${e.http}`
           : e.tipo === 'transient' ? 'errore di rete' : 'risposta non leggibile';
-        return `<li>${escapeHtml(`${dove}: ${fase} — ${esito}`)}</li>`;
-      }).join('');
-      fonteBreakdown.innerHTML += `<div class="src-avviso">Subito: errori delle richieste<ul class="src-error-list">${righe}</ul></div>`;
+        return `${dove}: ${fase} — ${esito}`;
+      }).join('; ');
+      aggiungi(`Subito: errori delle richieste — ${righe}`);
     }
   }
   // La pagina fallita non entra nella lista: il motivo resta visibile qui e sul pulsante.
-  if (paginaErrore) fonteBreakdown.innerHTML += `<span class="src-avviso" role="alert">${escapeHtml(paginaErrore.testo)}${paginaErrore.riprovabile ? ' Potrai riprovare questa pagina dal pulsante qui sotto.' : ' Per riprendere, avvia una nuova ricerca.'}</span>`;
+  if (paginaErrore) aggiungi(`${paginaErrore.testo}${paginaErrore.riprovabile ? ' Potrai riprovare questa pagina dal pulsante qui sotto.' : ' Per riprendere, avvia una nuova ricerca.'}`);
   // Le parole della versione che Moto.it non conosce vengono ignorate di proposito — un filtro
   // che svuoterebbe l'insieme si scarta — ma finora quel "di proposito" restava in un log del
   // server: a schermo la colonna Moto.it si presentava filtrata come le altre.
@@ -4040,7 +4061,7 @@ function renderSourceStatus() {
    */
   const sb = lastSources.subito;
   if (sb && sb.come === 'testo libero' && sb.status === 'ok' && sb.count > 0) {
-    fonteBreakdown.innerHTML += '<span class="src-avviso">Ricerca pari alla ricerca a testo libero di Subito. Vuoi gestire le tue ricerche in modo diverso? Parliamone!</span>';
+    aggiungi('Ricerca pari alla ricerca a testo libero di Subito. Vuoi gestire le tue ricerche in modo diverso? Parliamone!');
   }
   /**
    * L'ALLESTIMENTO CERCATO DENTRO LA SUA FAMIGLIA, e chi guarda deve saperlo. Il catalogo
@@ -4050,7 +4071,7 @@ function renderSourceStatus() {
    * tale sarebbe far passare per precisa una ricerca che precisa non e'.
    */
   if (sb && sb.come === 'allestimento' && sb.status === 'ok' && sb.count > 0) {
-    fonteBreakdown.innerHTML += `<span class="src-avviso">Su Subito questo modello e&#39; un allestimento: la ricerca parte dalla famiglia${sb.famigliaNome ? ' &laquo;' + escapeHtml(sb.famigliaNome) + '&raquo;' : ''} e si restringe col nome.</span>`;
+    aggiungi(`Su Subito questo modello è un allestimento: la ricerca parte dalla famiglia${sb.famigliaNome ? ' «' + sb.famigliaNome + '»' : ''} e si restringe col nome.`);
   }
   /**
    * LA MARCA OSPITE, e chi guarda deve saperlo. Su Subito «Vespa» non esiste come marca:
@@ -4059,17 +4080,17 @@ function renderSourceStatus() {
    * schermo non e' quella digitata, e tacerlo farebbe passare il passaggio per magia.
    */
   if (sb && /^ospite \(/.test(String(sb.come || '')) && sb.status === 'ok' && sb.count > 0) {
-    fonteBreakdown.innerHTML += `<span class="src-avviso">Su Subito questa marca vive sotto un&#39;altra (${escapeHtml(String(sb.come).slice(8, -1))})${sb.famigliaNome ? ': si cerca la famiglia &laquo;' + escapeHtml(sb.famigliaNome) + '&raquo;' : ''}.</span>`;
+    aggiungi(`Su Subito questa marca vive sotto un'altra (${String(sb.come).slice(8, -1)})${sb.famigliaNome ? ': si cerca la famiglia «' + sb.famigliaNome + '»' : ''}.`);
   }
   const mo = lastSources.moto;
   // Il menu versioni di Moto.it che non ha risposto: il filtro non e' stato applicato (o lo e'
   // stato su un elenco monco), e finora la colonna si presentava filtrata come le altre.
   if (mo && mo.versioneElencoMonco) {
-    fonteBreakdown.innerHTML += `<span class="src-avviso">${escapeHtml(String(mo.versioneElencoMonco))}</span>`;
+    aggiungi(String(mo.versioneElencoMonco));
   }
   if (mo && mo.versioneIgnorata && mo.versioneIgnorata.length) {
     const p = mo.versioneIgnorata;
-    fonteBreakdown.innerHTML += `<span class="src-avviso">Moto.it non ha ${p.length === 1 ? 'la parola' : 'le parole'} “${escapeHtml(p.join('”, “'))}” nel suo catalogo versioni: quella parte del filtro non è stata applicata.</span>`;
+    aggiungi(`Moto.it non ha ${p.length === 1 ? 'la parola' : 'le parole'} “${p.join('”, “')}” nel suo catalogo versioni: quella parte del filtro non è stata applicata.`);
   }
   // Il filtro km di Subito e' a fasce, non a numero, su ENTRAMBI i lati: chiedendo un massimo di
   // 200.000 arrivano annunci fino a 249.999, chiedendone un minimo di 22.000 arrivano da 20.000.
@@ -4081,10 +4102,10 @@ function renderSourceStatus() {
     const pezzi = [];
     if (sub.kmDa) pezzi.push(`da ${km(sub.kmDa)}`);
     if (sub.kmFino) pezzi.push(`fino a ${km(sub.kmFino)}`);
-    fonteBreakdown.innerHTML += `<span class="src-avviso">Subito filtra i km a fasce: possono arrivare annunci ${pezzi.join(' e ')} km</span>`;
+    aggiungi(`Subito filtra i km a fasce: possono arrivare annunci ${pezzi.join(' e ')} km`);
   }
+  renderSearchAlerts(avvisi);
 }
-
 function fontePausaHTML(nome, pausa) {
   const testo = fontePausaTesto(nome, pausa);
   return testo ? `<div class="src-avviso">${escapeHtml(testo)}</div>` : '';
@@ -4374,15 +4395,15 @@ async function enrichMotoSpecs(list) {
 }
 
 // ─── Segnalazioni (bug-report) ───────────────────────────────────────────────
-function openReport() {
+function openReport(avviso = '') {
   const m = document.getElementById('reportModal'); if (!m) return;
-  document.getElementById('reportMsg').value = '';
+  document.getElementById('reportMsg').value = avviso ? `Avviso sulla ricerca: ${avviso}\n` : '';
   document.getElementById('reportStatus').textContent = '';
   const att = document.getElementById('reportAttach');
   // "Allega i dati della ricerca" esiste se una RICERCA c'e' stata. `searchActive` e' vero
   // anche nel parco di un concessionario, dove i criteri non esistono: la spunta si offriva
   // e allegava il nulla (o, prima del reset, i criteri di tutt'altro).
-  if (att) { att.checked = false; att.parentElement.style.display = lastSearchParams ? '' : 'none'; }
+  if (att) { att.checked = !!avviso && !!lastSearchParams; att.parentElement.style.display = lastSearchParams ? '' : 'none'; }
   m.classList.remove('d-none');
   document.getElementById('reportMsg').focus();
 }
@@ -4473,6 +4494,7 @@ function resetContesto() {
   searchGen++;
   lastSearchParams = null;
   lastSources = null;
+  renderSearchAlerts([]);
   fettaPresa = 0;
   paginaErrore = null;
   paginaSubitoInSospeso = null;

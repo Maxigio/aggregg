@@ -705,6 +705,20 @@ body.has-results .search { padding: 14px 0 12px; }
    non spezza il ritmo delle tre pill. Misure copiate da .veh-liq-avviso. */
 .src-avviso { flex-basis: 100%; font-size: 0.74rem; color: var(--warn); }
 .src-error-list { margin: .2rem 0 0; padding-left: 1.2rem; }
+.search-alerts { position: relative; margin-left: 4px; padding-left: 12px; border-left: 1px solid var(--line); }
+.search-alerts > summary { list-style: none; cursor: pointer; }
+.search-alerts > summary::-webkit-details-marker { display: none; }
+.search-alerts-menu {
+  position: absolute; z-index: 50; top: calc(100% + 6px); right: 0;
+  width: min(390px, calc(100vw - 32px)); max-height: min(60vh, 440px); overflow-y: auto;
+  padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: var(--r2);
+  background: var(--surface); box-shadow: var(--shadow); font-size: .8rem; line-height: 1.4;
+}
+.search-alert-item { display: flex; align-items: flex-start; gap: 10px; justify-content: space-between; padding: 8px 0; }
+.search-alert-item + .search-alert-item { border-top: 1px solid var(--line); }
+.search-alert-item span { min-width: 0; overflow-wrap: anywhere; }
+.search-alert-item button { flex-shrink: 0; }
+@media (max-width: 860px) { .search-alerts-menu { right: auto; left: 0; } }
 
 /* ─── Griglia risultati ──────────────────────────────────────────────────────
    Colonne dinamiche: `grid-template-columns` calcolato in JS e applicato inline
