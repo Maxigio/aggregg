@@ -718,7 +718,6 @@ body.has-results .search { padding: 14px 0 12px; }
 .search-alert-item + .search-alert-item { border-top: 1px solid var(--line); }
 .search-alert-item span { min-width: 0; overflow-wrap: anywhere; }
 .search-alert-item button { flex-shrink: 0; }
-@media (max-width: 860px) { .search-alerts-menu { right: auto; left: 0; } }
 
 /* ─── Griglia risultati ──────────────────────────────────────────────────────
    Colonne dinamiche: `grid-template-columns` calcolato in JS e applicato inline

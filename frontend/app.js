@@ -763,6 +763,7 @@ async function init() {
     if (!Number.isInteger(i) || !searchAlertTexts[i]) return;
     openReport(searchAlertTexts[i]);
   });
+  searchAlerts?.addEventListener('toggle', () => { if (searchAlerts.open) requestAnimationFrame(positionSearchAlertMenu); });
   document.getElementById('reportClose')?.addEventListener('click', closeReport);
   document.getElementById('reportSend')?.addEventListener('click', submitReport);
   document.getElementById('reportModal')?.addEventListener('click', e => { if (e.target.id === 'reportModal') closeReport(); });
@@ -3958,6 +3959,14 @@ const SOURCE_STATUS = {
 // un guasto nostro e non e' "non disponibile", e' una scelta di non insistere per un po'.
 const SKIP_REASON_TXT = { 'solo moto': 'solo moto', 'marca non su Moto.it': 'non disponibile', 'marca non su Autoscout': 'non disponibile', 'in pausa dopo un blocco': 'in pausa' };
 let searchAlertTexts = [];
+function positionSearchAlertMenu() {
+  const menu = searchAlerts?.querySelector('.search-alerts-menu');
+  if (!searchAlerts?.open || !menu) return;
+  menu.style.transform = '';
+  const box = menu.getBoundingClientRect();
+  const dx = box.left < 8 ? 8 - box.left : box.right > window.innerWidth - 8 ? window.innerWidth - 8 - box.right : 0;
+  menu.style.transform = `translateX(${dx}px)`;
+}
 function renderSearchAlerts(avvisi) {
   const uguali = avvisi.length === searchAlertTexts.length && avvisi.every((v, i) => v === searchAlertTexts[i]);
   searchAlertTexts = avvisi;
@@ -3967,6 +3976,7 @@ function renderSearchAlerts(avvisi) {
   if (uguali && searchAlerts.innerHTML) return; // preserva il fuoco mentre un dettaglio si aggiorna
   searchAlerts.innerHTML = `<summary class="tb-btn btn-avvisi" aria-label="Avvisi sulla ricerca: ${avvisi.length}">${icon('alert')} Avvisi sulla ricerca (${avvisi.length})</summary>`
     + `<div class="search-alerts-menu">${avvisi.map((testo, i) => `<div class="search-alert-item"><span>${escapeHtml(testo)}</span><button type="button" class="tb-btn" data-search-alert="${i}" aria-label="Segnala l'avviso ${i + 1} all'assistenza">Segnala</button></div>`).join('')}</div>`;
+  if (searchAlerts.open) requestAnimationFrame(positionSearchAlertMenu);
 }
 function renderSourceStatus() {
   if (!fonteBreakdown) return;

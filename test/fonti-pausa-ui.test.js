@@ -87,6 +87,16 @@ test('avvisi ricerca: menu separato dalle fonti, testo escapato e segnalazione p
   assert.equal(attach.checked, true);
 });
 
+test('menu avvisi: resta nel viewport anche dopo il wrap della toolbar', () => {
+  const { c } = schermo();
+  const menu = { style: {}, getBoundingClientRect: () => ({ left: 120, right: 460 }) };
+  c.searchAlerts.open = true;
+  c.searchAlerts.querySelector = () => menu;
+  c.window = { innerWidth: 375 };
+  c.positionSearchAlertMenu();
+  assert.equal(menu.style.transform, 'translateX(-93px)');
+});
+
 test('Subito segnala il totale sconosciuto senza inventare uno zero', () => {
   for (const status of ['ok', 'empty']) {
     const { c } = schermo({ subito: { status, count: status === 'ok' ? 50 : 0, totale: null } });
