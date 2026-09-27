@@ -117,6 +117,28 @@ test('mapListing: venditore privato + danni fallback usageState quando damage as
   assert.strictEqual(r.danni, true);             // fallback: usageState in {HadAccident,Wreck}
 });
 
+test('mapListing: campi personali strutturati del privato non escono neppure nel raw', () => {
+  const n = JSON.parse(JSON.stringify(NODE));
+  n.details.seller = { type: 'PrivateSeller', id: 'privato-123', companyName: 'Nome privato' };
+  n.details.description = 'Testo del privato';
+  const r = mapListing(n, { attachRaw: true });
+  assert.equal(r.venditore, 'privato');
+  assert.equal(r.venditoreId, null);
+  assert.equal(r.venditoreNome, null);
+  assert.equal(r.descrizione, null);
+  assert.equal(r._raw.description, undefined);
+  assert.deepEqual(r._raw.seller, { type: 'PrivateSeller' });
+  assert.equal(r.url, n.details.webPage);
+  const dealer = mapListing({ details: { ...n.details, seller: { ...n.details.seller, type: 'Dealer' } } });
+  assert.equal(dealer.descrizione, 'Testo del privato');
+  assert.equal(dealer.venditoreId, 'privato-123');
+  const sconosciuto = mapListing({ details: { ...n.details,
+    seller: { ...n.details.seller, type: 'NotDealer' } } }, { attachRaw: true });
+  assert.equal(sconosciuto.descrizione, null);
+  assert.equal(sconosciuto.venditoreId, null);
+  assert.equal(sconosciuto._raw.seller.id, undefined);
+});
+
 test('mapListing: specs ricche assenti → null (nessuna fabbricazione)', () => {
   const n = JSON.parse(JSON.stringify(NODE));
   n.details.seller = null;

@@ -50,7 +50,7 @@ test('AutoScout24: pagine piene mantengono continua la navigazione', async () =>
   let chiamate = 0;
   https.request = (...args) => {
     const cb = args.at(-1), req = new EventEmitter();
-    req.write = () => {}; req.end = () => {}; req.setTimeout = () => {};
+    req.write = () => {}; req.end = () => {}; req.setTimeout = () => {}; req.destroy = () => {};
     process.nextTick(() => {
       const res = new EventEmitter();
       res.statusCode = 200; res.headers = {}; res.setEncoding = () => {};
@@ -66,6 +66,46 @@ test('AutoScout24: pagine piene mantengono continua la navigazione', async () =>
   const r = await autoscout({ tipo: 'auto', as24Customer: '1' }, { withMeta: true });
   assert.equal(chiamate, 2);
   assert.equal(r.hasMore, true);
+});
+
+test('AutoScout24: pagina 2 fallita, il retry riusa pagina 1 e non salta la 2', async () => {
+  const pagine = [];
+  let fallisci = true;
+  https.request = (...args) => {
+    const cb = args.at(-1), req = new EventEmitter();
+    let body = '';
+    req.write = x => { body += x; };
+    req.setTimeout = () => {}; req.destroy = () => {};
+    req.end = () => process.nextTick(() => {
+      const page = JSON.parse(body).variables.m.page;
+      pagine.push(page);
+      const res = new EventEmitter();
+      res.statusCode = page === 2 && fallisci ? 503 : 200;
+      res.headers = {}; res.setEncoding = () => {};
+      cb(res);
+      if (res.statusCode === 200) {
+        const list = Array.from({ length: 50 }, (_, i) => nodo(page * 100 + i));
+        res.emit('data', JSON.stringify({ data: { search: { listings: {
+          listings: list, metadata: { totalItems: 150 },
+        } } } }));
+        res.emit('end');
+      }
+    });
+    return req;
+  };
+  const params = { tipo: 'auto', as24Customer: '1' };
+  const opts = { withMeta: true, retryPages: true, retryScope: 'prova-page2', maxPages: 2 };
+  const primo = await autoscout(params, opts);
+  assert.equal(primo.items.length, 50);
+  assert.equal(primo.parzialeRete, true);
+  fallisci = false;
+  await autoscout(params, { ...opts, retryScope: 'altro-account' });
+  const secondo = await autoscout(params, opts);
+  assert.equal(secondo.items.length, 100);
+  assert.equal(secondo.parzialeRete, false);
+  assert.deepEqual(pagine, [1, 2, 1, 2, 2], 'un altro account non riusa la pagina in sospeso');
+  await autoscout(params, opts);
+  assert.deepEqual(pagine, [1, 2, 1, 2, 2, 1, 2], 'dopo il completamento il buffer non resta come cache ordinaria');
 });
 
 test('Moto.it: pagina vuota chiude anche con totale largo e righe filtrate', async () => {
@@ -88,7 +128,7 @@ test('pagina fallita: il retry non richiama una fonte che aveva completato la pa
   });
   https.request = (...args) => {
     const cb = args.at(-1), req = new EventEmitter();
-    req.write = () => {}; req.end = () => {}; req.setTimeout = () => {};
+    req.write = () => {}; req.end = () => {}; req.setTimeout = () => {}; req.destroy = () => {};
     process.nextTick(() => {
       const res = new EventEmitter();
       res.statusCode = ++richiesteAs === 1 ? 503 : 200;
@@ -120,7 +160,7 @@ test('pagina successiva: una fonte esaurita non riceve altre richieste', async (
   });
   https.request = (...args) => {
     const cb = args.at(-1), req = new EventEmitter();
-    req.write = () => {}; req.end = () => {}; req.setTimeout = () => {};
+    req.write = () => {}; req.end = () => {}; req.setTimeout = () => {}; req.destroy = () => {};
     process.nextTick(() => {
       const res = new EventEmitter();
       res.statusCode = 200; res.headers = {}; res.setEncoding = () => {};
@@ -187,7 +227,7 @@ test('un cursore nativo Subito diverso cambia la richiesta; il filtro diverso no
   });
   https.request = (...args) => {
     const cb = args.at(-1), req = new EventEmitter();
-    req.write = () => {}; req.end = () => {}; req.setTimeout = () => {};
+    req.write = () => {}; req.end = () => {}; req.setTimeout = () => {}; req.destroy = () => {};
     process.nextTick(() => {
       const res = new EventEmitter();
       res.statusCode = 200; res.headers = {}; res.setEncoding = () => {};
@@ -216,6 +256,7 @@ test('riallargamento AutoScout respinto: conserva HTTP e tipo per riprovare la p
     let body = '';
     req.write = x => { body += x; };
     req.setTimeout = () => {};
+    req.destroy = () => {};
     req.end = () => process.nextTick(() => {
       const conVersione = JSON.stringify(JSON.parse(body).variables).includes('Cross');
       chiamate.push(conVersione ? 'versione' : 'riallargamento');

@@ -160,6 +160,32 @@ test('pagina intermedia fallita: nessuna riga nuova, stessa pagina riprovabile',
   assert.equal(s.ctx.currentResults.length, 100);
 });
 
+test('prima fetta AutoScout incompleta: non pubblica i 50 provvisori e riprova la fetta zero', async () => {
+  const as = id => ({ fonte: 'autoscout', id: `autoscout:${id}`,
+    url: `https://www.autoscout24.it/annunci/${id}`, prezzo: 1000 + id });
+  const s = schermo([{ risultati: Array.from({ length: 100 }, (_, i) => as(i)), sources: {
+    autoscout: { status: 'ok', count: 100, hasMore: true },
+  } }]);
+  s.ctx.currentResults = [];
+  s.ctx.data = { risultati: Array.from({ length: 50 }, (_, i) => as(i)), sources: {
+    subito: { status: 'empty', count: 0, hasMore: false },
+    autoscout: { status: 'ok', count: 50, hasMore: true,
+      parzialeRete: true, erroreTipo: 'transient', parziale: 'pagina 2 non letta' },
+    moto: { status: 'skipped', hasMore: false },
+  } };
+  const start = app.indexOf('    lastSources = data.sources || null;', app.indexOf('async function doSearch()'));
+  const end = app.indexOf('    for (const [f, stato]', start);
+  vm.runInContext(app.slice(start, end), s.ctx);
+  assert.equal(s.ctx.currentResults.length, 0);
+  s.ctx.renderAltriBtn();
+  assert.match(s.pulsante.textContent, /Riprova/);
+  vm.runInContext('paginaErrore.dopo = 0', s.ctx);
+  await s.ctx.caricaAltri();
+  assert.deepEqual(s.richieste, [0]);
+  assert.equal(new URL('https://prova.invalid' + s.urls[0]).searchParams.get('fonti'), 'autoscout');
+  assert.equal(s.ctx.currentResults.length, 100);
+});
+
 test('429: ferma la pagina e impedisce un tentativo prima della pausa', async () => {
   const s = schermo([{ risultati: Array.from({ length: 25 }, (_, i) => riga(i + 50)), sources: {
     subito: { status: 'ok', count: 25, totale: 1000, hasMore: true, parzialeRete: true,

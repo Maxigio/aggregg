@@ -27,6 +27,10 @@ const AUTH = 'Basic YXMyNC1zZWFyY2gtZnVubmVsOnZucmZiYkJqSTMyT2wxV2thNnVOSFJwM0VZ
 const PAGE_SIZE = 50;
 const MAX_PAGES = 2;          // 2×50 = 100 annunci per fetta
 const TIMEOUT_MS = 15000;
+// Una pagina reale di 50 Golf misurata il 2026-09-27: 248.930 byte. Il tetto
+// lascia ampio margine per annunci piu' ricchi, ma impedisce stream illimitati.
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const RESPONSE_DEADLINE_MS = 45000;
 
 /**
  * Query ridotta ai soli campi mappati (+ media.images webp per lo slider; no leasing/360).
@@ -110,6 +114,7 @@ const salute = require('../fonti-salute');
 function httpPost(body, auth = AUTH) {
   return salute.richiesta('autoscout', async () => {
   budget.conta('as24');
+  let deadline;
   return new Promise((resolve, reject) => {
     const data = Buffer.from(body, 'utf8');
     const req = https.request({
@@ -131,17 +136,35 @@ function httpPost(body, auth = AUTH) {
       // Anche un body rifiutato può interrompersi dopo gli header.
       res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
       res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
-      if (res.statusCode !== 200) { res.resume(); return reject(salute.erroreHttp('autoscout', res.statusCode, res.headers)); }
-      let d = ''; res.setEncoding('utf8');
-      res.on('data', c => d += c);
-      res.on('end', () => resolve({ status: res.statusCode, body: d }));
+      if (res.statusCode !== 200) {
+        reject(salute.erroreHttp('autoscout', res.statusCode, res.headers));
+        req.destroy();
+        return;
+      }
+      let d = '', bytes = 0, interrotta = false; res.setEncoding('utf8');
+      res.on('data', c => {
+        if (interrotta) return;
+        bytes += Buffer.byteLength(c, 'utf8');
+        if (bytes > MAX_BODY_BYTES) {
+          interrotta = true; d = '';
+          reject(Object.assign(fail('AutoScout24 ha inviato una risposta oltre il limite di dimensione. Gli annunci di questa pagina non sono stati letti.', { kind: 'error' }), { code: 'AS24_BODY_TOO_LARGE' }));
+          req.destroy(); return;
+        }
+        d += c;
+      });
+      res.on('end', () => { if (!interrotta) resolve({ status: res.statusCode, body: d }); });
       // Se la presa cade DOPO gli header, l'errore esce su `res`, non su `req`: senza questi due
       // la Promise resta appesa per sempre (e req.setTimeout non scatta a connessione chiusa).
     });
     req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
-    req.setTimeout(TIMEOUT_MS, () => req.destroy(fail('timeout', { kind: 'transient' })));
+    req.setTimeout(TIMEOUT_MS, () => {
+      reject(fail('timeout', { kind: 'transient' })); req.destroy();
+    });
+    deadline = setTimeout(() => {
+      reject(fail('timeout della risposta AutoScout24', { kind: 'transient' })); req.destroy();
+    }, RESPONSE_DEADLINE_MS);
     req.write(data); req.end();
-  });
+  }).finally(() => clearTimeout(deadline));
   });
 }
 
@@ -336,10 +359,12 @@ function mapListing(node, opts = {}) {
   const sellerType = (dt.seller && dt.seller.type) || '';   // 'PrivateSeller' | 'Dealer'
   // Chi vende, non solo che tipo e': serve alla sezione Competitor per sapere di chi e'
   // il parco che si sta guardando, e per accorgersi se la fonte ci mescola qualcun altro.
-  const venditoreId = (dt.seller && dt.seller.id) || null;
-  const venditoreNome = (dt.seller && dt.seller.companyName) || null;
-  const venditore = /dealer/i.test(sellerType) ? 'concessionario'
-                  : /private/i.test(sellerType) ? 'privato' : null;
+  // Solo l'enum nativo Dealer autorizza i campi strutturati: un valore nuovo o
+  // sconosciuto non deve assomigliare testualmente a "dealer" per sbloccarli.
+  const venditore = sellerType === 'Dealer' ? 'concessionario'
+                  : sellerType === 'PrivateSeller' ? 'privato' : null;
+  const venditoreId = venditore === 'concessionario' ? (dt.seller.id || null) : null;
+  const venditoreNome = venditore === 'concessionario' ? (dt.seller.companyName || null) : null;
   // danni: nativo `damage.isCurrentlyDamaged` (più affidabile), fallback al vecchio usageState.
   const danni = dmg && typeof dmg.isCurrentlyDamaged === 'boolean'
     ? dmg.isCurrentlyDamaged
@@ -412,7 +437,7 @@ function mapListing(node, opts = {}) {
     // Il testo arriva con dentro l'HTML del venditore: misurato, 52 descrizioni su 83
     // contengono <br />. A schermo va escapato, quindi senza questo si leggerebbe
     // "<br />" scritto per esteso in mezzo alle frasi.
-    descrizione: testoPulito(dt.description),
+    descrizione: venditore === 'concessionario' ? testoPulito(dt.description) : null,
     // IVA: `taxDeductible` dice se chi la detrae paga davvero meno. `netAmountInEUR` e
     // `vatRate` ci sono solo quando il venditore li espone (12% degli annunci).
     ivaEsposta: pub && typeof pub.taxDeductible === 'boolean' ? pub.taxDeductible : null,
@@ -473,7 +498,14 @@ function mapListing(node, opts = {}) {
   };
   // raw_json (keep-last) senza `media`: gli URL immagine non vanno persistiti
   // (servono solo al display on-search) → evita di gonfiare raw_json sui crawl profondi.
-  if (opts.attachRaw) { const { media, ...rawNoMedia } = dt; out._raw = rawNoMedia; }
+  if (opts.attachRaw) {
+    const { media, ...rawNoMedia } = dt;
+    if (venditore !== 'concessionario') {
+      delete rawNoMedia.description;
+      if (rawNoMedia.seller) rawNoMedia.seller = { type: rawNoMedia.seller.type };
+    }
+    out._raw = rawNoMedia;
+  }
   return out;
 }
 
@@ -486,9 +518,12 @@ async function fetchPage(params, page, opts = {}) {
   if (res.status !== 200) throw fail(`AS24 GraphQL HTTP ${res.status}`, { status: res.status, kind: kindForStatus(res.status) });
   let j;
   try { j = JSON.parse(res.body); } catch (_) { throw fail('AS24 GraphQL: body non-JSON', { status: res.status, kind: 'blocked' }); }
-  if (j.errors) throw fail('AS24 GraphQL errors: ' + JSON.stringify(j.errors).slice(0, 120), { kind: 'error' });
+  if (j.errors && (!Array.isArray(j.errors) || j.errors.length))
+    throw fail('AS24 GraphQL errors: ' + JSON.stringify(j.errors).slice(0, 120), { kind: 'error' });
   const arr = ((j.data || {}).search || {}).listings;
-  const list = (arr && arr.listings) || [];
+  if (!arr || !Array.isArray(arr.listings))
+    throw fail('AS24 GraphQL: elenco annunci assente o illeggibile', { kind: 'error' });
+  const list = arr.listings;
   // `raw` = annunci grezzi della pagina (per decidere se c'è una pagina dopo);
   // `items` è filtrato (onRequestOnly/prezzo-null) → non usarlo per la paginazione.
   // `totale` = quanti ne ha AS24 per QUESTA ricerca, non quanti ne mostriamo noi.
@@ -509,6 +544,21 @@ async function fetchPage(params, page, opts = {}) {
  *                        (vista parziale → il crawler NON deve rilevare venduti).
  */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// Solo pagine NORMALIZZATE di una fetta in corso, mai il body GraphQL. Se una pagina
+// successiva cade, il retry riparte dalla prima mancante senza riscaricare le precedenti.
+const pagineRetry = new Map();
+const RETRY_TTL_MS = 3 * 60 * 1000;
+const RETRY_MAX = 40;
+function chiavePagina(params, p, opts) {
+  const v = buildVariables(params, p, opts);
+  return v && JSON.stringify([opts.retryScope || 'interno', v]);
+}
+function clearRetryPages(params, opts = {}) {
+  if (!opts.retryPages) return;
+  const maxPages = opts.maxPages || MAX_PAGES;
+  const salta = Math.max(0, opts.fetta || 0) * maxPages;
+  for (let p = 1 + salta; p <= salta + maxPages; p++) pagineRetry.delete(chiavePagina(params, p, opts));
+}
 
 async function scrapeAutoscoutGraphql(params, opts = {}) {
   const maxPages = opts.maxPages || MAX_PAGES;
@@ -524,18 +574,28 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
   // successiva. Ogni fonte la traduce nella SUA paginazione, perche' le pagine hanno
   // dimensioni diverse — qui 50 per pagina, due pagine per fetta.
   const salta = Math.max(0, opts.fetta || 0) * maxPages;
-  let parziale = null, bloccoParziale = null, erroreTipo = null, erroreHttp = null;
+  let parziale = null, bloccoParziale = null, erroreTipo = null, erroreHttp = null, erroreCodice = null;
   let hasMore = false;
   let rawTot = 0;                   // annunci grezzi visti: se mappati 0, e' il parser
   for (let p = 1 + salta; p <= salta + maxPages; p++) {
-    if (p > 1 + salta && pageDelay) await sleep(pageDelay);   // mai raffica di pagine
     let pagina;
-    try { pagina = await fetchPage(params, p, opts); }
+    const key = opts.retryPages && chiavePagina(params, p, opts);
+    const hit = key && pagineRetry.get(key);
+    const validHit = hit && Date.now() - hit.ts < RETRY_TTL_MS;
+    if (hit && !validHit) pagineRetry.delete(key);
+    try {
+      if (!validHit && p > 1 + salta && pageDelay) await sleep(pageDelay); // mai raffica di richieste
+      pagina = validHit ? hit.data : await fetchPage(params, p, opts);
+      if (key && !validHit) {
+        pagineRetry.set(key, { ts: Date.now(), data: pagina });
+        if (pagineRetry.size > RETRY_MAX) pagineRetry.delete(pagineRetry.keys().next().value);
+      }
+    }
     catch (e) {
       if (p === 1 + salta || !opts.withMeta) throw e;
       parziale = `AutoScout24: pagine successive non lette. ${e.message}`;
       bloccoParziale = e.kind === 'blocked' ? e : null;
-      erroreTipo = e.kind || 'transient'; erroreHttp = e.status || null;
+      erroreTipo = e.kind || 'transient'; erroreHttp = e.status || null; erroreCodice = e.code || null;
       break;
     }
     const { items, raw, total: tot } = pagina;
@@ -555,10 +615,12 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
    * mentre l'errore finisce in `errori[]` e diventa un `parziale` dichiarato.
    */
   if (rawTot > 0 && out.length === 0) {
+    clearRetryPages(params, opts);
     throw new Error(`Autoscout: ${rawTot} annunci grezzi e nessuno leggibile — lo schema del payload puo' essere cambiato`);
   }
+  if (!parziale && !opts.retainPages) clearRetryPages(params, opts);
   return opts.withMeta ? { items: out, truncated, total, hasMore, parziale,
-    parzialeRete: !!parziale, erroreTipo, erroreHttp, bloccoParziale } : out;
+    parzialeRete: !!parziale, erroreTipo, erroreHttp, erroreCodice, bloccoParziale } : out;
 }
 
 // ─── F50 copertura: conteggio totale per-query (count-query LEGGERA, separata) ───
@@ -697,3 +759,4 @@ module.exports._parseTotalCount = parseTotalCount;      // PURO, testabile senza
 module.exports.combaciaModello = combaciaModello;       // PURO: modello dichiarato vs cercato
 module.exports._testoPulito = testoPulito;              // PURO: testo annuncio senza markup
 module.exports._mapListing = mapListing;                // PURO: nodo GraphQL → risultato
+module.exports._clearRetryPages = clearRetryPages;

@@ -133,12 +133,13 @@ async function scrapeAutoscoutUnion(params, opts = {}) {
   const liste = await Promise.all(grafie.map(async g => {
     try {
       const r = await scrapeAutoscoutGraphql({ ...params, autoscoutVersionText: conVersione(g) },
-        { fetta: opts.fetta || 0, withMeta: true, ...(opts.maxPages ? { maxPages: opts.maxPages } : {}) });
+        { ...opts, withMeta: true, retainPages: true });
       if (r.parziale) parziali.push(r.parziale);
       if (r.bloccoParziale) errori.push(r.bloccoParziale);
       if (r.hasMore) hasMore = true;
       if (r.erroreTipo && !r.bloccoParziale) errori.push({
-        kind: r.erroreTipo, status: r.erroreHttp, message: r.parziale || 'pagina non letta',
+        kind: r.erroreTipo, status: r.erroreHttp, code: r.erroreCodice,
+        message: r.parziale || 'pagina non letta',
       });
       return r.items;
     } catch (e) { errori.push(e); return []; }
@@ -165,9 +166,13 @@ async function scrapeAutoscoutUnion(params, opts = {}) {
   const bloccoParziale = respinte.find(e => e.status === 429)
     || respinte.find(e => e.code !== 'FONTE_IN_PAUSA') || respinte[0] || null;
   const peggiore = errori.find(e => e?.status === 429) || errori.find(e => e?.kind === 'blocked') || errori[0];
+  if (!errori.length && scrapeAutoscoutGraphql._clearRetryPages) for (const g of grafie)
+    scrapeAutoscoutGraphql._clearRetryPages({ ...params, autoscoutVersionText: conVersione(g) }, opts);
   return { items: [...byUrl.values()], total: null, hasMore, parziale,
     parzialeRete: !!errori.length, erroreTipo: peggiore?.kind || null,
-    erroreHttp: peggiore?.status || null, bloccoParziale };
+    erroreHttp: peggiore?.status || null,
+    erroreCodice: errori.find(e => e?.code === 'AS24_BODY_TOO_LARGE')?.code || peggiore?.code || null,
+    bloccoParziale };
 }
 
 // Auto e Moto usano sempre hades: gli ID di catalogo e i filtri non vengono sostituiti
@@ -1219,7 +1224,8 @@ async function runSource(lavoro, ms, nomeSito, chiaveFonte) {
     segna(isTimeout ? Object.assign(new Error('timeout'), { kind: 'transient' }) : err, 0);
     console.warn(`[WARN] ${nomeSito}: ${isTimeout ? 'timeout' : err.message}`);
     return { items: [], status: isTimeout ? 'timeout' : 'error', reason: isTimeout ? 'timeout' : err.message,
-      erroreTipo: isTimeout ? 'transient' : err.kind || 'error', erroreHttp: err.status || null };
+      erroreTipo: isTimeout ? 'transient' : err.kind || 'error', erroreHttp: err.status || null,
+      erroreCodice: err.code || null };
   } finally { clearTimeout(scattato); }
 }
 
@@ -1282,6 +1288,7 @@ app.get('/api/search', async (req, res) => {
   if (parsed.errors) {
     return res.status(400).json({ error: parsed.errors.join(', ') });
   }
+  parsed.params._cacheScope = req.authId || 'locale';
   // Il tetto giornaliero si addebita QUI, dopo il limitatore al minuto e la validazione: una
   // richiesta che viene rifiutata non deve costare una ricerca. `tettoGiornaliero` chiama
   // next() solo se si puo' procedere; altrimenti ha gia' risposto lui.
@@ -1356,7 +1363,7 @@ function searchCacheKey(p) {
   // sarebbe identico per carrozzeria=suv e carrozzeria=berlina, cioe' lo stesso morso una
   // terza volta. Si srotolano in coppie ordinate, cosi' due scelte diverse danno chiavi diverse.
   const avanzati = filtriAuto.chiaveCache(p.filtriAuto);
-  return ['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax',
+  return ['_cacheScope', 'tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax',
           'regione', 'raggio', 'mmmvAutoscout', 'motoitBrandSlug', 'motoitModelSlug', 'motoitBikeCode',
           'versione', 'fetta', 'fontiPagina', 'subitoMainStart', 'subitoRecuperoStart']
     .map(f => `${f}=${p[f] ?? ''}`).concat(`avanzati=${avanzati}`).join('&').toLowerCase();
@@ -1446,6 +1453,7 @@ function as24LivelloAllargamento(params, asRes, as24Allargato) {
 // così UI e avvisi danno risultati/rating coerenti. Ritorna l'oggetto-response.
 async function runSearchCore(params) {
   const richiesta = f => !params.fontiPagina || params.fontiPagina.split(',').includes(f);
+  const as24Retry = { retryPages: true, retryScope: params._cacheScope || 'interno' };
   // ── Risoluzione metadata per-sito dal catalogo unificato ──────────────────
   // Subito: gli id del suo catalogo (cb/cm auto, bb/bm moto) — vedi subito-nodo.
   // Autoscout24: serve mmmvAutoscout (livello modello, fallback livello brand).
@@ -1907,7 +1915,7 @@ async function runSearchCore(params) {
       // sul CAP li toglie. Senza compensare, la regione mostrerebbe MENO annunci di prima
       // pur pescando da un insieme piu' grande (75 contro 83). Costa una richiesta.
       : runSource(() => scrapeAutoscoutUnion(params, { withMeta: true, fetta: params.fetta || 0,
-          ...(params.as24RegioneDaCap ? { maxPages: 3 } : {}) }), TIMEOUT_MS, 'Autoscout24', 'autoscout'),
+          ...(params.as24RegioneDaCap ? { maxPages: 3 } : {}), ...as24Retry }), TIMEOUT_MS, 'Autoscout24', 'autoscout'),
     !richiesta('moto') ? Promise.resolve(esaurita()) : salvate?.moto ? Promise.resolve(salvate.moto) : skipMotoIt
       ? Promise.resolve({ items: [], status: 'skipped', reason: motoSkipReason })
       : inPausaMoto
@@ -1933,12 +1941,12 @@ async function runSearchCore(params) {
     if (params.autoscoutVersionModello) {
       const soloModello = await runSource(() =>
         scrapeAutoscoutUnion({ ...params, versione: null, autoscoutVersionText: params.autoscoutVersionModello },
-          { withMeta: true, fetta }), TIMEOUT_MS, 'Autoscout24', 'autoscout');
+          { withMeta: true, fetta, ...as24Retry }), TIMEOUT_MS, 'Autoscout24', 'autoscout');
       if (soloModello.items.length) { asRes = { ...soloModello, viaSoloModello: true }; as24Allargato = true; }
     }
     if (!as24Allargato) {
       const retry = await runSource(() =>
-        scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null, autoscoutSpellings: null }, { withMeta: true, fetta }), TIMEOUT_MS, 'Autoscout24', 'autoscout');
+        scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null, autoscoutSpellings: null }, { withMeta: true, fetta, ...as24Retry }), TIMEOUT_MS, 'Autoscout24', 'autoscout');
       if (retry.items.length) { asRes = retry; as24Allargato = true; }
       // Un ritentativo SCADUTO non e' "la fonte non ha nulla": lasciando 'empty' la risposta
       // monca finiva pure in cache per tre minuti (vedi `cacheable`). Si porta fuori lo stato
@@ -2289,6 +2297,7 @@ async function runSearchCore(params) {
       autoscout: { status: asRes.status,     reason: asReason,                 count: asCount,
                    totale: asRes.total ?? null, hasMore: asRes.hasMore ?? null,
                    erroreTipo: asRes.erroreTipo || null, erroreHttp: asRes.erroreHttp || null,
+                   erroreCodice: asRes.erroreCodice || null,
                    parzialeRete: asRes.parzialeRete || null,
                    pausa: salute.fermo('autoscout'), allargato: asAllargatoA,
                    // Grafie AS24 cadute con superstiti: gli item ci sono ma ne mancano
@@ -2331,6 +2340,7 @@ const amrSearchFn = async (input, utente) => {
   let parsed = parseSearchParams(q);
   if (parsed.errors && q.regione) { delete q.regione; parsed = parseSearchParams(q); }   // regione invalida → droppa e riprova
   if (parsed.errors) return { error: parsed.errors.join(', ') };
+  parsed.params._cacheScope = utente?.id || 'interno';
   // IL TETTO GIORNALIERO VALE ANCHE QUI. Questa closure arriva a runSearch in-process e
   // saltava il gate di /api/search: un 'demo' fermo alle 50 ricerche sul web continuava
   // illimitato da WhatsApp, dallo stesso IP di casa che il tetto deve proteggere. Stessa

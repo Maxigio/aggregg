@@ -2392,7 +2392,8 @@ function completaPagina(data, fonti, fetta) {
     });
     const bloccata = stati.find(s => s.erroreHttp === 429 || s.pausa?.fermo
       || (Array.isArray(s.errori) && s.errori.some(e => e.http === 429)));
-    const troppoGrande = stati.some(s => s.erroreCodice === 'SUBITO_BODY_TOO_LARGE');
+    const troppoGrande = stati.some(s => s.erroreCodice === 'SUBITO_BODY_TOO_LARGE'
+      || s.erroreCodice === 'AS24_BODY_TOO_LARGE');
     const definitiva = errori.some(e => e.http === 403 || e.tipo === 'auth' || e.tipo === 'error');
     const transitoria = errori.every(e => e.tipo === 'transient' || e.http >= 500)
       || stati.every(s => s.status === 'timeout');
@@ -2401,7 +2402,7 @@ function completaPagina(data, fonti, fetta) {
     const dopo = bloccata
       ? (Number.isSafeInteger(fino) && fino > Date.now() && fino < 8640000000000000 ? fino : Date.now() + 60000)
       : Date.now() + 15000;
-    const motivo = troppoGrande ? 'risposta di Subito oltre il limite di dimensione'
+    const motivo = troppoGrande ? 'risposta della fonte oltre il limite di dimensione'
       : errori.some(e => e.http === 403) ? 'accesso rifiutato dalla fonte (403)'
       : errori.some(e => e.tipo === 'auth') ? 'accesso alla fonte non valido (401)'
         : definitiva ? 'risposta della fonte non leggibile'
@@ -2627,7 +2628,7 @@ async function doSearch() {
     paginaFontiInSospeso = null;
     lastSources = data.sources || null;
     let pubblicabile = true;
-    if (data.sources?.subito?.parzialeRete && data.sources.subito.errori?.some(e => e.fase === 'recupero')) {
+    if (Object.values(data.sources || {}).some(s => s?.parzialeRete)) {
       const fonti = ['subito', 'autoscout', 'moto'].filter(f => data.sources[f]
         && (data.sources[f].status !== 'skipped' || data.sources[f].pausa?.fermo));
       pubblicabile = completaPagina(data, fonti, 0);

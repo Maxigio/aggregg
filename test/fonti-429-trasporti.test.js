@@ -53,6 +53,54 @@ test('AS24: il 429 arriva dagli header, ferma anche le count-query e conserva le
   assert.ok(salute.fermo('autoscout').fino > Date.now() + 23 * 3600000);
 });
 
+test('AS24: errors vuoto e lista vuota sono validi, lista mancante resta errore', async () => {
+  finta(() => ({ status: 200, body: JSON.stringify({ errors: [], data: { search: {
+    listings: { listings: [], metadata: { totalItems: 0 } },
+  } } }) }));
+  const vuota = await as24({ tipo: 'auto', as24Customer: '1' }, { maxPages: 1, withMeta: true });
+  assert.equal(vuota.items.length, 0);
+  finta(() => ({ status: 200, body: JSON.stringify({ data: { search: {} } }) }));
+  await assert.rejects(as24({ tipo: 'auto', as24Customer: '1' }, { maxPages: 1 }), /elenco annunci assente/);
+});
+
+test('AS24: body oltre 2 MiB si interrompe senza interpretarli come zero annunci', async () => {
+  let chiusa = false;
+  https.request = (...args) => {
+    const cb = args.at(-1), req = new EventEmitter();
+    req.setTimeout = () => {}; req.write = () => {}; req.end = () => {};
+    req.destroy = () => { chiusa = true; };
+    process.nextTick(() => {
+      const res = new EventEmitter();
+      res.statusCode = 200; res.headers = {}; res.setEncoding = () => {};
+      cb(res); res.emit('data', 'x'.repeat(2 * 1024 * 1024 + 1));
+    });
+    return req;
+  };
+  await assert.rejects(as24({ tipo: 'auto', as24Customer: '1' }, { maxPages: 1 }),
+    { code: 'AS24_BODY_TOO_LARGE' });
+  assert.equal(chiusa, true);
+});
+
+test('AS24: un 429 chiude la presa dagli header e conserva Retry-After', async () => {
+  let chiusa = false, bodyLetto = false;
+  https.request = (...args) => {
+    const cb = args.at(-1), req = new EventEmitter();
+    req.setTimeout = () => {}; req.write = () => {}; req.end = () => {};
+    req.destroy = () => { chiusa = true; };
+    process.nextTick(() => {
+      const res = new EventEmitter();
+      res.statusCode = 429; res.headers = { 'retry-after': '900' };
+      res.on('data', () => { bodyLetto = true; });
+      cb(res);
+    });
+    return req;
+  };
+  await assert.rejects(as24({ tipo: 'auto', as24Customer: '1' }, { maxPages: 1 }), { status: 429 });
+  assert.equal(chiusa, true);
+  assert.equal(bodyLetto, false);
+  assert.ok(salute.fermo('autoscout').fino >= Date.now() + 899000);
+});
+
 test('Subito: il 429 HTTP senza fine body blocca anche una nuova ricerca ricambi', async () => {
   const chiamate = finta(() => ({ status: 429 }));
   await assert.rejects(subito({ tipo: 'auto', marca: 'Prova' }), { status: 429 });
@@ -94,6 +142,23 @@ test('AS24: l’unione conserva anche una grafia letta solo a metà, tutte falli
   assert.equal(r.items.length, 1); assert.equal(r.bloccoParziale.status, 429); assert.match(r.parziale, /pagina persa/);
   fallisci = true;
   await assert.rejects(contesto.scrapeAutoscoutUnion({ autoscoutSpellings: ['prima', 'seconda'] }), { status: 429 });
+});
+
+test('AS24: il limite del body resta visibile anche se un’altra grafia fallisce prima', async () => {
+  const vm = require('node:vm');
+  const src = fs.readFileSync(path.join(__dirname, '../backend/server.js'), 'utf8');
+  const corpo = src.slice(src.indexOf('async function scrapeAutoscoutUnion'), src.indexOf('// Auto e Moto usano sempre hades'));
+  const contesto = vm.createContext({ scrapeAutoscoutSmart() { assert.fail('ripiego inatteso'); },
+    async scrapeAutoscoutGraphql(p) {
+      const e = p.autoscoutVersionText === 'prima'
+        ? Object.assign(new Error('rete'), { kind: 'transient', status: 503 })
+        : Object.assign(new Error('body oltre il limite'), { kind: 'error', code: 'AS24_BODY_TOO_LARGE' });
+      return { items: [{ url: `https://auto/${p.autoscoutVersionText}` }], parziale: e.message,
+        erroreTipo: e.kind, erroreHttp: e.status || null, erroreCodice: e.code || null };
+    } });
+  vm.runInContext(corpo, contesto);
+  const r = await contesto.scrapeAutoscoutUnion({ autoscoutSpellings: ['prima', 'seconda'] });
+  assert.equal(r.erroreCodice, 'AS24_BODY_TOO_LARGE');
 });
 
 test('Moto.it: markup non leggibile durante la verifica non riapre la fonte', async () => {
