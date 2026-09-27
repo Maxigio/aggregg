@@ -35,14 +35,14 @@
 const SEGNAPOSTO = /^(altro|altr[oa]\s+(allestimento|modello|versione)|non\s+dichiarat\w*|n\.?d\.?)$/i;
 
 /**
- * Testo → parole confrontabili. I numeri con la virgola decimale restano interi ("2.0" e'
- * una parola sola, non "2" e "0"): sono meta' dei nomi-versione italiani, e spezzarli
- * farebbe combaciare "2.0" con qualunque annuncio che contenga un 2 e uno 0.
+ * Testo → parole confrontabili. "2,0" e "2.0" diventano la stessa parola intera,
+ * non "2" e "0": spezzarli farebbe combaciare una cilindrata diversa.
  */
 function parole(s) {
   return String(s == null ? '' : s)
     .toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/(\d),(?=\d)/g, '$1.')
     .replace(/[^a-z0-9.]+/g, ' ')
     .split(/\s+/)
     .map(t => t.replace(/^\.+|\.+$/g, ''))

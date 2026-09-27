@@ -67,6 +67,18 @@ test('i numeri con la virgola restano interi', () => {
   assert.strictEqual(v.verifica(ad('Golf 1.0 TSI', ''), '2.0').esito, 'smentita');
 });
 
+test('virgola e punto decimali sono equivalenti solo nel confronto locale', () => {
+  assert.deepStrictEqual(v.parole('2,0 TDI'), ['2.0', 'tdi']);
+  assert.deepStrictEqual(v.parole('23,8 kWh'), ['23.8', 'kwh']);
+  assert.strictEqual(v.verifica(ad('2.0 TDI', ''), '2,0 TDI').esito, 'confermata');
+  assert.strictEqual(v.verifica(ad('2,0 TDI', ''), '2.0 TDI').esito, 'confermata');
+  assert.strictEqual(v.verifica(ad('23.8 kWh Action', ''), '23,8 kWh Action').esito, 'confermata');
+  assert.strictEqual(v.verifica(ad('Altro allestimento', 'Golf 2.0 TDI'), '2,0 TDI').esito, 'confermata');
+  assert.strictEqual(v.verifica(ad('1.0 TDI', ''), '2,0 TDI').esito, 'smentita');
+  assert.strictEqual(v.verifica(ad('2.0 TDI S', ''), '2,0 TDI R').esito, 'smentita');
+  assert.deepStrictEqual(v.parole('2, 0 TDI'), ['2', '0', 'tdi'], 'una virgola non decimale resta separatore');
+});
+
 test('accenti e maiuscole non fanno due versioni diverse', () => {
   assert.strictEqual(v.verifica(ad('Golf GTI PERFORMANCE', ''), 'gti performance').esito, 'confermata');
   assert.strictEqual(v.verifica(ad('500 Sport Pòp', ''), 'pop').esito, 'confermata');
