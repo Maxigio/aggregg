@@ -63,6 +63,77 @@ test('AS24: errors vuoto e lista vuota sono validi, lista mancante resta errore'
   await assert.rejects(as24({ tipo: 'auto', as24Customer: '1' }, { maxPages: 1 }), /elenco annunci assente/);
 });
 
+test('AS24: Competitor si ferma a 50 su 50, ma legge la pagina 2 quando il totale e 51', async () => {
+  let chiamate = finta(() => ({ status: 200, body: JSON.stringify({ data: { search: {
+    listings: { listings: Array.from({ length: 50 }, (_, i) => nodo(i)), metadata: { totalItems: 50 } },
+  } } }) }));
+  const completo = await as24({ tipo: 'auto', as24Customer: '1' }, { maxPages: 40, withMeta: true });
+  assert.equal(chiamate(), 1);
+  assert.equal(completo.items.length, 50);
+  assert.equal(completo.truncated, false);
+  assert.equal(completo.hasMore, false);
+
+  chiamate = finta(n => ({ status: 200, body: JSON.stringify({ data: { search: {
+    listings: { listings: n === 1 ? Array.from({ length: 50 }, (_, i) => nodo(i)) : [nodo(50)],
+      metadata: { totalItems: 51 } },
+  } } }) }));
+  const successiva = await as24({ tipo: 'auto', as24Customer: '1' }, { maxPages: 40, withMeta: true });
+  assert.equal(chiamate(), 2);
+  assert.equal(successiva.items.length, 51);
+  assert.equal(successiva.truncated, false);
+});
+
+test('AS24: totale in contrasto con 50 righe e prezzo non leggibile restano dichiarati', async () => {
+  const conPrezzo = nodo(1), senzaPrezzo = nodo(2);
+  delete senzaPrezzo.details.prices;
+  const list = [conPrezzo, senzaPrezzo, ...Array.from({ length: 48 }, (_, i) => nodo(i + 3))];
+  const chiamate = finta(n => ({ status: 200, body: JSON.stringify({ data: { search: {
+    listings: { listings: n === 1 ? list : [], metadata: { totalItems: 0 } },
+  } } }) }));
+  const r = await as24({ tipo: 'auto', as24Customer: '1' }, { maxPages: 2, withMeta: true });
+  assert.equal(chiamate(), 2, 'un totale impossibile non chiude la pagina piena');
+  assert.equal(r.items.length, 49);
+  assert.equal(r.total, null);
+  assert.match(r.parziale, /dati mancanti o illeggibili/);
+  assert.equal(r.parzialeRete, false);
+});
+
+test('AS24: totali diversi fra pagine non inventano una fine certa', async () => {
+  const chiamate = finta(n => ({ status: 200, body: JSON.stringify({ data: { search: {
+    listings: { listings: Array.from({ length: 50 }, (_, i) => nodo(n * 100 + i)),
+      metadata: { totalItems: n === 1 ? 100 : 101 } },
+  } } }) }));
+  const r = await as24({ tipo: 'auto', as24Customer: '1' }, { maxPages: 2, withMeta: true });
+  assert.equal(chiamate(), 2);
+  assert.equal(r.items.length, 100);
+  assert.equal(r.total, null);
+  assert.equal(r.hasMore, true);
+  assert.equal(r.truncated, true);
+  assert.match(r.parziale, /totale incoerente/);
+});
+
+test('AS24: ogni 403 GraphQL effettivo conta, il riepilogo dello stesso errore no', async () => {
+  const chiamate = finta(() => ({ status: 403 }));
+  let primo;
+  try { await as24({ tipo: 'auto', as24Customer: '1' }); } catch (e) { primo = e; }
+  assert.equal(primo.status, 403);
+  salute.registra('autoscout', { errore: primo });
+  assert.equal(salute.fermo('autoscout').fermo, false);
+  await assert.rejects(as24({ tipo: 'auto', as24Customer: '1' }), { status: 403 });
+  assert.equal(chiamate(), 2);
+  assert.equal(salute.fermo('autoscout').fermo, true);
+});
+
+test('AS24 moto: quattro grafie respinte contano quattro chiamate della fonte', async () => {
+  const chiamate = finta(() => ({ status: 403 }));
+  const server = require('../backend/server');
+  const r = await server._amrSearchFn({ tipo: 'moto', marca: 'CFMOTO', modello: '800MT-X',
+    fonti: 'autoscout', fetta: '0', prezzoMin: 3492 });
+  assert.equal(chiamate(), 4);
+  assert.equal(r.sources.autoscout.status, 'error');
+  assert.equal(salute.fermo('autoscout').fermo, true);
+});
+
 test('AS24: body oltre 2 MiB si interrompe senza interpretarli come zero annunci', async () => {
   let chiusa = false;
   https.request = (...args) => {

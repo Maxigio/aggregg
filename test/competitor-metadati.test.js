@@ -42,6 +42,21 @@ test('Competitor: gli avvisi del parser non diventano annunci persi né errori d
   assert.ok(calls.every(c => c.opts.withMeta === true));
 });
 
+test('Competitor: gli annunci AS24 scartati non vengono detti inclusi nel parco', async () => {
+  const C = competitor();
+  const p = await C.parco({ ...voce, fonte: 'autoscout' }, { salute: freno(),
+    scrapeAs24: async params => params.tipo === 'auto'
+      ? { items: [riga({ fonte: 'autoscout' })], total: 2, scartati: 1,
+        parziale: '1 annuncio AutoScout senza prezzo leggibile non incluso' }
+      : { items: [], total: 0, scartati: 0 },
+  });
+  assert.equal(p.veicoli.length, 1);
+  assert.equal(p.illeggibili, 1);
+  assert.deepEqual(p.avvisiLettura, []);
+  assert.deepEqual(p.passateKo, []);
+  assert.equal(p.totaleFonte, 2);
+});
+
 test('Competitor: prezzi in parte illeggibili conservano tutti i veicoli e il solo prezzo leggibile nei numeri', async () => {
   const C = competitor();
   const warning = '1 annuncio ha un campo prezzo non leggibile';

@@ -377,6 +377,7 @@ async function parco(voce, dip = {}) {
   let troncato = false;        // il TETTO nostro (40 pagine): il parco e' piu' grande
   const passateKo = [];        // passate cadute: non si sa quanto manca, e non e' un tetto
   const avvisiLettura = [];    // campi non letti in annunci che restano nel parco
+  let illeggibili = 0;         // annunci scartati dal parser: non sono nel parco
   let totaleFonte = null;      // quanti ne dichiara la FONTE, contro quanti ne abbiamo presi
   // Il totale dichiarato descrive TUTTE le passate che hanno portato veicoli? Se una
   // passata fallisce, o riesce con veicoli ma senza dichiarare il suo totale, la somma
@@ -441,9 +442,10 @@ async function parco(voce, dip = {}) {
     // (`illeggibili`) e non si presenta come una passata caduta. Il flag per riga
     // conserva l'avviso anche quando `parziale` contiene pure un errore di rete.
     const prezziIlleggibili = items.filter(v => v.prezzoIlleggibile === true).length;
-    const avvisoLettura = r.sospetto || (!r.parzialeRete && r.parziale)
+    const avvisoLettura = r.sospetto || (!r.parzialeRete && !r.scartati && r.parziale)
       || (prezziIlleggibili ? `${prezziIlleggibili} annunci hanno un campo prezzo non leggibile` : null);
     if (avvisoLettura) avvisiLettura.push({ tipo, motivo: avvisoLettura });
+    illeggibili += r.scartati || 0;
     // Una passata VUOTA non si registra: qui zero non e' un silenzio sospetto ma il caso
     // quotidiano (il concessionario di sole auto, passata moto), e contarlo fra i vuoti
     // renderebbe la fonte "sospetta" nel pannello per un fatto sul venditore, non su di lei.
@@ -473,7 +475,7 @@ async function parco(voce, dip = {}) {
     }
     if (voce.fonte === 'subito' && r.bloccoParziale?.status === 429) break;
   }
-  return { veicoli, troncato, passateKo, avvisiLettura, illeggibili: 0, totaleFonte: totaleCopreTutto ? totaleFonte : null };
+  return { veicoli, troncato, passateKo, avvisiLettura, illeggibili, totaleFonte: totaleCopreTutto ? totaleFonte : null };
 }
 
 /* ─── i numeri ────────────────────────────────────────────────────────────── */

@@ -1927,7 +1927,7 @@ async function runSearchCore(params) {
   // a priori). Se il filtro nativo non trova nulla, si riprova tenendo il modello-padre:
   // meglio "ti mostro anche il modello imparentato, segnalato" che una schermata vuota.
   let asRes = asRes0, as24Allargato = salvate?.autoscout?.allargato || false;
-  if (!salvate?.autoscout && params.autoscoutVersionText && asRes.status === 'empty') {
+  if (!salvate?.autoscout && params.autoscoutVersionText && asRes.status === 'empty' && !asRes.parziale) {
     // UN GRADINO PER VOLTA. Ora che la versione parte davvero (vedi scrapeAutoscoutUnion), lo
     // zero-risultati non e' piu' un caso raro: il filtro di AS24 e' un AND su tutte le parole
     // ed e' durissimo — misurato su Golf, "Golf GTD" 145 annunci, "Golf GTD Variant" 1.
@@ -1943,8 +1943,9 @@ async function runSearchCore(params) {
         scrapeAutoscoutUnion({ ...params, versione: null, autoscoutVersionText: params.autoscoutVersionModello },
           { withMeta: true, fetta, ...as24Retry }), TIMEOUT_MS, 'Autoscout24', 'autoscout');
       if (soloModello.items.length) { asRes = { ...soloModello, viaSoloModello: true }; as24Allargato = true; }
+      else if (soloModello.status !== 'empty' || soloModello.parziale) asRes = soloModello;
     }
-    if (!as24Allargato) {
+    if (!as24Allargato && asRes.status === 'empty' && !asRes.parziale) {
       const retry = await runSource(() =>
         scrapeAutoscoutSmart({ ...params, autoscoutVersionText: null, autoscoutSpellings: null }, { withMeta: true, fetta, ...as24Retry }), TIMEOUT_MS, 'Autoscout24', 'autoscout');
       if (retry.items.length) { asRes = retry; as24Allargato = true; }

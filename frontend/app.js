@@ -4039,11 +4039,19 @@ function renderSourceStatus() {
     const s = lastSources[f];
     aggiungi(fontePausaTesto(FONTE_LABEL[f], s?.pausa)
       || (s?.erroreDettaglio ? `Dettagli ${FONTE_LABEL[f]}: ${s.erroreDettaglio}` : ''));
-    if (s && (s.status === 'ok' || s.status === 'error') && s.parziale && !(f === 'autoscout' && s.allargato)) {
+    if (s && (s.status === 'ok' || s.status === 'error' || s.status === 'empty') && s.parziale && !(f === 'autoscout' && s.allargato)) {
       aggiungi(String(s.parziale));
     }
     if (f === 'subito' && s?.erroreCodice === 'SUBITO_BODY_TOO_LARGE' && !s.parziale) {
       aggiungi('Subito ha inviato una risposta oltre il limite di dimensione. La richiesta è stata interrotta: gli annunci di questa pagina non sono stati letti.');
+    }
+    if (f === 'autoscout' && (s?.status === 'error' || s?.status === 'timeout') && !s.parziale && !s.pausa?.fermo) {
+      const motivo = s.erroreCodice === 'AS24_BODY_TOO_LARGE' ? 'risposta oltre il limite di dimensione'
+        : s.erroreHttp === 401 ? 'autenticazione rifiutata dalla fonte'
+        : s.erroreHttp === 403 || s.erroreHttp === 429 ? `richieste respinte (HTTP ${s.erroreHttp})`
+        : s.erroreTipo === 'transient' ? 'errore di rete o risposta temporaneamente non disponibile'
+        : 'risposta non leggibile';
+      aggiungi(`AutoScout24: ${motivo}. Gli annunci di questa pagina non sono stati letti.`);
     }
     if (f === 'subito' && Array.isArray(s?.errori) && s.errori.length) {
       const righe = s.errori.map(e => {

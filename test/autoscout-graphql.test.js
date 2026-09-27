@@ -56,6 +56,14 @@ test('mapListing: shape completa coerente con gli altri scraper', () => {
   assert.strictEqual(r.url, 'https://www.autoscout24.it/annunci/bmw-320d-x');
 });
 
+test('mapListing: importo numerico leggibile e stringa invalida non confusi', () => {
+  const n = JSON.parse(JSON.stringify(NODE));
+  n.details.prices.public.amountInEUR.raw = '8500';
+  assert.strictEqual(mapListing(n).prezzo, 8500);
+  n.details.prices.public.amountInEUR.raw = 'prezzo da concordare';
+  assert.strictEqual(mapListing(n), null);
+});
+
 // F50 Fase 0: il nome-modello entra nel titolo. Prima, con modelVersionInput vuoto (~74% delle
 // moto AS24) il titolo era la sola marca e il post-filter di server.js scartava l'annuncio.
 const nodeCls = cls => ({ details: { ...NODE.details, vehicle: { ...NODE.details.vehicle, classification: cls } } });

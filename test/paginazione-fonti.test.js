@@ -281,6 +281,39 @@ test('riallargamento AutoScout respinto: conserva HTTP e tipo per riprovare la p
   assert.equal(r.sources.autoscout.erroreHttp, 503);
 });
 
+test('AS24 moto: il solo-modello fallito non prova assenza e non apre il modello padre', async () => {
+  const chiamate = [];
+  https.request = (...args) => {
+    const cb = args.at(-1), req = new EventEmitter();
+    let body = '';
+    req.write = x => { body += x; }; req.setTimeout = () => {}; req.destroy = () => {};
+    req.end = () => process.nextTick(() => {
+      const v = JSON.parse(body).variables;
+      const testo = v.v.classification?.[0]?.modelVersionInput || '';
+      chiamate.push(testo);
+      const res = new EventEmitter();
+      res.statusCode = testo.includes('ABS') ? 200 : testo ? 503 : 200;
+      res.headers = {}; res.setEncoding = () => {}; res.resume = () => {};
+      cb(res);
+      if (res.statusCode === 200) {
+        res.emit('data', JSON.stringify({ data: { search: { listings: {
+          listings: testo ? [] : [nodo(1)], metadata: { totalItems: testo ? 0 : 1 },
+        } } } }));
+        res.emit('end');
+      }
+    });
+    return req;
+  };
+  const r = await server._amrSearchFn({ tipo: 'moto', marca: 'CFMOTO', modello: '800MT-X',
+    versione: 'ABS', fonti: 'autoscout', fetta: '0', prezzoMin: 3491 });
+  assert.ok(chiamate.some(x => x.includes('ABS')), JSON.stringify(chiamate));
+  assert.ok(chiamate.some(x => x && !x.includes('ABS')));
+  assert.ok(chiamate.every(Boolean), 'la ricerca del modello padre non parte dopo il 503');
+  assert.equal(r.sources.autoscout.status, 'error');
+  assert.equal(r.sources.autoscout.erroreHttp, 503);
+  assert.equal(server._cacheable({ sources: r.sources, totale: r.risultati.length }), false);
+});
+
 test('una pagina richiesta solo a Subito non consulta il catalogo remoto Moto.it', async () => {
   let menuMoto = 0, hades = 0;
   https.get = () => { menuMoto++; throw new Error('catalogo Moto.it non richiesto'); };

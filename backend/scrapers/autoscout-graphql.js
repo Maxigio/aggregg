@@ -330,7 +330,10 @@ function mapListing(node, opts = {}) {
    * ma resta fra i visti e nessuno lo dichiara venduto.
    */
   const suRichiesta = !!(pub && pub.onRequestOnly);
-  const prezzo = pub && pub.amountInEUR ? pub.amountInEUR.raw : null;
+  const prezzoRaw = pub && pub.amountInEUR ? pub.amountInEUR.raw : null;
+  const prezzoNumero = typeof prezzoRaw === 'number' ? prezzoRaw
+    : typeof prezzoRaw === 'string' && /^\d+(?:\.\d+)?$/.test(prezzoRaw.trim()) ? Number(prezzoRaw) : null;
+  const prezzo = Number.isFinite(prezzoNumero) && prezzoNumero >= 0 ? prezzoNumero : null;
   if (prezzo == null && !suRichiesta) return null;
 
   const v = dt.vehicle || {};
@@ -529,8 +532,16 @@ async function fetchPage(params, page, opts = {}) {
   // `totale` = quanti ne ha AS24 per QUESTA ricerca, non quanti ne mostriamo noi.
   // Arriva dentro la stessa risposta: nessuna richiesta in piu'.
   const tot = arr && arr.metadata && arr.metadata.totalItems;
-  return { items: list.map(n => mapListing(n, opts)).filter(Boolean), raw: list.length,
-           total: Number.isFinite(tot) ? tot : null };
+  const items = list.map(n => mapListing(n, opts)).filter(Boolean);
+  const total = Number.isSafeInteger(tot) && tot >= 0
+    && (!list.length || tot >= (page - 1) * PAGE_SIZE + list.length) ? tot : null;
+  return { items, raw: list.length, scartati: list.length - items.length, total,
+           totaleIncoerente: tot != null && total == null };
+  }).catch(e => {
+    // Ogni risposta GraphQL conta una volta, anche se una ricerca unisce piu' grafie.
+    // Un rifiuto locale viene ignorato da registra; il WeakSet deduplica il riepilogo.
+    salute.registra('autoscout', { errore: e });
+    throw e;
   });
 }
 
@@ -577,6 +588,7 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
   let parziale = null, bloccoParziale = null, erroreTipo = null, erroreHttp = null, erroreCodice = null;
   let hasMore = false;
   let rawTot = 0;                   // annunci grezzi visti: se mappati 0, e' il parser
+  let scartati = 0, totaleIncoerente = false;
   for (let p = 1 + salta; p <= salta + maxPages; p++) {
     let pagina;
     const key = opts.retryPages && chiavePagina(params, p, opts);
@@ -600,11 +612,15 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
     }
     const { items, raw, total: tot } = pagina;
     if (p === 1 + salta) total = tot;   // uguale su tutte le pagine: si prende la prima
+    else if (tot != null && total != null && tot !== total) totaleIncoerente = true;
+    if (pagina.totaleIncoerente || totaleIncoerente) total = null;
     rawTot += raw;
+    scartati += pagina.scartati || 0;
+    totaleIncoerente ||= !!pagina.totaleIncoerente;
     out.push(...items);
     hasMore = raw === PAGE_SIZE && (total == null || p * PAGE_SIZE < total);
-    if (raw < PAGE_SIZE) break;       // lista esaurita (conteggio GREZZO) = vista completa
-    if (p === salta + maxPages) truncated = true;   // ultima pagina piena al cap → forse altro
+    if (!hasMore) break;              // usa lo stesso esaurimento del cursore pubblico
+    if (p === salta + maxPages) truncated = true;
   }
   /**
    * SE NON MAPPA PIU' NIENTE, E' IL PARSER, NON IL MERCATO — la regola di subito-api:745,
@@ -618,9 +634,14 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
     clearRetryPages(params, opts);
     throw new Error(`Autoscout: ${rawTot} annunci grezzi e nessuno leggibile — lo schema del payload puo' essere cambiato`);
   }
+  const parzialeRete = !!parziale;
   if (!parziale && !opts.retainPages) clearRetryPages(params, opts);
-  return opts.withMeta ? { items: out, truncated, total, hasMore, parziale,
-    parzialeRete: !!parziale, erroreTipo, erroreHttp, erroreCodice, bloccoParziale } : out;
+  if (scartati || totaleIncoerente) parziale = [parziale,
+    scartati ? `${scartati} annunci AutoScout con dati mancanti o illeggibili non sono stati inclusi` : null,
+    totaleIncoerente ? 'AutoScout ha comunicato un totale incoerente: totale sconosciuto' : null,
+  ].filter(Boolean).join(' · ');
+  return opts.withMeta ? { items: out, truncated, total, hasMore, scartati, parziale,
+    parzialeRete, erroreTipo, erroreHttp, erroreCodice, bloccoParziale } : out;
 }
 
 // ─── F50 copertura: conteggio totale per-query (count-query LEGGERA, separata) ───
