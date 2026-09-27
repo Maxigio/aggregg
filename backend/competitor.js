@@ -158,12 +158,13 @@ function getTesto(url, redirect = 0) {
         return resolve(getTesto(new URL(res.headers.location, u).href, redirect + 1));
       }
       if (res.statusCode >= 400) {
-        res.resume();
         const e = fontiSalute.erroreHttp(fonte, res.statusCode, res.headers);
         // Lo stesso errore attraversa anche la verifica: la deduplica evita doppi
         // colpi, incluso il 429 gia' registrato da erroreHttp.
         fontiSalute.registra(fonte, { errore: e });
-        return reject(e);
+        reject(e);
+        req.destroy();
+        return;
       }
       const ch = []; let s = res;
       const enc = (res.headers['content-encoding'] || '').toLowerCase();
@@ -372,6 +373,7 @@ async function parco(voce, dip = {}) {
   if (salute.fermo(voce.fonte).fermo) throw Object.assign(new Error(
     salute.avvisoPausa ? salute.avvisoPausa(voce.fonte) : `${voce.fonte}: ${salute.MOTIVO_PAUSA}`), { code: 'FONTE_IN_PAUSA' });
   const veicoli = [];
+  const visti = new Set();
   let troncato = false;        // il TETTO nostro (40 pagine): il parco e' piu' grande
   const passateKo = [];        // passate cadute: non si sa quanto manca, e non e' un tetto
   const avvisiLettura = [];    // campi non letti in annunci che restano nel parco
@@ -462,7 +464,13 @@ async function parco(voce, dip = {}) {
     // dichiarati coincidono (il caso quotidiano: concessionario solo-auto, passata moto).
     if (!Array.isArray(r) && Number.isFinite(r.total)) totaleFonte = (totaleFonte || 0) + r.total;
     else if (items.length) totaleCopreTutto = false;
-    for (const v of items) veicoli.push({ ...v, tipo });
+    for (const v of items) {
+      const chiave = v.id != null && String(v.id).trim() ? `id:${voce.fonte}:${v.id}`
+        : v.url ? `url:${voce.fonte}:${v.url}` : null;
+      if (chiave && visti.has(chiave)) continue;
+      if (chiave) visti.add(chiave);
+      veicoli.push({ ...v, tipo });
+    }
     if (voce.fonte === 'subito' && r.bloccoParziale?.status === 429) break;
   }
   return { veicoli, troncato, passateKo, avvisiLettura, illeggibili: 0, totaleFonte: totaleCopreTutto ? totaleFonte : null };

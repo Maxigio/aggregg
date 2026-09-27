@@ -53,6 +53,8 @@ function presa(producer) {
       if (res.destroyed) return;
       if (piano.interrompi) {
         res.emit('aborted'); res.destroy(new Error('socket interrotto'));
+      } else if (piano.lenta) {
+        res.write(' ');
       } else if (piano.aperta) {
         res.write(Buffer.alloc(1024 * 1024, 'x'));
       } else res.end(piano.body || '');
@@ -63,6 +65,21 @@ function presa(producer) {
 }
 const cerca = () => subito({ tipo: 'auto', marca: 'Prova' }, { withMeta: true, senzaRecupero: true });
 const corpoVuoto = JSON.stringify({ ads: [], count_all: 0 });
+
+test('Subito: una risposta che resta attiva ma lentissima scade e chiude la presa', async () => {
+  const nativeTimeout = global.setTimeout;
+  const prese = presa(() => ({ status: 200, lenta: true }));
+  global.setTimeout = (fn, ms, ...args) => nativeTimeout(fn, ms === 45000 ? 25 : ms, ...args);
+  try {
+    await assert.rejects(Promise.race([
+      cerca(), new Promise((_, reject) => nativeTimeout(() => reject(new Error('richiesta rimasta appesa')), 150)),
+    ]), e => e.kind === 'transient' && /timeout/.test(e.message));
+    assert.equal(prese[0].req.destroyed, true);
+  } finally {
+    global.setTimeout = nativeTimeout;
+    prese[0]?.req.destroy();
+  }
+});
 
 for (const caso of [
   { nome: 'oversized', body: 'x'.repeat(808291) },

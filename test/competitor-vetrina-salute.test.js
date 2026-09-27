@@ -72,6 +72,27 @@ for (const status of [403, 429]) test(`vetrina Subito: HTTP ${status}, scala 15 
   assert.equal(t.pending.length, status === 403 ? 4 : 3);
 });
 
+test('vetrina 429: chiude il body prima di scaricarlo e conserva Retry-After', async () => {
+  salute.azzera();
+  let req, letti = 0;
+  https.get = (_url, _opts, cb) => {
+    const res = new PassThrough();
+    res.statusCode = 429;
+    res.headers = { 'retry-after': '120' };
+    res.on('data', chunk => { letti += chunk.length; });
+    req = new EventEmitter();
+    req.setTimeout = () => req;
+    req.destroy = () => { req.destroyed = true; res.destroy(); return req; };
+    process.nextTick(() => { cb(res); res.write(Buffer.alloc(1024 * 1024)); });
+    return req;
+  };
+  await assert.rejects(competitor.risolviVetrina(URL_SUBITO),
+    e => e.status === 429 && e.retryAfter === '120');
+  assert.equal(req.destroyed, true);
+  assert.equal(letti, 0);
+  assert.equal(salute.fermo('subito').fermo, true);
+});
+
 test('un input locale non valido alla scadenza non consuma la verifica della fonte', async () => {
   const t = ambiente();
   salute.erroreHttp('subito', 429); salute.erroreHttp('autoscout', 429); t.scadi();

@@ -1297,43 +1297,6 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// Gli annunci «Altro modello» sono una consultazione distinta: il loro modello
-// NON e' verificabile con l'ID nativo, quindi non entrano nella ricerca, nei suoi
-// conteggi o nei documenti. Una pagina Hades parte solo dopo il clic dell'utente.
-app.get('/api/subito/senza-modello', async (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  const parsed = parseSearchParams(req.query);
-  if (parsed.errors) return res.status(400).json({ error: parsed.errors.join(', ') });
-  const rawStart = req.query.start ?? '0';
-  if (typeof rawStart !== 'string' || !/^(?:0|[1-9]\d*)$/.test(rawStart)
-      || Number(rawStart) % 50 !== 0 || Number(rawStart) > 2450)
-    return res.status(400).json({ error: 'pagina Subito non valida' });
-  const params = parsed.params;
-  if (!params.modello) return res.status(400).json({ error: 'modello obbligatorio per questa consultazione' });
-  if (marcaPseudo(params.tipo, params.marca))
-    return res.status(422).json({ error: 'Questa marca non esiste nel catalogo Subito.' });
-  // La ricerca principale può aver risolto la famiglia tramite i ponti curati: qui
-  // serve solo l'ID della marca nativa, perché il modello NON è dichiarato dagli annunci.
-  params.subitoNodo = risolviNodo(params.tipo, params.marca, '');
-  if (!params.subitoNodo?.marcaId)
-    return res.status(422).json({ error: 'Marca non risolta nel catalogo Subito.' });
-  const pausa = salute.fermo('subito');
-  if (pausa.fermo) return res.status(503).json({ error: salute.avvisoPausa('subito'), pausa });
-  const g = limiteRicerche.consuma(chiaveLimite(req));
-  if (!g.ok) return res.status(429).json({ error: limiteRicerche.messaggio(g), riprovaFra: g.attesa });
-  let passa = false;
-  tettoGiornaliero(req, res, () => { passa = true; });
-  if (!passa) return;
-  const r = await runSource(() => scrapeSubitoApi.searchSenzaModello(params, Number(rawStart)),
-    TIMEOUT_MS, 'Subito senza modello');
-  if (r.status === 'error' || r.status === 'timeout')
-    return res.status(502).json({ error: r.reason, tipo: r.erroreTipo,
-      httpStatus: r.erroreHttp, pausa: salute.fermo('subito') });
-  return res.json({ ok: true, items: r.items, total: r.total,
-    hasMore: r.hasMore, nextStart: r.mainNextStart, limiteRaggiunto: r.limiteRaggiunto,
-    pausa: salute.fermo('subito') });
-});
-
 // ─── Ricambi: codice OEM → articoli (auto-doc via stealth) — vedi ricambi-route.js ──
 // Registrazione, pannello del proprietario e link d'invito. Le sue pagine stanno in `pagine/`,
 // FUORI da `frontend/`: quella cartella la serve express.static, e su un filesystem che non

@@ -75,11 +75,38 @@ test('Competitor: nello stesso scarico il prezzo illeggibile e la pagina caduta 
 test('Competitor: importi normali, zero, assenti e su richiesta non diventano avvisi di parser', async () => {
   const C = competitor();
   const p = await C.parco(voce, { salute: freno(), scrapeSubito: async params => params.tipo === 'auto'
-    ? { items: [riga({}), riga({ prezzo: 0 }), riga({ prezzo: null }), riga({ prezzo: null, prezzoSuRichiesta: true })], total: 4 }
+    ? { items: [riga({}), riga({ id: 'subito:2', prezzo: 0 }),
+      riga({ id: 'subito:3', prezzo: null }),
+      riga({ id: 'subito:4', prezzo: null, prezzoSuRichiesta: true })], total: 4 }
     : { items: [], total: 0 },
   });
   assert.deepEqual(p.avvisiLettura, []);
   assert.deepEqual(p.passateKo, []);
   assert.equal(p.veicoli.length, 4);
   assert.equal(p.totaleFonte, 4);
+});
+
+test('Competitor: un ID ripetuto nella pagina successiva conta una volta nei numeri', async () => {
+  const C = competitor();
+  const p = await C.parco(voce, { salute: freno(), scrapeSubito: async params => params.tipo === 'auto'
+    ? { items: [riga({ url: 'https://www.subito.it/auto/uno-1.htm' }),
+      riga({ url: 'https://www.subito.it/auto/nuovo-link-1.htm', prezzo: 8000 }),
+      riga({ id: 'subito:2' })], total: 3 }
+    : { items: [], total: 0 },
+  });
+  assert.deepEqual(p.veicoli.map(v => v.id), ['subito:1', 'subito:2']);
+  assert.equal(p.veicoli[0].prezzo, 5000, 'resta la prima copia');
+  assert.equal(C.aggrega(p.veicoli).veicoli, 2);
+  assert.equal(p.totaleFonte, 3, 'il totale della fonte continua a descrivere le righe grezze');
+});
+
+test('Competitor: senza ID usa la URL e non unisce annunci con URL diverse', async () => {
+  const C = competitor();
+  const p = await C.parco(voce, { salute: freno(), scrapeSubito: async params => params.tipo === 'auto'
+    ? { items: [riga({ id: null, url: 'https://www.subito.it/auto/uno-1.htm' }),
+      riga({ id: '', url: 'https://www.subito.it/auto/due-2.htm' }),
+      riga({ id: null, url: 'https://www.subito.it/auto/uno-1.htm' })], total: 3 }
+    : { items: [], total: 0 },
+  });
+  assert.equal(p.veicoli.length, 2);
 });

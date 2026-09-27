@@ -16,7 +16,7 @@ const salute = require('../backend/fonti-salute');
 const server = require('../backend/server');
 const handler = server.app.router.stack.find(l => l.route?.path === '/api/search').route.stack.at(-1).handle;
 const app = fs.readFileSync(path.join(__dirname, '../frontend/app.js'), 'utf8');
-const codice = app.slice(app.indexOf('let senzaModelloStart = 0;'), app.indexOf('// ─── Slider prezzo'));
+const codice = app.slice(app.indexOf('let searchGen = 0;'), app.indexOf('// ─── Slider prezzo'));
 after(() => { sub._setHttpGetJson(null); https.get = get; https.request = request; Date.now = now; salute._reset(); fs.rmSync(dir, { recursive: true, force: true }); });
 
 for (const errore of [503, 429]) test(`ricerca iniziale: nessun recupero automatico anche se il ramo separato darebbe HTTP ${errore}`, async () => {

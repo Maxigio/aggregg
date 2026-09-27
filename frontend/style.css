@@ -1514,17 +1514,6 @@ select.cp-unisci { max-width: 190px; }
 .carica-altri { display: flex; justify-content: center; padding: 14px 0 2px; }
 .carica-altri button { min-width: 220px; }
 .carica-altri button[disabled] { opacity: .6; cursor: default; }
-.senza-modello { margin: 24px 0; padding: 22px; border: 1px solid var(--line);
-  border-radius: 12px; background: var(--surface); }
-.senza-modello h3 { margin: 0 0 8px; font-size: 1.1rem; }
-.senza-modello > p { color: var(--text-muted); line-height: 1.5; }
-.senza-modello-lista { display: grid; gap: 8px; margin: 16px 0; }
-.senza-modello-riga { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0;
-  border-top: 1px solid var(--line); }
-.senza-modello-riga a { overflow-wrap: anywhere; }
-.senza-modello-riga span { white-space: nowrap; font-weight: 600; }
-.senza-modello-stato:empty { display: none; }
-.senza-modello button[disabled] { opacity: .6; cursor: default; }
 /* L'omologazione sotto la riga dell'allerta: e' il numero da confrontare col libretto,
    quindi monospazio e a capo suo. Puo' essere lungo ("e4*168/2013*00131*01-*04"): va a
    capo invece di allargare la colonna. */

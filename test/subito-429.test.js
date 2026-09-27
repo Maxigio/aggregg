@@ -441,10 +441,13 @@ test('Competitor: la pagina della vetrina conserva il 429, lo registra una volta
   const { EventEmitter } = require('node:events');
   const originale = https.get;
   let chiamate = 0;
+  let richiesta;
   https.get = (_url, _opts, callback) => {
     chiamate++;
     const req = new EventEmitter();
+    richiesta = req;
     req.setTimeout = () => {};
+    req.destroy = () => { req.destroyed = true; };
     process.nextTick(() => callback(Object.assign(new EventEmitter(), { statusCode: 429, headers: {}, resume() {} })));
     return req;
   };
@@ -456,6 +459,7 @@ test('Competitor: la pagina della vetrina conserva il 429, lo registra una volta
     assert.equal(salute.fermo('subito').fermo, true);
     await assert.rejects(competitor.risolviVetrina(url), e => e.code === 'FONTE_IN_PAUSA');
     assert.equal(chiamate, 1);
+    assert.equal(richiesta.destroyed, true);
   } finally { https.get = originale; }
 });
 

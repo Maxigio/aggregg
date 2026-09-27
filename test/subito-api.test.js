@@ -85,46 +85,6 @@ test('mapAd: senza url → null', () => {
   assert.strictEqual(mapAd(ad), null);
 });
 
-test('Auto e Moto: consultazione senza modello separata, per ID di marca e pagine grezze', async () => {
-  for (const [tipo, marcaKey, modelloKey] of [['auto', 'cb', 'cm'], ['moto', 'bb', 'bm']]) {
-    const calls = [];
-    const ad = (id, modello = '000000', marca = '000123') => ({
-      urn: `id:ad:prova:list:${id}`,
-      subject: `Annuncio ${id}`,
-      body: 'Testo personale da non inoltrare',
-      advertiser: { company: false, name: 'Nome privato', user_id: 77 },
-      urls: { default: `https://www.subito.it/${tipo}/prova-${id}.htm` },
-      features: [{ uri: tipo === 'auto' ? '/car' : '/bike', values: [
-        { label: 'Marca', key: marca, value: 'Marca prova' },
-        { label: 'Modello', key: modello, value: 'Altro modello' },
-      ] }],
-    });
-    scrape._setHttpGetJson(async path => {
-      const q = new URL(`https://test.invalid${path}`).searchParams;
-      calls.push(q);
-      const start = Number(q.get('start'));
-      return { status: 200, body: JSON.stringify({ count_all: 75,
-        ads: start ? [ad(100)] : [...Array.from({ length: 48 }, (_, i) => ad(i + 1)),
-          ad(49, '000888'), ad(50, '000000', '000999')] }) };
-    });
-    try {
-      const params = { tipo, marca: 'Marca prova', modello: 'Modello scelto',
-        subitoVersioneTesto: 'R', subitoNodo: { marcaId: '000123', famigliaIds: ['000888'], testo: 'R' } };
-      const first = await scrape.searchSenzaModello(params, 0);
-      assert.equal(calls[0].get(marcaKey), '000123');
-      assert.equal(calls[0].get(modelloKey), '000000');
-      assert.equal(calls[0].has('q'), false, 'il titolo non filtra il modello inesistente');
-      assert.equal(first.items.length, 48, 'modello e marca divergenti non entrano');
-      assert.deepEqual([first.hasMore, first.mainNextStart, first.total], [true, 50, 75]);
-      assert.equal(JSON.stringify(first).includes('Nome privato'), false);
-      assert.equal(JSON.stringify(first).includes('Testo personale'), false);
-      const second = await scrape.searchSenzaModello(params, first.mainNextStart);
-      assert.deepEqual([second.hasMore, second.mainNextStart], [false, null]);
-      assert.deepEqual(calls.map(q => q.get('start')), ['0', '50']);
-    } finally { scrape._setHttpGetJson(null); }
-  }
-});
-
 test('buildPath: categoria auto=2 / moto=3 + query', () => {
   assert.match(buildPath({ tipo: 'auto', marca: 'BMW', modello: '320d' }, 0), /[?&]c=2&/);
   assert.match(buildPath({ tipo: 'auto', marca: 'BMW', modello: '320d' }, 0), /q=BMW\+320d/);
