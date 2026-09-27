@@ -3382,6 +3382,7 @@ function optionalHTML(r) {
  * tutto il resto. Chiuso si vede che c'e'; aperto si legge.
  */
 function testoHTML(r) {
+  if (r.fonte === 'autoscout' && r.venditore !== 'concessionario') return '';
   const d = (r.descrizione || '').trim();
   if (!d) return '';
   return miniHTML('testo:' + r.url, 'Testo dell\'annuncio', d.length + ' caratteri',

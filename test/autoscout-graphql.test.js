@@ -1,6 +1,9 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const path = require('node:path');
 const scrape = require('../backend/scrapers/autoscout-graphql');
 const mapListing = scrape._mapListing;
 const buildVariables = scrape._buildVariables;
@@ -137,6 +140,20 @@ test('mapListing: campi personali strutturati del privato non escono neppure nel
   assert.equal(sconosciuto.descrizione, null);
   assert.equal(sconosciuto.venditoreId, null);
   assert.equal(sconosciuto._raw.seller.id, undefined);
+});
+
+test('scheda: una riga AutoScout privata non mostra il testo anche se arriva da una cache vecchia', () => {
+  const app = fs.readFileSync(path.join(__dirname, '../frontend/app.js'), 'utf8');
+  const da = app.indexOf('function testoHTML(r)');
+  const fino = app.indexOf('\n/**', da);
+  assert.ok(da >= 0 && fino > da);
+  const c = vm.createContext({ miniHTML: (...args) => args.join(' '), escapeHtml: s => s });
+  vm.runInContext(app.slice(da, fino), c);
+  const r = { fonte: 'autoscout', venditore: 'privato', descrizione: 'Dato personale', url: '/1' };
+  assert.equal(c.testoHTML(r), '');
+  assert.equal(c.testoHTML({ ...r, venditore: null }), '');
+  assert.match(c.testoHTML({ ...r, venditore: 'concessionario' }), /Dato personale/);
+  assert.match(c.testoHTML({ ...r, fonte: 'moto' }), /Dato personale/);
 });
 
 test('mapListing: specs ricche assenti → null (nessuna fabbricazione)', () => {
