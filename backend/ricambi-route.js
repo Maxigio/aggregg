@@ -26,7 +26,7 @@ const defaultClientIp = req =>
 // degradato viene ritentato invece di restare congelato in cache.
 function cacheable(env) {
   const bad = s => s === 'error' || s === 'blocked' || s === 'timeout';
-  return !Object.values(env.sources || {}).some(s => bad(s.status));
+  return !Object.values(env.sources || {}).some(s => bad(s.status) || s.parzialeRete);
 }
 
 // deps iniettabili: { searchRicambi, normOen, clientIp } — default = reali. I test passano stub.

@@ -518,12 +518,20 @@ app.post('/api/report-pdf', express.json({ limit: '4mb' }), (req, res) => {
   const gPdf = limitePdf.consuma(chiaveLimite(req));
   if (!gPdf.ok) return res.status(429).json({ error: limitePdf.messaggio(gPdf), riprovaFra: gPdf.attesa, restanti: 0 });
   const b = req.body || {};
-  const righe = Array.isArray(b.righe) ? b.righe.slice(0, 2000) : [];
+  const righe = Array.isArray(b.righe) ? b.righe : [];
+  if (righe.length > 2000) return res.status(400).json({ error: 'Il PDF può contenere al massimo 2.000 annunci. Riduci la selezione oppure esporta tutti gli annunci in CSV.' });
   if (!righe.length) return res.status(400).json({ error: 'niente da stampare' });
+  // Il nuovo spazio per gli avvisi non deve diventare un documento arbitrariamente
+  // lungo da impaginare in modo sincrono. Si rifiuta l'eccesso, non si taglia il testo.
+  if (b.avvisi != null && (!Array.isArray(b.avvisi) || b.avvisi.length > 10
+      || b.avvisi.some(a => typeof a !== 'string') || b.avvisi.join('').length > 4000)) {
+    return res.status(400).json({ error: 'Avvisi PDF non validi: massimo 10 avvisi e 4.000 caratteri complessivi.' });
+  }
   try {
     const buf = renderReportPdf([], b.params || {}, {
       titolo: b.titolo || null,
       sottotitolo: b.sottotitolo || null,
+      avvisi: b.avvisi || [],
       contatore: b.contatore || null,
       colonne: Array.isArray(b.colonne) ? b.colonne : null,
       righe,
@@ -1029,18 +1037,20 @@ function parseSearchParams(query) {
   // e il messaggio dava la colpa alla rete. Un 400 col perche', come per marca.
   if (modello != null && typeof modello !== 'string') errors.push('modello deve essere una stringa sola');
   if (regione && !canonRegione(regione)) errors.push(`regione non valida: ${regione}`);
+  // Anche la prima pagina può dover riprovare soltanto alcune fonti.
+  const primaPagina = fetta === '0' || fetta === 0;
   let fontiPagina = null;
   if (fonti != null) {
     const voci = typeof fonti === 'string' ? fonti.split(',') : [];
-    if (!(Number(fetta) > 0) || !voci.length || new Set(voci).size !== voci.length
+    if (!(Number(fetta) > 0 || primaPagina) || !voci.length || new Set(voci).size !== voci.length
         || voci.some(f => !FONTI_PAGINA.includes(f))) errors.push('fonti della pagina non valide');
     else fontiPagina = FONTI_PAGINA.filter(f => voci.includes(f)).join(',');
   }
   const cursoriSubito = subitoMainStart !== undefined || subitoRecuperoStart !== undefined;
   const cursoreSubito = v => v === '-1' ? null
-    : typeof v === 'string' && /^(?:[1-9]\d*)$/.test(v) && Number(v) % 50 === 0
+    : typeof v === 'string' && /^(?:0|[1-9]\d*)$/.test(v) && Number(v) % 50 === 0
       && Number(v) <= 2500 ? Number(v) : undefined;
-  if (cursoriSubito && (!(Number(fetta) > 0) || !fontiPagina?.split(',').includes('subito')
+  if (cursoriSubito && (!(Number(fetta) > 0 || primaPagina) || !fontiPagina?.split(',').includes('subito')
       || cursoreSubito(subitoMainStart) === undefined
       || cursoreSubito(subitoRecuperoStart) === undefined)) errors.push('cursori Subito non validi');
   if (errors.length) return { errors };
@@ -1866,10 +1876,18 @@ async function runSearchCore(params) {
 
   // Ogni fonte ritorna { items, status, reason }. Subito ha wrapper dedicato
   // Lo skip è uno stato esplicito, non un [] muto.
-  const chiavePagina = params.fetta > 0 ? searchCacheKey(params) : null;
-  const sospesa = chiavePagina && pagineInSospeso.get(chiavePagina);
-  if (sospesa && Date.now() - sospesa.ts >= SEARCH_CACHE_TTL) pagineInSospeso.delete(chiavePagina);
-  const salvate = sospesa && Date.now() - sospesa.ts < SEARCH_CACHE_TTL ? sospesa : null;
+  // I cursori di Subito non cambiano la pagina delle altre fonti. Le porzioni
+  // complete hanno una chiave propria, con tutti i filtri ma solo i propri cursori.
+  const chiaviPagina = Object.fromEntries(FONTI_PAGINA.map(f => [f, searchCacheKey({ ...params,
+    fetta: params.fetta || 0, fontiPagina: f,
+    ...(f === 'subito' ? {} : { subitoMainStart: undefined, subitoRecuperoStart: undefined }),
+  })]));
+  const salvate = {};
+  for (const f of FONTI_PAGINA) {
+    const hit = pagineInSospeso.get(chiaviPagina[f]);
+    if (hit && Date.now() - hit.ts < SEARCH_CACHE_TTL) salvate[f] = hit.data;
+    else if (hit) pagineInSospeso.delete(chiaviPagina[f]);
+  }
   const richiesta = f => !params.fontiPagina || params.fontiPagina.split(',').includes(f);
   const esaurita = () => ({ items: [], status: 'skipped', reason: 'fonte esaurita nelle pagine precedenti', hasMore: false });
   const [subitoRes, asRes0, motoRes] = await Promise.all([
@@ -1927,20 +1945,20 @@ async function runSearchCore(params) {
     }
   }
 
-  if (chiavePagina) {
-    const completa = r => (r.status === 'ok' || r.status === 'empty')
-      && !r.parzialeRete && !r.bloccoParziale && !r.sospetto;
-    const risposta = {
-      ...(completa(subitoRes) ? { subito: subitoRes } : {}),
-      ...(completa(asRes) ? { autoscout: { risposta: asRes, allargato: as24Allargato } } : {}),
-      ...(completa(motoRes) ? { moto: motoRes } : {}),
-    };
-    const fallita = [subitoRes, asRes, motoRes].some(r =>
-      r.status === 'error' || r.status === 'timeout' || r.parzialeRete);
-    if (fallita && Object.keys(risposta).length) {
-      pagineInSospeso.set(chiavePagina, { ts: salvate?.ts || Date.now(), ...risposta });
-      if (pagineInSospeso.size > 10) pagineInSospeso.delete(pagineInSospeso.keys().next().value);
-    } else pagineInSospeso.delete(chiavePagina);
+  const rispostePagina = { subito: subitoRes, autoscout: asRes, moto: motoRes };
+  const fallita = Object.values(rispostePagina).some(r =>
+    r.status === 'error' || r.status === 'timeout' || r.parzialeRete);
+  for (const f of FONTI_PAGINA) {
+    if (!richiesta(f)) continue;
+    const r = rispostePagina[f];
+    const completa = (r.status === 'ok' || r.status === 'empty')
+      && !r.parzialeRete && !r.bloccoParziale && !r.sospetto && (f === 'subito' || !r.parziale);
+    if (fallita && completa) {
+      const key = chiaviPagina[f], hit = pagineInSospeso.get(key);
+      pagineInSospeso.set(key, { ts: hit?.ts || Date.now(),
+        data: f === 'autoscout' ? { risposta: r, allargato: as24Allargato } : r });
+      if (pagineInSospeso.size > 30) pagineInSospeso.delete(pagineInSospeso.keys().next().value);
+    } else if (!fallita) pagineInSospeso.delete(chiaviPagina[f]);
   }
 
   const grezzi = [...subitoRes.items, ...asRes.items, ...motoRes.items];

@@ -116,3 +116,64 @@ test('gli annunci in cache restano intatti ma lo stato della pausa è quello att
   salute.azzera('subito');
   assert.equal(salute.conStatoFonti(dati).sources.subito.pausa.fermo, false);
 });
+
+test('i 403 dopo la pausa salgono di gradino una sola volta, anche con riepilogo esterno', async () => {
+  const tempo = ambiente();
+  const vietato = () => salute.erroreHttp('subito', 403);
+  salute.registra('subito', { errore: vietato() });
+  assert.equal(salute.fermo('subito').fermo, false);
+  salute.registra('subito', { errore: vietato() });
+  assert.equal(salute.fermo('subito').fino - Date.now(), salute.FINESTRE[0]);
+  for (const finestra of [salute.FINESTRE[1], salute.FINESTRE[2]]) {
+    tempo.scadi('subito');
+    const errore = vietato();
+    await assert.rejects(salute.richiesta('subito', async () => { throw errore; }), e => e === errore);
+    const fine = salute.fermo('subito').fino;
+    assert.equal(fine - Date.now(), finestra);
+    salute.registra('subito', { errore });
+    salute.registra('subito', { errore });
+    assert.equal(salute.fermo('subito').fino, fine);
+    salute._reset();
+    assert.equal(salute.fermo('subito').fino, fine, 'la pausa effettiva sopravvive al riavvio');
+  }
+  const { DatabaseSync } = require('node:sqlite');
+  const d = new DatabaseSync(salute.percorso(), { readOnly: true });
+  try { assert.equal(d.prepare("SELECT stop_fatti FROM salute WHERE fonte = 'subito'").get().stop_fatti, 3); }
+  finally { d.close(); }
+});
+
+test('una sola verifica 403: concorrenti respinti e risposta vecchia riuscita non toglie la nuova pausa', async () => {
+  const tempo = ambiente();
+  let rispondiVecchia, respingiProva, chiamate = 0;
+  const vecchia = salute.richiesta('subito', () => new Promise(r => { rispondiVecchia = r; }));
+  limite('subito'); tempo.scadi('subito');
+  const verifica = salute.richiesta('subito', () => {
+    chiamate++;
+    return new Promise((_, r) => { respingiProva = r; });
+  });
+  await assert.rejects(salute.richiesta('subito', async () => { chiamate++; }), { code: 'FONTE_IN_PAUSA' });
+  const errore = salute.erroreHttp('subito', 403);
+  respingiProva(errore);
+  await assert.rejects(verifica, e => e === errore);
+  salute.registra('subito', { errore });
+  const fine = salute.fermo('subito').fino;
+  assert.equal(fine - Date.now(), salute.FINESTRE[1]);
+  rispondiVecchia([]); await vecchia;
+  salute.registra('subito', { conteggio: 3 });
+  assert.equal(salute.fermo('subito').fino, fine);
+  assert.equal(chiamate, 1);
+});
+
+test('una verifica 503 o socket fallita conserva la pausa breve senza salire nella scala dei blocchi', async () => {
+  const tempo = ambiente();
+  limite('subito');
+  for (const errore of [salute.erroreHttp('subito', 503), Object.assign(new Error('socket'), { kind: 'transient' })]) {
+    tempo.scadi('subito');
+    await assert.rejects(salute.richiesta('subito', async () => { throw errore; }), e => e === errore);
+    salute.registra('subito', { errore });
+    assert.equal(salute.fermo('subito').fino - Date.now(), salute.FINESTRE[0]);
+  }
+  tempo.scadi('subito');
+  await salute.richiesta('subito', async () => []);
+  assert.equal(salute.fermo('subito').fino, null);
+});

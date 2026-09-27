@@ -149,3 +149,42 @@ test('cache sana: hit non addebita; forza senza pausa aggiorna e sostituisce il 
   assert.equal(nuovo.body.passateKo, null);
   assert.equal((await h.chiedi()).body.veicoli[0].url, 'a:nuovo');
 });
+
+test('avvisi parser: singolo, gruppo e cache conservano il motivo senza fingere card perse', async t => {
+  const h = monta(t, 'subito');
+  h.voci.splice(1);
+  const avvisi = [{ tipo: 'auto', motivo: '1 annuncio ha un campo prezzo non leggibile' }];
+  h.produci(v => ({ veicoli: [{ url: v.id }], avvisiLettura: avvisi, illeggibili: 0 }));
+  const primo = await h.chiedi();
+  const hit = await h.chiedi();
+  const gruppo = await h.chiedi('gruppo');
+  for (const d of [primo.body, hit.body, gruppo.body.parti[0]]) {
+    assert.deepEqual(d.avvisiLettura, avvisi);
+    assert.equal(d.illeggibili, 0);
+    assert.equal(d.passateKo, null);
+  }
+  assert.equal(hit.body.daCache, true);
+  assert.equal(gruppo.body.parti[0].daCache, true);
+  assert.equal(h.chiamate.length, 1);
+});
+
+test('avviso parser nuovo: si mostra senza sostituire la cache sana né rinnovarne la scadenza', async t => {
+  const h = monta(t, 'subito');
+  const quando = h.quando();
+  await h.chiedi();
+  h.avanza(TTL - 1000);
+  const avvisi = [{ tipo: 'moto', motivo: '1 annuncio ha un campo prezzo non leggibile' }];
+  h.produci(v => ({ veicoli: [{ url: v.id }], avvisiLettura: avvisi }));
+  const degradato = await h.chiedi('a', true);
+  assert.deepEqual(degradato.body.avvisiLettura, avvisi);
+  assert.equal(degradato.body.daCache, false);
+  const hit = await h.chiedi();
+  assert.equal(hit.body.avvisiLettura, null);
+  assert.equal(hit.body.veicoli.length, 2);
+  assert.equal(hit.body.quando, quando);
+  h.avanza(1000);
+  const scaduta = await h.chiedi();
+  assert.deepEqual(scaduta.body.avvisiLettura, avvisi);
+  assert.equal(scaduta.body.daCache, false);
+  assert.equal(h.chiamate.length, 3);
+});

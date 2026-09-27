@@ -410,7 +410,12 @@ async function richiesta(fonte, lavoro) {
     }
     return r;
   } catch (e) {
-    if (e?.status === 429) registra(fonte, { errore: e });
+    // Il blocco della verifica deve aggiornare la scala PRIMA della pausa generica:
+    // altrimenti il successivo registra() esterno vede gia' 15 minuti di pausa e
+    // non sale mai di gradino. Il WeakSet rende innocuo quel riepilogo esterno.
+    if (e?.status === 429 || (prova && m.prova === prova && classifica(e) === 'bloccato')) {
+      registra(fonte, { errore: e });
+    }
     if (prova && m.prova === prova) {
       // Anche timeout e formato invalido NON provano che il blocco sia finito.
       m.prova = null; m.fermaFinoA = Date.now() + FINESTRE[0];

@@ -254,6 +254,7 @@ function mount(app, deps = {}) {
       // Le passate cadute viaggiano separate dal tetto: sono due avvisi diversi e finora
       // uscivano con la stessa frase, quella sbagliata delle due.
       passateKo: (p.passateKo && p.passateKo.length) ? p.passateKo : null,
+      avvisiLettura: p.avvisiLettura?.length ? p.avvisiLettura : null,
       // Le card presenti che non si sono lasciate leggere: dirle e' l'unico modo perche' chi
       // guarda sappia che i numeri sono calcolati su meno mezzi di quelli in vetrina.
       illeggibili: p.illeggibili || 0,
@@ -272,7 +273,7 @@ function mount(app, deps = {}) {
     // Un aggiornamento monco si mostra, ma non cancella una copia completa ancora fresca.
     // Si rilegge dopo l'await: anche un altro scarico puo' aver appena riempito la cache.
     const precedente = cache.get(k);
-    const parziale = d => d.passateKo?.length || d.troncato || d.illeggibili;
+    const parziale = d => d.passateKo?.length || d.troncato || d.illeggibili || d.avvisiLettura?.length;
     if (!parziale(dati) || !precedente || parziale(precedente.dati) || !inCacheFresca(k)) {
       cache.set(k, { ts: Date.now(), dati });
     }
@@ -404,6 +405,7 @@ function mount(app, deps = {}) {
       parti: parti.map(p => ({
         voce: p.voce, numeri: p.numeri, storico: p.storico, troncato: p.troncato,
         passateKo: (p.passateKo && p.passateKo.length) ? p.passateKo : null,
+        avvisiLettura: p.avvisiLettura?.length ? p.avvisiLettura : null,
         illeggibili: p.illeggibili || 0,
         quando: p.quando, daCache: p.daCache, avvisoCache: p.avvisoCache || null,
       })),

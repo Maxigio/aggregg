@@ -54,7 +54,15 @@ function httpGetJson(path) {
       // Anche un body rifiutato può interrompersi dopo gli header.
       res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
       res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
-      if (res.statusCode === 429) { res.resume(); return reject(salute.erroreHttp('subito', 429, res.headers)); }
+      // Lo status basta a classificare un rifiuto: un body enorme o troncato non deve
+      // trasformare un 403 in errore di lettura. Rigetta PRIMA di chiudere la presa,
+      // cosi' gli eventi error/aborted della chiusura non sostituiscono il motivo HTTP.
+      // resume() scaricherebbe ancora il body del 429 anche dopo il rifiuto.
+      if (res.statusCode !== 200) {
+        reject(salute.erroreHttp('subito', res.statusCode, res.headers));
+        req.destroy();
+        return;
+      }
       let d = '', bytes = 0, interrotta = false; res.setEncoding('utf8');
       res.on('data', c => {
         if (interrotta) return;
@@ -173,8 +181,10 @@ function mapAd(ad) {
   const nuovo = cond == null ? null : (cond === 'Nuovo' || cond === 'Km 0');
   // Neopatentati: 'Sì'/'No' nativo → bool; assente → null.
   const neo = feat(ad, 'Per neopatentati');
-  const prezzoRaw = primoValore(featurePrezzo(ad));
+  const fPrezzo = featurePrezzo(ad);
+  const prezzoRaw = primoValore(fPrezzo);
   const prezzoSuRichiesta = typeof prezzoRaw === 'string' && /\bsu richiesta\b/i.test(prezzoRaw);
+  const prezzo = prezzoSuRichiesta ? null : digits(prezzoRaw);
   // I tre livelli che l'annuncio dichiara di se'. Letti UNA volta: servono sia alla marca
   // sia alla versione, e prima si leggevano due volte in due modi diversi.
   const liv = livelliAnnuncio(ad);
@@ -196,8 +206,10 @@ function mapAd(ad) {
      */
     id: idSubito(ad),
     titolo: ad.subject || 'Annuncio senza titolo',
-    prezzo: prezzoSuRichiesta ? null : digits(prezzoRaw),
+    prezzo,
     prezzoSuRichiesta: prezzoSuRichiesta || null,
+    // Solo lo stato di lettura: il testo grezzo non deve raggiungere UI/export/cache.
+    prezzoIlleggibile: !!fPrezzo && !prezzoSuRichiesta && prezzo === null,
     km,
     anno: yearOf(feat(ad, 'Immatricolazione') || feat(ad, 'Anno di immatricolazione')),
     carburante: feat(ad, 'Carburante'),
@@ -788,7 +800,7 @@ async function scrapeSubitoApi(params, opts = {}) {
       if (!m) continue;
       // Senza feature Prezzo sappiamo solo che il dato manca; «su richiesta» richiederebbe
       // una dichiarazione della fonte. Se la feature c'e' ma non e' leggibile, lo segnaliamo.
-      if (m.prezzo == null && !m.prezzoSuRichiesta && featurePrezzo(ad)) prezziIlleggibili++;
+      if (m.prezzoIlleggibile) prezziIlleggibili++;
       const riga = come === 'testo-libero' ? m : { ...m, dichiarazione: come };
       out.push(riga);
       const kv = chiaveVersione(riga, ad, tipo);
@@ -830,7 +842,7 @@ async function scrapeSubitoApi(params, opts = {}) {
         if (riconosci(ad, nodo, rico) !== 'senza-modello') continue;
         const m = mapAd(ad, opts);
         if (!m || visti.has(m.url)) continue;
-        if (m.prezzo == null && !m.prezzoSuRichiesta && featurePrezzo(ad)) prezziIlleggibili++; // vedi sopra
+        if (m.prezzoIlleggibile) prezziIlleggibili++; // vedi sopra
         const riga = { ...m, dichiarazione: 'senza-modello' };
         visti.add(m.url); out.push(riga);
         const kv = chiaveVersione(riga, ad, tipo);
@@ -872,20 +884,37 @@ async function scrapeSubitoApi(params, opts = {}) {
 // Accessori Auto (c=5) + Accessori Moto (c=36). Riusa scrapeSubitoApi (path API, no CAPTCHA).
 // La keyword viaggia su `marca` (buildPath fa q=marca+modello). Ritorna item mapAd (shape Subito).
 // opts.cat = 'auto' | 'moto' → interroga SOLO quella categoria (un ricambio è per auto O per moto).
+// opts.withMeta conserva totale grezzo, copertura e avvisi; senza, resta l'array storico.
 // Lancia solo se TUTTE le categorie interrogate falliscono (una KO → torna quel che c'è).
 async function searchAccessori(keyword, opts = {}) {
   const kw = String(keyword || '').trim();
-  if (!kw) return [];
-  const { cat, ...rest } = opts;
+  if (!kw) return opts.withMeta ? { items: [], total: null, truncated: false, hasMore: false,
+    sospetto: null, parziale: null, parzialeRete: false, erroriSubito: [] } : [];
+  const { cat, withMeta = false, ...rest } = opts;
   const cats = cat === 'auto' ? ['accessoriAuto'] : cat === 'moto' ? ['accessoriMoto'] : ['accessoriAuto', 'accessoriMoto'];
   const res = await Promise.allSettled(cats.map(tipo =>
-    scrapeSubitoApi({ marca: kw, tipo }, { maxPages: 1, sort: 'priceasc', ...rest })));
-  const items = res.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
+    scrapeSubitoApi({ marca: kw, tipo }, { maxPages: 1, sort: 'priceasc', ...rest, withMeta: true })));
+  const lette = res.filter(r => r.status === 'fulfilled').map(r => r.value);
+  const items = lette.flatMap(r => r.items);
   const rejected = res.find(r => r.status === 'rejected');
   // 0 item MA almeno una categoria bloccata → propaga (runSource → 'error', non cachato come 'empty').
   // both-fulfilled con 0 item = vuoto legittimo → return [].
   if (!items.length && rejected) throw rejected.reason;
-  return items;
+  if (!withMeta) return items;
+  if (cats.length === 1) return lette[0];
+  // Il chiamante senza categoria puo' ancora chiedere entrambi i cataloghi. Il
+  // totale con un ramo ignoto/fallito non e' la sola somma del ramo riuscito.
+  return {
+    items,
+    total: rejected || lette.some(r => r.total == null) ? null : lette.reduce((n, r) => n + r.total, 0),
+    truncated: lette.some(r => r.truncated), hasMore: lette.some(r => r.hasMore),
+    sospetto: lette.map(r => r.sospetto).filter(Boolean).join(' · ') || null,
+    parziale: [...lette.map(r => r.parziale), rejected && 'Subito non ha restituito tutte le categorie richieste.']
+      .filter(Boolean).join(' · ') || null,
+    parzialeRete: !!rejected || lette.some(r => r.parzialeRete),
+    erroriSubito: [...lette.flatMap(r => r.erroriSubito),
+      ...res.filter(r => r.status === 'rejected').flatMap(r => r.reason.erroriSubito || [])],
+  };
 }
 
 module.exports = scrapeSubitoApi;

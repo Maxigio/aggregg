@@ -22,7 +22,7 @@ function finta(producer) {
   let n = 0;
   const impl = (...args) => {
     const cb = args.at(-1), req = new EventEmitter();
-    req.setTimeout = () => {}; req.destroy = e => req.emit('error', e); req.write = () => {}; req.end = () => {};
+    req.setTimeout = () => {}; req.destroy = e => { req.destroyed = true; if (e) req.emit('error', e); }; req.write = () => {}; req.end = () => {};
     const r = producer(++n, args[0]);
     process.nextTick(() => {
       const res = new EventEmitter();

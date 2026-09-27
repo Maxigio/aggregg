@@ -14,10 +14,10 @@
  *   - `extra.colonne/righe` la tabella gia' composta (i prezzi finali li calcola il browser,
  *                           che e' l'unico a conoscere commissione, spese, margine e IVA)
  *   - `extra.fonti`         la fonte di ogni riga, per la pastiglia colorata
+ *   - `extra.avvisi`        limiti di lettura/copertura da stampare per intero
  *
- * Il documento NON porta ne' statistiche aggregate, ne' lo stato delle fonti, ne' la legenda
- * dei prezzi: erano tre righe di prosa sopra la tabella, e la tabella dice gia' tutto riga
- * per riga.
+ * Il documento non porta statistiche di mercato o una legenda prezzi. Gli avvisi
+ * di copertura hanno invece uno spazio dedicato: il sottotitolo si limita a due righe.
  */
 const { jsPDF } = require('jspdf');
 const { autoTable } = require('jspdf-autotable');
@@ -140,8 +140,19 @@ function renderReportPdf(results, params = {}, extra = null) {
     doc.text(data, pageW - 14, 10.5, { align: 'right' });
   };
 
+  const intestazione = () => {
+    if (doc.getCurrentPageInfo().pageNumber === 1) drawFirstPage(); else drawContinuation();
+  };
+  const avvisi = Array.isArray(extra.avvisi) ? extra.avvisi.filter(a => typeof a === 'string' && a.trim()) : [];
+  if (avvisi.length) autoTable(doc, {
+    startY: 70, body: avvisi.map(a => [a]), theme: 'plain', rowPageBreak: 'avoid',
+    styles: { font: 'helvetica', fontSize: 8, textColor: AMBER, fillColor: PALE,
+      cellPadding: 2, overflow: 'linebreak' },
+    margin: { top: 25, left: 14, right: 14, bottom: 17 },
+    willDrawPage: intestazione,
+  });
   autoTable(doc, {
-    startY: 70,
+    startY: avvisi.length ? doc.lastAutoTable.finalY + 4 : 70,
     head: [head],
     body: tableBody,
     theme: 'plain',
@@ -152,7 +163,7 @@ function renderReportPdf(results, params = {}, extra = null) {
     columnStyles: extra.colonneStile
       || { 0: { halign: 'center', cellWidth: 24 }, 1: { cellWidth: 'auto' }, 2: { halign: 'right', cellWidth: 26, fontStyle: 'bold', textColor: BLUE }, 3: { halign: 'center', cellWidth: 14 }, 4: { halign: 'right', cellWidth: 24 }, 5: { halign: 'center', cellWidth: 24 }, 6: { halign: 'center', cellWidth: 24 } },
     margin: { top: 25, left: 14, right: 14, bottom: 17 },
-    willDrawPage(dataHook) { if (dataHook.pageNumber === 1) drawFirstPage(); else drawContinuation(); },
+    willDrawPage: intestazione,
     didParseCell(cell) {
       if (cell.section !== 'body') return;
       if (cell.column.index === 0 && FONTE_COLORS[fontiRiga[cell.row.index]]) cell.cell.text = [' '];
@@ -193,8 +204,9 @@ function renderReportPdf(results, params = {}, extra = null) {
 function tabellaRicambi(articoli) {
   const arts = Array.isArray(articoli) ? articoli : [];
   const eur = n => '€ ' + Number(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const prezzo = a => (typeof a.prezzo === 'number' && a.prezzo > 0 ? eur(a.prezzo)
-    : (a.fonte === 'subito' ? 'trattabile' : '—'));
+  const prezzo = a => (Number.isFinite(a.prezzo) ? eur(a.prezzo)
+    : a.fonte !== 'subito' ? '—'
+      : a.prezzoSuRichiesta ? 'su richiesta' : a.prezzoIlleggibile ? 'prezzo non leggibile' : 'prezzo non indicato');
   return {
     colonne: ['Fonte', 'Ricambio', 'Marca', 'Prezzo', 'Venditore'],
     righe: arts.map(a => [' ', a.nome || '—', a.marca || '—', prezzo(a), a.venditore || (a.fonte === 'autodoc' ? 'Autodoc' : '—')]),

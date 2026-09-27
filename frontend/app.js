@@ -1490,7 +1490,12 @@ const rcHas = (arr, a) => arr.some(x => rcKey(x) === rcKey(a));
 const rcEur = n => (typeof n === 'number' ? '€ ' + n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null);
 const rcSafeUrl = u => (/^https?:\/\//i.test(u || '') ? u : null);   // solo http/https: blocca javascript:/data: (XSS)
 function rcCurrentList() { return rcVisibleArts(); }
-function rcPriceText(a) { const p = rcEur(a.prezzo); return p || (a.fonte === 'subito' ? 'trattabile' : 'prezzo sul sito'); }
+function rcPriceText(a) {
+  const p = rcEur(a.prezzo);
+  if (p) return p;
+  if (a.fonte !== 'subito') return 'prezzo sul sito';
+  return a.prezzoSuRichiesta ? 'su richiesta' : a.prezzoIlleggibile ? 'prezzo non leggibile' : 'prezzo non indicato';
+}
 function rcArt(key) { return (rcData && rcData.articoli || []).find(a => rcKey(a) === key) || confrontoRicambi.find(a => rcKey(a) === key); }
 
 // Lista visibile in griglia = articoli ordinati. Se c'è un tipo scelto nel selettore varianti,
@@ -1976,6 +1981,16 @@ async function rcFetchVariantSpecs(v) {
   if (rcVariantSel.articleId === v.articleId) renderRicambiPanel();
 }
 
+function rcNoteSubito(s) {
+  if (!s) return [];
+  const note = [];
+  if (s.truncated) note.push('Subito: ricerca limitata alla prima pagina (fino a 50 annunci). Altri annunci non sono stati caricati.');
+  if (s.truncated && Number.isFinite(s.total)) note.push(`Totale dichiarato dalla fonte prima dei filtri AMR: ${s.total}.`);
+  if (s.total === null && (s.status === 'ok' || s.status === 'empty')) note.push('Subito non ha comunicato il totale degli annunci.');
+  if (s.sospetto || s.parziale) note.push(s.sospetto || s.parziale);
+  return note;
+}
+
 function renderRicambiPanel() {
   stopLoadingTips(document.getElementById('ricambiPanel'));   // i risultati sostituiscono l'attesa → ferma la rotazione
   const panel = document.getElementById('ricambiPanel');
@@ -2002,6 +2017,7 @@ function renderRicambiPanel() {
   const subitoAvviso = d.sources?.subito?.status === 'blocked' && d.sources.subito.reason
     ? `<div class="src-avviso">${escapeHtml(d.sources.subito.reason)}</div>` : '';
   const subitoPausa = fontePausaHTML(RC_FONTE.subito || 'Subito.it', d.sources?.subito?.pausa);
+  const subitoCopertura = rcNoteSubito(d.sources?.subito).map(n => `<div class="src-avviso">${escapeHtml(n)}</div>`).join('');
   /**
    * PAGINE TROVATE SUL WEB, non offerte.
    *
@@ -2018,7 +2034,7 @@ function renderRicambiPanel() {
           + `<span class="rc-pagina-d">${escapeHtml(x.dominio || '')}</span></a>`).join('')
       + '</div>'
     : '';
-  const head = `<div class="rc-head">${rcSchedaHTML(d)}${statusLine}${subitoAvviso}${subitoPausa}${budgetHTML(rcRestanti, 'ricerca', 'ricerche')}${pagineLine}</div>`;
+  const head = `<div class="rc-head">${rcSchedaHTML(d)}${statusLine}${subitoAvviso}${subitoPausa}${subitoCopertura}${budgetHTML(rcRestanti, 'ricerca', 'ricerche')}${pagineLine}</div>`;
   // barra confronto (mirror auto: "Selezionati N · Apri confronto · Svuota") + sezione matrice separata
   const bar = confrontoRicambi.length ? rcCompareBarHTML() : '';
   const cmp = (rcCompareOpen && confrontoRicambi.length) ? rcCompareSection() : '';
@@ -2163,6 +2179,7 @@ function exportPdfRicambi() {
   scaricaPdf({
     titolo: 'Report ricambi',
     sottotitolo: [[meta.tipoPezzo, meta.veicoli].filter(Boolean).join(' | '), meta.oen ? 'OE/OEM ' + meta.oen : null].filter(Boolean).join(' | '),
+    avvisi: rcNoteSubito(meta.sources?.subito),
     contatore: arts.length + (arts.length === 1 ? ' ricambio' : ' ricambi'),
     colonne, righe, colonneStile,
     fonti: arts.map(a => a.fonte),
@@ -2175,11 +2192,15 @@ function exportPdfRicambi() {
  * Sta qui perche' i due bottoni (veicoli e ricambi) facevano ognuno il suo download a mano.
  */
 function scaricaPdf(payload) {
-  fetch('/api/report-pdf', {
+  return fetch('/api/report-pdf', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  }).then(r => (r.ok ? r.blob() : Promise.reject(new Error('HTTP ' + r.status))))
+  }).then(async r => {
+    if (r.ok) return r.blob();
+    const d = await r.json().catch(() => ({}));
+    throw new Error(typeof d.error === 'string' ? d.error : 'HTTP ' + r.status);
+  })
     .then(blob => {
       const url = URL.createObjectURL(blob);
       const a = Object.assign(document.createElement('a'), { href: url, download: payload.nome || 'automotoradar.pdf' });
@@ -2315,6 +2336,7 @@ let caricandoAltri = false;
 let paginaErrore = null;
 let paginaRetryTimer = null;
 let paginaSubitoInSospeso = null; // solo righe normalizzate della pagina nativa riuscita
+let paginaFontiInSospeso = null; // porzioni complete della sola pagina da riprovare
 
 function fontiConAltri() {
   const s = lastSources || {};
@@ -2329,15 +2351,97 @@ function presiDa(fonte) {
   return currentResults.filter(r => r.fonte === fonte).length;
 }
 
+// Il retry conserva solo la pagina incompleta, non un archivio delle ricerche.
+// Le colonne complete restano qui anche se la pausa supera il TTL della cache server.
+function completaPagina(data, fonti, fetta) {
+  const attesa = paginaFontiInSospeso;
+  if (attesa) {
+    data.risultati = attesa.risultati.concat(data.risultati);
+    data.sources = { ...data.sources, ...attesa.sources };
+  }
+  const fallita = s => s && (s.status === 'error' || s.status === 'timeout' || s.parzialeRete
+    || (s.status === 'skipped' && s.pausa?.fermo));
+  if (paginaSubitoInSospeso && !fallita(data.sources.subito)) {
+    const p = paginaSubitoInSospeso;
+    const s = data.sources.subito;
+    data.risultati = p.risultati.concat(data.risultati);
+    data.sources.subito = { ...s, status: p.risultati.length ? 'ok' : s.status,
+      count: p.risultati.length + (s.count || 0), totale: p.source.totale ?? s.totale,
+      mainNextStart: p.source.mainNextStart,
+      hasMore: p.source.mainNextStart != null || s.recuperoNextStart != null };
+    paginaSubitoInSospeso = null;
+  }
+  const cadute = (attesa?.fonti || fonti).filter(f => fallita(data.sources[f]));
+  if (cadute.length) {
+    const s = data.sources.subito;
+    if (!paginaSubitoInSospeso && fonti.includes('subito')
+        && s?.parzialeRete && s.errori?.some(e => e.fase === 'recupero')) {
+      paginaSubitoInSospeso = { risultati: data.risultati.filter(r => r.fonte === 'subito'),
+        source: s, recuperoStart: s.recuperoNextStart };
+    }
+    const complete = Object.fromEntries(Object.entries(data.sources).filter(([, s]) =>
+      (s.status === 'ok' || s.status === 'empty') && !fallita(s)));
+    paginaFontiInSospeso = { fetta, fonti: attesa?.fonti || fonti, sources: complete,
+      risultati: data.risultati.filter(r => complete[r.fonte]) };
+    const fonte = cadute.map(f => FONTE_LABEL[f] || f).join(' e ');
+    const stati = cadute.map(f => data.sources[f]);
+    const errori = cadute.flatMap(f => {
+      const s = data.sources[f];
+      return (Array.isArray(s.errori) && s.errori.length ? s.errori
+        : [{ http: s.erroreHttp, tipo: s.erroreTipo }]).map(e => ({ ...e, fonte: f }));
+    });
+    const bloccata = stati.find(s => s.erroreHttp === 429 || s.pausa?.fermo
+      || (Array.isArray(s.errori) && s.errori.some(e => e.http === 429)));
+    const troppoGrande = stati.some(s => s.erroreCodice === 'SUBITO_BODY_TOO_LARGE');
+    const definitiva = errori.some(e => e.http === 403 || e.tipo === 'auth' || e.tipo === 'error');
+    const transitoria = errori.every(e => e.tipo === 'transient' || e.http >= 500)
+      || stati.every(s => s.status === 'timeout');
+    const riprovabile = !definitiva && (!!bloccata || transitoria);
+    const fino = bloccata && Number(bloccata.pausa?.fino);
+    const dopo = bloccata
+      ? (Number.isSafeInteger(fino) && fino > Date.now() && fino < 8640000000000000 ? fino : Date.now() + 60000)
+      : Date.now() + 15000;
+    const motivo = troppoGrande ? 'risposta di Subito oltre il limite di dimensione'
+      : errori.some(e => e.http === 403) ? 'accesso rifiutato dalla fonte (403)'
+      : errori.some(e => e.tipo === 'auth') ? 'accesso alla fonte non valido (401)'
+        : definitiva ? 'risposta della fonte non leggibile'
+          : errori.some(e => e.http === 429) ? 'la fonte ha limitato le richieste (429)'
+            : bloccata ? 'la fonte è ancora in pausa' : 'errore di rete temporaneo';
+    const elenco = errori.filter(e => Number.isInteger(e.http)).map(e =>
+      `${FONTE_LABEL[e.fonte] || e.fonte}${Number.isInteger(e.famiglia) ? ` famiglia ${e.famiglia}` : ''}: HTTP ${e.http}`).join('; ');
+    paginaErrore = { testo: `${fonte}: pagina non completata (${motivo}).${elenco ? ` Errori: ${elenco}.` : ''} Nessun nuovo annuncio è stato aggiunto.${riprovabile && bloccata ? ` Riprova dal ${new Date(dopo).toLocaleString('it-IT')}.` : riprovabile ? ' Riprova fra 15 secondi.' : ''}`,
+      riprovabile,
+      dopo };
+    renderSourceStatus(); toast(paginaErrore.testo); return false;
+  }
+  paginaFontiInSospeso = null;
+  return true;
+}
+
+// L'identità appartiene alla fonte; il titolo (e quindi la URL) può cambiare fra clic.
+// La prima copia mantiene prezzi e avvisi già mostrati, senza fondere annunci distinti.
+function annunciUnici(righe) {
+  const visti = new Set();
+  return righe.filter(r => {
+    if (!r?.url) return false;
+    const id = (typeof r.id === 'string' || typeof r.id === 'number') && String(r.id).trim();
+    const k = JSON.stringify([r.fonte, id ? 'id' : 'url', id || r.url]);
+    if (visti.has(k)) return false;
+    visti.add(k); return true;
+  });
+}
+
 async function caricaAltri() {
   if (caricandoAltri || fettaPresa >= MAX_FETTE || !lastSearchParams || (paginaErrore &&
       (!paginaErrore.riprovabile || Date.now() < paginaErrore.dopo))) return;
-  const fonti = fontiConAltri();
+  const fonti = paginaFontiInSospeso
+    ? paginaFontiInSospeso.fonti.filter(f => !paginaFontiInSospeso.sources[f]) : fontiConAltri();
+  const fetta = paginaFontiInSospeso?.fetta ?? fettaPresa + 1;
   if (!fonti.length) return;
   caricandoAltri = true; renderAltriBtn();
   const myGen = searchGen;
   try {
-    const q = new URLSearchParams({ ...lastSearchParams, fetta: String(fettaPresa + 1), fonti: fonti.join(',') });
+    const q = new URLSearchParams({ ...lastSearchParams, fetta: String(fetta), fonti: fonti.join(',') });
     const subito = lastSources?.subito;
     if (fonti.includes('subito') && subito && 'mainNextStart' in subito && 'recuperoNextStart' in subito) {
       q.set('subitoMainStart', String(paginaSubitoInSospeso ? -1 : subito.mainNextStart ?? -1));
@@ -2360,63 +2464,11 @@ async function caricaAltri() {
         riprovabile: false, dopo: 0 };
       renderSourceStatus(); toast(paginaErrore.testo); return;
     }
-    const cadute = ['subito', 'autoscout', 'moto'].filter(f => {
-      const s = (data.sources || {})[f];
-      return s && (s.status === 'error' || s.status === 'timeout' || s.parzialeRete
-        || (s.status === 'skipped' && s.pausa?.fermo && lastSources?.[f]?.hasMore));
-    });
-    if (cadute.length) {
-      const s = data.sources.subito;
-      if (!paginaSubitoInSospeso && fonti.includes('subito') && subito?.mainNextStart != null
-          && s?.parzialeRete && s.errori?.some(e => e.fase === 'recupero')) {
-        paginaSubitoInSospeso = { risultati: data.risultati.filter(r => r.fonte === 'subito'),
-          source: s, recuperoStart: subito.recuperoNextStart };
-      }
-      const fonte = cadute.map(f => FONTE_LABEL[f] || f).join(' e ');
-      const stati = cadute.map(f => data.sources[f]);
-      const errori = cadute.flatMap(f => {
-        const s = data.sources[f];
-        return (Array.isArray(s.errori) && s.errori.length ? s.errori
-          : [{ http: s.erroreHttp, tipo: s.erroreTipo }]).map(e => ({ ...e, fonte: f }));
-      });
-      const bloccata = stati.find(s => s.erroreHttp === 429 || s.pausa?.fermo
-        || (Array.isArray(s.errori) && s.errori.some(e => e.http === 429)));
-      const troppoGrande = stati.some(s => s.erroreCodice === 'SUBITO_BODY_TOO_LARGE');
-      const definitiva = errori.some(e => e.http === 403 || e.tipo === 'auth' || e.tipo === 'error');
-      const transitoria = errori.every(e => e.tipo === 'transient' || e.http >= 500)
-        || stati.every(s => s.status === 'timeout');
-      const riprovabile = !definitiva && (!!bloccata || transitoria);
-      const fino = bloccata && Number(bloccata.pausa?.fino);
-      const dopo = bloccata
-        ? (Number.isSafeInteger(fino) && fino > Date.now() && fino < 8640000000000000 ? fino : Date.now() + 60000)
-        : Date.now() + 15000;
-      const motivo = troppoGrande ? 'risposta di Subito oltre il limite di dimensione'
-        : errori.some(e => e.http === 403) ? 'accesso rifiutato dalla fonte (403)'
-        : errori.some(e => e.tipo === 'auth') ? 'accesso alla fonte non valido (401)'
-          : definitiva ? 'risposta della fonte non leggibile'
-            : errori.some(e => e.http === 429) ? 'la fonte ha limitato le richieste (429)'
-              : bloccata ? 'la fonte è ancora in pausa' : 'errore di rete temporaneo';
-      const elenco = errori.filter(e => Number.isInteger(e.http)).map(e =>
-        `${FONTE_LABEL[e.fonte] || e.fonte}${Number.isInteger(e.famiglia) ? ` famiglia ${e.famiglia}` : ''}: HTTP ${e.http}`).join('; ');
-      paginaErrore = { testo: `${fonte}: pagina non completata (${motivo}).${elenco ? ` Errori: ${elenco}.` : ''} Nessun nuovo annuncio è stato aggiunto.${riprovabile && bloccata ? ` Riprova dal ${new Date(dopo).toLocaleString('it-IT')}.` : riprovabile ? ' Riprova fra 15 secondi.' : ''}`,
-        riprovabile,
-        dopo };
-      renderSourceStatus(); toast(paginaErrore.testo); return;
-    }
-    if (paginaSubitoInSospeso) {
-      const p = paginaSubitoInSospeso;
-      const s = data.sources.subito;
-      data.risultati = p.risultati.concat(data.risultati);
-      data.sources.subito = { ...s, status: p.risultati.length ? 'ok' : s.status,
-        count: p.risultati.length + (s.count || 0), totale: p.source.totale ?? s.totale,
-        mainNextStart: p.source.mainNextStart,
-        hasMore: p.source.mainNextStart != null || s.recuperoNextStart != null };
-      paginaSubitoInSospeso = null;
-    }
+    if (!completaPagina(data, fonti, fetta)) return;
     paginaErrore = null;
-    fettaPresa++;
-    const visti = new Set(currentResults.map(r => r.url));
-    const nuovi = (data.risultati || []).filter(r => r && r.url && !visti.has(r.url));
+    fettaPresa = fetta;
+    const uniti = annunciUnici(currentResults.concat(data.risultati || []));
+    const nuovi = uniti.slice(currentResults.length);
     if (!nuovi.length) {
       lastSources = fondiTotali(data.sources);
       renderSourceStatus();
@@ -2457,7 +2509,10 @@ function fondiTotali(nuove) {
     // Una fetta vuota non cancella gli annunci gia' mostrati da questa fonte.
     if (vecchia && (vecchia.status === 'ok' || vecchia.status === 'empty')
         && n && (n.status === 'empty' || n.status === 'skipped')) {
-      out[f] = { ...vecchia, count: presiDa(f), hasMore: n.status === 'empty' ? n.hasMore ?? false : vecchia.hasMore,
+      out[f] = { ...vecchia, ...(n.status === 'empty' ? n : {}),
+        status: n.status === 'skipped' ? vecchia.status : presiDa(f) ? 'ok' : 'empty', count: presiDa(f),
+        allargato: n.allargato || vecchia.allargato || null,
+        hasMore: n.status === 'empty' ? n.hasMore ?? false : vecchia.hasMore,
         ...(f === 'subito' && n.status === 'empty'
           ? { mainNextStart: n.mainNextStart ?? null, recuperoNextStart: n.recuperoNextStart ?? null }
           : {}),
@@ -2469,7 +2524,8 @@ function fondiTotali(nuove) {
                // L'avviso di allargamento vale per gli annunci a schermo, non per l'ultima
                // fetta: se resta anche una riga allargata, l'avviso deve restare con lei.
                allargato: (n && n.allargato) || (vecchia && vecchia.allargato) || null,
-               reason: (n && n.reason) || (vecchia && vecchia.reason) || null };
+               reason: vecchia?.parzialeRete && n && !n.parzialeRete ? n.reason || null
+                 : (n && n.reason) || (vecchia && vecchia.reason) || null };
   }
   return out;
 }
@@ -2560,7 +2616,6 @@ async function doSearch() {
     if (myGen !== searchGen) return;   // una ricerca più recente ha già preso il posto → non sovrascrivere
     if (!res.ok) { showError(data.error || 'Errore durante la ricerca.'); return; }
 
-    currentResults = data.risultati || [];
     searchActive = true;
     // La ricerca e' andata: la pagina smette di vestirsi da schermo vuoto (barra compatta,
     // niente sfondo). Anche a zero risultati — perche' a quel punto la risposta e' il pannello
@@ -2569,7 +2624,16 @@ async function doSearch() {
     fettaPresa = 0;                      // ricerca nuova: si riparte dalla prima fetta
     paginaErrore = null;
     paginaSubitoInSospeso = null;
+    paginaFontiInSospeso = null;
     lastSources = data.sources || null;
+    let pubblicabile = true;
+    if (data.sources?.subito?.parzialeRete && data.sources.subito.errori?.some(e => e.fase === 'recupero')) {
+      const fonti = ['subito', 'autoscout', 'moto'].filter(f => data.sources[f]
+        && (data.sources[f].status !== 'skipped' || data.sources[f].pausa?.fermo));
+      pubblicabile = completaPagina(data, fonti, 0);
+    }
+    if (pubblicabile) currentResults = annunciUnici(data.risultati || []);
+    for (const [f, stato] of Object.entries(lastSources || {})) stato.count = presiDa(f);
     renderSourceStatus();
 
 
@@ -4411,6 +4475,7 @@ function resetContesto() {
   fettaPresa = 0;
   paginaErrore = null;
   paginaSubitoInSospeso = null;
+  paginaFontiInSospeso = null;
   if (paginaRetryTimer) { clearTimeout(paginaRetryTimer); paginaRetryTimer = null; }
   ultimiVisti = null;
   soloIva = false;
@@ -6154,6 +6219,7 @@ init();
 let cpVoci = null;                 // l'elenco salvato (null = mai caricato)
 let cpParchi = {};                 // chiave → { stato, dati }
 let cpErrore = null;
+let cpVistaGen = 0;               // solo l’ultima scelta può sostituire la griglia
 let cpApertoId = null;             // di chi sono gli annunci che stanno nella griglia
 let cpGruppi = {};                 // gruppo → { stato, dati }: le vetrine unite, scaricate insieme
 const cpAperte = new Set();        // quali schede sono aperte: il re-render non deve richiuderle
@@ -6195,6 +6261,7 @@ async function cpApri() {
   cpRender();
 }
 function cpChiudi() {
+  cpVistaGen++;
   // Uscendo dalla sezione, gli annunci del parco non possono restare nella griglia: la
   // ricerca che si apre dopo troverebbe a schermo i risultati di un'altra cosa.
   if (cpApertoId) hideResults();
@@ -6213,7 +6280,7 @@ const cpRiga = (k, v) => `<div class="cp-n"><span>${escapeHtml(k)}</span><b>${v}
  * ricavano — chi e' fermo da troppo, chi e' appena arrivato, quanto ha venduto in dieci
  * anni.
  */
-function cpNumeriChiave(n, storico, v, troncato, illeggibili, totaleFonte, passateKo) {
+function cpNumeriChiave(n, storico, v, troncato, illeggibili, totaleFonte, passateKo, avvisiLettura) {
   if (!n) return '';
   const dich = v && v.annunciDichiarati;
   // Quattro avvisi, non quattro statistiche: dicono che quello che stai guardando potrebbe
@@ -6222,6 +6289,7 @@ function cpNumeriChiave(n, storico, v, troncato, illeggibili, totaleFonte, passa
   const avvisi = ((passateKo && passateKo.length)
       ? `<div class="cp-avviso">La passata ${escapeHtml(passateKo.map(p => p.tipo).join(' e '))} non e\' riuscita (${escapeHtml(passateKo.map(p => p.motivo).join(' · ')).slice(0, 120)}): di quella parte del parco non si sa niente, e i numeri qui sotto non la comprendono.</div>`
       : '')
+    + (avvisiLettura?.length ? `<div class="cp-avviso">${escapeHtml(avvisiLettura.map(p => `${p.tipo}: ${p.motivo}`).join(' · '))}. Gli annunci restano inclusi nel parco.</div>` : '')
     + (troncato ? '<div class="cp-avviso">Elenco troncato al tetto di sicurezza: questo parco e\' piu\' grande di quello mostrato.</div>' : '')
     + (illeggibili ? `<div class="cp-avviso">${illeggibili} annunci della vetrina non si sono lasciati leggere: i numeri qui sotto sono calcolati senza di loro.</div>` : '')
     + (n.venditori && n.venditori.length > 1
@@ -6263,7 +6331,7 @@ function cpSchedaHTML(v) {
     : st.stato === 'carico' ? '<div class="cp-att">Scarico il parco… su un concessionario grande ci vuole un minuto.</div>'
     : st.stato === 'ko' ? `<div class="cp-att">Non riuscito: ${escapeHtml(st.errore || 'la fonte non risponde')}</div>`
     : (st.dati.avvisoCache ? `<div class="cp-avviso">${escapeHtml(st.dati.avvisoCache)}</div>` : '')
-      + cpNumeriChiave(st.dati.numeri, st.dati.storico, v, st.dati.troncato, st.dati.illeggibili, st.dati.totaleFonte, st.dati.passateKo);
+      + cpNumeriChiave(st.dati.numeri, st.dati.storico, v, st.dati.troncato, st.dati.illeggibili, st.dati.totaleFonte, st.dati.passateKo, st.dati.avvisiLettura);
   const quando = st && st.stato === 'ok' && st.dati.quando
     ? `<span class="cp-quando">dati del ${new Date(st.dati.quando).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${st.dati.daCache ? ' · dalla cache' : ''}</span>` : '';
   const aperto = cpApertoId === cpChiave(v);
@@ -6334,8 +6402,9 @@ function cpGruppoNumeriHTML(dati, voci) {
   const parti = dati.parti || [];
   const errori = dati.errori || [];
   const nomeDi = p => (p.voce && (p.voce.nome || p.voce.fonte)) || 'una vetrina';
-  const guai = [];
+  const guai = [], letture = [];
   for (const p of parti) {
+    for (const a of p.avvisiLettura || []) letture.push(`${nomeDi(p)} (${a.tipo}): ${a.motivo}`);
     if (p.passateKo && p.passateKo.length) {
       const limite429 = p.passateKo.find(x => x.status === 429)?.motivo;
       guai.push(`${nomeDi(p)}: ${limite429 || `la passata ${p.passateKo.map(x => x.tipo).join(' e ')} non e' riuscita`}`);
@@ -6348,6 +6417,7 @@ function cpGruppoNumeriHTML(dati, voci) {
     + cpRiga('annunci in tutto', `${cpNum((dati.veicoli || []).length)} <em>su ${coperte} ${coperte === 1 ? 'vetrina' : 'vetrine'} di ${voci.length}</em>`)
     + '</div>'
     + (errori.length ? `<div class="cp-avviso">${errori.map(e => escapeHtml(`${e.nome}: ${e.error}`)).join(' · ')}</div>` : '')
+    + (letture.length ? `<div class="cp-avviso">${escapeHtml(letture.join(' · '))}. Gli annunci restano inclusi nel parco.</div>` : '')
     + (guai.length ? `<div class="cp-avviso">Il totale qui sopra e' parziale — ${escapeHtml(guai.join(' · '))}.</div>` : '');
 }
 
@@ -6406,19 +6476,27 @@ async function cpUnisci(id, con) {
 }
 
 async function cpScaricaGruppo(g, forza) {
-  cpGruppi[g] = { stato: 'carico' };
+  const vista = ++cpVistaGen, contesto = searchGen;
+  const attesa = { stato: 'carico' };
+  cpGruppi[g] = attesa;
   cpRender();
   try {
     const d = await fetch(`/api/competitor/gruppo/${encodeURIComponent(g)}/parco${forza ? '?forza=1' : ''}`).then(r => r.json());
+    if (cpGruppi[g] !== attesa) return;
     cpGruppi[g] = d.ok ? { stato: 'ok', dati: d } : { stato: 'ko', errore: d.error };
-  } catch (_) { cpGruppi[g] = { stato: 'ko', errore: 'il server non risponde' }; }
+  } catch (_) {
+    if (cpGruppi[g] !== attesa) return;
+    cpGruppi[g] = { stato: 'ko', errore: 'il server non risponde' };
+  }
   cpRender();
-  if (cpGruppi[g].stato === 'ok') cpMostraGruppo(g);
+  if (vista === cpVistaGen && contesto === searchGen && searchMode === 'competitor'
+      && cpGruppi[g].stato === 'ok') cpMostraGruppo(g);
 }
 
 function cpMostraGruppo(g) {
   const st = cpGruppi[g];
   if (!st || st.stato !== 'ok') return;
+  cpVistaGen++;
   cpApertoId = 'g:' + g;
   // Il contesto cambia: quello che descriveva la ricerca di prima non descrive questo
   // gruppo di vetrine (vedi `resetContesto`). Prima qui si azzeravano tre cose su dieci.
@@ -6436,6 +6514,9 @@ async function cpAggiungi() {
   const url = (inp && inp.value || '').trim();
   // Il silenzio non aiuta: come fa la gemella dei Ricambi (doRicambi), si dice cosa manca.
   if (!url) { showError('Incolla il link della vetrina di un concessionario.'); return; }
+  // La scelta risale al clic, non al completamento del POST: chi nel frattempo
+  // cambia vetrina deve conservarla anche quando questo download finisce.
+  const intenzione = { vista: ++cpVistaGen, contesto: searchGen };
   const mio = !!(document.getElementById('cpMio') || {}).checked;
   cpErrore = null;
   // Il bottone ora sta nella barra e non viene ridisegnato: se non lo si rimette a posto
@@ -6455,23 +6536,33 @@ async function cpAggiungi() {
   // Incollare il link E' la richiesta: il parco si scarica subito. La regola "non si
   // scarica da solo" vale per l'apertura della sezione, non per chi ha appena chiesto
   // questo concessionario.
-  if (nuova) cpScarica(cpChiave(nuova));
+  if (nuova) cpScarica(cpChiave(nuova), false, intenzione);
 }
 
-async function cpScarica(chiave, forza) {
-  cpParchi[chiave] = { stato: 'carico' };
+async function cpScarica(chiave, forza, intenzione = { vista: ++cpVistaGen, contesto: searchGen }) {
+  const { vista, contesto } = intenzione;
+  // Un POST lento può risolversi dopo un nuovo scarico della stessa vetrina.
+  // L'intenzione superata riusa quella cache/attesa, senza prenderne il posto.
+  if (vista !== cpVistaGen && cpParchi[chiave]) return;
+  const attesa = { stato: 'carico' };
+  cpParchi[chiave] = attesa;
   cpRender();
   try {
     const d = await fetch(`/api/competitor/${encodeURIComponent(chiave)}/parco${forza ? '?forza=1' : ''}`).then(r => r.json());
+    if (cpParchi[chiave] !== attesa) return;
     if (d.scarichiRestanti != null) cpRestanti = d.scarichiRestanti;
     else if (d.restanti != null) cpRestanti = d.restanti;
     cpParchi[chiave] = d.ok ? { stato: 'ok', dati: d } : { stato: 'ko', errore: d.error };
     // L'anagrafica puo' essere stata riletta dal server (le vetrine vecchie non avevano
     // orari, telefoni, valutazione): si prende quella, altrimenti la scheda resta magra.
     if (d.ok && d.voce) cpVoci = (cpVoci || []).map(v => (cpChiave(v) === chiave ? d.voce : v));
-  } catch (_) { cpParchi[chiave] = { stato: 'ko', errore: 'il server non risponde' }; }
+  } catch (_) {
+    if (cpParchi[chiave] !== attesa) return;
+    cpParchi[chiave] = { stato: 'ko', errore: 'il server non risponde' };
+  }
   cpRender();
-  if (cpParchi[chiave].stato === 'ok') cpMostraParco(chiave);
+  if (vista === cpVistaGen && contesto === searchGen && searchMode === 'competitor'
+      && cpParchi[chiave].stato === 'ok') cpMostraParco(chiave);
 }
 
 /**
@@ -6484,6 +6575,7 @@ async function cpScarica(chiave, forza) {
 function cpMostraParco(chiave) {
   const st = cpParchi[chiave];
   if (!st || st.stato !== 'ok' || !Array.isArray(st.dati.veicoli)) return;
+  cpVistaGen++;
   cpApertoId = chiave;
   // Un parco NON e' la ricerca di prima: `resetContesto` porta via i suoi criteri, i suoi
   // filtri e le sue colonne. Porta via anche `lastSources`, ed e' voluto — un parco arriva

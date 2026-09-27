@@ -361,6 +361,7 @@ async function parco(voce, dip = {}) {
   const veicoli = [];
   let troncato = false;        // il TETTO nostro (40 pagine): il parco e' piu' grande
   const passateKo = [];        // passate cadute: non si sa quanto manca, e non e' un tetto
+  const avvisiLettura = [];    // campi non letti in annunci che restano nel parco
   let totaleFonte = null;      // quanti ne dichiara la FONTE, contro quanti ne abbiamo presi
   // Il totale dichiarato descrive TUTTE le passate che hanno portato veicoli? Se una
   // passata fallisce, o riesce con veicoli ma senza dichiarare il suo totale, la somma
@@ -389,7 +390,7 @@ async function parco(voce, dip = {}) {
       } catch (_) { /* lo storico e' un di piu': se non arriva, il parco resta */ }
     }
     // Moto.it la vetrina non dichiara un totale: si conta finche' le pagine finiscono.
-    return { veicoli: r.items.map(v => ({ ...v, tipo: 'moto' })), troncato: r.troncato, passateKo: r.errorePagina ? [{ tipo: 'moto', motivo: r.errorePagina.message, status: r.errorePagina.status }] : [], illeggibili: r.illeggibili || 0, totaleFonte: null, storico };
+    return { veicoli: r.items.map(v => ({ ...v, tipo: 'moto' })), troncato: r.troncato, passateKo: r.errorePagina ? [{ tipo: 'moto', motivo: r.errorePagina.message, status: r.errorePagina.status }] : [], avvisiLettura, illeggibili: r.illeggibili || 0, totaleFonte: null, storico };
   }
 
   for (const tipo of ['auto', 'moto']) {
@@ -421,6 +422,13 @@ async function parco(voce, dip = {}) {
       continue;
     }
     const items = Array.isArray(r) ? r : (r.items || []);
+    // Un prezzo illeggibile non elimina l'annuncio. Non si somma alle card scartate
+    // (`illeggibili`) e non si presenta come una passata caduta. Il flag per riga
+    // conserva l'avviso anche quando `parziale` contiene pure un errore di rete.
+    const prezziIlleggibili = items.filter(v => v.prezzoIlleggibile === true).length;
+    const avvisoLettura = r.sospetto || (!r.parzialeRete && r.parziale)
+      || (prezziIlleggibili ? `${prezziIlleggibili} annunci hanno un campo prezzo non leggibile` : null);
+    if (avvisoLettura) avvisiLettura.push({ tipo, motivo: avvisoLettura });
     // Una passata VUOTA non si registra: qui zero non e' un silenzio sospetto ma il caso
     // quotidiano (il concessionario di sole auto, passata moto), e contarlo fra i vuoti
     // renderebbe la fonte "sospetta" nel pannello per un fatto sul venditore, non su di lei.
@@ -444,7 +452,7 @@ async function parco(voce, dip = {}) {
     for (const v of items) veicoli.push({ ...v, tipo });
     if (voce.fonte === 'subito' && r.bloccoParziale?.status === 429) break;
   }
-  return { veicoli, troncato, passateKo, illeggibili: 0, totaleFonte: totaleCopreTutto ? totaleFonte : null };
+  return { veicoli, troncato, passateKo, avvisiLettura, illeggibili: 0, totaleFonte: totaleCopreTutto ? totaleFonte : null };
 }
 
 /* ─── i numeri ────────────────────────────────────────────────────────────── */

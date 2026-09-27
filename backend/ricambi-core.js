@@ -13,12 +13,15 @@ const salute = require('./fonti-salute');
 
 const TIMEOUT_MS = parseInt(process.env.RICAMBI_TIMEOUT_MS, 10) || 45000;
 
-// Adatta un item Subito (mapAd) allo shape parti unificato. prezzo 0 = trattabile → null.
+// Il prezzo assente non significa trattabile: si conservano numero e stato nativo,
+// senza copiare il testo grezzo o i campi personali dell'annuncio.
 function subitoToPart(it) {
   return {
     fonte: 'subito',
     nome: it.titolo || 'Annuncio Subito',
-    prezzo: (typeof it.prezzo === 'number' && it.prezzo > 0) ? it.prezzo : null,
+    prezzo: Number.isFinite(it.prezzo) ? it.prezzo : null,
+    prezzoSuRichiesta: it.prezzoSuRichiesta === true,
+    prezzoIlleggibile: it.prezzoIlleggibile === true,
     valuta: 'EUR',
     immagine: it.immagini && it.immagini[0] ? (it.immagini[0].thumb || it.immagini[0].full) : null,
     venditore: it.venditore || 'privato',
@@ -31,9 +34,12 @@ async function subitoSource(term, opts = {}) {
     return { blocked: true, error: salute.avvisoPausa('subito') };
   }
   try {
-    const items = await scrapeSubito.searchAccessori(term, { cat: opts.cat });
+    const r = await scrapeSubito.searchAccessori(term, { cat: opts.cat, withMeta: true });
+    const items = r.items;
     salute.registra('subito', { conteggio: items.length });
-    return { articoli: items.map(subitoToPart) };
+    return { articoli: items.map(subitoToPart), total: r.total ?? null,
+      truncated: !!r.truncated, hasMore: typeof r.hasMore === 'boolean' ? r.hasMore : null,
+      sospetto: r.sospetto || null, parziale: r.parziale || null, parzialeRete: !!r.parzialeRete };
   } catch (e) {
     salute.registra('subito', { errore: e });
     if (e.code === 'FONTE_IN_PAUSA') return { blocked: true, error: e.message };
@@ -167,6 +173,13 @@ async function searchRicambi(qRaw, opts = {}) {
   order.forEach(k => {
     if (!res[k]) return;
     sources[k] = { status: res[k].status, reason: res[k].reason, count: res[k].items.length };
+    // Il totale riguarda la risposta grezza, count le offerte dopo il filtro locale.
+    // Il limite alla prima pagina resta: dichiararlo non richiede altre chiamate.
+    if (k === 'subito' && res[k].meta) {
+      for (const campo of ['total', 'truncated', 'hasMore', 'sospetto', 'parziale', 'parzialeRete']) {
+        if (res[k].meta[campo] !== undefined) sources[k][campo] = res[k].meta[campo];
+      }
+    }
     if (k === 'subito' && !opts.subito) sources[k].pausa = salute.fermo('subito');
     if (res[k].meta?.httpStatus) sources[k].httpStatus = res[k].meta.httpStatus;
     // fonte non riuscita → logga tag + reason (prima era muto: causa del "Web error" invisibile)

@@ -41,6 +41,13 @@ quando la voce AMR corrisponde a più famiglie Subito si usa `q=marca+modello`.
    con risposta valida (`ok` o `empty`), non su timeout o fonte saltata.
    Riproduzione prima del fix e regressione in `test/fonti-pausa-ui.test.js`.
 
+## Revisione del 27 settembre 2026
+
+Gli undici finding successivi sono stati verificati e corretti nel working tree,
+con seconda revisione e prove di regressione. Esiti, soluzione migliorata per il
+retry, test e limiti sono in [REVISIONE-SUBITO-FIX-2026-09-27.md](REVISIONE-SUBITO-FIX-2026-09-27.md).
+Le modifiche non sono ancora committate o distribuite sull'M2.
+
 ## Aperti
 
 Nessuno dei problemi elencati in questo registro resta aperto. Questo non

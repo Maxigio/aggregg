@@ -148,7 +148,7 @@ test('tabellaRicambi + renderReportPdf: un solo layout per i due documenti', () 
   assert.strictEqual(t.righe.length, 4);
   assert.strictEqual(t.righe[1][3], '€ 25,00');
   assert.strictEqual(t.righe[2][3], '—', 'una fonte web senza prezzo non promette niente');
-  assert.strictEqual(t.righe[3][3], 'trattabile', 'su Subito il prezzo assente vuol dire trattabile, non ignoto');
+  assert.strictEqual(t.righe[3][3], 'prezzo non indicato', 'un prezzo assente non implica che sia trattabile');
   const buf = renderReportPdf([], {}, { titolo: 'AUTO MOTO RADAR — Ricambi', contatore: '4 ricambi', ...t });
   assert.ok(Buffer.isBuffer(buf) && buf.length > 0);
   assert.strictEqual(buf.slice(0, 5).toString(), '%PDF-');

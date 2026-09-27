@@ -13,7 +13,7 @@ function estrai(da, fino) {
   return APP.slice(start, end);
 }
 const fonti = estrai('const SOURCE_STATUS =', '// ─── Spec (dettaglio)');
-const ricambi = estrai('function renderRicambiPanel()', '// Toolbar rispecchiata');
+const ricambi = estrai('function rcNoteSubito(', '// Toolbar rispecchiata');
 const escape = estrai('function escapeHtml(str)', '\n/**');
 const ORA = new Date(2026, 8, 23, 10, 0).getTime();
 class Orologio extends Date {

@@ -137,9 +137,9 @@ test('pagina successiva: una fonte esaurita non riceve altre richieste', async (
   assert.equal(r.sources.subito.hasMore, false);
 });
 
-test('la scelta delle fonti accetta solo nomi univoci nelle pagine successive', async () => {
+test('la scelta delle fonti accetta solo nomi univoci e una pagina esplicita', async () => {
   for (const q of [
-    { fetta: 0, fonti: 'subito' },
+    { fonti: 'subito' },
     { fetta: 1, fonti: 'subito,subito' },
     { fetta: 1, fonti: '__proto__' },
     { fetta: 1, fonti: ['subito', 'moto'] },
@@ -154,11 +154,55 @@ test('i cursori Subito rifiutano offset arbitrari o incompleti', async () => {
     { subitoMainStart: '1', subitoRecuperoStart: '50' },
     { subitoMainStart: '2550', subitoRecuperoStart: '50' },
     { subitoMainStart: '50' },
-    { subitoMainStart: '50', subitoRecuperoStart: '50', fetta: 0 },
+    { subitoMainStart: '50', subitoRecuperoStart: '0.5' },
     { subitoMainStart: '50', subitoRecuperoStart: '50', fonti: 'autoscout' },
   ]) {
     const r = await server._amrSearchFn({ tipo: 'auto', marca: 'Audi', fetta: 1,
       fonti: 'subito', ...cursori });
     assert.match(r.error, /cursori Subito non validi/);
   }
+});
+
+test('recupero iniziale a zero ammesso: salta il nativo e non avanza le altre fonti', async () => {
+  const calls = [];
+  subito._setHttpGetJson(async path => {
+    const q = new URL('https://test.invalid' + path).searchParams;
+    calls.push([q.get('cm'), q.get('start')]);
+    return { status: 200, body: JSON.stringify({ ads: [], count_all: 0 }) };
+  });
+  const r = await server._amrSearchFn({ tipo: 'auto', marca: 'Fiat', modello: 'Panda',
+    fetta: '0', fonti: 'subito', subitoMainStart: '-1', subitoRecuperoStart: '0' });
+  assert.equal(r.error, undefined);
+  assert.deepEqual(calls, [['000000', '0']]);
+  assert.equal(r.sources.subito.hasMore, false);
+});
+
+test('retry con cursore Subito diverso riusa AutoScout, ma un filtro diverso no', async () => {
+  let asCalls = 0;
+  subito._setHttpGetJson(async path => {
+    const q = new URL('https://test.invalid' + path).searchParams;
+    return q.get('cm') === '000000' ? { status: 503, body: '{}' }
+      : { status: 200, body: JSON.stringify({ ads: [{ ...ad(1111), subject: 'Fiat Panda' }], count_all: 51 }) };
+  });
+  https.request = (...args) => {
+    const cb = args.at(-1), req = new EventEmitter();
+    req.write = () => {}; req.end = () => {}; req.setTimeout = () => {};
+    process.nextTick(() => {
+      const res = new EventEmitter();
+      res.statusCode = 200; res.headers = {}; res.setEncoding = () => {};
+      cb(res); asCalls++;
+      res.emit('data', JSON.stringify({ data: { search: { listings: { listings: [nodo(1112)], metadata: { totalItems: 51 } } } } }));
+      res.emit('end');
+    });
+    return req;
+  };
+  const q = { tipo: 'auto', marca: 'Fiat', modello: 'Panda', fetta: '17',
+    fonti: 'subito,autoscout', subitoMainStart: '50', subitoRecuperoStart: '50' };
+  const r = await server._amrSearchFn(q);
+  assert.equal(r.sources.subito.parzialeRete, true);
+  assert.equal(asCalls, 1);
+  await server._amrSearchFn({ ...q, subitoMainStart: '-1' });
+  assert.equal(asCalls, 1, 'stessa pagina AutoScout non dipende dal cursore Subito');
+  await server._amrSearchFn({ ...q, subitoMainStart: '-1', prezzoMin: '123' });
+  assert.equal(asCalls, 2, 'filtri diversi non condividono la colonna');
 });

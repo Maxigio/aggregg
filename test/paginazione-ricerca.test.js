@@ -130,6 +130,16 @@ test('una fonte vuota ed esaurita resta vuota mentre avanzano le altre', async (
   assert.equal(s.ctx.lastSources.subito.hasMore, false);
 });
 
+test('la pausa di una fonte già esaurita non blocca la pagina delle altre', async () => {
+  const s = schermo([{ risultati: [{ fonte: 'autoscout', url: 'https://autoscout24.it/altro' }], sources: {
+    subito: { status: 'skipped', hasMore: false, pausa: { fermo: true, fino: Date.now() + 60000 } },
+    autoscout: { status: 'ok', hasMore: false },
+  } }], { subito: { status: 'empty', hasMore: false }, autoscout: { status: 'ok', hasMore: true } });
+  await s.ctx.caricaAltri();
+  assert.equal(vm.runInContext('paginaErrore', s.ctx), null);
+  assert.equal(vm.runInContext('fettaPresa', s.ctx), 1);
+});
+
 test('pagina intermedia fallita: nessuna riga nuova, stessa pagina riprovabile', async () => {
   const s = schermo([
     { risultati: Array.from({ length: 25 }, (_, i) => riga(i + 50)), sources: {
@@ -194,7 +204,7 @@ test('un errore di una fonte non pubblica neppure gli annunci delle altre', asyn
   const s = schermo([{ risultati: [riga(50), { fonte: 'autoscout', url: 'https://autoscout24.it/1' }], sources: {
     subito: { status: 'ok', hasMore: true },
     autoscout: { status: 'timeout', erroreTipo: 'transient', hasMore: null },
-  } }]);
+  } }], { subito: { status: 'ok', hasMore: true }, autoscout: { status: 'ok', hasMore: true } });
   await s.ctx.caricaAltri();
   assert.equal(s.ctx.currentResults.length, 50);
   assert.equal(vm.runInContext('fettaPresa', s.ctx), 0);
@@ -253,9 +263,127 @@ test('un 403 insieme a un 429 resta definitivo e non promette un retry', async (
     subito: { status: 'error', erroreTipo: 'blocked', erroreHttp: 429,
       pausa: { fermo: true, fino: Date.now() + 60_000 } },
     autoscout: { status: 'error', erroreTipo: 'blocked', erroreHttp: 403 },
-  } }]);
+  } }], { subito: { status: 'ok', hasMore: true }, autoscout: { status: 'ok', hasMore: true } });
   await s.ctx.caricaAltri();
   assert.equal(s.box.nascosto, true);
   assert.match(s.avvisi.at(-1), /403/);
   assert.doesNotMatch(s.avvisi.at(-1), /Riprova dal/);
+});
+
+function abilitaRicerca(s) {
+  const campi = Object.fromEntries(['modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax', 'raggio']
+    .map(k => [k, { value: k === 'modello' ? 'Panda' : '' }]));
+  const get = s.ctx.document.getElementById;
+  s.ctx.document.getElementById = id => campi[id] || get(id);
+  s.ctx.document.body = { dataset: {}, classList: { add() {} } };
+  Object.assign(s.ctx, {
+    currentTipo: () => 'auto', matchedBrand: () => ({ nome: 'Fiat' }), selectedModel: null,
+    versioneInput: { value: 'Nessuna Versione' }, sceltaVersione: () => ({ versione: null }),
+    regioneSelect: { value: '' }, filtriAutoScelti: () => ({}), closeMatrix() {},
+    showLoading() {}, hideResults() { s.ctx.currentResults = []; }, liqCarica() {},
+    colsDefault: () => [], syncColMenu() {}, hideLoading() {}, resultsToolbar: { scrollIntoView() {} },
+    showError(e) { assert.fail(e); },
+  });
+  vm.runInContext(app.slice(app.indexOf('async function doSearch()'), app.indexOf('// ─── Slider prezzo')), s.ctx);
+}
+
+test('recupero iniziale fallito: pagina atomica, retry a zero, nessuna fonte riuscita ripetuta', async () => {
+  const as = { fonte: 'autoscout', id: 'a1', url: 'https://autoscout24.it/1', prezzo: 3000 };
+  const s = schermo([
+    { risultati: [riga(0), as], sources: {
+      subito: { status: 'ok', count: 1, hasMore: true, mainNextStart: null, recuperoNextStart: 0,
+        parzialeRete: true, errori: [{ fase: 'recupero', tipo: 'transient', http: 503 }] },
+      autoscout: { status: 'ok', count: 1, hasMore: false },
+    } },
+    { risultati: [riga(1)], sources: { subito: { status: 'ok', count: 1, hasMore: false,
+      mainNextStart: null, recuperoNextStart: null } } },
+  ]);
+  abilitaRicerca(s);
+  await s.ctx.doSearch();
+  assert.equal(s.ctx.currentResults.length, 0, 'nessuna porzione iniziale pubblicata prima del recupero');
+  vm.runInContext('paginaErrore.dopo = 0', s.ctx);
+  await s.ctx.caricaAltri();
+  const q = new URL('https://test.invalid' + s.urls[1]).searchParams;
+  assert.equal(q.get('fetta'), '0');
+  assert.equal(q.get('fonti'), 'subito');
+  assert.equal(q.get('subitoMainStart'), '-1');
+  assert.equal(q.get('subitoRecuperoStart'), '0');
+  assert.equal(s.ctx.currentResults.length, 3);
+  assert.equal(vm.runInContext('fettaPresa', s.ctx), 0);
+  assert.equal(s.box.nascosto, true);
+});
+
+test('retry recupero conserva le altre fonti nel browser anche oltre la cache server', async () => {
+  const s = schermo([
+    { risultati: [riga(50), { fonte: 'autoscout', id: 'a2', url: 'https://autoscout24.it/2' }], sources: {
+      subito: { status: 'ok', hasMore: true, mainNextStart: 100, recuperoNextStart: 50,
+        parzialeRete: true, errori: [{ fase: 'recupero', tipo: 'transient', http: 503 }] },
+      autoscout: { status: 'ok', hasMore: true },
+    } },
+    { risultati: [riga(51)], sources: { subito: {
+      status: 'ok', hasMore: false, mainNextStart: null, recuperoNextStart: null,
+    } } },
+  ], { subito: { status: 'ok', hasMore: true, mainNextStart: 50, recuperoNextStart: 50 },
+    autoscout: { status: 'ok', hasMore: true } });
+  await s.ctx.caricaAltri();
+  vm.runInContext('paginaErrore.dopo = 0', s.ctx);
+  await s.ctx.caricaAltri();
+  assert.equal(new URL('https://test.invalid' + s.urls[1]).searchParams.get('fonti'), 'subito');
+  assert.equal(s.ctx.currentResults.filter(r => r.fonte === 'autoscout').length, 1);
+  assert.equal(s.ctx.lastSources.autoscout.hasMore, true);
+});
+
+test('merge pagine: ID stabile e duplicati interni non incrementano il conteggio', async () => {
+  const s = schermo([{ risultati: [
+    { ...riga(50), id: 'subito:50' }, { ...riga(50), id: 'subito:50' },
+    { ...riga(999), id: 'subito:0' },
+    { ...riga(1000), fonte: 'autoscout', id: 'subito:0' },
+  ], sources: { subito: { status: 'ok', hasMore: false }, autoscout: { status: 'ok', hasMore: false } } }]);
+  s.ctx.currentResults[0].id = 'subito:0';
+  await s.ctx.caricaAltri();
+  assert.equal(s.ctx.currentResults.length, 52);
+  assert.equal(s.ctx.currentResults.filter(r => r.fonte === 'subito' && r.id === 'subito:0').length, 1);
+});
+
+test('recupero iniziale riuscito mentre AutoScout fallisce: il terzo tentativo chiede solo AutoScout', async () => {
+  const ko = { status: 'error', erroreTipo: 'transient', erroreHttp: 503 };
+  const s = schermo([
+    { risultati: [riga(0)], sources: { subito: { status: 'ok', hasMore: true,
+      mainNextStart: 50, recuperoNextStart: 0, parzialeRete: true,
+      errori: [{ fase: 'recupero', tipo: 'transient', http: 503 }] }, autoscout: ko } },
+    { risultati: [riga(1)], sources: { subito: { status: 'ok', hasMore: false,
+      mainNextStart: null, recuperoNextStart: null }, autoscout: ko } },
+    { risultati: [{ fonte: 'autoscout', url: 'https://autoscout24.it/new' }],
+      sources: { autoscout: { status: 'ok', hasMore: false } } },
+  ]);
+  abilitaRicerca(s); await s.ctx.doSearch();
+  for (let i = 0; i < 2; i++) {
+    vm.runInContext('paginaErrore.dopo = 0', s.ctx);
+    await s.ctx.caricaAltri();
+    if (!i) assert.equal(s.ctx.currentResults.length, 0);
+  }
+  assert.deepEqual(s.urls.slice(1).map(url => new URL('https://test.invalid' + url).searchParams.get('fonti')),
+    ['subito,autoscout', 'autoscout']);
+  assert.deepEqual(s.richieste, [0, 0, 0]);
+  assert.equal(s.ctx.currentResults.length, 3);
+  assert.equal(s.ctx.lastSources.subito.mainNextStart, 50);
+});
+
+test('recupero iniziale 429, nativo senza righe visibili: pausa rispettata e avviso rimosso dopo successo vuoto', async () => {
+  const s = schermo([
+    { risultati: [], sources: { subito: { status: 'ok', hasMore: true, count: 0,
+      mainNextStart: null, recuperoNextStart: 0, parzialeRete: true,
+      pausa: { fermo: true, fino: Date.now() + 900_000 },
+      errori: [{ fase: 'recupero', http: 429, tipo: 'blocked' }] } } },
+    { risultati: [], sources: { subito: { status: 'empty', hasMore: false, parzialeRete: false,
+      parziale: null, reason: null, erroreTipo: null, errori: [],
+      mainNextStart: null, recuperoNextStart: null, pausa: { fermo: false } } } },
+  ]);
+  abilitaRicerca(s); await s.ctx.doSearch();
+  await s.ctx.caricaAltri(); assert.equal(s.urls.length, 1);
+  vm.runInContext('paginaErrore.dopo = 0', s.ctx); await s.ctx.caricaAltri();
+  assert.equal(s.ctx.currentResults.length, 0);
+  assert.equal(s.ctx.lastSources.subito.parzialeRete, false);
+  assert.equal(s.ctx.lastSources.subito.pausa.fermo, false);
+  assert.equal(s.box.nascosto, true);
 });
