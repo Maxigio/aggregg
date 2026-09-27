@@ -724,6 +724,7 @@ async function init() {
   document.getElementById('caricaAltri')?.addEventListener('click', e => {
     if (e.target.closest('button')) caricaAltri();
   });
+  document.getElementById('senzaModelloCarica')?.addEventListener('click', caricaSenzaModello);
   // SI ESPORTA QUELLO CHE SI STA GUARDANDO. `currentResults` e' tutto lo scaricato: con il
   // cursore del prezzo stretto, il CSV e il PDF uscivano con annunci e statistiche di un
   // insieme diverso da quello a schermo — e sono i documenti che escono di mano.
@@ -2319,6 +2320,116 @@ function setRcVeicolo(v) {
 
 // ─── Ricerca ──────────────────────────────────────────────────────────────────
 let searchGen = 0;   // review: token di generazione — solo la ricerca PIÙ RECENTE applica i risultati
+let senzaModelloStart = 0;
+let senzaModelloBusy = false;
+let senzaModelloFine = false;
+let senzaModelloBlocco = false;
+let senzaModelloAttesa = 0;
+let senzaModelloTimer = null;
+const senzaModelloVisti = new Set();
+
+function resetSenzaModello() {
+  if (senzaModelloTimer) clearTimeout(senzaModelloTimer);
+  senzaModelloTimer = null;
+  senzaModelloStart = 0;
+  senzaModelloBusy = false;
+  senzaModelloFine = false;
+  senzaModelloBlocco = false;
+  senzaModelloAttesa = 0;
+  senzaModelloVisti.clear();
+  document.getElementById('subitoSenzaModello')?.classList.add('d-none');
+  document.getElementById('senzaModelloLista')?.replaceChildren();
+  const stato = document.getElementById('senzaModelloStato');
+  if (stato) stato.textContent = '';
+}
+
+function renderSenzaModello() {
+  const b = document.getElementById('senzaModelloCarica');
+  if (!b) return;
+  if (senzaModelloTimer) clearTimeout(senzaModelloTimer);
+  senzaModelloTimer = null;
+  const attesa = Math.max(0, senzaModelloAttesa - Date.now());
+  b.disabled = senzaModelloBusy || senzaModelloFine || senzaModelloBlocco || attesa > 0;
+  b.textContent = senzaModelloBusy ? 'Carico…' : senzaModelloBlocco ? 'Consultazione non disponibile'
+    : senzaModelloFine ? 'Ultima pagina consultata'
+    : senzaModelloStart ? 'Consulta altri annunci' : 'Consulta gli annunci';
+  if (attesa && !senzaModelloBlocco) senzaModelloTimer = setTimeout(renderSenzaModello, Math.min(attesa + 100, 2147483647));
+}
+
+function mostraSenzaModello() {
+  const s = lastSources?.subito;
+  const disponibile = searchActive && !!lastSearchParams?.modello && !!s?.famigliaNome
+    && (s.status === 'ok' || s.status === 'empty');
+  document.getElementById('subitoSenzaModello')?.classList.toggle('d-none', !disponibile);
+  if (disponibile) renderSenzaModello();
+}
+
+function rigaSenzaModello(item) {
+  if (!item || (typeof item.id !== 'string' && typeof item.id !== 'number')) return null;
+  let url;
+  try { url = new URL(item.url); } catch { return null; }
+  if (url.protocol !== 'https:' || !(url.hostname === 'subito.it' || url.hostname.endsWith('.subito.it'))) return null;
+  const key = String(item.id);
+  if (senzaModelloVisti.has(key)) return null;
+  senzaModelloVisti.add(key);
+  const row = document.createElement('div');
+  row.className = 'senza-modello-riga';
+  const a = document.createElement('a');
+  a.href = url.href;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.textContent = String(item.titolo || 'Annuncio Subito');
+  const prezzo = document.createElement('span');
+  prezzo.textContent = Number.isFinite(item.prezzo) ? eurRound(item.prezzo)
+    : item.prezzoSuRichiesta ? 'Prezzo su richiesta' : 'Prezzo non disponibile';
+  row.append(a, prezzo);
+  return row;
+}
+
+async function caricaSenzaModello() {
+  if (senzaModelloBusy || senzaModelloFine || senzaModelloBlocco || Date.now() < senzaModelloAttesa
+      || !lastSearchParams || document.getElementById('subitoSenzaModello')?.classList.contains('d-none')) return;
+  const gen = searchGen;
+  senzaModelloBusy = true;
+  renderSenzaModello();
+  const stato = document.getElementById('senzaModelloStato');
+  const lista = document.getElementById('senzaModelloLista');
+  try {
+    const q = new URLSearchParams({ ...lastSearchParams, start: String(senzaModelloStart) });
+    const res = await fetch(`/api/subito/senza-modello?${q}`);
+    const data = await res.json();
+    if (gen !== searchGen) return;
+    if (!res.ok) {
+      if (data.riprovaDomani || res.status === 400 || res.status === 422
+          || data.httpStatus === 401 || data.httpStatus === 403 || data.tipo === 'error')
+        senzaModelloBlocco = true;
+      const fino = Number(data.pausa?.fino);
+      const breve = Number(data.riprovaFra);
+      senzaModelloAttesa = Number.isFinite(fino) && fino > Date.now() ? fino
+        : Number.isFinite(breve) && breve > 0 ? Date.now() + breve * 1000 : Date.now() + 15000;
+      if (stato) stato.textContent = `${data.error || 'Impossibile consultare questa pagina.'} Nessun annuncio è stato aggiunto.${senzaModelloBlocco ? '' : ' Puoi riprovare.'}`;
+      return;
+    }
+    if (!Array.isArray(data.items) || typeof data.hasMore !== 'boolean'
+        || (data.hasMore && (!Number.isInteger(data.nextStart) || data.nextStart !== senzaModelloStart + 50)))
+      throw new Error('Risposta incompleta');
+    const rows = data.items.map(rigaSenzaModello).filter(Boolean);
+    if (lista) lista.append(...rows);
+    senzaModelloStart = data.hasMore ? data.nextStart : senzaModelloStart;
+    senzaModelloFine = !data.hasMore;
+    if (stato) stato.textContent = data.limiteRaggiunto ? 'Limite di 2.500 annunci consultati. La fonte potrebbe averne altri.'
+      : rows.length
+      ? `${senzaModelloVisti.size} annunci consultati. ${senzaModelloFine ? 'Non sono disponibili altre pagine di questa consultazione.' : 'Puoi consultare la pagina successiva.'}`
+      : senzaModelloFine ? 'Nessun annuncio con modello non dichiarato in questa consultazione.'
+        : 'Nessun annuncio visualizzabile in questa pagina; puoi continuare.';
+  } catch {
+    if (gen !== searchGen) return;
+    senzaModelloAttesa = Date.now() + 15000;
+    if (stato) stato.textContent = 'La pagina non è stata caricata. Nessun annuncio è stato aggiunto; riprova fra 15 secondi.';
+  } finally {
+    if (gen === searchGen) { senzaModelloBusy = false; renderSenzaModello(); }
+  }
+}
 /**
  * "CARICA ALTRI ANNUNCI" — la fetta successiva, chiesta quando la chiedi tu.
  *
@@ -2635,6 +2746,7 @@ async function doSearch() {
     if (pubblicabile) currentResults = annunciUnici(data.risultati || []);
     for (const [f, stato] of Object.entries(lastSources || {})) stato.count = presiDa(f);
     renderSourceStatus();
+    mostraSenzaModello();
 
 
     initPrezzoSlider(currentResults);
@@ -4470,6 +4582,7 @@ function resetContesto() {
   // Una fetta di "Carica altri" ancora in volo non deve piu' atterrare: la risposta in
   // ritardo rimetteva `lastSources` e concatenava annunci in uno stato gia' azzerato.
   searchGen++;
+  resetSenzaModello();
   lastSearchParams = null;
   lastSources = null;
   fettaPresa = 0;

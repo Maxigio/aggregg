@@ -893,6 +893,40 @@ async function scrapeSubitoApi(params, opts = {}) {
     erroreTipo, erroreHttp, erroreCodice, bloccoParziale, erroriSubito } : out;
 }
 
+// Esplorazione separata: il venditore ha dichiarato la marca, ma NON il modello.
+// Nessun confronto col titolo può trasformare questa riga in una corrispondenza certa.
+// Una pagina per gesto dell'utente; il body grezzo vive solo durante questa chiamata.
+async function searchSenzaModello(params, start = 0) {
+  const nodo = params.subitoNodo;
+  if (!nodo?.marcaId) throw fail('marca Subito non risolta', { kind: 'error' });
+  const puliti = { ...params, modello: '', subitoVersioneTesto: null,
+    subitoNodo: { marcaId: nodo.marcaId }, subitoSoloNonDichiarati: true, _sort: 'priceasc' };
+  const page = await fetchPage(puliti, start);
+  const regione = params.regione ? String(params.regione).trim().toLowerCase() : null;
+  const items = [];
+  for (const ad of page.ads) {
+    const liv = livelliAnnuncio(ad);
+    if (liv.marca?.id !== String(nodo.marcaId) || liv.modello?.id !== NON_DICHIARATO) continue;
+    if (regione) {
+      const r = ad.geo?.region?.friendly_name;
+      if (r && r.toLowerCase() !== regione) continue;
+    }
+    const m = mapAd(ad);
+    if (!m) continue;
+    // Solo quanto serve a valutare e aprire l'annuncio. Dati del venditore e testo
+    // libero della descrizione non entrano neppure nella risposta separata.
+    items.push({ id: m.id, titolo: m.titolo, url: m.url, prezzo: m.prezzo,
+      prezzoSuRichiesta: m.prezzoSuRichiesta, anno: m.anno, km: m.km });
+  }
+  const fine = start + page.ads.length;
+  const totaleCoerente = page.total != null && page.total >= fine;
+  const limiteRaggiunto = page.ads.length === PAGE_SIZE && fine >= 2500
+    && (!totaleCoerente || fine < page.total);
+  const hasMore = page.ads.length === PAGE_SIZE && !limiteRaggiunto
+    && (!totaleCoerente || fine < page.total);
+  return { items, total: page.total, hasMore, mainNextStart: hasMore ? fine : null, limiteRaggiunto };
+}
+
 // Ricerca ACCESSORI/RICAMBI per keyword libera (OEM o nome pezzo) nelle categorie
 // Accessori Auto (c=5) + Accessori Moto (c=36). Riusa scrapeSubitoApi (path API, no CAPTCHA).
 // La keyword viaggia su `marca` (buildPath fa q=marca+modello). Ritorna item mapAd (shape Subito).
@@ -932,6 +966,7 @@ async function searchAccessori(keyword, opts = {}) {
 
 module.exports = scrapeSubitoApi;
 module.exports.searchAccessori = searchAccessori;
+module.exports.searchSenzaModello = searchSenzaModello;
 module.exports._mapAd = mapAd;
 module.exports._buildPath = buildPath;
 module.exports._extractTotal = extractTotal;   // F50 copertura

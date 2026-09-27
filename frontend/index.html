@@ -302,6 +302,14 @@
       <button class="btn-ghost mt-2" onclick="window.scrollTo({top:0,behavior:'smooth'})">Modifica ricerca</button>
     </div>
 
+    <section id="subitoSenzaModello" class="senza-modello d-none" aria-labelledby="senzaModelloTitolo">
+      <h3 id="senzaModelloTitolo">Subito · modello non dichiarato</h3>
+      <p>Questi annunci dichiarano la marca, ma non il modello. Consultali separatamente: non sono verificati rispetto al modello cercato e non entrano nei risultati, nei conteggi o negli export.</p>
+      <div id="senzaModelloLista" class="senza-modello-lista"></div>
+      <p id="senzaModelloStato" class="senza-modello-stato" role="status" aria-live="polite"></p>
+      <button id="senzaModelloCarica" type="button" class="btn-ghost">Consulta gli annunci</button>
+    </section>
+
     <!-- Resta disponibile anche quando AMR ha filtrato tutti gli annunci della prima pagina. -->
     <div id="caricaAltri" class="carica-altri d-none">
       <button type="button" class="btn-ghost">Carica altro</button>

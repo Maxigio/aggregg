@@ -16,10 +16,10 @@ const salute = require('../backend/fonti-salute');
 const server = require('../backend/server');
 const handler = server.app.router.stack.find(l => l.route?.path === '/api/search').route.stack.at(-1).handle;
 const app = fs.readFileSync(path.join(__dirname, '../frontend/app.js'), 'utf8');
-const codice = app.slice(app.indexOf('let fettaPresa = 0;'), app.indexOf('// ─── Slider prezzo'));
+const codice = app.slice(app.indexOf('let senzaModelloStart = 0;'), app.indexOf('// ─── Slider prezzo'));
 after(() => { sub._setHttpGetJson(null); https.get = get; https.request = request; Date.now = now; salute._reset(); fs.rmSync(dir, { recursive: true, force: true }); });
 
-for (const errore of [503, 429]) test(`recupero iniziale HTTP ${errore}: retry reale solo del ramo mancante, anche dopo scadenza cache`, async () => {
+for (const errore of [503, 429]) test(`ricerca iniziale: nessun recupero automatico anche se il ramo separato darebbe HTTP ${errore}`, async () => {
   salute.azzera();
   let ora = now(), fail = true, asCalls = 0;
   Date.now = () => ora;
@@ -71,15 +71,15 @@ for (const errore of [503, 429]) test(`recupero iniziale HTTP ${errore}: retry r
   });
   vm.runInContext(codice, ctx);
   await ctx.doSearch();
-  assert.equal(ctx.currentResults.length, 0); assert.equal(asCalls, 1);
-  assert.deepEqual(hades, [['nativo', '0'], ['recupero', '0']]);
-  await ctx.caricaAltri(); assert.equal(urls.length, 1, 'la pausa della UI impedisce richieste premature');
+  assert.equal(ctx.currentResults.length, 2); assert.equal(asCalls, 1);
+  assert.deepEqual(hades, [['nativo', '0']]);
+  await ctx.caricaAltri(); assert.equal(urls.length, 1, 'nessuna pagina aggiuntiva richiesta');
   ora += 3_600_000; fail = false;
   await ctx.caricaAltri();
-  assert.deepEqual(statuses, [200, 200]);
-  assert.deepEqual(hades, [['nativo', '0'], ['recupero', '0'], ['recupero', '0']]);
-  assert.equal(asCalls, 1, 'la cache server scaduta non ripete una colonna conservata dal browser');
-  assert.equal(ctx.currentResults.filter(r => r.fonte === 'subito').length, 2);
+  assert.deepEqual(statuses, [200]);
+  assert.deepEqual(hades, [['nativo', '0']]);
+  assert.equal(asCalls, 1);
+  assert.equal(ctx.currentResults.filter(r => r.fonte === 'subito').length, 1);
   assert.equal(ctx.currentResults.filter(r => r.fonte === 'autoscout').length, 1);
   assert.equal(ctx.lastSources.subito.hasMore, false);
   assert.equal(vm.runInContext('fettaPresa', ctx), 0);

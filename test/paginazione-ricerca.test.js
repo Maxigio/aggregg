@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const app = fs.readFileSync(path.join(__dirname, '../frontend/app.js'), 'utf8');
-const pagina = app.slice(app.indexOf('let fettaPresa = 0;'), app.indexOf('\nasync function doSearch()'));
+const pagina = app.slice(app.indexOf('let senzaModelloStart = 0;'), app.indexOf('\nasync function doSearch()'));
 const riga = id => ({ fonte: 'subito', url: `https://www.subito.it/auto/prova-${id}.htm`, prezzo: 1000 + id });
 
 function schermo(risposte, sources = { subito: { status: 'ok', count: 50, totale: 1000, hasMore: true } }) {

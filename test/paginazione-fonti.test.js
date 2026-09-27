@@ -164,7 +164,7 @@ test('i cursori Subito rifiutano offset arbitrari o incompleti', async () => {
   }
 });
 
-test('recupero iniziale a zero ammesso: salta il nativo e non avanza le altre fonti', async () => {
+test('il cursore del vecchio recupero non avvia una richiesta nella ricerca ordinaria', async () => {
   const calls = [];
   subito._setHttpGetJson(async path => {
     const q = new URL('https://test.invalid' + path).searchParams;
@@ -174,11 +174,11 @@ test('recupero iniziale a zero ammesso: salta il nativo e non avanza le altre fo
   const r = await server._amrSearchFn({ tipo: 'auto', marca: 'Fiat', modello: 'Panda',
     fetta: '0', fonti: 'subito', subitoMainStart: '-1', subitoRecuperoStart: '0' });
   assert.equal(r.error, undefined);
-  assert.deepEqual(calls, [['000000', '0']]);
+  assert.deepEqual(calls, []);
   assert.equal(r.sources.subito.hasMore, false);
 });
 
-test('retry con cursore Subito diverso riusa AutoScout, ma un filtro diverso no', async () => {
+test('un cursore nativo Subito diverso cambia la richiesta; il filtro diverso non riusa cache', async () => {
   let asCalls = 0;
   subito._setHttpGetJson(async path => {
     const q = new URL('https://test.invalid' + path).searchParams;
@@ -200,12 +200,12 @@ test('retry con cursore Subito diverso riusa AutoScout, ma un filtro diverso no'
   const q = { tipo: 'auto', marca: 'Fiat', modello: 'Panda', fetta: '17',
     fonti: 'subito,autoscout', subitoMainStart: '50', subitoRecuperoStart: '50' };
   const r = await server._amrSearchFn(q);
-  assert.equal(r.sources.subito.parzialeRete, true);
+  assert.equal(r.sources.subito.parzialeRete, null);
   assert.equal(asCalls, 1);
   await server._amrSearchFn({ ...q, subitoMainStart: '-1' });
-  assert.equal(asCalls, 1, 'stessa pagina AutoScout non dipende dal cursore Subito');
+  assert.equal(asCalls, 2, 'non c\'e\' una pagina incompleta da riprovare o una colonna da conservare');
   await server._amrSearchFn({ ...q, subitoMainStart: '-1', prezzoMin: '123' });
-  assert.equal(asCalls, 2, 'filtri diversi non condividono la colonna');
+  assert.equal(asCalls, 3, 'filtri diversi non condividono la colonna');
 });
 
 test('riallargamento AutoScout respinto: conserva HTTP e tipo per riprovare la pagina', async () => {
