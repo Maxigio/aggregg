@@ -185,26 +185,6 @@ test('cache-disco: il file vero non si tocca finche\' la copia nuova non e\' com
   }
 });
 
-// ─── Ricambi: zero articoli "sospetti" non e' zero articoli ──────────────────
-test('ricambi: una fonte che dichiara di non aver letto NON esce come "empty"', async () => {
-  const { searchRicambi } = require('../backend/ricambi-core');
-  const vuoto = async () => ({ articoli: [] });
-  const base = { subito: vuoto, ebay: vuoto, cmsnl: vuoto, web: vuoto, ebaySpecs: async () => ({}) };
-
-  // Autodoc ha risposto zero SENZA sospetti: e' un fatto sul catalogo.
-  const onesto = await searchRicambi('1K0905851B', { ...base, autodoc: vuoto });
-  assert.strictEqual(onesto.sources.autodoc.status, 'empty');
-
-  // Autodoc ha risposto zero ma sa di non aver letto l'elenco: non e' un fatto.
-  const sospetto = await searchRicambi('1K0905851B', {
-    ...base,
-    autodoc: async () => ({ articoli: [], sospetto: 'nessun elemento di listino nella pagina' }),
-  });
-  assert.strictEqual(sospetto.sources.autodoc.status, 'error',
-    'con "empty" a schermo comparirebbe "Ricambio non presente nel catalogo Autodoc"');
-  assert.match(sospetto.sources.autodoc.reason, /listino/);
-});
-
 // ─── Ricerche salvate: un controllo con una fonte muta non e' un controllo ───
 test('saved: le fonti mute restano nel record e arrivano alla lista', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-mute-'));
@@ -722,12 +702,12 @@ test('contesto: ogni punto che riempie la griglia passa dall\'azzeramento', () =
 });
 
 test('contesto: ogni porta d\'ingresso sincronizza i filtri auto con la funzione unica', () => {
-  // Le porte sono quattro — init, il change del tipo (registrato dentro init),
-  // applyUrlParams e setSearchMode — e la visibilita' delle otto tendine la decide UNA
+  // Init, il cambio del tipo, applyUrlParams e selectPrimary usano la stessa regola:
+  // la visibilita' delle otto tendine la decide UNA
   // funzione. Con una copia inline del toggle le due regole sarebbero tornate a divergere;
   // con una porta che non chiama, le tendine di un altro contesto restano a schermo e la
   // scelta si perde in silenzio (filtriAutoScelti si legge solo nel ramo tipo==='auto').
-  for (const f of ['async function applyUrlParams(', 'function setSearchMode(']) {
+  for (const f of ['async function applyUrlParams(', 'function selectPrimary(']) {
     assert.ok(/sincronizzaFiltriAuto\(/.test(corpoDi(APP, f)),
       `${f}...) non chiama sincronizzaFiltriAuto: quella porta lascia i filtri del contesto di prima`);
   }
@@ -1012,7 +992,7 @@ test('cache: TUTTE le cache su disco passano dal modulo comune', () => {
   // Il modulo fa tre cose che ogni copia scritta a mano si dimenticava: numero di schema,
   // tetto alle voci, e scrittura accanto ai dati utente (nel pacchetto Electron la cartella
   // dell'app e' di sola lettura, e il `catch` vuoto ingoiava l'errore).
-  // TUTTO backend/, non solo backend/scrapers/: la nona cache stava in backend/carburanti.js
+  // TUTTO backend/, non solo backend/scrapers/: una cache sta in backend/carburanti.js
   // e questo test non la vedeva. Non l'ha trovata il test, l'ha trovata un numero che non
   // cambiava — cambiare come si conta e non vederlo a schermo, perche' l'indice vecchio
   // usciva da una cache senza numero di schema.
@@ -1026,7 +1006,7 @@ test('cache: TUTTE le cache su disco passano dal modulo comune', () => {
       if (/const CACHE_FILE\s*=/.test(fs.readFileSync(p, 'utf8'))) files.push(p);
     }
   }
-  assert.ok(files.length >= 9, `attese almeno 9 cache su disco, trovate ${files.length}`);
+  assert.ok(files.length >= 8, `attese almeno 8 cache su disco, trovate ${files.length}`);
   for (const f of files) {
     const src = fs.readFileSync(f, 'utf8');
     assert.match(src, /cacheDisco\.crea\(/, `${path.basename(f)} ha una cache su disco che non passa dal modulo comune`);
@@ -1156,9 +1136,6 @@ test('minori: un errore non si mette in cache', () => {
     'le rotte richiami rimettono un\'ora di cache su un "archivio non costruito"');
   assert.match(richiami, /if \(out && !nonPronto\) res\.set\('Cache-Control', 'public, max-age=3600'\)/,
     'l\'ora di cache va SOLO su una risposta pronta');
-  const ebay = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ebay-scrape.js'), 'utf8');
-  assert.ok(!/item details[\s\S]{0,80}return \{\}/.test(codice(ebay)),
-    'un 403 di eBay torna a diventare una scheda vuota, che il chiamante cacha per un\'ora');
   assert.ok(!/catch \{ modelCache\[key\] = \[\]; \}/.test(codice(APP)),
     'una risposta mancata di /api/models torna a spegnere la tendina per tutta la sessione');
 });
@@ -1498,62 +1475,14 @@ test('l\'arricchimento che non porta niente non marca l\'annuncio come arricchit
     '_enriched si mette solo se qualcosa e\' arrivato davvero');
 });
 
-const bancoModi = () => {
-  const classi = new Set(), memo = {};
-  const finto = () => {
-    const cls = new Set();
-    return { classList: {
-      add: c => cls.add(c), remove: c => cls.delete(c),
-      toggle: (c, on) => on ? cls.add(c) : cls.delete(c),
-    } };
-  };
-  const document = {
-    querySelector: k => (memo[k] ||= finto()),
-    getElementById: k => (memo[k] ||= finto()),
-  };
-  const AREE = { aste: {
-    pannello: 'astePanel', apri: () => classi.add('has-results'), chiudi: () => {},
-  } };
-  const scope = { document, AREE, area: k => AREE[k],
-    localStorage: { setItem() {} },
-    hideResults: () => classi.delete('has-results'),
-    currentTipo: () => 'auto', sincronizzaFiltriAuto: () => {},
-    btnCerca: { textContent: '' }, marcaSelect: {}, modelloSelect: {},
-  };
-  const body = 'let searchMode = "cerca";\n' + corpoDi(APP, 'function setSearchMode(') + '\n}\n'
-    + 'return m => setSearchMode(m);';
-  return { classi, vai: new Function(...Object.keys(scope), body)(...Object.values(scope)) };
-};
-
-test('contesto: uscendo da un\'area la pagina torna allo stato-vuoto, non resta nel layout post-ricerca', () => {
-  // `has-results` la mettono le apri() delle aree e la toglie SOLO hideResults(). Sulla via
-  // Aste → Auto non ci passava nessuno: il radio del tipo e' gia' checked (il suo change, che
-  // chiama hideResults, non parte), il ramo dei Ricambi non scatta e quello dell'INGRESSO in
-  // un'area nemmeno. Restava la barra compatta in cima (body.has-results .search), lo sfondo
-  // dello stato-vuoto spento e la pagina vuota sotto, fino alla ricerca successiva.
-  const aste = bancoModi();
-  aste.vai('aste');
-  assert.ok(aste.classi.has('has-results'), 'entrando nelle Aste il body non passa piu\' a has-results: il test non proverebbe niente');
-  aste.vai('cerca');
-  assert.ok(!aste.classi.has('has-results'),
-    'tornando su Auto dalle Aste `has-results` resta addosso al body: barra schiacciata in cima, sfondo spento, pagina vuota sotto');
-
-  // E chi NON viene da un'area non deve perdere i risultati che ha a schermo: un clic su
-  // «Auto» gia' attivo ripassa di qui con prev === 'cerca'.
-  const dopo = bancoModi();
-  dopo.vai('cerca'); dopo.classi.add('has-results');
-  dopo.vai('cerca');
-  assert.ok(dopo.classi.has('has-results'), 'un clic sul modo gia\' attivo spazza via i risultati della ricerca');
-});
-
 // ─── Quel che il dato sa di se' arriva a schermo ─────────────────────────────
 test('passaggio: i kW STIMATI dai CV si dichiarano, non si spacciano per misurati', () => {
   // `potenzaStimata` viaggiava nella risposta e a schermo non la leggeva nessuno (rg su
   // frontend/: zero): l'importo IPT usciva identico a quello calcolato su kW veri, mentre
   // nasce da una conversione. `avvisi` e' il canale gia' montato (passAvvisiHTML, ramo di
   // successo compreso), quindi la stima passa di li' senza inventare una riga nuova.
-  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8'));
-  const blocco = srv.slice(srv.indexOf('const kwStimati'), srv.indexOf('if (r.ok) res.set'));
+  const rotte = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'veicolo-dati-route.js'), 'utf8'));
+  const blocco = rotte.slice(rotte.indexOf('const kwStimati'), rotte.indexOf('if (r.ok) res.set'));
   assert.ok(/r\.potenzaStimata = /.test(blocco), 'la stima non viaggia piu\' nella risposta');
   assert.ok(/r\.avvisi = \[/.test(blocco) && /STIMATI/.test(blocco),
     'la stima non entra negli avvisi: a schermo l\'importo torna indistinguibile da uno su kW veri');
@@ -1604,24 +1533,6 @@ test('autoscout: la ricerca Auto/Moto resta GraphQL anche quando fallisce', () =
   assert.match(union, /if \(errori\.length && byUrl\.size === 0\) throw errori\[0\]/);
   assert.doesNotMatch(srv, /require\(['"]\.\/scrapers\/autoscout-playwright['"]\)|USE_AS24_GRAPHQL/);
   assert.match(srv, /runSource\(\(\) => scrapeAutoscoutUnion/);
-});
-
-test('ebay: una serp senza risultati esatti non e\' un elenco di offerte', () => {
-  // In modo OEM il filtro di pertinenza e' escluso di proposito (l'OEN quasi mai sta nel
-  // titolo): senza guardia, i SUGGERITI di eBay entravano come offerte del codice cercato.
-  const src = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'ebay-scrape.js'), 'utf8'));
-  assert.ok(/srp-save-null-search/.test(src), 'la guardia sulla serp nulla e\' sparita');
-  assert.ok(/if \(nulla\) return \[\]/.test(src), 'con zero risultati esatti la lista deve essere vuota');
-  // La regola dell'intestazione, ESEGUITA: senza confine, «1.230 risultati» conterrebbe
-  // «0 risultati» e una serp piena verrebbe azzerata.
-  const re = /nessun risultato esatto|non ha prodotto risultati|(^|[^\d])0\s+risultati/i;
-  assert.ok(src.includes(String(re.source)), 'la regex del test non e\' piu\' quella del codice');
-  for (const piena of ['1.230 risultati', '10 risultati', '4.507 risultati per ricambio']) {
-    assert.ok(!re.test(piena), `"${piena}" e' una serp PIENA e non va azzerata`);
-  }
-  for (const vuota of ['0 risultati', 'Nessun risultato esatto trovato']) {
-    assert.ok(re.test(vuota), `"${vuota}" e' una serp nulla`);
-  }
 });
 
 // ─── Una regola scritta una volta, e la leggono tutti ────────────────────────
@@ -1759,322 +1670,6 @@ test('scheda tecnica: il numero di prova di auto.it non entra grezzo nella pagin
   assert.match(SCRAPER, /const testo = v => \{ const t = String\(v == null \? '' : v\)\.trim\(\);/,
     '`testo()` e\' cambiato: se adesso sanifica, questa prova va riscritta; se non lo fa, resta com\'e\'');
 });
-
-// ─── Il portale delle aste: una forma che non si legge non e' un inventario ──────────────────
-test('pvp: una paginazione illeggibile non diventa «inventario completo»', async () => {
-  const { EventEmitter } = require('events');
-  const https = require('https');
-  const pvp = require('../backend/scrapers/pvp');
-  const TOT = 1000, PAG = 200;
-
-  // La fonte finta: 1000 lotti veri e paginati, e `totalElements` nella forma che decide il caso.
-  let forma = 'numero';
-  const veroRequest = https.request;
-  https.request = (opts, cb) => {
-    const req = new EventEmitter();
-    req.setTimeout = () => {}; req.write = () => {}; req.destroy = () => {};
-    req.end = () => {
-      const res = new EventEmitter();
-      res.statusCode = 200; res.setEncoding = () => {};
-      let payload;
-      if (opts.path.includes('fe-config')) {
-        payload = { msUrl: { ricerca: 'ric-x/ric-ms', vendite: 'ven-x/ven-ms' } };
-      } else {
-        const page = Number((opts.path.match(/[?&]page=(\d+)/) || [])[1] || 0);
-        const da = page * PAG;
-        // 'vuotaAMeta': 200 con zero risultati a meta' paginazione, e `last` che NON lo dice —
-        // un nodo di bordo che riparte durante i ~15 s del giro.
-        const vuota = forma === 'vuotaAMeta' && page === 1;
-        const content = vuota ? [] : Array.from({ length: Math.max(0, Math.min(da + PAG, TOT) - da) },
-          (_, i) => ({ idLotto: da + i, descLotto: 'lotto di prova' }));
-        const ultima = !vuota && da + PAG >= TOT;
-        const b = { content, last: ultima };
-        if (forma === 'numero' || forma === 'vuotaAMeta') b.totalElements = TOT;
-        if (forma === 'stringa') b.totalElements = String(TOT);
-        // 'involucro': la stessa risposta senza il guscio `{body:{...}}` che ci aspettiamo.
-        payload = forma === 'involucro' ? { content, last: ultima, totalElements: TOT } : { body: b };
-      }
-      setImmediate(() => { cb(res); res.emit('data', JSON.stringify(payload)); res.emit('end'); });
-    };
-    return req;
-  };
-
-  try {
-    forma = 'numero'; pvp._test.resetCache();
-    assert.strictEqual((await pvp.tutti('auto', { pausaMs: 0 })).lotti.length, TOT,
-      'con il totale nella forma attesa si scarica tutto: se questo fallisce e\' rotta la finta fonte');
-
-    // "1000" invece di 1000: `totale` diventava 0, e `out.length >= 0` chiudeva il giro dopo la
-    // PRIMA pagina. 200 lotti su 1000 con `troncato:false` e nessun avviso — e siccome la ricerca
-    // chiede le vendite in ordine di data crescente, quei 200 sono i PIU' VECCHI: il filtro sulle
-    // vendite future in aste.js li scarta tutti, il magazzino si svuota e il giro si dichiara «ok».
-    forma = 'stringa'; pvp._test.resetCache();
-    const s = await pvp.tutti('auto', { pausaMs: 0 });
-    assert.strictEqual(s.lotti.length, TOT,
-      'un totale in forma diversa non e\' un inventario da 200: si pagina fino in fondo');
-
-    // L'involucro cambiato non vuol dire «zero lotti»: vuol dire che la fonte non sappiamo piu'
-    // leggerla. Tornare una pagina vuota e' indistinguibile da «oggi non ci sono aste», e a valle
-    // marca sparito tutto il magazzino scrivendo esito 'ok'.
-    forma = 'involucro'; pvp._test.resetCache();
-    await assert.rejects(() => pvp.tutti('auto', { pausaMs: 0 }), /involucro cambiato/,
-      'una risposta senza `content` deve dichiararsi, non passare per inventario vuoto e completo');
-
-    // LA PORTA GEMELLA, dall'altro ramo di `ultima`. Una pagina vuota a meta' e' l'uscita normale
-    // della paginazione, quindi `tutti()` usciva con 200 lotti su 1000 e `troncato:false`, cioe'
-    // «ho preso tutto»: il numero che smaschera la bugia (`totalElements`) ce l'aveva gia' in mano
-    // e non lo guardava. A valle e' lo stesso danno del caso qui sopra — inventario sostituito con
-    // quel poco, il resto marcato sparito, giro 'ok' e «aggiornato oggi» per 24 ore.
-    forma = 'vuotaAMeta'; pvp._test.resetCache();
-    await assert.rejects(() => pvp.tutti('auto', { pausaMs: 0 }), /paginazione interrotta/,
-      'meta\' inventario non si consegna come completo: l\'uscita anticipata si dichiara');
-  } finally { https.request = veroRequest; pvp._test.resetCache(); }
-});
-
-// ─── Il portale delle aste: un percorso morto si riscopre, non si ribatte per sei ore ────────
-test('pvp: un endpoint che non risponde piu\' fa ripartire la scoperta, non sei ore di KO', async () => {
-  const { EventEmitter } = require('events');
-  const https = require('https');
-  const pvp = require('../backend/scrapers/pvp');
-
-  // Il ministero rilascia e gli hash nei percorsi cambiano (punto 2 dell'intestazione di pvp.js):
-  // i percorsi della versione precedente diventano morti, quelli nuovi rispondono i lotti.
-  let versione = 1, forma = 404, feConfig = 0;
-  const ep = () => ({ ricerca: `ric-v${versione}/ric-ms`, vendite: `ve-v${versione}/ve-ms` });
-  const veroRequest = https.request;
-  https.request = (opts, cb) => {
-    const req = new EventEmitter();
-    req.setTimeout = () => {}; req.write = () => {}; req.destroy = () => {};
-    req.end = () => {
-      const res = new EventEmitter();
-      res.statusCode = 200; res.setEncoding = () => {};
-      let payload;
-      if (opts.path.includes('fe-config')) { feConfig++; payload = JSON.stringify({ msUrl: ep() }); }
-      else if (!opts.path.startsWith(`/${ep().ricerca}`) && !opts.path.startsWith(`/${ep().vendite}`)) {
-        // Le due forme in cui il portale dice «endpoint spostato»: il non-200 e l'HTML al posto del JSON.
-        if (forma === 404) { res.statusCode = 404; payload = '{"error":"not found"}'; }
-        else payload = '<!doctype html><html><body>PVP</body></html>';
-      } else payload = JSON.stringify({ body: { content: [{ idLotto: 7 }], last: true, totalElements: 1 } });
-      setImmediate(() => { cb(res); res.emit('data', payload); res.emit('end'); });
-    };
-    return req;
-  };
-
-  try {
-    for (const caso of [404, 'html']) {
-      versione = 1; forma = caso; feConfig = 0; pvp._test.resetCache();
-      assert.strictEqual((await pvp.pagina('auto')).lotti.length, 1,
-        'con gli endpoint vivi si legge la pagina: se questo fallisce e\' rotta la finta fonte');
-      assert.strictEqual(feConfig, 1, 'finche\' i percorsi funzionano si scoprono una volta sola');
-
-      versione = 2;                          // il rilascio: i percorsi in cache adesso sono morti
-      await assert.rejects(() => pvp.pagina('auto'), caso === 404 ? /HTTP 404/ : /non-JSON/,
-        'un percorso che non risponde piu\' deve dichiararsi, non fingere una pagina');
-      // E deve portarsi via la cache: la chiamata dopo riscopre gli endpoint e RIESCE. Senza,
-      // si ribatte lo stesso percorso morto fino alla scadenza del TTL — sei ore in cui ogni giro
-      // va KO, le due rotte delle aste rispondono 502 e il controllo orario ricasca sempre li'.
-      assert.strictEqual((await pvp.pagina('auto')).lotti.length, 1,
-        `dopo un rilascio (${caso}) la riscoperta non riparte: sono sei ore di KO`);
-      assert.strictEqual(feConfig, 2, 'la riscoperta costa UNA chiamata a fe-config, non una per richiesta');
-    }
-  } finally { https.request = veroRequest; pvp._test.resetCache(); }
-});
-
-// ─── Il portale delle aste: un guasto non e' «il ministero ha cambiato la pagina» ────────────
-test('pvp: un portale che sta male si dichiara, non passa per «endpoint spostato»', async () => {
-  const { EventEmitter } = require('events');
-  const https = require('https');
-  const pvp = require('../backend/scrapers/pvp');
-  const BO_NUOVO = 'bo-aaaaaaaa-bbbbbbbb';
-
-  // I DUE percorsi della scoperta: `fe-config` sotto il prefisso di backoffice, e la pagina
-  // pubblica da cui il prefisso si ripesca. Quando il portale degrada cadono insieme, ed e'
-  // li' che il messaggio mentiva: il fallimento della riscoperta copriva il guasto vero.
-  let feConfig, paginaPub;
-  const veroRequest = https.request;
-  https.request = (opts, cb) => {
-    const req = new EventEmitter();
-    req.setTimeout = () => {}; req.write = () => {}; req.destroy = () => {};
-    req.end = () => {
-      const res = new EventEmitter();
-      res.setEncoding = () => {};
-      const r = opts.path.includes('fe-config')
-        ? (opts.path.startsWith(`/${BO_NUOVO}/`)
-            ? { status: 200, body: JSON.stringify({ msUrl: { ricerca: 'ric-x/ric-ms', vendite: 'ven-x/ven-ms' } }) }
-            : feConfig)
-        : opts.path.includes('lista_annunci.page') ? paginaPub
-        : { status: 200, body: JSON.stringify({ body: { content: [{ idLotto: 7 }], last: true, totalElements: 1 } }) };
-      res.statusCode = r.status;
-      setImmediate(() => { cb(res); res.emit('data', r.body); res.emit('end'); });
-    };
-    return req;
-  };
-
-  const CORTESIA = '<!doctype html><html><body>Servizio temporaneamente non disponibile</body></html>';
-  try {
-    // Manutenzione su tutt'e due i percorsi. Il 503 deve arrivare fino a `giri.motivo` e al 502
-    // delle rotte: se al suo posto si legge «prefisso non trovato», si va a riscrivere lo
-    // scraper per un guasto di dieci minuti.
-    feConfig = { status: 503, body: CORTESIA }; paginaPub = { status: 503, body: CORTESIA };
-    pvp._test.resetCache();
-    await assert.rejects(() => pvp.pagina('auto'), e => {
-      assert.match(e.message, /HTTP 503/, `il 503 del portale e' sparito dal motivo: ${e.message}`);
-      assert.doesNotMatch(e.message, /^PVP: prefisso backoffice/,
-        `una manutenzione viene riportata come rilascio del ministero: ${e.message}`);
-      return true;
-    });
-
-    // Stessa cosa con una pagina di blocco: il genere resta quello dello stato vero.
-    feConfig = { status: 403, body: CORTESIA }; paginaPub = { status: 403, body: CORTESIA };
-    pvp._test.resetCache();
-    await assert.rejects(() => pvp.pagina('auto'), e => {
-      assert.match(e.message, /HTTP 403/, `il 403 e' sparito dal motivo: ${e.message}`);
-      assert.strictEqual(e.kind, 'blocked', 'un blocco non si degrada in «endpoint cambiato»');
-      return true;
-    });
-
-    // E se solo `fe-config` cade mentre la pagina risponde 200 ma senza il pattern, la causa
-    // vera resta in testa e il fallimento della riscoperta la segue: nessuna delle due si perde.
-    feConfig = { status: 502, body: '' }; paginaPub = { status: 200, body: '<html></html>' };
-    pvp._test.resetCache();
-    await assert.rejects(() => pvp.pagina('auto'), e => {
-      assert.match(e.message, /^PVP \/bo-[^:]+: HTTP 502/, `la causa vera non e' in testa: ${e.message}`);
-      assert.match(e.message, /prefisso backoffice non trovato/, `la riscoperta fallita non e' detta: ${e.message}`);
-      return true;
-    });
-
-    // Controprova: il meccanismo che il codice VUOLE fare resta intero. Seme scaduto (404) ma
-    // pagina pubblica viva: si ripesca il prefisso nuovo e si riprende, senza errori.
-    feConfig = { status: 404, body: '{"error":"not found"}' };
-    paginaPub = { status: 200, body: `<html><script src="/${BO_NUOVO}/bo-ms/main.js"></script></html>` };
-    pvp._test.resetCache();
-    assert.strictEqual((await pvp.pagina('auto')).lotti.length, 1,
-      'con la pagina pubblica viva il prefisso si ripesca e il giro riprende');
-  } finally { https.request = veroRequest; pvp._test.resetCache(); }
-});
-
-// ─── L'area Aste: una fonte muta non e' un inventario vuoto ──────────────────────────────────
-
-/** La fonte finta del portale: `vuoto` decide se risponde con i lotti o con zero risultati. */
-function pvpFinto(lotti, quandoVuoto) {
-  const { EventEmitter } = require('events');
-  const https = require('https');
-  const vero = https.request;
-  https.request = (opts, cb) => {
-    const req = new EventEmitter();
-    req.setTimeout = () => {}; req.write = () => {}; req.destroy = () => {};
-    req.end = () => {
-      const res = new EventEmitter();
-      res.statusCode = 200; res.setEncoding = () => {};
-      // L'involucro e' SEMPRE quello giusto: e' il caso che nessun controllo di forma intercetta.
-      const content = quandoVuoto() ? [] : lotti;
-      const payload = String(opts.path).includes('fe-config')
-        ? { msUrl: { ricerca: 'ric-x/ric-ms', vendite: 'ven-x/ven-ms' } }
-        : { body: { content, last: true, totalElements: content.length } };
-      setImmediate(() => { cb(res); res.emit('data', JSON.stringify(payload)); res.emit('end'); });
-    };
-    return req;
-  };
-  return () => { https.request = vero; };
-}
-
-/** Moduli dell'area Aste freschi, su una cartella dati tutta loro. */
-function conAste(fn) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-aste-muta-'));
-  const prima = process.env.USER_DATA_PATH;
-  process.env.USER_DATA_PATH = dir;
-  for (const m of ['../backend/aste-db', '../backend/scrapers/pvp', '../backend/aste']) {
-    delete require.cache[require.resolve(m)];
-  }
-  const mod = {
-    db: require('../backend/aste-db'),
-    pvp: require('../backend/scrapers/pvp'),
-    aste: require('../backend/aste'),
-  };
-  const chiudi = () => {
-    mod.aste._reset(); mod.db._reset(); mod.pvp._test.resetCache();
-    if (prima == null) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = prima;
-  };
-  return Promise.resolve(fn(mod)).finally(chiudi);
-}
-
-const fraGiorniAste = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
-// Gli stessi due lotti valgono per auto e per moto: la chiave e' (id, tipo), quindi fanno 4 righe.
-const LOTTI_PVP = [
-  { id: 2001, descLotto: 'Autovettura Fiat Panda', dataVendita: fraGiorniAste(30),
-    indirizzo: { citta: 'Verona', provincia: 'Verona' } },
-  { id: 2002, descLotto: 'Motociclo Yamaha XMAX', dataVendita: fraGiorniAste(40),
-    indirizzo: { citta: 'Trento', provincia: 'Trento' } },
-];
-
-test('aste: un 200 con zero lotti non marca sparito tutto il magazzino', () => conAste(async ({ db, aste }) => {
-  let vuoto = false;
-  const ripristina = pvpFinto(LOTTI_PVP, () => vuoto);
-  try {
-    assert.strictEqual((await aste.giro({ pausaMs: 0 })).ok, true,
-      'il giro sano deve riuscire: se fallisce e\' rotta la fonte finta, non il codice');
-    assert.strictEqual(db.cerca().length, 4, 'due lotti per tipo, chiave (id, tipo)');
-
-    /**
-     * Il ministero rinomina un enum del corpo della ricerca: 200, involucro giusto, zero
-     * risultati. Nessun controllo di FORMA lo intercetta — la forma e' perfetta. Prima di questa
-     * guardia il giro marcava sparito tutto l'inventario e si scriveva 'ok', e l'area restava
-     * vuota e muta, timbrata «aggiornato oggi», fino al giorno dopo.
-     */
-    vuoto = true;
-    const g = await aste.giro({ pausaMs: 0 });
-    assert.strictEqual(g.ok, false,
-      'una fonte che non da\' piu\' niente e\' un giro FALLITO, non un inventario vuoto');
-    assert.strictEqual(db.cerca().length, 4, 'il magazzino non si svuota su una risposta muta');
-    assert.strictEqual(db.unLotto(2001, 'auto').sparito, false,
-      'nessun lotto va marcato sparito per colpa di una risposta che non abbiamo capito');
-    // E il giro muto non deve nemmeno rubare il posto all'ultimo giro RIUSCITO: e' da quello che
-    // `stantio()` decide se riprovare, e un 'ok' falso spegnerebbe i tentativi per un giorno.
-    assert.strictEqual(db.ultimoGiro().visti, 4,
-      'l\'ultimo giro riuscito resta quello buono');
-  } finally { ripristina(); }
-}));
-
-test('aste: un tipo guasto non porta via il tipo che viene dopo', () => conAste(async ({ db, pvp, aste }) => {
-  /**
-   * `Object.keys(pvp.TIPOLOGIE)` conserva l'ordine d'inserimento, quindi il giro e' SEMPRE
-   * ['auto','moto'] ed e' sempre 'moto' a pagare un guasto delle auto — che sono ~25 pagine
-   * contro 6, cioe' quattro volte le occasioni di cadere. Senza la guardia per tipo le moto non
-   * venivano nemmeno CHIESTE, e siccome le auto restano stantie il giro dopo ricadeva li': a
-   * ogni giro, per sempre. `stantioTipo` copre solo la direzione opposta.
-   */
-  const vero = pvp.tutti;
-  const chiesti = [];
-  pvp.tutti = async (tipo) => {
-    chiesti.push(tipo);
-    if (tipo === 'auto') { const e = new Error('PVP /ricerca/vendite: HTTP 500'); e.kind = 'transient'; throw e; }
-    return { lotti: LOTTI_PVP, totale: LOTTI_PVP.length, troncato: false };
-  };
-  try {
-    const g = await aste.giro({ pausaMs: 0 });
-    assert.deepStrictEqual(chiesti, ['auto', 'moto'],
-      'il tipo DOPO quello guasto deve essere chiesto lo stesso');
-    assert.strictEqual(db.cerca({ tipo: 'moto' }).length, 2,
-      'le moto si aggiornano anche col giro delle auto caduto');
-    assert.deepStrictEqual(db.cerca({ tipo: 'auto' }), [],
-      'il magazzino del tipo guasto non si tocca');
-    // Un giro a meta' resta KO: e' `stantio()` a far riprovare, e un 'ok' falso timbrerebbe
-    // «aggiornato oggi» un inventario in cui manca un tipo intero.
-    assert.strictEqual(g.ok, false, 'un tipo caduto e\' un giro fallito, non un giro riuscito');
-    assert.match(g.motivo, /HTTP 500/, 'il motivo del tipo caduto non si perde per strada');
-    assert.strictEqual(db.ultimoGiro(), null, 'nessun giro RIUSCITO da un giro a meta\'');
-  } finally { pvp.tutti = vero; }
-}));
-
-test('aste: il primo giro in assoluto non e\' bloccato dalla guardia', () => conAste(async ({ db, aste }) => {
-  // Magazzino vuoto e portale senza lotti: non c'e' niente da difendere, e un giro che non trova
-  // nulla al primo colpo deve poter dire 'ok' — se no l'area non partirebbe mai.
-  const ripristina = pvpFinto(LOTTI_PVP, () => true);
-  try {
-    assert.strictEqual((await aste.giro({ pausaMs: 0 })).ok, true);
-    assert.deepStrictEqual(db.cerca(), []);
-  } finally { ripristina(); }
-}));
 
 test('le ricerche salvate non avviano piu\' controlli periodici', () => {
   const srv = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');

@@ -4,15 +4,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-// Eseguiamo il vero handler senza avviare server o leggere credenziali.
-const src = fs.readFileSync(path.join(__dirname, '../backend/server.js'), 'utf8');
-const start = src.indexOf("app.post('/api/report-pdf',");
+// Montiamo la rotta vera senza avviare server o leggere credenziali.
 test('il limite PDF rifiuta la troncatura e lascia integro un export ammesso', () => {
   let handler, render = 0, righe, avvisi;
-  vm.runInNewContext(src.slice(start, src.indexOf('\n});', start) + 4), {
-    app: { post: (_url, ...hs) => { handler = hs.at(-1); } }, express: { json: () => () => {} },
+  require('../backend/report-route').mount({ post: (url, ...hs) => {
+    if (url === '/api/report-pdf') handler = hs.at(-1);
+  } }, {
     limitePdf: { consuma: () => ({ ok: true }) }, chiaveLimite: () => 'test',
-    renderReportPdf: (_r, _p, x) => { render++; righe = x.righe; avvisi = x.avvisi; return Buffer.from('pdf'); }, console,
+    renderReportPdf: (_r, _p, x) => { render++; righe = x.righe; avvisi = x.avvisi; return Buffer.from('pdf'); },
   });
   const res = () => ({ code: 200, status(c) { this.code = c; return this; }, json(x) { this.body = x; return this; }, setHeader() {}, send(x) { this.body = x; } });
   const troppi = res(); handler({ body: { righe: Array.from({ length: 2001 }, (_, i) => [i]) } }, troppi);
@@ -30,8 +29,8 @@ test('il limite PDF rifiuta la troncatura e lascia integro un export ammesso', (
 
 test('il PDF prodotto conserva gli avvisi anche con sottotitolo lungo e avvisi su più pagine', () => {
   const { renderReportPdf } = require('../backend/report-pdf');
-  const base = { titolo: 'Report ricambi', sottotitolo: 'Compatibilita modello sintetico '.repeat(30),
-    colonne: ['Fonte', 'Ricambio'], righe: [['Subito', 'ULTIMA-RIGA']], colonneStile: {}, fonti: ['subito'] };
+  const base = { titolo: 'Report annunci', sottotitolo: 'Criteri di ricerca sintetici '.repeat(30),
+    colonne: ['Fonte', 'Annuncio'], righe: [['Subito', 'ULTIMA-RIGA']], colonneStile: {}, fonti: ['subito'] };
   for (const avvisi of [
     ['Prima pagina, copertura parziale.', 'Totale grezzo: 75.', 'Prezzo non leggibile.'],
     Array.from({ length: 10 }, (_, i) => `AVVISO-${i} ` + 'Testo completo senza troncatura. '.repeat(12)),
@@ -40,14 +39,6 @@ test('il PDF prodotto conserva gli avvisi anche con sottotitolo lungo e avvisi s
     assert.match(pdf, /ULTIMA-RIGA/);
     for (const a of avvisi) assert.ok(pdf.includes(a.split(' ').slice(0, 2).join(' ')), a);
   }
-});
-
-test('il compositore PDF lato server usa gli stessi stati prezzo del browser', () => {
-  const { tabellaRicambi } = require('../backend/report-pdf');
-  const righe = tabellaRicambi([{ prezzo: null }, { prezzo: null, prezzoIlleggibile: true },
-    { prezzo: null, prezzoSuRichiesta: true }, { prezzo: 0 }, { prezzo: 25 }]
-    .map(a => ({ fonte: 'subito', ...a }))).righe;
-  assert.deepEqual(righe.map(r => r[3]), ['prezzo non indicato', 'prezzo non leggibile', 'su richiesta', '€ 0,00', '€ 25,00']);
 });
 
 test('la UI mostra il motivo del rifiuto PDF, non soltanto HTTP 400', async () => {

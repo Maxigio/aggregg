@@ -29,8 +29,8 @@ const filtriAuto = require('../filtri-auto');         // filtri avanzati auto �
 const { risolvi: risolviProvincia } = require('../province-sigla'); // il risolutore unico: la provincia e' una sigla
 
 const HOST = 'hades.subito.it';
-// Categorie hades (macro Motori=1). accessoriAuto/Moto scoperti live 2026-07-07 per la sezione Ricambi.
-const CAT = { auto: '2', moto: '3', accessoriAuto: '5', accessoriMoto: '36' };
+// Categorie Hades della ricerca Auto e Moto.
+const CAT = { auto: '2', moto: '3' };
 const PAGE_SIZE = 50;
 const MAX_PAGES = 1;            // una pagina Hades per ricerca; la successiva si chiede con "Carica altri annunci"
 const TIMEOUT_MS = 12000;
@@ -906,45 +906,7 @@ async function scrapeSubitoApi(params, opts = {}) {
     erroreTipo, erroreHttp, erroreCodice, bloccoParziale, erroriSubito } : out;
 }
 
-// Ricerca ACCESSORI/RICAMBI per keyword libera (OEM o nome pezzo) nelle categorie
-// Accessori Auto (c=5) + Accessori Moto (c=36). Riusa scrapeSubitoApi (path API, no CAPTCHA).
-// La keyword viaggia su `marca` (buildPath fa q=marca+modello). Ritorna item mapAd (shape Subito).
-// opts.cat = 'auto' | 'moto' → interroga SOLO quella categoria (un ricambio è per auto O per moto).
-// opts.withMeta conserva totale grezzo, copertura e avvisi; senza, resta l'array storico.
-// Lancia solo se TUTTE le categorie interrogate falliscono (una KO → torna quel che c'è).
-async function searchAccessori(keyword, opts = {}) {
-  const kw = String(keyword || '').trim();
-  if (!kw) return opts.withMeta ? { items: [], total: null, truncated: false, hasMore: false,
-    sospetto: null, parziale: null, parzialeRete: false, erroriSubito: [] } : [];
-  const { cat, withMeta = false, ...rest } = opts;
-  const cats = cat === 'auto' ? ['accessoriAuto'] : cat === 'moto' ? ['accessoriMoto'] : ['accessoriAuto', 'accessoriMoto'];
-  const res = await Promise.allSettled(cats.map(tipo =>
-    scrapeSubitoApi({ marca: kw, tipo }, { maxPages: 1, sort: 'priceasc', ...rest, withMeta: true })));
-  const lette = res.filter(r => r.status === 'fulfilled').map(r => r.value);
-  const items = lette.flatMap(r => r.items);
-  const rejected = res.find(r => r.status === 'rejected');
-  // 0 item MA almeno una categoria bloccata → propaga (runSource → 'error', non cachato come 'empty').
-  // both-fulfilled con 0 item = vuoto legittimo → return [].
-  if (!items.length && rejected) throw rejected.reason;
-  if (!withMeta) return items;
-  if (cats.length === 1) return lette[0];
-  // Il chiamante senza categoria puo' ancora chiedere entrambi i cataloghi. Il
-  // totale con un ramo ignoto/fallito non e' la sola somma del ramo riuscito.
-  return {
-    items,
-    total: rejected || lette.some(r => r.total == null) ? null : lette.reduce((n, r) => n + r.total, 0),
-    truncated: lette.some(r => r.truncated), hasMore: lette.some(r => r.hasMore),
-    sospetto: lette.map(r => r.sospetto).filter(Boolean).join(' · ') || null,
-    parziale: [...lette.map(r => r.parziale), rejected && 'Subito non ha restituito tutte le categorie richieste.']
-      .filter(Boolean).join(' · ') || null,
-    parzialeRete: !!rejected || lette.some(r => r.parzialeRete),
-    erroriSubito: [...lette.flatMap(r => r.erroriSubito),
-      ...res.filter(r => r.status === 'rejected').flatMap(r => r.reason.erroriSubito || [])],
-  };
-}
-
 module.exports = scrapeSubitoApi;
-module.exports.searchAccessori = searchAccessori;
 module.exports._mapAd = mapAd;
 module.exports._buildPath = buildPath;
 module.exports._extractTotal = extractTotal;   // F50 copertura

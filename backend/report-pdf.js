@@ -2,15 +2,13 @@
 /**
  * L'UNICO POSTO DOVE SI DISEGNA UN PDF DI AMR.
  *
- * Prima erano tre: questo file (per il bot), `exportPdf` dentro frontend/app.js e
- * `exportPdfRicambi` sempre nel frontend, piu' `report-pdf-ricambi.js` lato server. Quattro
- * copie dello stesso documento, gia' divergenti fra loro. Adesso il layout e' uno: header con
+ * Il layout condiviso col frontend ha header con
  * logo, riga dei criteri, tabella con la pastiglia della fonte, piede numerato.
  *
  * Chi chiama porta cio' che questo file non puo' sapere:
- *   - `extra.titolo`        l'intestazione ("AUTO MOTO RADAR", "— Ricambi", …)
+ *   - `extra.titolo`        l'intestazione
  *   - `extra.sottotitolo`   la riga dei criteri, quando non si ricava da `params`
- *   - `extra.contatore`     il numero in alto a destra ("128 annunci", "12 ricambi")
+ *   - `extra.contatore`     il numero in alto a destra
  *   - `extra.colonne/righe` la tabella gia' composta (i prezzi finali li calcola il browser,
  *                           che e' l'unico a conoscere commissione, spese, margine e IVA)
  *   - `extra.fonti`         la fonte di ogni riga, per la pastiglia colorata
@@ -51,25 +49,19 @@ function renderReportPdf(results, params = {}, extra = null) {
   const fmtEur = n => '€ ' + n.toLocaleString('it-IT');
   const FONTE_LABEL_PDF = {
     subito: 'Subito.it', autoscout: 'Autoscout24', moto: 'Moto.it',
-    autodoc: 'Autodoc', cmsnl: 'CMSNL', ebay: 'eBay', web: 'Web',
   };
   const FONTE_COLORS = {
     subito:    { fill: [231, 240, 253], text: [19, 87, 196] },
     autoscout: { fill: [250, 240, 213], text: [138, 97, 0] },
     moto:      { fill: [225, 243, 232], text: [17, 122, 55] },
-    autodoc:   { fill: [237, 233, 254], text: [91, 33, 182] },
-    cmsnl:     { fill: [237, 233, 254], text: [91, 33, 182] },
-    ebay:      { fill: [254, 240, 240], text: [185, 28, 28] },
-    web:       { fill: [241, 245, 249], text: [71, 85, 105] },
   };
 
   const titoloDato = String(extra.titolo || '').trim();
-  const ricambi = /ricamb/i.test(titoloDato);
-  const titolo = titoloDato || (ricambi ? 'Report ricambi' : 'Report annunci');
+  const titolo = titoloDato || 'Report annunci';
   const nRighe = Array.isArray(extra.righe) ? extra.righe.length : results.length;
-  const quante = extra.contatore || `${nRighe} ${ricambi ? (nRighe === 1 ? 'ricambio' : 'ricambi') : (nRighe === 1 ? 'annuncio' : 'annunci')}`;
+  const quante = extra.contatore || `${nRighe} ${nRighe === 1 ? 'annuncio' : 'annunci'}`;
   const p = params || {};
-  const ricerca = [p.marca, p.modello].filter(Boolean).join(' ') || (ricambi ? 'Ricambi' : 'Ricerca veicolo');
+  const ricerca = [p.marca, p.modello].filter(Boolean).join(' ') || 'Ricerca veicolo';
   const criteri = extra.sottotitolo || [
     p.regione ? String(p.regione).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Tutta Italia',
     (p.prezzoMin || p.prezzoMax) ? `Prezzo ${p.prezzoMin || 0}-${p.prezzoMax || 'max'}` : null,
@@ -124,9 +116,7 @@ function renderReportPdf(results, params = {}, extra = null) {
       x += w + 3;
     }
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...SLATE);
-    const nota = ricambi
-      ? 'Risultati rilevati al momento dell\'esportazione: verifica prezzo e disponibilita\' sul portale.'
-      : 'Esportazione istantanea: gli annunci non vengono archiviati nell\'app.';
+    const nota = 'Esportazione istantanea: gli annunci non vengono archiviati nell\'app.';
     doc.text(nota, pageW - 14, 63.8, { align: 'right' });
   };
 
@@ -195,27 +185,7 @@ function renderReportPdf(results, params = {}, extra = null) {
 // `reportStats` (min/mediana/media/max/conPrezzo) e' stata tolta insieme alla striscia. Quei
 // numeri erano calcolati su tutte le righe indistintamente, e un aggregato costruito su un
 // insieme misto e' peggio di nessun aggregato: sembra una misura del mercato e non lo e'.
-/**
- * Le colonne del PDF ricambi, nello stesso layout di quello dei veicoli.
- *
- * Sta qui e non in un file suo perche' il file suo era il quarto gemello: stesso header,
- * stesso piede, stessa tabella, scritti un'altra volta. Cambia solo cosa c'e' nelle colonne.
- */
-function tabellaRicambi(articoli) {
-  const arts = Array.isArray(articoli) ? articoli : [];
-  const eur = n => '€ ' + Number(n).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const prezzo = a => (Number.isFinite(a.prezzo) ? eur(a.prezzo)
-    : a.fonte !== 'subito' ? '—'
-      : a.prezzoSuRichiesta ? 'su richiesta' : a.prezzoIlleggibile ? 'prezzo non leggibile' : 'prezzo non indicato');
-  return {
-    colonne: ['Fonte', 'Ricambio', 'Marca', 'Prezzo', 'Venditore'],
-    righe: arts.map(a => [' ', a.nome || '—', a.marca || '—', prezzo(a), a.venditore || (a.fonte === 'autodoc' ? 'Autodoc' : '—')]),
-    fonti: arts.map(a => a.fonte),
-    colonneStile: { 0: { halign: 'center', cellWidth: 24 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 34 }, 3: { halign: 'right', cellWidth: 30, fontStyle: 'bold', textColor: [31, 111, 235] }, 4: { cellWidth: 44 } },
-  };
-}
-
-module.exports = { renderReportPdf, tabellaRicambi };
+module.exports = { renderReportPdf };
 
 // ── self-check (ponytail): `node backend/report-pdf.js` genera un PDF finto e verifica.
 if (require.main === module) {

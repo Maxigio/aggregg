@@ -1,9 +1,9 @@
 'use strict';
 /**
- * Area FONTI — le quattro banche dati aperte.
+ * Area FONTI — le banche dati aperte ancora disponibili.
  *
  * I test girano OFFLINE: si prova il parsing sui dati reali gia' letti e l'instradamento delle
- * route su un finto `app`. Le chiamate di rete (Overpass, EPREL, bilstein, Wheel-Size) non si
+ * route su un finto `app`. Le chiamate di rete (Overpass, EPREL, Wheel-Size) non si
  * fanno qui: una suite che dipende dalla rete diventa rossa quando cade una fonte terza, e a quel
  * punto smette di dire qualcosa sul NOSTRO codice.
  */
@@ -16,7 +16,6 @@ const fonti = require('../backend/fonti-route');
 const { FONTI } = fonti;
 const osm = require('../backend/scrapers/osm-territorio');
 const eprel = require('../backend/scrapers/eprel-pneumatici');
-const bilstein = require('../backend/scrapers/bilstein-oe');
 const wheelsize = require('../backend/scrapers/wheelsize');
 const PROVINCE = require('../data/province.json');
 
@@ -35,7 +34,7 @@ async function chiama(percorso, query = {}) {
 test('sono montate tutte le route dell\'area', () => {
   for (const p of ['/api/fonti', '/api/fonti/territorio/categorie', '/api/fonti/territorio/conta',
     '/api/fonti/territorio/oggetti', '/api/fonti/pneumatici/totale', '/api/fonti/pneumatici/cerca',
-    '/api/fonti/ricambi-oe/cerca', '/api/fonti/ricambi-oe/equivalenti', '/api/fonti/cerchi/calzate',
+    '/api/fonti/cerchi/calzate',
     '/api/fonti/costi/provincia', '/api/fonti/costi/classifica']) {
     assert.ok(rotte[p], 'manca ' + p);
   }
@@ -47,9 +46,7 @@ test('ogni fonte dichiara cosa sa E cosa non sa', async () => {
   const { corpo, headers } = await chiama('/api/fonti');
   assert.strictEqual(corpo.ok, true);
   assert.strictEqual(headers['Cache-Control'], 'no-store', 'porta lo stato di pausa: non si caccia');
-  // L'elenco mostra le fonti NON nascoste. `nascosta` toglie la voce dal pannello e basta:
-  // le rotte restano, perche' una fonte puo' servire da dentro un'altra parte dell'app —
-  // ricambiOe lo fa, e alimenta la scheda del pezzo nella ricerca ricambi.
+  // L'elenco mostra le fonti NON nascoste. `nascosta` toglie la voce dal pannello e basta.
   const visibili = Object.entries(FONTI).filter(([, f]) => !f.nascosta).map(([id]) => id);
   assert.deepStrictEqual(corpo.fonti.map(f => f.id), visibili);
 
@@ -78,7 +75,6 @@ test('categorie del territorio: nessuna rete, tredici voci e le venti regioni', 
 test('parametri mancanti: si dice cosa manca invece di rispondere vuoto', async () => {
   assert.strictEqual((await chiama('/api/fonti/territorio/oggetti')).corpo.motivo, 'categoria mancante');
   assert.match((await chiama('/api/fonti/pneumatici/cerca')).corpo.motivo, /misura o.*marca/);
-  assert.strictEqual((await chiama('/api/fonti/ricambi-oe/cerca')).corpo.motivo, 'codice mancante');
   assert.match((await chiama('/api/fonti/cerchi/calzate', { marca: 'Fiat' })).corpo.motivo, /marca, modello e anno/);
 });
 
@@ -183,30 +179,6 @@ test('OSM: way e relation prendono la posizione da center', () => {
   const extra = osm._mappaOggetto({ type: 'node', id: 3, lat: 1, lon: 2, tags: { name: 'Z', shop: 'car', chissa: 'che' } }, chiavi);
   assert.strictEqual(extra.altriTag.chissa, 'che');
   assert.strictEqual(extra.dati.name, 'Z');
-});
-
-test('bilstein: i codici si confrontano ripuliti, o non agganciano mai', () => {
-  // La fonte scrive "85E 819 439 B", i nostri dati e gli annunci lo portano attaccato.
-  assert.strictEqual(bilstein._normCodice('85E 819 439 B'), '85E819439B');
-  assert.strictEqual(bilstein._normCodice('1k0-615-301-aa'), '1K0615301AA');
-  assert.strictEqual(bilstein._normCodice(null), '');
-});
-
-test('bilstein: da un articolo escono cross-reference e misure', () => {
-  const a = bilstein._mappa({
-    id: '1', attributes: {
-      masterId: 360859, bgBrand: 'FEBI', articleDescription: 'disco freno', fittingSide: 'assale anteriore',
-      packagingQty: 2, vehicleType: 'CAR',
-      oeNumbers: [{ make: 'Audi', numbers: ['5Q0 615 301 F', '1K0 615 301 AA'] }, { make: 'Ford', numbers: ['2 631 432'] }],
-      articleAttributes: [{ type: 'diametro esterno', unit: 'mm', value: '312' }, { type: 'senza valore' }],
-    },
-  });
-  assert.strictEqual(a.marchio, 'FEBI');
-  assert.strictEqual(a.descrizione, 'disco freno');
-  assert.deepStrictEqual(a.costruttori, ['Audi', 'Ford']);
-  assert.deepStrictEqual(a.codiciNormalizzati, ['5Q0615301F', '1K0615301AA', '2631432']);
-  assert.strictEqual(a.misure.length, 1, 'una misura senza valore non si mostra');
-  assert.deepStrictEqual(a.misure[0], { nome: 'diametro esterno', valore: '312', unita: 'mm' });
 });
 
 test('EPREL: la misura e i suoi cinque campi, non solo la stringa', () => {

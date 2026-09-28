@@ -7,7 +7,7 @@ const { EventEmitter } = require('node:events');
 const https = require('node:https');
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-retry-integrazione-'));
 process.env.USER_DATA_PATH = dir; process.env.AMR_LOG_DIR = dir;
-process.env.AMR_WHATSAPP = '0'; process.env.AMR_ASTE_LOCALE = '0';
+process.env.AMR_WHATSAPP = '0';
 require('dotenv').config = () => ({ parsed: {} });
 const get = https.get, request = https.request, now = Date.now;
 https.get = () => { throw new Error('Richiesta live vietata nel test'); };

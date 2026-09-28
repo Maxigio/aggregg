@@ -105,7 +105,7 @@ test('Subito: il 429 chiude il download agli header e conserva Retry-After', asy
   const t = 2000000000000;
   Date.now = () => t;
   const prese = presa(() => ({ status: 429, headers: { 'retry-after': '86400' }, aperta: true }));
-  await assert.rejects(subito.searchAccessori('faro prova', { cat: 'moto' }),
+  await assert.rejects(cerca(),
     e => e.status === 429 && e.kind === 'blocked' && e.retryAfter === '86400');
   await new Promise(setImmediate);
   assert.equal(prese[0].req.destroyed, true);
@@ -224,71 +224,4 @@ test('mapAd: prezzo illeggibile e solo un booleano, distinto da assente, richies
     assert.equal(r.descrizione, null);
     assert.equal(Object.hasOwn(r, 'prezzoRaw'), false);
   }
-});
-
-test('searchAccessori: withMeta conserva totale e avvisi nativi; senza opzione resta un array', async () => {
-  let chiamate = 0;
-  subito._setHttpGetJson(async () => {
-    chiamate++;
-    return { status: 200, body: JSON.stringify({ ads: Array.from({ length: 50 }, (_, i) => accessorio(i)), count_all: 75 }) };
-  });
-  const r = await subito.searchAccessori('faro prova', { cat: 'auto', withMeta: true });
-  assert.equal(chiamate, 1);
-  assert.equal(r.items.length, 50);
-  assert.equal(r.total, 75);
-  assert.equal(r.truncated, true);
-  assert.equal(r.hasMore, true);
-  assert.match(r.sospetto, /50 annunci.*prezzo/);
-  const vecchio = await subito.searchAccessori('faro prova', { cat: 'auto' });
-  assert.equal(chiamate, 2);
-  assert.deepEqual(vecchio, r.items);
-});
-
-test('searchAccessori: il totale mancante non diventa zero, quello completo non e troncato', async () => {
-  for (const totale of [undefined, 50]) {
-    subito._setHttpGetJson(async () => ({ status: 200,
-      body: JSON.stringify({ ads: Array.from({ length: 50 }, (_, i) => accessorio(i)), count_all: totale }) }));
-    const r = await subito.searchAccessori('faro prova', { cat: 'moto', withMeta: true });
-    assert.equal(r.total, totale ?? null);
-    assert.equal(r.truncated, totale === undefined);
-  }
-});
-
-test('searchAccessori: due categorie sommano solo totali noti e dichiarano un ramo fallito', async () => {
-  let motoKo = false, totaleMoto;
-  const chiamate = [];
-  subito._setHttpGetJson(async p => {
-    const cat = new URL('https://local.invalid' + p).searchParams.get('c');
-    chiamate.push(cat);
-    return cat === '36' && motoKo ? { status: 503, body: '' }
-      : { status: 200, body: JSON.stringify({ ads: [accessorio(Number(cat))], count_all: cat === '5' ? 1 : totaleMoto }) };
-  });
-  assert.equal((await subito.searchAccessori('faro prova', { withMeta: true })).total, null);
-  totaleMoto = 1;
-  const completo = await subito.searchAccessori('faro prova', { withMeta: true });
-  assert.equal(completo.items.length, 2);
-  assert.equal(completo.total, 2);
-  assert.equal(completo.parzialeRete, false);
-  motoKo = true;
-  const monco = await subito.searchAccessori('faro prova', { withMeta: true });
-  assert.equal(monco.items.length, 1);
-  assert.equal(monco.total, null);
-  assert.equal(monco.parzialeRete, true);
-  assert.match(monco.parziale, /categorie/);
-  assert.equal(monco.erroriSubito[0].http, 503);
-  assert.deepEqual(chiamate, ['5', '36', '5', '36', '5', '36']);
-  const vecchio = await subito.searchAccessori('faro prova');
-  assert.equal(vecchio.length, 1, 'il contratto preesistente conserva il ramo riuscito');
-});
-
-test('searchAccessori: withMeta non nasconde un fallimento totale e la query vuota non va in rete', async () => {
-  let chiamate = 0;
-  subito._setHttpGetJson(async () => { chiamate++; return { status: 503, body: '' }; });
-  assert.deepEqual(await subito.searchAccessori(''), []);
-  const vuota = await subito.searchAccessori('', { withMeta: true });
-  assert.deepEqual(vuota.items, []);
-  assert.equal(vuota.total, null, 'nessuna risposta Hades letta');
-  assert.equal(chiamate, 0);
-  await assert.rejects(subito.searchAccessori('faro prova', { withMeta: true }), { status: 503 });
-  assert.equal(chiamate, 2);
 });

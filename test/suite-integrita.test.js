@@ -12,7 +12,7 @@
  *
  * PERCHE' IL FILE RESTA, per un motivo diverso da quello scritto prima: dodici moduli del
  * backend non sono richiesti da NESSUN test e sono coperti solo qui — fra cui auth.js,
- * db/index.js, normalize.js, utils.js, web-parts.js. Se uno prende un errore
+ * db/index.js, normalize.js e utils.js. Se uno prende un errore
  * di sintassi o un require morto, senza il primo test qui sotto la suite resta verde. E' uno
  * smoke test sul caricamento, e costa circa un secondo.
  *
@@ -53,11 +53,11 @@ test('ogni modulo del backend si carica', () => {
   assert.deepStrictEqual(ko, [], 'moduli che non si caricano');
 });
 
-test('Ricambi e Competitor non hanno porte web attive; il motore WhatsApp resta disponibile', () => {
+test('le aree accantonate non hanno porte web attive', () => {
   const html = fs.readFileSync(path.join(RADICE, 'frontend', 'index.html'), 'utf8');
   const app = fs.readFileSync(path.join(RADICE, 'frontend', 'app.js'), 'utf8');
   const server = fs.readFileSync(path.join(RADICE, 'backend', 'server.js'), 'utf8');
-  for (const area of ['ricambi', 'competitor']) {
+  for (const area of ['ricambi', 'competitor', 'aste']) {
     assert.ok(!html.includes(`data-mode="${area}"`));
     assert.ok(!html.includes(`id="${area}Panel"`));
     assert.ok(!server.includes(`${area}-route`));
@@ -65,7 +65,9 @@ test('Ricambi e Competitor non hanno porte web attive; il motore WhatsApp resta 
   }
   assert.ok(!fs.existsSync(path.join(RADICE, 'backend', 'competitor-route.js')));
   assert.ok(!fs.existsSync(path.join(RADICE, 'backend', 'ricambi-route.js')));
-  assert.equal(typeof require('../backend/ricambi-core').searchRicambi, 'function');
+  assert.ok(!fs.existsSync(path.join(RADICE, 'backend', 'aste-route.js')));
+  assert.ok(!fs.existsSync(path.join(RADICE, 'backend', 'whatsapp', 'webhook.js')));
+  assert.ok(!server.includes('/api/whatsapp/webhook'));
 });
 
 test('ogni dipendenza dichiarata dai file di test si risolve', () => {

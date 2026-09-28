@@ -10,8 +10,6 @@
  *                 colonnine, centri revisione, zone a basse emissioni. Per regione.
  *  - pneumatici   EPREL, la banca dati UE delle etichette: 293.999 pneumatici con efficienza,
  *                 aderenza sul bagnato, rumore, neve e ghiaccio. Per misura e marca.
- *  - ricambiOe    bilstein partsfinder: da un codice originale a tutti i suoi equivalenti, con
- *                 le misure tecniche del pezzo.
  *  - cerchi       Wheel-Size: calzate, offset e PRESSIONI di gonfiaggio per modello e anno.
  *  - costi        IVASS + MEF: quanto costa TENERE un veicolo in ogni provincia — premio r.c.
  *                 realmente pagato e aliquota dell'imposta provinciale. Unica del gruppo a stare
@@ -23,7 +21,6 @@
  */
 const osm = require('./scrapers/osm-territorio');
 const eprel = require('./scrapers/eprel-pneumatici');
-const bilstein = require('./scrapers/bilstein-oe');
 const wheelsize = require('./scrapers/wheelsize');
 // La pulizia del nome-modello sta nella scheda veicolo perche' vale per ogni chiamante:
 // qui si riusa quella invece di ricopiarne le regex. Nessun ciclo — scheda-veicolo-route
@@ -103,16 +100,6 @@ const FONTI = {
     sa: 'Efficienza, aderenza sul bagnato, rumore in decibel, neve e ghiaccio di ogni pneumatico registrato in Europa.',
     nonSa: 'Non contiene dati di veicolo: nessuna marca auto, nessun modello. Si cerca per misura o per marca del pneumatico.',
   },
-  ricambiOe: {
-    // NASCOSTA DALL'ELENCO, non spenta: la sezione Ricambi la usa a ogni ricerca per
-    // codice (`/cerca`), dove i dati del pezzo e i codici equivalenti stanno accanto
-    // alle offerte. Come voce a se' stante non serve piu' a nessuno.
-    nascosta: true,
-    nome: 'Ricambi OE', dettaglio: 'da un codice originale a tutti i suoi equivalenti — bilstein group',
-    scraper: bilstein,
-    sa: 'Dato un codice originale, quali altri codici sono lo stesso pezzo, su quali marche monta e che misure ha.',
-    nonSa: 'Copre il catalogo di febi, SWAG e Blue Print: un pezzo che nessuno dei tre produce non c\'e\'.',
-  },
   cerchi: {
     nome: 'Cerchi e gomme', dettaglio: 'calzate, offset e pressioni per modello — Wheel-Size',
     scraper: wheelsize,
@@ -165,8 +152,7 @@ function mount(app, deps = {}) {
     res.set('Cache-Control', 'no-store');
     res.json({
       ok: true, adesso: Date.now(),
-      // `nascosta` toglie la voce dall'elenco e basta: le rotte restano in piedi, perche'
-      // una fonte puo' servire da dentro un'altra parte dell'app (ricambiOe lo fa).
+      // `nascosta` toglie la voce dall'elenco e basta: alcune fonti servono altre aree dell'app.
       fonti: Object.entries(FONTI).filter(([, f]) => !f.nascosta).map(([id, f]) => {
         const fino = pausaDi(f);
         return { id, nome: f.nome, dettaglio: f.dettaglio, sa: f.sa, nonSa: f.nonSa, ...(fino ? { bloccataFino: fino } : {}) };
@@ -203,16 +189,6 @@ function mount(app, deps = {}) {
   via('/api/fonti/pneumatici/cerca', 'pneumatici', q => {
     if (!q.misura && !q.marca) return Promise.resolve({ pneumatici: [], motivo: 'serve almeno una misura o una marca' });
     return eprel.cerca({ misura: q.misura, marca: q.marca, classe: q.classe, pagina: q.pagina });
-  });
-
-  // ─── Ricambi OE ────────────────────────────────────────────────────────────
-  via('/api/fonti/ricambi-oe/cerca', 'ricambiOe', q => {
-    if (!q.codice) return Promise.resolve({ articoli: [], motivo: 'codice mancante' });
-    return bilstein.perCodice(String(q.codice), q.tipo);
-  });
-  via('/api/fonti/ricambi-oe/equivalenti', 'ricambiOe', q => {
-    if (!q.codice) return Promise.resolve({ equivalenti: [], motivo: 'codice mancante' });
-    return bilstein.equivalenti(String(q.codice), q.tipo);
   });
 
   // ─── Cerchi e gomme ────────────────────────────────────────────────────────

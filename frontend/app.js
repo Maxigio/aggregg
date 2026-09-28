@@ -158,23 +158,6 @@ const COMPARE_CAP  = 10;
 const brandCache = { auto: null, moto: null };
 const FONTE_LABEL = { subito: 'Subito.it', autoscout: 'Autoscout24', moto: 'Moto.it' };
 
-// ─── Icone (SVG inline, offline) ────────────────────────────────────────────
-const ICONS = {
-  square:            '<rect x="3" y="3" width="18" height="18" rx="2"/>',
-  'square-check':    '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 12 2 2 4-4"/>',
-  info:              '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
-  alert:             '<path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5"/><path d="M12 18h.01"/>',
-  chevron:           '<path d="m6 9 6 6 6-6"/>',
-  search:            '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>',
-  x:                 '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
-  moon:              '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
-  sun:               '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
-  bulb:              '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5.76.76 1.23 1.52 1.41 2.5"/>',
-};
-function icon(name, cls = '') {
-  return `<svg class="ico ${cls}" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
-}
-
 // ─── Prezzo di listino: Commissione (+ € o %), Spese (− €), Margine (rivendita %), IVA 22% ──
 // `pricing`/`priceAdjActive`/`PRICE_DEFAULT` arrivano da pricing.js (globale). Stato per contesto,
 // persistito in localStorage. Applicato coerentemente a righe/stats/slider/export.
@@ -1323,43 +1306,14 @@ function renderFacetChips() {
 }
 
 // ─── Modi di ricerca ──────────────────────────────────────────────────────────
-let searchMode = 'cerca';
-const AREE = {
-  aste: { pannello: 'astePanel', apri: () => asApri(), chiudi: () => asChiudi() },
-};
-const voceDi = (tab, k) => (Object.prototype.hasOwnProperty.call(tab, k) ? tab[k] : undefined);
-const area = k => voceDi(AREE, k);
-
 function selectPrimary(mode) {
-  const primary = ['auto', 'moto'].includes(mode) || area(mode) ? mode : 'auto';
+  const primary = mode === 'moto' ? 'moto' : 'auto';
   document.querySelectorAll('#modeToggle .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === primary));
-  if (area(primary)) { setSearchMode(primary); return; }
   const radio = document.getElementById(primary === 'moto' ? 'tipoMoto' : 'tipoAuto');
   if (radio && !radio.checked) { radio.checked = true; radio.dispatchEvent(new Event('change')); }
-  setSearchMode('cerca');
-}
-function setSearchMode(mode) {
-  const prev = searchMode;
-  searchMode = area(mode) ? mode : 'cerca';
   try {
-    localStorage.setItem('amrModo', searchMode);
-    if (searchMode === 'cerca') localStorage.setItem('amrModoTipo', currentTipo());
+    localStorage.setItem('amrModoTipo', currentTipo());
   } catch (_) {}
-  const attiva = area(searchMode);
-  document.querySelector('section.search').classList.toggle('area-attiva', !!attiva);
-  for (const [id, a] of Object.entries(AREE)) {
-    const el = document.getElementById(a.pannello);
-    if (el) el.classList.toggle('d-none', id !== searchMode);
-  }
-  if (area(prev) && prev !== searchMode) area(prev).chiudi();
-  if (area(prev) && !attiva) hideResults();
-  if (attiva) {
-    marcaSelect.required = false;
-    hideResults();
-    attiva.apri();
-    return;
-  }
-  marcaSelect.required = true;
   sincronizzaFiltriAuto(currentTipo());
   btnCerca.textContent = 'Cerca';
   modelloSelect.placeholder =
@@ -5202,8 +5156,8 @@ const modoRaggiungibile = m => !!m && !!document.querySelector(`#modeToggle .mod
 
 /** Quello che si era salvato l'ultima volta. Non lancia: localStorage puo' essere negato. */
 function modoSalvato() {
-  try { return { m: localStorage.getItem('amrModo'), t: localStorage.getItem('amrModoTipo') }; }
-  catch (_) { return { m: null, t: null }; }
+  try { return localStorage.getItem('amrModoTipo'); }
+  catch (_) { return null; }
 }
 
 /**
@@ -5214,30 +5168,19 @@ function modoSalvato() {
  * Cosi' `populateMarca` scarica il catalogo GIUSTO, uno solo (prima ne scaricava due:
  * auto e poi quello vero), e chi lavora in Moto non vede piu' l'app passare da Auto.
  *
- * Non apre pannelli e non chiama `setSearchMode`: quello resta a `ripristinaModo()`, che
- * gira a fine init quando il catalogo c'e'. Qui si tocca solo cio' che si vede.
+ * Il catalogo verra' caricato dopo; qui si tocca solo cio' che si vede.
  */
 function preImpostaModo() {
-  const { m, t } = modoSalvato();
+  const t = modoSalvato();
   if (t === 'moto') { const r = document.getElementById('tipoMoto'); if (r) r.checked = true; }
-  // Il bottone acceso: per 'cerca' e' il tipo, per le aree e' l'area stessa. Se il modo
-  // salvato non ha piu' un bottone (area tolta dalla barra), non si tocca niente.
-  const bottone = m === 'cerca' ? (t === 'moto' ? 'moto' : 'auto') : m;
+  const bottone = t === 'moto' ? 'moto' : 'auto';
   if (modoRaggiungibile(bottone)) {
     document.querySelectorAll('#modeToggle .mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === bottone));
   }
 }
 
 function ripristinaModo() {
-  const { m, t } = modoSalvato();
-  // 'cerca' non e' un bottone della barra: i bottoni sono Auto e Moto.
-  // La guardia qui sotto lo scartava sempre, quindi chi lavorava in Moto ripartiva in Auto
-  // a ogni ricaricamento.
-  if (m === 'cerca') { if (t === 'moto' && modoRaggiungibile('moto')) selectPrimary('moto'); return; }
-  // Una modalita' tolta dalla barra non deve tornare da localStorage: chi l'aveva salvata
-  // ci resterebbe dentro senza avere il bottone per uscirne.
-  if (!modoRaggiungibile(m)) return;
-  if (area(m)) return selectPrimary(m);
+  if (modoSalvato() === 'moto' && modoRaggiungibile('moto')) selectPrimary('moto');
 }
 
 // ─── Avvio ────────────────────────────────────────────────────────────────────
@@ -5399,312 +5342,4 @@ resultsGrid?.addEventListener('click', e => {
 });
 resultsGrid?.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.id === 'tgCaptcha') { e.preventDefault(); tgVerifica(); }
-});
-
-// ─── ASTE GIUDIZIARIE ────────────────────────────────────────────────────────
-/**
- * I lotti del Portale delle Vendite Pubbliche, letti dal nostro magazzino locale.
- *
- * Perche' e' un'area e non una quarta fonte della ricerca: un'asta non e' un annuncio. Ha una
- * data entro cui si compra e non oltre, un termine per l'offerta che scade PRIMA di quella data,
- * un tribunale, e quasi sempre una piattaforma esterna dove bisogna essersi registrati. I filtri
- * sono suoi e non c'entrano con marca/modello/chilometri.
- *
- * Tre cose che questa pagina dice invece di nascondere, perche' la fonte e' fatta cosi':
- *  - la marca che non siamo riusciti a leggere dal testo libero (~10% dei lotti);
- *  - il lotto che contiene piu' di un veicolo, che non e' un affare singolo;
- *  - il magazzino mai riempito, che e' diverso da «nessuna asta trovata».
- */
-let asDati = null;         // l'ultima risposta dell'elenco
-let asFiltri = null;       // marche e province viste dal magazzino
-let asStato = { tipo: 'moto', marca: '', provincia: '', q: '', prezzoMax: '', soloSingoli: false };
-let asInVolo = false;
-let asDaRifare = false;    // un filtro e' cambiato mentre la chiamata era in volo
-let asAttesa = null;       // la catena in corso, per chi la trova gia' partita
-
-const asEl = () => document.getElementById('astePanel');
-const asEuro = n => (n == null ? '—' : '€ ' + Number(n).toLocaleString('it-IT'));
-/** «2026-10-03» → «3 ott 2026». La fonte le manda gia' tutte in ISO (ci pensa il backend). */
-function asData(iso) {
-  if (!iso) return '—';
-  const [a, m, g] = iso.split('-');
-  const mesi = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
-  return `${Number(g)} ${mesi[Number(m) - 1] || '?'} ${a}`;
-}
-/** Quanto manca, perche' «fra 3 giorni» si capisce meglio di una data. */
-function asQuanto(iso) {
-  if (!iso) return '';
-  const g = Math.round((new Date(iso + 'T12:00:00') - new Date()) / 86400000);
-  if (g < 0) return 'passata';
-  if (g === 0) return 'oggi';
-  if (g === 1) return 'domani';
-  return `fra ${g} giorni`;
-}
-
-async function asApri() {
-  const el = asEl(); if (!el) return;
-  el.classList.remove('d-none');
-  document.body.classList.add('has-results');
-  if (!asDati) { el.innerHTML = '<div class="as-wrap"><div class="cp-att">Carico i lotti…</div></div>'; }
-  await asCarica();
-}
-function asChiudi() {
-  const el = asEl(); if (el) { el.classList.add('d-none'); el.innerHTML = ''; }
-}
-
-/**
- * UNA RICHIESTA ALLA VOLTA, MA CHI ARRIVA DOPO NON SI SCARTA. Chi tocca un filtro mentre siamo
- * in volo ha gia' scritto in `asStato`: scartarlo lascerebbe i selettori nuovi sopra la lista
- * vecchia PER SEMPRE, perche' la risposta non dice con quali filtri e' stata servita e nessuno
- * riproverebbe. Quindi si segna la richiesta e si rilancia prima di disegnare.
- * A chi arriva a cose iniziate si rende la promessa dell'INTERA catena: il ripristino del fuoco
- * (in fondo) deve girare dopo l'ULTIMO asRender(), non prima di quello della chiamata in corso.
- */
-function asCarica() {
-  if (asInVolo) { asDaRifare = true; return asAttesa; }
-  asInVolo = true;
-  asAttesa = (async () => {
-    try {
-      do {
-        asDaRifare = false;
-        try {
-          // IL TETTO SI CHIEDE, ALTRIMENTI LO METTE LA ROTTA: senza `limite` sono 500, e
-          // l'elenco e' ordinato per data di vendita crescente — i tagliati sarebbero i lotti
-          // con vendita piu' LONTANA, cioe' gli unici su cui c'e' ancora tempo per preparare
-          // un'offerta. In silenzio, per giunta: la risposta non porta il totale vero e la riga
-          // del conteggio mostra quelli arrivati. Il magazzino vive a un soffio dal 500 (491 auto
-          // vive al 2026-09-14, con un giro che ne muove piu' di cento per volta), quindi si
-          // chiede il massimo che la rotta accetta.
-          const q = new URLSearchParams({ tipo: asStato.tipo, limite: '2000' });
-          if (asStato.marca) q.set('marca', asStato.marca);
-          if (asStato.provincia) q.set('provincia', asStato.provincia);
-          if (asStato.q) q.set('q', asStato.q);
-          if (asStato.prezzoMax) q.set('prezzoMax', asStato.prezzoMax);
-          if (asStato.soloSingoli) q.set('soloSingoli', '1');
-          const [d, f] = await Promise.all([
-            fetch('/api/aste?' + q).then(r => r.json()),
-            fetch('/api/aste/filtri?tipo=' + asStato.tipo).then(r => r.json()),
-          ]);
-          // Un 500 della rotta ha corpo JSON valido, quindi `r.json()` riesce e il catch non
-          // scatterebbe: senza questa riga il guasto del server arriverebbe a schermo travestito
-          // da magazzino vuoto, e in silenzio (le rotte scrivono `error`, l'avviso legge `errore`).
-          if (!d || !d.ok || !f || !f.ok) throw new Error('risposta non valida');
-          asDati = d; asFiltri = f;
-        } catch (_) {
-          // LA RETE CHE CADE NON SVUOTA IL MAGAZZINO. Sostituire `asDati` in blocco cancellava
-          // l'ultima lista buona, e da li' asVuoto accusava il magazzino di essere vuoto quando
-          // era pieno, spingendo su Aggiorna — cioe' un giro intero sul portale del ministero per
-          // una fetch fallita. Si tiene il dato e si segna solo l'errore, come e' sempre stato
-          // per `asFiltri`, che il catch non tocca: l'avviso «potrebbe non essere aggiornato»
-          // presuppone appunto che un elenco ci sia ancora.
-          asDati = { ...(asDati || { ok: false, lotti: [] }), errore: 'non raggiungibile' };
-        }
-      } while (asDaRifare);
-    } finally { asInVolo = false; }
-    asRender();
-  })();
-  return asAttesa;
-}
-
-/**
- * Lo stato del magazzino, detto in italiano. E' la differenza fra «non ho ancora scaricato
- * niente» e «non c'e' niente da vedere»: senza questa riga la seconda frase coprirebbe la prima,
- * e uno resterebbe a guardare una pagina vuota senza sapere che basta premere Aggiorna.
- */
-function asAvviso(d) {
-  if (!d) return '';
-  if (d.errore) return '<div class="cp-avviso">Il server non risponde: l\'elenco che vedi potrebbe non essere aggiornato.</div>';
-  if (d.magazzino === 'assente') return '<div class="cp-avviso">Non ho ancora scaricato nessun lotto dal portale del ministero. Premi <b>Aggiorna</b>: ci vuole una quindicina di secondi.</div>';
-  if (d.magazzino === 'illeggibile') return `<div class="cp-avviso">Il magazzino dei lotti non si apre (${escapeHtml(d.guasto || 'motivo ignoto')}). L'elenco qui sotto e' vuoto per questo, non perche' non ci siano aste.</div>`;
-  if (d.daAggiornare) return '<div class="cp-avviso">L\'ultimo scarico ha piu\' di un giorno: qualche lotto potrebbe essere gia\' stato venduto.</div>';
-  return '';
-}
-
-function asRender() {
-  const el = asEl(); if (!el) return;
-  const d = asDati || {};
-  const lotti = d.lotti || [];
-  const f = asFiltri || { marche: [], province: [], senzaMarca: 0 };
-
-  const opzioni = (voci, sel, etichetta) => ['<option value="">' + etichetta + '</option>']
-    .concat(voci.map(v => `<option value="${escapeHtml(v.valore)}"${v.valore === sel ? ' selected' : ''}>${escapeHtml(v.testo)}</option>`)).join('');
-
-  const quandoUltimo = d.ultimoGiro
-    ? `aggiornato ${asQuanto(new Date(d.ultimoGiro.finitoIl).toISOString().slice(0, 10)).replace('oggi', 'oggi').replace('passata', 'da qualche giorno')}`
-    : 'mai aggiornato';
-
-  el.innerHTML = `
-    <div class="as-wrap">
-      <div class="as-testa">
-        <div class="as-tipi">
-          <button type="button" class="as-tipo${asStato.tipo === 'moto' ? ' attivo' : ''}" data-astipo="moto">Moto</button>
-          <button type="button" class="as-tipo${asStato.tipo === 'auto' ? ' attivo' : ''}" data-astipo="auto">Auto</button>
-        </div>
-        <div class="as-meta">${escapeHtml(quandoUltimo)}</div>
-        <button type="button" class="as-agg" id="asAggiorna">Aggiorna</button>
-      </div>
-      ${asAvviso(d)}
-      <div class="as-filtri">
-        <select id="asMarca" class="as-sel">${opzioni(
-          f.marche.map(m => ({ valore: m.nome, testo: `${m.nome} (${m.quanti})` })), asStato.marca, 'Tutte le marche')}</select>
-        <select id="asProv" class="as-sel">${opzioni(
-          f.province.map(p => ({ valore: p.provincia, testo: `${p.provincia} (${p.quanti})` })), asStato.provincia, 'Tutta Italia')}</select>
-        <input type="search" id="asQ" class="as-inp" placeholder="cerca nel testo del lotto" value="${escapeHtml(asStato.q)}" />
-        <input type="number" id="asPrezzo" class="as-inp as-inp-n" placeholder="prezzo max €" value="${escapeHtml(asStato.prezzoMax)}" min="0" />
-        <label class="cp-mio-chk"><input type="checkbox" id="asSingoli"${asStato.soloSingoli ? ' checked' : ''} /> solo veicoli singoli</label>
-      </div>
-      <div class="as-conta">${lotti.length} lotti in vendita${f.senzaMarca ? ` · ${f.senzaMarca} senza marca riconosciuta` : ''}</div>
-      <div class="as-lista">${lotti.length ? lotti.map(asRiga).join('') : asVuoto(d)}</div>
-    </div>`;
-}
-
-const asVuoto = d => (d.magazzino === 'ok'
-  ? '<div class="cp-att">Nessun lotto con questi filtri.</div>'
-  : '<div class="cp-att">Niente da mostrare finche\' non scarico i lotti.</div>');
-
-/**
- * Una riga. Mostra quello che il proprietario ha chiesto e nient'altro: i tre numeri per
- * decidere l'offerta, le due scadenze, e da chi/dove viene il veicolo.
- *
- * Il TERMINE per le offerte non e' qui perche' la lista non ce l'ha: sta nel dettaglio, che
- * costa una chiamata al portale. Si apre al clic.
- */
-function asRiga(l) {
-  const marca = l.marca
-    ? `<b class="as-marca">${escapeHtml(l.marca)}</b>`
-    : '<span class="as-nomarca" title="Il portale scrive marca e modello nel testo libero: qui non sono riuscito a leggerla">marca non riconosciuta</span>';
-  const bolli = [
-    l.cumulativo ? '<span class="as-bollo as-cumulo" title="Il lotto contiene piu\' di un veicolo o altri beni">lotto cumulativo</span>' : '',
-    l.piattaforma ? `<span class="as-bollo as-piatt" title="Per offrire bisogna registrarsi su questa piattaforma">${escapeHtml(l.piattaforma)}</span>` : '',
-  ].filter(Boolean).join('');
-  const scad = asQuanto(l.dataVendita);
-  return `
-    <div class="as-lotto" data-aslotto="${escapeHtml(String(l.id))}" data-astipo2="${escapeHtml(l.tipo)}">
-      <div class="as-riga1">
-        ${marca}
-        <span class="as-desc">${escapeHtml(l.descrizione || '')}</span>
-        ${bolli}
-      </div>
-      <div class="as-riga2">
-        <span class="as-prezzo">${asEuro(l.prezzoBase)}</span>
-        <span class="as-n">offerta minima ${asEuro(l.offertaMinima)}</span>
-        <span class="as-n">rialzo ${asEuro(l.rialzoMinimo)}</span>
-        <span class="as-sep">·</span>
-        <span class="as-quando${scad === 'oggi' || scad === 'domani' ? ' as-urgente' : ''}">vendita ${asData(l.dataVendita)}${scad ? ` (${scad})` : ''}</span>
-      </div>
-      <div class="as-riga3">
-        ${escapeHtml([l.citta, l.provincia].filter(Boolean).join(', ') || 'luogo non indicato')}
-        ${l.tribunale ? ' · ' + escapeHtml(l.tribunale) : ''}
-        ${l.numeroLotto ? ' · ' + escapeHtml(l.numeroLotto) : ''}
-      </div>
-      <div class="as-det d-none"></div>
-    </div>`;
-}
-
-/** Il dettaglio: una chiamata al portale, quindi solo su richiesta e una volta sola. */
-async function asDettaglio(box, id, tipo) {
-  const det = box.querySelector('.as-det');
-  if (!det) return;
-  if (!det.classList.contains('d-none')) { det.classList.add('d-none'); return; }
-  det.classList.remove('d-none');
-  if (det.dataset.caricato === '1') return;
-  det.innerHTML = '<div class="cp-att">Chiedo al portale…</div>';
-  try {
-    const d = await fetch(`/api/aste/${encodeURIComponent(id)}?tipo=${encodeURIComponent(tipo)}`).then(r => r.json());
-    if (!d.ok) {
-      // Il portale che non risponde si dice, e si lascia comunque la porta per andarci a mano.
-      det.innerHTML = `<div class="cp-avviso">${escapeHtml(d.error || 'non riesco a leggere il dettaglio')}${
-        d.url ? ` <a href="${escapeHtml(d.url)}" target="_blank" rel="noopener">Apri sul portale</a>` : ''}</div>`;
-      return;
-    }
-    det.innerHTML = asDetHtml(d);
-    det.dataset.caricato = '1';
-  } catch (_) {
-    det.innerHTML = '<div class="cp-avviso">Non riesco a raggiungere il server.</div>';
-  }
-}
-
-function asDetHtml(d) {
-  const x = d.dettaglio || {};
-  const all = (x.allegati || []).map(a => `
-    <li><a href="${escapeHtml(a.url || '#')}" target="_blank" rel="noopener">${escapeHtml(a.nome || 'documento')}</a>
-      ${a.tipo ? `<span class="as-tag">${escapeHtml(a.tipo)}</span>` : ''}
-      ${a.byte ? `<span class="as-n">${Math.round(a.byte / 1024)} KB</span>` : ''}</li>`).join('');
-  const beni = (x.beni || []).filter(b => b.descrizione).map(b =>
-    `<li>${escapeHtml(b.descrizione)}${b.tipologia ? ` <span class="as-tag">${escapeHtml(b.tipologia)}</span>` : ''}</li>`).join('');
-  return `
-    <div class="as-detbox">
-      ${x.termineOfferte ? `<div class="as-termine"><b>Offerte entro il ${asData(x.termineOfferte)}</b>${
-        x.oraTermineOfferte ? ' alle ' + escapeHtml(x.oraTermineOfferte) : ''} — ${escapeHtml(asQuanto(x.termineOfferte))}</div>` : ''}
-      <div class="as-n">${escapeHtml([x.tipoVendita, x.modalita].filter(Boolean).join(' · ') || 'modalita\' non indicata')}${
-        x.procedura ? ` · procedura ${escapeHtml(x.procedura)}` : ''}${x.ufficio ? ` · ${escapeHtml(x.ufficio)}` : ''}</div>
-      ${beni ? `<div class="as-sotto"><b>Cosa c'e' nel lotto</b><ul>${beni}</ul></div>` : ''}
-      ${all ? `<div class="as-sotto"><b>Documenti</b><ul class="as-all">${all}</ul></div>`
-            : '<div class="as-sotto as-n">Il portale non allega documenti per questo lotto.</div>'}
-      <a class="as-vai" href="${escapeHtml(d.url || '#')}" target="_blank" rel="noopener">Apri l'annuncio sul portale del ministero</a>
-    </div>`;
-}
-
-// Un solo ascoltatore per il pannello, delegato: le righe si ridisegnano a ogni filtro.
-document.getElementById('astePanel')?.addEventListener('click', async e => {
-  const t = e.target.closest('[data-astipo]');
-  if (t) { asStato.tipo = t.dataset.astipo; asStato.marca = ''; asStato.provincia = ''; return asCarica(); }
-  if (e.target.closest('#asAggiorna')) {
-    const b = e.target.closest('#asAggiorna');
-    b.disabled = true; b.textContent = 'Aggiorno…';
-    try {
-      const r = await fetch('/api/aste/aggiorna', { method: 'POST' }).then(x => x.json());
-      // IL MOTIVO STA IN `motivo`, NON IN `error`. Il giro che fallisce sulla FONTE e' un 200 con
-      // `{ok:false, motivo}` — scelta dichiarata nella rotta — e `error` lo scrivono solo il 429 e
-      // il 500. Leggendo il solo `error` restava la frase generica anche quando lo scraper era
-      // rotto per sempre («fe-config senza msUrl utilizzabile»): uno ci legge un intoppo di
-      // passaggio e ripreme, bruciando le altre due fiches orarie per lo stesso errore.
-      if (!r.ok) alert(r.error || r.motivo || 'aggiornamento non riuscito');
-    } catch (_) { alert('server non raggiungibile'); }
-    return asCarica();
-  }
-  const box = e.target.closest('[data-aslotto]');
-  // Il dettaglio VIVE dentro la card: senza l'uscita su `.as-det` ogni clic sul suo contenuto —
-  // il termine, i beni, il bianco del box, o il rilascio di un trascinamento per copiarsi
-  // «procedura 431/2024» nel gestionale — risalirebbe fin qui e lo richiuderebbe, portandosi via
-  // la selezione. E riaprirlo, finche' non e' in cache, costa una chiamata al portale e un
-  // gettone di rate-limit. Si chiude dalle righe della card, che restano scoperte.
-  if (box && !e.target.closest('a') && !e.target.closest('.as-det'))
-    return asDettaglio(box, box.dataset.aslotto, box.dataset.astipo2);
-});
-document.getElementById('astePanel')?.addEventListener('change', e => {
-  if (e.target.id === 'asMarca') asStato.marca = e.target.value;
-  else if (e.target.id === 'asProv') asStato.provincia = e.target.value;
-  else if (e.target.id === 'asSingoli') asStato.soloSingoli = e.target.checked;
-  else return;
-  asCarica();
-});
-// Il testo e il prezzo aspettano che uno smetta di scrivere: una chiamata per tasto sarebbe
-// inutile anche se costa poco (il filtro e' locale, ma il ridisegno no).
-let asTimer = null;
-document.getElementById('astePanel')?.addEventListener('input', e => {
-  if (e.target.id !== 'asQ' && e.target.id !== 'asPrezzo') return;
-  if (e.target.id === 'asQ') asStato.q = e.target.value;
-  else asStato.prezzoMax = e.target.value;
-  clearTimeout(asTimer);
-  asTimer = setTimeout(() => {
-    const fuoco = document.activeElement;
-    const attivo = fuoco && fuoco.id;
-    // SI SALVA ANCHE DOVE STAVA IL CURSORE, non solo in quale casella. Rimetterlo sempre in coda
-    // andava bene solo a chi scrive in fondo: chi stava correggendo in mezzo alla parola se lo
-    // vedeva saltare alla fine 350 ms dopo l'ultima battuta, e le lettere seguenti finivano nel
-    // punto sbagliato. Su `asPrezzo` (type=number) la selezione non esiste e vale null: la coda
-    // resta il ripiego per quel caso e per chi arriva qui senza una casella a fuoco.
-    const selDa = fuoco && fuoco.type !== 'number' ? fuoco.selectionStart : null;
-    const selA = fuoco && fuoco.type !== 'number' ? fuoco.selectionEnd : null;
-    asCarica().then(() => {
-      // Il ridisegno rifa' gli input: senza questo, chi scrive perde il cursore a ogni pausa.
-      const el = attivo && document.getElementById(attivo);
-      if (el) {
-        el.focus();
-        if (el.setSelectionRange && el.type !== 'number')
-          el.setSelectionRange(selDa == null ? el.value.length : selDa, selA == null ? el.value.length : selA);
-      }
-    });
-  }, 350);
 });

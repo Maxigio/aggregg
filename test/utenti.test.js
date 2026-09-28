@@ -443,10 +443,8 @@ test('creaPersona: nasce demo, marcata "web", e la marcatura sopravvive al cambi
 // ── 5. Due processi sullo stesso auth.json ───────────────────────────────────
 
 test('auth: chi scrive aspetta il lock di un altro processo, e un lock stantio non blocca', () => {
-  // Il guaio vero, misurato sull'M2: il server vivo e `scripts/set-telefono.js` via ssh fanno
-  // entrambi load() → modifica → riscrittura dell'INTERO auth.json, e l'ultimo che scrive
-  // cancellava in silenzio la modifica dell'altro (telefono assegnato sparito, o persona
-  // appena registrata sparita). La serializzazione e' un lock file esclusivo accanto ad
+  // Il server vivo e gli script via ssh fanno entrambi load() → modifica → riscrittura
+  // dell'INTERO auth.json. La serializzazione e' un lock file esclusivo accanto ad
   // auth.json: qui si prova che chi scrive lo RISPETTA davvero — cioe' aspetta finche' un
   // altro processo non lo molla — e che il lock di un processo morto a meta' non chiude
   // fuori tutti per sempre.
@@ -459,7 +457,7 @@ test('auth: chi scrive aspetta il lock di un altro processo, e un lock stantio n
   fs.writeFileSync(lock, '');
   const morto = (Date.now() - 60_000) / 1000;
   fs.utimesSync(lock, morto, morto);
-  assert.strictEqual(auth.setTelefono('Piero Lock', '+39 333 111 2233').telefono, '393331112233');
+  assert.strictEqual(auth.setPersona('Piero Lock', 'pierolock2', 'demo').id, 'piero-lock');
   assert.ok(!fs.existsSync(lock), 'il lock stantio doveva sparire dopo la scrittura');
 
   // Lock FRESCO di un altro processo: la scrittura deve ASPETTARE che venga mollato.
@@ -471,7 +469,7 @@ test('auth: chi scrive aspetta il lock di un altro processo, e un lock stantio n
   ], { stdio: 'ignore' });
   figlio.unref();
   const prima = Date.now();
-  assert.strictEqual(auth.setTelefono('Piero Lock', '+39 333 111 9999').telefono, '393331119999');
+  assert.strictEqual(auth.setPersona('Piero Lock', 'pierolock3', 'demo').id, 'piero-lock');
   assert.ok(Date.now() - prima >= 150,
     'la scrittura non ha aspettato il lock: due processi possono di nuovo cancellarsi le modifiche a vicenda');
   assert.ok(!fs.existsSync(lock), 'il lock proprio doveva essere rilasciato a fine scrittura');

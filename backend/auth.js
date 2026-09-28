@@ -415,84 +415,6 @@ function persone() {
   }));
 }
 
-// Sole cifre: "+39 352 072 7252" → "393520727252". Il confronto fra numeri e' sempre su
-// questa forma, mai sulla stringa com'e' arrivata.
-const soloCifre = s => String(s || '').replace(/\D/g, '');
-
-const PREFISSO_ITALIA = '39';
-
-/**
- * IL NUMERO IN FORMA INTERNAZIONALE, SEMPRE.
- *
- * "Ha gia' il prefisso del paese?" NON si deduce dalla lunghezza, e usare ">= 12 cifre" come
- * sinonimo di "ce l'ha" apriva un buco d'identita': 12 e' la forma internazionale completa in
- * Italia, ma sono 11 cifre in Francia, USA/Canada, Russia, Olanda, Belgio. Quei numeri
- * finivano nel ramo "confronta le ultime 10 cifre" e combaciavano con l'italiano che ha la
- * stessa coda — e il mittente non se lo inventa nessuno, la firma di Meta garantisce che il
- * numero e' davvero suo (whatsapp/webhook.js), quindi era un numero estero VERO che si
- * prendeva la persona: nome nel prompt del bot, scrape dall'IP di casa, quota consumata.
- * Il prefisso si mette quando MANCA — 10 cifre sono la forma nazionale italiana, mobili 3xx —
- * e da li' in poi si confrontano numeri interi.
- */
-function formaInternazionale(numero) {
-  // "00" iniziale = prefisso di uscita internazionale (0039... ≡ +39...): via.
-  const cifre = soloCifre(numero).replace(/^00/, '');
-  return cifre.length === 10 ? PREFISSO_ITALIA + cifre : cifre;
-}
-
-/**
- * LA PERSONA DIETRO UN NUMERO WHATSAPP.
- *
- * Il bot riceve solo il numero del mittente: qui lo si trasforma in un'identita' — le stesse
- * voci di `persone` del login web, tramite il campo opzionale `telefono` (scripts/set-telefono.js).
- * Confronto sul numero INTERO in forma internazionale: "+39 352 072 7252", "393520727252",
- * "00393520727252" e "3520727252" sono lo stesso numero; uno estero con la stessa coda di 10
- * cifre non lo e'.
- *
- * @returns {{id:string, nome:string, ruolo:'full'|'demo'}|null}
- */
-function personaDaTelefono(numero) {
-  const cifre = formaInternazionale(numero);
-  if (cifre.length < 9) return null;   // troppo corto per essere un numero vero
-  const cfg = load();
-  if (!leggibile(cfg)) return null;
-  for (const p of cfg.persone || []) {
-    const tel = formaInternazionale(p.telefono);
-    if (tel.length < 9) continue;
-    if (tel === cifre) {
-      return { id: String(p.id), nome: p.nome || String(p.id), ruolo: p.ruolo === 'full' ? 'full' : 'demo' };
-    }
-  }
-  return null;
-}
-
-/**
- * Assegna (o toglie, passando vuoto) il telefono WhatsApp di una persona.
- * Un numero identifica UNA persona: assegnarlo a due voci renderebbe ambigua l'identita'
- * che il bot ricava dal mittente, quindi il doppione (per suffisso) e' un errore.
- */
-function setTelefono(idONome, telefono) {
-  const q = String(idONome || '').trim().toLowerCase();
-  if (!q) throw new Error('Serve il nome (o l\'id) della persona.');
-  const cfg = load();
-  if (cfg === ILLEGGIBILE) throw new Error(`${filePath()} esiste ma non si legge: correggilo prima di riscriverlo.`);
-  if (!cfg) throw new Error('Imposta prima la password principale (scripts/set-password.js).');
-  const p = (cfg.persone || []).find(x => String(x.id).toLowerCase() === q || String(x.nome || '').toLowerCase() === q);
-  if (!p) throw new Error(`Nessuna persona di nome o id "${idONome}" (scripts/set-password.js --elenco).`);
-  const cifre = soloCifre(telefono);
-  if (!cifre) {
-    delete p.telefono;
-  } else {
-    if (cifre.length < 9) throw new Error('Numero troppo corto: servono almeno 9 cifre.');
-    const coda = cifre.slice(-10);
-    const doppione = (cfg.persone || []).find(x => x !== p && soloCifre(x.telefono).length >= 9 && soloCifre(x.telefono).slice(-10) === coda);
-    if (doppione) throw new Error(`Quel numero e' gia' di ${doppione.nome || doppione.id}: un numero identifica UNA persona.`);
-    p.telefono = cifre;   // salvato normalizzato (sole cifre), col prefisso com'e' arrivato
-  }
-  scriviAtomico(filePath(), cfg);
-  return { id: String(p.id), nome: p.nome || String(p.id), ruolo: p.ruolo === 'full' ? 'full' : 'demo', telefono: p.telefono || null };
-}
-
 /**
  * LA CHIAVE CON CUI SI FIRMA — e per l'ospite condiviso non e' il solo `secret`.
  *
@@ -585,8 +507,6 @@ module.exports = {
   setPersona:         (...a) => conLock(() => setPersona(...a)),
   creaPersona:        (...a) => conLock(() => creaPersona(...a)),
   togliPersona:       (...a) => conLock(() => togliPersona(...a)),
-  setTelefono:        (...a) => conLock(() => setTelefono(...a)),
   persone, verifica, verifyRole, passwordOccupata, passwordOccupataIn: (cfg, pw) => Boolean(chiUsaPassword(cfg, pw)), makeToken, checkToken, checkSessione,
-  personaDaTelefono,
   idDaNome, ID_RISERVATI, MIN_LEN, TTL_MS,
 };

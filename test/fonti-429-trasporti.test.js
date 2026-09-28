@@ -152,10 +152,10 @@ test('AS24: un 429 chiude la presa dagli header e conserva Retry-After', async (
   assert.ok(salute.fermo('autoscout').fino >= Date.now() + 899000);
 });
 
-test('Subito: il 429 HTTP senza fine body blocca anche una nuova ricerca ricambi', async () => {
+test('Subito: il 429 HTTP senza fine body blocca anche la ricerca successiva', async () => {
   const chiamate = finta(() => ({ status: 429 }));
   await assert.rejects(subito({ tipo: 'auto', marca: 'Prova' }), { status: 429 });
-  await assert.rejects(subito.searchAccessori('faro', { cat: 'moto' }), { code: 'FONTE_IN_PAUSA' });
+  await assert.rejects(subito({ tipo: 'moto', marca: 'Prova' }), { code: 'FONTE_IN_PAUSA' });
   assert.equal(chiamate(), 1);
 });
 

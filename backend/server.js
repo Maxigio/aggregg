@@ -10,7 +10,7 @@ const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
-const { buildFrontendSync } = require('../scripts/build-frontend');   // F39: minify (via commenti) app.js/style.css
+const { buildFrontendSync, frontendSourceSync, JS_FILES } = require('../scripts/build-frontend');
 const { buildGuidaSync, mtimeGuida } = require('../scripts/build-guida');   // F41: la Guida, montata da docs/guida/*.md
 const filtriAuto = require('./filtri-auto');            // filtri avanzati auto → dialetto di ogni fonte
 const versioneVerifica = require('./versione-verifica');  // la versione, verificata da noi su tutte le fonti
@@ -22,17 +22,11 @@ const scrapeAutoscoutGraphql = require('./scrapers/autoscout-graphql');
 const { combaciaModello } = require('./scrapers/autoscout-graphql');   // modello dichiarato vs cercato
 const scrapeSubitoApi = require('./scrapers/subito-api');
 const scrapeMotoIt    = require('./scrapers/motoit');
-const { renderReportPdf } = require('./report-pdf');   // un solo layout: lo usa anche il bottone del frontend
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
 const { famiglieMotoit, getBrandModels, getModelBikes, resolveMotoitVersionEntry, correggiModelSlug } = require('./scrapers/motoit-models');
 const motoitVersione = require('./scrapers/motoit-versione');   // testo libero → codice/slug versione Moto.it
 const { getDetail, fonteFromUrl } = require('./scrapers/detail');
-const liquidita      = require('./liquidita');    // liquidita modello (ACI Autoritratto)
 const annullo        = require('./annullo');       // il segnale che chiude le richieste abbandonate
-const iptCalc        = require('./ipt');          // costo passaggio di proprieta per provincia
-const provSigla      = require('./province-sigla'); // localita' dell'annuncio -> sigla provincia
-const motornet       = require('./scrapers/motornet');  // kW ufficiali di listino (SPENTO se AMR_MOTORNET!=1)
-const carburanti     = require('./carburanti');   // prezzi carburante MIMIT per provincia
 const budget = require('./budget-richieste');     // quante richieste costa una ricerca: contate, non stimate
 const { risolviNodo, marcaPseudo } = require('./scrapers/subito-nodo');   // testo digitato → id del catalogo Subito
 const { unisciGemelli, marcheNascoste, sinonimiTendina } = require('./menu-gemelli');   // due strade nel menu, la stessa lista
@@ -40,7 +34,8 @@ const { versioniDi } = require('./versioni-menu');     // le versioni suggeribil
 const { agganciaSubito } = require('./scrapers/ponte-buchi'); // i modelli che il ponte non copriva
 const { codiciAs24, unisciCodici, famigliaSubito, famiglieSubito } = require('./scrapers/as24-modelli');   // traduzione di livello, nei due versi
 // (campagna E6: l'import di as24-tassonomia era morto — nessun uso oltre la require)
-const { makeResolver, makeModelResolver, loadAliasMap, resolveAs24Narrowing, as24Spellings, norm } = require('./scrapers/brand-match');
+const { makeModelResolver, resolveAs24Narrowing, as24Spellings, norm } = require('./scrapers/brand-match');
+const { catalogResolver, lookupBrand, lookupModelGroup } = require('./catalogo-ricerca');
 const province        = require('../data/province.json');
 const regionCentroids = require('../data/region-centroids.json');  // capoluoghi regione {lat,lng} → raggio AS24 nativo
 // 12.575 CAP → regione. Autoscout il CAP lo manda con ogni annuncio: e' cio' che rende
@@ -55,35 +50,6 @@ const modelsData      = require('../data/models.json');
 // "Regolarita" e la ricerca "Regolarità" (o viceversa) perche' la moto sparisse dai risultati
 // senza nessun errore. Misurati 32 modelli moto accentati, ed e' sulle moto che il filtro-titolo
 // e' attivo. Vedi il commento della funzione per il perche' non e' quella di model-key.
-
-// Lookup marca FUZZY (matcher condiviso): "BMW"/"bmw", "Beta"→"Betamotor",
-// "Fantic"→"Fantic Motor" agganciano la stessa entry. Evita lo skip a cascata di
-// AS24/Moto.it quando la marca digitata non combacia esatta col nome catalogo.
-// NB: serve solo a recuperare i metadata (makeId/slug/modelli); la query Subito
-// usa sempre il testo digitato dall'utente, non il nome catalogo.
-// Il value porta sia il nome canonico sia l'entry: serve il nome per la chiave
-// dei gruppi-serie (model-groups.json), l'entry per i metadata (makeId/slug/modelli).
-const catalogResolver = {
-  auto: makeResolver(Object.entries(modelsData.auto || {}).map(([nome, entry]) => ({ name: nome, value: { nome, entry } })), { alias: loadAliasMap('auto') }),
-  moto: makeResolver(Object.entries(modelsData.moto || {}).map(([nome, entry]) => ({ name: nome, value: { nome, entry } })), { alias: loadAliasMap('moto') }),
-};
-const lookupBrand = (tipo, marca) => catalogResolver[tipo]?.(marca) || null;
-
-// Gruppi-serie commerciali (es. BMW "Serie 3" → [316,318,320,…]) generati da
-// scripts/build-model-groups.js. Usati per narroware il titolo AS24 quando la
-// serie non ha una entry-modello singola (niente mmmv di modello).
-let modelGroups = { auto: {}, moto: {} };
-try { modelGroups = require('../data/model-groups.json'); } catch (_) { /* opzionale */ }
-function lookupModelGroup(tipo, brandName, modelText) {
-  const brands = modelGroups[tipo];
-  if (!brands || !brandName) return null;
-  const g = brands[brandName];
-  if (!g) return null;
-  const q = norm(modelText);
-  if (!q) return null;
-  for (const [serie, membri] of Object.entries(g)) if (norm(serie) === q) return membri;
-  return null;
-}
 
 const app = express();
 // Il server e' raggiungibile dal Funnel: non dichiara il framework e applica le difese che non
@@ -100,8 +66,6 @@ app.use((req, res, next) => {
   next();
 });
 const PORT = process.env.PORT || 3000;
-// Le Aste sono una prova locale: sul servizio M2, senza opt-in, niente UI, API o giro PVP.
-const ASTE_LOCALE = process.env.AMR_ASTE_LOCALE === '1';
 // Timeout per-fonte: copre anche le ricerche che leggono più pagine o famiglie.
 const TIMEOUT_MS = 45000;
 
@@ -193,16 +157,12 @@ const LOCK_MS  = 10 * 60 * 1000;
 // lo azzerava solo un login riuscito, e otto errori sommati da piu' persone dietro lo stesso IP
 // pubblico (il Funnel) le bloccavano tutte a oltranza.
 const LOCK_DECAY_MS = 30 * 60 * 1000;
-// L'interruttore del bot WhatsApp. Default SPENTO: la webhook non viene montata affatto e la
-// sua deroga all'autenticazione non esiste. Si riaccende solo con AMR_WHATSAPP=1.
-const WHATSAPP_ON = process.env.AMR_WHATSAPP === '1';
 // Le porte che si devono poter bussare SENZA una sessione. Le tre della registrazione ci stanno
 // per definizione: chi chiede un account, e chi apre un invito per scegliersi la password, una
 // sessione non ce l'ha ancora — e `/api/invito` e' l'unica rotta non autenticata di tutta l'app
 // che SCRIVE una credenziale, quindi ogni riga che ci si aggiunge dentro va pesata.
 const AUTH_FREE = new Set(['/login', '/logout', '/api/public-url', '/api/health',
-  '/api/registrazione', '/invito', '/api/invito', '/api/invito/chi',
-  ...(WHATSAPP_ON ? ['/api/whatsapp/webhook'] : [])]);
+  '/api/registrazione', '/invito', '/api/invito', '/api/invito/chi']);
 
 function parseCookies(req) {
   const out = {};
@@ -467,96 +427,16 @@ function chiaveLimite(req) {
   return req.authId ? 'u:' + req.authId : 'ip:' + clientIp(req);
 }
 
-// ─── Segnalazioni (bug-report) — anche l'utente demo ────────────────────────
-// File in append: <USER_DATA_PATH>/reports.jsonl (Electron) o data/ (dev), come saved.js.
-// Sicurezza: dietro login (NON in AUTH_FREE), esente dal demo-gate (match esatto),
-// rate-limit dedicato (mappa separata, non lockare il login), cap 2000 char, no-echo.
-function reportsFile() {
-  const ud = process.env.USER_DATA_PATH;
-  return (ud && fs.existsSync(ud)) ? path.join(ud, 'reports.jsonl') : path.join(__dirname, '..', 'data', 'reports.jsonl');
-}
-// SEPARATO dai tentativi di accesso, e dallo stesso stampo di tutte le altre rotte:
-// una segnalazione rifiutata non si addebita, e il 429 dice fra quanto si puo' riprovare.
-const limiteReport = require('./limite-richieste').crea({ max: 5, finestra: 10 * 60 * 1000, cosa: 'segnalazioni' });
-app.post('/api/report', express.json({ limit: '32kb' }), (req, res) => {
-  const gRep = limiteReport.consuma(chiaveLimite(req));
-  if (!gRep.ok) return res.status(429).json({ error: limiteReport.messaggio(gRep), riprovaFra: gRep.attesa, restanti: 0 });
-  const b = req.body || {};
-  const type = b.type === 'search' ? 'search' : 'bug';
-  const message = String(b.message == null ? '' : b.message).slice(0, 2000).trim();
-  if (!message) return res.status(400).json({ error: 'messaggio obbligatorio' });
-  const rec = {
-    ts: new Date().toISOString(),
-    type,
-    message,
-    searchParams: (b.searchParams && typeof b.searchParams === 'object') ? b.searchParams : null,
-    count: Number.isFinite(b.count) ? b.count : null,
-    role: req.authRole || 'full',
-  };
-  try {
-    fs.appendFileSync(reportsFile(), JSON.stringify(rec) + '\n');
-    res.json({ ok: true });   // NO echo del contenuto
-  } catch (e) {
-    console.error('[report]', e.message);
-    res.status(500).json({ error: 'Impossibile salvare la segnalazione' });
-  }
-});
+// Le segnalazioni e il PDF condividono la chiave di limite dell'account.
+require('./report-route').mount(app, { chiaveLimite });
 
-/**
- * IL PDF DEL REPORT, DISEGNATO IN UN POSTO SOLO.
- *
- * C'erano due implementazioni dello stesso documento — `backend/report-pdf.js` per il bot e
- * `exportPdf` dentro frontend/app.js per il bottone — con lo stesso layout scritto due volte.
- * Erano gia' divergenti: quella del browser aveva le colonne dei prezzi finali (commissione,
- * spese, margine, passaggio) e la striscia delle metriche calcolata su valori diversi. Due
- * gemelli cosi' non restano uguali: basta una correzione applicata a uno solo.
- *
- * Il conto dei prezzi finali dipende da preferenze che vivono nel browser, quindi resta di
- * la': il browser manda le RIGHE gia' composte e qui si fa solo il disegno.
- *
- * L'utente demo puo' usarla: il documento contiene esattamente cio' che ha gia' a schermo.
- */
-// L'UNICA rotta cara che non aveva un freno: rende un PDF in modo SINCRONO da un corpo fino a
-// 4 MB e 2000 righe, e l'ospite anonimo puo' chiamarla. Stesso stampo delle altre sette.
-const limitePdf = require('./limite-richieste').crea({ max: 10, cosa: 'esportazioni PDF' });
-app.post('/api/report-pdf', express.json({ limit: '4mb' }), (req, res) => {
-  const gPdf = limitePdf.consuma(chiaveLimite(req));
-  if (!gPdf.ok) return res.status(429).json({ error: limitePdf.messaggio(gPdf), riprovaFra: gPdf.attesa, restanti: 0 });
-  const b = req.body || {};
-  const righe = Array.isArray(b.righe) ? b.righe : [];
-  if (righe.length > 2000) return res.status(400).json({ error: 'Il PDF può contenere al massimo 2.000 annunci. Riduci la selezione oppure esporta tutti gli annunci in CSV.' });
-  if (!righe.length) return res.status(400).json({ error: 'niente da stampare' });
-  // Il nuovo spazio per gli avvisi non deve diventare un documento arbitrariamente
-  // lungo da impaginare in modo sincrono. Si rifiuta l'eccesso, non si taglia il testo.
-  if (b.avvisi != null && (!Array.isArray(b.avvisi) || b.avvisi.length > 10
-      || b.avvisi.some(a => typeof a !== 'string') || b.avvisi.join('').length > 4000)) {
-    return res.status(400).json({ error: 'Avvisi PDF non validi: massimo 10 avvisi e 4.000 caratteri complessivi.' });
-  }
-  try {
-    const buf = renderReportPdf([], b.params || {}, {
-      titolo: b.titolo || null,
-      sottotitolo: b.sottotitolo || null,
-      avvisi: b.avvisi || [],
-      contatore: b.contatore || null,
-      colonne: Array.isArray(b.colonne) ? b.colonne : null,
-      righe,
-      fonti: Array.isArray(b.fonti) ? b.fonti : [],
-      colonneStile: (b.colonneStile && typeof b.colonneStile === 'object') ? b.colonneStile : null,
-    });
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${String(b.nome || 'automotoradar.pdf').replace(/[^\w.-]/g, '')}"`);
-    res.send(buf);
-  } catch (e) {
-    console.error('[report-pdf]', e.message);
-    res.status(500).json({ error: 'PDF non generato' });
-  }
-});
-
-// F39 — serve app.js/style.css MINIFICATI (commenti via) prima dello static.
-// Fallback trasparente al sorgente se la build esbuild fallisce (next()).
+// Serve app.js/style.css minificati; se esbuild manca al boot si serve il sorgente composto.
 let minFE = { js: null, css: null, ver: '' };
 try { minFE = buildFrontendSync(); console.log(`[frontend] minify OK v${minFE.ver}`); }
-catch (e) { console.warn('[frontend] minify fallita → servo i sorgenti:', e.message); }
+catch (e) {
+  console.warn('[frontend] minify fallita → servo i sorgenti:', e.message);
+  try { minFE = frontendSourceSync(); } catch (_) { /* lo static gestisce l'assenza del file */ }
+}
 
 /**
  * IL BUNDLE SI RIFA' DA SOLO QUANDO IL SORGENTE CAMBIA.
@@ -567,12 +447,12 @@ catch (e) { console.warn('[frontend] minify fallita → servo i sorgenti:', e.me
  * bottone della sezione nuova compare e non fa niente, perche' il gestore non e' nel
  * bundle. Un errore che non fa rumore e manda a cercare il bug nel posto sbagliato.
  *
- * Costa due statSync per richiesta di /app.js e /style.css: nulla, e solo su due file.
+ * Controlla il timestamp di ogni sorgente del bundle e del foglio stile.
  * Se la ricostruzione fallisce si tiene il bundle buono di prima invece di servire un
  * frontend a meta'.
  */
 let mtimeFE = 0;
-const FILE_FE = ['app.js', 'style.css'].map(f => path.join(__dirname, '../frontend', f));
+const FILE_FE = [...JS_FILES, path.join(__dirname, '../frontend/style.css')];
 const timbroFE = () => {
   try { return FILE_FE.reduce((m, f) => Math.max(m, fs.statSync(f).mtimeMs), 0); } catch (_) { return mtimeFE; }
 };
@@ -611,11 +491,6 @@ app.get(['/', '/index.html'], (req, res, next) => {
     const v = minFE.ver || String(Date.now());
     let html = fs.readFileSync(path.join(__dirname, '../frontend/index.html'), 'utf8')
       .replace(/(src|href)="(app\.js|style\.css|pricing\.js)"/g, `$1="$2?v=${v}"`);
-    html = html
-      .replace('<!-- AMR_ASTE_BUTTON -->', ASTE_LOCALE
-        ? '<button type="button" class="mode-btn" data-mode="aste" role="tab">Aste</button>' : '')
-      .replace('<!-- AMR_ASTE_PANEL -->', ASTE_LOCALE
-        ? '<div id="astePanel" class="d-none"></div>' : '');
     res.set('Cache-Control', 'no-cache').type('html').send(html);
   } catch (_) { next(); }
 });
@@ -799,131 +674,8 @@ app.get('/api/models', async (req, res) => {
     ...(motoitKo ? { fonteMotoitKo: motoitKo } : {}) });
 });
 
-// F43 — Versioni (allestimenti) Moto.it di un modello: per la 2ª force-select (solo moto).
-// `bikes/<brand>|<model>/Used` → [{ nome, code }]; `code` va in `motoitBikeCode` (param `bike=`).
-// Due modi (Lazy-T2):
-//  - `modelSlug` = famiglia Moto.it scelta direttamente → bikes della famiglia.
-//  - `modelNome` = voce-catalogo (es. "Dyna Fat Bob") senza slug → risolve famiglia+versioni.
-// Ritorna `{ familySlug, versioni:[{nome,code,annoMin,annoMax}] }`.
-// ─── Liquidita per MARCA: alimenta il segno accanto a ogni annuncio ───────────
-// Si serve solo la marca cercata (poche decine di modelli, non i 1.997 totali), cosi'
-// il client puo' attribuire il dato riga per riga senza scaricare tutto l'archivio.
-// Serve nelle ricerche per sola marca, dove ogni riga e' un modello diverso.
-app.get('/api/liquidita', (req, res) => {
-  const marca = String((req.query || {}).marca || '').trim();
-  const modello = String((req.query || {}).modello || '').trim();
-  const tipo = String((req.query || {}).tipo || 'auto');
-  if (!marca) return res.json({ ok: false });
-  // La marca del catalogo va TRADOTTA in quella dell'Autoritratto ("Mercedes-Benz" \u2192
-  // "mercedes"), senno' la scansione per prefisso non trova niente e la lista dei modelli
-  // torna vuota \u2014 stesso difetto che `cerca()` aveva sulla voce singola.
-  const marcaAci = liquidita.risolviMarca(marca);
-  if (!marcaAci) return res.json({ ok: true, marca, anno: liquidita.dati.anno, fonte: liquidita.dati.fonte, modelli: [], voce: null });
-  const pref = marcaAci + '|';
-  const modelli = [];
-  for (const [k, m] of Object.entries(liquidita.dati.modelli)) {
-    if (!k.startsWith(pref)) continue;
-    const r = liquidita.ricambioUtile(m);   // niente percentuale dove il rapporto non e' misurabile
-    // `trasferimentiTotali` viaggia anche qui: i netti escludono le minivolture, cioe' il
-    // passaggio al concessionario che poi rivende — sull'archivio ACI sono 2,4 milioni di
-    // formalita' su 5,6, e sono proprio quelle del giro commerciale.
-    modelli.push({ modello: m.modello, parco: m.parco, trasferimenti: m.trasferimenti,
-                   trasferimentiTotali: m.trasferimentiTotali, ricambio: r });
-  }
-  res.set('Cache-Control', 'public, max-age=86400');
-  // voce del modello cercato: la sola che sa dire "questo e' il dato del modello base, non
-  // della variante" e che porta fonte e nota. Il frontend non deve reinventarle.
-  const voce = modello ? liquidita.cerca(marca, modello, tipo) : null;
-  res.json({ ok: true, marca, anno: liquidita.dati.anno, fonte: liquidita.dati.fonte, modelli, voce });
-});
-
-// ─── Passaggio di proprieta' del SINGOLO annuncio ────────────────────────────
-// Potenza e localita' sono gia' nell'annuncio: un operatore che guarda una macchina vuole
-// sapere li' quanto gli costa metterla a nome suo, non in un pannello a parte. La localita'
-// arriva in tre formati diversi secondo la fonte (sigla, provincia, comune) e va tradotta in
-// sigla, altrimenti l'IPT non e' calcolabile. Se la traduzione fallisce si dice perche':
-// meglio "non lo so" che un importo su una provincia indovinata.
-app.get('/api/passaggio', async (req, res) => {
-  const { provincia, cap, cv, kw, tipo, ivaEsposta, storico, marca, modello } = req.query || {};
-  const st = storico === '1';
-  const loc = provSigla.risolvi(provincia, cap);
-  if (!loc) return res.json({ ok: false, motivo: 'localita\' non riconosciuta: "' + String(provincia || '').slice(0, 40) + '"' });
-
-  // Potenze fuori scala: un annuncio con "9999 CV" e' un errore di battitura del venditore,
-  // non un veicolo. Meglio rifiutare che firmare un importo assurdo. Bande larghe di proposito
-  // (esistono auto da 1.000+ CV): servono solo a fermare l'assurdo.
-  const num = x => { const n = Number(x); return Number.isFinite(n) ? n : NaN; };
-  const cvN = num(cv), kwN = num(kw);
-  if (!Number.isNaN(kwN) && kwN !== 0 && !(kwN >= 1 && kwN <= 1500)) return res.json({ ok: false, provincia: loc.sigla, motivo: 'potenza fuori scala: ' + kwN + ' kW' });
-  if (!Number.isNaN(cvN) && cvN !== 0 && !(cvN >= 1 && cvN <= 2000)) return res.json({ ok: false, provincia: loc.sigla, motivo: 'potenza fuori scala: ' + cvN + ' CV' });
-
-  // kW dichiarati se ci sono, altrimenti stimati dai CV: la stima va detta, non nascosta.
-  // Si arrotonda a un decimale PRIMA del calcolo: l'IPT si paga sui kW del libretto, che sono
-  // un valore dichiarato — portarsi dietro 55,16240625 kW sarebbe finta precisione.
-  // I kW DICHIARATI battono la stima: sopra e sotto i 53 kW la tariffa cambia categoria, e la
-  // stima dai CV puo' far scavalcare la soglia a un'utilitaria (73 CV → 53,7 kW stimati, ma il
-  // libretto puo' dire 53 → 49 € di differenza). Il listino li ha; se non li ha, si stima e si dice.
-  let kwListino = null;
-  // `tipo !== 'moto'`, simmetrico al guard sull'anno gia' dentro motornet: gli endpoint del
-  // listino sono solo /nuovo/auto/, e per le moto il kW e' inutile in OGNI ramo di ipt.js
-  // (non-storico: ok:false a prescindere; storico: importo fisso che i kW non li guarda).
-  // Erano fino a 3 richieste con pause da 1,5 s — e un 403 mette la fonte in pausa 30 minuti.
-  if (motornet.ATTIVO && tipo !== 'moto' && marca && modello && cvN >= 1) {
-    // L'anno dell'annuncio arriva fin qui: su un'auto vecchia la richiesta al listino del
-    // NUOVO non parte proprio (vedi motornet.js) e si va dritti alla stima dai CV, che e'
-    // dichiarata. Prima si spendeva una richiesta a una fonte con un freno anti-raffica per
-    // un modello che quel listino non ha piu'.
-    try { kwListino = await motornet.kwDaCavalli(marca, modello, cvN, (req.query || {}).anno); }
-    catch (e) { console.warn('[api/passaggio] motornet KO:', e.message); }
-  }
-  const kwDiretti = kwN >= 1 ? kwN : (kwListino ? kwListino.kw : null);
-  const kwStimati = kwDiretti == null && cvN >= 1 ? Math.round(provSigla.kwDaCv(cvN) * 10) / 10 : null;
-  const kW = kwDiretti != null ? kwDiretti : kwStimati;
-  if (!(kW > 0) && !st) return res.json({ ok: false, provincia: loc.sigla, motivo: 'potenza non disponibile in questo annuncio' });
-
-  const r = iptCalc.calcola({
-    provincia: loc.sigla, kW: kW || 0, tipo: tipo === 'moto' ? 'moto' : 'auto',
-    ivaEsposta: ivaEsposta === '1', storico: st,
-  });
-  r.localita = { testo: String(provincia || '').slice(0, 60), sigla: loc.sigla, via: loc.via };
-  /**
-   * LA STIMA SI DICHIARA. `potenzaStimata` viaggiava nella risposta e nessuno a schermo la
-   * leggeva (rg su frontend/: zero): l'importo dell'IPT usciva identico a quello calcolato
-   * su kW veri, mentre nasce da una conversione dai CV dichiarati — su 73 CV sono 53,7 kW
-   * e ~49 euro di scarto sull'importo. `avvisi` e' il canale gia' montato a schermo
-   * (passAvvisiHTML, ramo di successo compreso): la stima passa di li'.
-   */
-  if (kwStimati != null) {
-    r.potenzaStimata = { cv: cvN, kw: kwStimati };
-    r.avvisi = [`Potenza non dichiarata dall'annuncio: i ${kwStimati} kW sono STIMATI dai ${cvN} CV, e l'importo con loro.`,
-      ...(r.avvisi || [])];
-  }
-  // `!(kwN >= 1)`, non `kwN < 1`: senza il parametro kw questo e' NaN, e NaN < 1 e' FALSO —
-  // la provenienza non sarebbe mai uscita proprio nel caso per cui esiste. Stessa forma della
-  // riga 564, che con NaN sceglie appunto i kW di listino.
-  if (kwListino && !(kwN >= 1)) r.potenzaListino = { cv: cvN, kw: kwListino.kw, versioni: kwListino.versioni.slice(0, 3), fonte: kwListino.fonte, url: kwListino.url };
-  // Cache solo sui successi: un "non calcolabile" dipende dai dati dell'annuncio, che possono
-  // arrivare dopo (Moto.it arricchisce la potenza in un secondo momento).
-  if (r.ok) res.set('Cache-Control', 'public, max-age=3600');
-  res.json(r);
-});
-
-// ─── Prezzi carburante ufficiali per provincia (open data MIMIT, IODL 2.0) ────
-// Incrociati col consumo della scheda tecnica danno il costo reale al km dove vive
-// l'utente. L'indice è piccolo (107 province × 4 carburanti) → si serve tutto e il
-// client calcola: cambiare km/anno o provincia non richiede altre richieste.
-// La UI DEVE citare la fonte: è l'obbligo di attribuzione della licenza IODL 2.0.
-app.get('/api/carburanti', async (req, res) => {
-  try {
-    const idx = await carburanti.indice();
-    if (!idx) return res.json({ ok: false, motivo: 'prezzi non disponibili' });
-    res.set('Cache-Control', 'public, max-age=3600');
-    res.json({ ok: true, aggiornato: idx.aggiornato, fonte: idx.fonte, italia: idx.italia, province: idx.province });
-  } catch (e) {
-    console.warn('[api/carburanti] KO:', e.message);
-    res.json({ ok: false, motivo: 'prezzi non disponibili' });
-  }
-});
+// Dati del veicolo e costi, separati dalla ricerca degli annunci.
+require('./veicolo-dati-route').mount(app);
 
 /**
  * LE VERSIONI SUGGERIBILI per la tendina del campo Versione (richiesta del proprietario,
@@ -1322,7 +1074,7 @@ require('./richiami-route').mount(app, { chiaveLimite });
 // Una targa per gesto umano, niente archivio, niente targhe nei log.
 require('./targa').mount(app, { json: express.json({ limit: '2kb' }), chiaveLimite });
 
-// ─── Fonti dati aperte (OSM, EPREL, bilstein, Wheel-Size) — vedi fonti-route.js ──
+// ─── Fonti dati aperte (OSM, EPREL, Wheel-Size) — vedi fonti-route.js ──
 require('./fonti-route').mount(app, { chiaveLimite });
 
 // ─── Le MISURE della redazione (auto.it, inSella) — vedi prove-route.js ────────
@@ -1330,10 +1082,6 @@ require('./fonti-route').mount(app, { chiaveLimite });
 // il costruttore dichiara. Su richiesta, una fonte per tipo di veicolo.
 require('./prove-route').mount(app, { chiaveLimite });
 
-// ─── Aste giudiziarie: i lotti del PVP, in magazzino locale — vedi aste-route.js ──
-// Fonte unica per legge (art. 490 c.p.c.), copiata una volta al giorno in `amr-aste.db`:
-// i filtri a schermo non costano niente al portale del ministero.
-if (ASTE_LOCALE) require('./aste-route').mount(app, { chiaveLimite });
 
 // ─── Cache ricerche recenti (§17.4) ───────────────────────────────────────────
 // Stessa ricerca entro il TTL → risposta istantanea. NON cacha se una fonte è
@@ -2358,30 +2106,6 @@ const amrSearchFn = async (input, utente) => {
 };
 
 /**
- * WEBHOOK WHATSAPP — spenta per difetto: senza interruttore la rotta NON ESISTE.
- *
- * Il bot e' un sistema che conversa con una persona; era stato spento il 2 agosto 2026 in
- * attesa della messa a norma AI Act. Gli adempimenti sono ORA implementati nel canale
- * (backend/whatsapp/webhook.js):
- *   - disclosure Art. 50: a ogni NUOVA sessione (prima interazione o TTL 30 min scaduto) il
- *     primo messaggio dichiara che si sta parlando con un sistema AI. Testo di default in
- *     codice, riformulabile via WA_DISCLOSURE_TEXT ma MAI disattivabile (vuota = default);
- *   - identificazione mittenti: il numero WhatsApp risale a una persona di auth.json
- *     (auth.personaDaTelefono, gestita con scripts/set-telefono.js) e il nome arriva al bot;
- *     in mancanza vale il solo fallback legacy WHATSAPP_ALLOWED_SENDERS (senza identita'),
- *     e chi non e' in nessuna delle due riceve UNA risposta cortese e il bot non parte.
- *
- * Il canale si abilita mettendo AMR_WHATSAPP=1 nell'ambiente: scelta esplicita e mai per
- * difetto. Spenta, la rotta non viene proprio montata — `/api/whatsapp/webhook` da' 404 come
- * qualunque percorso inesistente — e anche la deroga all'autenticazione segue l'interruttore.
- */
-if (WHATSAPP_ON) {
-  require('./whatsapp/webhook').mount(app, { searchFn: amrSearchFn });
-} else {
-  console.log('[wa] webhook NON montata (AMR_WHATSAPP non vale 1): /api/whatsapp/webhook risponde 404');
-}
-
-/**
  * L'ULTIMA RETE. Va DOPO ogni rotta: e' l'ultimo `app.use` del file, e i quattro argomenti
  * sono cio' che lo rende un gestore d'errore per Express (tre non basterebbero).
  *
@@ -2448,9 +2172,6 @@ if (avviaAscolto && auth.stato() === 'assente') {
 const server = !avviaAscolto ? null : app.listen(PORT, () => {
   console.log(`Server avviato su http://localhost:${PORT}`);
 
-    // Aste: il giro sul portale del ministero, uno al giorno. Si sveglia da solo e quasi
-    // sempre non fa niente — decide `stantio()`, che guarda l'ETA' dell'ultimo giro riuscito.
-    if (ASTE_LOCALE) require('./aste').avvia();
 });
 // Esposte per i test di caratterizzazione: sono le funzioni con cui inizia OGNI risoluzione
 // marca/modello, e finora non erano raggiungibili da fuori. Prefisso _ = superficie interna.
