@@ -170,7 +170,7 @@ test('Moto.it: un 429 del menu ferma la ricerca senza nuove chiamate', async () 
 test('AS24: l’unione conserva anche una grafia letta solo a metà, tutte fallite restano errore', async () => {
   const vm = require('node:vm');
   const src = fs.readFileSync(path.join(__dirname, '../backend/server.js'), 'utf8');
-  const corpo = src.slice(src.indexOf('async function scrapeAutoscoutUnion'), src.indexOf('// Auto e Moto usano sempre hades'));
+  const corpo = src.slice(src.indexOf('async function scrapeAutoscoutUnion'), src.indexOf('async function scrapeSubitoSmart'));
   let fallisci = false;
   const contesto = vm.createContext({ scrapeAutoscoutSmart() { assert.fail('ripiego inatteso'); },
     async scrapeAutoscoutGraphql(p, opts) {
@@ -189,7 +189,7 @@ test('AS24: l’unione conserva anche una grafia letta solo a metà, tutte falli
 test('AS24: il limite del body resta visibile anche se un’altra grafia fallisce prima', async () => {
   const vm = require('node:vm');
   const src = fs.readFileSync(path.join(__dirname, '../backend/server.js'), 'utf8');
-  const corpo = src.slice(src.indexOf('async function scrapeAutoscoutUnion'), src.indexOf('// Auto e Moto usano sempre hades'));
+  const corpo = src.slice(src.indexOf('async function scrapeAutoscoutUnion'), src.indexOf('async function scrapeSubitoSmart'));
   const contesto = vm.createContext({ scrapeAutoscoutSmart() { assert.fail('ripiego inatteso'); },
     async scrapeAutoscoutGraphql(p) {
       const e = p.autoscoutVersionText === 'prima'
@@ -220,7 +220,7 @@ test('Moto.it: markup non leggibile durante la verifica non riapre la fonte', as
 test('AS24: una grafia fermata localmente non viene ricontata come blocco del portale', async () => {
   const vm = require('node:vm');
   const src = fs.readFileSync(path.join(__dirname, '../backend/server.js'), 'utf8');
-  const corpo = src.slice(src.indexOf('async function scrapeAutoscoutUnion'), src.indexOf('// Auto e Moto usano sempre hades'));
+  const corpo = src.slice(src.indexOf('async function scrapeAutoscoutUnion'), src.indexOf('async function scrapeSubitoSmart'));
   const locale = Object.assign(new Error('verifica in corso'), { kind: 'blocked', code: 'FONTE_IN_PAUSA' });
   const c = vm.createContext({ async scrapeAutoscoutGraphql(p) {
     if (p.autoscoutVersionText === 'seconda') throw locale;
