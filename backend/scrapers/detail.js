@@ -23,6 +23,7 @@ const TTL_MS    = 12 * 60 * 60 * 1000;
 // che usano motornet e autoit-rilevamenti, e stesso motivo di `ttlCorto` in cache-disco.
 const VUOTO_TTL_MS = 15 * 60 * 1000;
 const MAX_CACHE = 500;
+const MAX_HTML_BYTES = { subito: 606096, autoscout: 1611063 };
 const cache    = new Map();   // url → { ts, data }
 const inflight = new Map();   // url → Promise
 
@@ -56,8 +57,17 @@ async function fetchText(url, hops = 0, onRequest = null) {
         res.resume();
         return reject(errore);
       }
-      let d = ''; res.setEncoding('utf8');
-      res.on('data', c => d += c);
+      let d = '', bytes = 0; res.setEncoding('utf8');
+      res.on('data', c => {
+        bytes += Buffer.byteLength(c, 'utf8');
+        if (bytes > MAX_HTML_BYTES[fonte]) {
+          reject(Object.assign(new Error(`${fonte}: dettaglio oltre il limite di dimensione; pagina non letta`),
+            { code: 'DETAIL_BODY_TOO_LARGE', fonte }));
+          res.destroy(); req.destroy();
+          return;
+        }
+        d += c;
+      });
       res.on('end', () => resolve(d));
     });
     req.on('error', reject);
@@ -288,7 +298,8 @@ async function getDetail(url, { onRequest = null } = {}) {
     return data;
   }).catch(e => {
     console.warn(`[detail] ${String(url).slice(0, 70)}: ${e.message}`);
-    if (e.status === 429 || e.code === 'FONTE_IN_PAUSA' || e.code === 'AMR_DETAIL_LIMIT') throw e;
+    if (e.status === 429 || e.code === 'FONTE_IN_PAUSA' || e.code === 'AMR_DETAIL_LIMIT'
+        || e.code === 'DETAIL_BODY_TOO_LARGE') throw e;
     return null;   // best-effort: la UI mostra "dettagli non disponibili"
   }).finally(() => { inflight.delete(url); });
   inflight.set(url, p);

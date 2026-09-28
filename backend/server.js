@@ -219,6 +219,9 @@ app.get('/api/detail', async (req, res) => {
     if (e.code === 'AMR_DETAIL_LIMIT') {
       return res.status(429).json({ ok: false, error: e.message, limiteDettaglio: true, riprovaFra: e.riprovaFra });
     }
+    if (e.code === 'DETAIL_BODY_TOO_LARGE') {
+      return res.status(502).json({ ok: false, error: e.message, detailTroppoGrande: true, fonte: e.fonte });
+    }
     if (e.status === 429 || e.code === 'FONTE_IN_PAUSA') {
       return res.status(502).json({ ok: false, error: e.message, fonte: e.fonte, pausa: salute.fermo(e.fonte) });
     }

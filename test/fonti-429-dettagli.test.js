@@ -152,6 +152,43 @@ test('detail: quota locale esaurita non modifica la salute della fonte in verifi
   assert.equal(salute.fermo('autoscout').fermo, false);
 });
 
+for (const [fonte, host, bytes] of [
+  ['subito', 'www.subito.it', 606097],
+  ['autoscout', 'www.autoscout24.it', 1611064],
+]) {
+  test(`detail ${fonte}: un body oltre la soglia viene rifiutato, mai servito parziale`, async () => {
+    const chiamate = risposte({ status: 200, body: Buffer.alloc(bytes, 65) });
+    const url = `https://${host}/dettaglio-troppo-grande`;
+    await assert.rejects(getDetail(url), { code: 'DETAIL_BODY_TOO_LARGE', fonte });
+    assert.equal(chiamate.length, 1);
+    assert.equal(chiamate[0].closed, true);
+  });
+}
+
+test('detail Subito: il body esattamente alla soglia resta leggibile', async () => {
+  const chiamate = risposte({ status: 200, body: Buffer.alloc(606096, 65) });
+  const detail = await getDetail('https://www.subito.it/dettaglio-soglia-esatta');
+  assert.ok(detail);
+  assert.equal(chiamate.length, 1);
+  assert.equal(chiamate[0].closed, false);
+});
+
+test('/api/detail: un body troppo grande produce 502 esplicito', async () => {
+  risposte({ status: 200, body: Buffer.alloc(606097, 65) });
+  const app = require('../backend/server').app;
+  const handler = app.router.stack.find(x => x.route?.path === '/api/detail').route.stack.at(-1).handle;
+  const req = { query: { url: 'https://www.subito.it/dettaglio-soglia-route' }, authId: 'probe-dettaglio' };
+  const res = {
+    statusCode: 200,
+    status(n) { this.statusCode = n; return this; },
+    json(body) { this.body = body; return this; },
+  };
+  await handler(req, res);
+  assert.equal(res.statusCode, 502);
+  assert.equal(res.body.detailTroppoGrande, true);
+  assert.equal(res.body.fonte, 'subito');
+});
+
 test('specs: 429 con Retry-After ferma anche detail e preserva errore tipizzato', { timeout: 1000 }, async () => {
   const chiamate = risposte({ status: 429, hold: true, headers: { 'retry-after': '7200' },
     onResume: () => assert.equal(salute.fermo('moto').fermo, true) });
