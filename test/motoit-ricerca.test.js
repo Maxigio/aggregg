@@ -5,11 +5,9 @@
  * REGRESSIONE chiusa qui: `items.length === 0` chiudeva il loop come "fine genuina" anche
  * quando la pagina conteneva card grezze non mappabili, o quando la testata dichiarava
  * migliaia di annunci. Una deriva del markup diventava "Moto.it: 0 risultati" — presentata
- * come dato di mercato, e cacheable. La vetrina gemella (motoit-vetrina) questa guardia
- * ce l'ha da prima: ora le due si comportano allo stesso modo.
+ * come dato di mercato, e cacheable.
  *
- * Si prova il loop (`_scrapeVia`) stubbando `_get`, come fa motoit-vetrina.test.js: niente
- * throttle da 1.5s, niente rete.
+ * Si prova il loop (`_scrapeVia`) stubbando `_get`: niente throttle da 1.5s, niente rete.
  */
 const { test } = require('node:test');
 const assert = require('node:assert');
@@ -80,8 +78,7 @@ test('la prima fetta Moto.it chiede una pagina nativa, la seconda la pagina 2', 
 test('risposta troncata con FIN pulita: la porta HTTP rigetta, non resta pendente', async () => {
   // Content-Length 1000, 100 byte scritti, poi FIN pulita: prima del fix niente 'end',
   // niente errore su req, e il timeout socket muore col socket → Promise pendente per
-  // sempre. La vetrina (motoit-vetrina via competitor) aspetta `_get` FUORI dal segnale
-  // di annullo e senza timeout di rotta: li' nessuno poteva piu' chiuderla.
+  // sempre.
   const http = require('node:http');
   const https = require('node:https');
   const server = http.createServer((req, res) => {

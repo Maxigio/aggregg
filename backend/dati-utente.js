@@ -3,11 +3,11 @@
  *
  * Annunci, ricambi e ricerche provengono dai portali e non vengono conservati. Tema e vista
  * restano invece nel singolo browser; queste preferenze seguono l'account per evitare che due
- * dispositivi calcolino prezzi diversi per lo stesso veicolo o ricambio.
+ * dispositivi calcolino prezzi diversi per lo stesso veicolo.
  */
 const dbmod = require('./utenti-db');
 
-const PREFERENZE = new Set(['amr_price_v', 'amr_price_r', 'amrCarbProvincia', 'amrCarbKm', 'amrPassProvincia']);
+const PREFERENZE = new Set(['amr_price_v', 'amrCarbProvincia', 'amrCarbKm', 'amrPassProvincia']);
 const MAX_VALORE = 4096;
 
 function chi(utente) {

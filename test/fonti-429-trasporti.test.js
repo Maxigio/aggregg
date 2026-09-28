@@ -13,7 +13,6 @@ const salute = require('../backend/fonti-salute');
 const as24 = require('../backend/scrapers/autoscout-graphql');
 const motoit = require('../backend/scrapers/motoit');
 const catalogo = require('../backend/scrapers/motoit-models');
-const vetrina = require('../backend/scrapers/motoit-vetrina');
 const subito = require('../backend/scrapers/subito-api');
 const get = https.get, request = https.request;
 afterEach(() => { https.get = get; https.request = request; salute.azzera(); });
@@ -62,26 +61,6 @@ test('AS24: errors vuoto e lista vuota sono validi, lista mancante resta errore'
   assert.equal(vuota.items.length, 0);
   finta(() => ({ status: 200, body: JSON.stringify({ data: { search: {} } }) }));
   await assert.rejects(as24({ tipo: 'auto', as24Customer: '1' }, { maxPages: 1 }), /elenco annunci assente/);
-});
-
-test('AS24: Competitor si ferma a 50 su 50, ma legge la pagina 2 quando il totale e 51', async () => {
-  let chiamate = finta(() => ({ status: 200, body: JSON.stringify({ data: { search: {
-    listings: { listings: Array.from({ length: 50 }, (_, i) => nodo(i)), metadata: { totalItems: 50 } },
-  } } }) }));
-  const completo = await as24({ tipo: 'auto', as24Customer: '1' }, { maxPages: 40, withMeta: true });
-  assert.equal(chiamate(), 1);
-  assert.equal(completo.items.length, 50);
-  assert.equal(completo.truncated, false);
-  assert.equal(completo.hasMore, false);
-
-  chiamate = finta(n => ({ status: 200, body: JSON.stringify({ data: { search: {
-    listings: { listings: n === 1 ? Array.from({ length: 50 }, (_, i) => nodo(i)) : [nodo(50)],
-      metadata: { totalItems: 51 } },
-  } } }) }));
-  const successiva = await as24({ tipo: 'auto', as24Customer: '1' }, { maxPages: 40, withMeta: true });
-  assert.equal(chiamate(), 2);
-  assert.equal(successiva.items.length, 51);
-  assert.equal(successiva.truncated, false);
 });
 
 test('AS24: totale in contrasto con 50 righe e prezzo non leggibile restano dichiarati', async () => {
@@ -180,21 +159,12 @@ test('Subito: il 429 HTTP senza fine body blocca anche una nuova ricerca ricambi
   assert.equal(chiamate(), 1);
 });
 
-test('Moto.it: un 429 del menu ferma ricerca e vetrine senza nuove chiamate', async () => {
+test('Moto.it: un 429 del menu ferma la ricerca senza nuove chiamate', async () => {
   const chiamate = finta(() => ({ status: 429 }));
   await catalogo.getBrandModels('marca-prova-429').catch(() => {});
   assert.equal(salute.fermo('moto').fermo, true);
   await assert.rejects(motoit._get('https://www.moto.it/moto-usate/ricerca'), { code: 'FONTE_IN_PAUSA' });
-  await assert.rejects(vetrina.scheda('concessionario-prova'), { code: 'FONTE_IN_PAUSA' });
   assert.equal(chiamate(), 1);
-});
-
-test('Moto.it: il parco mantiene le card ricevute prima del 429', async () => {
-  const card = id => `<div class="dlr-card"><a data-target="#annuncio_${id}"></a><span class="dlr-card__info__title__brand">Yamaha</span><span class="dlr-card__info__title__model">MT-07</span><span class="dlr-card__extrainfo__price">5.000 €</span></div>`;
-  const chiamate = finta(n => n === 1 ? { status: 200, body: `<html>${Array.from({ length: 12 }, (_, i) => card(1000 + i)).join('')}</html>` } : { status: 429 });
-  const r = await vetrina.parco('prova', { maxPagine: 5 });
-  assert.equal(r.items.length, 12); assert.equal(r.errorePagina.status, 429);
-  assert.equal(r.troncato, false, 'errore, non raggiungimento del tetto'); assert.equal(chiamate(), 2);
 });
 
 test('AS24: l’unione conserva anche una grafia letta solo a metà, tutte fallite restano errore', async () => {
@@ -274,8 +244,6 @@ const verificaMoto = async lavoro => {
 const pagMoto = 'https://www.moto.it/moto-usate/ricerca';
 for (const [nome, leggi] of [
   ['ricerca', () => motoit._scrapeVia([pagMoto])],
-  ['parco', () => vetrina.parco('prova')],
-  ['anagrafica', () => vetrina.scheda('prova')],
 ]) {
   test(`Moto.it: manutenzione HTTP 200 non sblocca la verifica di ${nome}`, async () => {
     const chiamate = finta(() => ({ status: 200, body: '<html><h1>Temporarily unavailable</h1></html>' }));
@@ -295,17 +263,3 @@ test('Moto.it: una ricerca con zero annunci dichiarati sblocca la fonte', async 
     assert.equal(salute.fermo('moto').fino, null);
   });
 });
-
-for (const inventario of [false, true]) {
-  test(`Moto.it: la vetrina riconoscibile sblocca ${inventario ? 'il parco anche vuoto' : 'l’anagrafica'}`, async () => {
-    const $ = require('cheerio').load(fs.readFileSync(path.join(__dirname, 'fixtures/motoit-vetrina.html'), 'utf8'));
-    $('.dlr-card').remove(); // conserva la struttura del concessionario, non inventa un marcatore di zero
-    finta(() => ({ status: 200, body: $.html() }));
-    await verificaMoto(async () => {
-      const r = inventario ? await vetrina.parco('prova') : await vetrina.scheda('prova');
-      if (inventario) assert.deepEqual(r.items, []);
-      else assert.equal(r.nome, 'Niko Moto');
-      assert.equal(salute.fermo('moto').fino, null);
-    });
-  });
-}

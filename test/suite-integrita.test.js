@@ -53,6 +53,21 @@ test('ogni modulo del backend si carica', () => {
   assert.deepStrictEqual(ko, [], 'moduli che non si caricano');
 });
 
+test('Ricambi e Competitor non hanno porte web attive; il motore WhatsApp resta disponibile', () => {
+  const html = fs.readFileSync(path.join(RADICE, 'frontend', 'index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(RADICE, 'frontend', 'app.js'), 'utf8');
+  const server = fs.readFileSync(path.join(RADICE, 'backend', 'server.js'), 'utf8');
+  for (const area of ['ricambi', 'competitor']) {
+    assert.ok(!html.includes(`data-mode="${area}"`));
+    assert.ok(!html.includes(`id="${area}Panel"`));
+    assert.ok(!server.includes(`${area}-route`));
+    assert.ok(!app.includes(`/api/${area}`));
+  }
+  assert.ok(!fs.existsSync(path.join(RADICE, 'backend', 'competitor-route.js')));
+  assert.ok(!fs.existsSync(path.join(RADICE, 'backend', 'ricambi-route.js')));
+  assert.equal(typeof require('../backend/ricambi-core').searchRicambi, 'function');
+});
+
 test('ogni dipendenza dichiarata dai file di test si risolve', () => {
   // Si caricano le DIPENDENZE dei file di test, non i file stessi (li ri-registrerebbe).
   // E' la difesa diretta: se un backend cambia nome, qui diventa rosso invece di far sparire
@@ -96,46 +111,6 @@ test('init: il gestore del cambio tipo e\' registrato PRIMA del ripristino del m
   assert.ok(ripristino > 0, 'la chiamata `if (!daUrl) ripristinaModo();` non e\' piu\' in init()');
   assert.ok(gestore < ripristino,
     'il gestore di `change` va registrato PRIMA di ripristinaModo(), altrimenti il ripristino su Moto lascia il catalogo marche vuoto');
-});
-
-test('il cambio tab dei Ricambi tocca tutti e soli gli input dei Ricambi', () => {
-  // `.rc-input` e' un GANCIO, non uno stile: decide quale dei tre input mostrare. Quando la
-  // presa era su tutto il documento agganciava anche #cpUrl (il link della vetrina, altra riga
-  // della stessa barra), che senza `data-rcfor` finiva nascosto a ogni cambio tab.
-  const app = fs.readFileSync(path.join(RADICE, 'frontend', 'app.js'), 'utf8');
-  const html = fs.readFileSync(path.join(RADICE, 'frontend', 'index.html'), 'utf8');
-
-  // 1) la presa e' ancorata al contenitore dei Ricambi
-  for (const sel of ["#ricambiFields .rc-input[data-rcfor=", "'#ricambiFields .rc-input'"]) {
-    assert.ok(app.includes(sel), `la ricerca di .rc-input non e' piu' ancorata a #ricambiFields (${sel})`);
-  }
-  // 2) e nessun elemento fuori da #ricambiFields porta quella classe
-  // `\b` non basta: il trattino e' un confine di parola, quindi \brc-input\b aggancia anche
-  // `rc-input-row`, che e' la riga contenitore e non c'entra. Serve il token intero.
-  const GANCIO = /class="[^"]*\brc-input(?=[\s"])/g;
-  const dentro = html.slice(html.indexOf('id="ricambiFields"'), html.indexOf('id="competitorFields"'));
-  const fuori = html.replace(dentro, '');
-  assert.strictEqual((fuori.match(GANCIO) || []).length, 0,
-    'un elemento fuori da #ricambiFields porta la classe-gancio rc-input: verra\' nascosto dal cambio tab');
-  // 3) e i tre input dei Ricambi ce l'hanno ancora, con il loro data-rcfor
-  assert.strictEqual((dentro.match(/class="[^"]*\brc-input(?=[\s"])[^"]*"[^>]*data-rcfor=/g) || []).length, 3,
-    'i tre input dei Ricambi devono avere sia rc-input sia data-rcfor');
-});
-
-test('la pulizia dei Ricambi scatta sul CAMBIO di modo, non sul ri-clic', () => {
-  // Senza `prev !== searchMode` la guardia scattava anche ripremendo "Ricambi" mentre ci sei
-  // gia' dentro: azzerava rcData ma non nascondeva il pannello e non lo ridisegnava, cosi' la
-  // lista restava a schermo sopra uno stato vuoto e il primo chip la sostituiva con "Fonti non
-  // disponibili" — una frase sulle fonti detta su dati che l'app si era cancellata da sola.
-  // A commenti tolti: quello accanto alla riga NOMINA la condizione, e da solo terrebbe verde
-  // una guardia che legge il sorgente cosi' com'e'.
-  const app = fs.readFileSync(path.join(RADICE, 'frontend', 'app.js'), 'utf8')
-    .replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
-  const righe = app.split('\n').filter(r => r.includes('rcGen++'));
-  assert.strictEqual(righe.length, 1,
-    `rcGen++ compare ${righe.length} volte nel codice: la guardia non sa piu' quale riga difendere`);
-  assert.match(righe[0], /prev !== searchMode/,
-    'il reset dei Ricambi (rcGen++ / rcData = null / hideResults) non e\' piu\' legato al cambio di modo: ripremere "Ricambi" da dentro i Ricambi cancella i dati e lascia la lista a schermo');
 });
 
 test('aprire la scheda tecnica su un altro annuncio smonta quella di prima', () => {

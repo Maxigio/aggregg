@@ -1,5 +1,5 @@
 'use strict';
-// Modello "prezzo di listino" condiviso da UI ed export (veicoli + ricambi).
+// Modello "prezzo di listino" condiviso da UI ed export (veicoli).
 // Puro (nessun DOM/localStorage) → testabile in node e usabile come globale nel browser.
 // Leve: Commissione (+, € o %), Spese (−, €), Margine rivendita (%), Scorporo IVA 22%,
 // Passaggio di proprietà (−, €: costo reale della pratica, dal calcolo IPT per provincia).

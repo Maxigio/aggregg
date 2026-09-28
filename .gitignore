@@ -59,3 +59,6 @@ data/wheelsize-cache.json
 # La landing showcase e' un repo A SE': ha la sua storia git e si pubblica da sola
 # (netlify.toml). Committandola qui git salverebbe un puntatore vuoto, non i file.
 landing/
+
+# Copie locali delle aree rimosse (contengono sorgenti precedenti al taglio).
+.amr-feature-backups/

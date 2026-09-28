@@ -11,7 +11,7 @@ Durante la fase Demo vengono proposte 4 aree di ricerca, tuttavia Auto Moto Rada
 
 ::componente #modeToggle
 
-**Auto** e **Moto** aggregano le stesse fonti. **Ricambi** cerca pezzi su altre fonti. **Competitor** ti aiuta a tenere d'occhio i tuoi concorrenti.
+**Auto** e **Moto** aggregano gli annunci dalle fonti disponibili.
 
 ## Dati obbligatori
 

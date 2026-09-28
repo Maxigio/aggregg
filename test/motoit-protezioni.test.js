@@ -12,7 +12,6 @@ const models = require('../backend/scrapers/motoit-models');
 const detail = require('../backend/scrapers/detail');
 const specs = require('../backend/scrapers/motoit-specs');
 const moto = require('../backend/scrapers/motoit');
-const vetrina = require('../backend/scrapers/motoit-vetrina');
 const get = https.get, attesa = ritmo.attendi;
 let handler, hits = 0, port;
 const srv = http.createServer((req, res) => { hits++; handler(req, res); });
@@ -37,7 +36,6 @@ test('M01: la chiamata gia in coda non parte dopo un 429', async () => {
 
 for (const [nome, run] of [
   ['menu', i => models.getBrandModels('amr-403-' + i, { rilancia: true })],
-  ['vetrina', () => vetrina.parco('amr-test')],
   ['dettaglio', i => detail.getDetail(url('detail-403-' + i))],
 ]) test(`M02: due 403 ${nome}, non tre, fermano la fonte senza doppio conteggio`, async () => {
   fast(); handler = (_, res) => { res.writeHead(403); res.end(); };
@@ -132,20 +130,6 @@ test('M07: la cancellazione in coda non invia la richiesta', async () => {
   await ritmo.attendi();
   const p = trasporto.get(url('annullata'), { signal: ctrl.signal }); ctrl.abort();
   await assert.rejects(p); assert.equal(hits, 0);
-});
-
-test('M08/C01: ricerca e vetrina distinguono prezzi, riservati e testo illeggibile', () => {
-  for (const [raw, prezzo, riservato, illeggibile] of [
-    ['5.000,50 €', 5000.5, null, false], ['€ 5.000', 5000, null, false], ['4.300 euro', 4300, null, false], ['0 €', 0, null, false],
-    ['T.RISERVATA', null, true, false], ['su richiesta', null, true, false], ['', null, null, false],
-    ['100 € al mese', null, null, true], ['12.34 €', null, null, true],
-  ]) {
-    const a = moto._mapCards([{ href: '/annuncio', priceRaw: raw }])[0];
-    const b = vetrina._mapCards(`<div class="dlr-card"><a data-target="#annuncio_123456"></a><span class="dlr-card__extrainfo__price">${raw}</span></div>`)[0];
-    for (const r of [a, b]) {
-      assert.equal(r.prezzo, prezzo, raw); assert.equal(r.prezzoSuRichiesta, riservato, raw); assert.equal(r.prezzoIlleggibile, illeggibile, raw);
-    }
-  }
 });
 
 test('review M03: anche la pagina modello deve essere leggibile per riaprire la fonte', async () => {

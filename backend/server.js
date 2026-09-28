@@ -1304,7 +1304,6 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// ─── Ricambi: codice OEM → articoli (auto-doc via stealth) — vedi ricambi-route.js ──
 // Registrazione, pannello del proprietario e link d'invito. Le sue pagine stanno in `pagine/`,
 // FUORI da `frontend/`: quella cartella la serve express.static, e su un filesystem che non
 // distingue le maiuscole un pannello protetto da un solo handler si scaricherebbe con
@@ -1312,13 +1311,9 @@ app.get('/api/search', async (req, res) => {
 require('./registrazioni-route').mount(app, { json: express.json({ limit: '4kb' }), chiaveLimite, clientIp });
 // Le sole impostazioni di prezzo seguono l'account invece del dispositivo.
 require('./dati-utente').mount(app, { json: express.json({ limit: '8kb' }), utenteDi: req => req.authId || 'owner', chiaveLimite });
-require('./ricambi-route').mount(app, { chiaveLimite });
 
 // ─── Scheda tecnica veicolo (auto-data.net) — vedi scheda-veicolo-route.js ──────────
 require('./scheda-veicolo-route').mount(app, { chiaveLimite });
-
-// ─── Competitor: il parco di un concessionario, il tuo e quello degli altri ───
-require('./competitor-route').mount(app, { json: express.json({ limit: '8kb' }), chiaveLimite });
 
 // ─── Richiami di sicurezza (Safety Gate UE) — vedi richiami-route.js ───────────
 require('./richiami-route').mount(app, { chiaveLimite });
@@ -1373,7 +1368,6 @@ function cacheable(data) {
   // un'altra fonte portava annunci, la risposta MONCA entrava in cache per tre minuti. L'utente
   // vedeva il badge rosso, ripremeva Cerca e riceveva istantaneamente la stessa risposta senza
   // che nessuna richiesta ripartisse: l'unico gesto per rimediare non faceva nulla.
-  // Stessa regola gia' scritta in ricambi-route.js:27.
   const bad = s => s === 'error' || s === 'timeout';
   const src = data.sources || {};
   if (Object.values(src).some(s => s?.pausa?.fermo || s?.pausa?.verifica)) return false;

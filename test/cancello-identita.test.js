@@ -67,15 +67,14 @@ test('cancello: il proprietario passa dappertutto', () => {
   for (const p of DELLA_MACCHINA) {
     assert.strictEqual(chiama(PROPRIETARIO, 'GET', p).passato, true, `il proprietario e' stato fermato su ${p}`);
   }
-  assert.strictEqual(chiama(PROPRIETARIO, 'POST', '/api/competitor').passato, true);
+  assert.strictEqual(chiama(PROPRIETARIO, 'PUT', '/api/miei/preferenze/amr_price_v').passato, true);
 });
 
 test('cancello: chi ha un nome puo\' SCRIVERE le sue cose', () => {
   // E' il rovesciamento: prima "ruolo demo" voleva dire nessuna scrittura, e un iscritto non
   // avrebbe potuto scrivere niente. L'isolamento fra persone non lo fa il cancello — da qui non
   // si vede di chi e' una riga — lo fa lo strato dati.
-  for (const [m, p] of [['POST', '/api/competitor'], ['DELETE', '/api/competitor/7'],
-                        ['PUT', '/api/miei/preferenze/amr_price_v'], ['GET', '/api/miei']]) {
+  for (const [m, p] of [['PUT', '/api/miei/preferenze/amr_price_v'], ['GET', '/api/miei']]) {
     const r = chiama(REGISTRATA, m, p);
     assert.strictEqual(r.passato, true, `la persona registrata e' stata fermata su ${m} ${p}`);
   }
@@ -125,15 +124,14 @@ test('cancello: un collega "full" non e\' il proprietario', () => {
   // accessi contiene le ricerche e gli indirizzi di tutti.
   assert.strictEqual(chiama(COLLEGA, 'GET', '/api/logs').passato, false);
   // Ma tutto il resto e' suo come prima.
-  assert.strictEqual(chiama(COLLEGA, 'POST', '/api/competitor').passato, true);
+  assert.strictEqual(chiama(COLLEGA, 'PUT', '/api/miei/preferenze/amr_price_v').passato, true);
   assert.strictEqual(chiama(COLLEGA, 'GET', '/api/search').passato, true);
 });
 
 test('cancello: l\'ospite ANONIMO resta in sola lettura', () => {
   // Senza un nome non si sa di chi sarebbe la riga che salva: e' l'unico motivo per cui la
   // sola lettura esisteva, e per lui vale ancora.
-  for (const [m, p] of [['POST', '/api/competitor'], ['DELETE', '/api/competitor/7'],
-                        ['PUT', '/api/miei/preferenze/amr_price_v']]) {
+  for (const [m, p] of [['PUT', '/api/miei/preferenze/amr_price_v']]) {
     const r = chiama(ANONIMO, m, p);
     assert.strictEqual(r.passato, false, `l'ospite anonimo e' passato su ${m} ${p}`);
     assert.strictEqual(r.status, 403);
@@ -145,7 +143,7 @@ test('cancello: l\'ospite ANONIMO resta in sola lettura', () => {
   // Il cookie che nessun login produce ma che si puo' costruire a mano: ruolo 'demo' con id
   // 'owner' (il valore predefinito di makeToken). Nel dubbio, la porta piu' stretta.
   const chimera = cookieDi('demo', 'owner');
-  assert.strictEqual(chiama(chimera, 'POST', '/api/competitor').passato, false, 'ruolo demo con id owner non e\' il proprietario');
+  assert.strictEqual(chiama(chimera, 'PUT', '/api/miei/preferenze/amr_price_v').passato, false, 'ruolo demo con id owner non e\' il proprietario');
   assert.strictEqual(chiama(chimera, 'GET', '/api/logs').passato, false);
 });
 

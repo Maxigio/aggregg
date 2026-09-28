@@ -13,7 +13,6 @@ function estrai(da, fino) {
   return APP.slice(start, end);
 }
 const fonti = estrai('const SOURCE_STATUS =', '// ─── Spec (dettaglio)');
-const ricambi = estrai('function rcNoteSubito(', '// Toolbar rispecchiata');
 const escape = estrai('function escapeHtml(str)', '\n/**');
 const ORA = new Date(2026, 8, 23, 10, 0).getTime();
 class Orologio extends Date {
@@ -23,24 +22,17 @@ class Orologio extends Date {
 const traDueOre = ORA + 2 * 60 * 60 * 1000;
 const pausa = { fermo: true, fino: traDueOre, verifica: false };
 
-function schermo(sources = {}, articoli = []) {
-  const panel = { innerHTML: '', dataset: {}, querySelector: () => null };
+function schermo(sources = {}) {
   const vietato = () => { throw new Error('La UI non deve avviare rete o timer'); };
   const c = vm.createContext({
     Date: Orologio, fetch: vietato, setTimeout: vietato, setInterval: vietato,
-    fonteBreakdown: { innerHTML: '' }, searchAlerts: { innerHTML: '', open: false, classList: { toggle() {} } }, lastSources: sources, paginaErrore: null,
+    fonteBreakdown: { innerHTML: '' }, searchAlerts: { innerHTML: '', open: false, classList: { toggle() {} } },
+    lastSources: sources, paginaErrore: null,
     FONTE_LABEL: { subito: 'Subito.it', autoscout: 'Autoscout24', moto: 'Moto.it' },
-    icon: () => '<svg aria-hidden="true"></svg>',
-    RC_FONTE: { subito: 'Subito.it' },
-    document: { getElementById: id => { assert.equal(id, 'ricambiPanel'); return panel; } },
-    rcData: { sources, articoli }, rcVeicolo: 'auto', rcRestanti: null,
-    confrontoRicambi: [], rcCompareOpen: false, rcGroupDim: '',
-    stopLoadingTips() {}, rcSchedaHTML: () => '', budgetHTML: () => '', rcToolbarHTML: () => '',
-    rcVisibleArts: () => articoli, rcBestKey: () => null,
-    rcRowHTML: () => '<div>Offerta ricambio</div>', rcGridHeadHTML: () => '',
+    icon: () => '<svg aria-hidden="true"></svg>', document: { getElementById() { return null; } },
   });
-  vm.runInContext([escape, fonti, ricambi].join('\n'), c);
-  return { c, panel };
+  vm.runInContext([escape, fonti].join('\n'), c);
+  return { c };
 }
 
 test('cooldown: orario locale, data solo se diversa da oggi, nessuna promessa di successo', () => {
@@ -151,37 +143,18 @@ test('Auto/Moto: tutte le fonti mostrano la pausa anche se skipped, vuote, blocc
   }
 });
 
-test('Ricambi: pausa visibile con e senza offerte e per ogni stato della fonte', () => {
-  for (const status of ['skipped', 'blocked', 'empty', 'error', 'timeout', 'ok']) {
-    for (const articoli of [[], [{ fonte: 'subito' }]]) {
-      const { c, panel } = schermo({ subito: { status, pausa, reason: 'Motivo precedente' } }, articoli);
-      c.renderRicambiPanel();
-      assert.match(panel.innerHTML, /Fonte Subito\.it: richieste sospese\./);
-      if (status === 'blocked') assert.match(panel.innerHTML, /Motivo precedente/);
-      if (articoli.length) assert.match(panel.innerHTML, /Offerta ricambio/);
-    }
-  }
-  const { c, panel } = schermo({ subito: { status: 'skipped', pausa: { ...pausa, fino: ORA - 1 } } });
-  c.renderRicambiPanel();
-  assert.match(panel.innerHTML, /Pausa terminata: la prossima richiesta verificherà/);
-});
-
 test('escape: nomi nelle pause e motivi skipped sconosciuti non diventano HTML', () => {
   const payload = '<img src=x onerror="alert(1)">&';
-  const { c, panel } = schermo({ subito: { status: 'skipped', reason: payload, pausa } });
+  const { c } = schermo({ subito: { status: 'skipped', reason: payload, pausa } });
   const escaped = c.escapeHtml(payload);
   assert.ok(c.fontePausaHTML(payload, pausa).includes(escaped));
   c.renderSourceStatus();
   assert.ok(c.fonteBreakdown.innerHTML.includes(escaped));
   assert.doesNotMatch(c.fonteBreakdown.innerHTML, /<img/);
-  c.RC_FONTE.subito = payload;
-  c.renderRicambiPanel();
-  assert.ok(panel.innerHTML.includes(escaped));
-  assert.doesNotMatch(panel.innerHTML, /<img/);
 });
 
 test('senza metadati pausa: conservati motivi noti, avvisi parziali e di allargamento', () => {
-  const { c, panel } = schermo({
+  const { c } = schermo({
     subito: { status: 'skipped', reason: 'in pausa dopo un blocco' },
     autoscout: { status: 'ok', count: 2, totale: 20, allargato: 'marca', reason: 'Modello <allargato>' },
     moto: { status: 'error', parziale: 'Fonte <parziale>' },
@@ -191,8 +164,6 @@ test('senza metadati pausa: conservati motivi noti, avvisi parziali e di allarga
   assert.match(c.searchAlerts.innerHTML, /Modello &lt;allargato&gt;/);
   assert.match(c.searchAlerts.innerHTML, /Fonte &lt;parziale&gt;/);
   assert.doesNotMatch(c.searchAlerts.innerHTML, /richieste sospese|Pausa terminata|verificata alla prossima/);
-  c.renderRicambiPanel();
-  assert.doesNotMatch(panel.innerHTML, /richieste sospese|Pausa terminata|verificata alla prossima/);
 });
 
 test('Moto.it: una risposta troppo grande diventa un avviso sulla ricerca', () => {
@@ -247,23 +218,6 @@ test('detail senza pausa attiva: il messaggio upstream rimane visibile ed escape
   assert.match(c.searchAlerts.innerHTML, /Dettagli Moto\.it: Fonte &lt;bloccata&gt;/);
   assert.doesNotMatch(c.searchAlerts.innerHTML, /<bloccata>/);
   assert.equal(c.currentResults[0]._detailLoaded, undefined);
-});
-
-test('Competitor: dettaglio e confronto concorrenti producono un solo toast per fonte e stato', async () => {
-  const { c, avvisi, avanza } = dettagli(null, [annuncio(1), annuncio(2), annuncio(3)]);
-  await Promise.all([c.enrichMotoRow(c.currentResults[0].url), c.enrichMotoSpecs(c.matrixList)]);
-  assert.equal(avvisi.length, 1);
-  assert.match(avvisi[0], /Fonte Moto\.it: richieste sospese/);
-  assert.equal(c.lastSources, null);
-  await c.enrichMotoSpecs(c.matrixList);
-  assert.equal(avvisi.length, 1, 'la stessa pausa non riavvia una raffica di toast');
-  avanza(30001);
-  c.fetch = async () => risposta(detailKo('moto', { ...pausa, fino: traDueOre + 60000 }));
-  await c.enrichMotoSpecs(c.matrixList);
-  assert.equal(avvisi.length, 2, 'un cambiamento di pausa va comunicato');
-  c.searchGen++; avanza(30001);
-  await c.enrichMotoSpecs(c.matrixList);
-  assert.equal(avvisi.length, 3, 'il nuovo contesto può ricevere il proprio avviso');
 });
 
 test('detail tardivo: un cambio contesto blocca avvisi, merge e ridisegni anche con lo stesso oggetto', async () => {
@@ -346,28 +300,6 @@ test('detail riuscito: sincronizza la pausa e cancella il vecchio errore senza c
       else assert.doesNotMatch(c.searchAlerts.innerHTML, /richieste sospese|Dettagli Moto/);
     }
   }
-});
-
-test('Competitor: successo senza pausa non produce toast, successo in cache con pausa avvisa ancora', async () => {
-  for (const pausaDopo of [undefined, null, { fermo: false, fino: null, verifica: false }, pausa]) {
-    const { c, avvisi } = dettagli(null);
-    c.fetch = async () => risposta({ ok: true, detail: { cilindrata: 900 }, fonte: 'moto', pausa: pausaDopo });
-    await c.enrichMotoRow(c.currentResults[0].url);
-    assert.equal(avvisi.length, pausaDopo?.fermo ? 1 : 0);
-    if (avvisi.length) assert.match(avvisi[0], /richieste sospese/);
-  }
-});
-
-test('Competitor: cache mantenuta durante la pausa mostra un avviso testuale', () => {
-  const c = vm.createContext({
-    cpChiave: () => 'subito:1', cpParchi: { 'subito:1': { stato: 'ok', dati: { numeri: {}, avvisoCache: 'Fonte in pausa <img onerror=alert(1)>. Dati non aggiornati.' } } },
-    cpApertoId: null, cpAperte: new Set(), FONTE_LABEL: { subito: 'Subito' },
-    cpNumeriChiave: () => 'NUMERI PRESENTI', cpUnisciHTML: () => '', cpOrariHTML: () => '', miniHTML: () => '',
-  });
-  vm.runInContext(escape + '\n' + estrai('function cpSchedaHTML(v)', '\nfunction '), c);
-  const html = c.cpSchedaHTML({ fonte: 'subito', id: '1', nome: 'Vetrina' });
-  assert.match(html, /Dati non aggiornati/); assert.match(html, /NUMERI PRESENTI/);
-  assert.match(html, /&lt;img/); assert.doesNotMatch(html, /<img onerror/);
 });
 
 test('avviso di pagina interrotta: testo del server escapato prima di inserirlo nel DOM', () => {

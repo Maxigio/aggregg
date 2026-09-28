@@ -73,50 +73,10 @@ test('sola lettura: applyDemoMode NON nasconde il selettore dei modi', () => {
     "applyDemoMode() torna a forzare il modo: gira DOPO ripristinaModo() e riporta l'ospite su Auto a ogni ricaricamento");
 });
 
-test('sola lettura: i quattro modi esistono nella pagina e i comandi che scrivono sono nascosti', () => {
+test('sola lettura: Auto e Moto restano disponibili', () => {
   const html = sorgente('frontend', 'index.html');
-  for (const m of ['auto', 'moto', 'ricambi', 'competitor']) {
-    assert.ok(html.includes(`data-mode="${m}"`), `il modo "${m}" non e' piu' nel selettore`);
-  }
-  // Mostrare il modo Competitor senza togliere i suoi comandi di scrittura vorrebbe dire
-  // mandare l'ospite dritto contro un 403. La regola sta in CSS e non in JS perche'
-  // cpRender() ridisegna il pannello a ogni azione.
-  const css = sorgente('frontend', 'style.css');
-  for (const sel of ['#competitorFields', '.cp-togli', '.cp-unisci', '.cp-separa']) {
-    assert.ok(new RegExp(`body\\.demo-mode\\s+\\${sel.startsWith('.') ? '' : ''}${sel.replace('.', '\\.')}`).test(css)
-      || css.includes(`body.demo-mode ${sel}`),
-      `body.demo-mode non nasconde piu' ${sel}: l'ospite vedrebbe un comando che prende 403`);
-  }
-});
-
-test('sola lettura: il server permette la LETTURA dei quattro modi e nega le scritture', () => {
-  // Requisito del gate vero, non della UI: se un giorno il server chiudesse anche le letture,
-  // il selettore andrebbe rinascosto — e questo test diventerebbe rosso per dirlo.
-  const srv = require('../backend/server');
-  // La credenziale se la fa il test nella sua cartella temporanea: appoggiarsi a quella della
-  // macchina voleva dire saltare in silenzio su ogni macchina senza auth.json — cioe' non
-  // provare niente proprio dove serviva.
-  auth.setPassword('gateprova1');
-  const token = auth.makeToken('demo');
-  assert.strictEqual(auth.checkToken(token), 'demo');
-  const cookie = `amr_auth=${token}`;
-
-  const chiama = (metodo, percorso) => {
-    const res = { statusCode: 200, status(c) { this.statusCode = c; return this; },
-      json() { return this; }, send() { return this; },
-      redirect(c, u) { this.statusCode = c; this.redirectTo = u; return this; }, setHeader() {} };
-    let passato = false;
-    srv._gateAuth({ method: metodo, path: percorso, headers: { cookie }, ip: '203.0.113.9' },
-      res, () => { passato = true; });
-    return passato;
-  };
-
-  for (const p of ['/api/search', '/api/ricambi', '/api/competitor']) {
-    assert.strictEqual(chiama('GET', p), true, `il demo deve poter leggere ${p}: e' uno dei quattro modi`);
-  }
-  for (const [m, p] of [['POST', '/api/competitor'], ['DELETE', '/api/competitor/7']]) {
-    assert.strictEqual(chiama(m, p), false, `il demo non deve poter scrivere: ${m} ${p}`);
-  }
+  for (const m of ['auto', 'moto']) assert.ok(html.includes(`data-mode="${m}"`));
+  for (const m of ['ricambi', 'competitor']) assert.ok(!html.includes(`data-mode="${m}"`));
 });
 
 // ── 2. L'elenco delle persone si controlla prima di scriverlo ────────────────

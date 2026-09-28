@@ -21,7 +21,6 @@ process.env.USER_DATA_PATH = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-persone-
 const dbmod = require('../backend/utenti-db');
 const saved = require('../backend/saved');
 const miei = require('../backend/dati-utente');
-const comp = require('../backend/competitor');
 
 const R = (url, prezzo) => ({ url, prezzo, anno: 2018, km: 80000, titolo: 'BMW 320d' });
 
@@ -276,10 +275,7 @@ test('le mie cose: le impostazioni prezzo dell\'account entrano anche NEL menu, 
     console: { warn() {} },
     PRICE_DEFAULT: require('../frontend/pricing.js').PRICE_DEFAULT,
     priceAdjActive: require('../frontend/pricing.js').priceAdjActive,
-    priceCfgV: null, priceCfgR: null,
-    mieiPronti: false,
-    rcData: null, currentResults: [],
-    renderRicambiPanel() {}, renderResults() {},
+    priceCfgV: null, mieiPronti: false, currentResults: [], renderResults() {},
     mieiPreferenza: (k, v) => saliti.push([k, v]),
   };
   const corpo = [
@@ -309,22 +305,6 @@ test('le mie cose: le impostazioni prezzo dell\'account entrano anche NEL menu, 
   const ultimo = saliti.filter(([k]) => k === 'amr_price_v').pop();
   assert.ok(ultimo, 'il gesto deve comunque salire sull\'account');
   assert.strictEqual(JSON.parse(ultimo[1]).comm, 500, 'e sull\'account non deve salire uno zero al posto dei 500 €');
-});
-
-test('parco concorrenti: uno per persona, e i gruppi non si sovrascrivono', () => {
-  daCapo();
-  comp.scrivi('anna', [{ fonte: 'subito', id: '1', nome: 'Vetrina di Anna', gruppo: 'g1' }]);
-  comp.scrivi('bruno', [{ fonte: 'subito', id: '9', nome: 'Vetrina di Bruno', gruppo: 'altro' }]);
-
-  assert.deepStrictEqual(comp.leggi('anna').map(v => v.nome), ['Vetrina di Anna']);
-  assert.deepStrictEqual(comp.leggi('bruno').map(v => v.nome), ['Vetrina di Bruno']);
-  assert.deepStrictEqual(comp.leggi('carlo'), []);
-
-  // Prima era un file solo per macchina: riassegnare un gruppo riscriveva l'elenco di tutti.
-  comp.scrivi('anna', comp.leggi('anna').map(v => ({ ...v, gruppo: 'nuovo' })));
-  assert.strictEqual(comp.leggi('anna')[0].gruppo, 'nuovo');
-  assert.strictEqual(comp.leggi('bruno')[0].gruppo, 'altro', 'il gruppo di Bruno non si e\' mosso');
-  assert.throws(() => comp.scrivi('', []), /manca l'utente/);
 });
 
 test('annunci, ricambi e ricerche salvate non hanno piu\' una superficie HTTP', () => {

@@ -191,24 +191,9 @@ body:not(.has-results) .search {
 .mode-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 
-/* Campi ricambi: toggle OEM/Nome + input */
-.ricambi-fields { margin-top: 4px; }
-.rc-mode-toggle { display: inline-flex; gap: 2px; background: var(--surface-2, #f2f3f5); border-radius: 9px; padding: 2px; margin-bottom: 8px; }
-.rc-mode-btn { border: none; background: transparent; padding: 5px 12px; border-radius: 7px; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); cursor: pointer; }
-.rc-mode-btn.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
-.rc-input-row { display: flex; gap: 10px; align-items: stretch; }
-.rc-topline { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-.rc-nome-link { color: inherit; text-decoration: none; }
-.rc-nome-link:hover { color: var(--accent); text-decoration: underline; }
-
-/* Ricambi — pipeline parti full-width */
-#ricambiPanel { margin-bottom: 16px; }
-.rc-wrap { margin-inline: calc(-1 * clamp(14px, 2.4vw, 40px)); padding-inline: 12px; }
-.rc-head { padding: 4px 4px 10px; }
-.rc-loading, .rc-empty { color: var(--text-faint); font-style: italic; padding: 14px 4px; }
 /* La scheda che non si puo' fare lo scrive: hai premuto tu, una risposta la meriti. */
 .veh-ko { font-size: 0.82rem; color: var(--text-muted); padding: 8px 4px; }
-/* ── Attesa: barra stato + consiglio rotante + skeleton (veicoli + ricambi) ── */
+/* Attesa dei risultati veicoli: barra stato e skeleton. */
 .amr-loading { display: flex; flex-direction: column; gap: 12px; padding: 8px 4px 4px; }
 .amr-loading-bar { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--text-muted); font-size: 0.9rem; }
 .amr-loading-tip { display: flex; align-items: center; justify-content: center; gap: 8px; text-align: center; color: var(--text); font-size: 0.88rem; min-height: 20px; transition: opacity .22s ease; }
@@ -225,18 +210,10 @@ body:not(.has-results) .search {
 .skel-thumb, .skel-lines span, .skel-price { background: linear-gradient(90deg, var(--surface-2) 25%, var(--line) 37%, var(--surface-2) 63%); background-size: 400% 100%; animation: skel-shimmer 1.4s ease-in-out infinite; }
 @keyframes skel-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
 @media (max-width: 860px) { .skel-row { grid-template-columns: 84px 1fr; } .skel-price { display: none; } }
-.rc-tit { font-weight: 700; font-size: 1rem; color: var(--text); }
-.rc-code { font-family: var(--num); color: var(--accent); }
 /* riga fonti: SOLO diagnostica errori (pill rossa) */
-.rc-srcline { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
-.rc-src { font-size: 0.74rem; padding: 2px 8px; border-radius: 9px; }
-.rc-src-bad { background: var(--neg-bg); color: var(--neg); }
 /* SCHEDA RICAMBIO — a blocchi: [img+prezzo] | [titolo · dati tecnici · compatibilità · OE] */
 /* scheda "buy-box": header (tipo·marca + codice) → main (foto | prezzo in evidenza) → sezioni */
-.rc-scheda { display: flex; flex-direction: column; gap: 14px; border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface); padding: 16px; }
-.rc-scheda-empty { background: var(--surface-2, #f7f8fa); }
 /* scheda dentro il gruppo collassabile → niente doppio bordo/frame, il gruppo fa da cornice */
-.rc-group-body > .rc-scheda { border: 0; border-radius: 0; padding: 12px; }
 /* Scheda tecnica veicolo (riusa .rc-group/.rc-sch-*): selettori generazione/motorizzazione */
 #vehicleScheda { margin: 0 0 10px; }
 #vehicleScheda:empty { display: none; }
@@ -408,98 +385,13 @@ body:not(.has-results) .search {
 .veh-crow { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px; }
 .veh-crow .veh-v { text-align: left; }
 .veh-crow.veh-diff { box-shadow: inset 2px 0 0 var(--accent); border-radius: var(--r); }
-.rc-sch-emptymsg { color: var(--text-muted); font-size: 0.9rem; line-height: 1.4; }
-.rc-sch-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
-.rc-sch-titmain { font-weight: 700; font-size: 1.15rem; color: var(--text); }
-.rc-sch-main { display: flex; gap: 18px; align-items: stretch; }
-.rc-sch-img { width: 150px; flex: 0 0 auto; height: auto; max-height: 190px; object-fit: contain; background: transparent; border: 1px solid var(--line); border-radius: 6px; cursor: zoom-in; display: block; }
-.rc-sch-buybox { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 5px; background: var(--surface-2, #f7f8fa); border: 1px solid var(--line); border-radius: var(--r2); padding: 14px 18px; }
-.rc-sch-buybox-empty { justify-content: center; }
-.rc-sch-priceline { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.rc-sch-buybox .rc-prezzo { font-size: 1.7rem; font-weight: 800; color: var(--text); }
-.rc-sch-buybox a { color: var(--accent); font-weight: 600; font-size: 0.82rem; }
 .rc-sch-secs { display: flex; flex-direction: column; gap: 12px; }
 /* selettore varianti v7: chip tipi + lista varianti */
-.rc-var-tipi { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.rc-var-lab { font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.rc-tipo-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2, #f7f8fa); font-size: 0.82rem; color: var(--text); cursor: pointer; }
-.rc-tipo-chip:hover { border-color: var(--accent); }
-.rc-tipo-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-.rc-tipo-n { font-size: 0.7rem; opacity: 0.75; font-weight: 700; }
-.rc-var-dd { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
-.rc-var-sum { cursor: pointer; list-style: none; padding: 8px 12px; font-size: 0.86rem; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; }
-.rc-var-sum::-webkit-details-marker { display: none; }
-.rc-var-sum::after { content: '▾'; margin-left: auto; color: var(--text-muted); transition: transform .15s; }
-.rc-var-dd[open] .rc-var-sum::after { transform: rotate(180deg); }
-.rc-var-dd[open] .rc-var-sum { border-bottom: 1px solid var(--line); }
-.rc-var-menu { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 6px; }
-.rc-var-row { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); cursor: pointer; font-size: 0.86rem; }
-.rc-var-row:hover { border-color: var(--accent); background: var(--surface-2, #f7f8fa); }
-.rc-var-row.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; background: var(--accent-weak); }
-.rc-var-marca { font-weight: 700; color: var(--text); }
-.rc-var-nota { flex: 1; min-width: 0; color: var(--text-muted); font-size: 0.8rem;
-  /* Due righe, non i puntini: questa descrizione E' cio' che distingue una variante
-     dall'altra, e troncata a meta' le rende indistinguibili. */
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-.rc-var-prezzo { font-family: var(--num); font-weight: 800; color: var(--pos); }
-.rc-tipo-match { display: inline-block; font-size: 0.62rem; font-weight: 700; color: var(--pos); border: 1px solid var(--pos); border-radius: 3px; padding: 0 4px; margin-right: 6px; vertical-align: middle; }
-.rc-sch-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 12px; }
-.rc-sch-tit { font-weight: 700; font-size: 1.1rem; color: var(--text); }
-.rc-sch-price-lab { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
-.rc-sch-src { color: var(--text-muted); font-size: 0.78rem; }
-.rc-sch-sec { display: flex; flex-direction: column; gap: 5px; }
-.rc-sch-sechd { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
-.rc-sch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 2px 20px; }
-.rc-fits-wrap { max-height: 180px; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; }
-.rc-fits-tbl { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-.rc-fits-tbl th { text-align: left; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.62rem; padding: 5px 10px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); }
-.rc-fits-tbl td { padding: 4px 10px; color: var(--text); border-bottom: 1px solid var(--line); vertical-align: top; }
-.rc-fits-tbl tbody tr:nth-child(even) { background: var(--surface-2, #f7f8fa); }
-.rc-fits-tbl tbody tr:last-child td { border-bottom: 0; }
-.rc-fits-more { padding: 5px 10px; font-size: 0.72rem; color: var(--text-muted); }
-.rc-fits > .rc-fits-wrap { margin-top: 6px; }
-.rc-fits-sum { cursor: pointer; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); list-style: none; display: flex; align-items: center; gap: 6px; user-select: none; }
-.rc-fits-sum::-webkit-details-marker { display: none; }
-.rc-fits-sum::before { content: '▸'; font-size: 0.8rem; transition: transform 0.15s; }
-.rc-fits[open] > .rc-fits-sum::before { transform: rotate(90deg); }
-.rc-fits-sum:hover { color: var(--text); }
-.rc-oechips { display: flex; flex-wrap: wrap; gap: 6px; }
 /* lista annunci — righe a tutta larghezza (mirror .result-row auto) */
-.rc-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r2); overflow: hidden; background: var(--surface); }
-.rc-item { display: grid; gap: 12px; align-items: center; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--line); border-left: 3px solid transparent; min-height: 56px; }
-.rc-item:last-of-type { border-bottom: none; }
-.rc-item:hover { background: var(--surface-2, #f7f8fa); }
-.rc-item[data-sel="1"] { border-left-color: var(--accent); background: var(--accent-weak); }
-.rc-item.rc-best { border-left-color: var(--pos); }
-.rc-cell-txt { font-size: 0.82rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rc-compare-bar { position: static; }   /* barra confronto in alto (non sticky come auto) */
 /* header colonne connesso alla lista piatta (mirror auto) */
-.rc-grid-head { border-radius: var(--r2) var(--r2) 0 0; }
-.rc-wrap > .rc-grid-head + .rc-list { border-top: none; border-radius: 0 0 var(--r2) var(--r2); }
 @keyframes rcFlash { 0%,100% { background: var(--surface); } 30% { background: var(--accent-weak); } }
-.rc-item.rc-flash { animation: rcFlash 1.4s ease; }
-.rc-img-wrap { width: 48px; height: 48px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 4px; background: #fff; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-.rc-img-wrap:not(.rc-img-ph) { cursor: zoom-in; }
-.rc-img { width: 100%; height: 100%; object-fit: contain; display: block; }
 /* placeholder immagine come auto (emoji dal veicolo della ricerca) */
-.rc-img-ph { background: var(--surface-2, #f2f3f5); }
-.rc-img-wrap.rc-img-ph::after, .rc-sch-img.rc-img-ph::after { content: '🚗'; font-size: 1.3rem; opacity: 0.5; display: flex; align-items: center; justify-content: center; height: 100%; }
-#ricambiPanel[data-veicolo="moto"] .rc-img-ph::after { content: '🏍'; }
-.rc-sch-img.rc-img-ph { height: 130px; cursor: default; display: flex; align-items: center; justify-content: center; }
-.rc-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; justify-content: center; }
-.rc-nome { font-size: 0.88rem; color: var(--text); line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.rc-best-badge { font-size: 0.58rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; color: #fff; background: var(--pos); padding: 1px 5px; border-radius: 5px; margin-right: 5px; vertical-align: middle; }
-.rc-meta { font-size: 0.78rem; color: var(--text-muted); }
-.rc-price-cell { flex: 0 0 auto; text-align: right; min-width: 90px; }
-.rc-prezzo { font-family: var(--num); font-weight: 800; color: var(--pos); font-size: 1rem; }
-.rc-noprice { color: var(--text-muted); font-weight: 600; font-size: 0.82rem; }
-.rc-listino { font-family: var(--num); color: var(--text-faint); text-decoration: line-through; font-size: 0.8rem; }
-.rc-sconto { background: var(--neg-bg); color: var(--neg); font-size: 0.7rem; font-weight: 700; padding: 1px 6px; border-radius: 8px; }
 /* azioni riga — IDENTICHE alla ricerca auto (.row-act) */
-.rc-rowact { display: flex; gap: 4px; flex: 0 0 auto; }
-.rc-act { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: var(--surface); border-radius: 7px; width: 30px; height: 30px; cursor: pointer; color: var(--text-muted); }
-.rc-act:hover { border-color: var(--accent); color: var(--accent); }
-.rc-act.on { background: var(--accent-weak); color: var(--accent); border-color: var(--accent); }
 /* gruppi collassabili a cartella (mirror auto) */
 .rc-group { border: 1px solid var(--line); border-radius: var(--r2); margin-bottom: 10px; overflow: hidden; }
 .rc-group-head { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: var(--surface-2, #f7f8fa); border: none; border-bottom: 1px solid var(--line); padding: 9px 12px; cursor: pointer; font-family: inherit; }
@@ -511,36 +403,10 @@ body:not(.has-results) .search {
 .rc-group-meta { margin-left: auto; font-size: 0.78rem; color: var(--text-muted); font-family: var(--num); }
 .rc-group.collapsed .rc-group-body { display: none; }
 .rc-group-body { padding: 8px; }
-.rc-group .rc-list { border: none; }
 /* accordion inline: usa le classi .det-* della ricerca auto (stesso look). Restano solo le classi
    scheda (.rc-det-row/-k/-v = griglia dati tecnici) + il wrapper + lo spinner enrich. */
-.rc-detail { background: var(--surface-2, #f7f8fa); border-bottom: 1px solid var(--line); }
-.rc-det-row { display: flex; justify-content: space-between; gap: 10px; font-size: 0.82rem; padding: 3px 0; border-bottom: 1px dotted var(--line); }
-.rc-det-k { color: var(--text-muted); }
-.rc-det-v { color: var(--text); font-weight: 600; text-align: right; }
-.rc-copy { background: none; border: 0; padding: 0; margin: 0; font: inherit; font-weight: 600; color: var(--accent); text-align: right; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
-.rc-copy:hover { text-decoration-style: solid; }
-.rc-copy.rc-copied { color: var(--ok, #22a06b); text-decoration: none; }
-.rc-code-more { display: inline; }
-.rc-code-more > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; justify-content: flex-end; }
-.rc-code-more > summary::-webkit-details-marker { display: none; }
-.rc-code-caret { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--text-muted); transition: transform 0.15s; }
-.rc-code-more[open] .rc-code-caret { transform: rotate(180deg); }
-.rc-code-extra { display: flex; justify-content: space-between; gap: 10px; margin-top: 4px; padding-top: 4px; border-top: 1px dotted var(--line); font-size: 0.8rem; }
-.rc-code-extra .rc-det-k { font-weight: 400; }
-.rc-det-loading { grid-column: 1 / -1; color: var(--text-muted); font-size: 0.82rem; font-style: italic; padding: 4px 0; display: inline-flex; align-items: center; gap: 8px; }
-.rc-det-loading .spinner-border-sm { width: 0.9rem; height: 0.9rem; border-width: 2px; }
 /* confronto parti */
-.rc-cmp-scroll { overflow-x: auto; }
-.rc-cmp { border-collapse: collapse; width: 100%; font-size: 0.84rem; }
-.rc-cmp th, .rc-cmp td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
-.rc-cmp-lab { font-weight: 700; color: var(--text-muted); background: var(--surface-2, #f7f8fa); white-space: nowrap; }
-.rc-cmp-h { display: flex; flex-direction: column; gap: 4px; max-width: 200px; }
-.rc-cmp-h img { width: 48px; height: 48px; object-fit: contain; }
-.rc-cmp-remove { align-self: flex-start; border: none; background: transparent; color: var(--text-faint); cursor: pointer; font-size: 0.8rem; }
 /* codici OE equivalenti (chip nella scheda) */
-.rc-oe { border: 1px solid var(--line); background: var(--surface-2, #f2f3f5); color: var(--text); border-radius: 7px; padding: 2px 8px; font-family: var(--num); font-size: 0.76rem; cursor: pointer; }
-.rc-oe:hover { border-color: var(--accent); color: var(--accent); }
 
 /* Campi protagonisti */
 .search-fields { display: flex; gap: 10px; align-items: stretch; }
@@ -1103,17 +969,6 @@ body[data-tipo="moto"] .row-thumb.noimg::after { content: '🏍'; }
    segnale che resta, visto che nessun test controlla che la guida sia aggiornata. */
 .guida-manca { background: var(--neg-weak); color: var(--neg); border: 1px solid var(--neg); border-radius: var(--r); padding: 8px 12px; font-size: 0.84rem; font-weight: 600; }
 
-/* In sola lettura i quattro modi si vedono tutti (li permette il gate del server), ma
-   quello che SCRIVE no: aggiungere una vetrina, toglierla, unirla o separarla da un gruppo
-   sono POST/DELETE su /api/competitor* e il server risponde 403. Mostrare quei comandi
-   servirebbe solo a far sbattere l'ospite contro un errore.
-   Sta in CSS e non in applyDemoMode() perche' cpRender() ridisegna il pannello a ogni
-   azione: una rimozione in JS andrebbe rifatta dopo ognuna, questa regola no. */
-body.demo-mode #competitorFields,
-body.demo-mode .cp-togli,
-body.demo-mode .cp-unisci,
-body.demo-mode .cp-separa { display: none; }
-
 /* ─── Badge venditore (inline, priv/conc) ──────────────────────────────────── */
 .vend-badge { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.02em; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
 .vend-priv { background: var(--surface-2); color: var(--text-muted); }
@@ -1121,7 +976,7 @@ body.demo-mode .cp-separa { display: none; }
 
 /* ─── Dettaglio inline (ℹ → fisarmonica sotto la riga) ──────────────────────── */
 .row-detail { background: var(--surface-2); border-bottom: 1px solid var(--line); }
-.row-detail .det-inner, .rc-detail .det-inner { padding: 12px 14px; }
+.row-detail .det-inner { padding: 12px 14px; }
 .det-gallery { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .det-gallery img { width: 96px; height: 72px; object-fit: cover; border-radius: var(--r); border: 1px solid var(--line); cursor: pointer; background: var(--surface); }
 .det-specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 2px 18px; }
@@ -1243,10 +1098,7 @@ body.demo-mode .cp-separa { display: none; }
   .btn-cerca { padding: 12px; }
   #resultsSection { padding-bottom: 80px; }
   .row-act { width: 38px; height: 38px; }
-  /* Riga ricambi: la grid a colonne px (~440px min, inline style) non ci sta e .rc-list ha
-     overflow:hidden → azioni tagliate. Torna flex-wrap: foto+nome sulla 1ª riga, resto sotto. */
-  .rc-item { display: flex !important; flex-wrap: wrap; row-gap: 4px; }
-  .rc-item .rc-nome { flex: 1 1 calc(100% - 64px); min-width: 0; }
+
 }
 @media (max-width: 640px) {
   .tb-sep { display: none; }
@@ -1259,12 +1111,8 @@ body.demo-mode .cp-separa { display: none; }
   .adv-grid { grid-template-columns: 1fr; }    /* filtri in colonna singola: input numerici più comodi */
 }
 
-/* ─── AREE (Competitor) ──────────────────────────────────────────────────────
-   Un'area non ha il form di ricerca e nasconde la barra, ma i bottoni dei modi devono
-   restare: vivono DENTRO #searchForm, e nascondere l'intera sezione chiudeva l'utente
-   dentro l'area senza uscita. Competitor la barra la usa: il link della vetrina E' la sua
-   ricerca, e sta li' come gli altri campi. */
-section.search.area-attiva #searchForm > *:not(#modeToggle):not(#competitorFields) { display: none; }
+/* Le aree senza form lasciano sempre visibili i bottoni dei modi. */
+section.search.area-attiva #searchForm > *:not(#modeToggle) { display: none; }
 section.search.area-attiva #searchForm { min-height: 0; }
 
 /* ── Versione: un campo solo ──────────────────────────────────────────
@@ -1286,48 +1134,6 @@ section.search.area-attiva #searchForm { min-height: 0; }
   background: transparent; color: var(--accent); font: inherit; font-size: 0.82rem; font-weight: 600;
   cursor: pointer; white-space: nowrap; }
 .btn-targa-vai:hover { background: var(--accent); color: #fff; }
-
-/* ── Scheda del ricambio dalla fonte OE, dentro la ricerca ricambi ────────────
-   I codici stanno RAGGRUPPATI per costruttore: in piano erano trentuno pastiglie in
-   fila con "Volkswagen (VW)" ripetuto undici volte, e il nome del costruttore occupava
-   piu' spazio del codice, che e' l'unica cosa che si legge davvero.
-   Tutto si adatta in larghezza: niente scorrimento orizzontale, niente testo tagliato. */
-/* Dentro la scheda tecnica: nessuna cornice propria, solo una riga di separazione —
-   due riquadri affiancati facevano sembrare due schede quello che e' una sola. */
-.rc-pz { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
-.rc-pz-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 0.82rem; font-weight: 600; color: var(--text); margin-bottom: 8px; }
-.rc-pz-src { font-weight: 400; font-size: 0.75rem; color: var(--text-muted); }
-.rc-pz-att { font-size: 0.8rem; color: var(--text-muted); font-style: italic; }
-.rc-pz-a + .rc-pz-a { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
-.rc-pz-a-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 0.86rem; }
-.rc-pz-desc { color: var(--text-muted); font-size: 0.8rem; }
-.rc-pz-link { margin-left: auto; font-size: 0.78rem; white-space: nowrap; }
-
-/* misure: griglia che si adatta, valore sotto il nome — le etichette sono lunghe
-   ("diametro cerchio fori") e su una riga sola verrebbero tagliate */
-.rc-pz-mis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 12px; margin: 8px 0 0; }
-.rc-pz-mis > div { min-width: 0; }
-.rc-pz-mis dt { font-size: 0.72rem; color: var(--text-muted); overflow-wrap: anywhere; }
-.rc-pz-mis dd { margin: 0; font-size: 0.82rem; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
-
-/* codici sotto un dropdown chiuso: quattordici righe su un disco freno, e possono
-   essere molte di piu' — aperte spingevano giu' le offerte */
-.rc-pz-dd { margin-top: 10px; }
-.rc-pz-sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; cursor: pointer; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); list-style: none; }
-.rc-pz-sum::-webkit-details-marker { display: none; }
-.rc-pz-sum::before { content: '▸'; display: inline-block; transition: transform .12s; }
-.rc-pz-dd[open] > .rc-pz-sum::before { transform: rotate(90deg); }
-.rc-pz-n { padding: 0 6px; font-size: 0.72rem; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; }
-.rc-pz-hint { font-weight: 400; font-style: italic; }
-.rc-pz-lista { margin-top: 6px; max-height: 260px; overflow-y: auto; }
-/* codice a sinistra (la colonna che si legge), chi lo usa a destra in chiaro */
-.rc-pz-riga { display: grid; grid-template-columns: minmax(120px, max-content) 1fr; gap: 4px 12px; align-items: baseline; padding: 2px 0; }
-.rc-pz-mk { font-size: 0.76rem; color: var(--text-muted); overflow-wrap: anywhere; }
-.rc-pz-c { padding: 2px 7px; font-size: 0.78rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; overflow-wrap: anywhere; }
-.rc-pz-c:hover { border-color: var(--accent); color: var(--accent); }
-.rc-pz-c.suo { cursor: default; border-style: dashed; color: var(--text-muted); background: transparent; }
-@media (max-width: 560px) { .rc-pz-riga { grid-template-columns: 1fr; } }
-
 
 /* ── Cerchi, gomme e pneumatici dentro il pannello annuncio ───────────────────
    Una riga per MISURA distinta, non per allestimento: la stessa gomma torna su piu'
@@ -1396,78 +1202,6 @@ section.search.area-attiva #searchForm { min-height: 0; }
    senza spazi, che senza questo sfondano la scheda in larghezza. */
 .det-testo { font-size: 0.82rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); max-height: 22em; overflow-y: auto; }
 
-
-/* ── Competitor: il parco di un concessionario ────────────────────────────────
-   Una scheda per vetrina. Il tuo parco e' una voce come le altre ma segnata, altrimenti
-   nel confronto ci si perde. Nessun numero compare finche' non lo chiedi: scaricare il
-   parco di un concessionario grande costa una richiesta ogni cinquanta veicoli. */
-.cp-wrap { max-width: 1100px; margin: 0 auto; padding: 4px 0 24px; }
-/* I campi stanno nella barra di ricerca, non nel pannello: stessa riga di Ricambi. */
-.cp-fields { display: flex; flex-direction: column; gap: 6px; }
-.cp-mio-chk { display: flex; align-items: center; gap: 5px; font-size: 0.82rem; color: var(--text-muted); white-space: nowrap; }
-.cp-att { font-size: 0.84rem; color: var(--text-muted); font-style: italic; padding: 8px 0; }
-.cp-avviso { margin-top: 8px; padding: 7px 10px; font-size: 0.78rem; color: var(--text); background: var(--surface-2); border-left: 3px solid var(--accent); border-radius: 6px; }
-
-.cp-scheda { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; background: var(--surface); }
-.cp-mio { border-color: var(--accent); }
-/* Chiusa di default: la riga dice chi e' e dov'e'. Il resto sta dentro, e ogni pezzo ha
-   il suo richiudibile — niente si butta, si smette solo di ingombrare. */
-.cp-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; list-style: none; }
-.cp-sum::-webkit-details-marker { display: none; }
-.cp-sum::before { content: '▸'; color: var(--text-muted); font-size: 0.8rem; }
-.cp-det[open] > .cp-sum::before { content: '▾'; }
-.cp-det[open] > .cp-sum { border-bottom: 1px solid var(--line); }
-.cp-sum:hover { background: var(--surface-2); border-radius: 10px 10px 0 0; }
-.cp-corpo { padding: 10px 14px 12px; }
-.cp-anagrafica { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
-.cp-ana-testo { min-width: 0; flex: 1 1 auto; }
-.cp-slogan { font-size: 0.86rem; color: var(--text); margin-bottom: 2px; }
-.cp-ref { font-size: 0.8rem; color: var(--text); margin-top: 3px; }
-.cp-ref em { font-style: normal; color: var(--text-muted); }
-.cp-desc { font-size: 0.8rem; line-height: 1.5; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 16em; overflow-y: auto; }
-.cp-nome { font-size: 1rem; font-weight: 700; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
-.cp-tag { margin-left: 8px; padding: 1px 7px; font-size: 0.7rem; font-weight: 600; color: #fff; background: var(--accent); border-radius: 999px; }
-.cp-dove { font-size: 0.8rem; color: var(--text-muted); overflow-wrap: anywhere; }
-.cp-azioni { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
-.cp-quando { font-size: 0.74rem; color: var(--text-muted); }
-/* CHI E', non solo come si chiama. Autoscout pubblica logo, telefoni, valutazione, orari
-   e servizi nella stessa pagina da cui prendiamo l'id: erano li' e non li mostravamo. */
-.cp-logo { height: 26px; width: auto; max-width: 120px; object-fit: contain; vertical-align: middle; margin-right: 8px; border-radius: 3px; background: #fff; }
-.cp-nome .tag { margin-left: 8px; vertical-align: middle; }
-.cp-fatti { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; }
-.cp-fatto { font-size: 0.78rem; color: var(--text); text-decoration: none; }
-a.cp-fatto:hover { color: var(--accent); text-decoration: underline; }
-.cp-voto { font-weight: 700; color: var(--accent); }
-.cp-voto em { font-style: normal; font-weight: 400; font-size: 0.74rem; color: var(--text-muted); margin-left: 5px; }
-.cp-orari { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; font-size: 0.74rem; color: var(--text-muted); }
-.cp-ora b { color: var(--text); font-weight: 600; margin-right: 3px; }
-.cp-servizi { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; }
-.cp-btn.attivo { border-color: var(--accent); color: var(--accent); }
-select.cp-unisci { max-width: 190px; }
-/* Il profilo unico: piu' vetrine, un concessionario. Le sue schede stanno dentro. */
-.cp-grp { border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px 4px; margin-bottom: 12px; background: var(--surface-2); }
-.cp-grp-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
-.cp-grp-nome { font-size: 1.05rem; font-weight: 700; color: var(--text); }
-.cp-grp-meta { font-size: 0.8rem; color: var(--text-muted); }
-.cp-grp-fonti { display: flex; gap: 4px; flex-wrap: wrap; }
-.cp-grp .cp-scheda { background: var(--surface); }
-.cp-grp .cp-numeri { margin-bottom: 10px; }
-.cp-aperto { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
-.cp-btn { padding: 4px 10px; font-size: 0.8rem; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; text-decoration: none; }
-.cp-btn:hover { border-color: var(--accent); color: var(--accent); }
-
-.cp-numeri { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 16px; }
-.cp-n { min-width: 0; }
-.cp-n span { display: block; font-size: 0.74rem; color: var(--text-muted); }
-.cp-n b { font-size: 0.95rem; color: var(--text); overflow-wrap: anywhere; }
-.cp-n em { font-style: normal; font-weight: 400; font-size: 0.74rem; color: var(--text-muted); display: block; }
-
-.cp-gruppo { margin-top: 12px; }
-.cp-gruppo-h { font-size: 0.76rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
-.cp-barra { display: grid; grid-template-columns: minmax(90px, 150px) 1fr auto; gap: 8px; align-items: center; padding: 2px 0; font-size: 0.78rem; }
-.cp-barra-k { color: var(--text); overflow-wrap: anywhere; }
-.cp-barra-v { height: 8px; background: var(--accent); border-radius: 999px; min-width: 2px; }
-.cp-barra-n { color: var(--text-muted); font-family: var(--num); }
 
 /* ── ADD ON: le integrazioni esterne, ultimo gruppo della scheda tecnica ──────
    Stessa intestazione di MOTORE e PRESTAZIONI (.veh-grp), dentro i tre blocchi
@@ -1644,13 +1378,7 @@ select.cp-unisci { max-width: 190px; }
 .budget-avviso { font-size: 0.78rem; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin: 6px 0; }
 
 /* Pagine trovate dalla ricerca web: NON sono offerte, e non devono somigliare a una riga
-   della lista ricambi (vedi web-parts.js). */
-.rc-pagine { border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
-.rc-pagine-h { font-size: 0.74rem; color: var(--text-muted); margin-bottom: 6px; }
-.rc-pagina { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; text-decoration: none; color: inherit; }
-.rc-pagina:hover .rc-pagina-t { text-decoration: underline; }
-.rc-pagina-t { font-size: 0.82rem; }
-.rc-pagina-d { font-size: 0.72rem; color: var(--text-muted); margin-left: auto; white-space: nowrap; }
+   delle integrazioni esterne. */
 
 /* Le ricerche degli altri: riquadro in fondo alla scheda Ricerche, solo per il proprietario. */
 .ricerche-altri { margin: 0 12px 14px; border-top: 1px solid var(--line); padding-top: 10px; }

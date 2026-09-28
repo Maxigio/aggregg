@@ -251,50 +251,6 @@ function frenoFinto(fermo = false) {
 }
 
 // ─── Competitor: una passata caduta non e' il tetto di sicurezza ─────────────
-test('competitor: la passata fallita si dichiara per quello che e\', non come troncamento', async () => {
-  const C = require('../backend/competitor');
-  const voce = { fonte: 'autoscout', id: '12345', nome: 'Prova Auto' };
-  const finto = async (params) => {
-    if (params.tipo === 'auto') return { items: [{ url: 'a1', titolo: 'Auto 1', prezzo: 10000 }], truncated: false, total: 1 };
-    throw new Error('HTTP 429');
-  };
-  const p = await C.parco(voce, { scrapeAs24: finto, salute: frenoFinto() });
-  assert.strictEqual(p.veicoli.length, 1, 'la passata riuscita si tiene');
-  assert.strictEqual(p.troncato, false, 'nessun tetto e\' stato toccato: dirlo sarebbe falso');
-  assert.ok(p.passateKo && p.passateKo.length === 1, 'la passata caduta si dichiara a parte');
-  assert.strictEqual(p.passateKo[0].tipo, 'moto');
-});
-
-// ─── Competitor: il parco passa dal freno anti-ban, come le ricerche ─────────
-test('competitor: la fonte in pausa non si interroga, e l\'esito del parco arriva al freno', async () => {
-  const C = require('../backend/competitor');
-  const voce = { fonte: 'subito', id: '1398723', nome: 'Prova Auto' };
-
-  // Fonte in pausa: lo scarico non deve partire affatto. Le fonti bannano la macchina, e
-  // uno scarico di parco e' la richiesta piu' profonda che facciamo.
-  const freno = frenoFinto(true);
-  let chiamate = 0;
-  await assert.rejects(
-    () => C.parco(voce, { scrapeSubito: async () => { chiamate++; return { items: [], total: 0 }; }, salute: freno }),
-    /in pausa dopo un blocco/);
-  assert.strictEqual(chiamate, 0, 'in pausa non si bussa lo stesso');
-
-  // Fonte libera: le pagine partono con la pausa fra una e l'altra (il default degli
-  // scraper e' 0), e il 403 preso qui conta un colpo per il freno.
-  const freno2 = frenoFinto(false);
-  const opts = [];
-  await assert.rejects(() => C.parco(voce, {
-    scrapeSubito: async (p, o) => { opts.push(o); throw Object.assign(new Error('Subito hades HTTP 403'), { kind: 'blocked', status: 403 }); },
-    salute: freno2,
-  }), /HTTP 403/);
-  assert.ok(opts[0].pageDelayMs > 0, 'senza pausa le 40 pagine partono a raffica verso la stessa fonte');
-  assert.ok(freno2.registrati.length >= 1, 'un blocco preso dal parco deve contare per il freno');
-  assert.strictEqual(freno2.registrati[0].fonte, 'subito');
-  assert.strictEqual(freno2.registrati[0].errore.kind, 'blocked',
-    'al freno serve il genere vero: il rilancio piu\' a valle lo perde nel messaggio');
-});
-
-// ─── Una pagina-annuncio che non dice niente non e' un annuncio senza dati ────
 test('detail: il parser che non riconosce nulla si distingue dall\'annuncio scarno', () => {
   const d = require('../backend/scrapers/detail');
   // Tutti i campi nulli: la pagina non si e' lasciata leggere (transizione, markup cambiato).
@@ -761,10 +717,6 @@ test('contesto: ogni punto che riempie la griglia passa dall\'azzeramento', () =
   assert.ok(/function resetContesto\(\)/.test(APP), 'resetContesto() non esiste piu\'');
   assert.ok(/function hideResults\(\)\s*\{\s*resetContesto\(\);/.test(APP),
     'hideResults deve cominciare azzerando il contesto');
-  for (const f of ['function cpMostraParco(', 'function cpMostraGruppo(']) {
-    assert.ok(/resetContesto\(\)/.test(corpoDi(APP, f)),
-      `${f}...) riempie la griglia senza azzerare il contesto: i criteri, i filtri e le colonne della ricerca di prima restano addosso al parco`);
-  }
   assert.ok(/showLoading\(\); hideResults\(\);/.test(corpoDi(APP, 'async function doSearch(')),
     'doSearch non passa piu\' da hideResults: il contesto precedente non verrebbe azzerato');
 });
@@ -990,7 +942,7 @@ test('IVA: si scorpora solo dove la fonte la dichiara, e altrove si dice perche\
   const { pricing, PRICE_DEFAULT } = require('../frontend/pricing.js');
   const cfg = { ...PRICE_DEFAULT, iva: true };
   const { vPricing, notaIva } = esegui([
-    ritaglia(APP, 'const ivaDichiarata = r =>', '\nconst rPricing = base'),
+    ritaglia(APP, 'const ivaDichiarata = r =>', '\nconst eurRound = n =>'),
   ], { pricing, priceCfgV: cfg }, ['vPricing', 'notaIva', 'ivaDichiarata', 'cfgPerRiga']);
 
   // Misurato su una ricerca Golf 9-20k, 204 annunci: 5 dichiarano l'IVA esposta, 117
@@ -1194,36 +1146,6 @@ test('annuncio: l\'identita\' non e\' l\'indirizzo, e il passato si converte', (
   }
 });
 
-test('ricambi: la scheda del pezzo non prende foto ne\' dati dagli annunci', () => {
-  const core = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ricambi-core.js'), 'utf8');
-  for (const forma of ['scheda.fotoReale', 'scheda.datiTecniciEbay', 'scheda.galleria']) {
-    assert.ok(!core.includes(forma + ' ='),
-      `${forma} viene di nuovo riempito da un annuncio: la scheda e' l'identita' di catalogo del pezzo`);
-  }
-  assert.ok(!/res\.subito\?\.items.*immagine/.test(core),
-    'la foto della scheda non puo\' venire dal primo annuncio usato di Subito');
-});
-
-test('ricambi: i codici OE si leggono dai link, non dal testo', () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'backend', 'oem-lookup.js'), 'utf8');
-  assert.match(src, /a\[href\*="\/pezzi-di-ricambio\/oem\/"\]/,
-    'i codici OE devono venire dai link a un\'altra pagina OEM: e\' la pagina stessa a dichiarare che quello e\' un codice');
-  // La vecchia pesca nel testo accettava anche le minuscole, e frasi intere passavano il
-  // filtro a valle. Verificato sulle frasi vere della pagina.
-  assert.ok(!/textContent\.match\(\/\[A-Z0-9\]/.test(codice(src)),
-    'e\' tornata la pesca nel testo: "Garanzia 2 anni" diventerebbe di nuovo un codice OE');
-  const { dedupeOe } = require('../backend/oem-lookup.js');
-  // I dieci codici veri letti dalla pagina (sonda 2026-08-01) passano tutti.
-  const veri = ['1K0 905 841', '1K0905865A', '1K0905865', '1K0 905 851', '1K0905849B',
-                '6RA905865A', '6RA905865', '1K0905865B', '1K0 905 851D', '1K0905849A'];
-  assert.strictEqual(dedupeOe(veri, '1K0905851B').length, 10);
-  // E le frasi che prima passavano restano fuori solo perche' non sono link: il filtro a
-  // valle da solo non basta, ed e' esattamente perche' la lettura ora e' strutturale.
-  assert.ok(dedupeOe(['Garanzia 2 anni'], '1K0905851B').length === 1,
-    'il filtro a valle NON riconosce le frasi: se tornasse la pesca nel testo tornerebbero anche i falsi');
-});
-
-// ═══ I MINORI: stessa disciplina, casi piccoli ════════════════════════════════
 test('minori: un errore non si mette in cache', () => {
   // Tre punti diversi, una regola sola: una risposta mancata non e' una risposta.
   const richiami = fs.readFileSync(path.join(__dirname, '..', 'backend', 'richiami-route.js'), 'utf8');
@@ -1258,8 +1180,6 @@ test('minori: i numeri a schermo contano quello che dicono di contare', () => {
   assert.match(APP, /st\.totale != null && st\.totale > p\.length/,
     'il pannello pneumatici deve dire quanti ne esistono, non quanti ne ha scaricati');
   // «Compatibilita' · N modelli» contava quelli passati dal server (venti al massimo).
-  assert.match(APP, /Number\.isFinite\(totale\) && totale > list\.length/,
-    'la compatibilita\' deve dire il totale vero');
 });
 
 test('minori: la verifica targa non dipende da una ricerca, e ha un freno', () => {
@@ -1326,11 +1246,6 @@ test('annullo: le tre fonti chiedono il segnale al momento della richiesta', () 
   const srv = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
   assert.match(srv, /runSource\(\(\) =>/, 'le fonti vanno passate a runSource come funzione');
   assert.match(srv, /ctrl\.abort\(\)/, 'runSource deve annullare quando il tempo scade');
-});
-
-test('minori: le richieste eBay condividono la sessione browser dei Ricambi', () => {
-  const ebay = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ebay-scrape.js'), 'utf8');
-  assert.match(ebay, /_ctxInVolo/);
 });
 
 test('minori: uno schermo vuoto per un filtro non e\' un mercato vuoto', () => {
@@ -1516,7 +1431,7 @@ test('il DMG e\' staccato: niente aggiornamento automatico agganciato', () => {
 
 // ─── Un guasto tiene il suo nome anche nelle zone che nessuno aveva guardato ──
 test('saved: un elenco illeggibile non e\' un elenco vuoto, e non si riscrive da solo', () => {
-  // La forma gia' scritta in competitor.js:50, che qui mancava: rispondendo [] a entrambi,
+  // Rispondendo [] a entrambi,
   // il pannello diceva «Nessuna ricerca salvata» su un file che c'era, e il gesto istintivo
   // — risalvare — chiamava saveAll con quella sola voce. Le altre ricerche, con tutto il
   // loro storico (seen, alerted, avvisi), sparivano per sempre.
@@ -1583,58 +1498,31 @@ test('l\'arricchimento che non porta niente non marca l\'annuncio come arricchit
     '_enriched si mette solo se qualcosa e\' arrivato davvero');
 });
 
-test('contesto: anche i Ricambi invalidano la generazione alla porta, e l\'errore non ridipinge la lista vecchia', () => {
-  // `rcGen` e' dichiarato «mirror searchGen», ma il fix delle porte (508ea84) era arrivato
-  // solo alla copia veicoli: uscendo dai Ricambi una risposta in volo aveva ancora
-  // myGen === rcGen, atterrava e resuscitava rcData appena azzerato. E una ricerca
-  // FALLITA lasciava i dati della precedente, che la porta del pannello ridipingeva.
-  const sm = corpoDi(APP, 'function setSearchMode(');
-  assert.ok(/rcGen\+\+/.test(sm),
-    'la porta d\'uscita dai Ricambi non invalida la generazione: la risposta in ritardo torna a atterrare');
-  const dr = corpoDi(APP, 'async function doRicambi(');
-  const bump = dr.indexOf('++rcGen');
-  const azzera = dr.indexOf('rcData = null');
-  assert.ok(bump > 0 && azzera > bump,
-    'doRicambi deve azzerare rcData dopo aver preso la sua generazione: senza, l\'errore mostra la lista di prima');
-});
-
-// Il banco di `setSearchMode`: qui si ESEGUE il vero corpo della funzione con un DOM finto,
-// perche' jsdom non e' fra le dipendenze. Le classi dei singoli elementi si registrano davvero
-// (non solo quelle del body), senno' non si puo' controllare chi nasconde — o non nasconde —
-// il pannello dei ricambi.
 const bancoModi = () => {
-  const classi = new Set();
+  const classi = new Set(), memo = {};
   const finto = () => {
     const cls = new Set();
-    return { cls, required: false, classList: {
+    return { classList: {
       add: c => cls.add(c), remove: c => cls.delete(c),
-      toggle: (c, on) => (on === undefined ? (cls.has(c) ? cls.delete(c) : cls.add(c)) : on ? cls.add(c) : cls.delete(c)),
+      toggle: (c, on) => on ? cls.add(c) : cls.delete(c),
     } };
   };
-  const memo = {};
   const document = {
-    body: { classList: { add: c => classi.add(c), remove: c => classi.delete(c) }, dataset: {} },
-    getElementById: id => (memo[id] ||= finto()),
-    querySelector: s => (memo[s] ||= finto()),
+    querySelector: k => (memo[k] ||= finto()),
+    getElementById: k => (memo[k] ||= finto()),
   };
-  const apri = () => document.body.classList.add('has-results');   // asApri/cpApri, in una riga
-  const AREE = {
-    competitor: { pannello: 'competitorPanel', apri, chiudi: () => {} },
-    aste: { pannello: 'astePanel', apri, chiudi: () => {} },
-  };
-  const g = {
-    document, AREE, area: k => AREE[k],
+  const AREE = { aste: {
+    pannello: 'astePanel', apri: () => classi.add('has-results'), chiudi: () => {},
+  } };
+  const scope = { document, AREE, area: k => AREE[k],
     localStorage: { setItem() {} },
-    hideResults: () => document.body.classList.remove('has-results'),
+    hideResults: () => classi.delete('has-results'),
     currentTipo: () => 'auto', sincronizzaFiltriAuto: () => {},
-    btnCerca: { textContent: '' }, versioniRow: finto(),
+    btnCerca: { textContent: '' }, marcaSelect: {}, modelloSelect: {},
   };
-  const chiavi = Object.keys(g);
-  // `corpoDi` taglia PRIMA della graffa di chiusura, che qui serve per ricomporre la funzione.
-  const src = 'let searchMode = \'cerca\', rcGen = 0, rcData = null;\n'
-    + corpoDi(APP, 'function setSearchMode(') + '\n}\n'
-    + 'return { vai: m => setSearchMode(m), carica: d => { rcData = d; }, stato: () => ({ rcGen, rcData }) };';
-  return Object.assign({ classi, el: id => memo[id] }, new Function(...chiavi, src)(...chiavi.map(k => g[k])));
+  const body = 'let searchMode = "cerca";\n' + corpoDi(APP, 'function setSearchMode(') + '\n}\n'
+    + 'return m => setSearchMode(m);';
+  return { classi, vai: new Function(...Object.keys(scope), body)(...Object.values(scope)) };
 };
 
 test('contesto: uscendo da un\'area la pagina torna allo stato-vuoto, non resta nel layout post-ricerca', () => {
@@ -1649,12 +1537,6 @@ test('contesto: uscendo da un\'area la pagina torna allo stato-vuoto, non resta 
   aste.vai('cerca');
   assert.ok(!aste.classi.has('has-results'),
     'tornando su Auto dalle Aste `has-results` resta addosso al body: barra schiacciata in cima, sfondo spento, pagina vuota sotto');
-
-  // Il gemello: anche il Competitor, quando nessun parco e' stato aperto (con un parco
-  // aperto a pulire e' cpChiudi, e quel ramo copriva il difetto).
-  const cp = bancoModi();
-  cp.vai('competitor'); cp.vai('cerca');
-  assert.ok(!cp.classi.has('has-results'), 'stessa cosa uscendo dal Competitor senza nessun parco aperto');
 
   // E chi NON viene da un'area non deve perdere i risultati che ha a schermo: un clic su
   // «Auto» gia' attivo ripassa di qui con prev === 'cerca'.
