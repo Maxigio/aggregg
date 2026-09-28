@@ -32,13 +32,14 @@ function hostOk(u) {
 }
 
 // Fetch con cap redirect + ri-validazione hostname AD OGNI hop (anti-SSRF).
-async function fetchText(url, hops = 0) {
+async function fetchText(url, hops = 0, onRequest = null) {
   if (hops > 5) throw new Error('too many redirects');
   if (!hostOk(url)) throw new Error('host not allowed');
   const fonte = fonteFromUrl(url);
   if (fonte === 'moto') return (await require('./motoit-http').get(url, { timeoutMs: 12000,
-    signal: null, hosts: ['www.moto.it', 'moto.it'] })).body;
+    signal: null, hosts: ['www.moto.it', 'moto.it'], beforeRequest: onRequest })).body;
   return salute.richiesta(fonte, () => new Promise((resolve, reject) => {
+    if (onRequest) onRequest();
     const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'it-IT,it;q=0.9' } }, res => {
       res.on('error', reject);
       res.on('aborted', () => reject(new Error('risposta interrotta')));
@@ -48,7 +49,7 @@ async function fetchText(url, hops = 0) {
         const next = res.headers.location.startsWith('http')
           ? res.headers.location
           : new URL(res.headers.location, url).href;
-        return fetchText(next, hops + 1).then(resolve, reject);   // hostOk ri-controllato nel prossimo giro
+        return fetchText(next, hops + 1, onRequest).then(resolve, reject);   // hostOk ri-controllato nel prossimo giro
       }
       if (res.statusCode !== 200) {
         const errore = salute.erroreHttp(fonte, res.statusCode, res.headers);
@@ -252,7 +253,7 @@ function fonteFromUrl(u) {
 const senzaNiente = d => !d || !Object.values(d).some(v => v != null && !(Array.isArray(v) && !v.length));
 
 /** Spec extra per un annuncio, o null se host non valido/parser assente. */
-async function getDetail(url) {
+async function getDetail(url, { onRequest = null } = {}) {
   if (!hostOk(url)) throw new Error('host not allowed');
   const hit = cache.get(url);
   if (hit && Date.now() - hit.ts < (hit.ttl || TTL_MS)) { cache.delete(url); cache.set(url, hit); return hit.data; }  // LRU touch
@@ -261,7 +262,7 @@ async function getDetail(url) {
   const p = salute.richiesta(fonteFromUrl(url), async () => {
     const parser = PARSERS[fonteFromUrl(url)];
     if (!parser) return null;
-    const html = await fetchText(url);
+    const html = await fetchText(url, 0, onRequest);
     const data = parser(html) || { ...EMPTY };
     /**
      * UNA PAGINA CHE NON DICE NIENTE NON E' UN ANNUNCIO SENZA DATI.
@@ -287,7 +288,7 @@ async function getDetail(url) {
     return data;
   }).catch(e => {
     console.warn(`[detail] ${String(url).slice(0, 70)}: ${e.message}`);
-    if (e.status === 429 || e.code === 'FONTE_IN_PAUSA') throw e;
+    if (e.status === 429 || e.code === 'FONTE_IN_PAUSA' || e.code === 'AMR_DETAIL_LIMIT') throw e;
     return null;   // best-effort: la UI mostra "dettagli non disponibili"
   }).finally(() => { inflight.delete(url); });
   inflight.set(url, p);

@@ -410,6 +410,10 @@ async function richiesta(fonte, lavoro) {
     }
     return r;
   } catch (e) {
+    if (e?.code === 'AMR_DETAIL_LIMIT') {
+      if (prova && m.prova === prova) m.prova = null;
+      throw e;
+    }
     // Il blocco della verifica deve aggiornare la scala PRIMA della pausa generica:
     // altrimenti il successivo registra() esterno vede gia' 15 minuti di pausa e
     // non sale mai di gradino. Il WeakSet rende innocuo quel riepilogo esterno.

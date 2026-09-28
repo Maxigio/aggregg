@@ -218,7 +218,15 @@ function fontePausaTesto(nome, pausa) {
 
 // Al massimo un avviso per fonte/stato nel contesto corrente, anche fra dettaglio e confronto.
 const avvisiPausaDettaglio = new Map();
+let avvisoLimiteDettaglioFino = 0;
 function segnalaPausaDettaglio(data) {
+  if (data?.limiteDettaglio) {
+    if (Date.now() >= avvisoLimiteDettaglioFino) {
+      toast(data.error || 'Limite richieste per i dettagli raggiunto. Riprova più tardi.');
+      avvisoLimiteDettaglioFino = Date.now() + Math.max(1, Number(data.riprovaFra) || 1) * 1000;
+    }
+    return;
+  }
   if (typeof data?.ok !== 'boolean' || !data.pausa || !['subito', 'autoscout', 'moto'].includes(data.fonte)) return;
   const f = data.fonte;
   const errore = data.ok ? null : data.error || 'Dettaglio temporaneamente non disponibile.';

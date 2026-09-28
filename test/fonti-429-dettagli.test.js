@@ -108,12 +108,48 @@ for (const [fonte, host] of [['subito', 'www.subito.it'], ['autoscout', 'autosco
 test('detail: la cache resta leggibile in pausa, un cache-miss non esce', async () => {
   const chiamate = risposte({ status: 200, body: '{"rawPowerInHp":123}' });
   const url = 'https://www.autoscout24.it/dettaglio-cache';
-  const caldo = await getDetail(url);
+  let addebiti = 0;
+  const opt = { onRequest: () => { addebiti++; } };
+  const caldo = await getDetail(url, opt);
   assert.equal(caldo.potenzaCv, 123);
   salute.erroreHttp('autoscout', 429);
-  assert.strictEqual(await getDetail(url), caldo);
-  await assert.rejects(getDetail(url + '-freddo'), { code: 'FONTE_IN_PAUSA' });
+  assert.strictEqual(await getDetail(url, opt), caldo);
+  await assert.rejects(getDetail(url + '-freddo', opt), { code: 'FONTE_IN_PAUSA' });
   assert.equal(chiamate.length, 1);
+  assert.equal(addebiti, 1);
+});
+
+test('detail: il conteggio delle richieste ignora cache, attese condivise e URL rifiutati', async () => {
+  const chiamate = risposte({ status: 200, hold: true, body: '{"rawPowerInHp":123}' });
+  let addebiti = 0;
+  const url = 'https://www.autoscout24.it/dettaglio-conteggio';
+  const opt = { onRequest: () => { addebiti++; } };
+  await assert.rejects(getDetail('https://example.org/invalido', opt), /host not allowed/);
+  const prima = getDetail(url, opt);
+  const seconda = getDetail(url, opt);
+  assert.equal(chiamate.length, 1);
+  assert.equal(addebiti, 1);
+  await new Promise(setImmediate);
+  chiamate[0].fine();
+  const [a, b] = await Promise.all([prima, seconda]);
+  assert.strictEqual(a, b);
+  assert.strictEqual(await getDetail(url, opt), a);
+  assert.equal(addebiti, 1);
+});
+
+test('detail: quota locale esaurita non modifica la salute della fonte in verifica', async () => {
+  scadi('autoscout');
+  const chiamate = risposte({ status: 200, body: '{"rawPowerInHp":123}' });
+  const url = 'https://www.autoscout24.it/dettaglio-quota-verifica';
+  await assert.rejects(getDetail(url, { onRequest: () => {
+    throw Object.assign(new Error('quota locale'), { code: 'AMR_DETAIL_LIMIT' });
+  } }), { code: 'AMR_DETAIL_LIMIT' });
+  assert.equal(chiamate.length, 0);
+  assert.equal(salute.fermo('autoscout').verifica, true);
+  const detail = await getDetail(url, { onRequest: () => {} });
+  assert.equal(detail.potenzaCv, 123);
+  assert.equal(chiamate.length, 1);
+  assert.equal(salute.fermo('autoscout').fermo, false);
 });
 
 test('specs: 429 con Retry-After ferma anche detail e preserva errore tipizzato', { timeout: 1000 }, async () => {

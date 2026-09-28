@@ -22,7 +22,7 @@ function hostOk(raw, hosts = HOSTS) {
 }
 
 function get(url, { timeoutMs = 15000, signal = annullo.segnale(), hosts = HOSTS,
-  accept = 'text/html', tag = null } = {}) {
+  accept = 'text/html', tag = null, beforeRequest = null } = {}) {
   const deadlineAt = Date.now() + DEADLINE_MS;
   async function hop(target, n) {
     if (!hostOk(target, hosts)) throw fail(n ? 'redirect Moto.it non consentito' : 'destinazione Moto.it non consentita', { kind: 'error' });
@@ -35,6 +35,7 @@ function get(url, { timeoutMs = 15000, signal = annullo.segnale(), hosts = HOSTS
         if (signal?.aborted) throw fail('richiesta Moto.it annullata', { kind: 'transient' });
         if (Date.now() >= deadlineAt) throw fail('timeout complessivo Moto.it', { kind: 'transient' });
         budget.conta('motoit', n ? 'redirect' : tag);
+        if (beforeRequest) beforeRequest();
         let timer, response, decoded, done = false;
         return new Promise((resolve, reject) => {
           const stop = e => {
