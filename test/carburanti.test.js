@@ -111,7 +111,7 @@ test('costruisciIndice: prezzi impossibili scartati', () => {
  * questi test restavano verdi provando una copia sbagliata che nessuno esegue.
  * La copia morta e' stata tolta; qui si ritaglia dal sorgente quella vera e la si esegue.
  */
-const APP = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+const APP = require('../scripts/build-frontend').frontendSourceSync().js;
 function regoleVive() {
   const da = APP.indexOf('function carbConsumoDa(v)');
   assert.ok(da > 0, 'carbConsumoDa non e\' piu\' in frontend/app.js');

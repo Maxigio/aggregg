@@ -35,6 +35,7 @@ const fs = require('fs');
 const path = require('path');
 const { marked } = require('marked');
 const cheerio = require('cheerio');
+const { frontendSourceSync, JS_FILES } = require('./build-frontend');
 
 const RADICE = path.join(__dirname, '..');
 const DIR_MD = path.join(RADICE, 'docs', 'guida');
@@ -82,7 +83,7 @@ function elencoFiltri($) {
  * fonte su ogni riga di risultato.
  */
 function elencoSiti() {
-  const src = fs.readFileSync(path.join(RADICE, 'frontend', 'app.js'), 'utf8');
+  const src = frontendSourceSync().js;
   const m = src.match(/const FONTE_LABEL\s*=\s*\{([^}]*)\}/);
   if (!m) {
     return '<p class="guida-manca">Non trovo <code>FONTE_LABEL</code> in <code>frontend/app.js</code>: l\'elenco dei siti non si può generare.</p>';
@@ -151,7 +152,7 @@ const ELENCHI = {
  * suo argomento e da pricing.js, che in node si carica). Il cursore del prezzo lo disegna
  * la sua libreria, sulla pagina della guida: vedi guida.html.
  */
-function appJs() { return fs.readFileSync(path.join(RADICE, 'frontend', 'app.js'), 'utf8'); }
+function appJs() { return frontendSourceSync().js; }
 
 function chipRaggruppa() {
   const m = appJs().match(/const FACET_DIMS\s*=\s*\[([\s\S]*?)\];/);
@@ -326,16 +327,15 @@ function buildGuidaSync() {
   return { html, ver, sezioni: sezioni.length };
 }
 
-/** Il momento piu' recente fra i sorgenti: serve a rifare la build solo quando serve. */
+/** La firma dei sorgenti: una modifica a qualunque file deve rifare la Guida. */
 function mtimeGuida() {
   // app.js e' un sorgente VERO della Guida (priceMenuHTML, elenchi): senza di lui nel
   // timbro, cambiare il frontend lasciava in giro la pagina vecchia — pure con un 304.
-  const files = [...fileSezioni(), INDEX_HTML, MODELLO, path.join(RADICE, 'frontend', 'app.js')];
-  let piu = 0;
-  for (const f of files) {
-    try { piu = Math.max(piu, fs.statSync(f).mtimeMs); } catch (_) { /* sparito: la build lo dira' */ }
-  }
-  return piu;
+  const files = [...fileSezioni(), INDEX_HTML, MODELLO, ...JS_FILES];
+  return files.map(f => {
+    try { const s = fs.statSync(f); return `${s.mtimeMs}:${s.size}`; }
+    catch (_) { return 'assente'; }
+  }).join('|');
 }
 
 module.exports = { buildGuidaSync, mtimeGuida, espandi, componente, provalo, parliamone, ELENCHI };

@@ -1,0 +1,281 @@
+
+/* ── Versione: un campo solo ──────────────────────────────────────────
+   Un campo solo, a testo libero: le tre colonne per catalogo promettevano una
+   corrispondenza fra fonti che non esiste. */
+.ver-lab { display: block; font-size: 0.78rem; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; }
+.ver-lab em { font-style: normal; opacity: 0.75; }
+/* Versione e targa in riga: i due campi che DESCRIVONO il veicolo, non quelli che
+   restringono la ricerca. Stesso passo di marca/modello (gap 10px) e larghezza data
+   dall'input, non dalla colonna: con le colonne elastiche i due campi restavano agli
+   estremi della riga con un vuoto in mezzo. Su schermo stretto si impilano da soli. */
+.riga-libera { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.campo-libero { flex: 0 1 auto; min-width: 0; }
+.campo-libero .field-input { width: 100%; }
+#versione { width: 420px; max-width: 100%; }
+#targaFiltro { width: 200px; max-width: 100%; text-transform: uppercase; }
+.targa-riga { display: flex; gap: 6px; align-items: center; }
+.btn-targa-vai { align-self: stretch; padding: 0 12px; border: 1px solid var(--accent); border-radius: var(--r);
+  background: transparent; color: var(--accent); font: inherit; font-size: 0.82rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap; }
+.btn-targa-vai:hover { background: var(--accent); color: #fff; }
+
+/* ── Cerchi, gomme e pneumatici dentro il pannello annuncio ───────────────────
+   Una riga per MISURA distinta, non per allestimento: la stessa gomma torna su piu'
+   allestimenti e in piano erano decine di righe uguali. La misura e' un bottone perche'
+   da li' parte l'etichetta europea, e solo se la premi. */
+.det-gomme:not(:empty) { margin-top: 10px; }
+.gom { border-top: 1px solid var(--line); padding-top: 10px; }
+.gom-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 0.8rem; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.gom-src { font-weight: 400; font-size: 0.74rem; color: var(--text-muted); }
+.gom-hint { font-weight: 400; font-size: 0.74rem; font-style: italic; color: var(--text-muted); }
+.gom-att { font-size: 0.78rem; color: var(--text-muted); font-style: italic; padding: 4px 0; }
+.gom-riga { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 3px 0; }
+.gom-mis { padding: 2px 8px; font-size: 0.8rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; white-space: nowrap; }
+.gom-mis:hover { border-color: var(--accent); color: var(--accent); }
+.gom-det { font-size: 0.76rem; color: var(--text-muted); min-width: 0; overflow-wrap: anywhere; }
+
+.gom-pneu { margin: 2px 0 8px 10px; padding-left: 10px; border-left: 2px solid var(--line); }
+.gom-pneu-h { font-size: 0.74rem; color: var(--text-muted); margin-bottom: 4px; }
+.gom-pneu-r { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; padding: 2px 0; font-size: 0.78rem; }
+/* il nome non si allarga a spingere i valori all'altro capo della riga: consumo,
+   bagnato e rumore vanno letti ACCANTO al pneumatico a cui appartengono */
+.gom-pneu-m { flex: 0 1 300px; min-width: 0; overflow-wrap: anywhere; }
+.gom-pneu-v { font-weight: 600; white-space: nowrap; }
+.gom-pneu-v em { font-weight: 400; font-style: normal; font-size: 0.7rem; color: var(--text-muted); margin-left: 3px; }
+
+
+/* ── Sezioni richiudibili dentro le schede ────────────────────────────────────
+   Quattro blocchi (passaggio, cerchi e gomme, carburante, passaggi del modello) che
+   stavano sempre aperti e riempivano la scheda anche quando non li guardavi. Chiusi si
+   legge comunque la cifra che conta: e' nell'intestazione, accanto al titolo. */
+.mini { border-top: 1px solid var(--line); margin-top: 8px; }
+/* I blocchi richiudibili dell'annuncio in GRIGLIA: erano quattro righe incolonnate con
+   mezzo pannello vuoto a destra. Stessa regola dell'area ADD ON, gia' provata: dove c'e'
+   spazio si affiancano, dove non c'e' tornano in colonna. */
+.det-blocchi { display: grid; gap: 0 20px; align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+/* In griglia ogni blocco e' una colonna a se': il filo sopra separava dal precedente, che
+   ora sta di fianco e non sopra. Il primo di OGNI colonna non lo vuole. */
+.det-blocchi > * { min-width: 0; }
+.det-blocchi > .det-pass > .mini, .det-blocchi > .det-gomme > .mini { border-top: 0; margin-top: 0; }
+.det-blocchi > .mini:first-of-type { border-top: 0; margin-top: 0; }
+.mini:first-child { border-top: 0; margin-top: 0; }
+.mini-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 7px 0; cursor: pointer; list-style: none; }
+.mini-h::-webkit-details-marker { display: none; }
+.mini-h::before { content: '▸'; color: var(--text-muted); font-size: 0.8rem; transition: transform .12s; }
+.mini[open] > .mini-h::before { transform: rotate(90deg); }
+.mini-t { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.mini-meta { font-size: 0.82rem; font-weight: 600; color: var(--accent); }
+.mini-meta em { font-style: normal; font-weight: 400; font-size: 0.74rem; color: var(--text-muted); margin-left: 4px; }
+.mini-b { padding: 0 0 10px; }
+
+/* ── Quello che la fonte dichiarava e non leggevamo ───────────────────────────
+   I campi singoli stanno con gli altri dati dell'annuncio, nella griglia `.det-specs`:
+   sono dati dell'annuncio come la potenza, non integrazioni da andare a cercare. Qui
+   restano solo le due cose che nella griglia non ci stanno — la lista degli optional e
+   il testo scritto dal venditore — a tutta larghezza e in chiaro. */
+.det-fonte { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+/* .det-blocco/-t/-n: erano il riquadro sempre aperto degli Optional. Ora quel blocco usa
+   la forma richiudibile `mini`, come il testo dell'annuncio, e quelle tre regole non le
+   usava piu' nessuno. */
+.opt-cat { padding: 5px 0; border-bottom: 1px dotted var(--line); }
+.opt-cat-t { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 3px; }
+.opt-voci { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.opt-v { font-size: 0.78rem; padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--text); }
+/* Il testo dell'annuncio e' scritto a mano: puo' contenere righe lunghissime o URL
+   senza spazi, che senza questo sfondano la scheda in larghezza. */
+.det-testo { font-size: 0.82rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); max-height: 22em; overflow-y: auto; }
+
+
+/* ── ADD ON: le integrazioni esterne, ultimo gruppo della scheda tecnica ──────
+   Stessa intestazione di MOTORE e PRESTAZIONI (.veh-grp), dentro i tre blocchi
+   richiudibili con la loro fonte scritta. Le specifiche descrivono il veicolo, questi
+   dicono cosa gli succede intorno: stanno insieme ma non si mescolano. */
+/* Tre blocchi impilati lasciavano mezza scheda vuota su schermo largo. In griglia si
+   affiancano e occupano la larghezza che c'e'; sotto i 700px tornano in colonna da soli.
+   `align-items:start` perche' aprendone uno non devono allungarsi anche gli altri, e la
+   riga in piu' della descrizione non deve spostare i vicini. */
+/* `.veh-grp-body` e' GIA' una griglia a colonne (le righe delle specifiche si incolonnano
+   da sole): senza questa riga il blocco finiva dentro UNA colonna da 273px e i tre
+   riquadri, che ne chiedono 290, sfondavano il loro stesso contenitore. Prende la riga
+   intera, e la griglia qui sotto lavora sulla larghezza vera. */
+.veh-addon { grid-column: 1 / -1; padding: 6px 0 6px; display: grid; gap: 4px 20px; align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+/* Nella griglia ogni blocco e' una colonna a se': il filo sopra separava dal blocco
+   precedente, che ora sta di fianco e non sopra. */
+.veh-addon .mini { border-top: 0; margin-top: 0; min-width: 0; }
+.veh-addon .mini-b { padding-bottom: 4px; }
+/* Il blocco richiami e' il piu' largo: quando c'e' spazio si prende due colonne, cosi'
+   le due fonti stanno affiancate invece di incolonnarsi in una striscia stretta. */
+/* Richiami e Passaggi sono i due blocchi larghi: quando c'e' spazio si prendono due
+   colonne, cosi' le due fonti (richiami) e le due meta' (passaggi) stanno affiancate
+   invece di incolonnarsi dentro una striscia da 290px. */
+@media (min-width: 900px) { .veh-addon .mini[data-mini="veh-rich"],
+                            .veh-addon .mini[data-mini="passaggi"] { grid-column: span 2; } }
+/* I comandi del carburante su una riga sola. */
+.veh-costo-ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.veh-costo-ctrl .veh-carb-prov { min-width: 0; flex: 1 1 120px; }
+
+.veh-rich { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px 18px; }
+.veh-rich-b { min-width: 0; }
+.veh-rich-h { font-size: 0.74rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px; }
+.veh-rich-h b { color: var(--accent); font-weight: 700; }
+.veh-rich-r { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px dotted var(--line); font-size: 0.8rem; }
+/* La categoria puo' essere lunga ("Sicurezza passeggeri (airbag, cinture)"): si accorcia
+   invece di spingere fuori la data, che e' la parte che si legge a colpo d'occhio. */
+.veh-rich-cat { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.veh-rich-meta { flex: none; color: var(--text-muted); font-size: 0.76rem; }
+.veh-rich-att { font-size: 0.8rem; color: var(--text-muted); padding: 4px 0; }
+.veh-rich-fonte { grid-column: 1 / -1; font-size: 0.72rem; line-height: 1.45; color: var(--text-muted); border-top: 1px solid var(--line); padding-top: 6px; }
+.veh-rich-fonte b { color: var(--text); font-weight: 600; }
+
+/* Il titolo della scheda e la riga dell'ADD ON sono LINK al richiamo originale: senza il
+   testo del guasto a schermo, quello e' l'unico modo di leggerlo. Restano righe, non
+   diventano bottoni: cambia solo che si possono aprire. */
+.veh-rich-link { color: inherit; text-decoration: none; }
+.veh-rich-link:hover { color: var(--accent); text-decoration: none; }
+.veh-rich-link:hover .veh-rich-cat { text-decoration: underline; }
+
+/* "109 di 11.610": il primo numero e' quello che vedi, il secondo quanti ne ha la fonte.
+   Il secondo si tiene in secondo piano — e' contesto, non il risultato. */
+.src b em { font-style: normal; font-weight: 400; color: var(--text-muted); margin-left: 3px; }
+
+/* "Carica altri": la fetta successiva. Sta sotto la lista, non nella toolbar, perche'
+   si preme quando si e' finito di guardare — non prima. */
+.carica-altri { display: flex; justify-content: center; padding: 14px 0 2px; }
+.carica-altri button { min-width: 220px; }
+.carica-altri button[disabled] { opacity: .6; cursor: default; }
+/* L'omologazione sotto la riga dell'allerta: e' il numero da confrontare col libretto,
+   quindi monospazio e a capo suo. Puo' essere lungo ("e4*168/2013*00131*01-*04"): va a
+   capo invece di allargare la colonna. */
+.veh-rich-omo { flex-basis: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.veh-rich-r { flex-wrap: wrap; }
+
+/* ── Verifica per targa (dentro ADD ON) ───────────────────────────────────────
+   L'immagine e' quella del portale e la legge una persona. Il modulo sta su una riga
+   sola dove c'e' spazio e va a capo sul telefono, senza mai stringere l'immagine: se
+   diventa piccola non si legge, ed e' l'unica cosa che deve restare leggibile. */
+.tg-corpo { padding-bottom: 4px; }
+.tg-nota { font-size: 0.78rem; line-height: 1.45; color: var(--text-muted); margin: 0 0 10px; }
+.tg-nota b { color: var(--text); font-weight: 600; }
+.tg-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tg-form #tgTipo { flex: 0 1 150px; }
+.tg-form .tg-cin { flex: 0 1 110px; letter-spacing: .12em; }
+.tg-btn { flex: none; }
+.tg-captcha { display: flex; align-items: center; gap: 4px; flex: none; }
+.tg-captcha img { display: block; border: 1px solid var(--line); border-radius: var(--r); background: #fff; }
+.tg-cambia { flex: none; font-size: 1rem; line-height: 1; color: var(--text-muted); background: none;
+  border: 1px solid var(--line); border-radius: var(--r); padding: 7px 9px; cursor: pointer; }
+.tg-cambia:hover { color: var(--accent); border-color: var(--accent); }
+.tg-att { padding: 18px 2px; font-size: 0.9rem; color: var(--text-muted); }
+.tg-avviso { font-size: 0.85rem; color: var(--text); background: var(--accent-weak);
+  border-radius: var(--r); padding: 9px 12px; margin: 12px 0 0; }
+.tg-esito { margin-top: 14px; }
+/* Piu' gruppi (piu' revisioni) restano staccati: senza il filo si leggerebbero come
+   un elenco unico e non si saprebbe piu' quale valore appartiene a quale riga. */
+.tg-esito .det-specs + .det-specs { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.tg-esito .det-specs { margin-top: 10px; }
+/* Le righe che il portale aggiunge e che non stanno in coppie: testo suo, mostrato com'e'. */
+.tg-riga { font-size: 0.85rem; line-height: 1.5; padding: 3px 0; border-bottom: 1px dotted var(--line); overflow-wrap: anywhere; }
+
+/* ── Dall'omologazione alle versioni ──────────────────────────────────────────
+   Il numero da solo e' una stringa da guardare; il bottone lo apre e dice QUALI
+   versioni copre. Sta fuori dal link della riga perche' dentro un <a> un bottone non
+   ci puo' stare. */
+.veh-rich-omo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 2px 0 4px; }
+.veh-omo-n { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem;
+  color: var(--text-muted); overflow-wrap: anywhere; min-width: 0; }
+.veh-omo-btn { flex: none; font-size: 0.7rem; color: var(--accent); background: var(--accent-weak);
+  border: 1px solid var(--accent); border-radius: 999px; padding: 1px 9px; cursor: pointer; }
+.veh-omo-btn:hover { background: var(--accent); color: #fff; }
+.veh-omo-btn[disabled] { opacity: .55; cursor: default; }
+.veh-omo-att { font-size: 0.76rem; color: var(--text-muted); padding: 2px 0 6px; }
+.veh-omo-esito { padding: 2px 0 8px; }
+.veh-omo-alim { font-size: 0.78rem; margin-bottom: 4px; }
+.veh-omo-alim em { font-style: normal; color: var(--text-muted); }
+.veh-omo-nomi { display: flex; flex-wrap: wrap; gap: 4px; }
+.veh-omo-v { font-size: 0.74rem; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; }
+.veh-omo-piu { color: var(--text-muted); }
+.veh-omo-fonte { font-size: 0.7rem; line-height: 1.4; color: var(--text-muted); margin-top: 5px; }
+
+
+/* Il bottone che chiede la scheda tecnica dentro un annuncio. La scheda poi si disegna
+   QUI DENTRO, con tutto quello che ha sempre avuto: generazioni, motorizzazioni, unità,
+   confronto, export, ADD ON. Il bottone sparisce quando la scheda prende il suo posto. */
+.det-scheda { margin-top: 8px; }
+.det-scheda:empty { display: none; margin: 0; }
+.det-scheda-apri {
+  border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface-2);
+  color: var(--text); font: inherit; font-size: 0.82rem; font-weight: 600;
+  padding: 7px 12px; cursor: pointer; width: 100%; text-align: left;
+}
+.det-scheda-apri:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── ADD ON: le MISURE della redazione (auto.it, inSella) ─────────────────────
+   Il dato misurato sta accanto a quello dichiarato, non al posto suo: la differenza fra i
+   due e' l'unica ragione per cui questo blocco esiste. Le candidate sono bottoni perche'
+   una prova e' di un allestimento preciso e la scelta la fa chi guarda. */
+.veh-mis-att { font-size: 0.8rem; color: var(--text-muted); padding: 4px 0; }
+.veh-mis-r + .veh-mis-r { margin-top: 8px; padding-top: 8px; border-top: 1px dotted var(--line); }
+.veh-mis-h { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.veh-mis-m { font-weight: 400; font-size: 0.74rem; color: var(--text-muted); margin-left: 6px; }
+.veh-mis-d { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 3px; }
+.veh-mis-d span { font-size: 0.8rem; color: var(--text); font-family: var(--num); }
+.veh-mis-d em { font-style: normal; font-family: inherit; font-size: 0.72rem; color: var(--text-muted); margin-right: 4px; }
+/* Il numero come lo ha misurato la fonte, accanto a quello convertito: si legge se lo si
+   cerca, non compete con la cifra principale (vedi consumiHTML). */
+.veh-mis-alt { font-size: 0.72rem; color: var(--text-muted); }
+.veh-mis-fonte { font-size: 0.72rem; line-height: 1.45; color: var(--text-muted); border-top: 1px solid var(--line); margin-top: 8px; padding-top: 6px; }
+.veh-mis-fonte b { color: var(--text); font-weight: 600; }
+.veh-mis-lista { display: flex; flex-wrap: wrap; gap: 6px; }
+.veh-mis-cand { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; max-width: 100%;
+  padding: 5px 9px; font-size: 0.8rem; text-align: left; color: var(--text); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.veh-mis-cand:hover { border-color: var(--accent); }
+.veh-mis-cand-t { font-weight: 600; overflow-wrap: anywhere; }
+.veh-mis-cand-m { font-size: 0.72rem; color: var(--text-muted); }
+.veh-mis-prova { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.veh-mis-ph { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 0.84rem; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.veh-mis-link { font-size: 0.76rem; font-weight: 400; color: var(--accent); text-decoration: none; }
+.veh-mis-b + .veh-mis-b { margin-top: 8px; }
+.veh-mis-bh { font-size: 0.74rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 2px; }
+
+/* Il motore e' identificato, l'allestimento no: si scrive, invece di mostrare quattordici
+   righe che si distinguono per il cambio. */
+.veh-motore-uno { margin: 0 0 8px; padding: 8px 10px; border-left: 3px solid var(--accent);
+  background: var(--surface-2); border-radius: 6px; font-size: 0.82rem; line-height: 1.5; }
+.veh-motore-uno b { display: block; color: var(--text); }
+.veh-motore-uno span { color: var(--text-muted); font-size: 0.78rem; }
+
+/* Il catalogo letto a meta': il colore e' quello degli avvisi, non quello dell'accento — la
+   scheda qui sotto e' una deduzione su un elenco monco, non una certezza. */
+.veh-monco { margin: 0 0 8px; padding: 6px 10px; border-left: 3px solid var(--warn);
+  background: var(--warn-weak); border-radius: 6px; font-size: 0.78rem; line-height: 1.5; color: var(--text); }
+
+/* Il chip "Solo IVA esposta" quando in questa ricerca non ce n'e' nessuno: si vede che c'e'
+   ma si legge che non porterebbe niente. Non si nasconde — sapere che sono zero e' un dato. */
+.facet-chip-vuoto { opacity: .5; }
+
+/* Quante richieste restano prima della pausa. Compare solo quando sta per finire: un
+   contatore sempre acceso e' rumore, e scoprire il tetto sbattendoci era la vecchia via. */
+.budget-avviso { font-size: 0.78rem; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin: 6px 0; }
+
+/* Pagine trovate dalla ricerca web: NON sono offerte, e non devono somigliare a una riga
+   delle integrazioni esterne. */
+
+/* Le ricerche degli altri: riquadro in fondo alla scheda Ricerche, solo per il proprietario. */
+.ricerche-altri { margin: 0 12px 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.ricerche-altri > summary { cursor: pointer; font-size: 0.84rem; font-weight: 700; color: var(--accent); list-style: none;
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; }
+.ricerche-altri > summary::-webkit-details-marker { display: none; }
+.ricerche-altri > summary:hover { border-color: var(--accent); }
+.ricerche-altri > summary .ra-freccia { transition: transform .12s; display: inline-block; }
+.ricerche-altri[open] > summary .ra-freccia { transform: rotate(90deg); }
+.ricerche-altri > summary .ra-solo { margin-left: auto; font-size: 0.7rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.ricerche-altri .ra-persona { margin-top: 10px; }
+.ricerche-altri .ra-chi { font-size: 0.78rem; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+.ricerche-altri .ra-riga { display: flex; gap: 8px; align-items: baseline; font-size: 0.76rem; color: var(--muted); padding: 2px 0 2px 8px; }
+.ricerche-altri .ra-et { color: var(--text); }
+.ricerche-altri .ra-quando { margin-left: auto; white-space: nowrap; }
+.ricerche-altri .ra-nov { color: var(--accent); font-weight: 700; white-space: nowrap; }

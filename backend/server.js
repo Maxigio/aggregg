@@ -10,7 +10,7 @@ const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
-const { buildFrontendSync, frontendSourceSync, JS_FILES } = require('../scripts/build-frontend');
+const { buildFrontendSync, frontendSourceSync, JS_FILES, CSS_FILES } = require('../scripts/build-frontend');
 const { buildGuidaSync, mtimeGuida } = require('../scripts/build-guida');   // F41: la Guida, montata da docs/guida/*.md
 const filtriAuto = require('./filtri-auto');            // filtri avanzati auto → dialetto di ogni fonte
 const versioneVerifica = require('./versione-verifica');  // la versione, verificata da noi su tutte le fonti
@@ -451,11 +451,12 @@ catch (e) {
  * Se la ricostruzione fallisce si tiene il bundle buono di prima invece di servire un
  * frontend a meta'.
  */
-let mtimeFE = 0;
-const FILE_FE = [...JS_FILES, path.join(__dirname, '../frontend/style.css')];
-const timbroFE = () => {
-  try { return FILE_FE.reduce((m, f) => Math.max(m, fs.statSync(f).mtimeMs), 0); } catch (_) { return mtimeFE; }
-};
+let mtimeFE = '';
+const FILE_FE = [...JS_FILES, ...CSS_FILES];
+const timbroFE = () => FILE_FE.map(f => {
+  try { const s = fs.statSync(f); return `${s.mtimeMs}:${s.size}`; }
+  catch (_) { return 'assente'; }
+}).join('|');
 mtimeFE = timbroFE();
 function aggiornaFE() {
   const t = timbroFE();

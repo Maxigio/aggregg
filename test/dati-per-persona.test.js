@@ -209,7 +209,7 @@ test('le mie cose: un ciclo di PUT si ferma, prima del corpo, e solo per chi ins
 
 test('il browser elimina tutte le vecchie cache e non offre salvataggi ricambi', () => {
   daCapo();
-  const APP = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const APP = require('../scripts/build-frontend').frontendSourceSync().js;
   const HTML = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
   for (const key of ['amr_salvati', 'amr_salvati_ricambi', 'amr_oem_preferiti']) {
     assert.ok(APP.includes(`'${key}'`), `la cache legacy ${key} non viene eliminata`);
@@ -236,7 +236,7 @@ test('le mie cose: le impostazioni prezzo dell\'account entrano anche NEL menu, 
   const payload = miei.tutto('anna');
   assert.deepStrictEqual(Object.keys(payload.preferenze), ['amr_price_v'], 'il presupposto: di la\' c\'e\' solo il prezzo');
 
-  const APP = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const APP = require('../scripts/build-frontend').frontendSourceSync().js;
   const pezzo = (da, finoA) => {
     const i = APP.indexOf(da);
     assert.ok(i > 0, `non trovo piu' \`${da}\` in frontend/app.js`);

@@ -672,7 +672,7 @@ test('saved: due avvisi sullo stesso annuncio si segnano letti insieme', () => {
 // passaggio Auto/Moto — lo stato che descriveva la schermata di prima deve sparire tutto
 // insieme, in un posto solo. Finche' erano tre punti a farlo, ognuno ne dimenticava un
 // pezzo diverso, e il pezzo dimenticato descriveva un'altra ricerca.
-const APP = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+const APP = require('../scripts/build-frontend').frontendSourceSync().js;
 const INDEX = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
 /**
  * Sorgente a COMMENTI TOLTI. Un match POSITIVO soddisfatto dalla prosa non prova niente —

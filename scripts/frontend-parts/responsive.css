@@ -1,0 +1,47 @@
+
+/* ─── Responsive ─────────────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .results-toolbar { position: static; }       /* su mobile wrappa in 4-5 righe → niente sticky che mangia il viewport */
+  .grid-head { display: none; }                /* niente header colonne su mobile */
+  .tb-sort-mobile { display: inline-flex; }     /* ordina via select su mobile */
+  /* Riga mobile: foto a sx · [titolo 2-righe + meta] · prezzo sotto. Niente bottoni
+     (tap riga → dettaglio, azioni nel pannello) → tutto lo spazio al titolo. */
+  .result-row {
+    grid-template-columns: 84px minmax(0,1fr) !important;
+    grid-template-areas: "thumb main" "thumb price";
+    row-gap: 2px; cursor: pointer;
+  }
+  .row-thumb { grid-area: thumb; width: 84px; height: 84px; align-self: start; }
+  .row-main { grid-area: main; }
+  .row-prezzo {
+    grid-area: price; align-self: start; justify-self: start; text-align: left;
+    font-size: 1.1rem; margin-top: 2px;
+  }
+  .result-row .row-cell { display: none; }      /* anno/km vanno in .row-sub-m */
+  .row-fonte { display: none; }                  /* fonte va in .row-sub-m */
+  .row-sub-m { display: block; font-family: var(--num); font-size: 0.74rem; color: var(--text-muted); margin-top: 4px; }
+  .row-actions { display: none; }                /* azioni nel pannello dettaglio (tap riga) */
+  .row-actions.has-alerts { display: flex; }
+  .row-actions.has-alerts .btn-info, .row-actions.has-alerts .btn-confronta { display: none; }
+  .result-row .row-actions.has-alerts { grid-column: 2; grid-row: 2; justify-self: end; }
+  .result-row:has(.row-actions.has-alerts) .row-prezzo { padding-right: 44px; }
+  .cmatrix thead th { min-width: 150px; }
+  .adv-grid { grid-template-columns: 1fr 1fr; }
+  .search-fields { flex-direction: column; }
+  .btn-cerca { padding: 12px; }
+  #resultsSection { padding-bottom: 80px; }
+  .row-act { width: 38px; height: 38px; }
+
+}
+@media (max-width: 640px) {
+  .tb-sep { display: none; }
+}
+@media (max-width: 480px) {
+  /* Topbar resta a 1 riga (così top:53px della toolbar sticky è corretto):
+     nascondi il testo brand (resta il logo/QR), gap ridotto → niente overflow su iPhone SE. */
+  .topbar { gap: 8px; }
+  .brand .brand-name { display: none; }
+  .adv-grid { grid-template-columns: 1fr; }    /* filtri in colonna singola: input numerici più comodi */
+}
+
+/* Le aree senza form lasciano sempre visibili i bottoni dei modi. */

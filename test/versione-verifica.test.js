@@ -132,7 +132,7 @@ test('il browser toglie solo gli smentiti, e lo dice', () => {
   // A COMMENTI TOLTI, come le guardie di silenzi-fonti (lezione 34941e8): `mostrali` sta
   // anche in un commento di resetContesto, e questa guardia era gia' oggi soddisfatta
   // dalla prosa — la regola poteva morire nel codice con l'asserzione verde.
-  const grezzo = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const grezzo = require('../scripts/build-frontend').frontendSourceSync().js;
   const app = grezzo.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
   assert.ok(/versioneEsito === 'smentita'/.test(app), 'il filtro lato browser non guarda l\'esito');
   assert.ok(/versioneEsito !== 'smentita'/.test(app), 'gli ignoti devono restare: "non lo so" non e\' "non e\' quella"');
@@ -145,7 +145,7 @@ test('una versione ignota non diventa «corrisponde» negli export', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const vm = require('node:vm');
-  const app = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const app = require('../scripts/build-frontend').frontendSourceSync().js;
   const start = app.indexOf('const DICHIARAZIONE =');
   const end = app.indexOf('function avvisiAnnuncio(', start);
   assert.ok(start >= 0 && end > start);
@@ -160,7 +160,7 @@ test('gli avvisi di modello e versione condividono un pulsante fuori dal titolo'
   const fs = require('node:fs');
   const path = require('node:path');
   const vm = require('node:vm');
-  const app = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const app = require('../scripts/build-frontend').frontendSourceSync().js;
   const start = app.indexOf('const DICHIARAZIONE =');
   const end = app.indexOf('function rowHTML(', start);
   assert.ok(start >= 0 && end > start);

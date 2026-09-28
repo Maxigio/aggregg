@@ -14,11 +14,22 @@ const path = require('path');
 const crypto = require('crypto');
 
 const FE = path.join(__dirname, '../frontend');
-const JS_FILES = [path.join(FE, 'parts/icons.js'), path.join(FE, 'app.js')];
+// Ordine del sorgente classico: le dichiarazioni condividono lo stesso scope nel bundle.
+const JS_FILES = [
+  path.join(__dirname, 'frontend-parts/icons.js'),
+  path.join(FE, 'app.js'),
+  ...['vehicle-sheet.js', 'export.js', 'navigation.js', 'targa.js']
+    .map(f => path.join(__dirname, 'frontend-parts', f)),
+];
+const CSS_FILES = [
+  path.join(FE, 'style.css'),
+  ...['results.css', 'guide.css', 'detail.css', 'responsive.css', 'add-ons.css']
+    .map(f => path.join(__dirname, 'frontend-parts', f)),
+];
 
 function frontendSourceSync() {
-  const js = JS_FILES.map(f => fs.readFileSync(f, 'utf8')).join('\n');
-  const css = fs.readFileSync(path.join(FE, 'style.css'), 'utf8');
+  const js = JS_FILES.map(f => fs.readFileSync(f, 'utf8')).join('');
+  const css = CSS_FILES.map(f => fs.readFileSync(f, 'utf8')).join('');
   const ver = crypto.createHash('sha256').update(js + css).digest('hex').slice(0, 12);
   return { js, css, ver };
 }
@@ -37,4 +48,4 @@ function buildFrontendSync() {
   return { js, css, ver };
 }
 
-module.exports = { buildFrontendSync, frontendSourceSync, JS_FILES };
+module.exports = { buildFrontendSync, frontendSourceSync, JS_FILES, CSS_FILES };

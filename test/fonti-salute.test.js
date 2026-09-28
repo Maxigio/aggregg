@@ -340,7 +340,7 @@ test('il motivo della pausa e\' la STESSA stringa che il frontend sa tradurre', 
   // Il frontend mappa `reason` → etichetta con una tabella a chiavi esatte. Se qualcuno cambia
   // la costante in backend e non la tabella, a schermo esce la stringa grezza e nessuno se ne
   // accorge finche' non capita davvero un blocco.
-  const app = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const app = require('../scripts/build-frontend').frontendSourceSync().js;
   const riga = app.split('\n').find(l => l.includes('SKIP_REASON_TXT = {'));
   assert.ok(riga, 'SKIP_REASON_TXT deve esistere in frontend/app.js');
   assert.ok(riga.includes(`'${salute.MOTIVO_PAUSA}'`),

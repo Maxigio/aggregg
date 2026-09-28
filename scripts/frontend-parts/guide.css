@@ -1,0 +1,90 @@
+
+/* ─── La Guida (/guida) ─────────────────────────────────────────────────────
+   Vive in questo foglio e non in uno suo: la guida mostra i PEZZI VERI estratti da
+   index.html, quindi deve avere sotto lo stesso identico CSS che li disegna nell'app.
+   Un foglio separato vorrebbe dire due verita' sullo stesso bottone. */
+.guida-wrap { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 32px; align-items: start; margin: 18px 0 64px; }
+@media (max-width: 860px) { .guida-wrap { grid-template-columns: 1fr; gap: 18px; } }
+
+.guida-indice { position: sticky; top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r2); padding: 14px 12px; }
+@media (max-width: 860px) { .guida-indice { position: static; } }
+.guida-indice-tit { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 700; margin-bottom: 8px; }
+.guida-indice ol { list-style: none; margin: 0; padding: 0; }
+.guida-indice a { display: flex; gap: 8px; align-items: baseline; padding: 5px 6px; border-radius: var(--r); color: var(--text-muted); text-decoration: none; font-size: 0.86rem; line-height: 1.3; }
+.guida-indice a:hover { background: var(--surface-2); color: var(--text); }
+.guida-indice a.attiva { background: var(--accent-weak); color: var(--accent); font-weight: 600; }
+.guida-num { font-family: var(--num); font-variant-numeric: tabular-nums; color: var(--text-faint); font-size: 0.78rem; min-width: 1.2em; }
+.guida-indice a.attiva .guida-num { color: var(--accent); }
+
+.guida-corpo { max-width: 74ch; }
+.guida-sezione { scroll-margin-top: 16px; padding-bottom: 40px; }
+.guida-sezione + .guida-sezione { border-top: 1px solid var(--line); padding-top: 32px; }
+.guida-sezione h1 { font-size: 1.5rem; font-weight: 700; margin: 0 0 16px; color: var(--text); }
+.guida-sezione h2 { font-size: 1.05rem; font-weight: 700; margin: 28px 0 10px; color: var(--text); }
+.guida-sezione p { color: var(--text-muted); line-height: 1.65; margin: 0 0 12px; }
+.guida-sezione strong { color: var(--text); }
+.guida-sezione ul { color: var(--text-muted); line-height: 1.65; padding-left: 1.2em; }
+.guida-sezione li { margin-bottom: 6px; }
+.guida-sezione code { font-family: var(--mono); font-size: 0.85em; background: var(--surface-2); padding: 1px 5px; border-radius: var(--r); color: var(--text); }
+.guida-sezione blockquote { margin: 0 0 12px; padding: 10px 14px; border-left: 3px solid var(--line-strong); background: var(--surface-2); border-radius: 0 var(--r) var(--r) 0; }
+.guida-sezione blockquote p { margin: 0; }
+.guida-sezione em { color: var(--text-faint); }
+
+/* Il pezzo vero dell'app, inerte: incorniciato perche' si veda che e' un esempio da guardare
+   e non un comando da usare.
+   `pointer-events: none` sul contenuto e non solo `disabled` sui campi: <summary> non e' un
+   campo, quindi "Colonne ▾" restava cliccabile e il menu che si apriva — posizione assoluta —
+   veniva tagliato dall'overflow di questo riquadro. */
+.guida-pezzo {
+  border: 1px dashed var(--line-strong); border-radius: var(--r2); padding: 14px;
+  margin: 0 0 16px; background: var(--surface); overflow-x: auto;
+}
+.guida-pezzo > * { pointer-events: none; }
+.guida-pezzo * { cursor: default !important; }
+
+/* Le tendine si mostrano APERTE e IN LINEA. In una guida il contenuto di un menu e' la cosa
+   da vedere; lasciarlo in posizione assoluta lo farebbe uscire dal riquadro e sparire dentro
+   l'overflow. Qui scorre sotto al suo bottone, dove c'e' spazio. */
+.guida-pezzo .tb-cols { display: flex; align-items: flex-start; gap: 8px; }
+.guida-pezzo .tb-cols-menu {
+  position: static; top: auto; left: auto; box-shadow: none; z-index: auto;
+  background: var(--surface-2); min-width: 0;
+}
+/* Su schermo stretto l'app nasconde il gruppo Colonne. Nella guida si vede sempre: e' l'unico
+   posto dove quel menu si puo' spiegare, e chi legge da telefono deve sapere che esiste. */
+.guida-pezzo .tb-cols-group { display: block; }
+.guida-pezzo .results-toolbar { flex-wrap: wrap; row-gap: 12px; }
+/* Nell'app i filtri avanzati stanno su quattro colonne fisse, e ci stanno perche' il modulo e'
+   largo quanto la pagina. Nella colonna della guida quelle quattro sforano, e il riquadro
+   diventava da scorrere di lato per vedere gli ultimi due campi. Qui si adattano. */
+.guida-pezzo .adv-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+
+.guida-tabella { overflow-x: auto; margin: 0 0 16px; }
+.guida-tabella table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.guida-tabella th { text-align: left; font-weight: 700; color: var(--text-faint); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 10px; border-bottom: 1px solid var(--line-strong); white-space: nowrap; }
+.guida-tabella td { padding: 8px 10px; border-bottom: 1px solid var(--line); color: var(--text-muted); vertical-align: top; line-height: 1.5; }
+.guida-tabella tr:last-child td { border-bottom: none; }
+.guida-sotto { color: var(--text-faint); font-size: 0.8em; }
+
+/* L'invito a scrivere. Volutamente diverso dal "provalo": quello porta dentro l'app, questo
+   porta fuori, a una conversazione. */
+.guida-parliamone { margin: 0 0 16px; }
+.guida-parliamone a {
+  display: inline-block; background: var(--pos-weak); color: var(--pos);
+  border: 1px solid var(--pos); border-radius: var(--r); padding: 9px 15px;
+  font-size: 0.88rem; text-decoration: none; line-height: 1.4;
+}
+.guida-parliamone a strong { white-space: nowrap; }
+.guida-parliamone a:hover { background: var(--pos); color: #fff; }
+
+.guida-provalo { margin: 0 0 16px; }
+.guida-provalo a {
+  display: inline-block; background: var(--accent-weak); color: var(--accent);
+  border: 1px solid var(--accent); border-radius: var(--r); padding: 7px 14px;
+  font-size: 0.86rem; font-weight: 600; text-decoration: none;
+}
+.guida-provalo a:hover { background: var(--accent); color: #fff; }
+
+/* Quando la guida chiede una cosa che nel codice non c'e' piu'. Deve stonare: e' l'unico
+   segnale che resta, visto che nessun test controlla che la guida sia aggiornata. */
+.guida-manca { background: var(--neg-weak); color: var(--neg); border: 1px solid var(--neg); border-radius: var(--r); padding: 8px 12px; font-size: 0.84rem; font-weight: 600; }

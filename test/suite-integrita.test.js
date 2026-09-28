@@ -55,7 +55,7 @@ test('ogni modulo del backend si carica', () => {
 
 test('le aree accantonate non hanno porte web attive', () => {
   const html = fs.readFileSync(path.join(RADICE, 'frontend', 'index.html'), 'utf8');
-  const app = fs.readFileSync(path.join(RADICE, 'frontend', 'app.js'), 'utf8');
+  const app = require('../scripts/build-frontend').frontendSourceSync().js;
   const server = fs.readFileSync(path.join(RADICE, 'backend', 'server.js'), 'utf8');
   for (const area of ['ricambi', 'competitor', 'aste']) {
     assert.ok(!html.includes(`data-mode="${area}"`));
@@ -103,7 +103,7 @@ test('init: il gestore del cambio tipo e\' registrato PRIMA del ripristino del m
   // `ripristinaModo()` rimette il radio su Moto e lancia `change`; l'unico posto che chiama
   // populateMarca('moto') e' il gestore di quel `change`. Registrandolo dopo, l'evento partiva
   // a vuoto e chi riapriva l'app in Moto non poteva scrivere NESSUNA marca.
-  const src = fs.readFileSync(path.join(RADICE, 'frontend', 'app.js'), 'utf8');
+  const src = require('../scripts/build-frontend').frontendSourceSync().js;
   const init = src.slice(src.indexOf('async function init()'), src.indexOf('\n// ─── Modi di ricerca'));
   const gestore = init.indexOf("tipoInputs.forEach(input => input.addEventListener('change'");
   // La CHIAMATA, non il nome: cercando la sola `ripristinaModo()` si aggancia il commento
@@ -122,7 +122,7 @@ test('aprire la scheda tecnica su un altro annuncio smonta quella di prima', () 
   // della Panda sotto l'intestazione della BMW, «Esporta» che scarica l'altro annuncio. Il
   // pannello vecchio non si ridisegna da solo, quindi lo zombie non se ne va da se'.
   // A commenti tolti: qui sopra e in app.js la prosa nomina gia' tutto.
-  const app = fs.readFileSync(path.join(RADICE, 'frontend', 'app.js'), 'utf8')
+  const app = require('../scripts/build-frontend').frontendSourceSync().js
     .replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
   const da = app.indexOf('async function loadVehScheda(');
   assert.ok(da > 0, 'loadVehScheda non e\' piu\' in frontend/app.js');

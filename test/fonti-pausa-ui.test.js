@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const APP = fs.readFileSync(path.join(__dirname, '../frontend/app.js'), 'utf8');
+const APP = require('../scripts/build-frontend').frontendSourceSync().js;
 function estrai(da, fino) {
   const start = APP.indexOf(da);
   const end = APP.indexOf(fino, start);

@@ -86,7 +86,7 @@ test('gli elenchi vengono dal codice, non da una copia', () => {
 test('i tre siti degli annunci sono un\'altra cosa dalle fonti dati', () => {
   // L'errore che questo test blocca: sotto "Da dove arrivano gli annunci" comparivano le
   // etichette europee dei pneumatici, perche' l'unico elenco disponibile era quello sbagliato.
-  const app = fs.readFileSync(path.join(RADICE, 'frontend', 'app.js'), 'utf8');
+  const app = require('../scripts/build-frontend').frontendSourceSync().js;
   const m = app.match(/const FONTE_LABEL\s*=\s*\{([^}]*)\}/);
   assert.ok(m, "FONTE_LABEL non e' piu' in app.js: l'elenco dei siti non ha piu' una sorgente");
   const nomi = [...m[1].matchAll(/(\w+)\s*:\s*'([^']+)'/g)].map(x => x[2]);
@@ -159,7 +159,7 @@ test('i pezzi estratti sono inerti: niente id, niente campi attivi, niente tendi
     assert.ok(barra(d).attr('open') !== undefined,
       'una tendina e\' chiusa: nella guida il contenuto di un menu e\' la cosa da vedere');
   });
-  const css = sorgente('frontend', 'style.css');
+  const css = require('../scripts/build-frontend').frontendSourceSync().css;
   assert.ok(/\.guida-pezzo\s*>\s*\*\s*\{[^}]*pointer-events:\s*none/.test(css),
     'manca pointer-events:none sul contenuto del pezzo: le tendine tornano cliccabili e sforano dal riquadro');
   assert.ok(/\.guida-pezzo\s+\.tb-cols-menu\s*\{[^}]*position:\s*static/.test(css),
@@ -195,7 +195,7 @@ test('la barra dei risultati non ha buchi: i contenitori che riempie il JS sono 
   assert.ok(chip.length >= 3, `i chip di Raggruppa sono ${chip.length}: il contenitore e' rimasto vuoto`);
 
   // I chip devono combaciare con FACET_DIMS, che e' la sorgente vera.
-  const app = sorgente('frontend', 'app.js');
+  const app = require('../scripts/build-frontend').frontendSourceSync().js;
   const dims = [...(app.match(/const FACET_DIMS\s*=\s*\[([\s\S]*?)\];/) || [, ''])[1]
     .matchAll(/\['([^']*)',\s*'([^']+)'\]/g)];
   for (const [, , label] of dims) {

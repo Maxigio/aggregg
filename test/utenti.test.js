@@ -60,7 +60,7 @@ const sorgente = (...p) => fs.readFileSync(path.join(RADICE, ...p), 'utf8');
 // ── 1. Il selettore dei modi resta a chi e' in sola lettura ──────────────────
 
 test('sola lettura: applyDemoMode NON nasconde il selettore dei modi', () => {
-  const app = sorgente('frontend', 'app.js');
+  const app = require('../scripts/build-frontend').frontendSourceSync().js;
   const inizio = app.indexOf('function applyDemoMode()');
   assert.ok(inizio > 0, "applyDemoMode() non c'e' piu': se e' stata rinominata, aggiorna questo test");
   // Fino alla funzione successiva: il corpo, non il commento che lo precede (il commento cita

@@ -251,7 +251,7 @@ test('Wheel-Size: una cella riempita dal JavaScript resta null, non diventa spaz
  * frontend/app.js, non una sua copia.
  */
 function corpoGomme() {
-  const APP = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const APP = require('../scripts/build-frontend').frontendSourceSync().js;
   const da = APP.indexOf('function gommeCorpoHTML(r, k) {');
   assert.ok(da > 0, 'gommeCorpoHTML non e\' piu\' in frontend/app.js');
   const a = APP.indexOf('\nasync function caricaGomme', da);

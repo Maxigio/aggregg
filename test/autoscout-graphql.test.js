@@ -151,7 +151,7 @@ test('mapListing: campi personali strutturati del privato non escono neppure nel
 });
 
 test('scheda: una riga AutoScout privata non mostra il testo anche se arriva da una cache vecchia', () => {
-  const app = fs.readFileSync(path.join(__dirname, '../frontend/app.js'), 'utf8');
+  const app = require('../scripts/build-frontend').frontendSourceSync().js;
   const da = app.indexOf('function testoHTML(r)');
   const fino = app.indexOf('\n/**', da);
   assert.ok(da >= 0 && fino > da);

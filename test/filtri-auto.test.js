@@ -142,7 +142,7 @@ test('i filtri stanno solo sulle auto', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
   assert.ok(/id="filtriAutoGrid"[^>]*data-solo="auto"/.test(html),
     'la griglia dei filtri deve dichiararsi solo-auto');
-  const app = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const app = require('../scripts/build-frontend').frontendSourceSync().js;
   assert.ok(/if \(tipo === 'auto'\) Object\.assign\(params, filtriAutoScelti\(\)\)/.test(app),
     'il browser non deve mandare questi filtri sulle moto');
 });
@@ -155,7 +155,7 @@ test('due caricamenti concorrenti non duplicano le tendine (e il fallimento si r
    * due volte: id duplicati, e la copia che getElementById non vede perdeva le scelte in
    * silenzio. Qui si esegue il codice VERO di app.js su un DOM minimo, con la fetch lenta.
    */
-  const app = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
+  const app = require('../scripts/build-frontend').frontendSourceSync().js;
   const inizio = app.indexOf('let filtriAutoNomi');
   const fine = app.indexOf('function sincronizzaFiltriAuto');
   assert.ok(inizio >= 0 && fine > inizio, 'caricaFiltriAuto non si trova piu\': aggiorna questo test');

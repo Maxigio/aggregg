@@ -15,7 +15,7 @@ const sub = require('../backend/scrapers/subito-api');
 const salute = require('../backend/fonti-salute');
 const server = require('../backend/server');
 const handler = server.app.router.stack.find(l => l.route?.path === '/api/search').route.stack.at(-1).handle;
-const app = fs.readFileSync(path.join(__dirname, '../frontend/app.js'), 'utf8');
+const app = require('../scripts/build-frontend').frontendSourceSync().js;
 const codice = app.slice(app.indexOf('let searchGen = 0;'), app.indexOf('// ─── Slider prezzo'));
 after(() => { sub._setHttpGetJson(null); https.get = get; https.request = request; Date.now = now; salute._reset(); fs.rmSync(dir, { recursive: true, force: true }); });
 

@@ -295,7 +295,7 @@ test('Subito: il 429 sulla prima pagina e sulla pagina richiesta dopo hanno stat
 });
 
 test('Schermo Auto/Moto: il 429 senza annunci compare negli avvisi sulla ricerca', () => {
-  const src = fs.readFileSync(path.join(__dirname, '../frontend/app.js'), 'utf8');
+  const src = require('../scripts/build-frontend').frontendSourceSync().js;
   const inizio = src.indexOf('function renderSourceStatus()');
   const fine = src.indexOf('\n// ─── Spec (dettaglio)', inizio);
   assert.ok(inizio >= 0 && fine > inizio);

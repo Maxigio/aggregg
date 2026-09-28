@@ -2,7 +2,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
-const app = fs.readFileSync(path.join(__dirname, '../frontend/app.js'), 'utf8');
+const app = require('../scripts/build-frontend').frontendSourceSync().js;
 test('AutoScout: errore della prima pagina visibile negli Avvisi sulla ricerca', () => {
   const start = app.indexOf('function renderSourceStatus()');
   const end = app.indexOf('\nfunction fontePausaHTML', start);

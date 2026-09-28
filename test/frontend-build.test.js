@@ -11,5 +11,7 @@ test('il bundle conserva le icone prima dell’app e si compila', () => {
   new Function(source.js);
   const built = buildFrontendSync();
   new Function(built.js);
+  assert.match(source.css, /\.result-row/);
+  assert.match(source.css, /\.veh-addon/);
   assert.ok(built.ver && built.css);
 });

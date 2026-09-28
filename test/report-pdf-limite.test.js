@@ -42,7 +42,7 @@ test('il PDF prodotto conserva gli avvisi anche con sottotitolo lungo e avvisi s
 });
 
 test('la UI mostra il motivo del rifiuto PDF, non soltanto HTTP 400', async () => {
-  const app = fs.readFileSync(path.join(__dirname, '../frontend/app.js'), 'utf8');
+  const app = require('../scripts/build-frontend').frontendSourceSync().js;
   const start = app.indexOf('function scaricaPdf(');
   const avvisi = [];
   const ctx = vm.createContext({ fetch: async () => ({ ok: false, status: 400,
