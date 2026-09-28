@@ -1278,7 +1278,7 @@ test('moto.it: la versione si legge dall\'URL dell\'annuncio', () => {
 });
 
 test('moto.it: l\'etichetta segue la stessa regola delle altre due fonti', () => {
-  const srv = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ricerca-moto.js'), 'utf8');
   // Prima: senza `bike=` OGNI riga usciva 'senza-versione' — «il venditore non l'ha
   // indicata» — anche quando l'URL la dichiarava. Misurato: 7 righe su 7 su Honda CB 500.
   assert.match(srv, /else r\.dichiarazione = r\.variante \? 'esatto' : 'senza-versione';/,
@@ -1631,13 +1631,14 @@ test('ricerca: la stessa domanda gia\' in volo non si rifa\' da capo', () => {
  */
 test('moto.it: versione senza slug-modello e tetto famiglie arrivano al banner, non solo al log', () => {
   const SRV = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
+  const MOTO = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ricerca-moto.js'), 'utf8');
   // il ramo senza slug: dichiara sul canale del banner e nomina la versione scritta
-  const senzaSlug = SRV.match(/else if \(params\.versione && params\.tipo === 'moto' && params\.motoitBrandSlug && !params\.motoitModelSlug[\s\S]{0,900}?\n  \}/);
+  const senzaSlug = MOTO.match(/else if \(params\.versione && params\.tipo === 'moto' && params\.motoitBrandSlug && !params\.motoitModelSlug[\s\S]{0,900}?\n  \}/);
   assert.ok(senzaSlug, 'manca il ramo dichiarato per versione+marca senza slug-modello');
   assert.ok(/motoitVersioneElencoMonco = /.test(senzaSlug[0]), 'il ramo senza-slug deve riempire il canale del banner');
   assert.ok(/\$\{params\.versione\}/.test(senzaSlug[0]), 'il banner deve NOMINARE la versione scritta');
   // il tetto famiglie: il campo si riempie PRIMA del throw
-  const tetto = SRV.match(/fam\.length > TETTO_FAM\) \{[\s\S]{0,700}?throw new Error/);
+  const tetto = MOTO.match(/fam\.length > TETTO_FAM\) \{[\s\S]{0,700}?throw new Error/);
   assert.ok(tetto, 'blocco del tetto famiglie non trovato');
   assert.ok(/motoitVersioneElencoMonco = /.test(tetto[0]), 'oltre il tetto il banner va riempito prima del throw');
   // e il canale arriva davvero a schermo

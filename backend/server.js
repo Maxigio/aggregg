@@ -19,8 +19,7 @@ const { combaciaModello } = require('./scrapers/autoscout-graphql');
 const scrapeSubitoApi = require('./scrapers/subito-api');
 const scrapeMotoIt    = require('./scrapers/motoit');
 const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
-const { famiglieMotoit, getBrandModels, getModelBikes, resolveMotoitVersionEntry, correggiModelSlug } = require('./scrapers/motoit-models');
-const motoitVersione = require('./scrapers/motoit-versione');
+const { getBrandModels, resolveMotoitVersionEntry, correggiModelSlug } = require('./scrapers/motoit-models');
 const { getDetail, fonteFromUrl } = require('./scrapers/detail');
 const annullo        = require('./annullo');
 const budget = require('./budget-richieste');
@@ -30,8 +29,10 @@ const { versioniDi } = require('./versioni-menu');
 const { agganciaSubito } = require('./scrapers/ponte-buchi');
 const { codiciAs24, unisciCodici, famigliaSubito, famiglieSubito } = require('./scrapers/as24-modelli');
 
-const { makeModelResolver, resolveAs24Narrowing, as24Spellings, norm } = require('./scrapers/brand-match');
+const { makeModelResolver, norm } = require('./scrapers/brand-match');
 const { catalogResolver, lookupBrand, lookupModelGroup } = require('./catalogo-ricerca');
+const ricercaAuto = require('./ricerca-auto');
+const ricercaMoto = require('./ricerca-moto');
 const province        = require('../data/province.json');
 const regionCentroids = require('../data/region-centroids.json');
 
@@ -578,9 +579,7 @@ async function runSearchCore(params) {
     modelEntry = resolveModel(params.modello) || null;
   }
 
-  const groupMembers = (!modelEntry && params.modello && params.tipo === 'auto')
-    ? lookupModelGroup(params.tipo, brandName, params.modello)
-    : null;
+  const groupMembers = ricercaAuto.membriGruppo(params, brandName, modelEntry);
 
   if (modelEntry) {
     if (!params.mmmvAutoscout && modelEntry.mmmvAutoscout) params.mmmvAutoscout = modelEntry.mmmvAutoscout;
@@ -608,23 +607,7 @@ async function runSearchCore(params) {
   if (params.subitoNodo?.famigliaIds?.length > 1) params.subitoNodo = null;
 
   if (params.tipo === 'moto') {
-    if (!params.motoitBrandSlug) {
-      params.motoitBrandSlug = brandEntry?.motoit?.brandSlug || resolveMotoitSlug(params.marca) || null;
-    }
-    if (!params.motoitModelSlug && modelEntry?.slugMotoIt) {
-
-      params.motoitModelSlug = correggiModelSlug(modelEntry.slugMotoIt);
-    }
-
-    if (richiesta('moto') && !params.motoitModelSlug && params.motoitBrandSlug && params.modello) {
-      try {
-
-        params.motoitModelSlug = await famiglieMotoit(params.motoitBrandSlug, params.modello, { rilancia: true }) || null;
-      } catch (_) {
-
-        params.motoitModelloKoRete = true;
-      }
-    }
+    await ricercaMoto.preparaModello(params, brandEntry, modelEntry, richiesta('moto'));
   }
 
   const asMakeId         = asMeta?.makeId || null;
@@ -634,20 +617,7 @@ async function runSearchCore(params) {
   if (asMakeId) {
     params.autoscoutMmmv = params.mmmvAutoscout || `${asMakeId}|||`;
 
-    if (params.tipo === 'moto' && params.modello && !params.mmmvAutoscout) {
-      const nar = resolveAs24Narrowing(brandEntry?.models, params.modello, asMakeId);
-      params.autoscoutMmmv = nar.mmmv;
-      params.autoscoutVersionText = nar.versionText;
-      params.autoscoutSpellings = as24Spellings(params.modello);
-      params.as24Padre = nar.padre;
-
-      params.as24Fratelli = nar.padre
-        ? (brandEntry?.models || []).map(m => m.nome).filter(n =>
-            norm(n).startsWith(norm(nar.padre)) && norm(n) !== norm(params.modello)
-            && !norm(params.modello).startsWith(norm(n)))
-        : null;
-      console.log(`[server] AS24 fase1 "${params.marca} ${params.modello}": mmmv=${nar.mmmv}${nar.padre ? ` (padre "${nar.padre}")` : ' (brand-only)'} + grafie ${JSON.stringify(params.autoscoutSpellings)}`);
-    }
+    ricercaMoto.preparaAutoscout(params, brandEntry, asMakeId);
 
     if (params.versione) {
 
@@ -666,55 +636,7 @@ async function runSearchCore(params) {
     console.log(`[server] Subito: versione "${params.versione}" accodata al testo libero`);
   }
 
-  if (richiesta('moto') && params.versione && params.tipo === 'moto'
-      && params.motoitBrandSlug && params.motoitModelSlug && !params.motoitBikeCode) {
-    try {
-
-      const fam = String(params.motoitModelSlug).split(',').map(s => s.trim()).filter(Boolean);
-      const TETTO_FAM = 12;
-      if (fam.length > TETTO_FAM) {
-
-        params.motoitVersioneElencoMonco = `"${params.modello}" aggancia ${fam.length} famiglie su Moto.it (oltre ${TETTO_FAM}): il filtro versione non si applica a questa fonte, si cerca largo`;
-        console.log(`[server] Moto.it: ${params.motoitVersioneElencoMonco}`);
-        throw new Error(`troppe famiglie (${fam.length}) per risolvere la versione`);
-      }
-
-      let famigliKo = 0;
-      const bikes = (await Promise.all(fam.map(s =>
-        getModelBikes(params.motoitBrandSlug, s, { rilancia: true }).catch(() => { famigliKo++; return []; })
-      ))).flat();
-      if (famigliKo) {
-        params.motoitVersioneElencoMonco = famigliKo >= fam.length
-          ? 'il menu versioni di Moto.it non ha risposto: il filtro versione non e\' stato applicato a questa fonte'
-          : `${famigliKo} famiglie su ${fam.length} non hanno risposto: l'elenco versioni di Moto.it e' incompleto`;
-
-        params.motoitVersioneKoRete = true;
-        console.warn(`[server] Moto.it: ${params.motoitVersioneElencoMonco}`);
-      }
-      const r = motoitVersione.risolvi(bikes, params.versione, { marca: params.marca, modello: params.modello });
-      if (r.versioni.length === 1) {
-        params.motoitBikeCode = r.versioni[0].code;
-        console.log(`[server] Moto.it: "${params.versione}" → bike=${r.versioni[0].code} ("${r.versioni[0].nome}")`);
-      } else if (r.versioni.length > 1) {
-
-        params.motoitSlugAmmessi = new Set(r.versioni.map(v => v.slug));
-        console.log(`[server] Moto.it: "${params.versione}" → ${r.versioni.length} versioni, filtro sullo slug dell'annuncio`);
-      } else {
-        console.log(`[server] Moto.it: "${params.versione}" non e' nel suo catalogo → nessun filtro versione`);
-      }
-
-      if (r.scartate.length) {
-        params.motoitVersioneScartate = r.scartate.slice();
-        console.log(`[server] Moto.it: parole ignorate ${JSON.stringify(r.scartate)}`);
-      }
-    } catch (e) {
-      console.warn('[server] Moto.it versione non risolta: ' + e.message);
-    }
-  } else if (params.versione && params.tipo === 'moto' && params.motoitBrandSlug && !params.motoitModelSlug && !params.motoitBikeCode) {
-
-    params.motoitVersioneElencoMonco = `il modello non ha un codice su Moto.it: la ricerca su questa fonte e' larga e la versione "${params.versione}" non la filtra (righe da verificare)`;
-    console.log(`[server] Moto.it: ${params.motoitVersioneElencoMonco}`);
-  }
+  if (params.tipo === 'moto') await ricercaMoto.preparaVersione(params, richiesta('moto'));
 
   if (params.regione && asMakeId) {
     const reg = String(params.regione).trim().toLowerCase();
@@ -828,15 +750,7 @@ async function runSearchCore(params) {
 
   const normModello = params.modello ? norm(params.modello) : '';
 
-  const normSp = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, ' ').trim();
-  const autoTokens = (params.tipo === 'auto' && params.modello && !params.mmmvAutoscout)
-    ? (groupMembers && groupMembers.length ? groupMembers.map(normSp) : [normSp(params.modello)]).filter(Boolean)
-    : null;
-
-  const autoTokenRe = autoTokens && autoTokens.length
-    ? new RegExp('(?:^| )(' + autoTokens.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![0-9])')
-    : null;
+  const autoTokenRe = ricercaAuto.regexTitolo(params, groupMembers);
 
   const risultati = grezzi.filter(r => {
 
@@ -866,7 +780,7 @@ async function runSearchCore(params) {
       if (tokenNorm && !titoloNorm.includes(tokenNorm)) return false;
     }
 
-    if (autoTokenRe && r.fonte === 'autoscout' && !autoTokenRe.test(normSp(r.titolo))) return false;
+    if (autoTokenRe && r.fonte === 'autoscout' && !autoTokenRe.test(ricercaAuto.normSp(r.titolo))) return false;
 
     if (params.prezzoMin != null && r.prezzo != null && r.prezzo < params.prezzoMin)   return false;
     if (params.prezzoMax != null && r.prezzo != null && r.prezzo > params.prezzoMax)   return false;
@@ -897,16 +811,7 @@ async function runSearchCore(params) {
       ? 'versione-non-verificata'
       : (r.variante ? 'esatto' : 'senza-versione');
 
-    for (const r of risultati) {
-      if (r.fonte !== 'moto' || r.dichiarazione) continue;
-      if (!params.motoitModelSlug) r.dichiarazione = 'senza-modello';
-      else if (params.motoitBikeCode || (params.motoitSlugAmmessi && params.motoitSlugAmmessi.size)) {
-        r.dichiarazione = (params.motoitVersioneScartate && params.motoitVersioneScartate.length)
-          ? 'versione-non-verificata' : 'esatto';
-      }
-      else if (versioneChiesta) r.dichiarazione = 'versione-non-verificata';
-      else r.dichiarazione = r.variante ? 'esatto' : 'senza-versione';
-    }
+    ricercaMoto.dichiaraRisultati(params, risultati, versioneChiesta);
 
     const subitoHaConfrontato = Boolean(params.subitoVersioneTesto || (params.subitoNodo && params.subitoNodo.testo));
     if (versioneChiesta && !subitoHaConfrontato) {
