@@ -190,6 +190,12 @@ test('la scelta delle fonti accetta solo nomi univoci e una pagina esplicita', a
   }
 });
 
+test('un numero valido della UI in notazione esponenziale conserva il valore', async () => {
+  const r = await server._amrSearchFn({ tipo: 'auto', marca: 'Fiat', fetta: '0',
+    fonti: 'moto', prezzoMin: '1e3' });
+  assert.equal(r.params.prezzoMin, 1000);
+});
+
 test('i cursori Subito rifiutano offset arbitrari o incompleti', async () => {
   for (const cursori of [
     { subitoMainStart: '1', subitoRecuperoStart: '50' },

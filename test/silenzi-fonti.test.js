@@ -1540,8 +1540,8 @@ test('tendina: la normalizzazione dei nomi e\' quella condivisa, e le marche pos
   // `normName` era una copia divergente di `brand-match.norm` (conservava gli spazi): il
   // merge Moto.it aggiungeva 94 doppioni della stessa moto — CL500/CL 500, NX500/NX 500,
   // CRF 300L/CRF 300 L — in una force-select il cui contratto e' «scegli un modello reale».
-  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8'));
-  assert.ok(!/normName\(/.test(srv), 'la copia divergente normName e\' tornata');
+  const menu = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'menu-ricerca-route.js'), 'utf8'));
+  assert.ok(!/normName\(/.test(menu), 'la copia divergente normName e\' tornata');
 
   const { norm } = require('../backend/scrapers/brand-match');
   const { resolveMotoitSlug } = require('../backend/scrapers/motoit-brands');
@@ -1567,8 +1567,13 @@ test('tendina: la normalizzazione dei nomi e\' quella condivisa, e le marche pos
   const raggiunte = new Set(Object.keys(models).map(n => resolveMotoitSlug(n)).filter(Boolean));
   const conModelli = Object.entries(marche).filter(([, m]) => Object.keys((m && m.modelli) || {}).length);
   const orfane = conModelli.filter(([s]) => !raggiunte.has(s)).map(([s]) => s);
-  assert.ok(/tipo === 'moto'/.test(srv) && /raggiunte\.has\(slug\)/.test(srv),
-    `/api/brands non fa piu' l'unione col catalogo: ${orfane.length} marche possedute resterebbero irraggiungibili`);
+  const app = require('../backend/server').app;
+  const handler = app.router.stack.find(x => x.route?.path === '/api/brands').route.stack.at(-1).handle;
+  const res = { json(body) { this.body = body; return this; } };
+  handler({ query: { tipo: 'moto' } }, res);
+  const visibili = new Set(res.body.brands.map(b => resolveMotoitSlug(b.nome)));
+  for (const slug of orfane) assert.ok(visibili.has(slug),
+    `/api/brands non espone la marca Moto.it ${slug} che possiede modelli`);
 });
 
 // ─── Chi ha osservato prima non decide dopo ──────────────────────────────────

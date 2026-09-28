@@ -4,30 +4,21 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const logger = require('./logger').install();
 const express = require('express');
-const os = require('os');
-const fs = require('fs');
-const crypto = require('crypto');
-const { execFile } = require('child_process');
 const filtriAuto = require('./filtri-auto');
 const versioneVerifica = require('./versione-verifica');
 const auth = require('./auth');
 const utentiDb = require('./utenti-db');
 const salute = require('./fonti-salute');
-const qrcode = require('qrcode-generator');
 const scrapeAutoscoutGraphql = require('./scrapers/autoscout-graphql');
 const { combaciaModello } = require('./scrapers/autoscout-graphql');
 const scrapeSubitoApi = require('./scrapers/subito-api');
 const scrapeMotoIt    = require('./scrapers/motoit');
-const { resolveMotoitSlug } = require('./scrapers/motoit-brands');
-const { getBrandModels, resolveMotoitVersionEntry, correggiModelSlug } = require('./scrapers/motoit-models');
-const { getDetail, fonteFromUrl } = require('./scrapers/detail');
+const { correggiModelSlug } = require('./scrapers/motoit-models');
 const annullo        = require('./annullo');
 const budget = require('./budget-richieste');
 const { risolviNodo, marcaPseudo } = require('./scrapers/subito-nodo');
-const { unisciGemelli, marcheNascoste, sinonimiTendina } = require('./menu-gemelli');
-const { versioniDi } = require('./versioni-menu');
 const { agganciaSubito } = require('./scrapers/ponte-buchi');
-const { codiciAs24, unisciCodici, famigliaSubito, famiglieSubito } = require('./scrapers/as24-modelli');
+const { codiciAs24, unisciCodici, famiglieSubito } = require('./scrapers/as24-modelli');
 
 const { makeModelResolver, norm } = require('./scrapers/brand-match');
 const { catalogResolver, lookupBrand, lookupModelGroup } = require('./catalogo-ricerca');
@@ -39,7 +30,6 @@ const regionCentroids = require('../data/region-centroids.json');
 const comuneRegione = require('../data/comune-regione.json');
 
 const { cerchioRegione } = require('./scrapers/utils');
-const modelsData      = require('../data/models.json');
 
 const app = express();
 
@@ -117,154 +107,13 @@ require('./report-route').mount(app, { chiaveLimite });
 
 require('./frontend-route').mount(app);
 
-app.get('/api/brands', (req, res) => {
-  const { tipo } = req.query;
-  if (!tipo || !['auto', 'moto'].includes(tipo)) {
-    return res.status(400).json({ error: 'tipo deve essere "auto" o "moto"' });
-  }
-  const brands = modelsData[tipo] || {};
-  const lista = Object.entries(brands)
-    .map(([nome, b]) => ({
-      nome,
-      sites:     b.sites || [],
-      autoscout: b.autoscout || null,
-    }));
-
-  if (tipo === 'moto') {
-    const raggiunte = new Set(lista.map(b => resolveMotoitSlug(b.nome)).filter(Boolean));
-    let cat = null;
-    try { cat = require('../data/motoit-catalogo.json'); } catch (_) { cat = null; }
-    for (const [slug, m] of Object.entries((cat && (cat.marche || cat)) || {})) {
-      if (raggiunte.has(slug) || !m || !Object.keys(m.modelli || {}).length) continue;
-      lista.push({ nome: m.nome || slug, sites: ['motoit'], autoscout: null });
-    }
-  }
-
-  const nascoste = marcheNascoste(tipo);
-  const visibili = lista.filter(b => !nascoste.has(b.nome));
-  visibili.sort((a, b) => a.nome.localeCompare(b.nome, 'it', { sensitivity: 'base' }));
-  res.json({ brands: visibili, sinonimi: sinonimiTendina(tipo) });
-});
-
-app.get('/api/models', async (req, res) => {
-  const { tipo, marca } = req.query;
-  if (!tipo || !['auto', 'moto'].includes(tipo)) {
-    return res.status(400).json({ error: 'tipo deve essere "auto" o "moto"' });
-  }
-  if (!marca || typeof marca !== 'string' || marca.trim().length === 0) {
-    return res.status(400).json({ error: 'marca obbligatoria' });
-  }
-  const entry = modelsData[tipo]?.[marca.trim()];
-
-  const modelli = ((entry && entry.models) || []).map(m => ({
-    nome:           m.nome,
-    sites:          m.sites || [],
-    mmmvAutoscout:  m.mmmvAutoscout  || '',
-
-    slugMotoIt:     correggiModelSlug(m.slugMotoIt || ''),
-  }));
-
-  modelli.push(...unisciGemelli(tipo, marca.trim(), modelli, modelsData));
-  modelli.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
-
-  let motoitKo = null;
-  if (tipo === 'moto') {
-    const brandSlug = (entry && entry.motoit && entry.motoit.brandSlug) || resolveMotoitSlug(marca.trim()) || null;
-    if (brandSlug) {
-      try {
-
-        const apiModels = await getBrandModels(brandSlug, { rilancia: true });
-        const byName = new Map(modelli.map(m => [norm(m.nome), m]));
-        for (const am of apiModels) {
-          const hit = byName.get(norm(am.name));
-          if (hit) { if (!hit.slugMotoIt) hit.slugMotoIt = am.slug; }
-          else {
-            const nm = { nome: am.name, sites: ['motoit'], mmmvAutoscout: '', slugMotoIt: am.slug };
-            modelli.push(nm); byName.set(norm(am.name), nm);
-          }
-        }
-        modelli.sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
-      } catch (e) { console.warn('[api/models] merge Moto.it KO:', e.message); motoitKo = e.message || 'moto.it non raggiungibile'; }
-    }
-  }
-
-  res.json({ modelli, sites: (entry && entry.sites) || (tipo === 'moto' ? ['motoit'] : []),
-    ...(motoitKo ? { fonteMotoitKo: motoitKo } : {}) });
-});
+require('./menu-ricerca-route').mount(app);
 
 require('./veicolo-dati-route').mount(app);
 
-app.get('/api/versioni', (req, res) => {
-  const tipo = String((req.query || {}).tipo || '');
-  const marca = String((req.query || {}).marca || '').trim();
-  const modello = String((req.query || {}).modello || '').trim();
-  if (!['auto', 'moto'].includes(tipo)) return res.status(400).json({ error: 'tipo deve essere "auto" o "moto"' });
-  if (!marca || !modello) return res.status(400).json({ error: 'marca e modello obbligatori' });
-  res.json({ versioni: versioniDi(tipo, marca, modello) });
-});
+require('./dettaglio-route').mount(app, { chiaveLimite });
 
-const limiteDettaglio = require('./limite-richieste').crea({ max: 30, cosa: 'richieste di dettagli alle fonti' });
-app.get('/api/detail', async (req, res) => {
-  const url = req.query.url;
-  if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url obbligatorio' });
-  try {
-    const detail = await getDetail(url, { onRequest: () => {
-      const gDet = limiteDettaglio.consuma(chiaveLimite(req));
-      if (!gDet.ok) throw Object.assign(new Error(limiteDettaglio.messaggio(gDet)),
-        { code: 'AMR_DETAIL_LIMIT', riprovaFra: gDet.attesa });
-    } });
-    if (!detail) return res.json({ ok: false, detail: null });
-    const fonte = fonteFromUrl(url);
-    res.json({ ok: true, detail, fonte, pausa: salute.fermo(fonte) });
-  } catch (e) {
-    if (e.code === 'AMR_DETAIL_LIMIT') {
-      return res.status(429).json({ ok: false, error: e.message, limiteDettaglio: true, riprovaFra: e.riprovaFra });
-    }
-    if (e.code === 'DETAIL_BODY_TOO_LARGE') {
-      return res.status(502).json({ ok: false, error: e.message, detailTroppoGrande: true, fonte: e.fonte });
-    }
-    if (e.status === 429 || e.code === 'FONTE_IN_PAUSA') {
-      return res.status(502).json({ ok: false, error: e.message, fonte: e.fonte, pausa: salute.fermo(e.fonte) });
-    }
-    return res.status(400).json({ error: e.message });
-  }
-});
-
-let funnelCache = { ts: 0, url: null };
-const FUNNEL_TTL = 60 * 1000;
-
-let funnelInVolo = null;
-function tailscalePublicUrl(cb) {
-  if (Date.now() - funnelCache.ts < FUNNEL_TTL) return cb(funnelCache.url);
-  if (funnelInVolo) { funnelInVolo.push(cb); return; }
-  funnelInVolo = [cb];
-  const bins = ['/usr/local/bin/tailscale', 'tailscale'];
-  let i = 0;
-  const done = url => {
-    funnelCache = { ts: Date.now(), url };
-    const attese = funnelInVolo; funnelInVolo = null;
-    for (const f of attese) f(url);
-  };
-  const tryNext = () => {
-    if (i >= bins.length) return done(null);
-    execFile(bins[i++], ['funnel', 'status'], { timeout: 3000 }, (err, stdout) => {
-      if (err) return err.code === 'ENOENT' ? tryNext() : done(null);
-      const m = String(stdout).match(/https:\/\/[^\s]+/);
-      done(m ? m[0].replace(/\/$/, '') : null);
-    });
-  };
-  tryNext();
-}
-
-app.get('/api/public-url', (req, res) => {
-  tailscalePublicUrl(url => {
-    if (!url) return res.json({ url: null, svg: null });
-    const qr = qrcode(0, 'M');
-    qr.addData(url);
-    qr.make();
-    res.json({ url, svg: qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true }) });
-  });
-});
+const { tailscalePublicUrl } = require('./public-url-route').mount(app);
 
 const REGIONI_VALIDE = new Set(Object.values(province).map(p => p.regione));
 
@@ -305,8 +154,9 @@ function parseSearchParams(query) {
   if (errors.length) return { errors };
 
   const toInt = (val) => {
-    const n = parseInt(val, 10);
-    return isNaN(n) || n < 0 ? null : n;
+    if (val == null || val === '') return null;
+    const n = Number(val);
+    return Number.isSafeInteger(n) && n >= 0 ? n : null;
   };
 
   return {
