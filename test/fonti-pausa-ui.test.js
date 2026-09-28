@@ -195,14 +195,22 @@ test('senza metadati pausa: conservati motivi noti, avvisi parziali e di allarga
   assert.doesNotMatch(panel.innerHTML, /richieste sospese|Pausa terminata|verificata alla prossima/);
 });
 
+test('Moto.it: una risposta troppo grande diventa un avviso sulla ricerca', () => {
+  const { c } = schermo({ moto: { status: 'error', erroreCodice: 'MOTO_BODY_TOO_LARGE' } });
+  c.renderSourceStatus();
+  assert.match(c.searchAlerts.innerHTML, /Moto\.it ha inviato una risposta oltre il limite di dimensione/);
+  assert.match(c.searchAlerts.innerHTML, /gli annunci di questa pagina non sono stati letti/);
+});
+
 const annuncio = (n = 1) => ({ fonte: 'moto', url: `https://www.moto.it/annuncio-${n}` });
 const detailKo = (fonte = 'moto', stato = pausa) => ({ ok: false, error: 'Fonte <bloccata>', fonte, pausa: stato });
 const risposta = data => ({ ok: data.ok, status: data.ok ? 200 : 502, json: async () => data });
 function dettagli(sources, risultati = [annuncio()]) {
   const { c } = schermo(sources);
   const avvisi = [], miniature = [];
-  let matrici = 0;
+  let matrici = 0, ora = ORA;
   Object.assign(c, {
+    Date: class extends Orologio { static now() { return ora; } },
     searchGen: 1, currentResults: risultati, confronto: [], matrixList: risultati,
     cmatrixPanel: { classList: { contains: () => false } }, hasSpec: () => false,
     toast: testo => avvisi.push(testo), updateRowThumb: url => miniature.push(url),
@@ -213,7 +221,7 @@ function dettagli(sources, risultati = [annuncio()]) {
     estrai('async function enrichMotoRow(url)', '\nfunction updateRowThumb'),
     estrai('async function enrichMotoSpecs(list)', '// ─── Segnalazioni'),
   ].join('\n'), c);
-  return { c, avvisi, miniature, matrici: () => matrici };
+  return { c, avvisi, miniature, matrici: () => matrici, avanza: ms => { ora += ms; } };
 }
 
 test('detail HTTP 502: pausa persistente per ogni fonte senza perdere i dati della ricerca', async () => {
@@ -242,17 +250,18 @@ test('detail senza pausa attiva: il messaggio upstream rimane visibile ed escape
 });
 
 test('Competitor: dettaglio e confronto concorrenti producono un solo toast per fonte e stato', async () => {
-  const { c, avvisi } = dettagli(null, [annuncio(1), annuncio(2), annuncio(3)]);
+  const { c, avvisi, avanza } = dettagli(null, [annuncio(1), annuncio(2), annuncio(3)]);
   await Promise.all([c.enrichMotoRow(c.currentResults[0].url), c.enrichMotoSpecs(c.matrixList)]);
   assert.equal(avvisi.length, 1);
   assert.match(avvisi[0], /Fonte Moto\.it: richieste sospese/);
   assert.equal(c.lastSources, null);
   await c.enrichMotoSpecs(c.matrixList);
   assert.equal(avvisi.length, 1, 'la stessa pausa non riavvia una raffica di toast');
+  avanza(30001);
   c.fetch = async () => risposta(detailKo('moto', { ...pausa, fino: traDueOre + 60000 }));
   await c.enrichMotoSpecs(c.matrixList);
   assert.equal(avvisi.length, 2, 'un cambiamento di pausa va comunicato');
-  c.searchGen++;
+  c.searchGen++; avanza(30001);
   await c.enrichMotoSpecs(c.matrixList);
   assert.equal(avvisi.length, 3, 'il nuovo contesto può ricevere il proprio avviso');
 });
@@ -298,7 +307,7 @@ test('detail tardivo: lo stesso URL con un oggetto diverso non appartiene alla r
 
 test('errori ordinari restano silenziosi e ritentabili; i dettagli riusciti si uniscono ancora', async () => {
   for (const metodo of ['enrichMotoRow', 'enrichMotoSpecs']) {
-    const { c, avvisi } = dettagli({ moto: { status: 'ok', count: 1 } });
+    const { c, avvisi, avanza } = dettagli({ moto: { status: 'ok', count: 1 } });
     const r = c.currentResults[0];
     const arg = metodo === 'enrichMotoRow' ? r.url : c.matrixList;
     c.fetch = async () => risposta({ ok: false, error: 'Errore ordinario' });
@@ -307,6 +316,7 @@ test('errori ordinari restano silenziosi e ritentabili; i dettagli riusciti si u
     assert.equal(avvisi.length, 0);
     assert.equal(r._enriched, undefined);
     assert.equal(r._detailLoaded, undefined);
+    avanza(30001);
     c.fetch = async () => risposta({ ok: true, detail: { cilindrata: 900 } });
     await c[metodo](arg);
     assert.equal(r.cilindrata, 900);
@@ -317,11 +327,12 @@ test('errori ordinari restano silenziosi e ritentabili; i dettagli riusciti si u
 test('detail riuscito: sincronizza la pausa e cancella il vecchio errore senza cambiare stato o conteggi', async () => {
   for (const metodo of ['enrichMotoRow', 'enrichMotoSpecs']) {
     for (const pausaDopo of [{ fermo: false, fino: null, verifica: false }, pausa]) {
-      const { c, avvisi } = dettagli({ moto: { status: 'empty', count: 0, totale: 42 } });
+      const { c, avvisi, avanza } = dettagli({ moto: { status: 'empty', count: 0, totale: 42 } });
       const arg = metodo === 'enrichMotoRow' ? c.currentResults[0].url : c.matrixList;
       await c[metodo](arg);
       assert.match(c.searchAlerts.innerHTML, /richieste sospese/);
       assert.equal(c.lastSources.moto.erroreDettaglio, 'Fonte <bloccata>');
+      avanza(30001);
       c.fetch = async () => risposta({ ok: true, detail: { cilindrata: 900 }, fonte: 'moto', pausa: pausaDopo });
       await c[metodo](arg);
       assert.strictEqual(c.lastSources.moto.pausa, pausaDopo);
@@ -365,4 +376,64 @@ test('avviso di pagina interrotta: testo del server escapato prima di inserirlo 
   c.renderSourceStatus();
   assert.match(c.searchAlerts.innerHTML, /&lt;img/);
   assert.doesNotMatch(c.searchAlerts.innerHTML, /<img src=x/);
+});
+
+test('M09: dettaglio vuoto ritentabile dopo la cache breve, senza fetch duplicate fra render', async () => {
+  const { c, avanza } = dettagli({ moto: { status: 'ok' } });
+  let n = 0, risolvi;
+  c.fetch = () => { n++; return new Promise(r => { risolvi = r; }); };
+  const primo = c.enrichMotoSpecs(c.matrixList);
+  await c.enrichMotoSpecs(c.matrixList); assert.equal(n, 1);
+  risolvi(risposta({ ok: true, detail: { cilindrata: null, immagini: [], cambio: null } })); await primo;
+  assert.equal(c.matrixList[0]._detailLoaded, undefined);
+  await c.enrichMotoSpecs(c.matrixList); assert.equal(n, 1);
+  avanza(15 * 60 * 1000 + 1);
+  c.fetch = async () => { n++; return risposta({ ok: true, detail: { cilindrata: 899 } }); };
+  await c.enrichMotoSpecs(c.matrixList); assert.equal(n, 2);
+  assert.equal(c.matrixList[0]._detailLoaded, true);
+  assert.equal(c.matrixList[0].cilindrata, 899);
+});
+
+test('M05/M08: errore del trasporto e prezzi riservati arrivano dal server alla UI', async () => {
+  const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'amr-moto-ui-reg-'));
+  const oldData = process.env.USER_DATA_PATH, oldLog = process.env.AMR_LOG_DIR;
+  process.env.USER_DATA_PATH = dir; process.env.AMR_LOG_DIR = dir;
+  const dotenv = require('dotenv'), config = dotenv.config; dotenv.config = () => ({ parsed: {} });
+  const build = require('../scripts/build-frontend'), guida = require('../scripts/build-guida');
+  const buildFn = build.buildFrontendSync, guidaFn = guida.buildGuidaSync;
+  build.buildFrontendSync = () => ({ ver: 'test', js: Buffer.alloc(0), css: Buffer.alloc(0) });
+  guida.buildGuidaSync = () => ({ ver: 'test', html: '' });
+  const https = require('https'), get = https.get, request = https.request;
+  https.get = https.request = () => { throw Error('nessuna rete ammessa'); };
+  const moto = require('../backend/scrapers/motoit'), orig = moto._get;
+  try {
+    const server = require('../backend/server');
+    const { c } = schermo();
+    vm.runInContext(estrai('function fontiConAltri()', '// Quanti ne abbiamo'), c);
+    const q = { tipo: 'moto', marca: 'Yamaha', modello: 'MT-07', motoitBrandSlug: 'yamaha', motoitModelSlug: 'mt-07', fonti: 'moto', fetta: 0 };
+    moto._get = async () => { throw Object.assign(Error('risposta troppo grande'), { code: 'MOTO_BODY_TOO_LARGE', kind: 'error' }); };
+    const ko = await server._amrSearchFn({ ...q, prezzoMin: '136' });
+    c.lastSources = ko.sources; c.renderSourceStatus();
+    assert.equal(ko.sources.moto.erroreCodice, 'MOTO_BODY_TOO_LARGE');
+    assert.match(c.searchAlerts.innerHTML, /oltre il limite di dimensione/);
+    const card = i => `<div class="mcard--big"><a href="/moto-usate/yamaha/mt-07/mt-07-2020/${900001+i}"></a><h3>Yamaha MT-07</h3><span class="price">T.RISERVATA</span></div>`;
+    moto._get = async () => ({ status: 200, body: '<div class="plist-head-title-info">20 annunci</div>' + [1, 2, 3].map(card).join('') });
+    const ok = await server._amrSearchFn({ ...q, prezzoMin: '137' });
+    c.lastSources = ok.sources; c.renderSourceStatus();
+    assert.equal(ok.sources.moto.status, 'ok'); assert.equal(ok.sources.moto.hasMore, true);
+    assert.ok(c.fontiConAltri().includes('moto'));
+    assert.ok(ok.risultati.every(r => r.prezzoSuRichiesta === true && r.prezzo === null));
+    moto._get = async () => ({ status: 200, body: '<div class="plist-head-title-info">20 annunci</div>' + [1, 2, 3].map(card).join('').replaceAll('T.RISERVATA', 'rata 50 al mese') });
+    const parziale = await server._amrSearchFn({ ...q, prezzoMin: '138' });
+    c.lastSources = parziale.sources; c.renderSourceStatus();
+    assert.equal(parziale.sources.moto.status, 'ok'); assert.ok(c.fontiConAltri().includes('moto'));
+    assert.match(c.searchAlerts.innerHTML, /prezzo non leggibile/);
+  } finally {
+    moto._get = orig; https.get = get; https.request = request; dotenv.config = config;
+    build.buildFrontendSync = buildFn; guida.buildGuidaSync = guidaFn;
+    require('../backend/fonti-salute')._reset();
+    if (oldData === undefined) delete process.env.USER_DATA_PATH; else process.env.USER_DATA_PATH = oldData;
+    if (oldLog === undefined) delete process.env.AMR_LOG_DIR; else process.env.AMR_LOG_DIR = oldLog;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

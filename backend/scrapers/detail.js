@@ -36,6 +36,8 @@ async function fetchText(url, hops = 0) {
   if (hops > 5) throw new Error('too many redirects');
   if (!hostOk(url)) throw new Error('host not allowed');
   const fonte = fonteFromUrl(url);
+  if (fonte === 'moto') return (await require('./motoit-http').get(url, { timeoutMs: 12000,
+    signal: null, hosts: ['www.moto.it', 'moto.it'] })).body;
   return salute.richiesta(fonte, () => new Promise((resolve, reject) => {
     const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'it-IT,it;q=0.9' } }, res => {
       res.on('error', reject);
@@ -279,6 +281,7 @@ async function getDetail(url) {
       throw Object.assign(new Error('Verifica della fonte non riuscita: nessun dato del dettaglio riconosciuto. La fonte resta in pausa.'),
         { code: 'FONTE_IN_PAUSA', fonte: fonteFromUrl(url), kind: 'error' });
     }
+    if (!nulla && fonteFromUrl(url) === 'moto') salute.registra('moto', { conteggio: 1 });
     cache.set(url, { ts: Date.now(), data, ttl: nulla ? VUOTO_TTL_MS : TTL_MS });
     if (nulla) console.warn(`[detail] ${String(url).slice(0, 70)}: pagina letta ma nessun campo riconosciuto (markup cambiato?) — cache breve`);
     if (cache.size > MAX_CACHE) cache.delete(cache.keys().next().value);  // evict oldest

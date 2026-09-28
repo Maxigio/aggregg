@@ -2402,7 +2402,7 @@ function completaPagina(data, fonti, fetta) {
     const bloccata = stati.find(s => s.erroreHttp === 429 || s.pausa?.fermo
       || (Array.isArray(s.errori) && s.errori.some(e => e.http === 429)));
     const troppoGrande = stati.some(s => s.erroreCodice === 'SUBITO_BODY_TOO_LARGE'
-      || s.erroreCodice === 'AS24_BODY_TOO_LARGE');
+      || s.erroreCodice === 'AS24_BODY_TOO_LARGE' || s.erroreCodice === 'MOTO_BODY_TOO_LARGE');
     const definitiva = errori.some(e => e.http === 403 || e.tipo === 'auth' || e.tipo === 'error');
     const transitoria = errori.every(e => e.tipo === 'transient' || e.http >= 500)
       || stati.every(s => s.status === 'timeout');
@@ -4045,6 +4045,17 @@ function renderSourceStatus() {
     if (f === 'subito' && s?.erroreCodice === 'SUBITO_BODY_TOO_LARGE' && !s.parziale) {
       aggiungi('Subito ha inviato una risposta oltre il limite di dimensione. La richiesta è stata interrotta: gli annunci di questa pagina non sono stati letti.');
     }
+    if (f === 'moto' && s?.erroreCodice === 'MOTO_BODY_TOO_LARGE' && !s.parziale) {
+      aggiungi('Moto.it ha inviato una risposta oltre il limite di dimensione. La richiesta è stata interrotta: gli annunci di questa pagina non sono stati letti.');
+    }
+    if (f === 'moto' && (s?.status === 'error' || s?.status === 'timeout') && !s.parziale
+        && !s.pausa?.fermo && s.erroreCodice !== 'MOTO_BODY_TOO_LARGE') {
+      const motivo = s.erroreHttp === 401 ? 'autenticazione rifiutata dalla fonte'
+        : s.erroreHttp === 403 || s.erroreHttp === 429 ? `richieste respinte (HTTP ${s.erroreHttp})`
+        : s.erroreTipo === 'transient' || s.status === 'timeout' ? 'errore di rete o risposta temporaneamente non disponibile'
+        : 'risposta non leggibile';
+      aggiungi(`Moto.it: ${motivo}. Gli annunci di questa pagina non sono stati letti.`);
+    }
     if (f === 'autoscout' && (s?.status === 'error' || s?.status === 'timeout') && !s.parziale && !s.pausa?.fermo) {
       const motivo = s.erroreCodice === 'AS24_BODY_TOO_LARGE' ? 'risposta oltre il limite di dimensione'
         : s.erroreHttp === 401 ? 'autenticazione rifiutata dalla fonte'
@@ -4102,6 +4113,9 @@ function renderSourceStatus() {
     aggiungi(`Su Subito questa marca vive sotto un'altra (${String(sb.come).slice(8, -1)})${sb.famigliaNome ? ': si cerca la famiglia «' + sb.famigliaNome + '»' : ''}.`);
   }
   const mo = lastSources.moto;
+  if (mo?.modelloKoRete) {
+    aggiungi('Moto.it: il catalogo modelli non è stato letto correttamente. La ricerca è stata allargata alla marca e filtrata sui titoli; riprova per verificare il modello.');
+  }
   // Il menu versioni di Moto.it che non ha risposto: il filtro non e' stato applicato (o lo e'
   // stato su un elenco monco), e finora la colonna si presentava filtrata come le altre.
   if (mo && mo.versioneElencoMonco) {
@@ -4401,14 +4415,24 @@ async function enrichMotoSpecs(list) {
   if (!targets.length) return;
   const myGen = searchGen;
   await Promise.all(targets.map(async r => {
-    if (r._detailLoaded) return;
+    if (r._detailLoaded || r._detailInFlight || Date.now() < (r._detailRetryAt || 0)) return;
+    r._detailInFlight = true;
+    r._detailRetryAt = Date.now() + 30000;
     try {
       const j = await fetch(`/api/detail?url=${encodeURIComponent(r.url)}`).then(x => x.json());
       if (myGen !== searchGen || !matrixList.includes(r)) return;
       segnalaPausaDettaglio(j);
-      // review: marca _detailLoaded SOLO sul successo, sennò un errore transitorio blocca per sempre l'arricchimento
-      if (j.ok && j.detail) { Object.keys(j.detail).forEach(k => { if (r[k] == null && j.detail[k] != null) r[k] = j.detail[k]; }); r._detailLoaded = true; }
-    } catch (_) {}
+      if (j.ok && j.detail) {
+        const utili = Object.entries(j.detail).filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && !v.length));
+        for (const [k, v] of utili) if (r[k] == null) r[k] = v;
+        if (utili.length) r._detailLoaded = true;
+        // Un vuoto best-effort sul server dura 15 minuti: un render non deve
+        // martellare quella cache ne' segnare la riga completata per sempre.
+        else r._detailRetryAt = Date.now() + 15 * 60 * 1000;
+      }
+    } catch (_) {
+      r._detailRetryAt = Date.now() + 30000;
+    } finally { delete r._detailInFlight; }
   }));
   if (myGen === searchGen && matrixList === list && !cmatrixPanel.classList.contains('d-none')) renderMatrix();
 }

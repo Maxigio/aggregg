@@ -33,6 +33,7 @@
  */
 const cheerio = require('cheerio');
 const salute = require('../fonti-salute');
+const { prezzoMoto, avvisoPrezzi } = require('./motoit-prezzo');
 const motoit = require('./motoit');          // `_get`: HTTP gentile + conteggio richieste
 
 const BASE = 'https://dealer.moto.it';
@@ -98,9 +99,10 @@ async function scheda(slug) {
   return salute.richiesta('moto', async () => {
     const { status, body, headers } = await motoit._get(`${BASE}/${slug}`);
     if (status !== 200) throw salute.erroreHttp('moto', status, headers);
-    if (salute.fermo('moto').verifica && !vetrinaRiconoscibile(body)) {
+    if (!vetrinaRiconoscibile(body)) {
       throw new Error('Moto.it: vetrina non riconoscibile, disponibilità non verificata');
     }
+    salute.registra('moto', { conteggio: 1 });
     return schedaDaHtml(body, slug);
   });
 }
@@ -158,7 +160,7 @@ function mapCards(html, ctx = {}) {
     out.push({
       fonte: 'moto',
       titolo: [marca, modello].filter(Boolean).join(' ') || `Annuncio ${id}`,
-      prezzo: numero(c.find('.dlr-card__extrainfo__price').first().text()),
+      ...prezzoMoto(c.find('.dlr-card__extrainfo__price').first().text()),
       km: numero(km),
       anno: anno ? parseInt(anno, 10) : null,
       marca,
@@ -221,9 +223,10 @@ async function parco(slug, opts = {}) {
         const pagina = leggiPagina(body, ctx);
         if (pagina.grezze > 0 && !pagina.items.length) throw Object.assign(
           new Error('le card della vetrina non si leggono più: la pagina della fonte è cambiata'), { illeggibili: pagina.grezze });
-        if (salute.fermo('moto').verifica && !pagina.items.length && !vetrinaRiconoscibile(body)) {
+        if (!pagina.grezze && !vetrinaRiconoscibile(body)) {
           throw new Error('Moto.it: vetrina non riconoscibile, disponibilità non verificata');
         }
+        if (pagina.items.length) salute.registra('moto', { conteggio: pagina.items.length });
         return pagina;
       });
     } catch (e) {
@@ -248,7 +251,7 @@ async function parco(slug, opts = {}) {
     if (p === maxPagine) troncato = true;
     await sleep(DELAY_MS);
   }
-  return { items, troncato, illeggibili, errorePagina };
+  return { items, troncato, illeggibili, errorePagina, avvisoPrezzi: avvisoPrezzi(items) };
 }
 
 module.exports = { slugVetrina, scheda, parco, _mapCards: mapCards, _scheda: schedaDaHtml, _urlAnnuncio: urlAnnuncio };

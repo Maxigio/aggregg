@@ -26,7 +26,8 @@ function finta(producer) {
     const r = producer(++n, args[0]);
     process.nextTick(() => {
       const res = new EventEmitter();
-      Object.assign(res, { statusCode: r.status, headers: r.headers || {}, resume() {}, setEncoding() {} });
+      Object.assign(res, { statusCode: r.status, headers: r.headers || {}, resume() {}, setEncoding() {},
+        destroy() { this.destroyed = true; } });
       cb(res);
       // Un 429 non deve aspettare nemmeno la fine del body.
       if (r.status !== 429) { res.emit('data', r.body || ''); res.emit('end'); }

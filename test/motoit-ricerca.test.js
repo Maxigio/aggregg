@@ -49,6 +49,34 @@ test('zero card e zero annunci dichiarati: fine genuina, nessun falso allarme', 
   });
 });
 
+test('un 200 senza struttura di ricerca non diventa zero annunci', async () => {
+  await conGet([{ status: 200, body: '<html><title>Manutenzione</title></html>' }], () =>
+    assert.rejects(() => motoit._scrapeVia(['u1']), /non riconoscibile/));
+});
+
+test('una card non leggibile resta dichiarata anche se altre card sono valide', async () => {
+  const params = { tipo: 'moto', marca: 'Yamaha', motoitBrandSlug: 'yamaha', motoitModelSlug: 'mt-07' };
+  await conGet([{ status: 200, body: pagina([101, null], 2) }], async () => {
+    const r = await motoit(params, { withMeta: true });
+    assert.equal(r.items.length, 1);
+    assert.equal(r.truncated, true);
+    assert.match(r.parziale, /1 card/);
+  });
+});
+
+test('la prima fetta Moto.it chiede una pagina nativa, la seconda la pagina 2', async () => {
+  const params = { tipo: 'moto', marca: 'Yamaha', motoitBrandSlug: 'yamaha', motoitModelSlug: 'mt-07' };
+  const orig = motoit._get, chieste = [];
+  motoit._get = async url => { chieste.push(url); return { status: 200, body: pagina([101], 40) }; };
+  try {
+    await motoit(params, { withMeta: true, fetta: 0 });
+    await motoit(params, { withMeta: true, fetta: 1 });
+    assert.equal(chieste.length, 2);
+    assert.match(chieste[0], /ricerca\?/);
+    assert.match(chieste[1], /ricerca\/pagina-2\?/);
+  } finally { motoit._get = orig; }
+});
+
 test('risposta troncata con FIN pulita: la porta HTTP rigetta, non resta pendente', async () => {
   // Content-Length 1000, 100 byte scritti, poi FIN pulita: prima del fix niente 'end',
   // niente errore su req, e il timeout socket muore col socket → Promise pendente per
@@ -76,6 +104,47 @@ test('risposta troncata con FIN pulita: la porta HTTP rigetta, non resta pendent
     https.get = orig;
     server.close();
   }
+});
+
+test('body troppo grande e redirect fuori Moto.it sono rifiutati prima di una seconda destinazione', async () => {
+  const http = require('node:http'), https = require('node:https');
+  const richieste = [];
+  const server = http.createServer((req, res) => {
+    if (req.url === '/grande') { res.writeHead(200); return res.end(Buffer.alloc(2 * 1024 * 1024 + 1024, 65)); }
+    res.writeHead(302, { Location: 'https://127.0.0.1/privato' }); res.end();
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const orig = https.get, porta = server.address().port;
+  https.get = (url, opts, cb) => {
+    richieste.push(url);
+    return http.get(url.replace(/^https:\/\/[^/]+/, `http://127.0.0.1:${porta}`), opts, cb);
+  };
+  try {
+    await assert.rejects(motoit._get('https://www.moto.it/grande'), e => e.code === 'MOTO_BODY_TOO_LARGE');
+    await assert.rejects(motoit._get('https://www.moto.it/redirect'), /redirect Moto.it non consentito/);
+    assert.equal(richieste.length, 2, 'il redirect non raggiunge la destinazione esterna');
+  } finally { https.get = orig; server.close(); }
+});
+
+test('ricerca e menu condividono la distanza fra richieste Moto.it', async () => {
+  const http = require('node:http'), https = require('node:https');
+  const menu = require('../backend/scrapers/motoit-models');
+  const arrivi = [];
+  const server = http.createServer((req, res) => {
+    arrivi.push(Date.now());
+    res.end(req.url.includes('/api-50/') ? '{"result":"OK","data":[]}' : '<div class="plist-head-title-info">0 annunci</div>');
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const orig = https.get, porta = server.address().port;
+  https.get = (url, opts, cb) => http.get(url.replace(/^https:\/\/[^/]+/, `http://127.0.0.1:${porta}`), opts, cb);
+  try {
+    await Promise.all([
+      motoit._get('https://www.moto.it/moto-usate/ricerca'),
+      menu.getBrandModels('amr-ritmo-prova', { rilancia: true }),
+    ]);
+    assert.equal(arrivi.length, 2);
+    assert.ok(arrivi[1] - arrivi[0] >= 1300, `intervallo ${arrivi[1] - arrivi[0]} ms`);
+  } finally { https.get = orig; server.close(); }
 });
 
 test('"Carica altri" oltre il fondo: pagina vuota con totale dichiarato NON e\' deriva', async () => {
@@ -131,11 +200,11 @@ test('pagina caduta: scrapeMotoIt dichiara `parziale`, non solo `truncated`', as
   const params = { tipo: 'moto', marca: 'Yamaha', modello: 'MT-07',
     motoitBrandSlug: 'yamaha', motoitModelSlug: 'mt-07' };
   await conGet([{ status: 200, body: pagina([101, 102, 103], 4323) }, { status: 503, body: '' }], async () => {
-    const r = await motoit(params, { withMeta: true });
+    const r = await motoit(params, { withMeta: true, maxPages: 3, pageDelayMs: 1 });
     assert.strictEqual(r.items.length, 3, 'le superstiti si tengono');
     assert.match(r.parziale, /non si sono lasciate leggere/);
   });
-  // Tre pagine buone: nessun avviso, altrimenti la ricerca normale non sarebbe piu' cachabile.
+  // La ricerca ordinaria chiede una sola pagina nativa e non inventa un avviso.
   await conGet([{ status: 200, body: pagina([101, 102, 103], 4323) }], async () => {
     const r = await motoit(params, { withMeta: true });
     assert.strictEqual(r.parziale, null);

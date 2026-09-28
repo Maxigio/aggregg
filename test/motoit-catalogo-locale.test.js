@@ -113,3 +113,20 @@ test('modello del catalogo senza versioni → lista vuota, non un\'invenzione', 
       'e ha chiesto proprio quel modello');
   } finally { https.get = veroGet; srv.close(); }
 });
+
+test('un menu 200 non riconoscibile non resta in cache dodici ore', async () => {
+  const http = require('http'), https = require('https');
+  const srv = http.createServer((req, res) => {
+    res.setHeader('content-type', 'application/json');
+    res.end(++chiamate === 1 ? '{"result":"KO","data":null}' : '{"result":"OK","data":[]}');
+  });
+  let chiamate = 0;
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const orig = https.get, porta = srv.address().port;
+  https.get = (url, opts, cb) => http.get(String(url).replace(/^https:\/\/[^/]+/, `http://127.0.0.1:${porta}`), opts, cb);
+  try {
+    await assert.rejects(mm.getBrandModels('amr-menu-prova', { rilancia: true }), /non riconoscibile/);
+    assert.deepEqual(await mm.getBrandModels('amr-menu-prova', { rilancia: true }), []);
+    assert.equal(chiamate, 2);
+  } finally { https.get = orig; srv.close(); }
+});

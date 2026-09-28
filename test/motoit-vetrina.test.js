@@ -65,6 +65,16 @@ test('senza id la card non diventa un annuncio', () => {
   assert.deepEqual(v._mapCards(''), []);
 });
 
+test('una pagina di manutenzione 200 non diventa una vetrina vuota', async () => {
+  const motoit = require('../backend/scrapers/motoit');
+  const orig = motoit._get;
+  motoit._get = async () => ({ status: 200, body: '<html><title>Manutenzione</title></html>' });
+  try {
+    await assert.rejects(() => v.scheda('prova'), /non riconoscibile/);
+    await assert.rejects(() => v.parco('prova', { maxPagine: 2 }), /non riconoscibile/);
+  } finally { motoit._get = orig; }
+});
+
 test('parco: l\'elenco finisce sulle card PRESENTI, non su quelle che si sono lette', async () => {
   // Il ciclo confrontava le card RIUSCITE con 12: una sola card fuori standard (promo, "in
   // arrivo", markup diverso) su una pagina piena faceva credere che l'elenco fosse finito, e

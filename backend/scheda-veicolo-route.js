@@ -217,8 +217,7 @@ async function resolveMotoit({ marca, modello, anno }) {
     const hitCache = cacheGet('motoit-model:' + mUrl);
     if (hitCache) meta = hitCache;
     else {
-      const { body } = await mis.httpGetText(mUrl);
-      meta = mis.parseModelVersionsMeta(body, brandSlug, hit.slug);
+      meta = await mis.fetchModelVersionsMeta(brandSlug, hit.slug);
       cacheSet('motoit-model:' + mUrl, meta, PAGE_TTL);
     }
   } catch (_) { /* niente foto, la scheda funziona comunque */ }

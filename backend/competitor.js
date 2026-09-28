@@ -390,6 +390,7 @@ async function parco(voce, dip = {}) {
   // in una sezione a parte, e mescolarlo qui falserebbe ogni mediana.
   if (voce.fonte === 'moto') {
     const r = await vetrinaMoto.parco(voce.id, { ctx: { venditoreNome: voce.nome, provincia: voce.provincia || null } });
+    if (r.avvisoPrezzi) avvisiLettura.push({ tipo: 'moto', motivo: r.avvisoPrezzi });
     /**
      * QUANTO HA VENDUTO IN DIECI ANNI, non solo cosa ha in piazzale adesso. Moto.it e' la
      * sola fonte che pubblica lo storico di un venditore — "Annunci pubblicati 1.018,

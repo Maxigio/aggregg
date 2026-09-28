@@ -12,59 +12,28 @@
  * Architettura ricerca (entrambi i consumatori):
  * - Motore /moto-usate/ricerca (non la landing SEO), filtri server-side
  *   brand/model/price_f-t/km_f-t/year_f-t/region, paginazione /pagina-N, sort=price-a.
- * - ~10-13 annunci/pagina × 3 pagine = ~30 annunci on-search.
+ * - Una pagina nativa per fetta on-search; fino a 3 pagine nel percorso deep.
  *
  * Slug: SOLO slug espliciti dal catalogo (`motoitBrandSlug`/`motoitModelSlug`).
  *   Senza `motoitBrandSlug` → bail out []. Modello non risolto → brand-only +
  *   post-filter titolo lato server.
  */
 
-const https        = require('https');
 const cheerio      = require('cheerio');
-const annullo = require('../annullo');
 const salute = require('../fonti-salute');
 
 const { kindForStatus, fail } = require('./utils');   // salute crawler (come AS24/Subito)
-const budget = require('../budget-richieste');        // conta le richieste, non le limita
+const motoHttp = require('./motoit-http');
+const { prezzoMoto, avvisoPrezzi } = require('./motoit-prezzo');
 const { slugDaUrl, varianteDaSlug } = require('./motoit-versione');  // la versione che l'annuncio dichiara nell'URL
 
 const BASE = 'https://www.moto.it';
-const MAX_PAGES = 3;                  // on-search: ~30 annunci (~10-13/pag), cheapest-first.
+const MAX_PAGES = 3;                  // percorso deep; on-search legge una pagina per fetta.
 const HTTP_TIMEOUT_DEFAULT = 15000;   // crawler (sequenziale, paziente).
 const ONSEARCH_DELAY_MS    = 1000;    // on-search: gentile tra pagine (sequenziale, mai parallelo).
 const ONSEARCH_TIMEOUT_MS  = 12000;   // on-search: non troppo stretto (8s troncava su risposte lente).
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-function httpGetText(url, hops = 0, timeoutMs = HTTP_TIMEOUT_DEFAULT) {
-  return salute.richiesta('moto', async () => {
-  // Anche un redirect e' una richiesta: si conta ogni salto, non solo il primo.
-  budget.conta('motoit', hops ? 'redirect' : null);
-  return new Promise((resolve, reject) => {
-    if (hops > 5) return reject(new Error('too many redirects'));
-    const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'it-IT,it;q=0.9' },
-      signal: annullo.segnale() }, res => {   // ricerca abbandonata → la presa si chiude (annullo.js)
-      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
-      res.on('close', () => reject(fail('risposta troncata', { kind: 'transient' })));
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        res.resume();
-        const next = res.headers.location.startsWith('http') ? res.headers.location : new URL(res.headers.location, url).href;
-        return httpGetText(next, hops + 1, timeoutMs).then(resolve, reject);
-      }
-      if (res.statusCode !== 200) { res.resume(); return reject(salute.erroreHttp('moto', res.statusCode, res.headers)); }
-      let d = ''; res.setEncoding('utf8');
-      res.on('data', c => d += c);
-      res.on('end', () => resolve({ status: res.statusCode, body: d }));
-      // Risposta troncata con FIN pulita (Content-Length non onorato): niente 'end',
-      // niente errore su req, e il timeout muore col socket → Promise pendente per
-      // sempre. 'close' arriva comunque; dopo 'end' il reject e' un no-op innocuo.
-    });
-    req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
-    req.setTimeout(timeoutMs, () => req.destroy(fail('timeout', { kind: 'transient' })));
-  });
-  });
-}
+const httpGetText = (url, _hops = 0, timeoutMs = HTTP_TIMEOUT_DEFAULT) => motoHttp.get(url, { timeoutMs });
 
 // ─── Costruzione URL ─────────────────────────────────────────────────────────
 // Moto.it offre un motore di ricerca completo a /moto-usate/ricerca con query params.
@@ -118,14 +87,6 @@ function buildUrl(params, page = 1) {
   return `${BASE}/moto-usate/ricerca${pagePath}?${qs.toString()}`;
 }
 
-// ─── Parser prezzo: "€ 4.800" → 4800, "T.RISERVATA" → null ───────────────────
-function parsePrezzo(str) {
-  if (!str) return null;
-  const clean = str.replace(/[€\s.]/g, '').replace(/,\d+$/, '');
-  const n = parseInt(clean, 10);
-  return isNaN(n) ? null : n;
-}
-
 // Cover dalla card di ricerca: le `.mcard--big` mostrano già la copertina come
 // `<img src="…/images/<id>/<size>/<file>.jpg">`. Valida che sia un'immagine cdn-img
 // (scarta placeholder lazy / src non-cdn), strippa la query, ricostruisce thumb/full.
@@ -146,7 +107,7 @@ function mapCards(cards, opts = {}) {
     const out = {
       fonte:      'moto',
       titolo:     c.titolo || 'Annuncio senza titolo',
-      prezzo:     parsePrezzo(c.priceRaw),
+      ...prezzoMoto(c.priceRaw),
       km:         c.km,
       anno:       c.anno,
       carburante: null,
@@ -242,6 +203,7 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
   let errorePagina = null;
   let driftBreak = false;                    // pagina illeggibile dopo pagine buone
   let total = null;                          // F50 "N annunci" (tetto), dalla 1ª pagina
+  let scartate = 0;                          // card presenti ma non leggibili
   for (let i = 0; i < urls.length; i++) {
     if (i > 0 && delay) await sleep(delay);
     let pagina;
@@ -254,6 +216,9 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
         const totale = extractTotal(body);
         const grezze = extractCardsHtml(body);
         const items = mapCards(grezze, opts);
+        if (!grezze.length && !cheerio.load(body)('#plist-top, .plist-head-title-info').length) {
+          throw fail('Moto.it: pagina di ricerca non riconoscibile, disponibilità non verificata', { kind: 'error' });
+        }
         const deriva = !items.length && (grezze.length > 0 || (i === 0 && !(opts.fetta > 0) && totale > 0));
         if (deriva) throw fail(`Moto.it: ${grezze.length} card in pagina, ${totale == null ? '?' : totale} annunci dichiarati, 0 leggibili — e' cambiato il markup della fonte, non il piazzale a essere vuoto`, { kind: 'error' });
         // Il 200 di una manutenzione senza card né contatore non prova la
@@ -261,7 +226,8 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
         if (salute.fermo('moto').verifica && !items.length && totale == null) {
           throw fail('Moto.it: pagina non riconoscibile, disponibilità non verificata', { kind: 'error' });
         }
-        return { items, totale };
+        if (items.length) salute.registra('moto', { conteggio: items.length });
+        return { items, totale, scartate: grezze.length - items.length };
       });
     } catch (e) {
       if (i === 0) {
@@ -271,6 +237,7 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
       errorePagina = e; driftBreak = true; break;
     }
     if (i === 0) total = pagina.totale;
+    scartate += pagina.scartate;
     const { items } = pagina;
     if (!items.length) break;
     pages.push(items);
@@ -296,7 +263,8 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
   const hasMore = !driftBreak && pages.length === urls.length
     && ((opts.fetta || 0) > 0 || total == null || got < total);
   if (hasMore) truncated = true;
-  return { pages, blocked: false, truncated, cadute, total, hasMore, errorePagina };
+  if (scartate) truncated = true;
+  return { pages, blocked: false, truncated, cadute, scartate, total, hasMore, errorePagina };
 }
 
 /**
@@ -312,28 +280,7 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
 const avvisoCadute = (cadute, tot) => cadute
   ? `${cadute} pagine su ${tot} non si sono lasciate leggere da Moto.it: l'elenco e' parziale (mancano gli annunci piu' cari)`
   : null;
-
-// ─── Rate limiting: minimo 1.5s tra ricerche ─────────────────────────────────
-let lastSearchAt = 0;
-async function throttle() {
-  // Si PRENOTA lo slot prima di dormire: leggendo prima e scrivendo dopo, N chiamate concorrenti
-  // calcolavano la stessa attesa, dormivano fino allo stesso istante e partivano insieme.
-  const mio = Math.max(Date.now(), lastSearchAt + 1500);
-  lastSearchAt = mio;
-  const wait = mio - Date.now();
-  if (wait > 0) await sleep(wait);
-}
-
-/**
- * SE NESSUNA CARD PORTA UN PREZZO, E' IL MARKUP, NON IL MERCATO — la regola di
- * subito-api:745, che qui mancava. `priceRaw` si legge da [class*="price"]: una classe
- * rinominata azzera il prezzo di TUTTE le card senza fare rumore, e le righe uscivano
- * con pastiglia verde e nessuna cifra. Il gate a 3 evita il falso allarme su una lista
- * piccola davvero tutta «T.RISERVATA» (che parsePrezzo traduce in null di proposito).
- */
-const sospettoPrezzi = r => (r.length >= 3 && r.every(x => x.prezzo == null))
-  ? `nessuno dei ${r.length} annunci porta un prezzo leggibile: l'etichetta del markup puo' essere cambiata`
-  : null;
+const avvisoScartate = n => n ? `${n} card di Moto.it presenti ma non leggibili: i risultati potrebbero essere incompleti` : null;
 
 // ─── Scraper principale ──────────────────────────────────────────────────────
 async function scrapeMotoIt(params, opts = {}) {
@@ -345,22 +292,22 @@ async function scrapeMotoIt(params, opts = {}) {
     return opts.withMeta ? { items: [], truncated: false } : [];
   }
 
-  await throttle();
-
   // deep = chiamata dal crawler (opts) → HTTP paziente, throw alla salute su blocco.
   // `withMeta` NON discrimina piu': da quando il server lo passa a OGNI ricerca (per il
   // totale F50), teneva TUTTE le ricerche live sul ramo crawler — delay zero fra pagine e
   // timeout lungo, l'esatto contrario dell'"HTTP sequenziale gentile" promesso qui sotto.
   // I tre chiamanti crawler veri passano tutti maxPages+pageDelayMs.
   const deep = !!(opts.pageDelayMs || opts.maxPages);
-  const maxPages = deep ? (opts.maxPages || MAX_PAGES) : MAX_PAGES;
+  // La fetta visibile corrisponde a UNA pagina nativa, come per Subito e AutoScout.
+  // Il giro profondo conserva il proprio tetto, senza cambiare il percorso sospeso.
+  const maxPages = deep ? (opts.maxPages || MAX_PAGES) : 1;
   // "Carica altri": la fetta successiva. Provato pagina 1 contro pagina 50 — nessun
   // link in comune, quindi le pagine profonde portano moto diverse e non le stesse.
   const salta = Math.max(0, opts.fetta || 0) * maxPages;
   const urls = Array.from({ length: maxPages }, (_, i) => buildUrl(params, salta + i + 1));
 
   if (deep) {
-    const { pages, statoKo, truncated, cadute, total, hasMore, errorePagina } = await scrapeMotoViaHttp(urls, {
+    const { pages, statoKo, truncated, cadute, scartate, total, hasMore, errorePagina } = await scrapeMotoViaHttp(urls, {
     ...opts, modelSlug: params.motoitModelSlug, httpTimeoutMs: HTTP_TIMEOUT_DEFAULT });
     // L'etichetta la calcola `kindForStatus`: 5xx = passeggero, non blocco. E il messaggio
     // non dice piu' "pagina-1 vuota", che era un residuo di codice tolto tempo fa e mandava
@@ -378,15 +325,15 @@ async function scrapeMotoIt(params, opts = {}) {
    */
   const totaleLargo = !params.motoitModelSlug || null;
   return opts.withMeta ? { items: risultati, truncated, total, hasMore, totaleLargo,
-    parziale: [avvisoCadute(cadute, urls.length), errorePagina?.message].filter(Boolean).join(' · ') || null,
+    parziale: [avvisoCadute(cadute, urls.length), avvisoScartate(scartate), avvisoPrezzi(risultati), errorePagina?.message].filter(Boolean).join(' · ') || null,
     parzialeRete: !!cadute, erroreTipo: errorePagina?.kind || null, erroreHttp: errorePagina?.status || null,
-    bloccoParziale: errorePagina?.kind === 'blocked' ? errorePagina : null, sospetto: sospettoPrezzi(risultati) } : risultati;
+    bloccoParziale: errorePagina?.kind === 'blocked' ? errorePagina : null } : risultati;
   }
 
   // ON-SEARCH: HTTP sequenziale gentile (come il crawler). Niente browser, niente
   // fallback. Il ramo onora `withMeta` (totale F50 e "Carica altri" ne dipendono) e
   // `fetta`: senza, tornato vivo questo ramo, sarebbero regrediti entrambi.
-  const { pages, statoKo, truncated, cadute, total, hasMore, errorePagina } = await scrapeMotoViaHttp(urls, {
+  const { pages, statoKo, truncated, cadute, scartate, total, hasMore, errorePagina } = await scrapeMotoViaHttp(urls, {
     modelSlug: params.motoitModelSlug,   // per leggere la versione dallo slug dell'annuncio
     pageDelayMs: ONSEARCH_DELAY_MS, httpTimeoutMs: ONSEARCH_TIMEOUT_MS, fetta: opts.fetta || 0,
   });
@@ -407,11 +354,11 @@ async function scrapeMotoIt(params, opts = {}) {
    * spacciarsi per tuo.
    */
   const totaleLargo = !params.motoitModelSlug || null;
-  const parziale = [avvisoCadute(cadute, urls.length), errorePagina?.message].filter(Boolean).join(' · ') || null;
+  const parziale = [avvisoCadute(cadute, urls.length), avvisoScartate(scartate), avvisoPrezzi(risultati), errorePagina?.message].filter(Boolean).join(' · ') || null;
   if (parziale) console.warn(`[Moto.it] ${parziale}`);
   return opts.withMeta ? { items: risultati, truncated, total, hasMore, totaleLargo, parziale,
     parzialeRete: !!cadute, erroreTipo: errorePagina?.kind || null, erroreHttp: errorePagina?.status || null,
-    bloccoParziale: errorePagina?.kind === 'blocked' ? errorePagina : null, sospetto: sospettoPrezzi(risultati) } : risultati;
+    bloccoParziale: errorePagina?.kind === 'blocked' ? errorePagina : null } : risultati;
 }
 
 module.exports = scrapeMotoIt;
@@ -420,5 +367,6 @@ module.exports._extractTotal = extractTotal;   // F50 copertura
 // La vetrina del concessionario (Competitor) parla con lo stesso host e deve contare le
 // richieste nello stesso budget: una sola porta HTTP verso Moto.it, non due.
 module.exports._get = httpGetText;
+module.exports._hostOk = motoHttp.hostOk;
 // Il loop di pagine, testabile senza il throttle da 1.5s (stubbando _get come fa la vetrina).
 module.exports._scrapeVia = scrapeMotoViaHttp;

@@ -78,7 +78,7 @@ test('isVuoto: riconosce i non-dati', () => {
 });
 
 test('httpGetText: anti-SSRF, host diverso da moto.it rifiutato', async () => {
-  await assert.rejects(() => mis.httpGetText('https://example.com/listino/x'), /host non consentito/);
+  await assert.rejects(() => mis.httpGetText('https://example.com/listino/x'), /destinazione Moto.it non consentita/);
 });
 
 // ── Foto/prezzo per versione dalla pagina-modello (una richiesta per tutte) ────

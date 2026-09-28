@@ -1388,6 +1388,7 @@ function cacheable(data) {
   // Stessa classe dei due casi qui sopra. I monchi deterministici (oltre 12 famiglie,
   // modello senza codice) NON alzano questo flag e restano cachabili: ritentare non cambia.
   if (src.moto?.versioneKoRete) return false;
+  if (src.moto?.modelloKoRete) return false;
   return (data.totale || 0) > 0;
 }
 
@@ -1622,8 +1623,11 @@ async function runSearchCore(params) {
         // moto e' spezzata per cilindrata ("Scarabeo" sono nove famiglie) e prima si teneva la
         // piu' corta — cercando le Scarabeo 500 arrivavano gli scooter 50. Misurato dal vivo:
         // una famiglia 29 annunci, tutte e nove 71.
-        params.motoitModelSlug = await famiglieMotoit(params.motoitBrandSlug, params.modello) || null;
-      } catch (_) { /* fallback brand-only + post-filter */ }
+        params.motoitModelSlug = await famiglieMotoit(params.motoitBrandSlug, params.modello, { rilancia: true }) || null;
+      } catch (_) {
+        // La ricerca larga resta possibile, ma un menu non letto non prova che il modello manchi.
+        params.motoitModelloKoRete = true;
+      }
     }
   }
 
@@ -2307,6 +2311,7 @@ async function runSearchCore(params) {
       moto:      { status: motoRes.status,   reason: motoRes.reason || null,   count: countBy('moto'),
                    totale: motoRes.total ?? null, hasMore: motoRes.hasMore ?? null,
                    erroreTipo: motoRes.erroreTipo || null, erroreHttp: motoRes.erroreHttp || null,
+                   erroreCodice: motoRes.erroreCodice || null,
                    parzialeRete: motoRes.parzialeRete || null,
                    pausa: salute.fermo('moto'),
                    // Senza lo slug del modello la ricerca si allarga alla MARCA, e il totale
@@ -2328,7 +2333,8 @@ async function runSearchCore(params) {
                    // Vero SOLO quando l'elenco monco viene da un KO di rete (transitorio):
                    // cacheable() lo legge per non congelare tre minuti una ricerca partita
                    // senza filtro versione. I monchi deterministici non lo alzano.
-                   versioneKoRete: params.motoitVersioneKoRete || null },
+                   versioneKoRete: params.motoitVersioneKoRete || null,
+                   modelloKoRete: params.motoitModelloKoRete || null },
     },
   };
 }

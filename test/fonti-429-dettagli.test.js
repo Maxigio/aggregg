@@ -18,10 +18,13 @@ const { getDetail } = require('../backend/scrapers/detail');
 const specs = require('../backend/scrapers/motoit-specs');
 const getOriginale = https.get;
 const oraOriginale = Date.now;
+const ritmo = require('../backend/scrapers/motoit-ritmo'), attesaOriginale = ritmo.attendi;
 const reteVietata = () => { throw new Error('rete reale vietata'); };
 let ora;
 
 beforeEach(() => {
+  // Questo file verifica gli esiti, la coda reale e' coperta da motoit-protezioni.
+  ritmo.attendi = async () => {};
   ora = 1800000000000;
   Date.now = () => ora;
   https.get = reteVietata;
@@ -32,6 +35,7 @@ afterEach(() => {
   salute._reset();
   https.get = reteVietata;
   Date.now = oraOriginale;
+  ritmo.attendi = attesaOriginale;
 });
 after(() => {
   salute._reset();
@@ -50,17 +54,19 @@ function risposte(...coda) {
     assert.ok(risposta, `richiesta inattesa: ${url}`);
     const req = new EventEmitter();
     req.setTimeout = () => req;
-    req.destroy = e => req.emit('error', e);
+    req.destroy = e => { req.destroyed = true; if (e) req.emit('error', e); };
     const res = new EventEmitter();
     res.statusCode = risposta.status;
     res.headers = risposta.headers || {};
     res.setEncoding = () => {};
-    const voce = { url: String(url), drained: false, fine() {
+    const voce = { url: String(url), drained: false, closed: false, fine() {
+      if (voce.closed) return;
       res.complete = true;
       res.emit('data', Buffer.from(risposta.body || '<html></html>'));
       res.emit('end');
       res.emit('close');
     } };
+    res.destroy = () => { voce.closed = true; res.emit('aborted'); res.emit('close'); };
     res.resume = () => {
       voce.drained = true;
       res.complete = true;
@@ -91,7 +97,8 @@ for (const [fonte, host] of [['subito', 'www.subito.it'], ['autoscout', 'autosco
     assert.equal(salute.fermo(fonte).fino, ora + 7200000);
     await assert.rejects(getDetail(url), { code: 'FONTE_IN_PAUSA' });
     assert.equal(chiamate.length, 1);
-    assert.equal(chiamate[0].drained, true);
+    assert.equal(chiamate[0].drained, fonte !== 'moto');
+    assert.equal(chiamate[0].closed, fonte === 'moto');
     for (const altra of ['subito', 'autoscout', 'moto'].filter(f => f !== fonte)) {
       assert.equal(salute.fermo(altra).fermo, false);
     }
@@ -215,11 +222,11 @@ test('detail: il redirect verso un altro sito rispetta la sua pausa', async () =
 test('detail e specs: host esterni vietati anche dopo redirect, senza HTTP esterno', async () => {
   const esterno = 'https://example.com/privato';
   await assert.rejects(getDetail(esterno), /host not allowed/);
-  await assert.rejects(specs.httpGetText(esterno), /host non consentito/);
+  await assert.rejects(specs.httpGetText(esterno), /destinazione Moto.it non consentita/);
   const chiamate = risposte({ status: 302, headers: { location: esterno } },
     { status: 302, headers: { location: esterno } });
   assert.equal(await getDetail('https://www.moto.it/dettaglio-ssrf'), null);
-  await assert.rejects(specs.httpGetText('https://www.moto.it/listino/ssrf'), /redirect fuori host/);
+  await assert.rejects(specs.httpGetText('https://www.moto.it/listino/ssrf'), /redirect Moto.it non consentito/);
   assert.equal(chiamate.length, 2);
   assert.ok(chiamate.every(c => new URL(c.url).hostname === 'www.moto.it'));
 });

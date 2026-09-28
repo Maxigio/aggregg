@@ -1313,11 +1313,14 @@ test('annullo: una richiesta abbandonata si chiude davvero', async () => {
 });
 
 test('annullo: le tre fonti chiedono il segnale al momento della richiesta', () => {
-  for (const f of ['subito-api.js', 'motoit.js', 'autoscout-graphql.js']) {
+  for (const f of ['subito-api.js', 'autoscout-graphql.js']) {
     const src = fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', f), 'utf8');
     assert.match(src, /signal: annullo\.segnale\(\)/,
       `${f} non passa il segnale: una ricerca abbandonata continuerebbe a scaricare da quella fonte`);
   }
+  const motoHttp = fs.readFileSync(path.join(__dirname, '..', 'backend/scrapers/motoit-http.js'), 'utf8');
+  assert.match(motoHttp, /signal = annullo\.segnale\(\)/, 'il trasporto Moto.it legge il contesto corrente');
+  assert.match(motoHttp, /signal: signal \|\| undefined/, 'il segnale arriva al client HTTP');
   // E `runSource` deve ricevere una FUNZIONE, senno' il lavoro nasce fuori dal contesto e
   // il segnale non lo raggiunge: e' l'errore facile da fare rileggendo questo codice.
   const srv = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');

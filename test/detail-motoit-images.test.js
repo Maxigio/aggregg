@@ -65,8 +65,11 @@ test('detail: una risposta interrotta termina il fetch e consente un nuovo tenta
     chiamate++;
     const req = new EventEmitter();
     req.setTimeout = () => {};
+    req.destroy = () => { req.destroyed = true; };
     const res = new EventEmitter();
     res.statusCode = 200;
+    res.headers = {};
+    res.destroy = () => { res.destroyed = true; };
     res.setEncoding = () => {};
     process.nextTick(() => {
       risposta(res);

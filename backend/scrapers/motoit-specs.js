@@ -20,59 +20,14 @@
  *  - ~11 campi su 67 valgono "n.d." o "-" → scartati, non sono dati;
  *  - nessuna conversione imperiale da ripulire (a differenza di auto-data.net).
  */
-const https = require('https');
-const zlib = require('zlib');
+const motoHttp = require('./motoit-http');
 const cheerio = require('cheerio');
-const { fail, kindForStatus } = require('./utils');
+const { fail } = require('./utils');
 const { classifyKey, GROUP_ORDER } = require('./vehicle-specs');
 const salute = require('../fonti-salute');
 
 const HOST = 'https://www.moto.it';
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
-const TIMEOUT_MS = 20000;
-
-// Anti-SSRF: questo scraper parla SOLO con moto.it (URL iniziale E ogni redirect).
-const isAllowedHost = h => /(^|\.)moto\.it$/i.test(String(h || ''));
-
-async function httpGetText(url, redirects = 0) {
-  let u; try { u = new URL(url); } catch (_) { throw fail('url non valido', { kind: 'error' }); }
-  if (!isAllowedHost(u.hostname)) throw fail('host non consentito', { kind: 'blocked' });
-  return salute.richiesta('moto', () => new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: {
-      'user-agent': UA, 'accept-encoding': 'gzip, deflate',
-      accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'accept-language': 'it-IT,it;q=0.9',
-    } }, res => {
-      // Anche le risposte scartate (429/redirect) possono interrompersi dopo gli header.
-      // `pipe()` non propaga gli errori: il listener serve sul messaggio originale.
-      res.on('error', e => reject(fail(e.message, { kind: 'transient' })));
-      res.on('aborted', () => reject(fail('risposta interrotta', { kind: 'transient' })));
-      const code = res.statusCode;
-      if ([301, 302, 303, 307, 308].includes(code) && res.headers.location && redirects < 5) {
-        res.resume();
-        let next; try { next = new URL(res.headers.location, url); } catch (_) { return reject(fail('redirect non valido', { kind: 'error' })); }
-        if (!isAllowedHost(next.hostname)) return reject(fail('redirect fuori host', { kind: 'blocked' }));
-        return resolve(httpGetText(next.href, redirects + 1));
-      }
-      if (code !== 200) {
-        const errore = salute.erroreHttp('moto', code, res.headers);
-        errore.kind = kindForStatus(code);
-        res.resume();
-        return reject(errore);
-      }
-      const chunks = [];
-      let s = res;
-      const enc = (res.headers['content-encoding'] || '').toLowerCase();
-      if (enc === 'gzip') s = res.pipe(zlib.createGunzip());
-      else if (enc === 'deflate') s = res.pipe(zlib.createInflate());
-      s.on('data', c => chunks.push(c));
-      s.on('end', () => resolve({ status: code, body: Buffer.concat(chunks).toString('utf8') }));
-      if (s !== res) s.on('error', e => reject(fail(e.message, { kind: 'transient' })));
-    });
-    req.on('error', e => reject(fail(e.message, { kind: 'transient' })));
-    req.setTimeout(TIMEOUT_MS, () => req.destroy(fail('timeout', { kind: 'transient' })));
-  }));
-}
+const httpGetText = url => motoHttp.get(url, { timeoutMs: 20000, signal: null });
 
 const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
 // "n.d." / "-" / "" non sono dati: meglio l'assenza del campo che un valore finto.
@@ -116,6 +71,18 @@ function parseModelVersionsMeta(html, brandSlug, modelSlug) {
   return { versioni, fotoModello: isFotoVera(og) ? og : '' };
 }
 
+async function fetchModelVersionsMeta(brandSlug, modelSlug) {
+  return salute.richiesta('moto', async () => {
+    const { body } = await httpGetText(modelUrl(brandSlug, modelSlug));
+    const meta = parseModelVersionsMeta(body, brandSlug, modelSlug);
+    // Anche la pagina foto/versioni deve provare la ripartenza. Una pagina
+    // di manutenzione HTTP 200 non va ne' in cache ne' liberata dal freno.
+    if (!Object.keys(meta.versioni).length) throw fail('pagina modello Moto.it non riconoscibile', { kind: 'error' });
+    salute.registra('moto', { conteggio: Object.keys(meta.versioni).length });
+    return meta;
+  });
+}
+
 // pagina-versione → { head:{marca,modello,allestimento,categoria}, groups:[{title,rows:[{k,v}]}] }
 function parseMotoitSpecs(html) {
   const $ = cheerio.load(html);
@@ -150,6 +117,7 @@ async function fetchMotoitSpecs(url) {
     if (!parsed.head.allestimento || !parsed.groups.length) {
       throw fail('scheda non disponibile su Moto.it', { kind: 'error' });
     }
+    salute.registra('moto', { conteggio: parsed.groups.length });
     return { ...parsed, source: 'moto.it', url };
   });
 }
@@ -159,4 +127,4 @@ function modelUrl(brandSlug, modelSlug) {
   return `${HOST}/listino/${encodeURIComponent(brandSlug)}/${encodeURIComponent(modelSlug)}`;
 }
 
-module.exports = { HOST, httpGetText, fetchMotoitSpecs, parseMotoitSpecs, parseModelVersionsMeta, specUrl, modelUrl, isVuoto, isFotoVera };
+module.exports = { HOST, httpGetText, fetchMotoitSpecs, fetchModelVersionsMeta, parseMotoitSpecs, parseModelVersionsMeta, specUrl, modelUrl, isVuoto, isFotoVera };

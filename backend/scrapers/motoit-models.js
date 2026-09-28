@@ -12,11 +12,9 @@
  * Niente più scrape HTML né slug indovinati: si usano i `value` reali dell'API.
  * Cache in-memory 12h per chiave + dedup richieste concorrenti.
  */
-const https = require('https');
+const motoHttp = require('./motoit-http');
 const salute = require('../fonti-salute');
 const { makeModelResolver, confiniDi } = require('./brand-match');
-const budget = require('../budget-richieste');        // conta le richieste, non le limita
-
 const BASE = 'https://www.moto.it';
 const API  = `${BASE}/api-50/market/search`;
 const TTL_MS = 12 * 60 * 60 * 1000;  // 12h
@@ -25,36 +23,25 @@ const modelsCache = new Map();   // brandSlug → { ts, models:[{name,slug}] }
 const bikesCache  = new Map();   // `${brand}|${model}` → { ts, bikes:[{name,code}] }
 const inflight    = new Map();   // chiave → Promise (dedup concorrenti)
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+// Il menu e' condiviso in volo: l'annullamento di una ricerca non deve
+// interrompere il download atteso anche da un altro utente. La deadline resta.
+async function fetchJson(url) {
+  const { body } = await motoHttp.get(url, { timeoutMs: 12000, signal: null,
+    hosts: ['www.moto.it'], accept: 'application/json', tag: 'menu cache-miss' });
+  try { return JSON.parse(body); }
+  catch { throw new Error('JSON menu Moto.it non valido'); }
+}
 
-// GET JSON con segui-redirect. L'API risponde a GET (verificato) — niente cookie.
-function fetchJson(url, hops = 0) {
-  return salute.richiesta('moto', async () => {
-  // Questi menu hanno cache 12h: quando si contano, e' perche' la cache era fredda.
-  budget.conta('motoit', hops ? 'redirect' : 'menu cache-miss');
-  return new Promise((resolve, reject) => {
-    if (hops > 5) return reject(new Error('too many redirects'));
-    const req = https.get(url, { headers: { 'User-Agent': UA, 'Accept': 'application/json', 'Accept-Language': 'it-IT,it;q=0.9' } }, res => {
-      res.on('error', reject);
-      res.on('aborted', () => reject(new Error('risposta interrotta')));
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        res.resume();
-        const next = res.headers.location.startsWith('http') ? res.headers.location : BASE + res.headers.location;
-        return fetchJson(next, hops + 1).then(resolve, reject);
-      }
-      if (res.statusCode !== 200) { res.resume(); return reject(salute.erroreHttp('moto', res.statusCode, res.headers)); }
-      let d = ''; res.setEncoding('utf8');
-      res.on('data', c => d += c);
-      res.on('end', () => { try { resolve(JSON.parse(d)); } catch (e) { reject(new Error('JSON non valido: ' + e.message)); } });
-      // Se la presa cade DOPO gli header (FIN a meta' body), l'errore esce su `res`, non su
-      // `req`: senza questi due la Promise restava appesa per sempre (il timeout di req e' di
-      // INATTIVITA': a presa chiusa non scatta) e l'inflight di `cached` — mai ripulito —
-      // incastrava ogni richiesta successiva per quella chiave. Stesso difetto misurato in
-      // subito-api.js.
-    });
-    req.on('error', reject);
-    req.setTimeout(12000, () => req.destroy(new Error('timeout')));
-  });
+// Un segnaposto ha value esplicitamente vuoto; un campo rinominato non e'
+// un segnaposto. Un solo elemento incompatibile rende il menu incompleto.
+function menuData(j) {
+  if (j === null) throw new Error('risposta nulla: slug sconosciuto a Moto.it');
+  if (j?.result !== 'OK' || !Array.isArray(j.data)) throw new Error('risposta menu Moto.it non riconoscibile');
+  return j.data.filter(d => {
+    if (!d || typeof d.value !== 'string' || typeof d.text !== 'string' || (d.value !== '' && !d.text.trim())) {
+      throw new Error('elemento menu Moto.it non riconoscibile');
+    }
+    return d.value !== '';
   });
 }
 
@@ -174,21 +161,16 @@ async function getBrandModels(brandSlug, opts = {}) {
   }
   const p = cached(modelsCache, `m:${brandSlug}`, TTL_MS, async () => {
     try {
-      const j = await fetchJson(`${API}/models/${encodeURIComponent(brandSlug)}/Used`);
-      // HTTP 200 col corpo letteralmente `null` = slug che Moto.it non conosce. NON e'
-      // «zero risultati» (quello arriva come result OK e lista vuota, misurato dal vivo):
-      // e' un KO col dato marcio, e si dichiara come gli altri KO — senno' lo slug rotto
-      // passava per «questa marca non ha modelli», muto proprio nel caso malato.
-      if (j === null) throw new Error('risposta nulla: slug sconosciuto a Moto.it');
-      const data = (j && j.result === 'OK' && Array.isArray(j.data)) ? j.data : [];
-      return data
-        .map(d => {
-          const value = String(d.value || '');
-          const i = value.indexOf('|');
-          const slug = i >= 0 ? value.slice(i + 1) : '';
-          return slug ? { name: String(d.text || '').trim(), slug } : null;
-        })
-        .filter(Boolean);
+      return await salute.richiesta('moto', async () => {
+        const j = await fetchJson(`${API}/models/${encodeURIComponent(brandSlug)}/Used`);
+        const items = menuData(j).map(d => {
+          const [brand, slug, extra] = d.value.split('|');
+          if (brand !== brandSlug || !slug || extra !== undefined) throw new Error('modello menu Moto.it non riconoscibile');
+          return { name: d.text.trim(), slug };
+        });
+        if (items.length) salute.registra('moto', { conteggio: items.length });
+        return items;
+      });
     } catch (e) {
       // L'errore SALE, cosi' `cached` non lo mette in memoria: una lista vuota restituita qui
       // ci sarebbe rimasta dodici ore, e un timeout sarebbe diventato "questa marca non ha
@@ -224,13 +206,16 @@ async function getModelBikes(brandSlug, modelSlug, opts = {}) {
   const key = `b:${brandSlug}|${modelSlug}`;
   const p = cached(bikesCache, key, TTL_MS, async () => {
     try {
-      const j = await fetchJson(`${API}/bikes/${encodeURIComponent(`${brandSlug}|${modelSlug}`)}/Used`);
-      // Stessa regola di `models`: corpo `null` = slug sconosciuto, non «senza versioni».
-      if (j === null) throw new Error('risposta nulla: slug sconosciuto a Moto.it');
-      const data = (j && j.result === 'OK' && Array.isArray(j.data)) ? j.data : [];
-      return data
-        .map(d => { if (!d.value) return null; const name = String(d.text || '').trim(); return { name, code: String(d.value), ...parseYears(name) }; })
-        .filter(Boolean);
+      return await salute.richiesta('moto', async () => {
+        const j = await fetchJson(`${API}/bikes/${encodeURIComponent(`${brandSlug}|${modelSlug}`)}/Used`);
+        const items = menuData(j).map(d => {
+          const name = d.text.trim();
+          if (!d.value.trim()) throw new Error('versione menu Moto.it non riconoscibile');
+          return { name, code: d.value, ...parseYears(name) };
+        });
+        if (items.length) salute.registra('moto', { conteggio: items.length });
+        return items;
+      });
     } catch (e) {
       // Stesso motivo di `models`: un errore di rete non e' un catalogo vuoto da tenere
       // in memoria mezza giornata. Sale per non finire in cache, e si spegne qui.
@@ -259,9 +244,9 @@ async function getModelBikes(brandSlug, modelSlug, opts = {}) {
  * Il nome preciso continua a vincere da solo: "Scarabeo 500" e' un match esatto, una famiglia.
  * null = brand-only.
  */
-async function famiglieMotoit(brandSlug, modelloText) {
+async function famiglieMotoit(brandSlug, modelloText, opts = {}) {
   if (!brandSlug || !modelloText) return null;
-  const models = await getBrandModels(brandSlug);
+  const models = await getBrandModels(brandSlug, opts);
   if (!models.length) return null;
   const nomi = models.map(m => ({ name: m.name, value: m.slug }));
   const q = normN(modelloText);
