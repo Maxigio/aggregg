@@ -364,9 +364,9 @@ async function scrapeMotoIt(params, opts = {}) {
 module.exports = scrapeMotoIt;
 module.exports._mapCards = mapCards;   // backfill F50: re-map della card grezza in raw_json
 module.exports._extractTotal = extractTotal;   // F50 copertura
-// La vetrina del concessionario (Competitor) parla con lo stesso host e deve contare le
-// richieste nello stesso budget: una sola porta HTTP verso Moto.it, non due.
+// Esposto per i test del trasporto: se una futura area riusa questo host deve
+// condividere il budget delle richieste, non aprire una seconda porta HTTP.
 module.exports._get = httpGetText;
 module.exports._hostOk = motoHttp.hostOk;
-// Il loop di pagine, testabile senza il throttle da 1.5s (stubbando _get come fa la vetrina).
+// Il loop di pagine e' testabile senza il throttle da 1.5s, stubbando _get.
 module.exports._scrapeVia = scrapeMotoViaHttp;

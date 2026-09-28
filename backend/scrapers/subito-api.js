@@ -247,14 +247,14 @@ function mapAd(ad) {
     // Venditore dal boolean nativo advertiser.company (true=conce, false=privato).
     venditore: (ad.advertiser && typeof ad.advertiser.company === 'boolean')
       ? (ad.advertiser.company ? 'concessionario' : 'privato') : null,
-    // CHI vende, non solo che tipo e': serve alla sezione Competitor per sapere di chi e'
-    // il parco, e per accorgersi se la fonte ci mescola dentro qualcun altro.
+    // I campi strutturati del venditore sono ammessi solo per i concessionari.
+    // Il tipo arriva dal boolean nativo; se non e' noto, non esponiamo l'identita'.
     // La marca che l'ANNUNCIO dichiara, non la prima parola del titolo: li' "Alfa Romeo"
     // diventava "Alfa" e "Land Rover" diventava "Land".
     marca: (liv.marca || {}).nome || null,
     // Il MODELLO che l'annuncio dichiara. Lo leggevamo gia' insieme a marca e versione e lo
     // buttavamo: senza, la scheda tecnica di un annuncio doveva pescare il modello dai
-    // filtri di ricerca, e in Competitor una ricerca non c'e' mai stata.
+    // filtri di ricerca, anche quando l'annuncio dichiara un modello diverso.
     modello: dichiarato(liv.modello) ? liv.modello.nome : null,
     venditoreId: concessionario && ad.advertiser.user_id ? String(ad.advertiser.user_id) : null,
     venditoreNome: concessionario ? (ad.advertiser.shop_name || ad.advertiser.name || null) : null,

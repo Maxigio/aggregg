@@ -283,8 +283,9 @@ test('i rimandi fra sezioni portano a una sezione che esiste', () => {
 });
 
 test('/guida sta dietro il login, e il modello grezzo non e\' servito', () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
-  const authFree = src.slice(src.indexOf('const AUTH_FREE'), src.indexOf(']', src.indexOf('const AUTH_FREE')));
+  const accesso = fs.readFileSync(path.join(__dirname, '..', 'backend', 'accesso-route.js'), 'utf8');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'backend', 'frontend-route.js'), 'utf8');
+  const authFree = accesso.slice(accesso.indexOf('const AUTH_FREE'), accesso.indexOf(']', accesso.indexOf('const AUTH_FREE')));
   assert.ok(!authFree.includes('/guida'),
     'la guida e\' finita in AUTH_FREE: la mappa completa dell\'app sarebbe leggibile senza password su un server pubblico');
   // La rotta deve coprire ANCHE /guida.html, se no express.static consegna il modello con i

@@ -21,7 +21,7 @@ const { jsPDF } = require('jspdf');
 const { autoTable } = require('jspdf-autotable');
 // Come si legge a parole la marcatura di una riga. Il vocabolario che vede l'utente vive nel
 // frontend (DICHIARAZIONE in app.js) e arriva qui dentro le righe gia' composte; questa mappa
-// serve al percorso che le righe NON le manda — oggi il solo bot WhatsApp, spento.
+// serve al percorso che non manda righe gia' composte. La rotta web attuale le manda.
 // ponytail: due mappe, non una, perche' il browser non puo' fare require di un file node.
 // Se un giorno servisse davvero condividerla, il posto e' un file servito a entrambi.
 const CORRISPONDENZA = {

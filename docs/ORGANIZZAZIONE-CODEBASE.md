@@ -8,6 +8,7 @@ L'interfaccia principale offre Auto e Moto. La ricerca passa per `backend/server
 
 - `backend/catalogo-ricerca.js` possiede la risoluzione di marche e gruppi di modelli usata dalla ricerca.
 - `backend/accesso-route.js` possiede gate, login, sessione esposta alla UI, limite giornaliero e chiavi dei limitatori. È montato prima delle rotte protette; `backend/server.js` conserva i riferimenti necessari alla ricerca e ai test.
+- `backend/frontend-route.js` monta bundle versionati, pagina iniziale, filtri da mostrare, Guida e file statici, in quest'ordine e dopo il gate. I sorgenti dei bundle restano in `scripts/frontend-parts/`, fuori dalla cartella statica.
 - `backend/report-route.js` monta segnalazioni e PDF; il PDF è disegnato da `backend/report-pdf.js`.
 - `backend/veicolo-dati-route.js` monta liquidità ACI, passaggio di proprietà e prezzi carburante.
 - `backend/fonti-route.js` conserva le fonti indipendenti dai Ricambi. Le rotte Ricambi OE e il client Bilstein sono nell'archivio locale.

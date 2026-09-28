@@ -200,9 +200,8 @@ function parseMotoit(html) {
     numeroAnnuncio: ins ? ins[1] : null,
     comune:       deEnt(grab(/Luogo\s+([A-Za-zÀ-ÿ' ]{2,40}\([A-Z]{2}\))/)),
 
-    // Il venditore con il link alla sua VETRINA: e' l'aggancio che mancava per mettere
-    // Moto.it fra le fonti della sezione Competitor (l'API di ricerca non filtra per
-    // venditore, la pagina-annuncio invece dice qual e').
+    // La scheda dell'annuncio puo' mostrare la vetrina del concessionario;
+    // il link proviene dalla pagina dettaglio, non dalla ricerca.
     venditoreNome: sel ? deEnt(sel[2]) : null,
     vetrinaUrl:    sel ? sel[1] : null,
     venditoreAnnunciPubblicati: toInt(grab(/Annunci pubblicati\s+([\d.]+)/i)),

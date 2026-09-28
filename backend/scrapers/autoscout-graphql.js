@@ -360,8 +360,7 @@ function mapListing(node, opts = {}) {
   const hp = eng.power && eng.power.hp ? eng.power.hp.raw : null;
   const dmg = cond.damage;                                  // { isCurrentlyDamaged } | null
   const sellerType = (dt.seller && dt.seller.type) || '';   // 'PrivateSeller' | 'Dealer'
-  // Chi vende, non solo che tipo e': serve alla sezione Competitor per sapere di chi e'
-  // il parco che si sta guardando, e per accorgersi se la fonte ci mescola qualcun altro.
+  // I campi strutturati del venditore sono ammessi solo per i concessionari.
   // Solo l'enum nativo Dealer autorizza i campi strutturati: un valore nuovo o
   // sconosciuto non deve assomigliare testualmente a "dealer" per sbloccarli.
   const venditore = sellerType === 'Dealer' ? 'concessionario'

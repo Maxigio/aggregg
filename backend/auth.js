@@ -333,8 +333,8 @@ function setPersona(nome, pw, ruolo = 'demo', origine = null) {
   const prima = (cfg.persone || []).find(p => String(p.id) === id);
   cfg.persone = (cfg.persone || []).filter(p => String(p.id) !== id);
   const voce = { id, nome: n, salt, hash, ruolo: ruolo === 'full' ? 'full' : 'demo' };
-  // Il telefono (bot WhatsApp) sopravvive al cambio password: e' un attributo della persona,
-  // non della credenziale — perderlo qui vorrebbe dire che ogni reset scollega il bot.
+  // Il telefono storico sopravvive al cambio password: e' un attributo della persona,
+  // non della credenziale. Accantonare il bot non autorizza a cancellare questo dato.
   if (prima && prima.telefono) voce.telefono = prima.telefono;
   // DA DOVE VIENE QUESTA PERSONA. 'web' = si e' registrata da sola ed e' stata approvata, quindi
   // NON sta nel .env. Serve a `scripts/utenti-da-env.js`, che rispecchia il .env e toglie chi non

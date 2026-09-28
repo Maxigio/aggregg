@@ -1,8 +1,7 @@
 'use strict';
 // Logger centralizzato AMR — niente dipendenze.
-// Risolve due problemi reali: (1) in Electron lo stdout del server forkato viene scartato
-// → qui si scrive anche su FILE rotante; (2) i catch della pipeline ricambi inghiottono gli
-// errori → ora chiamano logger.error e finiscono su file + ring-buffer + /api/logs.
+// I messaggi del server finiscono su file rotante, ring-buffer e /api/logs anche
+// quando il processo non ha un terminale collegato.
 // installConsoleTee() specchia ANCHE i ~119 console.* esistenti su file+buffer senza toccarli.
 const fs = require('node:fs');
 const path = require('node:path');
