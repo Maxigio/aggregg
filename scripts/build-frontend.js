@@ -18,7 +18,9 @@ const FE = path.join(__dirname, '../frontend');
 const JS_FILES = [
   path.join(__dirname, 'frontend-parts/icons.js'),
   path.join(FE, 'app.js'),
-  ...['vehicle-sheet.js', 'export.js', 'navigation.js', 'targa.js']
+  ...['controls.js', 'init-ui.js', 'catalog-ui.js',
+    'search.js', 'results.js', 'search-status.js', 'vehicle-sheet.js',
+    'export.js', 'navigation.js', 'targa.js']
     .map(f => path.join(__dirname, 'frontend-parts', f)),
 ];
 const CSS_FILES = [
