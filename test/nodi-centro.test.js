@@ -229,21 +229,25 @@ test('pagine lavori, log operativi e backup solo su richiesta Operatore', async 
   try {
     const insert=centro.db.prepare('INSERT INTO lavori(id,azienda,operazione,filtri,stato,creato,aggiornato,nodo) VALUES(?,?,?,?,?,?,?,?)');
     for(let i=0;i<25;i++) insert.run('job-'+i,'aziendaA','ricerca','{"marca":"Fiat"}','concluso',Date.now()+i,Date.now()+i,'a');
+    insert.run('attivo','aziendaA','ricerca','{"marca":"Fiat"}','in_corso',Date.now()+30,Date.now()+30,'a');
     const login=await fetch(url+'/api/test/login',{method:'POST',headers:{'content-type':'application/json'},
       body:JSON.stringify({azienda:'operatore'})});
     const cookie=login.headers.get('set-cookie').split(';')[0];
     const pubblico=await (await fetch(url+'/api/stato?pagina=2')).json();
-    assert.equal(pubblico.lavori.length,5);
+    assert.equal(pubblico.lavori.length,6);
     assert.equal(pubblico.pagine,2);
+    assert.equal(pubblico.lavoriAttivi,1);
     assert.equal(pubblico.lavori.every(r=>!Object.hasOwn(r,'filtri')),true);
     assert.equal((await fetch(url+'/api/admin/esporta')).status,401);
     const esporta=await fetch(url+'/api/admin/esporta',{headers:{cookie}});
     assert.equal(esporta.status,200);
     assert.match(esporta.headers.get('content-disposition'),/attachment/);
-    assert.equal((await esporta.json()).lavori.length,25);
+    assert.equal((await esporta.json()).lavori.length,26);
+    assert.equal(fs.readdirSync(dir).some(name=>name.endsWith('.json')),false);
     assert.equal((await fetch(url+'/api/admin/lavori',{method:'DELETE',headers:{cookie}})).status,200);
     const admin=await (await fetch(url+'/api/admin',{headers:{cookie}})).json();
-    assert.equal(admin.lavori.length,0);
+    assert.equal(admin.lavori.length,1);
+    assert.equal(admin.lavori[0].id,'attivo');
     assert.equal(admin.eventi.some(e=>e.codice==='lavori_cancellati'),true);
   } finally {await new Promise(resolve=>server.close(resolve));centro.close();fs.rmSync(dir,{recursive:true,force:true})}
 });
