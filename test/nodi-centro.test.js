@@ -50,12 +50,22 @@ test('centro locale: autenticazione dei nodi, isolamento dei moduli e failover d
       body:JSON.stringify({id:'b',revisione:'imac-1',fonti:{}})})).status,403);
     assert.equal((await heartbeat('a')).status,200);
     assert.equal((await heartbeat('b')).status,200);
+    const statoPubblico = await (await fetch(url + '/api/stato')).json();
+    assert.equal(statoPubblico.nodi.length, 2);
+    assert.equal(statoPubblico.lavori.every(x => !Object.hasOwn(x, 'filtri')), true);
+    assert.equal((await fetch(url + '/api/admin')).status, 401);
+    assert.equal((await fetch(url + '/prototipo.js')).status, 200);
+    assert.equal((await fetch(url + '/prototipo.css')).status, 200);
     assert.equal((await fetch(url+'/api/test/login',{method:'POST',
       headers:{'content-type':'application/json'},body:JSON.stringify({azienda:'__proto__'})})).status,400);
     const login = await fetch(url + '/api/test/login', { method:'POST',
       headers:{ 'content-type':'application/json' }, body:JSON.stringify({azienda:'aziendaB'}) });
     assert.equal(login.status,200);
     const cookie = login.headers.get('set-cookie').split(';')[0];
+    assert.deepEqual((await (await fetch(url + '/api/test/me', {headers:{cookie}})).json()).moduli, ['moto']);
+    const filtri = await (await fetch(url + '/api/filtri', {headers:{cookie}})).json();
+    assert.equal(filtri.regioni.includes('lombardia'), true);
+    assert.equal(filtri.filtriAuto.length > 0, true);
     assert.equal((await fetch(url + '/api/search?tipo=moto&marca=Yamaha&marca=Honda',
       { headers: { cookie } })).status, 400);
     const loginOperatore = await fetch(url + '/api/test/login', { method:'POST',
@@ -89,10 +99,15 @@ test('centro locale: autenticazione dei nodi, isolamento dei moduli e failover d
     assert.deepEqual(body.risultati.map(x=>x.id),['s1','a1']);
     assert.equal(body.sources.subito.status,'ok');
     assert.equal(body.sources.autoscout.status,'ok');
+    const eventi = (await (await fetch(url + '/api/admin',{headers:{cookie:cookieOperatore}})).json()).eventi;
+    assert.equal(eventi.some(e => e.codice === 'fonte_limitata' && e.fonte === 'subito' && e.http === 429), true);
     const admin = await (await fetch(url + '/api/admin',{headers:{cookie:cookieOperatore}})).json();
     assert.equal(admin.lavori.length,4);
     assert.equal(admin.lavori.every(x=>x.azienda==='aziendaB'),true);
     assert.equal(admin.lavori.every(x => !Object.hasOwn(x, 'risultati') && !Object.hasOwn(x.filtri, 'risultati')),true);
+    const pubblici = await (await fetch(url + '/api/stato')).json();
+    assert.equal(pubblici.lavori.every(x => !Object.hasOwn(x, 'filtri')), true);
+    assert.equal(pubblici.lavori.find(x => x.id === prima.idLavoro).nodo, 'a');
     assert.deepEqual(admin.lavori.find(x=>x.operazione==='componi').filtri,{fonti:['subito']});
     assert.equal((await node('a','POST','/_nodo/esito',{idLavoro:prima.idLavoro,tentativo:1,esito:{status:200,body:base}})).status,409);
 
@@ -179,6 +194,60 @@ test('centro locale: autenticazione dei nodi, isolamento dei moduli e failover d
   }
 });
 
+test('catalogo Moto locale accessibile anche con Moto.it in pausa', async () => {
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'amr-menu-pausa-'));
+  const tokens={a:'a'.repeat(64)}, centro=creaCentro({tokens,directory:dir,timeoutMs:3000});
+  const server=await new Promise(resolve=>{const s=centro.app.listen(0,'127.0.0.1',()=>resolve(s))});
+  const url=`http://127.0.0.1:${server.address().port}`;
+  const headers={'x-amr-node-id':'a','x-amr-node-token':tokens.a,'content-type':'application/json'};
+  try {
+    await fetch(url+'/_nodo/heartbeat',{method:'POST',headers,body:JSON.stringify({id:'a',
+      revisione:'imac-1',fonti:{moto:{fermo:true},subito:{fermo:false},autoscout:{fermo:false}}})});
+    const login=await fetch(url+'/api/test/login',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({azienda:'aziendaB'})});
+    const cookie=login.headers.get('set-cookie').split(';')[0];
+    const richiesta=fetch(url+'/api/models?tipo=moto&marca=Yamaha',{headers:{cookie}});
+    let job;
+    for(let i=0;i<50 && !job;i++) {
+      const poll=await fetch(url+'/_nodo/poll?id=a',{headers});
+      if(poll.status===200) job=await poll.json();
+      else {assert.equal(poll.status,204); await new Promise(resolve=>setTimeout(resolve,10));}
+    }
+    assert.ok(job);
+    assert.equal(job.operazione,'modelli');
+    await fetch(url+'/_nodo/esito',{method:'POST',headers,body:JSON.stringify({id:'a',
+      idLavoro:job.idLavoro,tentativo:job.tentativo,esito:{status:200,body:{modelli:[{nome:'MT-07'}]}}})});
+    assert.equal((await richiesta).status,200);
+  } finally {await new Promise(resolve=>server.close(resolve));centro.close();fs.rmSync(dir,{recursive:true,force:true})}
+});
+
+test('pagine lavori, log operativi e backup solo su richiesta Operatore', async () => {
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'amr-log-nodi-'));
+  const tokens={a:'a'.repeat(64)}, centro=creaCentro({tokens,directory:dir});
+  const server=await new Promise(resolve=>{const s=centro.app.listen(0,'127.0.0.1',()=>resolve(s))});
+  const url=`http://127.0.0.1:${server.address().port}`;
+  try {
+    const insert=centro.db.prepare('INSERT INTO lavori(id,azienda,operazione,filtri,stato,creato,aggiornato,nodo) VALUES(?,?,?,?,?,?,?,?)');
+    for(let i=0;i<25;i++) insert.run('job-'+i,'aziendaA','ricerca','{"marca":"Fiat"}','concluso',Date.now()+i,Date.now()+i,'a');
+    const login=await fetch(url+'/api/test/login',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({azienda:'operatore'})});
+    const cookie=login.headers.get('set-cookie').split(';')[0];
+    const pubblico=await (await fetch(url+'/api/stato?pagina=2')).json();
+    assert.equal(pubblico.lavori.length,5);
+    assert.equal(pubblico.pagine,2);
+    assert.equal(pubblico.lavori.every(r=>!Object.hasOwn(r,'filtri')),true);
+    assert.equal((await fetch(url+'/api/admin/esporta')).status,401);
+    const esporta=await fetch(url+'/api/admin/esporta',{headers:{cookie}});
+    assert.equal(esporta.status,200);
+    assert.match(esporta.headers.get('content-disposition'),/attachment/);
+    assert.equal((await esporta.json()).lavori.length,25);
+    assert.equal((await fetch(url+'/api/admin/lavori',{method:'DELETE',headers:{cookie}})).status,200);
+    const admin=await (await fetch(url+'/api/admin',{headers:{cookie}})).json();
+    assert.equal(admin.lavori.length,0);
+    assert.equal(admin.eventi.some(e=>e.codice==='lavori_cancellati'),true);
+  } finally {await new Promise(resolve=>server.close(resolve));centro.close();fs.rmSync(dir,{recursive:true,force:true})}
+});
+
 function rispostaDaPagina() {
   return { risultati:[],totale:0,sources:{subito:{status:'ok',count:0},
     autoscout:{status:'empty',count:0},moto:{status:'skipped',count:0}},
@@ -189,14 +258,15 @@ test('riavvio: i lavori pendenti sono dichiarati e i metadati vecchi eliminati',
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-centro-storia-'));
   const tokens = { a:'a'.repeat(64) }, tempo = 1800000000000;
   try {
-    creaCentro({tokens,directory:dir,ora:()=>tempo}).close();
     const db = new DatabaseSync(path.join(dir,'lavori-prototipo.db'));
+    db.exec('CREATE TABLE lavori (id TEXT PRIMARY KEY, azienda TEXT NOT NULL, operazione TEXT NOT NULL, filtri TEXT NOT NULL, stato TEXT NOT NULL, creato INTEGER NOT NULL, aggiornato INTEGER NOT NULL)');
     const ins = db.prepare('INSERT INTO lavori(id,azienda,operazione,filtri,stato,creato,aggiornato) VALUES(?,?,?,?,?,?,?)');
     ins.run('attesa','aziendaA','ricerca','{}','attesa',tempo-1000,tempo-1000);
     ins.run('iniziato','aziendaA','ricerca','{}','in_corso',tempo-1000,tempo-1000);
     ins.run('vecchio','aziendaA','ricerca','{}','concluso',tempo-8*86400000,tempo-8*86400000);
     db.close();
     const centro = creaCentro({tokens,directory:dir,ora:()=>tempo});
+    assert.equal(centro.db.prepare('PRAGMA table_info(lavori)').all().some(x => x.name === 'nodo'), true);
     const rows = centro.db.prepare('SELECT id,stato FROM lavori ORDER BY id').all().map(x => ({...x}));
     assert.deepEqual(rows,[{id:'attesa',stato:'interrotto'},{id:'iniziato',stato:'incerto'}]);
     centro.close();

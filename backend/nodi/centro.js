@@ -8,6 +8,8 @@ const { DatabaseSync } = require('node:sqlite');
 const { parseSearchParams, FONTI_PAGINA } = require('../ricerca-parametri');
 const { porzioneCompleta } = require('./componi-ricerca');
 const { NOMI: FILTRI_AUTO } = require('../filtri-auto');
+const filtriAuto = require('../filtri-auto');
+const province = require('../../data/province.json');
 
 const MODULI = { aziendaA: ['auto', 'moto'], aziendaB: ['moto'], operatore: [] };
 const SETTE_GIORNI = 7 * 86400000;
@@ -37,10 +39,31 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   }
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(path.join(directory, 'lavori-prototipo.db'));
-  db.exec('CREATE TABLE IF NOT EXISTS lavori (id TEXT PRIMARY KEY, azienda TEXT NOT NULL, operazione TEXT NOT NULL, filtri TEXT NOT NULL, stato TEXT NOT NULL, creato INTEGER NOT NULL, aggiornato INTEGER NOT NULL)');
+  db.exec('CREATE TABLE IF NOT EXISTS lavori (id TEXT PRIMARY KEY, azienda TEXT NOT NULL, operazione TEXT NOT NULL, filtri TEXT NOT NULL, stato TEXT NOT NULL, creato INTEGER NOT NULL, aggiornato INTEGER NOT NULL, nodo TEXT)');
+  if (!db.prepare('PRAGMA table_info(lavori)').all().some(col => col.name === 'nodo')) {
+    db.exec('ALTER TABLE lavori ADD COLUMN nodo TEXT');
+  }
   db.exec('CREATE TABLE IF NOT EXISTS sospensioni (nodo TEXT NOT NULL, fonte TEXT NOT NULL, PRIMARY KEY (nodo, fonte))');
-  db.prepare("UPDATE lavori SET stato=CASE WHEN stato='attesa' THEN 'interrotto' ELSE 'incerto' END, aggiornato=? WHERE stato IN ('attesa','in_corso')").run(ora());
-  const pulisci = () => db.prepare('DELETE FROM lavori WHERE creato < ?').run(ora() - SETTE_GIORNI);
+  db.exec('CREATE TABLE IF NOT EXISTS eventi (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, livello TEXT NOT NULL, codice TEXT NOT NULL, lavoro TEXT, nodo TEXT, fonte TEXT, azienda TEXT, http INTEGER)');
+  db.exec('CREATE INDEX IF NOT EXISTS eventi_ts ON eventi(ts)');
+  function evento(codice, { lavoro = null, nodo = null, fonte = null, azienda = null, http = null } = {}) {
+    // Soltanto codici interni e identificativi controllati: mai body, annunci o messaggi della fonte.
+    if (!/^[a-z_]{1,40}$/.test(codice)) throw new Error('codice evento non valido');
+    try {
+      db.prepare('INSERT INTO eventi(ts,livello,codice,lavoro,nodo,fonte,azienda,http) VALUES(?,?,?,?,?,?,?,?)')
+        .run(ora(), ['sospensione_aggiunta','sospensione_rimossa','lavori_cancellati'].includes(codice)
+          ? 'info' : codice === 'fonte_parziale' ? 'avviso' : 'errore', codice,
+          lavoro, nodo, fonte, azienda, Number.isInteger(http) && http >= 100 && http <= 599 ? http : null);
+    } catch { console.error('[nodi] registro eventi non disponibile'); }
+  }
+  const recuperati = db.prepare("UPDATE lavori SET stato=CASE WHEN stato='attesa' THEN 'interrotto' ELSE 'incerto' END, aggiornato=? WHERE stato IN ('attesa','in_corso')").run(ora()).changes;
+  if (recuperati) evento('riavvio_lavori');
+  const pulisci = () => {
+    db.prepare('DELETE FROM lavori WHERE creato < ?').run(ora() - SETTE_GIORNI);
+    db.prepare('DELETE FROM eventi WHERE ts < ?').run(ora() - SETTE_GIORNI);
+    db.exec('DELETE FROM lavori WHERE rowid NOT IN (SELECT rowid FROM lavori ORDER BY creato DESC LIMIT 10000) AND stato NOT IN (\'attesa\',\'in_corso\')');
+    db.exec('DELETE FROM eventi WHERE id NOT IN (SELECT id FROM eventi ORDER BY id DESC LIMIT 10000)');
+  };
   pulisci();
   const pulizia = setInterval(pulisci, 3600000);
   pulizia.unref();
@@ -48,8 +71,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
+    res.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'");
     if (!/^127\.0\.0\.1:\d+$/.test(req.headers.host || '')) return res.sendStatus(403);
-    if (req.method === 'POST' && req.headers.origin
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && req.headers.origin
         && req.headers.origin !== `http://${req.headers.host}`) return res.sendStatus(403);
     next();
   });
@@ -67,14 +91,36 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     return s && ora() - s.ts < 3600000 ? s : null;
   };
   const impronta = s => crypto.createHash('sha256').update(s).digest('hex');
+  const paginaDi = req => Math.min(500, Math.max(1, Number.parseInt(req.query.pagina, 10) || 1));
+  function paginaLavori(req, conFiltri) {
+    const pagina = paginaDi(req), totale = db.prepare('SELECT count(*) AS n FROM lavori').get().n;
+    const colonne = conFiltri ? 'id,azienda,operazione,filtri,stato,creato,aggiornato,nodo'
+      : 'id,azienda,operazione,stato,creato,aggiornato,nodo';
+    const righe = db.prepare(`SELECT ${colonne} FROM lavori ORDER BY creato DESC, rowid DESC LIMIT 20 OFFSET ?`).all((pagina - 1) * 20);
+    return { lavori: conFiltri ? righe.map(r => ({ ...r, filtri: JSON.parse(r.filtri) })) : righe,
+      pagina, pagine: Math.max(1, Math.ceil(totale / 20)), totale };
+  }
   function registra(lavoro, stato) {
-    db.prepare('INSERT INTO lavori(id,azienda,operazione,filtri,stato,creato,aggiornato) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET stato=excluded.stato, aggiornato=excluded.aggiornato')
+    db.prepare('INSERT INTO lavori(id,azienda,operazione,filtri,stato,creato,aggiornato,nodo) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET stato=excluded.stato, aggiornato=excluded.aggiornato, nodo=excluded.nodo')
       .run(lavoro.idLavoro, lavoro.azienda, lavoro.operazione,
         JSON.stringify(lavoro.operazione === 'dettaglio'
           ? { urlHash: impronta(lavoro.input.url) }
           : lavoro.operazione === 'componi'
             ? { fonti: Object.keys(lavoro.input.sostituzioni || {}) } : lavoro.input),
-        stato, lavoro.creato, ora());
+        stato, lavoro.creato, ora(), lavoro.nodoAssegnato || null);
+    if (['incerto', 'interrotto', 'errore'].includes(stato)) evento('lavoro_' + stato,
+      { lavoro: lavoro.idLavoro, nodo: lavoro.nodoAssegnato, fonte: lavoro.fonte, azienda: lavoro.azienda });
+  }
+  function segnalaFonti(job, esito) {
+    if (job.operazione === 'componi' || esito.status !== 200 || !esito.body?.sources) return;
+    for (const [fonte, s] of Object.entries(esito.body.sources)) {
+      if (!FONTI_PAGINA.includes(fonte) || !s) continue;
+      const codice = s.erroreHttp === 429 ? 'fonte_limitata'
+        : ['error', 'timeout'].includes(s.status) ? 'fonte_errore'
+          : s.parzialeRete || s.parziale ? 'fonte_parziale' : null;
+      if (codice) evento(codice, { lavoro: job.idLavoro, nodo: job.nodoAssegnato,
+        fonte, azienda: job.azienda, http: s.erroreHttp });
+    }
   }
   function disponibile(n, fonte = null) {
     if (!n || ora() - n.visto > 6000 || n.revisione !== REVISIONE || n.sospeso || n.coda.length >= 10) return false;
@@ -274,6 +320,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     lavori.delete(idLavoro); clearTimeout(job.timer);
     nodi.get(id).occupato = false;
     registra(job, esito.status === 200 ? 'concluso' : 'errore');
+    segnalaFonti(job, esito);
     job.resolve(esito);
     res.json({ ok: true });
   });
@@ -287,11 +334,24 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     res.cookie('amr_prova', cookie, { httpOnly: true, sameSite: 'strict', path: '/' });
     res.json({ azienda, moduli: MODULI[azienda] });
   });
+  app.get('/api/stato', (req, res) => {
+    pulisci();
+    res.json({ nodi: [...nodi.values()].map(n => ({ id: n.id, online: ora() - n.visto < 6000,
+      occupato: n.occupato, simulato: n.simulato, sospeso: n.sospeso,
+      sospese: [...n.sospese], fonti: n.fonti })),
+    ...paginaLavori(req, false), lavoriAttivi: db.prepare("SELECT count(*) AS n FROM lavori WHERE stato IN ('attesa','in_corso')").get().n });
+  });
   app.use('/api', (req, res, next) => {
     const s = sessione(req);
     if (!s) return res.sendStatus(401);
     req.sessioneProva = s; req.azienda = s.azienda; next();
   });
+  app.get('/api/test/me', (req, res) => res.json({ azienda: req.azienda, moduli: MODULI[req.azienda] }));
+  app.get('/api/filtri', (req, res) => res.json({
+    regioni: [...new Set(Object.values(province).map(p => p.regione))].sort((a, b) => a.localeCompare(b, 'it')),
+    filtriAuto: filtriAuto.NOMI.map(nome => ({ nome,
+      etichetta: filtriAuto.TAB.filtri[nome].etichetta, voci: filtriAuto.voci(nome) })),
+  }));
   app.get('/api/search', async (req, res) => {
     if (!MODULI[req.azienda].includes(req.query.tipo)) return res.sendStatus(403);
     let abbandonata = false;
@@ -315,8 +375,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       const input = Object.fromEntries(Object.entries(req.query).filter(([k, v]) =>
         ['tipo','marca','modello'].includes(k) && typeof v === 'string' && v.length <= 120));
       try {
-        const n = operazione === 'modelli' && input.tipo === 'moto'
-          ? nodoPerFonte('moto') : [...nodi.values()].find(n => !n.simulato && disponibile(n));
+        // Il catalogo locale resta utilizzabile anche quando Moto.it è in pausa.
+        const n = [...nodi.values()].find(n => !n.simulato && disponibile(n));
         if (!n) return res.status(503).json({ error: 'nodo non disponibile' });
         const out = await assegna(n, { idLavoro: crypto.randomUUID(), azienda: req.azienda,
           operazione, input });
@@ -350,8 +410,23 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     pulisci();
     res.json({ nodi: [...nodi.values()].map(n => ({ id: n.id, online: ora() - n.visto < 6000,
       occupato: n.occupato, simulato: n.simulato, sospeso: n.sospeso, sospese: [...n.sospese], fonti: n.fonti })),
-      lavori: db.prepare('SELECT id,azienda,operazione,filtri,stato,creato,aggiornato FROM lavori ORDER BY creato DESC LIMIT 100').all()
-        .map(r => ({ ...r, filtri: JSON.parse(r.filtri) })) });
+      ...paginaLavori(req, true),
+      eventi: db.prepare('SELECT ts,livello,codice,lavoro,nodo,fonte,azienda,http FROM eventi ORDER BY id DESC LIMIT 30').all() });
+  });
+  app.get('/api/admin/esporta', (req, res) => {
+    if (req.azienda !== 'operatore') return res.sendStatus(403);
+    pulisci();
+    res.set('Content-Disposition', 'attachment; filename="amr-nodi-log.json"');
+    res.json({ generato: new Date(ora()).toISOString(),
+      lavori: db.prepare('SELECT id,azienda,operazione,filtri,stato,creato,aggiornato,nodo FROM lavori ORDER BY creato DESC').all()
+        .map(r => ({ ...r, filtri: JSON.parse(r.filtri) })),
+      eventi: db.prepare('SELECT ts,livello,codice,lavoro,nodo,fonte,azienda,http FROM eventi ORDER BY id DESC').all() });
+  });
+  app.delete('/api/admin/lavori', (req, res) => {
+    if (req.azienda !== 'operatore') return res.sendStatus(403);
+    const rimossi = db.prepare("DELETE FROM lavori WHERE stato NOT IN ('attesa','in_corso')").run().changes;
+    evento('lavori_cancellati', { azienda: req.azienda });
+    res.json({ ok: true, rimossi });
   });
   app.post('/api/admin/nodi/:id', express.json({ limit: '1kb' }), (req, res) => {
     if (req.azienda !== 'operatore') return res.sendStatus(403);
@@ -364,9 +439,13 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     else n.sospeso = sospeso;
     if (sospeso) db.prepare('INSERT OR IGNORE INTO sospensioni(nodo,fonte) VALUES(?,?)').run(n.id, fonte || '');
     else db.prepare('DELETE FROM sospensioni WHERE nodo=? AND fonte=?').run(n.id, fonte || '');
+    evento(sospeso ? 'sospensione_aggiunta' : 'sospensione_rimossa',
+      { nodo: n.id, fonte: fonte || null, azienda: req.azienda });
     res.json({ ok: true });
   });
   app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'prototipo.html')));
+  app.get('/prototipo.css', (req, res) => res.type('css').sendFile(path.join(__dirname, '../../frontend/nodi-prototipo.css')));
+  app.get('/prototipo.js', (req, res) => res.type('js').sendFile(path.join(__dirname, '../../frontend/nodi-prototipo.js')));
   return { app, db, nodi, lavori, ricerca, close: () => {
     for (const job of lavori.values()) {
       clearTimeout(job.timer);

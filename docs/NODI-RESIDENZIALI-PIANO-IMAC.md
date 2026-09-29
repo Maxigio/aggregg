@@ -63,4 +63,18 @@ Limiti attuali: il secondo nodo è simulato sullo stesso IP, quindi non dimostra
 
 Queste verifiche sono sul prototipo locale con fonti simulate. Non provano disponibilità, 429 o identità commerciali su due nodi residenziali distinti.
 
+### Eventi e risposte agli errori (30 settembre 2026)
+
+Il centro conserva nello stesso SQLite del prototipo eventi operativi con timestamp, codice interno, ID lavoro, nodo, fonte, azienda e stato HTTP quando disponibile. Non registra body, annunci, cookie, token o il testo libero degli errori. I lavori e gli eventi scadono dopo sette giorni e sono limitati a 10.000 righe ciascuno; l'Operatore vede gli ultimi eventi e può esportare manualmente un JSON dei metadati. L'export non viene generato automaticamente. La lista pubblica dei lavori non include i filtri; l'export e la cancellazione dei lavori conclusi sono riservati all'Operatore. Le richieste avviate restano intatte.
+
+La prima pagina può mostrare risultati parziali con un avviso. Per le pagine successive, una fonte fallita non fa pubblicare la pagina incompleta: il browser conserva temporaneamente le parti riuscite e il retry chiede solo le fonti mancate. Cambiare un filtro disabilita «Carica altro» fino alla nuova ricerca. Il menu dei modelli locali Moto resta disponibile anche quando lo scraper Moto.it è in pausa. Prove con risposte simulate e test HTTP locali; nessuna richiesta ai portali.
+
 Collaudo locale dopo questa revisione: 942 test della suite generale superati. Il launcher ha servito menu Auto reali dai cataloghi locali attraverso centro e worker, senza avviare ricerche live sui portali. Nessun deploy.
+
+### Riepilogo pubblico e nuova UI di collaudo
+
+Il prototipo locale espone `/api/stato` senza login: nodo, disponibilità per fonte e lavori recenti sono visibili a chi apre localhost. La risposta non contiene i filtri; `/api/admin` resta riservata all'identità fittizia Operatore e mostra filtri e comandi di sospensione. L'ID del nodo è registrato nei nuovi lavori; la colonna SQLite è aggiunta anche ai database temporanei creati prima di questa revisione. I lavori storici senza nodo registrato mostrano «—».
+
+La pagina di prova usa i menu marca/modello/versione e i filtri Auto esistenti attraverso il worker. «Nessuna Versione» non invia un vincolo di versione; una versione specifica richiede un modello del catalogo. Due scenari rapidi compilano il form senza avviare una ricerca. Gli asset browser vivono in `frontend/nodi-prototipo.*`: lasciarli in `backend/nodi` faceva fallire il test che carica ogni modulo backend in Node (`document` assente). Le richieste di pagine successive usano, per Subito, entrambi i cursori della risposta; la pagina avanza solo dopo una risposta riuscita. Cambiare azienda cancella immediatamente risultati, fonti e cursori precedenti. I moduli e gli scenari non acquistati dall'identità di prova sono disabilitati già nel form, oltre al rifiuto lato server.
+
+Verifiche: test HTTP di permessi, migrazione e rotte statiche; cataloghi Fiat/Panda e scelta «Nessuna Versione» attraverso la UI; controllo del layout a 390 px senza overflow; Azienda B vede il solo modulo Moto; Operatore vede filtri e sospensioni. Queste prove UI non hanno inviato ricerche ai portali. La parità visiva e funzionale completa con il frontend AMR resta un gate futuro: la pagina attuale serve al collaudo del centro–nodo, non è il nuovo frontend commerciale.

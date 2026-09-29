@@ -1,21 +1,55 @@
-<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AMR · Prototipo nodi</title>
-<style>
-body{font:16px system-ui,sans-serif;max-width:1100px;margin:40px auto;padding:0 20px;background:#111827;color:#f9fafb}h1{font-size:2rem}h2{margin-top:2rem}form,.box{background:#1f2937;padding:18px;border-radius:12px;margin:14px 0}label{display:inline-grid;gap:5px;margin:6px}input,select,button{font:inherit;padding:8px;border-radius:7px;border:1px solid #64748b}button{background:#2563eb;color:white;cursor:pointer}button:disabled{opacity:.5}pre{white-space:pre-wrap;word-break:break-word;background:#030712;padding:16px;border-radius:10px;max-height:470px;overflow:auto}.errore{color:#fca5a5}.ok{color:#86efac}
-</style>
-<h1>Auto Moto Radar · Prototipo iMac</h1><p>Centro e nodo sono processi locali separati. Le identità qui sotto sono solo di collaudo.</p>
-<div class="box"><label>Identità di prova<select id="azienda"><option value="aziendaA">A · Auto e Moto</option><option value="aziendaB">B · solo Moto</option><option value="operatore">Operatore · Admin</option></select></label><button id="entra">Entra</button><span id="identita"></span></div>
-<form id="cerca"><h2>Ricerca</h2><label>Scenario<select id="scenario"><option value="">Filtri liberi</option><option value="auto">Fiat Panda</option><option value="moto">Yamaha MT-07</option></select></label><br><label>Tipo<select name="tipo"><option value="auto">Auto</option><option value="moto">Moto</option></select></label><label>Marca<input name="marca" required value="Fiat"></label><label>Modello<input name="modello" value="Panda"></label><label>Versione<input name="versione"></label><label>Pagina<input name="fetta" type="number" min="0" max="50" value="0"></label><br><button>Cerca</button></form>
-<h2>Risultato</h2><pre id="risultato">Scegli un'azienda.</pre>
-<h2>Admin · nodi e lavori</h2><button id="aggiorna">Aggiorna</button><div id="nodi"></div><pre id="lavori"></pre>
-<script>
-const $=id=>document.getElementById(id), forma=$('cerca');
-let identitaCorrente=null;
-async function json(r){const x=await r.json().catch(()=>({error:`HTTP ${r.status}`}));if(!r.ok)throw Error(x.error||`HTTP ${r.status}`);return x}
-function el(tag, testo){const e=document.createElement(tag);e.textContent=testo;return e}
-$('entra').onclick=async()=>{try{const r=await json(await fetch('/api/test/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({azienda:$('azienda').value})}));identitaCorrente=r.azienda;$('identita').textContent=` ${r.azienda}: ${r.moduli.join(', ')||'Admin'}`;await admin()}catch(e){$('identita').textContent=e.message}};
-$('scenario').onchange=()=>{const v=$('scenario').value;if(!v)return;forma.tipo.value=v;forma.marca.value=v==='auto'?'Fiat':'Yamaha';forma.modello.value=v==='auto'?'Panda':'MT-07';forma.versione.value=''};
-forma.onsubmit=async e=>{e.preventDefault();$('risultato').textContent='Ricerca in corso…';try{const q=new URLSearchParams(new FormData(forma));$('risultato').textContent=JSON.stringify(await json(await fetch('/api/search?'+q)),null,2)}catch(err){$('risultato').textContent=err.message}await admin()};
-async function admin(){if(identitaCorrente!=='operatore'){$('nodi').replaceChildren();$('lavori').textContent='Entra come Operatore per vedere l’Admin.';return}try{const r=await json(await fetch('/api/admin'));const box=$('nodi');box.replaceChildren();for(const n of r.nodi){const row=el('div',`${n.id}${n.simulato?' (simulato: non interroga portali)':''}: ${n.online?'online':'offline'} · ${n.occupato?'occupato':'libero'} · ${JSON.stringify(n.fonti)}`);row.className='box';for(const f of ['', 'subito','autoscout','moto']){const active=f?n.sospese.includes(f):n.sospeso;const b=el('button',`${active?'Riattiva':'Sospendi'} ${f||'nodo'}`);b.onclick=async()=>{await json(await fetch(`/api/admin/nodi/${encodeURIComponent(n.id)}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({fonte:f||null,sospeso:!active})}));admin()};row.append(' ',b)}box.append(row)}$('lavori').textContent=JSON.stringify(r.lavori,null,2)}catch(e){$('lavori').textContent=e.message}}
-$('aggiorna').onclick=admin;setInterval(admin,3000);
-</script></html>
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b1220">
+  <title>AMR · Laboratorio nodi</title>
+  <link rel="stylesheet" href="/prototipo.css">
+  <script src="/prototipo.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="masthead">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">◉</span><span>Auto Moto Radar</span><span class="brand-sep">/</span><span class="brand-sub">Laboratorio nodi</span></div>
+      <span class="lab-pill">PROTOTIPO LOCALE · iMAC</span>
+    </header>
+    <main>
+      <section class="intro" aria-labelledby="titolo">
+        <div><p class="eyebrow">CENTRO + WORKER RESIDENZIALI</p><h1 id="titolo">Ricerche coordinate.<br><span>Nodi sotto controllo.</span></h1>
+          <p class="lead">Scegli un'identità di prova, cerca nei cataloghi AMR e osserva come il centro assegna il lavoro. Il secondo nodo è simulato: non interroga i portali.</p></div>
+        <div class="identity-card"><label for="azienda">Identità di prova</label><div class="inline"><select id="azienda"><option value="aziendaA">Azienda A · Auto e Moto</option><option value="aziendaB">Azienda B · solo Moto</option><option value="operatore">Operatore · Admin</option></select><button id="entra" type="button" class="btn primary">Entra</button></div><p id="identita" class="hint" aria-live="polite">Seleziona un'identità per cercare. Lo stato dei nodi è sempre visibile.</p></div>
+      </section>
+      <section class="section" aria-labelledby="statoTitolo">
+        <div class="section-head"><div><p class="eyebrow">OSSERVABILITÀ</p><h2 id="statoTitolo">Nodi e lavori</h2><p class="section-sub">Riepilogo senza filtri di ricerca; i comandi e il dettaglio restano all'Operatore.</p></div><button type="button" id="aggiorna" class="btn quiet">↻ Aggiorna</button></div>
+        <div id="metriche" class="metrics" aria-live="polite"></div>
+        <div id="nodi" class="node-grid" aria-live="polite"></div>
+        <div class="panel jobs-panel"><div class="panel-heading"><h3>Lavori recenti</h3><span id="aggiornato" class="muted"></span></div><div class="table-scroll"><table><thead><tr><th>Stato</th><th>Operazione</th><th>Azienda</th><th>Nodo</th><th>Quando</th><th id="filtriTitolo" hidden>Filtri</th></tr></thead><tbody id="lavori"></tbody></table></div></div>
+        <div id="eventiPanel" class="panel jobs-panel" hidden><div class="panel-heading"><h3>Eventi operativi</h3><span class="muted">Solo Operatore · nessun annuncio registrato</span></div><ul id="eventi" class="event-list"></ul></div>
+      </section>
+      <section class="section" aria-labelledby="ricercaTitolo">
+        <div class="section-head"><div><p class="eyebrow">PROVA END-TO-END</p><h2 id="ricercaTitolo">Ricerca Auto e Moto</h2><p class="section-sub">Le marche, i modelli e le versioni arrivano dagli stessi cataloghi di AMR.</p></div></div>
+        <div class="workspace">
+          <form id="cerca" class="panel search-panel">
+            <fieldset class="type-switch"><legend>Modulo</legend><label><input type="radio" name="tipo" value="auto" checked><span>Auto</span></label><label><input type="radio" name="tipo" value="moto"><span>Moto</span></label></fieldset>
+            <div class="scenarios"><span>Prove rapide</span><button type="button" class="chip" data-scenario="auto">Fiat Panda</button><button type="button" class="chip" data-scenario="moto">Yamaha MT-07</button></div>
+            <div class="fields-main"><label for="marca"><span>Marca <strong>*</strong></span><input id="marca" name="marca" list="marche" autocomplete="off" placeholder="Scegli dal catalogo" required><datalist id="marche"></datalist><small id="marcaAiuto">Seleziona una marca per caricare i modelli.</small></label>
+              <label for="modello">Modello<input id="modello" name="modello" list="modelli" autocomplete="off" placeholder="Scegli o scrivi un modello"><datalist id="modelli"></datalist><small id="modelloAiuto">Puoi cercare anche la sola marca.</small></label>
+              <label for="versione"><span>Versione <strong>*</strong></span><input id="versione" name="versione" list="versioni" autocomplete="off" placeholder="Scegli una versione" required><datalist id="versioni"><option value="Nessuna Versione"></datalist><small>Per una ricerca generale seleziona “Nessuna Versione”.</small></label></div>
+            <details class="advanced"><summary>Filtri avanzati <span>Prezzo, anno, km, zona e caratteristiche</span></summary><div class="fields-extra">
+              <label>Prezzo minimo (€)<input name="prezzoMin" type="number" min="0" inputmode="numeric"></label><label>Prezzo massimo (€)<input name="prezzoMax" type="number" min="0" inputmode="numeric"></label>
+              <label>Anno da<input name="annoMin" type="number" min="1900" max="2100" inputmode="numeric"></label><label>Anno a<input name="annoMax" type="number" min="1900" max="2100" inputmode="numeric"></label>
+              <label>Km minimi<input name="kmMin" type="number" min="0" inputmode="numeric"></label><label>Km massimi<input name="kmMax" type="number" min="0" inputmode="numeric"></label>
+              <label>Regione<select name="regione" id="regione"><option value="">Tutta Italia</option></select></label><label>Raggio km · AutoScout<input name="raggio" type="number" min="1" inputmode="numeric" placeholder="Solo con regione"></label>
+            </div><div id="filtriAuto" class="fields-extra" hidden></div><div id="potenzaAuto" class="fields-extra" hidden><label>Potenza minima (CV)<input name="cvMin" type="number" min="0" inputmode="numeric"></label><label>Potenza massima (CV)<input name="cvMax" type="number" min="0" inputmode="numeric"></label></div></details>
+            <p id="formErrore" class="feedback error" role="alert" hidden></p>
+            <div class="form-footer"><p>La ricerca interroga davvero i portali dal nodo reale. Il risultato non viene archiviato nel centro.</p><button class="btn primary search-button" type="submit">Avvia ricerca <span aria-hidden="true">↗</span></button></div>
+          </form>
+          <aside class="panel result-panel" aria-labelledby="risultatoTitolo"><div class="panel-heading"><div><p class="eyebrow">RISPOSTA</p><h3 id="risultatoTitolo">Risultati</h3></div><span id="ricercaStato" class="state-pill">In attesa</span></div><p id="risultatoAiuto" class="muted">Entra come Azienda A o B e avvia una ricerca.</p><div id="avvisi" class="alerts" role="status"></div><div id="fonti" class="source-grid"></div><div id="risultati" class="result-list"></div><button id="altri" type="button" class="btn quiet more" hidden>Carica altro</button></aside>
+        </div>
+      </section>
+    </main>
+    <footer>AMR · Prototipo solo localhost <span>iMac reale + nodo simulato · nessun collegamento all'M2</span></footer>
+  </div>
+</body>
+</html>
