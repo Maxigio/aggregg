@@ -47,3 +47,11 @@ Ogni nodo ha un'identità propria e una credenziale revocabile, comunica su TLS 
 ## Criterio del primo prototipo
 
 Una stessa ricerca di prova sul processo monolitico e sul nodo locale produce lo stesso contratto di risposta, senza chiamate ulteriori alle fonti; 429 e pause restano per nodo; una risposta ritardata non sostituisce una ricerca più recente; nessun lavoro ripete in silenzio una pagina già consegnata. In seguito si prova iMac e M2 senza interrompere la produzione.
+
+## Decisioni dell'intervista prima della fase 2
+
+- Iniziare con un'estrazione **interna** del coordinatore, mantenendo invariati `/api/search` e la risposta del frontend. Verificare ogni sotto-task prima di proseguire. Il primo prototipo a due processi dovrà poi coprire ricerca Auto/Moto, menu e dettagli; non basta dimostrare solo la ricerca.
+- Se un nodo si disconnette dopo che una richiesta potrebbe essere partita, dichiarare l'esito incerto e richiedere un nuovo tentativo esplicito. Non ripetere automaticamente una chiamata di cui non si conosce l'esecuzione.
+- Se un nodo riceve 429 da una fonte mentre le altre riescono, provare brevemente **solo quella fonte** su un nodo idoneo. Poi mostrare il risultato completo, oppure le altre fonti con un avviso di parzialità. Il tempo d'attesa va misurato e definito durante il prototipo.
+- Il primo pannello Admin mostra lo stato di ciascuna fonte per nodo e i lavori in corso. Durante il prototipo gira solo su localhost, con identità di prova e nessuna porta pubblica.
+- La diagnostica può conservare filtri della ricerca e metadati operativi, mai risultati o annunci. Cancellare i filtri automaticamente dopo sette giorni; la struttura esatta dei metadati va definita prima di registrarli.
