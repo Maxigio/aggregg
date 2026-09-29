@@ -15,19 +15,15 @@
       <span class="lab-pill">PROTOTIPO LOCALE · iMAC</span>
     </header>
     <main>
-      <section class="intro" aria-labelledby="titolo">
-        <div><p class="eyebrow">CENTRO + WORKER RESIDENZIALI</p><h1 id="titolo">Ricerche coordinate.<br><span>Nodi sotto controllo.</span></h1>
-          <p class="lead">Scegli un'identità di prova, cerca nei cataloghi AMR e osserva come il centro assegna il lavoro. Il secondo nodo è simulato: non interroga i portali.</p></div>
-      </section>
       <section class="section" aria-labelledby="statoTitolo">
-        <div class="section-head"><div><p class="eyebrow">OSSERVABILITÀ</p><h2 id="statoTitolo">Nodi e lavori</h2><p class="section-sub">Riepilogo senza filtri di ricerca; i comandi e il dettaglio restano all'Operatore.</p></div><button type="button" id="aggiorna" class="btn quiet">↻ Aggiorna</button></div>
+        <div class="section-head"><h1 id="statoTitolo">Nodi e lavori</h1><button type="button" id="aggiorna" class="btn quiet">↻ Aggiorna</button></div>
         <div id="metriche" class="metrics" aria-live="polite"></div>
         <div id="nodi" class="node-grid" aria-live="polite"></div>
         <div class="panel jobs-panel"><div class="panel-heading"><h3>Lavori recenti</h3><span id="aggiornato" class="muted"></span></div><div class="table-scroll"><table><thead><tr><th>Stato</th><th>Operazione</th><th>Azienda</th><th>Nodo</th><th>Quando</th><th id="filtriTitolo" hidden>Filtri</th></tr></thead><tbody id="lavori"></tbody></table></div></div>
         <div id="eventiPanel" class="panel jobs-panel" hidden><div class="panel-heading"><h3>Eventi operativi</h3><span class="muted">Solo Operatore · nessun annuncio registrato</span></div><ul id="eventi" class="event-list"></ul></div>
       </section>
       <section class="section" aria-labelledby="ricercaTitolo">
-        <div class="section-head"><div><p class="eyebrow">PROVA END-TO-END</p><h2 id="ricercaTitolo">Ricerca Auto e Moto</h2><p class="section-sub">Le marche, i modelli e le versioni arrivano dagli stessi cataloghi di AMR.</p></div></div>
+        <div class="section-head"><h2 id="ricercaTitolo">Ricerca Auto e Moto</h2></div>
         <div class="identity-card"><label for="azienda">Identità di prova</label><div class="inline"><select id="azienda"><option value="aziendaA">Azienda A · Auto e Moto</option><option value="aziendaB">Azienda B · solo Moto</option><option value="operatore">Operatore · Admin</option></select><button id="entra" type="button" class="btn primary">Entra</button></div><p id="identita" class="hint" aria-live="polite">Seleziona un'identità per cercare. Lo stato dei nodi è sempre visibile.</p></div>
         <div class="workspace">
           <form id="cerca" class="panel search-panel">
@@ -45,7 +41,7 @@
             <p id="formErrore" class="feedback error" role="alert" hidden></p>
             <div class="form-footer"><p>La ricerca interroga davvero i portali dal nodo reale. Il risultato non viene archiviato nel centro.</p><button class="btn primary search-button" type="submit">Avvia ricerca <span aria-hidden="true">↗</span></button></div>
           </form>
-          <aside class="panel result-panel" aria-labelledby="risultatoTitolo"><div class="panel-heading"><div><p class="eyebrow">RISPOSTA</p><h3 id="risultatoTitolo">Risultati</h3></div><span id="ricercaStato" class="state-pill">In attesa</span></div><p id="risultatoAiuto" class="muted">Entra come Azienda A o B e avvia una ricerca.</p><div id="avvisi" class="alerts" role="status"></div><div id="fonti" class="source-grid"></div><div id="risultati" class="result-list" role="region" aria-label="Annunci della ricerca" tabindex="0"></div><button id="altri" type="button" class="btn quiet more" hidden>Carica altro</button></aside>
+          <aside class="panel result-panel" aria-labelledby="risultatoTitolo"><div class="panel-heading"><h3 id="risultatoTitolo">Risultati</h3><span id="ricercaStato" class="state-pill">In attesa</span></div><p id="risultatoAiuto" class="muted">Entra come Azienda A o B e avvia una ricerca.</p><div id="avvisi" class="alerts" role="status"></div><div id="fonti" class="source-grid"></div><div id="risultati" class="result-list" role="region" aria-label="Annunci della ricerca" tabindex="0"></div><button id="altri" type="button" class="btn quiet more" hidden>Carica altro</button></aside>
         </div>
       </section>
     </main>
