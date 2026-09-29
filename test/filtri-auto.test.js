@@ -124,7 +124,7 @@ test('l\'impronta per la cache distingue scelte diverse', () => {
 
 test('le due cache CONTENGONO davvero l\'impronta dei filtri', () => {
   // Prova sul sorgente: il difetto non era nella funzione, era nel non chiamarla.
-  const server = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
+  const server = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ricerca-coordinatore.js'), 'utf8');
   const subito = fs.readFileSync(path.join(__dirname, '..', 'backend', 'scrapers', 'subito-api.js'), 'utf8');
   const chiaveRicerca = server.slice(server.indexOf('function searchCacheKey'), server.indexOf('function cacheable'));
   assert.ok(chiaveRicerca.length > 100, 'searchCacheKey non si trova piu\': aggiorna questo test');
@@ -136,8 +136,8 @@ test('le due cache CONTENGONO davvero l\'impronta dei filtri', () => {
 });
 
 test('i filtri stanno solo sulle auto', () => {
-  const server = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
-  assert.ok(/tipo\.trim\(\)\s*===\s*'auto'\s*\?\s*filtriAuto\.leggiDaQuery/.test(server),
+  const parser = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ricerca-parametri.js'), 'utf8');
+  assert.ok(/tipo\.trim\(\)\s*===\s*'auto'\s*\?\s*filtriAuto\.leggiDaQuery/.test(parser),
     'parseSearchParams deve leggere i filtri avanzati solo per le auto');
   const html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
   assert.ok(/id="filtriAutoGrid"[^>]*data-solo="auto"/.test(html),

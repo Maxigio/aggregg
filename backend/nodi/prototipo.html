@@ -1,0 +1,21 @@
+<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AMR · Prototipo nodi</title>
+<style>
+body{font:16px system-ui,sans-serif;max-width:1100px;margin:40px auto;padding:0 20px;background:#111827;color:#f9fafb}h1{font-size:2rem}h2{margin-top:2rem}form,.box{background:#1f2937;padding:18px;border-radius:12px;margin:14px 0}label{display:inline-grid;gap:5px;margin:6px}input,select,button{font:inherit;padding:8px;border-radius:7px;border:1px solid #64748b}button{background:#2563eb;color:white;cursor:pointer}button:disabled{opacity:.5}pre{white-space:pre-wrap;word-break:break-word;background:#030712;padding:16px;border-radius:10px;max-height:470px;overflow:auto}.errore{color:#fca5a5}.ok{color:#86efac}
+</style>
+<h1>Auto Moto Radar · Prototipo iMac</h1><p>Centro e nodo sono processi locali separati. Le identità qui sotto sono solo di collaudo.</p>
+<div class="box"><label>Identità di prova<select id="azienda"><option value="aziendaA">A · Auto e Moto</option><option value="aziendaB">B · solo Moto</option><option value="operatore">Operatore · Admin</option></select></label><button id="entra">Entra</button><span id="identita"></span></div>
+<form id="cerca"><h2>Ricerca</h2><label>Scenario<select id="scenario"><option value="">Filtri liberi</option><option value="auto">Fiat Panda</option><option value="moto">Yamaha MT-07</option></select></label><br><label>Tipo<select name="tipo"><option value="auto">Auto</option><option value="moto">Moto</option></select></label><label>Marca<input name="marca" required value="Fiat"></label><label>Modello<input name="modello" value="Panda"></label><label>Versione<input name="versione"></label><label>Pagina<input name="fetta" type="number" min="0" max="50" value="0"></label><br><button>Cerca</button></form>
+<h2>Risultato</h2><pre id="risultato">Scegli un'azienda.</pre>
+<h2>Admin · nodi e lavori</h2><button id="aggiorna">Aggiorna</button><div id="nodi"></div><pre id="lavori"></pre>
+<script>
+const $=id=>document.getElementById(id), forma=$('cerca');
+let identitaCorrente=null;
+async function json(r){const x=await r.json().catch(()=>({error:`HTTP ${r.status}`}));if(!r.ok)throw Error(x.error||`HTTP ${r.status}`);return x}
+function el(tag, testo){const e=document.createElement(tag);e.textContent=testo;return e}
+$('entra').onclick=async()=>{try{const r=await json(await fetch('/api/test/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({azienda:$('azienda').value})}));identitaCorrente=r.azienda;$('identita').textContent=` ${r.azienda}: ${r.moduli.join(', ')||'Admin'}`;await admin()}catch(e){$('identita').textContent=e.message}};
+$('scenario').onchange=()=>{const v=$('scenario').value;if(!v)return;forma.tipo.value=v;forma.marca.value=v==='auto'?'Fiat':'Yamaha';forma.modello.value=v==='auto'?'Panda':'MT-07';forma.versione.value=''};
+forma.onsubmit=async e=>{e.preventDefault();$('risultato').textContent='Ricerca in corso…';try{const q=new URLSearchParams(new FormData(forma));$('risultato').textContent=JSON.stringify(await json(await fetch('/api/search?'+q)),null,2)}catch(err){$('risultato').textContent=err.message}await admin()};
+async function admin(){if(identitaCorrente!=='operatore'){$('nodi').replaceChildren();$('lavori').textContent='Entra come Operatore per vedere l’Admin.';return}try{const r=await json(await fetch('/api/admin'));const box=$('nodi');box.replaceChildren();for(const n of r.nodi){const row=el('div',`${n.id}${n.simulato?' (simulato: non interroga portali)':''}: ${n.online?'online':'offline'} · ${n.occupato?'occupato':'libero'} · ${JSON.stringify(n.fonti)}`);row.className='box';for(const f of ['', 'subito','autoscout','moto']){const active=f?n.sospese.includes(f):n.sospeso;const b=el('button',`${active?'Riattiva':'Sospendi'} ${f||'nodo'}`);b.onclick=async()=>{await json(await fetch(`/api/admin/nodi/${encodeURIComponent(n.id)}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({fonte:f||null,sospeso:!active})}));admin()};row.append(' ',b)}box.append(row)}$('lavori').textContent=JSON.stringify(r.lavori,null,2)}catch(e){$('lavori').textContent=e.message}}
+$('aggiorna').onclick=admin;setInterval(admin,3000);
+</script></html>

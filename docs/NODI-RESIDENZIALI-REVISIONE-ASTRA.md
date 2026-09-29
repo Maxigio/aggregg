@@ -1,5 +1,7 @@
 # Revisione della risposta di Astra sui nodi residenziali
 
+I riferimenti a `backend/server.js` e ai suoi numeri di riga descrivono il codice prima dell'estrazione del coordinatore. La rotta HTTP resta in `server.js`; esecuzione, cache e stato dei retry sono ora in `backend/ricerca-coordinatore.js`.
+
 29 settembre 2026. Questa nota conserva la revisione del piano in
 `docs/NODI-RESIDENZIALI-ARCHITETTURA.md` e il successivo controllo critico della
 risposta di Astra. È contesto per la discussione, non un'autorizzazione a

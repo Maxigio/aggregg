@@ -15,6 +15,7 @@
 const motoHttp = require('./motoit-http');
 const salute = require('../fonti-salute');
 const { makeModelResolver, confiniDi } = require('./brand-match');
+const { correggiModelSlug } = require('./motoit-slug');
 const BASE = 'https://www.moto.it';
 const API  = `${BASE}/api-50/market/search`;
 const TTL_MS = 12 * 60 * 60 * 1000;  // 12h
@@ -121,28 +122,6 @@ function catalogo() {
   return CAT;
 }
 const marcaCat = slug => (catalogo().marche || {})[String(slug || '').toLowerCase()] || null;
-
-/**
- * LE CORREZIONI DEGLI SLUG-MODELLO (data/motoit-slug-correzioni.json). Il menu porta
- * slug che Moto.it non conosce — 10 Kawasaki coi trattini che il listino non usa
- * (menu kx-250, Moto.it kx250) e la CMX 500 che li' si chiama cmx-500-rebel — e la
- * ricerca rispondeva 404 PER SEMPRE, il menu versioni un corpo nullo scambiato per
- * «modello senza versioni». Misurato in campagna E su tutti i 2.044 slug, verificato
- * dal vivo. La correzione si applica dove lo slug ENTRA (menu servito e parametri di
- * ricerca): i cataloghi in data/ non si toccano. File assente → nessuna correzione.
- */
-let SLUG_FIX = null;
-function correggiModelSlug(slug) {
-  if (!slug) return slug;
-  if (!SLUG_FIX) {
-    SLUG_FIX = new Map();
-    try {
-      const j = require('../../data/motoit-slug-correzioni.json');
-      for (const v of (j.voci || [])) if (v && v.da && v.a) SLUG_FIX.set(String(v.da), String(v.a));
-    } catch (e) { console.warn('[motoit-models] correzioni slug non lette: ' + e.message); }
-  }
-  return SLUG_FIX.get(String(slug)) || slug;
-}
 
 /**
  * Modelli (famiglie) di una marca: [{name, slug}]. `slug` = parte dopo `<brand>|`.

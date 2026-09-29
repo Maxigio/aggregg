@@ -1220,7 +1220,7 @@ test('annullo: le tre fonti chiedono il segnale al momento della richiesta', () 
   assert.match(motoHttp, /signal: signal \|\| undefined/, 'il segnale arriva al client HTTP');
   // E `runSource` deve ricevere una FUNZIONE, senno' il lavoro nasce fuori dal contesto e
   // il segnale non lo raggiunge: e' l'errore facile da fare rileggendo questo codice.
-  const srv = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ricerca-coordinatore.js'), 'utf8');
   assert.match(srv, /runSource\(\(\) =>/, 'le fonti vanno passate a runSource come funzione');
   assert.match(srv, /ctrl\.abort\(\)/, 'runSource deve annullare quando il tempo scade');
 });
@@ -1517,8 +1517,8 @@ test('inSella: i dichiarati della casa non passano dal formattatore dei numeri',
 
 // ─── Il ripiego dichiara le sue regole, o non parte ──────────────────────────
 test('subito: Auto e Moto usano solo Hades, senza sessione browser', () => {
-  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8'));
-  const smart = srv.slice(srv.indexOf('async function scrapeSubitoSmart'), srv.indexOf('// ─── Auth'));
+  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'ricerca-coordinatore.js'), 'utf8'));
+  const smart = srv.slice(srv.indexOf('async function scrapeSubitoSmart'), srv.indexOf('function sciogli'));
   assert.match(smart, /return scrapeSubitoApi\(params, \{ sort: 'priceasc', withMeta: true, fetta: params\.fetta \|\| 0,/);
   assert.match(smart, /mainStart: params\.subitoMainStart, recuperoStart: null, senzaRecupero: true/);
   assert.doesNotMatch(srv, /require\(['"]\.\/scrapers\/subito-playwright['"]\)/);
@@ -1526,9 +1526,9 @@ test('subito: Auto e Moto usano solo Hades, senza sessione browser', () => {
 });
 
 test('autoscout: la ricerca Auto/Moto resta GraphQL anche quando fallisce', () => {
-  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8'));
-  const smart = srv.slice(srv.indexOf('async function scrapeAutoscoutSmart'), srv.indexOf('// F50 fase 1b'));
-  const union = srv.slice(srv.indexOf('async function scrapeAutoscoutUnion'), srv.indexOf('// Auto e Moto usano sempre hades'));
+  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'ricerca-coordinatore.js'), 'utf8'));
+  const smart = srv.slice(srv.indexOf('async function scrapeAutoscoutSmart'), srv.indexOf('async function scrapeAutoscoutUnion'));
+  const union = srv.slice(srv.indexOf('async function scrapeAutoscoutUnion'), srv.indexOf('async function scrapeSubitoSmart'));
   assert.match(smart, /return scrapeAutoscoutGraphql\(params, opts\)/);
   assert.match(union, /if \(errori\.length && byUrl\.size === 0\) throw errori\[0\]/);
   assert.doesNotMatch(srv, /require\(['"]\.\/scrapers\/autoscout-playwright['"]\)|USE_AS24_GRAPHQL/);
@@ -1607,7 +1607,7 @@ test('ricerca: la stessa domanda gia\' in volo non si rifa\' da capo', () => {
   // e due schede aperte (o un doppio clic) facevano DUE giri completi verso Subito,
   // Autoscout e Moto.it per la stessa domanda — doppio costo verso le fonti proprio nel
   // momento in cui e' piu' facile farsi bloccare.
-  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8'));
+  const srv = codice(fs.readFileSync(path.join(__dirname, '..', 'backend', 'ricerca-coordinatore.js'), 'utf8'));
   const corpo = srv.slice(srv.indexOf('async function runSearch(params)'), srv.indexOf('async function runSearch(params)') + 1400);
   assert.ok(/searchInFlight\.has\(key\)/.test(corpo), 'la mappa delle ricerche in volo e\' sparita');
   assert.ok(/finally \{ searchInFlight\.delete\(key\);? \}/.test(corpo),
@@ -1635,7 +1635,7 @@ test('ricerca: la stessa domanda gia\' in volo non si rifa\' da capo', () => {
  * Entrambi ora passano dal canale gia' vivo `motoitVersioneElencoMonco` → banner.
  */
 test('moto.it: versione senza slug-modello e tetto famiglie arrivano al banner, non solo al log', () => {
-  const SRV = fs.readFileSync(path.join(__dirname, '..', 'backend', 'server.js'), 'utf8');
+  const SRV = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ricerca-coordinatore.js'), 'utf8');
   const MOTO = fs.readFileSync(path.join(__dirname, '..', 'backend', 'ricerca-moto.js'), 'utf8');
   // il ramo senza slug: dichiara sul canale del banner e nomina la versione scritta
   const senzaSlug = MOTO.match(/else if \(params\.versione && params\.tipo === 'moto' && params\.motoitBrandSlug && !params\.motoitModelSlug[\s\S]{0,900}?\n  \}/);
