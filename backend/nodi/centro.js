@@ -38,6 +38,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(path.join(directory, 'lavori-prototipo.db'));
   db.exec('CREATE TABLE IF NOT EXISTS lavori (id TEXT PRIMARY KEY, azienda TEXT NOT NULL, operazione TEXT NOT NULL, filtri TEXT NOT NULL, stato TEXT NOT NULL, creato INTEGER NOT NULL, aggiornato INTEGER NOT NULL)');
+  db.exec('CREATE TABLE IF NOT EXISTS sospensioni (nodo TEXT NOT NULL, fonte TEXT NOT NULL, PRIMARY KEY (nodo, fonte))');
   db.prepare("UPDATE lavori SET stato=CASE WHEN stato='attesa' THEN 'interrotto' ELSE 'incerto' END, aggiornato=? WHERE stato IN ('attesa','in_corso')").run(ora());
   const pulisci = () => db.prepare('DELETE FROM lavori WHERE creato < ?').run(ora() - SETTE_GIORNI);
   pulisci();
@@ -162,6 +163,10 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     const base = await assegna(primario, { idLavoro: crypto.randomUUID(), azienda,
       operazione: 'ricerca', input: query });
     if (base.status !== 200) return base;
+    if (!base.body || !Array.isArray(base.body.risultati) || !base.body.sources
+        || richieste.some(f => typeof base.body.sources[f]?.status !== 'string')) {
+      return { status: 502, body: { error: 'risposta di ricerca non valida dal nodo' } };
+    }
     const sostituzioni = {}, avvisi = [], assegnate = {};
     for (const f of suPrimario) assegnate[f] = primario.id;
     if (ancoraValida) for (const f of suPrimario) {
@@ -231,7 +236,12 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     if (id !== req.get('x-amr-node-id')) return res.sendStatus(403);
     if (!/^[a-zA-Z0-9_-]{1,40}$/.test(id || '') || !fonti || typeof fonti !== 'object') return res.sendStatus(400);
     let n = nodi.get(id);
-    if (!n) { n = { id, coda: [], sospese: new Set(), sospeso: false }; nodi.set(id, n); }
+    if (!n) {
+      const sospensioni = db.prepare('SELECT fonte FROM sospensioni WHERE nodo=?').all(id).map(r => r.fonte);
+      n = { id, coda: [], sospese: new Set(sospensioni.filter(Boolean)),
+        sospeso: sospensioni.includes('') };
+      nodi.set(id, n);
+    }
     const avviato = [...lavori.values()].find(j => j.nodoAssegnato === id && j.iniziato);
     if (avviato && avviato.idLavoro !== idLavoroAttivo) {
       lavori.delete(avviato.idLavoro);
@@ -259,7 +269,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     if (id !== req.get('x-amr-node-id')) return res.sendStatus(403);
     const job = lavori.get(idLavoro);
     if (!job || job.nodoAssegnato !== id || job.tentativo !== tentativo || !job.iniziato) return res.sendStatus(409);
-    if (!esito || !Number.isInteger(esito.status) || typeof esito.body !== 'object') return res.sendStatus(400);
+    if (!esito || !Number.isInteger(esito.status) || !esito.body
+        || typeof esito.body !== 'object' || Array.isArray(esito.body)) return res.sendStatus(400);
     lavori.delete(idLavoro); clearTimeout(job.timer);
     nodi.get(id).occupato = false;
     registra(job, esito.status === 200 ? 'concluso' : 'errore');
@@ -351,6 +362,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     if (typeof sospeso !== 'boolean') return res.sendStatus(400);
     if (fonte) sospeso ? n.sospese.add(fonte) : n.sospese.delete(fonte);
     else n.sospeso = sospeso;
+    if (sospeso) db.prepare('INSERT OR IGNORE INTO sospensioni(nodo,fonte) VALUES(?,?)').run(n.id, fonte || '');
+    else db.prepare('DELETE FROM sospensioni WHERE nodo=? AND fonte=?').run(n.id, fonte || '');
     res.json({ ok: true });
   });
   app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'prototipo.html')));

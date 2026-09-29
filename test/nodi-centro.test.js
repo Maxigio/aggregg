@@ -63,6 +63,10 @@ test('centro locale: autenticazione dei nodi, isolamento dei moduli e failover d
     const cookieOperatore = loginOperatore.headers.get('set-cookie').split(';')[0];
     assert.equal((await fetch(url + '/api/admin',{headers:{cookie}})).status,403);
     assert.equal((await fetch(url + '/api/search?tipo=auto&marca=Fiat', {headers:{cookie}})).status,403);
+    const rottaGuasta = fetch(url + '/api/search?tipo=moto&marca=Guasto', {headers:{cookie}});
+    const lavoroGuasto = await poll('a');
+    assert.equal((await esito('a', lavoroGuasto, {error:'body inatteso'})).status,200);
+    assert.equal((await rottaGuasta).status,502);
     const richiesta = fetch(url + '/api/search?tipo=moto&marca=Yamaha&modello=MT-07', {headers:{cookie}});
     const prima = await poll('a');
     assert.equal(prima.azienda,'aziendaB');
@@ -86,7 +90,7 @@ test('centro locale: autenticazione dei nodi, isolamento dei moduli e failover d
     assert.equal(body.sources.subito.status,'ok');
     assert.equal(body.sources.autoscout.status,'ok');
     const admin = await (await fetch(url + '/api/admin',{headers:{cookie:cookieOperatore}})).json();
-    assert.equal(admin.lavori.length,3);
+    assert.equal(admin.lavori.length,4);
     assert.equal(admin.lavori.every(x=>x.azienda==='aziendaB'),true);
     assert.equal(admin.lavori.every(x => !Object.hasOwn(x, 'risultati') && !Object.hasOwn(x.filtri, 'risultati')),true);
     assert.deepEqual(admin.lavori.find(x=>x.operazione==='componi').filtri,{fonti:['subito']});
@@ -197,6 +201,41 @@ test('riavvio: i lavori pendenti sono dichiarati e i metadati vecchi eliminati',
     assert.deepEqual(rows,[{id:'attesa',stato:'interrotto'},{id:'iniziato',stato:'incerto'}]);
     centro.close();
   } finally { fs.rmSync(dir,{recursive:true,force:true}); }
+});
+
+test('sospensioni manuali restano attive dopo il riavvio del centro', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-centro-pause-'));
+  const tokens = { a: 'a'.repeat(64) };
+  const avvia = async () => {
+    const centro = creaCentro({ tokens, directory: dir });
+    const server = await new Promise(resolve => {
+      const s = centro.app.listen(0, '127.0.0.1', () => resolve(s));
+    });
+    return { centro, server, url: `http://127.0.0.1:${server.address().port}` };
+  };
+  const chiudi = async x => { await new Promise(resolve => x.server.close(resolve)); x.centro.close(); };
+  const heartbeat = x => fetch(x.url + '/_nodo/heartbeat', { method: 'POST',
+    headers: { 'x-amr-node-token': tokens.a, 'x-amr-node-id': 'a', 'content-type': 'application/json' },
+    body: JSON.stringify({ id: 'a', revisione: 'imac-1', fonti: { subito: { fermo: false } } }),
+  });
+  try {
+    let x = await avvia();
+    await heartbeat(x);
+    const login = await fetch(x.url + '/api/test/login', { method: 'POST',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ azienda: 'operatore' }) });
+    const cookie = login.headers.get('set-cookie').split(';')[0];
+    for (const fonte of [null, 'subito']) {
+      const r = await fetch(x.url + '/api/admin/nodi/a', { method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ fonte, sospeso: true }) });
+      assert.equal(r.status, 200);
+    }
+    await chiudi(x);
+    x = await avvia();
+    await heartbeat(x);
+    assert.equal(x.centro.nodi.get('a').sospeso, true);
+    assert.equal(x.centro.nodi.get('a').sospese.has('subito'), true);
+    await chiudi(x);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('menu offline del nodo conserva la forma delle rotte esistenti', async () => {
