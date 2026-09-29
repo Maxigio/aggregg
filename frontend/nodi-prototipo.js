@@ -6,7 +6,7 @@ const cataloghi = { auto: null, moto: null };
 const modelliCache = new Map();
 const versioniCache = new Map();
 let identita = null, moduli = [], modelli = [], sequenzaMarche = 0, sequenzaModelli = 0,
-  sequenzaVersioni = 0, sequenzaRicerca = 0;
+  sequenzaVersioni = 0, sequenzaRicerca = 0, sequenzaStato = 0;
 let parametriRicerca = null, pagina = 0, fontiCorrenti = null, risultatiCorrenti = [], ricercaOccupata = false;
 let filtriModificati = false, paginaIncompleta = null;
 const nomiFonti = { subito: 'Subito', autoscout: 'AutoScout24', moto: 'Moto.it' };
@@ -209,15 +209,19 @@ function renderStato(data, dettagli = null) {
   if (identita === 'operatore') {
     for (const e of dettagli?.eventi || []) eventi.append(elemento('li',
       `${orario(e.ts)} · ${e.codice.replaceAll('_', ' ')}${e.fonte ? ' · ' + (nomiFonti[e.fonte] || e.fonte) : ''}${e.nodo ? ' · ' + e.nodo : ''}${e.http ? ' · HTTP ' + e.http : ''}${e.lavoro ? ' · lavoro ' + e.lavoro.slice(0, 8) : ''}`));
-    if (!eventi.childElementCount) eventi.append(elemento('li', 'Nessun evento operativo recente.'));
+    if (!eventi.childElementCount) eventi.append(elemento('li', dettagli
+      ? 'Nessun evento operativo recente.' : 'Dettaglio Admin non disponibile.'));
   }
 }
-async function aggiornaStato() {
+async function aggiornaStato(manuale = false) {
+  const numero = ++sequenzaStato;
+  if (manuale) { $('aggiorna').disabled = true; $('aggiornato').textContent = 'Aggiornamento in corso…'; }
   try {
     const stato = await leggi('/api/stato');
     const dettaglio = identita === 'operatore' ? await leggi('/api/admin').catch(() => null) : null;
-    renderStato(stato, dettaglio);
-  } catch (e) { $('aggiornato').textContent = 'Stato non disponibile: ' + e.message; }
+    if (numero === sequenzaStato) renderStato(stato, dettaglio);
+  } catch (e) { if (numero === sequenzaStato) $('aggiornato').textContent = 'Stato non disponibile: ' + e.message; }
+  finally { if (manuale) $('aggiorna').disabled = false; }
 }
 function renderRisultato(body, aggiungi = false, richieste = null) {
   const righe = Array.isArray(body.risultati) ? body.risultati : [];
@@ -384,7 +388,7 @@ $('altri').addEventListener('click', () => {
   }
   inviaRicerca(q, true, prossimaPagina);
 });
-$('aggiorna').addEventListener('click', aggiornaStato);
+$('aggiorna').addEventListener('click', () => aggiornaStato(true));
 form.hidden = true;
 aggiornaStato();
 setInterval(aggiornaStato, 3000);
