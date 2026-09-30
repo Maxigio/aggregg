@@ -157,14 +157,28 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     const candidati = [...nodi.values()].filter(n => disponibile(n, fonte));
     return candidati.find(n => !n.simulato) || null;
   }
+  function fontiDelLavoro(job) {
+    if (job.operazione === 'fonte') return [job.fonte];
+    if (job.operazione !== 'ricerca') return [];
+    return job.input.fonti?.split(',')
+      || (job.input.tipo === 'auto' ? ['subito', 'autoscout'] : FONTI_PAGINA);
+  }
+  function interrompiAccodati(n, fonte = null, bloccato = null) {
+    n.coda = n.coda.filter(job => {
+      if (bloccato ? !bloccato(job) : fonte && !fontiDelLavoro(job).includes(fonte)) return true;
+      lavori.delete(job.idLavoro);
+      clearTimeout(job.timer);
+      registra(job, 'interrotto');
+      job.reject(new Error('lavoro non avviato: nodo o fonte sospesa'));
+      return false;
+    });
+  }
   const controlloNodi = setInterval(() => {
     for (const job of lavori.values()) {
       const n = nodi.get(job.nodoAssegnato);
       if (n && ora() - n.visto <= 6000) continue;
       if (!job.iniziato) {
-        const richieste = job.operazione === 'fonte' ? [job.fonte]
-          : job.operazione === 'ricerca' ? (job.input.fonti?.split(',')
-            || (job.input.tipo === 'auto' ? ['subito','autoscout'] : FONTI_PAGINA)) : [];
+        const richieste = fontiDelLavoro(job);
         const alternativo = [...nodi.values()].find(x => x.id !== job.nodoAssegnato
           && !x.simulato && richieste.every(f => disponibile(x, f)) && disponibile(x));
         if (alternativo && alternativo.id !== job.nodoAssegnato) {
@@ -303,7 +317,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     if (req.query.id !== req.get('x-amr-node-id')) return res.sendStatus(403);
     const n = nodi.get(req.query.id);
     if (!n || ora() - n.visto > 6000 || n.revisione !== REVISIONE) return res.sendStatus(409);
-    if (n.occupato) return res.sendStatus(204);
+    if (n.occupato || n.sospeso) return res.sendStatus(204);
+    interrompiAccodati(n, null, job => fontiDelLavoro(job)
+      .some(f => n.sospese.has(f) || n.fonti[f]?.fermo));
     const job = n.coda.shift();
     if (!job) return res.sendStatus(204);
     n.occupato = true; job.iniziato = true; registra(job, 'in_corso');
@@ -439,6 +455,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     else n.sospeso = sospeso;
     if (sospeso) db.prepare('INSERT OR IGNORE INTO sospensioni(nodo,fonte) VALUES(?,?)').run(n.id, fonte || '');
     else db.prepare('DELETE FROM sospensioni WHERE nodo=? AND fonte=?').run(n.id, fonte || '');
+    if (sospeso) interrompiAccodati(n, fonte || null);
     evento(sospeso ? 'sospensione_aggiunta' : 'sospensione_rimossa',
       { nodo: n.id, fonte: fonte || null, azienda: req.azienda });
     res.json({ ok: true });

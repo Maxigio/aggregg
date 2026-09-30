@@ -477,3 +477,56 @@ test('lavoro non ancora iniziato passa al secondo nodo senza ripetizioni', async
     assert.equal(centro.lavori.size,0);
   } finally {await new Promise(resolve=>server.close(resolve));centro.close();fs.rmSync(dir,{recursive:true,force:true})}
 });
+
+test('sospensione: interrompe la coda ma lascia terminare un lavoro gia avviato', async () => {
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'amr-centro-sospeso-'));
+  const tokens={a:'a'.repeat(64)}, centro=creaCentro({tokens,directory:dir,timeoutMs:3000});
+  const server=await new Promise(resolve=>{const s=centro.app.listen(0,'127.0.0.1',()=>resolve(s))});
+  const url=`http://127.0.0.1:${server.address().port}`;
+  const headers={'x-amr-node-id':'a','x-amr-node-token':tokens.a,'content-type':'application/json'};
+  try {
+    await fetch(url+'/_nodo/heartbeat',{method:'POST',headers,body:JSON.stringify({id:'a',
+      revisione:'imac-1',fonti:{subito:{fermo:false},autoscout:{fermo:false},moto:{fermo:false}}})});
+    const login=await fetch(url+'/api/test/login',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({azienda:'operatore'})});
+    const cookie=login.headers.get('set-cookie').split(';')[0];
+    const attivo=centro.ricerca('aziendaA',{tipo:'auto',marca:'Fiat'});
+    const poll=await fetch(url+'/_nodo/poll?id=a',{headers});
+    assert.equal(poll.status,200);
+    const job=await poll.json();
+    const accodato=centro.ricerca('aziendaA',{tipo:'auto',marca:'Lancia'});
+    assert.equal(centro.nodi.get('a').coda.length,1);
+    const sospendi=await fetch(url+'/api/admin/nodi/a',{method:'POST',headers:{cookie,
+      'content-type':'application/json'},body:JSON.stringify({sospeso:true})});
+    assert.equal(sospendi.status,200);
+    await assert.rejects(accodato,/non avviato/);
+    assert.equal((await fetch(url+'/_nodo/poll?id=a',{headers})).status,204);
+    assert.equal((await fetch(url+'/_nodo/esito',{method:'POST',headers,body:JSON.stringify({id:'a',
+      idLavoro:job.idLavoro,tentativo:job.tentativo,
+      esito:{status:200,body:rispostaDaPagina()}})})).status,200);
+    assert.equal((await attivo).status,200);
+    const stati=centro.db.prepare('SELECT stato FROM lavori ORDER BY creato').all().map(x=>x.stato);
+    assert.deepEqual(stati.sort(),['concluso','interrotto']);
+    await fetch(url+'/api/admin/nodi/a',{method:'POST',headers:{cookie,
+      'content-type':'application/json'},body:JSON.stringify({sospeso:false})});
+    const ricercaAccodata=centro.ricerca('aziendaA',{tipo:'auto',marca:'Alfa'});
+    const loginUtente=await fetch(url+'/api/test/login',{method:'POST',
+      headers:{'content-type':'application/json'},body:JSON.stringify({azienda:'aziendaA'})});
+    const cookieUtente=loginUtente.headers.get('set-cookie').split(';')[0];
+    const menuAccodato=fetch(url+'/api/brands?tipo=auto',{headers:{cookie:cookieUtente}});
+    for(let i=0;i<30 && centro.nodi.get('a').coda.length<2;i++)
+      await new Promise(resolve=>setTimeout(resolve,5));
+    assert.equal(centro.nodi.get('a').coda.length,2);
+    await fetch(url+'/api/admin/nodi/a',{method:'POST',headers:{cookie,
+      'content-type':'application/json'},body:JSON.stringify({sospeso:true,fonte:'subito'})});
+    await assert.rejects(ricercaAccodata,/non avviato/);
+    const menuPoll=await fetch(url+'/_nodo/poll?id=a',{headers});
+    assert.equal(menuPoll.status,200);
+    const menuJob=await menuPoll.json();
+    assert.equal(menuJob.operazione,'marche');
+    await fetch(url+'/_nodo/esito',{method:'POST',headers,body:JSON.stringify({id:'a',
+      idLavoro:menuJob.idLavoro,tentativo:menuJob.tentativo,
+      esito:{status:200,body:{brands:[]}}})});
+    assert.equal((await menuAccodato).status,200);
+  } finally {await new Promise(resolve=>server.close(resolve));centro.close();fs.rmSync(dir,{recursive:true,force:true})}
+});

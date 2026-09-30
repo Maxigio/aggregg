@@ -11,6 +11,13 @@ let parametriRicerca = null, pagina = 0, fontiCorrenti = null, risultatiCorrenti
 let filtriModificati = false, paginaIncompleta = null;
 let paginaLavori = 1, paginaVisualizzata = 1, pagineDisponibili = 1;
 const nomiFonti = { subito: 'Subito', autoscout: 'AutoScout24', moto: 'Moto.it' };
+const nomiEventi = { riavvio_lavori: 'Centro riavviato con lavori pendenti',
+  lavoro_incerto: 'Lavoro avviato, esito non confermato',
+  lavoro_interrotto: 'Lavoro interrotto prima dell’avvio',
+  lavoro_errore: 'Lavoro terminato con errore', fonte_limitata: 'Fonte in pausa (429)',
+  fonte_errore: 'Errore della fonte', fonte_parziale: 'Risposta parziale della fonte',
+  sospensione_aggiunta: 'Sospensione manuale aggiunta',
+  sospensione_rimossa: 'Sospensione manuale rimossa', lavori_cancellati: 'Lavori terminati eliminati' };
 const normalizza = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   .toLowerCase().replace(/[^a-z0-9]/g, '');
 const tipo = () => form.elements.tipo.value;
@@ -140,6 +147,11 @@ function statoClasse(stato) {
   return ['ok', 'concluso', 'online', 'empty'].includes(stato) ? 'ok'
     : ['errore', 'error', 'timeout', 'incerto', 'interrotto'].includes(stato) ? 'bad' : 'wait';
 }
+function statoLavoro(stato) {
+  return ({ concluso: 'Concluso', interrotto: 'Interrotto prima dell’avvio',
+    incerto: 'Avviato, esito non confermato', errore: 'Terminato con errore',
+    attesa: 'In coda', in_corso: 'In corso' })[stato] || stato;
+}
 function orario(ts) { return ts ? new Date(ts).toLocaleString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'; }
 function renderStato(data, dettagli = null) {
   const nodi = data.nodi || [], lavori = data.lavori || [];
@@ -192,7 +204,7 @@ function renderStato(data, dettagli = null) {
   }
   for (const job of lavori) {
     const tr = document.createElement('tr');
-    const state = elemento('span', job.stato, `state ${statoClasse(job.stato)}`);
+    const state = elemento('span', statoLavoro(job.stato), `state ${statoClasse(job.stato)}`);
     const td = document.createElement('td'); td.append(state); tr.append(td);
     for (const v of [job.operazione, job.azienda, job.nodo || '—', orario(job.creato)]) tr.append(elemento('td', v));
     if (identita === 'operatore') {
@@ -214,7 +226,7 @@ function renderStato(data, dettagli = null) {
   $('eventiPanel').hidden = identita !== 'operatore';
   if (identita === 'operatore') {
     for (const e of dettagli?.eventi || []) eventi.append(elemento('li',
-      `${orario(e.ts)} · ${e.codice.replaceAll('_', ' ')}${e.fonte ? ' · ' + (nomiFonti[e.fonte] || e.fonte) : ''}${e.nodo ? ' · ' + e.nodo : ''}${e.http ? ' · HTTP ' + e.http : ''}${e.lavoro ? ' · lavoro ' + e.lavoro.slice(0, 8) : ''}`));
+      `${orario(e.ts)} · ${nomiEventi[e.codice] || e.codice}${e.fonte ? ' · ' + (nomiFonti[e.fonte] || e.fonte) : ''}${e.nodo ? ' · ' + e.nodo : ''}${e.http ? ' · HTTP ' + e.http : ''}${e.lavoro ? ' · lavoro ' + e.lavoro.slice(0, 8) : ''}`));
     if (!eventi.childElementCount) eventi.append(elemento('li', dettagli
       ? 'Nessun evento operativo recente.' : 'Dettaglio Admin non disponibile.'));
   }
@@ -251,6 +263,7 @@ function renderRisultato(body, aggiungi = false, richieste = null) {
   for (const testo of body.avvisiNodi || []) alert.append(elemento('div', testo, 'alert'));
   for (const [fonte, s] of Object.entries(body.sources || {})) {
     if (aggiungi && richieste && !richieste.includes(fonte)) continue;
+    if (!aggiungi && tipo() === 'auto' && fonte === 'moto' && s?.status === 'skipped') continue;
     if (s && (['error', 'timeout', 'skipped'].includes(s.status) || s.parziale || s.parzialeRete)) {
       alert.append(elemento('div', `${nomiFonti[fonte] || fonte}: ${s.reason || s.parziale || 'risposta parziale o non disponibile'}`, 'alert'));
     }
@@ -290,13 +303,36 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0) {
       const richieste = query.get('fonti')?.split(',') || null;
       const fallite = aggiungi ? (richieste || []).filter(f => {
         const s = body.sources?.[f];
-        return !s || !['ok', 'empty'].includes(s.status) && !(s.status === 'skipped' && s.hasMore === false);
+        return !s || s.parzialeRete || !['ok', 'empty'].includes(s.status)
+          && !(s.status === 'skipped' && s.hasMore === false);
       }) : [];
+      const completaFonte = (accumulo, fonte) => {
+        const s = body.sources[fonte];
+        const righe = (body.risultati || []).filter(r => r.fonte === fonte);
+        const parziale = accumulo.parziali?.[fonte];
+        if (!parziale) return { source: s, righe };
+        delete accumulo.parziali[fonte];
+        const unite = [...parziale.righe, ...righe];
+        return { righe: unite, source: { ...s, count: unite.length,
+          totale: parziale.source.totale ?? s.totale,
+          mainNextStart: parziale.source.mainNextStart,
+          hasMore: parziale.source.mainNextStart != null || s.recuperoNextStart != null } };
+      };
       if (fallite.length) {
-        const accumulo = paginaIncompleta || { pagina: paginaRichiesta, risultati: [], sources: {}, avvisiNodi: [] };
+        const accumulo = paginaIncompleta || { pagina: paginaRichiesta, risultati: [], sources: {},
+          parziali: {}, avvisiNodi: [] };
         for (const f of (richieste || []).filter(f => !fallite.includes(f))) {
-          accumulo.sources[f] = body.sources[f];
-          accumulo.risultati.push(...(body.risultati || []).filter(r => r.fonte === f));
+          const { source, righe } = completaFonte(accumulo, f);
+          accumulo.sources[f] = source;
+          accumulo.risultati.push(...righe);
+        }
+        if (fallite.includes('subito') && !accumulo.parziali.subito) {
+          const s = body.sources?.subito;
+          if (s?.parzialeRete && s.errori?.some(e => e.fase === 'recupero')
+              && s.recuperoNextStart != null) {
+            accumulo.parziali.subito = { source: s,
+              righe: (body.risultati || []).filter(r => r.fonte === 'subito') };
+          }
         }
         accumulo.avvisiNodi.push(...(body.avvisiNodi || []));
         accumulo.fallite = fallite;
@@ -308,6 +344,12 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0) {
         $('altri').textContent = 'Riprova questa pagina';
       } else {
         if (paginaIncompleta) {
+          for (const f of (richieste || [])) {
+            if (!paginaIncompleta.parziali?.[f]) continue;
+            const { source, righe } = completaFonte(paginaIncompleta, f);
+            body.sources[f] = source;
+            body.risultati = [...(body.risultati || []).filter(r => r.fonte !== f), ...righe];
+          }
           body.risultati = [...paginaIncompleta.risultati, ...(body.risultati || [])];
           body.sources = { ...body.sources, ...paginaIncompleta.sources,
             ...Object.fromEntries((richieste || []).map(f => [f, body.sources[f]])) };
@@ -400,9 +442,11 @@ $('altri').addEventListener('click', () => {
   if (!fonti.length) return;
   q.set('fetta', String(prossimaPagina)); q.set('fonti', fonti.join(','));
   if (fonti.includes('subito')) {
-    const cursore = fontiCorrenti.subito;
-    q.set('subitoMainStart', String(cursore.mainNextStart ?? -1));
-    q.set('subitoRecuperoStart', String(cursore.recuperoNextStart ?? -1));
+    const inSospeso = paginaIncompleta?.parziali?.subito;
+    const cursore = inSospeso?.source || fontiCorrenti.subito;
+    q.set('subitoMainStart', String(inSospeso ? -1 : cursore.mainNextStart ?? -1));
+    q.set('subitoRecuperoStart', String(inSospeso ? cursore.recuperoNextStart
+      : cursore.recuperoNextStart ?? -1));
   }
   inviaRicerca(q, true, prossimaPagina);
 });
