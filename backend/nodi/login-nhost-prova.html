@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AMR · Collaudo accesso</title><link rel="stylesheet" href="/api/auth/pagina.css"></head>
+<body><main><h1>Accesso AMR</h1><p>Collaudo locale con identità sintetiche.</p>
+<form id="login"><label>Email<input name="email" type="email" autocomplete="username" maxlength="254" required></label>
+<label>Password<input name="password" type="password" autocomplete="current-password" maxlength="50" required></label>
+<button>Accedi</button></form>
+<form id="mfa" hidden><label>Codice autenticatore<input name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label><button>Verifica</button></form>
+<p id="stato" role="status" aria-live="polite"></p><button id="logout" hidden>Esci</button>
+</main><script src="/api/auth/pagina.js" defer></script></body></html>
