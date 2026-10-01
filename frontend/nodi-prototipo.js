@@ -10,6 +10,7 @@ let identita = null, moduli = [], modelli = [], sequenzaMarche = 0, sequenzaMode
 let parametriRicerca = null, pagina = 0, fontiCorrenti = null, risultatiCorrenti = [], ricercaOccupata = false;
 let filtriModificati = false, paginaIncompleta = null;
 let paginaLavori = 1, paginaVisualizzata = 1, pagineDisponibili = 1;
+let nodiElencati = '';
 const nomiFonti = { subito: 'Subito', autoscout: 'AutoScout24', moto: 'Moto.it' };
 const nomiEventi = { riavvio_lavori: 'Centro riavviato con lavori pendenti',
   lavoro_incerto: 'Lavoro avviato, esito non confermato',
@@ -153,7 +154,9 @@ function statoLavoro(stato) {
     attesa: 'In coda', in_corso: 'In corso' })[stato] || stato;
 }
 function orario(ts) { return ts ? new Date(ts).toLocaleString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'; }
-function renderStato(data, dettagli = null) {
+const millisecondi = n => Number.isFinite(n) && n >= 0 ? `${Math.round(n)} ms` : '—';
+const dimensione = n => Number.isFinite(n) && n >= 0 ? `${Math.round(n / 1024)} KiB` : '—';
+function renderStato(data) {
   const nodi = data.nodi || [], lavori = data.lavori || [];
   paginaVisualizzata = data.pagina || 1; pagineDisponibili = data.pagine || 1;
   const metriche = [[String(nodi.filter(n => n.online).length) + '/' + nodi.length, 'nodi online'],
@@ -173,76 +176,83 @@ function renderStato(data, dettagli = null) {
     const rows = elemento('div', '', 'source-rows');
     for (const fonte of ['subito', 'autoscout', 'moto']) {
       const fermo = n.sospeso || n.sospese.includes(fonte) || n.fonti?.[fonte]?.fermo;
+      const fine = n.fonti?.[fonte]?.fino;
       const testo = !n.online ? 'Nodo offline' : n.sospeso || n.sospese.includes(fonte) ? 'Sospesa da Admin'
-        : n.fonti?.[fonte]?.fermo ? 'Pausa automatica' : 'Disponibile';
+        : n.fonti?.[fonte]?.fermo ? `Pausa automatica${Number.isFinite(fine) ? ' fino alle ' + new Date(fine).toLocaleTimeString('it-IT') : ''}`
+          : 'Disponibile';
       const row = elemento('div', '', 'source-row'); row.append(elemento('span', nomiFonti[fonte]), elemento('span', testo, fermo ? 'stop' : '')); rows.append(row);
     }
     card.append(rows);
-    if (identita === 'operatore') {
-      const actions = elemento('div', '', 'node-actions');
-      for (const fonte of ['', 'subito', 'autoscout', 'moto']) {
-        const attiva = fonte ? n.sospese.includes(fonte) : n.sospeso;
-        const b = elemento('button', `${attiva ? 'Riattiva' : 'Sospendi'} ${fonte ? nomiFonti[fonte] : 'nodo'}`, attiva ? 'active' : '');
-        b.type = 'button'; b.disabled = !n.online;
-        b.addEventListener('click', async () => {
-          b.disabled = true;
-          try { await leggi(`/api/admin/nodi/${encodeURIComponent(n.id)}`, { method: 'POST',
-            headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fonte: fonte || null, sospeso: !attiva }) });
-            await aggiornaStato();
-          } catch (e) { $('aggiornato').textContent = e.message; b.disabled = false; }
-        }); actions.append(b);
-      }
-      card.append(actions);
+    const actions = elemento('div', '', 'node-actions');
+    for (const fonte of ['', 'subito', 'autoscout', 'moto']) {
+      const attiva = fonte ? n.sospese.includes(fonte) : n.sospeso;
+      const b = elemento('button', `${attiva ? 'Riattiva' : 'Sospendi'} ${fonte ? nomiFonti[fonte] : 'nodo'}`, attiva ? 'active' : '');
+      b.type = 'button'; b.disabled = !n.online;
+      b.addEventListener('click', async () => {
+        b.disabled = true;
+        try { await leggi(`/api/admin/nodi/${encodeURIComponent(n.id)}`, { method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-amr-local-admin': '1' },
+          body: JSON.stringify({ fonte: fonte || null, sospeso: !attiva }) });
+          await aggiornaStato();
+        } catch (e) { $('aggiornato').textContent = e.message; b.disabled = false; }
+      }); actions.append(b);
     }
+    card.append(actions);
     box.append(card);
   }
-  $('filtriTitolo').hidden = identita !== 'operatore';
   const tbody = $('lavori'); tbody.replaceChildren();
   if (!lavori.length) {
-    const td = elemento('td', 'Nessun lavoro registrato.'); td.colSpan = identita === 'operatore' ? 6 : 5;
+    const td = elemento('td', 'Nessun lavoro registrato.'); td.colSpan = 12;
     const tr = document.createElement('tr'); tr.append(td); tbody.append(tr);
   }
   for (const job of lavori) {
     const tr = document.createElement('tr');
     const state = elemento('span', statoLavoro(job.stato), `state ${statoClasse(job.stato)}`);
     const td = document.createElement('td'); td.append(state); tr.append(td);
-    for (const v of [job.operazione, job.azienda, job.nodo || '—', orario(job.creato)]) tr.append(elemento('td', v));
-    if (identita === 'operatore') {
-      const cell = document.createElement('td'), dettaglio = dettagli?.lavori?.find(x => x.id === job.id);
-      if (dettaglio?.filtri) {
-        const disclosure = document.createElement('details'); disclosure.append(elemento('summary', 'Mostra'),
-          elemento('pre', JSON.stringify(dettaglio.filtri, null, 2))); cell.append(disclosure);
-      } else cell.textContent = '—';
-      tr.append(cell);
-    }
+    for (const v of [job.operazione, job.azienda, job.nodo || '—', orario(job.creato),
+      job.http ?? '—', millisecondi(job.assegnazione_ms), millisecondi(job.coda_ms),
+      millisecondi(job.nodo_ms), millisecondi(job.trasporto_ms), dimensione(job.byte_risposta)])
+      tr.append(elemento('td', v));
+    const cell = document.createElement('td');
+    if (job.filtri) {
+      const disclosure = document.createElement('details'); disclosure.append(elemento('summary', 'Mostra'),
+        elemento('pre', JSON.stringify(job.filtri, null, 2))); cell.append(disclosure);
+    } else cell.textContent = '—';
+    tr.append(cell);
     tbody.append(tr);
   }
   $('lavoriPagina').textContent = `Pagina ${data.pagina || 1} di ${data.pagine || 1} · ${data.totale ?? lavori.length} lavori`;
   $('lavoriPrima').disabled = paginaLavori <= 1;
   $('lavoriDopo').disabled = paginaLavori >= (data.pagine || 1);
-  $('lavoriAzioni').hidden = identita !== 'operatore';
   $('aggiornato').textContent = 'Aggiornato alle ' + new Date().toLocaleTimeString('it-IT');
   const eventi = $('eventi'); eventi.replaceChildren();
-  $('eventiPanel').hidden = identita !== 'operatore';
-  if (identita === 'operatore') {
-    for (const e of dettagli?.eventi || []) eventi.append(elemento('li',
-      `${orario(e.ts)} · ${nomiEventi[e.codice] || e.codice}${e.fonte ? ' · ' + (nomiFonti[e.fonte] || e.fonte) : ''}${e.nodo ? ' · ' + e.nodo : ''}${e.http ? ' · HTTP ' + e.http : ''}${e.lavoro ? ' · lavoro ' + e.lavoro.slice(0, 8) : ''}`));
-    if (!eventi.childElementCount) eventi.append(elemento('li', dettagli
-      ? 'Nessun evento operativo recente.' : 'Dettaglio Admin non disponibile.'));
-  }
+  for (const e of data.eventi || []) eventi.append(elemento('li',
+    `${orario(e.ts)} · ${nomiEventi[e.codice] || e.codice}${e.fonte ? ' · ' + (nomiFonti[e.fonte] || e.fonte) : ''}${e.nodo ? ' · ' + e.nodo : ''}${e.http ? ' · HTTP ' + e.http : ''}${e.lavoro ? ' · lavoro ' + e.lavoro.slice(0, 8) : ''}`));
+  if (!eventi.childElementCount) eventi.append(elemento('li', 'Nessun evento operativo recente.'));
 }
 async function aggiornaStato(manuale = false) {
   const numero = ++sequenzaStato;
   if (manuale) { $('aggiorna').disabled = true; $('lavoriPrima').disabled = true;
     $('lavoriDopo').disabled = true; $('aggiornato').textContent = 'Aggiornamento in corso…'; }
   try {
-    let stato = await leggi('/api/stato?pagina=' + paginaLavori);
-    if (paginaLavori > (stato.pagine || 1)) {
-      paginaLavori = stato.pagine || 1;
-      stato = await leggi('/api/stato?pagina=' + paginaLavori);
+    const elenco = await leggi('/api/stato');
+    if (numero !== sequenzaStato) return;
+    const ids = elenco.nodi.map(n => n.id).sort().join('|');
+    if (ids !== nodiElencati) {
+      nodiElencati = ids;
+      const scelta = $('nodoOsservato').value;
+      opzioni($('nodoOsservato'), ['', ...elenco.nodi.map(n => n.id).sort()]);
+      $('nodoOsservato').options[0].textContent = 'Tutti i nodi';
+      $('nodoOsservato').value = elenco.nodi.some(n => n.id === scelta) ? scelta : '';
     }
-    const dettaglio = identita === 'operatore' ? await leggi('/api/admin?pagina=' + paginaLavori).catch(() => null) : null;
-    if (numero === sequenzaStato) renderStato(stato, dettaglio);
+    const url = () => '/api/admin?pagina=' + paginaLavori
+      + ($('nodoOsservato').value ? '&nodo=' + encodeURIComponent($('nodoOsservato').value) : '');
+    let dettaglio = await leggi(url());
+    if (paginaLavori > (dettaglio.pagine || 1)) {
+      paginaLavori = dettaglio.pagine || 1;
+      dettaglio = await leggi(url());
+    }
+    if (numero === sequenzaStato) renderStato(dettaglio);
   } catch (e) { if (numero === sequenzaStato) {
     paginaLavori = paginaVisualizzata;
     $('aggiornato').textContent = 'Stato non disponibile: ' + e.message;
@@ -388,11 +398,9 @@ $('entra').addEventListener('click', async () => {
     $('fonti').replaceChildren(); $('risultati').replaceChildren(); $('avvisi').replaceChildren();
     $('altri').hidden = true; $('altri').textContent = 'Carica altro';
     form.querySelector('[type=submit]').disabled = false; $('altri').disabled = false;
-    $('identita').textContent = `${data.azienda} · ${moduli.length ? moduli.join(' + ') : 'pannello Admin'}`;
-    $('risultatoAiuto').textContent = moduli.length
-      ? 'Scegli marca, modello e versione, poi avvia la ricerca.'
-      : 'L’Operatore gestisce i nodi; scegli un’azienda per cercare.';
-    form.hidden = !moduli.length;
+    $('identita').textContent = `${data.azienda} · ${moduli.join(' + ')}`;
+    $('risultatoAiuto').textContent = 'Scegli marca, modello e versione, poi avvia la ricerca.';
+    form.hidden = false;
     for (const radio of form.querySelectorAll('[name=tipo]')) radio.disabled = !moduli.includes(radio.value);
     for (const button of document.querySelectorAll('[data-scenario]')) {
       button.disabled = !moduli.includes(button.dataset.scenario);
@@ -451,13 +459,15 @@ $('altri').addEventListener('click', () => {
   inviaRicerca(q, true, prossimaPagina);
 });
 $('aggiorna').addEventListener('click', () => aggiornaStato(true));
+$('nodoOsservato').addEventListener('change', () => { paginaLavori = 1; aggiornaStato(true); });
 $('lavoriPrima').addEventListener('click', () => { if (paginaLavori > 1) { paginaLavori--; aggiornaStato(true); } });
 $('lavoriDopo').addEventListener('click', () => { paginaLavori++; aggiornaStato(true); });
 $('cancellaLavori').addEventListener('click', async () => {
-  if (identita !== 'operatore' || !window.confirm('Eliminare i lavori terminati, inclusi quelli falliti? Quelli ancora in corso resteranno. Puoi esportare prima il log.')) return;
+  if (!window.confirm('Eliminare i lavori terminati, inclusi quelli falliti? Quelli ancora in corso resteranno. Puoi esportare prima il log.')) return;
   const bottone = $('cancellaLavori'); bottone.disabled = true;
   try {
-    const esito = await leggi('/api/admin/lavori', { method: 'DELETE' });
+    const esito = await leggi('/api/admin/lavori', { method: 'DELETE',
+      headers: { 'x-amr-local-admin': '1' } });
     paginaLavori = 1;
     await aggiornaStato(true);
     $('aggiornato').textContent = `${esito.rimossi} lavori terminati eliminati`;

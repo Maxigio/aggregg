@@ -56,12 +56,14 @@ async function avvia() {
       controllerAttivo = ctrl;
       const controllo = setInterval(() => heartbeat().catch(() => ctrl.abort()), 2000);
       let esito;
+      const inizioLavoro = performance.now();
       try { esito = process.env.AMR_NODO_SIMULATO === '1' ? esitoSimulato(lavoro)
         : await annullo.dentro(ctrl.signal, () => esegui(lavoro)); }
       catch (e) { esito = { status: 502, body: { error: e.message || 'errore nodo' } }; }
+      const durataMs = Math.round(performance.now() - inizioLavoro);
       clearInterval(controllo);
       try { if (!ctrl.signal.aborted) await post('/_nodo/esito', { id, idLavoro: lavoro.idLavoro,
-        tentativo: lavoro.tentativo, esito }); }
+        tentativo: lavoro.tentativo, esito, durataMs }); }
       finally { inCorso = null; controllerAttivo = null; }
     } catch (e) {
       // La caduta del centro rende incerto il lavoro già avviato: nessun replay automatico.

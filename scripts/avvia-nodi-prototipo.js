@@ -16,7 +16,7 @@ const baseEnv = Object.fromEntries(['PATH','HOME','TMPDIR','LANG','NODE_EXTRA_CA
   .filter(k => process.env[k] != null).map(k => [k, process.env[k]]));
 const env = { ...baseEnv, USER_DATA_PATH: directory, AMR_LOG_DIR: directory,
   AMR_NODI_DATA_DIR: directory, AMR_NODI_TOKENS: JSON.stringify(tokens), AMR_CENTRO_PORT: String(port),
-  AMR_CENTRO_URL: `http://127.0.0.1:${port}` };
+  AMR_CENTRO_URL: `http://127.0.0.1:${port}`, AMR_NODI_ADMIN_LOCALE: '1' };
 const figli = [];
 function avvia(file, extra = {}) {
   if (extra.AMR_NODO_ID) fs.mkdirSync(path.join(directory, extra.AMR_NODO_ID), { recursive: true, mode: 0o700 });
