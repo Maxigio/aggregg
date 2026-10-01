@@ -3,12 +3,13 @@ const crypto = require('node:crypto');
 
 // Sperimentazione loopback separata dal centro: nessun JWT del browser è accettato.
 // Nhost verifica password/TOTP; questo modulo registra l'esito ricevuto dal server.
-function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 * 60000 }) {
+function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 * 60000, cookiePath = '/api/auth' }) {
   const express = require('express');
   const url = new URL(origine);
   if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.origin !== origine) {
     throw new Error('Login di prova soltanto su origine loopback esplicita');
   }
+  if (!['/', '/api/auth'].includes(cookiePath)) throw new Error('ambito cookie del collaudo non valido');
   const sessioni = new Map(), challenge = new Map(), revoche = new Map();
   const impronta = value => crypto.createHash('sha256').update(value).digest('hex');
   const cookie = (req, nome) => {
@@ -21,7 +22,7 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     for (const m of [sessioni, challenge]) for (const [k, s] of m) if (s.scadenza <= ora()) m.delete(k);
   };
   const timer = setInterval(eliminaScaduti, 30000); timer.unref();
-  const options = { httpOnly: true, sameSite: 'strict', path: '/api/auth', secure: false };
+  const options = { httpOnly: true, sameSite: 'strict', path: cookiePath, secure: false };
   const errore = (status, codice) => Object.assign(new Error(codice), { status, codice });
   let attive = 0, inizioFinestra = ora(), tentativi = 0;
   app.use('/api/auth', (req, res, next) => {
@@ -66,7 +67,8 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     if (sessioni.size >= 100) throw errore(503, 'sessioni_non_disponibili');
     const vecchia = cookie(req, 'amr_sessione_prova'); if (vecchia) sessioni.delete(vecchia);
     const token = crypto.randomBytes(32).toString('hex');
-    sessioni.set(impronta(token), { persona: s.user.id, mfa, provider: s, scadenza: ora() + durataMs });
+    sessioni.set(impronta(token), { chiave: impronta(token), persona: s.user.id, mfa, provider: s,
+      epoca: ruolo.epoca ?? 0, azienda: ruolo.azienda, annunci: new Map(), scadenza: ora() + durataMs });
     res.clearCookie('amr_mfa_prova', options);
     res.cookie('amr_sessione_prova', token, { ...options, maxAge: durataMs });
     res.json({ ok: true });
@@ -97,15 +99,26 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     challenge.delete(key); res.clearCookie('amr_mfa_prova', options);
     await creaSessione(req, res, await client.mfa(pending.ticket, req.body.otp), true);
   }));
-  async function contesto(req) {
-    eliminaScaduti(); const key = cookie(req, 'amr_sessione_prova'), s = sessioni.get(key);
-    if (!s) throw errore(401, 'sessione_non_valida');
+  function sessione(req) {
+    eliminaScaduti(); return sessioni.get(cookie(req, 'amr_sessione_prova')) || null;
+  }
+  async function verifica(s, { admin = false, tipo } = {}) {
+    const key = s?.chiave;
+    if (!s || sessioni.get(key) !== s || s.scadenza <= ora()) throw errore(401, 'sessione_non_valida');
     const ruolo = await identita(s.persona);
     // Una revoca durante l'attesa deve prevalere sull'esito già calcolato.
     if (sessioni.get(key) !== s || s.scadenza <= ora()) throw errore(401, 'sessione_non_valida');
     if (!ruolo?.attiva || (ruolo.admin && !s.mfa)) throw errore(403, 'accesso_non_autorizzato');
-    return { persona: s.persona, admin: Boolean(ruolo.admin), mfa: s.mfa };
+    if ((ruolo.epoca ?? 0) !== s.epoca) throw errore(403, 'sessione_revocata');
+    if (admin && (!ruolo.admin || !s.mfa)) throw errore(403, 'accesso_non_autorizzato');
+    if (tipo !== undefined && (!ruolo.aziendaValida || !ruolo.moduli?.includes(tipo))) {
+      throw errore(403, 'modulo_non_autorizzato');
+    }
+    return { persona: s.persona, admin: Boolean(ruolo.admin), mfa: s.mfa,
+      ...(ruolo.azienda !== undefined ? { azienda: ruolo.azienda, aziendaValida: ruolo.aziendaValida,
+        moduli: ruolo.moduli || [] } : {}) };
   }
+  const contesto = req => verifica(sessione(req));
   app.get('/api/auth/me', async (req, res) => {
     try { res.json(await contesto(req)); }
     catch (e) { res.status(e.status || 503).json({ codice: e.codice || 'identita_non_disponibile' }); }
@@ -123,7 +136,7 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
   app.use('/api/auth', (err, req, res, next) => {
     res.status(err.status === 413 ? 413 : 400).json({ codice: 'input_non_valido' });
   });
-  return { contesto, revocaPersona: persona => {
+  return { contesto, sessione, verifica, revocaPersona: persona => {
     revoche.set(persona, (revoche.get(persona) || 0) + 1);
     for (const [k, s] of sessioni) if (s.persona === persona) sessioni.delete(k);
   }, close: () => { clearInterval(timer); sessioni.clear(); challenge.clear(); revoche.clear(); } };

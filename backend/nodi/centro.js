@@ -33,7 +33,8 @@ function filtriAmmessi(query) {
 }
 
 function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FINO_AL,
-  adminLocale = false, accountProva = null }) {
+  adminLocale = false, accountProva = null, inizializzaAccessi = null }) {
+  if (accountProva && inizializzaAccessi) throw new Error('due provider di accesso non ammessi');
   if (!tokens || !Object.keys(tokens).length || !directory
       || Object.values(tokens).some(t => typeof t !== 'string' || t.length < 32)) {
     throw new Error('token per nodo e directory necessari');
@@ -83,7 +84,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         && req.headers.origin !== `http://${req.headers.host}`) return res.sendStatus(403);
     next();
   });
+  let chiuso = false;
   const nodi = new Map(), lavori = new Map(), sessioni = new Map(), condivise = new Map(), affinita = new Map();
+  const accessi = inizializzaAccessi ? inizializzaAccessi(app) : null;
   const stessoToken = (ricevuto, id) => {
     if (typeof ricevuto !== 'string' || typeof id !== 'string' || !Object.hasOwn(tokens, id)) return false;
     const a = Buffer.from(ricevuto), b = Buffer.from(tokens[id] || '');
@@ -93,10 +96,24 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     req.get('x-amr-node-id'))
     ? next() : res.sendStatus(401);
   const sessione = req => {
+    if (accessi) return accessi.sessione(req);
     const s = sessioni.get(/(?:^|; )amr_prova=([a-f0-9]+)/.exec(req.headers.cookie || '')?.[1]);
     return s && ora() - s.ts < 3600000 ? s : null;
   };
-  function verificaSessione(s, tipo) {
+  async function verificaSessione(s, tipo) {
+    if (accessi) {
+      let c;
+      try { c = await accessi.verifica(s, { tipo }); }
+      catch (e) {
+        if ([401, 403].includes(e.status)) throw Object.assign(new Error('accesso_interrotto'), {
+          status: 403, codice: 'accesso_interrotto' });
+        throw e;
+      }
+      if (!c.azienda || !c.aziendaValida || c.azienda !== s.azienda) {
+        throw Object.assign(new Error('accesso_interrotto'), { status: 403, codice: 'accesso_interrotto' });
+      }
+      return c;
+    }
     if (!s || s.revocata || ora() - s.ts >= 3600000) {
       throw Object.assign(new Error('accesso_interrotto'), { status: 403, codice: 'accesso_interrotto' });
     }
@@ -115,11 +132,11 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     }
     return { azienda: s.azienda, moduli: MODULI[s.azienda] };
   }
-  function verificaDestinatari(destinatari) {
+  async function verificaDestinatari(destinatari) {
     if (!destinatari) return;
     let indisponibile = null;
     for (const verifica of destinatari) {
-      try { verifica(); return; }
+      try { await verifica(); return; }
       catch (e) { if (![401, 403].includes(e.status)) indisponibile = e; }
     }
     if (indisponibile) throw Object.assign(new Error('autorizzazione_non_disponibile'), { status: 503 });
@@ -171,32 +188,39 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         fonte, azienda: job.azienda, http: s.erroreHttp });
     }
   }
-  function disponibile(n, fonte = null) {
-    if (!n || ora() - n.visto > 6000 || n.revisione !== REVISIONE || n.sospeso || n.coda.length >= 10) return false;
+  function disponibile(n, fonte = null, consideraCoda = true) {
+    if (!n || ora() - n.visto > 6000 || n.revisione !== REVISIONE || n.sospeso
+        || (consideraCoda && n.coda.length >= 10)) return false;
     return !fonte || (!n.sospese.has(fonte) && !n.fonti[fonte]?.fermo);
   }
   function assegna(n, lavoro, limite = timeoutMs) {
-    return new Promise((resolve, reject) => {
-      verificaDestinatari(lavoro.destinatari);
-      const record = { ...lavoro, nodoAssegnato: n.id, tentativo: 1, creato: ora(),
-        accodatoMono: performance.now(), iniziato: false, resolve, reject };
-      const timer = setTimeout(() => {
-        if (!lavori.has(record.idLavoro)) return;
-        lavori.delete(record.idLavoro);
-        const attuale = nodi.get(record.nodoAssegnato);
-        if (attuale) {
-          attuale.coda = attuale.coda.filter(x => x !== record);
-          if (record.iniziato) attuale.occupato = false;
-        }
-        registra(record, record.iniziato ? 'incerto' : 'interrotto');
-        reject(Object.assign(new Error(record.iniziato ? 'esito incerto: nodo senza risposta' : 'nodo non disponibile'),
-          { incerto: record.iniziato }));
-      }, limite);
-      record.timer = timer;
-      lavori.set(record.idLavoro, record);
-      n.coda.push(record);
-      registra(record, 'attesa');
-    });
+    const avvia = () => {
+      // Dopo l'attesa dei permessi, sospensione/scadenza del nodo possono essere cambiate.
+      if (chiuso || !disponibile(n) || fontiDelLavoro(lavoro).some(f => !disponibile(n, f))) {
+        throw Object.assign(new Error('nodo non disponibile'), { status: 503 });
+      }
+      return new Promise((resolve, reject) => {
+        const record = { ...lavoro, nodoAssegnato: n.id, tentativo: 1, creato: ora(),
+          accodatoMono: performance.now(), iniziato: false, resolve, reject };
+        const timer = setTimeout(() => {
+          if (!lavori.has(record.idLavoro)) return;
+          lavori.delete(record.idLavoro);
+          const attuale = nodi.get(record.nodoAssegnato);
+          if (attuale) {
+            attuale.coda = attuale.coda.filter(x => x !== record);
+            if (record.iniziato) attuale.occupato = false;
+          }
+          registra(record, record.iniziato ? 'incerto' : 'interrotto');
+          reject(Object.assign(new Error(record.iniziato ? 'esito incerto: nodo senza risposta' : 'nodo non disponibile'),
+            { incerto: record.iniziato }));
+        }, limite);
+        record.timer = timer;
+        lavori.set(record.idLavoro, record);
+        n.coda.push(record);
+        registra(record, 'attesa');
+      });
+    };
+    return lavoro.destinatari ? verificaDestinatari(lavoro.destinatari).then(avvia) : avvia();
   }
   function sceglie(fonti, escluso = null) {
     return [...nodi.values()].filter(n => n.id !== escluso && !n.simulato && disponibile(n))
@@ -294,7 +318,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       const s = base.body.sources?.[fonte];
       const daAlternativo = !suPrimario.includes(fonte) || s?.erroreHttp === 429;
       if (!daAlternativo) continue;
-      verificaDestinatari(destinatari);
+      await verificaDestinatari(destinatari);
       const assegnazioneFonteDa = performance.now();
       const primaScelta = ancoraValida ? nodi.get(precedente.fonti[fonte]) : null;
       const alternativo = primaScelta && primaScelta.id !== primario.id && !primaScelta.simulato
@@ -320,13 +344,13 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       } else avvisi.push(alternativo.simulato
         ? `${fonte}: nodo simulato, nessun portale interrogato` : `${fonte}: nodo alternativo senza risultato completo`);
     }
-    function termina(body) {
+    async function termina(body) {
       const datoAffinita = { ts: ora(), fonti: { ...(ancoraValida ? precedente.fonti : {}), ...assegnate } };
       affinita.set(chiave, datoAffinita);
       // Il Set può ricevere altri destinatari anche durante la composizione sul nodo.
       for (const verifica of destinatari || []) {
         try {
-          const destinatario = verifica();
+          const destinatario = await verifica();
           affinita.set(chiaveAffinita(destinatario.azienda, input), datoAffinita);
         } catch { /* Non autorizzare nuove pagine per un destinatario revocato. */ }
       }
@@ -343,28 +367,31 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   }
 
   function ricerca(azienda, query, verifica = null) {
-    if (accountProva && !verifica) throw Object.assign(new Error('identita_richiesta'), { status: 401 });
-    if (verifica) verifica();
-    const input = filtriAmmessi(query);
-    const prima = Number(input.fetta || 0) === 0 && !input.fonti
-      && input.subitoMainStart == null && input.subitoRecuperoStart == null;
-    const destinatari = verifica ? new Set([verifica]) : null;
-    if (!prima) return ricercaSenzaCondivisione(azienda, input, destinatari);
-    const chiave = REVISIONE + ':' + JSON.stringify(Object.entries(input).sort(([a], [b]) => a.localeCompare(b)));
-    const esistente = condivise.get(chiave);
-    if (esistente) {
-      if (verifica) esistente.destinatari?.add(verifica);
-      const meta = { idLavoro: crypto.randomUUID(), azienda, operazione: 'condivisa', input,
-        creato: ora() };
-      registra(meta, 'in_corso');
-      return esistente.promessa.then(r => { registra(meta, r.status === 200 ? 'concluso' : 'errore'); return r; },
-        e => { registra(meta, e.incerto ? 'incerto' : 'errore'); throw e; });
-    }
-    const promessa = ricercaSenzaCondivisione(azienda, input, destinatari);
-    const voce = { promessa, destinatari };
-    condivise.set(chiave, voce);
-    promessa.finally(() => { if (condivise.get(chiave) === voce) condivise.delete(chiave); }).catch(() => {});
-    return promessa;
+    if ((accountProva || accessi) && !verifica) throw Object.assign(new Error('identita_richiesta'), { status: 401 });
+    const avvia = () => {
+      if (chiuso) throw Object.assign(new Error('centro interrotto'), { status: 503 });
+      const input = filtriAmmessi(query);
+      const prima = Number(input.fetta || 0) === 0 && !input.fonti
+        && input.subitoMainStart == null && input.subitoRecuperoStart == null;
+      const destinatari = verifica ? new Set([verifica]) : null;
+      if (!prima) return ricercaSenzaCondivisione(azienda, input, destinatari);
+      const chiave = REVISIONE + ':' + JSON.stringify(Object.entries(input).sort(([a], [b]) => a.localeCompare(b)));
+      const esistente = condivise.get(chiave);
+      if (esistente) {
+        if (verifica) esistente.destinatari?.add(verifica);
+        const meta = { idLavoro: crypto.randomUUID(), azienda, operazione: 'condivisa', input,
+          creato: ora() };
+        registra(meta, 'in_corso');
+        return esistente.promessa.then(r => { registra(meta, r.status === 200 ? 'concluso' : 'errore'); return r; },
+          e => { registra(meta, e.incerto ? 'incerto' : 'errore'); throw e; });
+      }
+      const promessa = ricercaSenzaCondivisione(azienda, input, destinatari);
+      const voce = { promessa, destinatari };
+      condivise.set(chiave, voce);
+      promessa.finally(() => { if (condivise.get(chiave) === voce) condivise.delete(chiave); }).catch(() => {});
+      return promessa;
+    };
+    return verifica ? Promise.resolve().then(verifica).then(avvia) : avvia();
   }
 
   app.use('/_nodo', nodoAutorizzato, express.json({ limit: '8mb' }));
@@ -390,24 +417,40 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     n.occupato = !!occupato;
     res.json({ ok: true });
   });
-  app.get('/_nodo/poll', (req, res) => {
+  app.get('/_nodo/poll', async (req, res) => {
     if (req.query.id !== req.get('x-amr-node-id')) return res.sendStatus(403);
     const n = nodi.get(req.query.id);
+    if (chiuso) return res.sendStatus(503);
     if (!n || ora() - n.visto > 6000 || n.revisione !== REVISIONE) return res.sendStatus(409);
-    if (n.occupato || n.sospeso) return res.sendStatus(204);
-    interrompiAccodati(n, null, job => fontiDelLavoro(job)
-      .some(f => n.sospese.has(f) || n.fonti[f]?.fermo));
-    interrompiAccodati(n, null, job => {
-      try { verificaDestinatari(job.destinatari); return false; } catch (e) { return e; }
-    });
-    const job = n.coda.shift();
-    if (!job) return res.sendStatus(204);
-    n.occupato = true; job.iniziato = true;
-    job.iniziatoMono = performance.now();
-    job.codaMs = Math.round(job.iniziatoMono - job.accodatoMono);
-    registra(job, 'in_corso');
-    res.json({ versioneProtocollo: 1, idLavoro: job.idLavoro, tentativo: job.tentativo,
-      azienda: job.azienda, operazione: job.operazione, fonte: job.fonte, input: job.input });
+    if (n.occupato || n.sospeso || n.pollInCorso) return res.sendStatus(204);
+    n.pollInCorso = true;
+    try {
+      interrompiAccodati(n, null, job => fontiDelLavoro(job)
+        .some(f => n.sospese.has(f) || n.fonti[f]?.fermo));
+      let job;
+      while ((job = n.coda[0])) {
+        try { await verificaDestinatari(job.destinatari); }
+        catch (e) {
+          if (chiuso) return res.sendStatus(503);
+          if (lavori.get(job.idLavoro) === job) interrompiAccodati(n, null, x => x === job ? e : false);
+          continue;
+        }
+        if (chiuso) return res.sendStatus(503);
+        // Il timer, una sospensione o una disconnessione possono rimuovere il record durante l'await.
+        if (lavori.get(job.idLavoro) !== job || n.coda[0] !== job) continue;
+        if (n.occupato || !disponibile(n, null, false) || fontiDelLavoro(job).some(f => !disponibile(n, f, false))) {
+          return res.sendStatus(204);
+        }
+        n.coda.shift(); break;
+      }
+      if (!job) return res.sendStatus(204);
+      n.occupato = true; job.iniziato = true;
+      job.iniziatoMono = performance.now();
+      job.codaMs = Math.round(job.iniziatoMono - job.accodatoMono);
+      registra(job, 'in_corso');
+      res.json({ versioneProtocollo: 1, idLavoro: job.idLavoro, tentativo: job.tentativo,
+        azienda: job.azienda, operazione: job.operazione, fonte: job.fonte, input: job.input });
+    } finally { n.pollInCorso = false; }
   });
   app.post('/_nodo/esito', (req, res) => {
     const { id, idLavoro, tentativo, esito, durataMs } = req.body || {};
@@ -433,7 +476,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     res.json({ ok: true });
   });
 
+  app.get('/api/test/config', (req, res) => res.json({ accesso: accessi ? 'nhost' : 'sintetico' }));
   app.post('/api/test/login', express.json({ limit: '1kb' }), (req, res) => {
+    if (accessi) return res.sendStatus(404);
     const azienda = req.body?.azienda;
     let identita = null, contesto = null;
     if (accountProva) {
@@ -470,7 +515,11 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       }
       return false;
     } });
-  function adminDiProva(req, res, next) {
+  async function adminDiProva(req, res, next) {
+    if (accessi) {
+      try { await accessi.verifica(sessione(req), { admin: true }); return next(); }
+      catch (e) { return res.status(e.status || 503).json({ codice: e.codice || 'autorizzazione_non_disponibile' }); }
+    }
     if (!accountProva) return next();
     try {
       accountProva.contesto(sessione(req)?.identita, { admin: true });
@@ -536,11 +585,11 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     evento(sospeso ? 'sospensione_aggiunta' : 'sospensione_rimossa', { nodo: n.id, fonte: fonte || null });
     res.json({ ok: true });
   });
-  app.use('/api', (req, res, next) => {
+  app.use('/api', async (req, res, next) => {
     const s = sessione(req);
     if (!s) return res.sendStatus(401);
     try {
-      const c = verificaSessione(s);
+      const c = await verificaSessione(s);
       req.sessioneProva = s; req.azienda = c.azienda; req.moduli = c.moduli; next();
     } catch (e) { res.status(e.status || 503).json({ codice: e.codice || 'accesso_interrotto', interrotto: true }); }
   });
@@ -557,7 +606,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     try {
       const out = await ricerca(req.azienda, req.query, () => verificaSessione(req.sessioneProva, req.query.tipo));
       if (!abbandonata) {
-        verificaSessione(req.sessioneProva, req.query.tipo);
+        await verificaSessione(req.sessioneProva, req.query.tipo);
         if (out.status === 200) for (const r of out.body.risultati || []) {
           if (typeof r.url !== 'string') continue;
           req.sessioneProva.annunci.set(impronta(r.url), req.query.tipo);
@@ -582,7 +631,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         const out = await assegna(n, { idLavoro: crypto.randomUUID(), azienda: req.azienda,
           operazione, input, destinatari: new Set([() => verificaSessione(req.sessioneProva, req.query.tipo)]),
           assegnazioneMs: Math.round(performance.now() - assegnazioneDa) });
-        verificaSessione(req.sessioneProva, req.query.tipo);
+        await verificaSessione(req.sessioneProva, req.query.tipo);
         res.status(out.status).json(out.body);
       } catch (e) { res.status(e.status === 403 ? 403 : e.incerto ? 504 : 503)
         .json({ error: e.message, interrotto: e.status === 403, incerto: !!e.incerto }); }
@@ -609,7 +658,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         operazione: 'dettaglio', input: { url },
         destinatari: new Set([() => verificaSessione(req.sessioneProva, tipo)]),
         assegnazioneMs: Math.round(performance.now() - assegnazioneDa) });
-      verificaSessione(req.sessioneProva, tipo);
+      await verificaSessione(req.sessioneProva, tipo);
       res.status(out.status).json(out.body);
     } catch (e) { res.status(e.status === 403 ? 403 : e.incerto ? 504 : 503)
       .json({ error: e.message, interrotto: e.status === 403, incerto: !!e.incerto }); }
@@ -618,12 +667,16 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   app.get('/prototipo.css', (req, res) => res.type('css').sendFile(path.join(__dirname, '../../frontend/nodi-prototipo.css')));
   app.get('/prototipo.js', (req, res) => res.type('js').sendFile(path.join(__dirname, '../../frontend/nodi-prototipo.js')));
   return { app, db, nodi, lavori, ricerca, close: () => {
+    if (chiuso) return;
+    chiuso = true;
+    accessi?.close();
     for (const job of lavori.values()) {
       clearTimeout(job.timer);
       registra(job, job.iniziato ? 'incerto' : 'interrotto');
       job.reject(Object.assign(new Error('centro interrotto'), { incerto: job.iniziato }));
     }
-    lavori.clear(); clearInterval(controlloNodi); clearInterval(pulizia); db.close();
+    lavori.clear(); for (const n of nodi.values()) n.coda.length = 0;
+    clearInterval(controlloNodi); clearInterval(pulizia); db.close();
   } };
 }
 

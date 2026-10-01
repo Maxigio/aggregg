@@ -47,3 +47,7 @@ Il 429 del test era conforme al provider: la fixture superava i dieci tentativi 
 - Nessun test afferma che PostgreSQL commerciale, password reset, recovery MFA, SMTP Aruba, sessioni fra repliche, revoca centrale provider, OneDrive o UI finale siano completi.
 
 Prossimo passo: integrare questo esito autenticato con lo schema commerciale PostgreSQL e i gate asincroni di ingresso/coda/poll/failover/consegna del centro. Ripetere le prove di revoca e scadenza durante la ricerca e di isolamento fra aziende prima di sostituire il provider sintetico. Non basta inserire Promise dove il centro oggi si aspetta controlli sincroni.
+
+## Stato successivo — collegamento del centro
+
+Il lavoro descritto sopra è committato in `ae33f5f`. Il successivo incremento locale è documentato in [centro-accessi-postgres.md](centro-accessi-postgres.md): sessione collegata al centro, permessi PostgreSQL e controlli asincroni. Le limitazioni storiche sopra descrivono il primo collaudo separato; non costituiscono lo stato dell'incremento successivo.

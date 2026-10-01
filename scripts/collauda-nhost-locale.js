@@ -1,7 +1,7 @@
 'use strict';
 
-// Esperimento esplicito: nessun import del server AMR, nessun dotenv, nessun cloud.
-// Le credenziali sintetiche esistono solo in RAM e nel compose temporaneo 0600.
+// Esperimento esplicito: nessun import del server AMR, nessun caricamento del suo .env.
+// Il collaudo manuale legge soltanto il file dedicato; quello automatico genera dati sintetici.
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -17,9 +17,9 @@ const IMMAGINI = Object.freeze({
   mail: 'jcalonso/mailhog:v1.0.1@sha256:f35c05c5e7bd005020a7865838c198c0fcb2ce1a64c5497c4c9c72dec5050cc9',
 });
 
-function configura({ password, jwt, admin, encryption }) {
+function configura({ password, jwt, admin, encryption, postgresDiretto = false }) {
   return { services: {
-    postgres: { image: IMMAGINI.postgres, environment: { POSTGRES_PASSWORD: password },
+    postgres: { image: IMMAGINI.postgres, ...(postgresDiretto ? { ports: ['127.0.0.1:0:5432'] } : {}), environment: { POSTGRES_PASSWORD: password },
       tmpfs: ['/var/lib/postgresql/data'], healthcheck: {
         test: ['CMD-SHELL', 'pg_isready -U postgres'], interval: '2s', timeout: '2s', retries: 40 } },
     graphql: { image: IMMAGINI.graphql, depends_on: { postgres: { condition: 'service_healthy' } },
@@ -66,17 +66,48 @@ function totp(secret, adesso = Date.now()) {
   return String((digest.readUInt32BE(offset) & 0x7fffffff) % 1000000).padStart(6, '0');
 }
 
-async function collauda() {
+const ENV_COLLAUDO = path.join(__dirname, '../.env.collaudo-nhost');
+function credenzialiLocali(file = ENV_COLLAUDO) {
+  let config;
+  try {
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile() || stat.size > 4096) throw new Error();
+    if (process.platform !== 'win32' && (stat.mode & 0o077)) {
+      throw Object.assign(new Error(), { permessi: true });
+    }
+    // parse non modifica process.env e non interpreta il file come comandi shell.
+    config = require('dotenv').parse(fs.readFileSync(file));
+  } catch (e) {
+    throw new Error(e.permessi ? 'Il file del collaudo richiede permessi 600'
+      : 'File .env del collaudo assente o non leggibile');
+  }
+  if (Object.keys(config).some(k => !['AMR_COLLAUDO_EMAIL', 'AMR_COLLAUDO_PASSWORD'].includes(k))) {
+    throw new Error('Il file del collaudo ammette soltanto email e password dedicate');
+  }
+  const email = config.AMR_COLLAUDO_EMAIL, password = config.AMR_COLLAUDO_PASSWORD;
+  if (typeof email !== 'string' || email.length > 254
+      || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+    throw new Error('Configura AMR_COLLAUDO_EMAIL nel file dedicato');
+  }
+  if (typeof password !== 'string' || password.length < 15 || password.length > 50
+      || Buffer.byteLength(password) > 72 || /[\r\n\0]/.test(password)) {
+    throw new Error('Configura AMR_COLLAUDO_PASSWORD: 15–50 caratteri, massimo 72 byte, una sola riga');
+  }
+  return { email, password };
+}
+
+async function collauda({ manuale = false } = {}) {
   const host = process.env.AMR_NHOST_DOCKER_HOST;
   if (!host?.startsWith('unix:///') || !host.includes('/amr-auth/')) {
     throw new Error('Impostare AMR_NHOST_DOCKER_HOST sul socket del profilo isolato amr-auth');
   }
+  const credenziali = manuale ? credenzialiLocali() : null;
+  const password = credenziali?.password ?? crypto.randomBytes(20).toString('hex');
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-nhost-locale-'));
   fs.chmodSync(directory, 0o700);
   const file = path.join(directory, 'compose.json');
   const progetto = 'amr-auth-' + crypto.randomBytes(6).toString('hex');
-  const password = crypto.randomBytes(20).toString('hex');
-  fs.writeFileSync(file, JSON.stringify(configura({ password: crypto.randomBytes(32).toString('hex'),
+  fs.writeFileSync(file, JSON.stringify(configura({ password: crypto.randomBytes(32).toString('hex'), postgresDiretto: true,
     jwt: JSON.stringify({ type: 'HS256', key: crypto.randomBytes(32).toString('hex') }),
     admin: crypto.randomBytes(32).toString('hex'),
     encryption: crypto.randomBytes(32).toString('hex') })), { mode: 0o600 });
@@ -100,7 +131,7 @@ async function collauda() {
   let fase = 'avvio';
   const risultati = [];
   let diagnosi = '';
-  let serverLogin, loginProva;
+  let serverLogin, loginProva, centro, pool;
   try {
     await docker('up', '-d', '--wait', 'postgres', 'mail');
     await sql('CREATE SCHEMA auth;');
@@ -128,6 +159,7 @@ async function collauda() {
       catch {}
       const stato = JSON.parse(await docker('ps', '-a', '--format', 'json', 'auth'));
       if (stato.State === 'exited') {
+        if (manuale) throw new Error('Auth terminato durante avvio');
         const raw = await docker('logs', '--no-color', 'auth');
         const righe = raw.split('\n').filter(r => /error|failed/i.test(r) && !r.includes('"flags"'));
         diagnosi = righe.slice(-2).join(' ').replace(/[a-f0-9]{32,}/gi, '[omesso]');
@@ -137,7 +169,7 @@ async function collauda() {
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
     fase = 'registrazione sintetica';
-    const email = `persona-${crypto.randomBytes(4).toString('hex')}@amr.invalid`;
+    const email = credenziali ? credenziali.email : `persona-${crypto.randomBytes(4).toString('hex')}@amr.invalid`;
     const signup = await chiama('/signup/email-password', { email, password });
     diagnosi = 'HTTP ' + signup.status + (typeof signup.data?.error === 'string'
       ? ' · ' + signup.data.error.replace(/[^a-z0-9_-]/gi, '') : '');
@@ -172,9 +204,9 @@ async function collauda() {
     risultati.push('Email: login negato prima della verifica; consentito dopo verifica della mail locale');
 
     fase = 'hash password';
-    const hashInfo = await sql(`SELECT (password_hash <> '${password}')::text || ':' || left(password_hash,7)
-      FROM auth.users WHERE email='${email}';`);
-    assert.match(hashInfo, /^true:\$2[aby]\$10\$$/);
+    const hashInfo = await sql(`SELECT length(password_hash)::text || ':' || left(password_hash,7)
+      FROM auth.users WHERE id='${preMfa.user.id}';`);
+    assert.match(hashInfo, /^60:\$2[aby]\$10\$$/);
     risultati.push('Password: hash bcrypt con costo 10, distinto dal segreto');
 
     fase = 'generazione segreto MFA';
@@ -209,7 +241,13 @@ async function collauda() {
     assert.deepEqual(claims(preMfa.accessToken)['https://hasura.io/jwt/claims'],
       claims(verified.data.session.accessToken)['https://hasura.io/jwt/claims']);
     risultati.push('I claim Hasura sono identici prima/dopo MFA: nessuna attestazione della challenge osservata');
+    fase = 'verifica JWT precedente';
     const oldToken = await chiama('/token/verify', { token: preMfa.accessToken });
+    if (oldToken.status !== 200) {
+      const messaggio = typeof oldToken.data?.message === 'string' ? oldToken.data.message.toLowerCase() : '';
+      diagnosi += ' · byte richiesta ' + Buffer.byteLength(JSON.stringify({ token: preMfa.accessToken }))
+        + ' · indizi: ' + ['body','payload','schema','token','header','size','length','required','maximum','signature','json'].filter(k => messaggio.includes(k)).join(',');
+    }
     assert.equal(oldToken.status, 200);
     risultati.push('JWT emesso prima di attivare MFA: verifica HTTP ' + oldToken.status);
 
@@ -223,20 +261,65 @@ async function collauda() {
     assert.equal(stillValid.status, 200);
     risultati.push('Logout: refresh negato; verifica del precedente access JWT HTTP ' + stillValid.status);
     fase = 'pagina AMR e sessione server-side';
-    const app = require('express')();
-    serverLogin = await new Promise(resolve => {
-      const s = app.listen(0, '127.0.0.1', () => resolve(s));
-    });
+    await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-accessi-prova.sql'), 'utf8'));
+    await sql(`INSERT INTO amr_accessi.persone(id,admin) VALUES ('${preMfa.user.id}',true);`);
+    const readerPassword = crypto.randomBytes(32).toString('hex');
+    await sql(`CREATE ROLE amr_gateway LOGIN PASSWORD '${readerPassword}' IN ROLE amr_accessi_lettore;`);
+    const pgAddress = await docker('port', 'postgres', '5432');
+    assert.match(pgAddress, /^127\.0\.0\.1:\d+$/);
+    pool = new (require('pg').Pool)({ host: '127.0.0.1', port: Number(pgAddress.split(':')[1]),
+      user: 'amr_gateway', password: readerPassword, database: 'postgres', max: 4,
+      connectionTimeoutMillis: 2000, query_timeout: 3000 });
+    pool.on('error', () => {});
+    const identita = require('../backend/nodi/accessi-postgres-prova').creaAccessiPostgres({ pool });
+    assert.equal((await identita(preMfa.user.id)).admin, true);
+    await assert.rejects(pool.query('SELECT * FROM auth.users'));
+    await assert.rejects(pool.query('SELECT * FROM amr_accessi.persone'));
+    risultati.push('Ruolo PostgreSQL del centro: legge solo la funzione dei permessi, nessun accesso a utenti/hash/tabelle');
+    serverLogin = require('node:http').createServer();
+    await new Promise(resolve => serverLogin.listen(0, '127.0.0.1', resolve));
     const origineLogin = 'http://127.0.0.1:' + serverLogin.address().port;
     const authClient = require('../backend/nodi/nhost-auth-client').creaClient({ base });
-    const clientOsservato = { ...authClient, login: async (...input) => {
-      try { return await authClient.login(...input); }
-      catch (e) { diagnosi = e.tipoTrasporto || e.codice || 'errore'; throw e; }
-    } };
-    loginProva = require('../backend/nodi/login-nhost-prova').mount(app, {
-      client: clientOsservato, origine: origineLogin,
-      identita: async id => ({ attiva: id === preMfa.user.id, admin: true }),
-    });
+    const nodeToken = crypto.randomBytes(32).toString('hex');
+    let prepara = manuale;
+    centro = require('../backend/nodi/centro').creaCentro({ tokens: { locale: nodeToken },
+      directory: path.join(directory, 'centro'), adminLocale: true,
+      inizializzaAccessi: app => {
+        loginProva = require('../backend/nodi/login-nhost-prova').mount(app, {
+          client: authClient, origine: origineLogin, identita, cookiePath: '/',
+        });
+        // Solo fixture manuale loopback: il segreto sintetico è visibile nel browser,
+        // mai nella console. Questa pagina scompare dopo la preparazione.
+        if (manuale) {
+          const qr = require('qrcode-generator')(0, 'M');
+          qr.addData('otpauth://totp/' + encodeURIComponent('AMR collaudo:' + email)
+            + '?secret=' + encodeURIComponent(generated.data.totpSecret)
+            + '&issuer=' + encodeURIComponent('AMR collaudo') + '&algorithm=SHA1&digits=6&period=30');
+          qr.make();
+          app.get('/api/auth/prepara', (req, res) => {
+            if (!prepara) return res.redirect(303, '/api/auth/pagina');
+            res.set('Content-Security-Policy', res.get('Content-Security-Policy') + '; img-src data:');
+            res.type('html').send('<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+              + '<title>Preparazione locale</title><link rel="stylesheet" href="/api/auth/pagina.css"></head><body><main>'
+              + '<h1>Account locale di collaudo</h1><p>Email: ' + email + '</p>'
+              + '<p>La password è quella configurata nel file dedicato.</p>'
+              + '<p>Nella tua app autenticatore aggiungi un account e scansiona questo QR:</p>'
+              + '<img src="' + qr.createDataURL(4) + '" alt="QR per configurare l’autenticatore">'
+              + '<p>In alternativa, inserisci manualmente questo segreto:</p><code>'
+              + generated.data.totpSecret + '</code><p>Inserimento manuale: TOTP, 6 cifre, SHA1, 30 secondi.</p>'
+              + '<p>Verifica che l’app generi un codice a sei cifre prima di chiudere questa pagina.</p>'
+              + '<form method="post" action="/api/auth/prepara/chiudi"><label><input type="checkbox" name="conferma" value="si" required> Ho salvato l’account nell’autenticatore</label>'
+              + '<button>Conferma e apri login</button></form>'
+              + '<p>Account e database sono temporanei: terminando questo processo vengono eliminati.</p></main></body></html>');
+          });
+          app.post('/api/auth/prepara/chiudi', require('express').urlencoded({ limit: '1kb' }), (req, res) => {
+            if (req.body?.conferma !== 'si') return res.redirect(303, '/api/auth/prepara');
+            prepara = false; res.redirect(303, '/api/auth/pagina');
+          });
+        }
+        return loginProva;
+      } });
+    serverLogin.on('request', centro.app);
     const richiestaLogin = (endpoint, body, cookie) => fetch(origineLogin + '/api/auth/' + endpoint, {
       method: body === undefined ? 'GET' : 'POST', headers: {
         ...(body === undefined ? {} : { origin: origineLogin, 'content-type': 'application/json' }),
@@ -260,6 +343,94 @@ async function collauda() {
     assert.equal((await richiestaLogin('me', undefined, cookieSessione)).status, 401);
     assert.equal((await richiestaLogin('pagina')).status, 200);
     risultati.push('AMR → Auth reale: challenge server, cookie opaco, sessione MFA; logout rende il cookie riusato non valido');
+    fase = 'autorizzazioni reali nel centro';
+    const req = (route, cookie, method = 'GET', body) => fetch(origineLogin + route, {
+      method, headers: { ...(cookie ? { cookie } : {}),
+        ...(body === undefined ? {} : { origin: origineLogin, 'content-type': 'application/json' }) },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(15000) });
+    assert.equal((await req('/api/test/login', null, 'POST', { azienda: 'aziendaA' })).status, 404);
+    assert.equal((await req('/api/admin')).status, 401);
+    const ownerLogin = await richiestaLogin('login', { email, password });
+    assert.equal(ownerLogin.status, 200);
+    const ownerMfaCookie = ownerLogin.headers.getSetCookie().find(v => v.startsWith('amr_mfa_prova=')).split(';')[0];
+    const ownerMfa = await richiestaLogin('mfa', { otp: totp(generated.data.totpSecret) }, ownerMfaCookie);
+    assert.equal(ownerMfa.status, 200);
+    const ownerCookie = ownerMfa.headers.getSetCookie().find(v => v.startsWith('amr_sessione_prova=')).split(';')[0];
+    assert.equal((await req('/api/admin', ownerCookie)).status, 200);
+    // L'admin non ottiene automaticamente una licenza aziendale.
+    assert.equal((await req('/api/search?tipo=moto&marca=Yamaha', ownerCookie)).status, 403);
+    await richiestaLogin('logout', {}, ownerCookie);
+    const registraCliente = async suffisso => {
+      const e = `cliente-${suffisso}-${crypto.randomBytes(4).toString('hex')}@amr.invalid`;
+      const p = crypto.randomBytes(20).toString('hex');
+      assert.equal((await chiama('/signup/email-password', { email: e, password: p })).status, 200);
+      let m;
+      for (let i = 0; i < 40 && !m; i++) {
+        const elenco = await (await fetch(`http://${mailAddress}/api/v2/messages`, { signal: AbortSignal.timeout(3000) })).json();
+        m = elenco.items?.find(v => v.Raw.To.includes(e));
+        if (!m) await new Promise(r => setTimeout(r, 100));
+      }
+      assert.ok(m);
+      const html = m.Content.Body.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h,16)));
+      const ticket = html.match(/ticket=([^&\s"<>]+)/)?.[1]; assert.ok(ticket);
+      const v = await fetch(base + '/verify?ticket=' + ticket + '&redirectTo=' + encodeURIComponent('http://127.0.0.1:3000'), { redirect: 'manual', signal: AbortSignal.timeout(10000) });
+      assert.ok([200,302,303,307].includes(v.status));
+      const auth = await chiama('/signin/email-password', { email: e, password: p });
+      assert.equal(auth.status, 200);
+      const id = auth.data.session.user.id;
+      await sql(`INSERT INTO amr_accessi.persone(id) VALUES ('${id}');
+        INSERT INTO amr_accessi.aziende(id,scadenza,moduli) VALUES ('${suffisso}',now()+interval '1 day',
+          ARRAY[${suffisso === 'A' ? "'auto','moto'" : "'moto'"}]);
+        INSERT INTO amr_accessi.membri VALUES ('${id}','${suffisso}');`);
+      const r = await richiestaLogin('login', { email: e, password: p });
+      assert.equal(r.status, 200); assert.deepEqual(await r.json(), { ok: true });
+      return { id, cookie: r.headers.getSetCookie().find(v => v.startsWith('amr_sessione_prova=')).split(';')[0] };
+    };
+    const a = await registraCliente('A'), b = await registraCliente('B');
+    assert.equal((await req('/api/search?tipo=auto&marca=Fiat', b.cookie)).status, 403);
+    assert.equal((await req('/api/admin', a.cookie)).status, 403);
+    assert.equal(centro.lavori.size, 0);
+    const node = (route, method = 'GET', body) => fetch(origineLogin + route, { method,
+      headers: { 'x-amr-node-id': 'locale', 'x-amr-node-token': nodeToken,
+        ...(body ? { 'content-type': 'application/json' } : {}) },
+      ...(body ? { body: JSON.stringify({ id: 'locale', ...body }) } : {}), signal: AbortSignal.timeout(15000) });
+    const hb = async () => assert.equal((await node('/_nodo/heartbeat','POST', {
+      revisione: 'imac-1', occupato: false, simulato: false, fonti: { subito:{fermo:false},autoscout:{fermo:false},moto:{fermo:false} }
+    })).status, 200);
+    const attendiJob = async () => {
+      for (let i = 0; i < 100 && !centro.lavori.size; i++) await new Promise(r => setTimeout(r, 10));
+      assert.equal(centro.lavori.size, 1);
+    };
+    const poll = async () => { await hb(); const r = await node('/_nodo/poll?id=locale'); assert.equal(r.status,200); return r.json(); };
+    const risposta = { risultati:[{id:'sintetico',fonte:'subito',url:'https://www.subito.it/moto/sintetico.htm'}],
+      sources:{subito:{status:'ok',count:1},autoscout:{status:'empty',count:0},moto:{status:'empty',count:0}},totale:1 };
+    const consegna = async job => assert.equal((await node('/_nodo/esito','POST', {
+      idLavoro:job.idLavoro,tentativo:job.tentativo,esito:{status:200,body:risposta}
+    })).status,200);
+    const cerca = cookie => req('/api/search?tipo=moto&marca=Yamaha&modello=MT-07',cookie);
+    const interrotto = async r => {
+      assert.equal(r.status,403); const x=await r.json(); assert.equal(x.interrotto,true); assert.ok(!('risultati' in x));
+    };
+    await hb();
+    const riuscita = cerca(a.cookie); await attendiJob(); await consegna(await poll());
+    assert.equal((await riuscita).status,200);
+    const accodata = cerca(a.cookie); await attendiJob();
+    await sql("UPDATE amr_accessi.aziende SET scadenza=now()-interval '1 second' WHERE id='A';");
+    assert.equal((await node('/_nodo/poll?id=locale')).status,204); await interrotto(await accodata);
+    await sql("UPDATE amr_accessi.aziende SET scadenza=now()+interval '1 day' WHERE id='A';");
+    const condivisaA = cerca(a.cookie); await attendiJob(); const condivisaB = cerca(b.cookie);
+    for(let i=0;i<100;i++) {
+      if (centro.db.prepare("SELECT count(*) n FROM lavori WHERE operazione='condivisa'").get().n) break;
+      await new Promise(r=>setTimeout(r,10));
+    }
+    assert.equal(centro.db.prepare("SELECT count(*) n FROM lavori WHERE operazione='condivisa'").get().n,1);
+    const job=await poll();
+    await sql(`UPDATE amr_accessi.persone SET epoca=epoca+1 WHERE id='${a.id}';`);
+    await consegna(job); await interrotto(await condivisaA);
+    assert.equal((await condivisaB).status,200);
+    assert.equal(centro.lavori.size,0);
+    await assert.rejects(sql(`INSERT INTO amr_accessi.membri VALUES ('${b.id}','A');`));
+    risultati.push('Centro reale: login sintetico escluso; admin MFA; moduli separati; scadenza in coda e revoca in volo senza annunci; ricerca condivisa consegnata solo al destinatario autorizzato');
     fase = 'concorrenza PostgreSQL';
     await sql(fs.readFileSync(path.join(__dirname, '../test/fixtures/nhost-quote.sql'), 'utf8'));
     const esito = p => p.then(value => ({ status: 'fulfilled', value }),
@@ -288,10 +459,18 @@ async function collauda() {
     await assert.rejects(sql('SET ROLE amr_collaudo_senza_permessi; SELECT * FROM amr_prova.membri;'));
     risultati.push('PostgreSQL: attesa del lock osservata, un solo ultimo posto; appartenenza univoca e ruolo senza permessi negato');
     for (const r of risultati) console.log('OK · ' + r);
-    console.log('Collaudo locale completato; nessuna integrazione del provider nel centro ancora attivata.');
+    console.log('Collaudo locale completato: login Nhost e permessi PostgreSQL collegati al centro.');
+    if (manuale) {
+      console.log('Preparazione account: ' + origineLogin + '/api/auth/prepara');
+      console.log('Il processo resta aperto. Ctrl+C elimina account, database e container sintetici.');
+      await new Promise(resolve => {
+        const chiudi = () => { process.off('SIGINT', chiudi); process.off('SIGTERM', chiudi); resolve(); };
+        process.once('SIGINT', chiudi); process.once('SIGTERM', chiudi);
+      });
+    }
   } catch (e) {
     // Non stampare Error/stdout/stderr: potrebbero includere token o password sintetiche.
-    if (fase === 'registrazione sintetica') {
+    if (!manuale && fase === 'registrazione sintetica') {
       const raw = await docker('logs', '--no-color', 'auth').catch(() => '');
       for (const line of raw.split('\n')) {
         const start = line.indexOf('{'); if (start < 0) continue;
@@ -305,11 +484,13 @@ async function collauda() {
         diagnosi += ' · ' + safe.slice(0, 500);
       }
     }
+    const punto = /collauda-nhost-locale\.js:\d+:\d+/.exec(e.stack || '')?.[0] || '';
     const confronto = typeof e.actual === 'number' && typeof e.expected === 'number'
       ? ` · ricevuto ${e.actual}, atteso ${e.expected}` : '';
-    throw new Error('Collaudo interrotto nella fase: ' + fase + confronto + (diagnosi ? ' · ' + diagnosi : ''));
+    throw new Error('Collaudo interrotto nella fase: ' + fase + (punto ? ' · ' + punto : '') + confronto + (diagnosi ? ' · ' + diagnosi : ''));
   } finally {
-    loginProva?.close();
+    if (centro) centro.close(); else loginProva?.close();
+    await pool?.end();
     if (serverLogin) {
       serverLogin.closeAllConnections();
       await new Promise(resolve => serverLogin.close(resolve));
@@ -324,5 +505,5 @@ async function collauda() {
   }
 }
 
-if (require.main === module) collauda().catch(e => { console.error(e.message); process.exitCode = 1; });
-module.exports = { configura, IMMAGINI, totp };
+if (require.main === module) collauda({ manuale: process.argv.includes('--manuale') }).catch(e => { console.error(e.message); process.exitCode = 1; });
+module.exports = { configura, IMMAGINI, totp, credenzialiLocali };

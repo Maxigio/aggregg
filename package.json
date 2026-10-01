@@ -124,6 +124,7 @@
     "jspdf": "4.2.1",
     "jspdf-autotable": "5.0.8",
     "marked": "^18.0.7",
+    "pg": "8.23.1",
     "playwright": "^1.59.1",
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",

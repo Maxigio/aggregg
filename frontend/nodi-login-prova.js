@@ -1,14 +1,15 @@
 'use strict';
 const login = document.querySelector('#login'), mfa = document.querySelector('#mfa');
 const stato = document.querySelector('#stato'), logout = document.querySelector('#logout');
-let occupato = false;
+const prototipo = document.querySelector('#prototipo');
+let occupato = false, sequenza = 0;
 const messaggi = { input_non_valido: 'Controlla i dati inseriti.', accesso_negato: 'Accesso non riuscito. Ripeti il login.',
   accesso_non_autorizzato: 'Accesso non autorizzato. Per l’Admin serve MFA.', ripeti_login: 'Ripeti il login per un nuovo codice.',
   troppi_tentativi: 'Troppi tentativi. Riprova più tardi.', identita_non_disponibile: 'Servizio di accesso non disponibile.',
   sessione_non_valida: 'Sessione terminata.' };
 async function manda(endpoint, body) {
   if (occupato) return;
-  occupato = true;
+  occupato = true; sequenza++;
   document.querySelectorAll('button').forEach(b => { b.disabled = true; });
   try {
     const r = await fetch('/api/auth/' + endpoint, { method: 'POST', credentials: 'same-origin',
@@ -21,9 +22,9 @@ async function manda(endpoint, body) {
       mfa.hidden = true; login.hidden = false; return;
     }
     if (data.mfa) { login.hidden = true; mfa.hidden = false; mfa.elements.otp.focus(); stato.textContent = 'Inserisci il codice dell’autenticatore.'; }
-    else if (endpoint === 'logout') { login.hidden = false; mfa.hidden = true; logout.hidden = true;
+    else if (endpoint === 'logout') { prototipo.hidden = true; login.hidden = false; mfa.hidden = true; logout.hidden = true;
       stato.textContent = data.providerRevocato ? 'Sessione terminata.' : 'Sessione AMR terminata. Revoca Nhost non confermata.'; }
-    else { login.hidden = true; mfa.hidden = true; logout.hidden = false; stato.textContent = 'Accesso verificato dal backend.'; }
+    else { prototipo.hidden = false; login.hidden = true; mfa.hidden = true; logout.hidden = false; stato.textContent = 'Accesso verificato dal backend.'; }
   } catch { stato.textContent = 'Esito non confermato. Ripeti il login.'; login.hidden = false; mfa.hidden = true; }
   finally {
     login.elements.password.value = ''; mfa.elements.otp.value = '';
@@ -34,3 +35,10 @@ login.addEventListener('submit', e => { e.preventDefault(); manda('login', { ema
   password: login.elements.password.value }); });
 mfa.addEventListener('submit', e => { e.preventDefault(); manda('mfa', { otp: mfa.elements.otp.value }); });
 logout.addEventListener('click', () => manda('logout', {}));
+
+const sequenzaIniziale = sequenza;
+fetch('/api/auth/me', { credentials: 'same-origin', signal: AbortSignal.timeout(5000) }).then(async r => {
+  if (!r.ok || sequenzaIniziale !== sequenza) return;
+  login.hidden = true; logout.hidden = false; prototipo.hidden = false;
+  stato.textContent = 'Sessione attiva.';
+}).catch(() => {});

@@ -386,31 +386,34 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0) {
   }
 }
 
+async function applicaIdentita(data) {
+  identita = data.azienda; moduli = data.moduli; sequenzaRicerca++; ricercaOccupata = false;
+  paginaLavori = 1;
+  parametriRicerca = null; pagina = 0; fontiCorrenti = null; risultatiCorrenti = [];
+  paginaIncompleta = null; filtriModificati = false;
+  $('ricercaStato').textContent = 'In attesa';
+  $('fonti').replaceChildren(); $('risultati').replaceChildren(); $('avvisi').replaceChildren();
+  $('altri').hidden = true; $('altri').textContent = 'Carica altro';
+  form.querySelector('[type=submit]').disabled = false; $('altri').disabled = false;
+  $('identita').textContent = `${data.azienda} · ${moduli.join(' + ')}`;
+  $('risultatoAiuto').textContent = 'Scegli marca, modello e versione, poi avvia la ricerca.';
+  form.hidden = false;
+  for (const radio of form.querySelectorAll('[name=tipo]')) radio.disabled = !moduli.includes(radio.value);
+  for (const button of document.querySelectorAll('[data-scenario]')) {
+    button.disabled = !moduli.includes(button.dataset.scenario);
+  }
+  if (moduli.length) {
+    const t = moduli.includes(tipo()) ? tipo() : moduli[0];
+    form.querySelector(`[name=tipo][value=${t}]`).checked = true;
+    await aggiornaTipo(); await caricaFiltri();
+  }
+  await aggiornaStato();
+}
 $('entra').addEventListener('click', async () => {
   try {
     const data = await leggi('/api/test/login', { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ azienda: $('azienda').value }) });
-    identita = data.azienda; moduli = data.moduli; sequenzaRicerca++; ricercaOccupata = false;
-    paginaLavori = 1;
-    parametriRicerca = null; pagina = 0; fontiCorrenti = null; risultatiCorrenti = [];
-    paginaIncompleta = null; filtriModificati = false;
-    $('ricercaStato').textContent = 'In attesa';
-    $('fonti').replaceChildren(); $('risultati').replaceChildren(); $('avvisi').replaceChildren();
-    $('altri').hidden = true; $('altri').textContent = 'Carica altro';
-    form.querySelector('[type=submit]').disabled = false; $('altri').disabled = false;
-    $('identita').textContent = `${data.azienda} · ${moduli.join(' + ')}`;
-    $('risultatoAiuto').textContent = 'Scegli marca, modello e versione, poi avvia la ricerca.';
-    form.hidden = false;
-    for (const radio of form.querySelectorAll('[name=tipo]')) radio.disabled = !moduli.includes(radio.value);
-    for (const button of document.querySelectorAll('[data-scenario]')) {
-      button.disabled = !moduli.includes(button.dataset.scenario);
-    }
-    if (moduli.length) {
-      const t = moduli.includes(tipo()) ? tipo() : moduli[0];
-      form.querySelector(`[name=tipo][value=${t}]`).checked = true;
-      await aggiornaTipo(); await caricaFiltri();
-    }
-    await aggiornaStato();
+    await applicaIdentita(data);
   } catch (e) { $('identita').textContent = e.message; }
 });
 for (const radio of form.querySelectorAll('[name=tipo]')) radio.addEventListener('change', aggiornaTipo);
@@ -477,6 +480,20 @@ $('cancellaLavori').addEventListener('click', async () => {
 form.hidden = true;
 aggiornaStato();
 setInterval(() => { if (!$('aggiorna').disabled) aggiornaStato(); }, 3000);
-leggi('/api/test/me').then(data => {
-  $('azienda').value = data.azienda; $('entra').click();
-}).catch(() => {});
+leggi('/api/test/config').then(async config => {
+  if (config.accesso === 'nhost') {
+    $('azienda').hidden = true; $('entra').hidden = true;
+    document.querySelector('label[for=azienda]').textContent = 'Account Nhost locale';
+    $('risultatoAiuto').textContent = 'Le ricerche richiedono una licenza aziendale e un nodo disponibile.';
+    const link = elemento('a', 'Accedi / gestisci sessione'); link.href = '/api/auth/pagina';
+    $('identita').before(link);
+    try {
+      const me = await leggi('/api/auth/me');
+      if (me.aziendaValida) await applicaIdentita(me);
+      else $('identita').textContent = me.admin ? 'Admin · nessuna licenza di ricerca assegnata' : 'Azienda non attiva';
+    } catch { $('identita').textContent = 'Accedi con il tuo account locale.'; }
+  } else {
+    try { const data = await leggi('/api/test/me'); $('azienda').value = data.azienda; await applicaIdentita(data); }
+    catch {}
+  }
+}).catch(() => { $('identita').textContent = 'Configurazione accessi non disponibile.'; });
