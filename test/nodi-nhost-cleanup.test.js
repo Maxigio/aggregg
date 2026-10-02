@@ -35,7 +35,7 @@ test('collaudo Nhost: listen fallito raggiunge il cleanup dei soli container di 
         return server;
       } } : nome === 'node:child_process' ? { spawn() {
         const child = new EventEmitter(); child.stdout = new EventEmitter();
-        child.stderr = { resume() {} }; child.kill = () => {};
+        child.stderr = new EventEmitter(); child.stderr.resume = () => {}; child.kill = () => {};
         child.stdin = { on() {}, end() { queueMicrotask(() => child.emit('close', 0)); } };
         return child;
       } } : nome === 'node:util' ? { promisify: () => async (_bin, args) => {

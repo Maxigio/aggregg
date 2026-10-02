@@ -135,19 +135,22 @@ async function collauda({ manuale = false } = {}) {
       'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres'], {
       stdio: ['pipe', 'pipe', 'pipe'], signal: fermata.signal });
     let out = ''; child.stdout.on('data', b => { out += b; });
-    // Gli errori SQL possono contenere dati: il test registra solo l'esito.
-    child.stderr.resume(); child.stdin.on('error', () => {}); child.stdin.end(testo);
+    // Solo SQLSTATE per diagnosticare fixture/schema senza riportare dati.
+    let sqlState = '';
+    child.stderr.on('data', b => { sqlState ||= /ERROR:\s+([A-Z0-9]{5})(?:\s|$)/.exec(b.toString())?.[1] || ''; });
+    child.stdin.on('error', () => {}); child.stdin.end('\\set VERBOSITY sqlstate\n'+testo);
     const timer = setTimeout(() => child.kill(), 20000);
     return new Promise((resolve, reject) => {
       child.on('error', () => { clearTimeout(timer); reject(new Error('psql non avviato')); });
       child.on('close', code => { clearTimeout(timer); code === 0 ? resolve(out.trim())
-        : reject(new Error('verifica PostgreSQL fallita')); });
+        : reject(Object.assign(new Error('verifica PostgreSQL fallita'),{code:sqlState})); });
     });
   };
   let fase = 'avvio';
   const risultati = [];
   let diagnosi = '';
-  let serverLogin, loginProva, centro, pool, writerPool, aziendeRoute, workerManuale;
+  let serverLogin, loginProva, centro, pool, writerPool, aziendeRoute, colleghiRoute, workerManuale;
+  let backupPool, backupWorker, backupNotifiche;
   try {
     await docker('up', '-d', '--wait', 'postgres', 'mail');
     await sql('CREATE SCHEMA auth;');
@@ -167,7 +170,8 @@ async function collauda({ manuale = false } = {}) {
     const base = `http://${authAddress}/v1`;
     const compose = JSON.parse(fs.readFileSync(file, 'utf8'));
     compose.services.auth.environment.AUTH_SERVER_URL = base;
-    compose.services.auth.environment.AUTH_ACCESS_CONTROL_ALLOWED_REDIRECT_URLS = origineLogin + '/api/auth/aziende/pagina';
+    compose.services.auth.environment.AUTH_ACCESS_CONTROL_ALLOWED_REDIRECT_URLS =
+      [origineLogin + '/api/auth/aziende/pagina', origineLogin + '/api/auth/colleghi/pagina'].join(',');
     fs.writeFileSync(file, JSON.stringify(compose), { mode: 0o600 });
     await docker('up', '-d');
     const chiama = async (endpoint, body, token) => {
@@ -290,8 +294,10 @@ async function collauda({ manuale = false } = {}) {
     await sql(`INSERT INTO amr_accessi.persone(id,admin) VALUES ('${preMfa.user.id}',true);`);
     await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-aziende-prova.sql'), 'utf8'));
     await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-rinnovi-prova.sql'), 'utf8'));
+    await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-colleghi-prova.sql'), 'utf8'));
+    await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-backup-prova.sql'), 'utf8'));
     const writerPassword = crypto.randomBytes(32).toString('hex');
-    await sql(`CREATE ROLE amr_commerciale LOGIN PASSWORD '${writerPassword}' IN ROLE amr_aziende_scrittore;`);
+    await sql(`CREATE ROLE amr_commerciale LOGIN PASSWORD '${writerPassword}' IN ROLE amr_aziende_scrittore,amr_colleghi_scrittore;`);
     const readerPassword = crypto.randomBytes(32).toString('hex');
     await sql(`CREATE ROLE amr_gateway LOGIN PASSWORD '${readerPassword}' IN ROLE amr_accessi_lettore;`);
     const pgAddress = await docker('port', 'postgres', '5432');
@@ -304,12 +310,28 @@ async function collauda({ manuale = false } = {}) {
       user:'amr_commerciale',password:writerPassword,database:'postgres',max:4,
       statement_timeout:2500,lock_timeout:1500,connectionTimeoutMillis:2000,query_timeout:3000 });
     writerPool.on('error',()=>{});
+    const backupPassword = crypto.randomBytes(32).toString('hex');
+    await sql(`CREATE ROLE amr_copie LOGIN PASSWORD '${backupPassword}' IN ROLE amr_backup_esecutore;`);
+    backupPool = new (require('pg').Pool)({ host:'127.0.0.1',port:Number(pgAddress.split(':')[1]),
+      user:'amr_copie',password:backupPassword,database:'postgres',max:2,
+      statement_timeout:2500,connectionTimeoutMillis:2000,query_timeout:3000 });
+    backupPool.on('error',()=>{});
+    const backupApi = require('../backend/nodi/backup-postgres-prova');
+    // Nessun repository cloud nel collaudo: lo stato resta esplicitamente non configurato.
+    backupWorker = backupApi.creaBackupPostgres({pool:backupPool});
+    backupWorker.start();
+    backupNotifiche = await backupApi.collegaNotificheBackup({pool:backupPool,worker:backupWorker});
+    const collegaAccount = require('../backend/nodi/colleghi-postgres-prova').creaColleghiPostgres({pool:writerPool});
     const aziende = require('../backend/nodi/aziende-postgres-prova').creaAziendePostgres({pool:writerPool});
     const identita = require('../backend/nodi/accessi-postgres-prova').creaAccessiPostgres({ pool });
     assert.equal((await identita(preMfa.user.id)).admin, true);
     await assert.rejects(pool.query('SELECT * FROM auth.users'));
     await assert.rejects(pool.query('SELECT * FROM amr_accessi.persone'));
     risultati.push('Ruolo PostgreSQL del centro: legge solo la funzione dei permessi, nessun accesso a utenti/hash/tabelle');
+    if (!manuale) {
+      fase = 'colleghi PostgreSQL: quote, ruoli e revoche';
+      risultati.push(...await require('../test/nodi-colleghi-pg.test').provaColleghiPostgres({sql,pool:writerPool,identita}));
+    }
     const authClient = require('../backend/nodi/nhost-auth-client').creaClient({ base });
     const nodeToken = crypto.randomBytes(32).toString('hex');
     let prepara = manuale;
@@ -350,6 +372,11 @@ async function collauda({ manuale = false } = {}) {
         }
         aziendeRoute = require('../backend/nodi/aziende-prova-route').mount(app,{
           account:aziende,accessi:loginProva,client:authClient,origine:origineLogin });
+        colleghiRoute = require('../backend/nodi/colleghi-prova-route').mount(app,{
+          account:collegaAccount,accessi:loginProva,client:authClient,origine:origineLogin });
+        require('../backend/nodi/backup-prova-route').mount(app,{
+          backup:backupApi.creaStatoBackup({pool:writerPool}),accessi:loginProva,origine:origineLogin,
+          segnalaOperazione:backupWorker.segnalaOperazione });
         return loginProva;
       } });
     serverLogin.on('request', centro.app);
@@ -489,8 +516,17 @@ async function collauda({ manuale = false } = {}) {
     assert.equal((await again.json()).link,invData.link);
     const invDuplicato=await aziendeReq('invita',ownerCookie,{...invitoBody,
       operazione:crypto.randomUUID(),id:'duplicato-'+crypto.randomUUID()});
-    assert.equal(invDuplicato.status,409);
-    assert.equal((await invDuplicato.json()).codice,'invito_esistente');
+    assert.equal(invDuplicato.status,200);
+    const recuperato=await invDuplicato.json();
+    assert.equal(recuperato.operazione,op); assert.equal(recuperato.id,aziendaId);
+    assert.equal(recuperato.link,invData.link); assert.equal(recuperato.giaCreata,true);
+    assert.equal(await sql(`SELECT count(*) FROM amr_accessi.aziende_operazioni WHERE tipo='invita' AND azienda='${aziendaId}';`),'1');
+    for (const diverso of [{nome:'Altro nome'}, {moduli:['auto']}]) {
+      const conflitto=await aziendeReq('invita',ownerCookie,{...invitoBody,...diverso,
+        operazione:crypto.randomUUID(),id:'diversa-'+crypto.randomUUID()});
+      assert.equal(conflitto.status,409);
+      assert.equal((await conflitto.json()).codice,'invito_esistente');
+    }
     const anticipata=await aziendeReq('attiva',ownerCookie,{operazione:crypto.randomUUID(),id:aziendaId});
     assert.equal(anticipata.status,409);
     const signupInv=await aziendeReq('registra',null,{token:invToken,password:pwInvito});assert.equal(signupInv.status,200);
@@ -630,7 +666,13 @@ async function collauda({ manuale = false } = {}) {
     await sql("SET ROLE amr_collaudo_senza_permessi; SELECT 1;");
     await assert.rejects(sql('SET ROLE amr_collaudo_senza_permessi; SELECT * FROM amr_prova.membri;'));
     risultati.push('PostgreSQL: attesa del lock osservata, un solo ultimo posto; appartenenza univoca e ruolo senza permessi negato');
-    if(manuale) await sql('BEGIN; DELETE FROM amr_accessi.aziende_operazioni; DELETE FROM amr_accessi.aziende_inviti; DELETE FROM amr_accessi.membri; DELETE FROM amr_accessi.aziende; COMMIT;');
+    if (!manuale && process.env.AMR_TEST_RESTIC) {
+      fase = 'backup commerciale e restore separato';
+      risultati.push(await require('./collauda-backup-postgres-locale').collaudaBackup({args,directory,
+        fileCompose:file,docker,sql,backupPool,writerPool,admin:adminFixture,azienda:aziendaId,
+        backupWorker,immagini:IMMAGINI}));
+    }
+    if(manuale) await sql('BEGIN; DELETE FROM amr_backup.outbox; DELETE FROM amr_accessi.colleghi_operazioni; DELETE FROM amr_accessi.colleghi_inviti; DELETE FROM amr_accessi.aziende_operazioni; DELETE FROM amr_accessi.aziende_inviti; DELETE FROM amr_accessi.membri; DELETE FROM amr_accessi.aziende; COMMIT;');
     for (const r of risultati) console.log('OK · ' + r);
     console.log('Collaudo locale completato: login Nhost e permessi PostgreSQL collegati al centro.');
     if (manuale) {
@@ -673,11 +715,12 @@ async function collauda({ manuale = false } = {}) {
     const punto = /collauda-nhost-locale\.js:\d+:\d+/.exec(e.stack || '')?.[0] || '';
     const confronto = typeof e.actual === 'number' && typeof e.expected === 'number'
       ? ` · ricevuto ${e.actual}, atteso ${e.expected}` : '';
-    throw new Error('Collaudo interrotto nella fase: ' + fase + (punto ? ' · ' + punto : '') + confronto + (diagnosi ? ' · ' + diagnosi : ''));
+    const sqlState = /^[A-Z0-9]{5}$/.test(e.code || '') ? ' · SQLSTATE '+e.code : '';
+    throw new Error('Collaudo interrotto nella fase: ' + fase + (punto ? ' · ' + punto : '') + confronto + sqlState + (diagnosi ? ' · ' + diagnosi : ''));
   } finally {
     for (const chiudi of [() => workerManuale?.close(),
-      () => centro ? centro.close() : loginProva?.close(), () => aziendeRoute?.close(),
-      () => writerPool?.end(), () => pool?.end(), async () => {
+      () => centro ? centro.close() : loginProva?.close(), () => aziendeRoute?.close(), () => colleghiRoute?.close(),
+      () => backupNotifiche?.close(), () => backupWorker?.stop(), () => backupPool?.end(), () => writerPool?.end(), () => pool?.end(), async () => {
         if (serverLogin) {
           serverLogin.closeAllConnections();
           await new Promise(resolve => serverLogin.close(resolve));
