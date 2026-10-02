@@ -6,6 +6,293 @@ const { creaCentro } = require('../backend/nodi/centro');
 
 const browserPath = process.env.AMR_TEST_CHROMIUM || (fs.existsSync(chromium.executablePath())
   ? chromium.executablePath() : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
+const browserDisponibile = { skip: !fs.existsSync(browserPath) && 'Chromium non disponibile' };
+
+async function apriAccountSintetico(t, api) {
+  const server = require('node:http').createServer((req, res) => {
+    if (req.url === '/') {
+      res.setHeader('content-type', 'text/html; charset=utf-8');
+      res.end('<!doctype html><main data-account-prototipo></main><script src="/account.js" defer></script>');
+    } else if (req.url === '/account.js') {
+      res.setHeader('content-type', 'text/javascript; charset=utf-8');
+      res.end(fs.readFileSync(path.join(__dirname, '../frontend/nodi-aziende-prova.js')));
+    } else res.writeHead(404).end();
+  }).listen(0, '127.0.0.1');
+  await new Promise((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
+  let browser;
+  t.after(async () => {
+    await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
+  });
+  browser = await chromium.launch({ headless: true, executablePath: browserPath });
+  const page = await browser.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  const origine = 'http://127.0.0.1:' + server.address().port;
+  await page.route('**/*', async route => {
+    const url = new URL(route.request().url());
+    if (url.origin !== origine) return route.abort();
+    if (!url.pathname.startsWith('/api/')) return route.continue();
+    if (await api(route, url)) return;
+    if (url.pathname === '/api/auth/aziende/pagina') return route.fulfill({ contentType: 'text/html',
+      body: fs.readFileSync(path.join(__dirname, '../backend/nodi/aziende-prova.html'), 'utf8') });
+    const risposte = { '/api/auth/me': { admin: true }, '/api/auth/aziende/elenco': { aziende: [] },
+      '/api/auth/sessioni': { sessioni: [] } };
+    assert.ok(Object.hasOwn(risposte, url.pathname), 'API inattesa: ' + url.pathname);
+    return route.fulfill({ json: risposte[url.pathname] });
+  });
+  await page.goto(origine);
+  await page.waitForFunction(() => document.getElementById('account-sessioni-panel')?.hidden === false
+    && document.getElementById('account-sessione-aggiorna')?.disabled === false);
+  return { page, errors };
+}
+
+test('F13: refresh account chiude il pending invalidato e una risposta tardiva non sovrascrive una nuova azione', browserDisponibile, async t => {
+  let attivo = true;
+  const pendenti = [];
+  const { page, errors } = await apriAccountSintetico(t, async (route, url) => {
+    if (url.pathname === '/api/auth/me') {
+      await route.fulfill({ status: attivo ? 200 : 401, json: attivo ? { admin: true } : {} }); return true;
+    }
+    if (url.pathname === '/api/auth/logout') {
+      attivo = false;
+      await route.fulfill({ json: { ok: true, provider: { stato: 'pending', id: 'a'.repeat(64) } } }); return true;
+    }
+    if (url.pathname === '/api/auth/logout/stato') { pendenti.push(route); return true; }
+    if (url.pathname === '/api/auth/aziende/invita') {
+      const body = route.request().postDataJSON();
+      await route.fulfill({ json: { ok: true, id: body.id, operazione: body.operazione,
+        link: url.origin + '/api/auth/aziende/pagina#sintetico' } }); return true;
+    }
+    return false;
+  });
+  for (const stato of ['confirmed', 'unconfirmed']) {
+    await page.click('#account-esci');
+    await page.waitForFunction(() => document.getElementById('account-stato').textContent.includes('Nhost in corso'));
+    await page.click('#account-sessione-aggiorna');
+    await page.waitForFunction(() => !document.getElementById('account-sessione-aggiorna').disabled);
+    assert.match(await page.locator('#account-stato').textContent(), /Sessione AMR terminata.*Nhost non è confermata/);
+    await page.waitForTimeout(2100);
+    for (const route of pendenti.splice(0)) await route.fulfill({ json: { provider: { stato } } });
+    await page.waitForTimeout(50);
+    assert.match(await page.locator('#account-stato').textContent(), /Nhost non è confermata/);
+    assert.equal(await page.locator('#account-sessioni-panel').isVisible(), false);
+    attivo = true; await page.reload();
+    await page.waitForFunction(() => !document.getElementById('account-sessione-aggiorna').disabled);
+  }
+  // Un nuovo login e un nuovo invito prevalgono sul poll già in volo.
+  await page.click('#account-esci');
+  const termine = Date.now() + 5000;
+  while (!pendenti.length && Date.now() < termine) await page.waitForTimeout(20);
+  assert.equal(pendenti.length, 1);
+  attivo = true; await page.click('#account-sessione-aggiorna');
+  await page.waitForSelector('#account-admin:not([hidden])');
+  await page.locator('#account-invita input[name=email]').fill('ref@amr.invalid');
+  await page.locator('#account-invita button').click();
+  await page.waitForFunction(() => document.getElementById('account-stato').textContent.includes('Invito disponibile nel link'));
+  await pendenti.pop().fulfill({ json: { provider: { stato: 'confirmed' } } });
+  await page.waitForTimeout(50);
+  assert.match(await page.locator('#account-stato').textContent(), /Invito disponibile nel link/);
+  assert.equal(await page.locator('#account-admin').isVisible(), true);
+  assert.deepEqual(errors, []);
+});
+
+test('F13: senza invalidazione il polling conferma, segnala il rifiuto o scade senza restare pending', browserDisponibile, async t => {
+  let risposta = 'confirmed', richieste = 0;
+  const pendenti = [];
+  const { page, errors } = await apriAccountSintetico(t, async (route, url) => {
+    if (url.pathname === '/api/auth/logout') {
+      await route.fulfill({ json: { ok: true, provider: { stato: 'pending', id: 'b'.repeat(64) } } }); return true;
+    }
+    if (url.pathname === '/api/auth/logout/stato') {
+      richieste++;
+      assert.deepEqual(route.request().postDataJSON(), { id: 'b'.repeat(64) });
+      if (risposta === 'timeout') pendenti.push(route);
+      else await route.fulfill({ json: { provider: { stato: risposta } } });
+      return true;
+    }
+    return false;
+  });
+  for (const stato of ['confirmed', 'unconfirmed', 'timeout', 'pending']) {
+    risposta = stato; richieste = 0;
+    await page.click('#account-esci');
+    await page.waitForFunction(() => document.getElementById('account-stato').textContent.includes('Nhost in corso'));
+    await page.waitForFunction(() => !document.getElementById('account-stato').textContent.includes('Nhost in corso'),
+      null, { timeout: 16000 });
+    assert.match(await page.locator('#account-stato').textContent(), stato === 'confirmed'
+      ? /Sessione AMR terminata.*Nhost confermata/ : /Sessione AMR terminata.*Nhost non è confermata/);
+    assert.equal(richieste, stato === 'pending' ? 6 : 1);
+    for (const route of pendenti.splice(0)) await route.fulfill({ json: { provider: { stato: 'confirmed' } } });
+    await page.waitForTimeout(2100);
+    assert.equal(richieste, stato === 'pending' ? 6 : 1, 'Nessun poll dopo un esito terminale');
+    if (stato === 'timeout') assert.match(await page.locator('#account-stato').textContent(), /Nhost non è confermata/);
+    await page.reload();
+    await page.waitForFunction(() => document.getElementById('account-sessioni-panel')?.hidden === false
+      && document.getElementById('account-sessione-aggiorna')?.disabled === false);
+  }
+  assert.deepEqual(errors, []);
+});
+
+test('F13: revoca riuscita conserva esito e polling se il refresh sessioni fallisce; retry della sola lettura', browserDisponibile, async t => {
+  const corrente = { id: 'c'.repeat(64), corrente: true, creata: '2026-10-02T08:00:00Z', scadenza: '2026-10-03T08:00:00Z' };
+  const altra = { ...corrente, id: 'd'.repeat(64), corrente: false };
+  let risposta = 'confirmed', guasto = 503, revocata = false, letture = 0, revoche = 0, poll = 0;
+  const { page, errors } = await apriAccountSintetico(t, async (route, url) => {
+    if (url.pathname === '/api/auth/sessioni') {
+      letture++;
+      if (revocata && guasto === 'rete') await route.abort('connectionfailed');
+      else if (revocata && guasto) await route.fulfill({ status: guasto, json: {} });
+      else await route.fulfill({ json: { sessioni: revocata ? [corrente] : [corrente, altra] } });
+      return true;
+    }
+    if (url.pathname === '/api/auth/sessioni/revoca') {
+      assert.deepEqual(route.request().postDataJSON(), { id: altra.id });
+      revoche++; revocata = true;
+      await route.fulfill({ json: { ok: true, provider: { stato: risposta, id: 'e'.repeat(64) } } }); return true;
+    }
+    if (url.pathname === '/api/auth/logout/stato') {
+      poll++; await route.fulfill({ json: { provider: { stato: 'confirmed' } } }); return true;
+    }
+    return false;
+  });
+  for (const caso of [{ stato: 'confirmed', guasto: 503 }, { stato: 'pending', guasto: 503 },
+    { stato: 'unconfirmed', guasto: 503 }, { stato: 'confirmed', guasto: 'rete' }]) {
+    risposta = caso.stato; guasto = caso.guasto;
+    await page.locator('#account-sessioni').getByRole('button', { name: 'Revoca sessione', exact: true }).click();
+    await page.waitForFunction(() => !document.getElementById('account-sessioni-aggiorna').disabled);
+    assert.match(await page.locator('#account-stato').textContent(), /Sessione selezionata terminata/);
+    assert.doesNotMatch(await page.locator('#account-stato').textContent(), /Operazione non riuscita|Esito non confermato/);
+    assert.match(await page.locator('#account-sessioni-avviso').textContent(), /Elenco delle sessioni non aggiornato.*Aggiorna sessioni/);
+    assert.equal(await page.locator('#account-sessioni-avviso').isVisible(), true);
+    assert.equal(await page.locator('#account-esci').isVisible(), true, 'Il chiamante resta autenticato');
+    assert.equal(await page.locator('#account-admin').isVisible(), true);
+    assert.equal(await page.locator('#account-sessioni').getByRole('button', { name: 'Revoca sessione', exact: true }).count(), 0,
+      'La sessione già revocata non resta riprovabile');
+    assert.equal(letture, 2); assert.equal(revoche, 1);
+    if (caso.stato === 'pending') {
+      await page.waitForFunction(() => document.getElementById('account-stato').textContent.includes('Nhost confermata'));
+      assert.equal(poll, 1);
+      assert.equal(await page.locator('#account-sessioni-avviso').isVisible(), true, 'Il poll non cancella il warning della lettura');
+    } else {
+      assert.match(await page.locator('#account-stato').textContent(), caso.stato === 'confirmed' ? /Nhost confermata/ : /Nhost non è confermata/);
+      assert.equal(poll, 0);
+    }
+    await page.click('#account-sessioni-aggiorna');
+    await page.waitForFunction(() => !document.getElementById('account-sessioni-aggiorna').disabled);
+    assert.match(await page.locator('#account-stato').textContent(), /Sessione selezionata terminata/);
+    assert.equal(await page.locator('#account-sessioni-avviso').isVisible(), true);
+    assert.equal(letture, 3); assert.equal(revoche, 1);
+    guasto = 0; await page.click('#account-sessioni-aggiorna');
+    await page.waitForFunction(() => !document.getElementById('account-sessioni-aggiorna').disabled);
+    assert.equal(await page.locator('#account-sessioni-avviso').isVisible(), false);
+    assert.equal(letture, 4); assert.equal(revoche, 1, 'Il retry non ripete la revoca');
+    assert.equal(await page.locator('#account-sessioni').getByRole('button', { name: 'Termina questa sessione' }).count(), 1);
+    revocata = false; letture = revoche = poll = 0; await page.reload();
+    await page.waitForFunction(() => document.getElementById('account-sessioni-panel')?.hidden === false
+      && document.getElementById('account-sessioni-aggiorna')?.disabled === false);
+  }
+  assert.deepEqual(errors, []);
+});
+
+test('F13: revoca corrente, POST fallito e perdita di accesso preservano i confini della UI sessioni', browserDisponibile, async t => {
+  const corrente = { id: 'f'.repeat(64), corrente: true, creata: '2026-10-02T08:00:00Z', scadenza: '2026-10-03T08:00:00Z' };
+  const altra = { ...corrente, id: '1'.repeat(64), corrente: false };
+  let caso, letture = 0, revoche = 0, poll = 0;
+  const casi = [{ corrente: true, post: 200, refresh: 200, provider: 'pending' },
+    { corrente: false, post: 503, refresh: 200, provider: 'confirmed' },
+    { corrente: false, post: 200, refresh: 401, provider: 'confirmed' },
+    { corrente: false, post: 200, refresh: 200, provider: 'pending' }];
+  caso = casi[0];
+  const { page, errors } = await apriAccountSintetico(t, async (route, url) => {
+    if (url.pathname === '/api/auth/sessioni') {
+      letture++;
+      if (revoche && caso.refresh !== 200) await route.fulfill({ status: caso.refresh, json: { codice: 'sessione_revocata' } });
+      else await route.fulfill({ json: { sessioni: revoche ? [corrente] : [corrente, altra] } });
+      return true;
+    }
+    if (url.pathname === '/api/auth/sessioni/revoca') {
+      assert.deepEqual(route.request().postDataJSON(), { id: caso.corrente ? corrente.id : altra.id });
+      revoche++;
+      await route.fulfill({ status: caso.post, json: caso.post === 200
+        ? { ok: true, provider: { stato: caso.provider, id: '2'.repeat(64) } } : {} }); return true;
+    }
+    if (url.pathname === '/api/auth/logout/stato') {
+      poll++; await route.fulfill({ json: { provider: { stato: 'confirmed' } } }); return true;
+    }
+    return false;
+  });
+  for (let i = 0; i < casi.length; i++) {
+    caso = casi[i];
+    if (i) {
+      letture = revoche = poll = 0; await page.reload();
+      await page.waitForFunction(() => document.getElementById('account-sessioni-panel')?.hidden === false
+        && document.getElementById('account-sessioni-aggiorna')?.disabled === false);
+    }
+    await page.evaluate(() => {
+      window.accountEvents = [];
+      document.addEventListener('amr:account', e => window.accountEvents.push(e.detail));
+    });
+    await page.locator('#account-sessioni').getByRole('button', {
+      name: caso.corrente ? 'Termina questa sessione' : 'Revoca sessione', exact: true }).click();
+    await page.waitForFunction(() => !document.getElementById('account-sessione-aggiorna').disabled);
+    assert.equal(revoche, 1);
+    if (caso.post !== 200) {
+      assert.match(await page.locator('#account-stato').textContent(), /Operazione non riuscita.*HTTP 503/);
+      assert.doesNotMatch(await page.locator('#account-stato').textContent(), /Sessione.*terminata/);
+      assert.equal(await page.locator('#account-sessioni button').count(), 2);
+      assert.equal(await page.locator('#account-sessioni-avviso').isVisible(), false);
+      assert.equal(await page.locator('#account-esci').isVisible(), true);
+      assert.equal(letture, 1); assert.equal(poll, 0);
+    } else if (caso.corrente) {
+      assert.equal(await page.locator('#account-admin').isVisible(), false);
+      assert.equal(await page.locator('#account-sessioni-panel').isVisible(), false);
+      assert.equal(await page.locator('#account-esci').isVisible(), false);
+      assert.equal(await page.locator('#account-sessione').textContent(), 'Sessione terminata.');
+      assert.deepEqual(await page.evaluate(() => window.accountEvents), [null]);
+      assert.equal(letture, 1, 'Revocare questa sessione non rilegge dati autenticati');
+      await page.waitForFunction(() => document.getElementById('account-stato').textContent.includes('Nhost confermata'));
+      assert.match(await page.locator('#account-stato').textContent(), /Sessione AMR terminata/);
+      assert.equal(poll, 1);
+    } else if (caso.refresh === 401) {
+      assert.equal(await page.locator('#account-admin').isVisible(), false);
+      assert.equal(await page.locator('#account-sessioni-panel').isVisible(), false);
+      assert.equal(await page.locator('#account-sessione').textContent(), 'Sessione revocata. Accedi nuovamente.');
+      assert.deepEqual(await page.evaluate(() => window.accountEvents), [null]);
+      assert.match(await page.locator('#account-stato').textContent(), /Sessione selezionata terminata.*Nhost confermata/);
+      assert.equal(letture, 2);
+    } else {
+      await page.click('#account-sessioni-aggiorna');
+      await page.waitForFunction(() => !document.getElementById('account-sessioni-aggiorna').disabled);
+      assert.match(await page.locator('#account-stato').textContent(), /Sessione selezionata terminata.*Nhost non è confermata/);
+      await page.waitForTimeout(2100);
+      assert.equal(poll, 0, 'Il refresh invalida il poll ancora in attesa');
+      assert.equal(await page.locator('#account-admin').isVisible(), true);
+      assert.equal(await page.locator('#account-esci').isVisible(), true);
+      assert.deepEqual(await page.evaluate(() => window.accountEvents), []);
+      assert.equal(letture, 3);
+    }
+  }
+  assert.deepEqual(errors, []);
+});
+
+test('F10: il recovery riusa insieme id e operazione restituiti, senza dipendere da prefissi', browserDisponibile, async t => {
+  const richieste = [], recuperato = { id: 'azienda-importata-sintetica', operazione: '00000000-0000-4000-8000-000000000010' };
+  const { page, errors } = await apriAccountSintetico(t, async (route, url) => {
+    if (url.pathname !== '/api/auth/aziende/invita') return false;
+    richieste.push(route.request().postDataJSON());
+    await route.fulfill({ json: { ok: true, giaCreata: true, ...recuperato } }); return true;
+  });
+  await page.locator('#account-invita input[name=email]').fill('ref@amr.invalid');
+  for (let i = 0; i < 2; i++) {
+    await page.locator('#account-invita button').click();
+    await page.waitForFunction(() => !document.querySelector('#account-invita button').disabled);
+    assert.match(await page.locator('#account-stato').textContent(), /Invito già registrato/);
+    assert.equal(await page.locator('#account-consegna a').count(), 0);
+  }
+  assert.equal(richieste.length, 2);
+  assert.equal(richieste[1].id, recuperato.id); assert.equal(richieste[1].operazione, recuperato.operazione);
+  assert.notEqual(richieste[0].id, recuperato.id); assert.notEqual(richieste[0].operazione, recuperato.operazione);
+  assert.deepEqual(errors, []);
+});
+
 test('UI account nel centro: Admin, invito, idempotenza, cliente e logout senza collisioni DOM',
   { skip: !fs.existsSync(browserPath) && 'Chromium non disponibile: impostare AMR_TEST_CHROMIUM' }, async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-account-ui-'));
@@ -16,28 +303,35 @@ test('UI account nel centro: Admin, invito, idempotenza, cliente e logout senza 
   let commerciale = null;
   let oraLimite = Date.now();
   let perdiRevoca = false;
+  let logoutProviderFallisce = false;
   const modifiche = [];
   const centro = creaCentro({ directory: dir, tokens: { locale: 'a'.repeat(64) }, adminLocale: true,
     inizializzaAccessi: app => {
       const accessi = require('../backend/nodi/login-nhost-prova').mount(app, { origine, cookiePath: '/',
         client: { login: async () => ({ mfa: { ticket: 'ticket-sintetico' } }),
           mfa: async () => ({ session: { user: { id: 'admin', emailVerified: true },
-            accessToken: 'sintetico', refreshToken: 'sintetico' } }), logout: async () => {} },
+            accessToken: 'sintetico', refreshToken: 'sintetico' } }), logout: async () => {
+            if(logoutProviderFallisce)throw new Error('provider sintetico non disponibile');
+          } },
         identita: async () => ({ attiva: true, admin: true, epoca: 0 }) });
       aziendeRoute = require('../backend/nodi/aziende-prova-route').mount(app, { origine, accessi, ora:()=>oraLimite,
         account: { elenco: async () => {
           elencoCount++;
           if (failElenco) throw Object.assign(new Error('KO sintetico'), { status: 503 });
           return { aziende: [commerciale || { id: 'cliente', nome: '<script>errore()</script>', stato: 'accettato' },
-            ...(invitoPersistente ? [{id:invitoPersistente.id,nome:invitoPersistente.nome,stato:'pending'}] : [])] };
+            ...(invitoPersistente ? [{id:invitoPersistente.id,nome:invitoPersistente.nome,stato:'pending'},
+              {id:'omonima',nome:invitoPersistente.nome,stato:'pending'}] : [])] };
         }, invita: async (s, b) => {
-          if (invitoPersistente && b.operazione !== invitoPersistente.operazione) {
-            throw Object.assign(new Error('invito_esistente'), {status:409,codice:'invito_esistente'});
-          }
-          if (invitoPersistente && JSON.stringify(b) !== JSON.stringify(invitoPersistente)) {
+          if (invitoPersistente && ['nome','email','moduli'].some(k=>JSON.stringify(b[k])!==JSON.stringify(invitoPersistente[k]))) {
             throw Object.assign(new Error('operazione_in_conflitto'), {status:409,codice:'operazione_in_conflitto'});
           }
-          invitoPersistente = {...b}; return {ok:true,token};
+          if(invitoPersistente) {
+            if(b.operazione===invitoPersistente.operazione && b.id!==invitoPersistente.id) {
+              throw Object.assign(new Error('operazione_in_conflitto'),{status:409,codice:'operazione_in_conflitto'});
+            }
+            return {ok:true,id:invitoPersistente.id,operazione:invitoPersistente.operazione,giaCreata:true};
+          }
+          invitoPersistente = {...b}; return {ok:true,id:b.id,operazione:b.operazione,token};
         },
         attiva: async (s, b) => { operazioni.push(b.operazione); return { ok: true }; },
         rinnova: async (s,b) => {
@@ -154,6 +448,8 @@ test('UI account nel centro: Admin, invito, idempotenza, cliente e logout senza 
   await page.waitForSelector('#account-consegna a');
   assert.match(await page.locator('#account-stato').textContent(), /non inviato/);
   const primoLink = await page.locator('#account-consegna a').getAttribute('href');
+  // Simula un invito preesistente con ID aziendale indipendente dall'operazione.
+  invitoPersistente.id = 'invito-' + invitoPersistente.operazione;
   // Ricaricare perde l'operazione nel browser, ma non deve bloccare l'invito esistente.
   await page.reload(); await page.waitForSelector('.area-nav a[href="#accountPanel"]:not([hidden])');
   await page.locator('.area-nav a[href="#accountPanel"]').click();
@@ -162,6 +458,18 @@ test('UI account nel centro: Admin, invito, idempotenza, cliente e logout senza 
   await page.locator('#account-invita button').click();
   await page.waitForSelector('#account-consegna a');
   assert.equal(await page.locator('#account-consegna a').getAttribute('href'), primoLink);
+  await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
+  await page.locator('#account-invita button').click();
+  await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
+  assert.equal(await page.locator('#account-consegna a').getAttribute('href'), primoLink);
+  assert.equal((await page.locator('#account-stato').textContent()).includes('non coincidono'),false);
+  // La perdita della copia RAM non viene dichiarata come link disponibile.
+  await page.route('**/api/auth/aziende/invita',route=>route.fulfill({json:{ok:true,giaCreata:true,id:invitoPersistente.id,operazione:invitoPersistente.operazione}}));
+  await page.locator('#account-invita button').click();
+  await page.waitForFunction(()=>document.getElementById('account-stato').textContent.includes('link temporaneo non è disponibile'));
+  assert.equal(await page.locator('#account-consegna a').count(),0);
+  assert.equal((await page.locator('#account-stato').textContent()).includes('Invito disponibile nel link'),false);
+  await page.unroute('**/api/auth/aziende/invita');
   // La pagina referente mantiene il flusso separato, senza controlli Admin.
   const recipient = await context.newPage();
   await recipient.goto(origine + '/api/auth/aziende/pagina#' + token);
@@ -182,12 +490,15 @@ test('UI account nel centro: Admin, invito, idempotenza, cliente e logout senza 
   for (let i = 0; !diagnosticaTardiva && i < 30; i++) await page.waitForTimeout(20);
   assert.ok(diagnosticaTardiva);
   // Logout nel pannello integrato distrugge la sessione lato server.
+  logoutProviderFallisce = true;
   await page.locator('.area-nav a[href="#accountPanel"]').click();
   await page.locator('#account-esci').click();
   await page.waitForFunction(() => document.getElementById('account-esci').hidden);
   assert.equal(await page.locator('#account-admin').isVisible(), false);
   assert.equal(await page.locator('#account-aziende').textContent(), '');
   assert.equal(await page.locator('#account-consegna').textContent(), '');
+  await page.waitForFunction(() => document.getElementById('account-stato').textContent.includes('Nhost non è confermata'));
+  assert.match(await page.locator('#account-stato').textContent(), /Sessione AMR terminata.*Nhost non è confermata/);
   assert.equal(await page.locator('#cerca').isVisible(), false);
   await diagnosticaTardiva.fulfill({ json: { nodi: [{ id: 'tardivo' }], lavori: [] } });
   await page.waitForFunction(() => !document.getElementById('aggiorna').disabled);
@@ -199,6 +510,7 @@ test('UI account nel centro: Admin, invito, idempotenza, cliente e logout senza 
   // Un cliente autenticato non carica il registro aziende Admin.
   await page.route('**/api/auth/me', route => route.fulfill({ json: { admin: false,
     azienda: 'cliente', aziendaValida: false, moduli: ['moto'] } }));
+  await page.route('**/api/auth/sessioni', route => route.fulfill({ json: { sessioni: [] } }));
   const letture = elencoCount;
   await page.locator('#account-sessione-aggiorna').click();
   await page.waitForFunction(() => document.getElementById('account-sessione').textContent.includes('in attesa'));

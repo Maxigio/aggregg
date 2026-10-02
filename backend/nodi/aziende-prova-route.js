@@ -43,8 +43,8 @@ function mount(app, { account, accessi, client, origine, ora = () => Date.now() 
     // Le copie di consegna sono solo RAM e hanno la medesima scadenza dell'invito.
     for(const [k,v] of consegne) if(v.fino <= Date.now()) consegne.delete(k);
     const out = await account.invita(s,req.body);
-    if(out.token) consegne.set(req.body.operazione,{token:out.token,fino:Date.now()+7*86400000});
-    const copia = consegne.get(req.body.operazione);
+    if(out.token) consegne.set(out.operazione,{token:out.token,fino:Date.now()+7*86400000});
+    const copia = consegne.get(out.operazione);
     res.json({ ...out, token:undefined, consegna:'locale_non_inviata',
       ...(copia ? { link:origine+'/api/auth/aziende/pagina#'+copia.token } : {}) });
   }));

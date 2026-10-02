@@ -183,6 +183,21 @@ BEGIN
   IF EXISTS (SELECT 1 FROM amr_accessi.aziende WHERE id = p_id) THEN
     RAISE EXCEPTION USING MESSAGE = 'azienda_esistente', ERRCODE = 'P0001';
   END IF;
+  SELECT o.* INTO v_op FROM amr_accessi.aziende_operazioni o
+    JOIN amr_accessi.aziende_inviti i ON i.azienda = o.azienda
+    WHERE o.tipo = 'invita' AND lower(i.email) = lower(p_email)
+      AND i.persona IS NULL AND i.scadenza > clock_timestamp();
+  IF FOUND THEN
+    -- Recupero dopo reload: il nome non identifica l'azienda. Si riusa solo
+    -- l'operazione del medesimo Admin con destinatario e moduli identici.
+    IF v_op.attore <> p_persona OR NOT EXISTS (SELECT 1 FROM amr_accessi.aziende a
+      JOIN amr_accessi.aziende_inviti i ON i.azienda = a.id
+      WHERE a.id = v_op.azienda AND a.nome = p_nome AND i.email = p_email AND a.moduli = p_moduli) THEN
+      RAISE EXCEPTION USING MESSAGE = 'invito_esistente', ERRCODE = 'P0001';
+    END IF;
+    RETURN jsonb_build_object('ok', true, 'id', v_op.azienda, 'operazione', v_op.id,
+      'giaCreata', true, 'tokenDisponibile', false);
+  END IF;
   IF (SELECT count(*) FROM amr_accessi.aziende) >= 10 THEN
     RAISE EXCEPTION USING MESSAGE = 'quota_aziende', ERRCODE = 'P0001';
   END IF;
@@ -194,10 +209,6 @@ BEGIN
   IF EXISTS (SELECT 1 FROM auth.users u JOIN amr_accessi.membri m ON m.persona = u.id
       WHERE lower(u.email) = lower(p_email)) THEN
     RAISE EXCEPTION USING MESSAGE = 'appartenenza_esistente', ERRCODE = 'P0001';
-  END IF;
-  IF EXISTS (SELECT 1 FROM amr_accessi.aziende_inviti
-      WHERE lower(email) = lower(p_email) AND persona IS NULL AND scadenza > clock_timestamp()) THEN
-    RAISE EXCEPTION USING MESSAGE = 'invito_esistente', ERRCODE = 'P0001';
   END IF;
   v_ora := clock_timestamp();
   INSERT INTO amr_accessi.aziende(id, nome, attiva, scadenza, moduli)

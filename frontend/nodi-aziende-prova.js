@@ -26,7 +26,11 @@
     }
   }
   const $ = id => root.querySelector('#account-' + id);
-  let token = incorporato ? '' : location.hash.slice(1), occupato = false, revisione = 0, aziendeCorrenti = [];
+  let token = incorporato ? '' : location.hash.slice(1), occupato = false, revisione = 0;
+  let revocaInCorso = null;
+  const avvisoSessioni = document.createElement('p');
+  avvisoSessioni.id = 'account-sessioni-avviso'; avvisoSessioni.hidden = true;
+  avvisoSessioni.setAttribute('role', 'status'); $('sessioni-panel').append(avvisoSessioni);
   if (token) history.replaceState(null, '', location.pathname);
   const messaggi = {
     accettazione_mfa_non_disponibile: 'Questo account ha già MFA attiva: questa accettazione non è ancora disponibile nel collaudo.',
@@ -53,14 +57,54 @@
   function nascondiGestione() {
     $('admin').hidden = true; $('aziende').replaceChildren(); $('consegna').replaceChildren();
   }
-  async function api(url, body) {
+  function nascondiSessioni() {
+    $('sessioni-panel').hidden = true; $('sessioni').replaceChildren();
+    avvisoSessioni.hidden = true; avvisoSessioni.textContent = '';
+  }
+  async function elencoSessioni() {
+    const versione = revisione;
+    const data = await api('/api/auth/sessioni');
+    if (versione !== revisione) return;
+    const lista = $('sessioni'); lista.replaceChildren(); $('sessioni-panel').hidden = false;
+    avvisoSessioni.hidden = true; avvisoSessioni.textContent = '';
+    for (const s of data.sessioni || []) {
+      const box = document.createElement('article'), testo = document.createElement('p');
+      testo.textContent = (s.corrente ? 'Questo browser' : 'Altro browser')
+        + ' · accesso ' + new Date(s.creata).toLocaleString('it-IT')
+        + ' · scadenza ' + new Date(s.scadenza).toLocaleString('it-IT');
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn quiet';
+      b.textContent = s.corrente ? 'Termina questa sessione' : 'Revoca sessione';
+      b.addEventListener('click', () => azione(async () => {
+        const esito = await api('/api/auth/sessioni/revoca', { id: s.id });
+        if (s.corrente) {
+          nascondiGestione(); nascondiSessioni(); comunica(null);
+          $('esci').hidden = true; $('sessione').textContent = 'Sessione terminata.';
+        }
+        mostraRevoca(esito.provider, s.corrente); void seguiRevoca(esito.provider, revisione, s.corrente);
+        if (!s.corrente) { box.remove(); await aggiornaSessioni(); }
+      }));
+      box.append(testo, b); lista.append(box);
+    }
+  }
+  async function aggiornaSessioni() {
+    try { await elencoSessioni(); }
+    catch (e) {
+      if ($('sessioni-panel').hidden && ['sessione_non_valida', 'sessione_revocata', 'accesso_non_autorizzato'].includes(e.codice)) {
+        $('sessione').textContent = e.message;
+        return;
+      }
+      avvisoSessioni.textContent = 'Elenco delle sessioni non aggiornato. Usa “Aggiorna sessioni” per riprovare.';
+      avvisoSessioni.hidden = false;
+    }
+  }
+  async function api(url, body, timeoutMs = 15000) {
     const r = await fetch(url, { method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin',
       headers: body === undefined ? {} : { 'content-type': 'application/json' },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(15000) });
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(timeoutMs) });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) {
       if ([401, 403].includes(r.status) && ['sessione_non_valida', 'sessione_revocata', 'accesso_non_autorizzato'].includes(d.codice)) {
-        nascondiGestione(); comunica(null);
+        nascondiGestione(); nascondiSessioni(); comunica(null);
       }
       throw Object.assign(new Error(messaggi[d.codice] || `Operazione non riuscita (HTTP ${r.status}). Aggiorna lo stato prima di riprovare.`), { codice: d.codice });
     }
@@ -69,6 +113,7 @@
   const aziende = (v, body) => api('/api/auth/aziende/' + v, body);
   async function azione(fn) {
     if (occupato) return;
+    interrompiRevoca();
     const focusPrima = document.activeElement;
     const focusAzienda = root.contains(focusPrima) ? focusPrima.dataset.azienda : null;
     const focusAzione = focusPrima?.dataset?.azione || '';
@@ -116,7 +161,6 @@
     const focusAzienda = lista.contains(attivo) ? attivo.dataset.azienda : null;
     const focusAzione = attivo?.dataset?.azione || '';
     for (const data of lista.querySelectorAll('input[data-azienda]')) dateRinnovo.set(data.dataset.azienda,data.value);
-    aziendeCorrenti = data.aziende || [];
     // Una mutazione confermata resta riprovabile soltanto finché manca la
     // lettura aggiornata. La successiva azione intenzionale ha un nuovo ID.
     for (const [key, op] of modifiche) if (op.confermata) modifiche.delete(key);
@@ -179,12 +223,13 @@
     }
   }
   async function sessione() {
+    interrompiRevoca();
     const versione = ++revisione;
     const r = await fetch('/api/auth/me', { credentials: 'same-origin', signal: AbortSignal.timeout(5000) });
     const me = await r.json().catch(() => ({}));
     if (versione !== revisione) return;
     if (!r.ok) {
-      nascondiGestione(); $('esci').hidden = true;
+      nascondiGestione(); nascondiSessioni(); $('esci').hidden = true;
       $('sessione').textContent = r.status >= 500 ? 'Verifica account non disponibile.' : 'Nessuna sessione attiva. Accedi per continuare.';
       comunica(null); return;
     }
@@ -194,45 +239,68 @@
         : 'Account autenticato · azienda in attesa di attivazione';
     comunica(me);
     if (me.admin) await elenco(); else nascondiGestione();
+    await elencoSessioni();
   }
-  let operazione = crypto.randomUUID(), ultimoBody = '';
+  let operazione = crypto.randomUUID(), idInvito = 'azienda-' + operazione, ultimoBody = '';
   $('invita').addEventListener('submit', e => {
     e.preventDefault(); azione(async () => {
       const f = e.target.elements;
       const dati = { nome: f.nome.value, email: f.email.value,
         moduli: f.moduli.value === 'entrambi' ? ['auto', 'moto'] : [f.moduli.value] };
       const key = JSON.stringify(dati);
-      if (ultimoBody && ultimoBody !== key) operazione = crypto.randomUUID();
-      ultimoBody = key;
-      let d;
-      try { d = await aziende('invita', { ...dati, id: 'azienda-' + operazione, operazione }); }
-      catch (e) {
-        if (e.codice !== 'invito_esistente') throw e;
-        await elenco();
-        // Solo recupero idempotente: il dominio confronta tutti i parametri e
-        // l'Admin originale. Nessun nuovo invito né token rigenerato.
-        const candidate = aziendeCorrenti.filter(a => a.stato === 'pending' && a.nome === dati.nome
-          && /^azienda-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(a.id));
-        if (candidate.length !== 1) throw e;
-        const originale = candidate[0].id.slice('azienda-'.length);
-        d = await aziende('invita', { ...dati, id: candidate[0].id, operazione: originale });
-        operazione = originale;
+      if (ultimoBody && ultimoBody !== key) {
+        operazione = crypto.randomUUID(); idInvito = 'azienda-' + operazione;
       }
+      ultimoBody = key;
+      const d = await aziende('invita', { ...dati, id: idInvito, operazione });
+      operazione = d.operazione; idInvito = d.id;
       $('consegna').replaceChildren();
       if (d.link) {
         const a = document.createElement('a'); a.href = d.link; a.target = '_blank'; a.rel = 'noopener noreferrer';
         a.textContent = 'Apri invito locale del referente'; $('consegna').append(a);
       } else $('consegna').textContent = 'Invito già creato: link temporaneo non disponibile dopo riavvio.';
-      $('stato').textContent = 'Invito disponibile nel link qui sopra; non inviato via email. Aprilo, verifica l’email nella casella locale e accetta. Poi attiva l’azienda da Admin.'; await elenco();
+      $('stato').textContent = d.link
+        ? 'Invito disponibile nel link qui sopra; non inviato via email. Aprilo, verifica l’email nella casella locale e accetta. Poi attiva l’azienda da Admin.'
+        : 'Invito già registrato; il link temporaneo non è disponibile. Nessun nuovo invito creato.';
+      await elenco();
     });
   });
   $('aggiorna').addEventListener('click', () => azione(elenco));
   $('sessione-aggiorna').addEventListener('click', () => azione(sessione));
+  $('sessioni-aggiorna').addEventListener('click', () => azione(aggiornaSessioni));
+  function interrompiRevoca() {
+    if (revocaInCorso && $('stato').textContent === revocaInCorso.testo) {
+      mostraRevoca(null, revocaInCorso.corrente);
+    }
+    revocaInCorso = null;
+  }
+  function mostraRevoca(provider, corrente = true) {
+    const terminata = corrente ? 'Sessione AMR terminata.' : 'Sessione selezionata terminata.';
+    $('stato').textContent = provider?.stato === 'confirmed'
+      ? terminata + ' Revoca Nhost confermata.'
+      : provider?.stato === 'pending' ? terminata + ' Revoca Nhost in corso.'
+        : terminata + ' La revoca della sessione Nhost non è confermata.';
+    revocaInCorso = provider?.stato === 'pending' ? { corrente, testo: $('stato').textContent } : null;
+  }
+  async function seguiRevoca(provider, versione, corrente = true) {
+    if (provider?.stato !== 'pending' || !/^[a-f0-9]{64}$/.test(provider.id)) return;
+    for (let i = 0; i < 6; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      if (versione !== revisione) return;
+      try {
+        const esito = await api('/api/auth/logout/stato', { id: provider.id }, 3000);
+        if (versione !== revisione) return;
+        mostraRevoca(esito.provider, corrente);
+        if (esito.provider?.stato !== 'pending') return;
+      } catch { if (versione === revisione) mostraRevoca(null, corrente); return; }
+    }
+    if (versione === revisione) mostraRevoca(null, corrente);
+  }
   $('esci').addEventListener('click', () => azione(async () => {
-    nascondiGestione(); comunica(null);
-    await api('/api/auth/logout', {});
+    nascondiGestione(); nascondiSessioni(); comunica(null);
+    const esito = await api('/api/auth/logout', {});
     $('esci').hidden = true; $('sessione').textContent = 'Sessione terminata.';
-    $('stato').textContent = 'Accedi nuovamente per usare il tuo account.';
+    mostraRevoca(esito.provider); void seguiRevoca(esito.provider, revisione);
   }));
   $('registra').addEventListener('submit', e => {
     e.preventDefault(); azione(async () => {
