@@ -1,15 +1,15 @@
 'use strict';
 const crypto = require('node:crypto');
 
-// Sperimentazione loopback separata dal centro: nessun JWT del browser è accettato.
+// Sessioni RAM di un singolo processo: restart perde tutte le sessioni e nega i vecchi cookie.
+// Nessun JWT del browser è accettato; HTTPS non introduce persistenza o replica.
 // Nhost verifica password/TOTP; questo modulo registra l'esito ricevuto dal server.
 function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 * 60000, cookiePath = '/api/auth',
-  cleanupMs = 10000 }) {
+  cleanupMs = 10000, proxyAttendibili, trasporto: configTrasporto }) {
   const express = require('express');
-  const url = new URL(origine);
-  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.origin !== origine) {
-    throw new Error('Login di prova soltanto su origine loopback esplicita');
-  }
+  const config = configTrasporto === undefined ? { origine, proxyAttendibili } : configTrasporto;
+  const trasporto = require('./trasporto-prova').trasportoPerRotta({ origine, proxyAttendibili, trasporto: configTrasporto });
+  origine = trasporto.origine;
   if (!['/', '/api/auth'].includes(cookiePath)) throw new Error('ambito cookie del collaudo non valido');
   if (!Number.isInteger(cleanupMs) || cleanupMs < 1 || cleanupMs > 10000) throw new Error('attesa cleanup non valida');
   const sessioni = new Map(), challenge = new Map(), revoche = new Map(), tentativiAccesso = new Map();
@@ -28,7 +28,7 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     for (const [k, s] of esitiLogout) if (s.scadenza <= ora()) { clearTimeout(s.timer); esitiLogout.delete(k); }
   };
   const timer = setInterval(eliminaScaduti, 30000); timer.unref();
-  const options = { httpOnly: true, sameSite: 'strict', path: cookiePath, secure: false };
+  const options = { httpOnly: true, sameSite: 'strict', path: cookiePath, secure: trasporto.secure };
   // Il cookie di contesto non autentica: collega logout e tentativi ancora pendenti.
   function browser(req, res) {
     const esistente = cookie(req, 'amr_accesso_prova');
@@ -85,15 +85,10 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
   }
   const errore = (status, codice) => Object.assign(new Error(codice), { status, codice });
   let attive = 0, inizioFinestra = ora(), tentativi = 0;
-  app.use('/api/auth', (req, res, next) => {
+  app.use('/api/auth', trasporto.middleware, (req, res, next) => {
     res.set('Cache-Control', 'no-store');
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
-    // Origin atteso fisso, non ricavato da Host/Forwarded del richiedente.
-    if (req.headers.host !== url.host || !['127.0.0.1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) {
-      return res.sendStatus(403);
-    }
-    if (req.method !== 'GET' && req.headers.origin !== origine) return res.sendStatus(403);
     eliminaScaduti(); next();
   }, express.json({ limit: '4kb', strict: true }));
   const path = require('node:path');
@@ -294,7 +289,7 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     for (const job of cleanup) { clearTimeout(job.timer); job.termina(false); }
     sessioni.clear(); challenge.clear(); revoche.clear(); tentativiAccesso.clear();
   } };
-  require('./sessioni-prova-route').mount(app, { accessi, ora });
+  require('./sessioni-prova-route').mount(app, { accessi, ora, trasporto: config });
   return accessi;
 }
 module.exports = { mount };

@@ -1,11 +1,18 @@
 'use strict';
 
-// Client del collaudo: URL fissata dal processo, mai ricevuta dal browser.
-function creaClient({ base, richiesta = fetch, timeoutMs = 10000 }) {
+// URL e origine Auth fissate dal processo, mai ricevute dal browser.
+function creaClient({ base, origineAuth, richiesta = fetch, timeoutMs = 10000 }) {
   const url = new URL(base);
-  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1'
-      || url.username || url.password || url.search || url.hash || url.pathname !== '/v1') {
-    throw new Error('Auth del collaudo deve essere http://127.0.0.1:porta/v1');
+  const locale = url.protocol === 'http:' && url.hostname === '127.0.0.1' && url.pathname === '/v1';
+  const https = url.protocol === 'https:' && typeof origineAuth === 'string'
+    && require('./trasporto-prova').origineConfigurata(origineAuth).origin === url.origin;
+  // Un prefisso esplicito (es. /v1 oppure /v1/auth), senza normalizzazioni,
+  // query, path traversal o segmenti codificati che possano cambiare endpoint.
+  if (typeof base !== 'string' || url.username || url.password || url.search || url.hash
+      || (!locale && !https) || (origineAuth !== undefined && origineAuth !== url.origin)
+      || !/^\/(?:[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*)?$/.test(url.pathname)
+      || base !== url.origin + (url.pathname === '/' ? '' : url.pathname)) {
+    throw new Error('base Auth non valida: HTTP loopback /v1 oppure HTTPS con origineAuth esplicita');
   }
   async function chiama(endpoint, body, token) {
     try {

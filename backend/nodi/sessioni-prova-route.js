@@ -1,8 +1,10 @@
 'use strict';
 
-// Montato dal login di prova, dopo i suoi controlli loopback/Origin e JSON.
+// Montato dal login: stessa policy esplicita di trasporto e parser JSON.
 // Solo sessioni AMR in RAM di questo processo; nessun elenco sessioni Nhost.
-function mount(app, { accessi, ora = Date.now }) {
+function mount(app, { accessi, trasporto, ora = Date.now }) {
+  const policy = require('./trasporto-prova').creaTrasporto(trasporto);
+  app.use('/api/auth/sessioni', policy.middleware);
   let attive = 0, tentativi = 0, finestra = ora();
   const protetta = fn => async (req, res) => {
     if (ora() - finestra >= 60000) { finestra = ora(); tentativi = 0; }

@@ -2,21 +2,14 @@
 const crypto = require('node:crypto');
 const path = require('node:path');
 
-// Solo il collaudo loopback: nessun invio SMTP esterno o backup dichiarato riuscito.
-function mount(app, { account, accessi, client, origine, ora = () => Date.now() }) {
+// Il mount non attiva invio SMTP o storage esterno.
+function mount(app, { account, accessi, client, origine, proxyAttendibili, trasporto, ora = () => Date.now() }) {
   const express = require('express');
-  const url = new URL(origine);
-  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.origin !== origine) {
-    throw new Error('aziende del collaudo solo su loopback');
-  }
+  const policy = require('./trasporto-prova').trasportoPerRotta({ origine, proxyAttendibili, trasporto });
+  origine = policy.origine;
   const consegne = new Map();
   let attive = 0, tentativi = 0, finestra = ora();
-  app.use('/api/auth/aziende', (req, res, next) => {
-    res.set('Referrer-Policy', 'no-referrer');
-    if (req.headers.host !== url.host || !['127.0.0.1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) return res.sendStatus(403);
-    if (req.method !== 'GET' && req.headers.origin !== origine) return res.sendStatus(403);
-    next();
-  }, express.json({ limit: '4kb', strict: true }));
+  app.use('/api/auth/aziende', policy.middleware, express.json({ limit: '4kb', strict: true }));
   const protetta = fn => async (req, res) => {
     if (ora() - finestra >= 60000) { finestra = ora(); tentativi = 0; }
     if (attive >= 4 || tentativi >= 30) return res.status(429).set('Retry-After','60').json({ codice:'troppi_tentativi' });
