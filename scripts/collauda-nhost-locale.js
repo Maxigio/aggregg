@@ -363,17 +363,27 @@ async function collauda({ manuale = false } = {}) {
     diagnosi += ' · HTTP ' + challengeAmr.status + ' · ' + String((await challengeAmr.clone().json()).codice || 'esito senza errore');
     assert.equal(challengeAmr.status, 200); assert.deepEqual(await challengeAmr.json(), { mfa: true });
     const cookieMfa = challengeAmr.headers.getSetCookie().find(v => v.startsWith('amr_mfa_prova=')).split(';')[0];
+    const cookieContesto = challengeAmr.headers.getSetCookie().find(v => v.startsWith('amr_accesso_prova='))?.split(';')[0];
+    assert.ok(cookieContesto);
     assert.equal((await richiestaLogin('me', undefined, cookieMfa)).status, 401);
-    const mfaAmr = await richiestaLogin('mfa', { otp: totp(generated.data.totpSecret) }, cookieMfa);
+    const mfaAmr = await richiestaLogin('mfa', { otp: totp(generated.data.totpSecret) }, cookieMfa + '; ' + cookieContesto);
     fase = 'MFA AMR → Auth';
     diagnosi = 'HTTP ' + mfaAmr.status + ' · ' + String((await mfaAmr.clone().json()).codice || 'esito senza errore');
     assert.equal(mfaAmr.status, 200); assert.deepEqual(await mfaAmr.json(), { ok: true });
     const cookieSessione = mfaAmr.headers.getSetCookie().find(v => v.startsWith('amr_sessione_prova=')).split(';')[0];
     assert.match(cookieSessione, /=([a-f0-9]{64})$/);
     assert.equal((await richiestaLogin('me', undefined, cookieSessione)).status, 200);
-    const uscitaAmr = await richiestaLogin('logout', {}, cookieSessione);
-    assert.equal(uscitaAmr.status, 200); assert.equal((await uscitaAmr.json()).providerRevocato, true);
+    const uscitaAmr = await richiestaLogin('logout', {}, cookieSessione + '; ' + cookieContesto);
+    assert.equal(uscitaAmr.status, 200);
+    const uscita = await uscitaAmr.json(); assert.equal(uscita.ok, true);
     assert.equal((await richiestaLogin('me', undefined, cookieSessione)).status, 401);
+    let provider = uscita.provider;
+    for (let i = 0; provider.stato === 'pending' && i < 30; i++) {
+      await new Promise(r => setTimeout(r, 100));
+      const stato = await richiestaLogin('logout/stato', { id: provider.id }, cookieContesto);
+      assert.equal(stato.status, 200); provider = (await stato.json()).provider;
+    }
+    assert.equal(provider.stato, 'confirmed');
     assert.equal((await richiestaLogin('pagina')).status, 200);
     risultati.push('AMR → Auth reale: challenge server, cookie opaco, sessione MFA; logout rende il cookie riusato non valido');
     fase = 'autorizzazioni reali nel centro';

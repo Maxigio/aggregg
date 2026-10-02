@@ -7,6 +7,30 @@ const messaggi = { input_non_valido: 'Controlla i dati inseriti.', accesso_negat
   accesso_non_autorizzato: 'Accesso non autorizzato. Per l’Admin serve MFA.', ripeti_login: 'Ripeti il login per un nuovo codice.',
   troppi_tentativi: 'Troppi tentativi. Riprova più tardi.', identita_non_disponibile: 'Servizio di accesso non disponibile.',
   sessione_non_valida: 'Sessione terminata.' };
+function mostraRevoca(provider) {
+  stato.textContent = provider?.stato === 'confirmed' ? 'Sessione AMR terminata. Revoca Nhost confermata.'
+    : provider?.stato === 'pending' ? 'Sessione AMR terminata. Revoca Nhost in corso.'
+    : 'Sessione AMR terminata. Revoca Nhost non confermata.';
+}
+async function seguiRevoca(provider, versione) {
+  if (provider?.stato !== 'pending' || !/^[a-f0-9]{64}$/.test(provider.id)) return;
+  // Letture limitate; un nuovo login rende obsolete queste notifiche.
+  for (let i = 0; i < 6; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    if (versione !== sequenza) return;
+    try {
+      const r = await fetch('/api/auth/logout/stato', { method: 'POST', credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: provider.id }),
+        signal: AbortSignal.timeout(3000) });
+      const data = await r.json();
+      if (versione !== sequenza) return;
+      if (!r.ok) { mostraRevoca(null); return; }
+      mostraRevoca(data.provider);
+      if (data.provider?.stato !== 'pending') return;
+    } catch { if (versione === sequenza) mostraRevoca(null); return; }
+  }
+  if (versione === sequenza) mostraRevoca(null);
+}
 async function manda(endpoint, body) {
   if (occupato) return;
   occupato = true; sequenza++;
@@ -23,7 +47,7 @@ async function manda(endpoint, body) {
     }
     if (data.mfa) { login.hidden = true; mfa.hidden = false; mfa.elements.otp.focus(); stato.textContent = 'Inserisci il codice dell’autenticatore.'; }
     else if (endpoint === 'logout') { prototipo.hidden = true; login.hidden = false; mfa.hidden = true; logout.hidden = true;
-      stato.textContent = data.providerRevocato ? 'Sessione terminata.' : 'Sessione AMR terminata. Revoca Nhost non confermata.'; }
+      mostraRevoca(data.provider); void seguiRevoca(data.provider, sequenza); }
     else { prototipo.hidden = false; login.hidden = true; mfa.hidden = true; logout.hidden = false; stato.textContent = 'Accesso verificato dal backend.'; location.replace('/'); }
   } catch { stato.textContent = 'Esito non confermato. Ripeti il login.'; login.hidden = false; mfa.hidden = true; }
   finally {
