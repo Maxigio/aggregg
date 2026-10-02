@@ -140,3 +140,17 @@ Log locale: `/private/tmp/amr-incrementi-suite4.log`. Collaudo PostgreSQL automa
 separato: `/private/tmp/amr-rinnovi-pg2.log`. Questi log temporanei non sono un
 artefatto di rilascio permanente. Il binario esplicito evita skip restic; il suo
 SHA256 è stato verificato nell'approvvigionamento, non dal wrapper runtime.
+
+## Review successiva del branch, senza fix — HEAD 30a1f12
+
+La [review del 2 ottobre](branch-nodi-2026-10-02-30a1f12.md) ricostruisce i 26
+commit dalla base, verifica decisioni e percorsi, e registra 13 difetti riprodotti
+e due limiti operativi prima del remoto. Le etichette “completato” sopra descrivono
+gli incrementi e i loro casi verificati; non significano che l'intera area sia
+priva di altri difetti o pronta alla produzione.
+
+Nuove prove: suite intera 1.025/1.025, nodi 100/100, PostgreSQL/Nhost locale
+separato, browser con API simulate e fault injection, tre review indipendenti.
+Nessun commit, deploy, accesso M2, riavvio del collaudo manuale o nuova chiamata
+ai portali. Rimangono da completare ciclo commerciale, backup integrato,
+entrypoint pubblico e integrazione di tutte le funzionalità Auto/Moto dell'app.
