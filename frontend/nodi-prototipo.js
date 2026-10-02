@@ -10,7 +10,29 @@ let identita = null, moduli = [], modelli = [], sequenzaMarche = 0, sequenzaMode
 let parametriRicerca = null, pagina = 0, fontiCorrenti = null, risultatiCorrenti = [], ricercaOccupata = false;
 let filtriModificati = false, paginaIncompleta = null;
 let paginaLavori = 1, paginaVisualizzata = 1, pagineDisponibili = 1;
-let nodiElencati = '';
+let nodiElencati = '', diagnosticaAbilitata = false;
+let accountAbilitato = false, accessoSintetico = false;
+const aree = ['ricercaPanel', 'diagnosticaPanel', 'accountPanel'];
+function aggiornaAree(aggiornaIndirizzo = true, focus = document.activeElement) {
+  const disponibili = { ricercaPanel: accessoSintetico || Boolean(identita && moduli.length),
+    diagnosticaPanel: diagnosticaAbilitata, accountPanel: accountAbilitato };
+  const richiesta = location.hash.slice(1);
+  const scelta = disponibili[richiesta] && aree.includes(richiesta) ? richiesta
+    : (!identita && diagnosticaAbilitata ? 'diagnosticaPanel' : aree.find(id => disponibili[id]));
+  const linkFocalizzato = focus.closest('.area-nav a');
+  const nascosto = !focus.isConnected || aree.some(id => id !== scelta && $(id).contains(focus))
+    || (linkFocalizzato && !disponibili[linkFocalizzato.hash.slice(1)]);
+  for (const id of aree) {
+    $(id).hidden = id !== scelta;
+    const link = document.querySelector(`.area-nav a[href="#${id}"]`);
+    link.hidden = !disponibili[id];
+    if (id === scelta) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+  if (aggiornaIndirizzo && scelta && scelta !== richiesta) history.replaceState(null, '', '#' + scelta);
+  if (nascosto && scelta) document.querySelector(`.area-nav a[href="#${scelta}"]`).focus({ preventScroll: true });
+}
+window.addEventListener('hashchange', () => aggiornaAree());
 const nomiFonti = { subito: 'Subito', autoscout: 'AutoScout24', moto: 'Moto.it' };
 const nomiEventi = { riavvio_lavori: 'Centro riavviato con lavori pendenti',
   lavoro_incerto: 'Lavoro avviato, esito non confermato',
@@ -200,27 +222,44 @@ function renderStato(data) {
     card.append(actions);
     box.append(card);
   }
-  const tbody = $('lavori'); tbody.replaceChildren();
+  const tbody = $('lavori'), scroll = tbody.closest('.table-scroll');
+  const focus = tbody.contains(document.activeElement) ? document.activeElement : null;
+  const posizione = { top: scroll.scrollTop, left: scroll.scrollLeft };
+  const righe = new Map(Array.from(tbody.children, tr => [tr.dataset.lavoro, tr]));
+  const presenti = new Set(lavori.map(job => job.id));
+  for (const tr of Array.from(tbody.children)) if (!presenti.has(tr.dataset.lavoro)) tr.remove();
   if (!lavori.length) {
     const td = elemento('td', 'Nessun lavoro registrato.'); td.colSpan = 12;
     const tr = document.createElement('tr'); tr.append(td); tbody.append(tr);
   }
-  for (const job of lavori) {
-    const tr = document.createElement('tr');
+  for (const [indice, job] of lavori.entries()) {
+    const tr = righe.get(job.id) || document.createElement('tr');
+    tr.dataset.lavoro = job.id;
     const state = elemento('span', statoLavoro(job.stato), `state ${statoClasse(job.stato)}`);
-    const td = document.createElement('td'); td.append(state); tr.append(td);
-    for (const v of [job.operazione, job.azienda, job.nodo || '—', orario(job.creato),
+    while (tr.children.length < 12) tr.append(document.createElement('td'));
+    tr.children[0].replaceChildren(state);
+    const valori = [job.operazione, job.azienda, job.nodo || '—', orario(job.creato),
       job.http ?? '—', millisecondi(job.assegnazione_ms), millisecondi(job.coda_ms),
-      millisecondi(job.nodo_ms), millisecondi(job.trasporto_ms), dimensione(job.byte_risposta)])
-      tr.append(elemento('td', v));
-    const cell = document.createElement('td');
+      millisecondi(job.nodo_ms), millisecondi(job.trasporto_ms), dimensione(job.byte_risposta)];
+    valori.forEach((v, i) => { tr.children[i + 1].textContent = String(v); });
+    const cell = tr.children[11];
     if (job.filtri) {
-      const disclosure = document.createElement('details'); disclosure.append(elemento('summary', 'Mostra'),
-        elemento('pre', JSON.stringify(job.filtri, null, 2))); cell.append(disclosure);
+      let disclosure = cell.querySelector('details');
+      if (!disclosure) {
+        disclosure = document.createElement('details');
+        disclosure.append(elemento('summary', 'Dettagli'), elemento('pre', ''));
+        cell.replaceChildren(disclosure);
+      }
+      const pre = disclosure.querySelector('pre'), testo = JSON.stringify(job.filtri, null, 2);
+      if (pre.textContent !== testo) pre.textContent = testo;
     } else cell.textContent = '—';
-    tr.append(cell);
-    tbody.append(tr);
+    if (tbody.children[indice] !== tr) tbody.insertBefore(tr, tbody.children[indice] || null);
   }
+  if (focus) {
+    const destinazione = tbody.contains(focus) ? focus : scroll;
+    if (document.activeElement !== destinazione) destinazione.focus({ preventScroll: true });
+  }
+  scroll.scrollTop = posizione.top; scroll.scrollLeft = posizione.left;
   $('lavoriPagina').textContent = `Pagina ${data.pagina || 1} di ${data.pagine || 1} · ${data.totale ?? lavori.length} lavori`;
   $('lavoriPrima').disabled = paginaLavori <= 1;
   $('lavoriDopo').disabled = paginaLavori >= (data.pagine || 1);
@@ -231,6 +270,7 @@ function renderStato(data) {
   if (!eventi.childElementCount) eventi.append(elemento('li', 'Nessun evento operativo recente.'));
 }
 async function aggiornaStato(manuale = false) {
+  if (!diagnosticaAbilitata) return;
   const numero = ++sequenzaStato;
   if (manuale) { $('aggiorna').disabled = true; $('lavoriPrima').disabled = true;
     $('lavoriDopo').disabled = true; $('aggiornato').textContent = 'Aggiornamento in corso…'; }
@@ -388,6 +428,7 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0) {
 
 async function applicaIdentita(data) {
   identita = data.azienda; moduli = data.moduli; sequenzaRicerca++; ricercaOccupata = false;
+  aggiornaAree();
   paginaLavori = 1;
   parametriRicerca = null; pagina = 0; fontiCorrenti = null; risultatiCorrenti = [];
   paginaIncompleta = null; filtriModificati = false;
@@ -409,6 +450,33 @@ async function applicaIdentita(data) {
   }
   await aggiornaStato();
 }
+// Una sessione cambiata invalida anche risposte e pagine in attesa nel browser.
+function terminaContesto() {
+  sequenzaRicerca++; sequenzaStato++; sequenzaMarche++; sequenzaModelli++; sequenzaVersioni++;
+  identita = null; moduli = []; parametriRicerca = null; paginaIncompleta = null;
+  risultatiCorrenti = []; fontiCorrenti = null; ricercaOccupata = false;
+  form.hidden = true; $('altri').hidden = true;
+  for (const id of ['fonti', 'risultati', 'avvisi', 'metriche', 'nodi', 'lavori', 'eventi']) $(id).replaceChildren();
+  $('ricercaStato').textContent = 'In attesa';
+  $('identita').textContent = 'Accedi con il tuo account locale.';
+  $('risultatoAiuto').textContent = 'Le ricerche richiedono un account e un’azienda attiva.';
+}
+let contestoAccount = '';
+document.addEventListener('amr:account', async e => {
+  const me = e.detail, firma = JSON.stringify(me);
+  if (firma === contestoAccount) return;
+  const focusPrecedente = document.activeElement;
+  contestoAccount = firma; terminaContesto();
+  diagnosticaAbilitata = Boolean(me?.admin);
+  aggiornaAree(false, focusPrecedente);
+  if (diagnosticaAbilitata) aggiornaStato();
+  if (me?.aziendaValida) {
+    try { await applicaIdentita(me); }
+    catch { $('identita').textContent = 'Impossibile aggiornare i cataloghi dell’account.'; }
+  } else if (me) $('identita').textContent = me.admin
+    ? 'Admin gestionale: le ricerche si apriranno con l’account del referente, dopo accettazione e attivazione dell’azienda.' : 'Azienda non attiva: completa l’invito e attendi l’attivazione dell’Admin.';
+  aggiornaAree();
+});
 $('entra').addEventListener('click', async () => {
   try {
     const data = await leggi('/api/test/login', { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -478,21 +546,19 @@ $('cancellaLavori').addEventListener('click', async () => {
   finally { bottone.disabled = false; }
 });
 form.hidden = true;
-aggiornaStato();
 setInterval(() => { if (!$('aggiorna').disabled) aggiornaStato(); }, 3000);
 leggi('/api/test/config').then(async config => {
   if (config.accesso === 'nhost') {
-    $('azienda').hidden = true; $('entra').hidden = true;
-    document.querySelector('label[for=azienda]').textContent = 'Account Nhost locale';
+    document.querySelector('.identity-card').hidden = true;
     $('risultatoAiuto').textContent = 'Le ricerche richiedono una licenza aziendale e un nodo disponibile.';
-    const link = elemento('a', 'Accedi / gestisci sessione'); link.href = '/api/auth/pagina';
-    $('identita').before(link);
-    try {
-      const me = await leggi('/api/auth/me');
-      if (me.aziendaValida) await applicaIdentita(me);
-      else $('identita').textContent = me.admin ? 'Admin · nessuna licenza di ricerca assegnata' : 'Azienda non attiva';
-    } catch { $('identita').textContent = 'Accedi con il tuo account locale.'; }
+    accountAbilitato = true; aggiornaAree(false);
+    const script = document.createElement('script');
+    script.src = '/api/auth/aziende/pagina.js'; script.defer = true;
+    script.onerror = () => { $('accountPanel').querySelector('[data-account-prototipo]').textContent =
+      'Gestione account non disponibile. Ricarica la pagina per riprovare.'; };
+    document.head.append(script);
   } else {
+    accessoSintetico = true; diagnosticaAbilitata = true; aggiornaAree(); aggiornaStato();
     try { const data = await leggi('/api/test/me'); $('azienda').value = data.azienda; await applicaIdentita(data); }
     catch {}
   }

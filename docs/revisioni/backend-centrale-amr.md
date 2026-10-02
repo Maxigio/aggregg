@@ -131,3 +131,45 @@ test/report-pdf-limite.test.js test/targa.test.js test/dati-per-persona.test.js
 ## Prossimo passo
 
 Presentare mappa/finding/piano al proprietario e attendere approvazione dell'intervento iniziale. Aggiornare questo registro dopo ogni intervento con riproduzione prima, modifica, controprove, regressioni, limiti e decisione. Non dichiarare AMR deployable sulla sola base di questa analisi.
+
+## Decisioni successive: interview commerciale del 30 settembre
+
+Il proprietario ha richiesto il commit del registro (eseguito: `155d295`) e approvato l'implementazione incrementale. Ha poi richiesto di definire prima le decisioni aperte tramite interview. Nessuna modifica applicativa iniziata; non anticipare scelte di provider con implementazioni simulate presentate come sistema definitivo.
+
+- Identità: servizio gestito da un fornitore; provider ancora da scegliere.
+- Obiettivo di spesa: meno di 50 euro/mese per centro, identità, database e backup; da verificare, non un preventivo approvato.
+- Brevi manutenzioni programmate durante gli aggiornamenti accettate. Non è una decisione sui tempi massimi di recupero da guasto.
+- Dimensione iniziale indicata: 10 aziende, massimo 30 persone, fino all'inizio del 2027/primo trimestre. Concorrenza effettiva e carico delle ricerche ancora da misurare.
+- Il proprietario attiva ogni azienda; il referente usa l'area account client-side per invitare due colleghi. Tre persone totali, referente incluso.
+- Ogni persona può usare PC e telefono senza occupare un'altra utenza. Superato il vecchio vincolo di postazione/browser autorizzato; non introdurre conteggio dispositivi come posti.
+- Una sola azienda per persona.
+- Auto e Moto acquistabili separatamente. Tutti gli utenti dell'azienda ricevono tutti i moduli acquistati; primi clienti Moto.
+- Prime fatture annuali gestite manualmente dal proprietario. Pagamenti e rinnovi automatici rinviati.
+- Alla scadenza blocco immediato dell'accesso, senza tolleranza. Richiede controlli server-side anche per sessioni già attive; non basta la scadenza del token/login. Trattamento dei lavori già in corso da definire nel contratto operativo.
+- Verifica email obbligatoria prima del primo accesso.
+- MFA obbligatoria per l'admin del proprietario e facoltativa per i clienti. Non confondere questo admin con il referente di un'azienda.
+
+Interview in testo semplice, una domanda per volta: il proprietario ha segnalato ripetutamente che le domande tramite tool non erano rispondibili dopo la chiusura del turno.
+
+Valutazione fornitori in corso; nessuna creazione di account, acquisto, infrastruttura, migrazione database o deploy autorizzati implicitamente dalla ricerca. Le opzioni Supabase/Clerk e Render vanno confrontate su prezzi correnti, MFA, inviti, SMTP, backup/ripristino e costi extra. Le aziende, i tre posti, i moduli e le scadenze restano regole AMR da applicare server-side anche usando un fornitore d'identità.
+
+Ulteriori informazioni: mittente disponibile `work@lucasraineri.it`, casella Aruba ordinaria con SMTP da verificare mediante configurazione e invio concordati, senza leggere credenziali in chat. Il dominio AMR non è ancora acquistato; hosting del **frontend** e dominio esclusi dal budget indicativo di 50 euro/mese. Non estendere questa esclusione automaticamente all'hosting del processo Node centrale: frontend statico e backend/coordinatore sono costi distinti, anche quando un solo servizio li ospita entrambi. Supabase Pro è pubblicizzato da 25 **dollari**/mese, non prezzo fisso in euro; include Auth, Postgres e backup giornalieri, ma non il processo Express/centro–nodi di questa codebase. SMTP Aruba tecnicamente candidato; consegna, limiti e TLS ancora da collaudare. Provider non ancora approvato.
+
+### Ricerca di un fornitore unico: 30 settembre
+
+Richiesta: equivalente delle funzioni necessarie di Supabase più hosting del backend centrale. Candidato più aderente documentalmente: **Nhost Pro + Nhost Run**. Auth gestita con email/password, verifica, recupero e TOTP; PostgreSQL; backup giornalieri sette giorni; Run per container personalizzati. Compatibilità operativa con AMR ancora da provare, non dichiarare equivalenza totale ai prodotti Supabase o deploy senza modifiche.
+
+- Prezzo Pro da 25 USD/mese, 15 USD di compute credits. Run e risorse dei servizi consumano compute a parte: non è hosting illimitato incluso nel canone. Listino shared 15 USD/vCPU/mese con 2 GB RAM/vCPU; dedicated 50 USD/vCPU/mese. Calcolare l'insieme dei servizi, non soltanto il container AMR; extra di traffico, dominio personalizzato del progetto, imposte e cambio da includere quando applicabili. Nessun preventivo sotto 50 euro garantito.
+- Backup gestiti includono DB, non file Storage né dati dei volumi Run. PITR è add-on, non backup continuo incluso nel prezzo base. Stato temporaneo delle operazioni da gestire al riavvio come nel piano.
+- Appwrite Sites: documentazione Cloud riporta timeout massimo 30 secondi; non equiparare Sites/functions a processo centrale persistente senza rivedere richieste lunghe e stato. Convex richiede il proprio modello di funzioni/database. Firebase/Google Cloud offre componenti integrabili, ma costo e adattamento separati.
+- Fonti primarie: https://nhost.io/pricing ; https://docs.nhost.io/products/run ; https://docs.nhost.io/products/run/resources ; https://docs.nhost.io/products/run/networking ; https://docs.nhost.io/products/auth/sign-in-email-password ; https://docs.nhost.io/products/database/backups ; https://appwrite.io/docs/products/sites/develop ; https://docs.convex.dev/functions/http-actions ; https://firebase.google.com/pricing .
+
+Nessun servizio acquistato, account creato, portale di annunci interrogato o codice applicativo modificato. Prima scelta del fornitore, poi prova minima simulata di container AMR, identità/MFA, DB/restore, timeout e riavvio; integrazione prototipo resta nella chat dedicata.
+
+### Verifica Nhost Starter gratuito: 30 settembre
+
+Starter può servire alle prove di Auth e DB, non all'hosting gratuito dell'intero backend centrale AMR. Listino ufficiale: un progetto attivo, 1 GB DB, 1 GB Storage, 5 GB egress, utenti Auth illimitati, sospensione dopo una settimana di inattività; Functions massimo 10 secondi. Il limite di un workspace member riguarda chi gestisce il progetto Nhost, non gli utenti AMR.
+
+Verificata anche la tabella DOM della pagina ufficiale, perché l'estrazione testuale perde i simboli: nell'ordine Starter/Pro/Team/Enterprise, `Run your own services` e `Custom SMTP` hanno croce/check/check/check; `2FA` ha quattro check. Quindi MFA presente su Starter, ma Run e SMTP Aruba personalizzato richiedono Pro. Non proporre Functions come sostituzione diretta del processo persistente Express/coordinatore.
+
+Starter non dispone dei backup giornalieri gestiti; possibili dump manuali, secondo https://docs.nhost.io/products/database/backups . Per sviluppo: backend locale sull'iMac e Nhost Starter per identità/DB con dati di prova; per collaudare hosting centrale e SMTP personalizzato occorre passare a Pro e quantificare Run. Non è ancora una scelta approvata del provider né un'integrazione eseguita. Fonte listino e tabella: https://nhost.io/pricing .

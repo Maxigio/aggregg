@@ -30,6 +30,16 @@ function creaClient({ base, richiesta = fetch, timeoutMs = 10000 }) {
     }
   }
   return {
+    registra: (email, password, redirectTo) => chiama('/signup/email-password', {
+      // Verifica email senza refresh token nel redirect; l'accesso resta un login separato.
+      email, password, options: { redirectTo },
+      codeChallenge: require('node:crypto').createHash('sha256')
+        .update(require('node:crypto').randomBytes(32)).digest('base64url'),
+    }),
+    reinviaVerifica: (email, redirectTo) => chiama('/user/email/send-verification-email', {
+      email, options: { redirectTo }, codeChallenge: require('node:crypto').createHash('sha256')
+        .update(require('node:crypto').randomBytes(32)).digest('base64url'),
+    }),
     login: (email, password) => chiama('/signin/email-password', { email, password }),
     mfa: (ticket, otp) => chiama('/signin/mfa/totp', { ticket, otp }),
     logout: s => chiama('/signout', { refreshToken: s.refreshToken }, s.accessToken),

@@ -24,7 +24,7 @@ async function manda(endpoint, body) {
     if (data.mfa) { login.hidden = true; mfa.hidden = false; mfa.elements.otp.focus(); stato.textContent = 'Inserisci il codice dell’autenticatore.'; }
     else if (endpoint === 'logout') { prototipo.hidden = true; login.hidden = false; mfa.hidden = true; logout.hidden = true;
       stato.textContent = data.providerRevocato ? 'Sessione terminata.' : 'Sessione AMR terminata. Revoca Nhost non confermata.'; }
-    else { prototipo.hidden = false; login.hidden = true; mfa.hidden = true; logout.hidden = false; stato.textContent = 'Accesso verificato dal backend.'; }
+    else { prototipo.hidden = false; login.hidden = true; mfa.hidden = true; logout.hidden = false; stato.textContent = 'Accesso verificato dal backend.'; location.replace('/'); }
   } catch { stato.textContent = 'Esito non confermato. Ripeti il login.'; login.hidden = false; mfa.hidden = true; }
   finally {
     login.elements.password.value = ''; mfa.elements.otp.value = '';
@@ -40,5 +40,5 @@ const sequenzaIniziale = sequenza;
 fetch('/api/auth/me', { credentials: 'same-origin', signal: AbortSignal.timeout(5000) }).then(async r => {
   if (!r.ok || sequenzaIniziale !== sequenza) return;
   login.hidden = true; logout.hidden = false; prototipo.hidden = false;
-  stato.textContent = 'Sessione attiva.';
+  stato.textContent = 'Sessione attiva.'; location.replace('/');
 }).catch(() => {});

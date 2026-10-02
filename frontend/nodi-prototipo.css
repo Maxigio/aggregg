@@ -1,4 +1,6 @@
 :root{color-scheme:dark;--bg:#0b1220;--panel:#131e30;--panel2:#19263a;--line:#2b3b51;--text:#edf4ff;--muted:#a1aec2;--blue:#64a5ff;--cyan:#62d6d1;--amber:#f8ca80;--red:#fa9d9d;--green:#8ce0ba}
+.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.area-nav{display:flex;flex-wrap:wrap;gap:8px;padding:18px 0 0}.area-nav a{padding:10px 16px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--muted);font-weight:650}.area-nav a:hover{color:var(--text);background:var(--panel2)}.area-nav a[aria-current]{color:var(--text);background:#244d7c;border-color:var(--blue)}
 [hidden]{display:none!important}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse 70% 480px at 80% -180px,#173c68 0%,transparent 80%),var(--bg);color:var(--text);font:16px/1.48 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.55}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--cyan);outline-offset:3px}
@@ -15,3 +17,6 @@ button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:no
 @media(max-width:400px){.node-grid,.metrics{grid-template-columns:1fr}}
 .section-tools{display:flex;align-items:center;gap:10px}.section-tools label{color:var(--muted);font-size:.8rem;white-space:nowrap}.section-tools select{width:auto;min-width:170px}.jobs-panel table{min-width:1150px}
 @media(max-width:650px){.section-tools{flex-wrap:wrap;justify-content:flex-end}.section-tools label{width:100%;text-align:right}.section-tools select{min-width:0;flex:1}}
+
+.account-panel{padding:22px}.account-panel p{color:var(--muted);font-size:.86rem}.account-panel a{color:var(--blue)}.account-sessione{padding-bottom:18px;border-bottom:1px solid var(--line);margin-bottom:20px}.account-sessione .inline{flex-wrap:wrap}.account-sessione a.btn{text-decoration:none}.account-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:end;margin:16px 0}.account-form label{display:grid;gap:7px;font-size:.85rem;font-weight:700}.account-form .btn{justify-self:start}.account-azienda{padding:14px 16px;border:1px solid var(--line);border-radius:10px;margin-top:10px;background:var(--panel2)}.account-azienda p{margin:0 0 8px;overflow-wrap:anywhere}#account-aziende{max-height:380px;overflow-y:auto}#account-stato{min-height:1.5em;color:var(--amber)}
+@media(max-width:650px){.account-form{grid-template-columns:1fr}.account-panel{padding:18px}.account-sessione .btn{width:100%;text-align:center}}

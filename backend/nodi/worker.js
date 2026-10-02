@@ -45,12 +45,15 @@ async function avvia() {
   while (attivo) {
     try {
       await heartbeat();
+      if (!attivo) break;
       const r = await fetch(`${origine}/_nodo/poll?id=${encodeURIComponent(id)}`, {
         headers: { 'x-amr-node-token': token, 'x-amr-node-id': id }, signal: AbortSignal.timeout(4000),
       });
+      if (!attivo) { await r.body?.cancel(); break; }
       if (r.status === 204) { await pausa(250); continue; }
       if (!r.ok) throw new Error(`poll ${r.status}`);
       const lavoro = await r.json();
+      if (!attivo) break;
       inCorso = lavoro;
       const ctrl = new AbortController();
       controllerAttivo = ctrl;
@@ -73,6 +76,8 @@ async function avvia() {
   }
 }
 
+// Se il launcher del collaudo cade, non lasciare un worker orfano che continua a fare polling.
+process.on('disconnect', () => { attivo = false; controllerAttivo?.abort(); });
 process.on('SIGTERM', () => { attivo = false; controllerAttivo?.abort(); });
 process.on('SIGINT', () => { attivo = false; controllerAttivo?.abort(); });
 if (require.main === module) avvia();

@@ -131,17 +131,21 @@ async function collauda({ manuale = false } = {}) {
   let fase = 'avvio';
   const risultati = [];
   let diagnosi = '';
-  let serverLogin, loginProva, centro, pool;
+  let serverLogin, loginProva, centro, pool, writerPool, aziendeRoute, workerManuale;
   try {
     await docker('up', '-d', '--wait', 'postgres', 'mail');
     await sql('CREATE SCHEMA auth;');
     const authAddress = await docker('port', 'mail', '4000');
     const mailAddress = await docker('port', 'mail', '8025');
+    serverLogin = require('node:http').createServer();
+    await new Promise(resolve => serverLogin.listen(0, '127.0.0.1', resolve));
+    const origineLogin = 'http://127.0.0.1:' + serverLogin.address().port;
     assert.match(authAddress, /^127\.0\.0\.1:\d+$/);
     assert.match(mailAddress, /^127\.0\.0\.1:\d+$/);
     const base = `http://${authAddress}/v1`;
     const compose = JSON.parse(fs.readFileSync(file, 'utf8'));
     compose.services.auth.environment.AUTH_SERVER_URL = base;
+    compose.services.auth.environment.AUTH_ACCESS_CONTROL_ALLOWED_REDIRECT_URLS = origineLogin + '/api/auth/aziende/pagina';
     fs.writeFileSync(file, JSON.stringify(compose), { mode: 0o600 });
     await docker('up', '-d');
     const chiama = async (endpoint, body, token) => {
@@ -263,6 +267,9 @@ async function collauda({ manuale = false } = {}) {
     fase = 'pagina AMR e sessione server-side';
     await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-accessi-prova.sql'), 'utf8'));
     await sql(`INSERT INTO amr_accessi.persone(id,admin) VALUES ('${preMfa.user.id}',true);`);
+    await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-aziende-prova.sql'), 'utf8'));
+    const writerPassword = crypto.randomBytes(32).toString('hex');
+    await sql(`CREATE ROLE amr_commerciale LOGIN PASSWORD '${writerPassword}' IN ROLE amr_aziende_scrittore;`);
     const readerPassword = crypto.randomBytes(32).toString('hex');
     await sql(`CREATE ROLE amr_gateway LOGIN PASSWORD '${readerPassword}' IN ROLE amr_accessi_lettore;`);
     const pgAddress = await docker('port', 'postgres', '5432');
@@ -271,14 +278,16 @@ async function collauda({ manuale = false } = {}) {
       user: 'amr_gateway', password: readerPassword, database: 'postgres', max: 4,
       connectionTimeoutMillis: 2000, query_timeout: 3000 });
     pool.on('error', () => {});
+    writerPool = new (require('pg').Pool)({ host:'127.0.0.1', port:Number(pgAddress.split(':')[1]),
+      user:'amr_commerciale',password:writerPassword,database:'postgres',max:4,
+      statement_timeout:2500,lock_timeout:1500,connectionTimeoutMillis:2000,query_timeout:3000 });
+    writerPool.on('error',()=>{});
+    const aziende = require('../backend/nodi/aziende-postgres-prova').creaAziendePostgres({pool:writerPool});
     const identita = require('../backend/nodi/accessi-postgres-prova').creaAccessiPostgres({ pool });
     assert.equal((await identita(preMfa.user.id)).admin, true);
     await assert.rejects(pool.query('SELECT * FROM auth.users'));
     await assert.rejects(pool.query('SELECT * FROM amr_accessi.persone'));
     risultati.push('Ruolo PostgreSQL del centro: legge solo la funzione dei permessi, nessun accesso a utenti/hash/tabelle');
-    serverLogin = require('node:http').createServer();
-    await new Promise(resolve => serverLogin.listen(0, '127.0.0.1', resolve));
-    const origineLogin = 'http://127.0.0.1:' + serverLogin.address().port;
     const authClient = require('../backend/nodi/nhost-auth-client').creaClient({ base });
     const nodeToken = crypto.randomBytes(32).toString('hex');
     let prepara = manuale;
@@ -317,6 +326,8 @@ async function collauda({ manuale = false } = {}) {
             prepara = false; res.redirect(303, '/api/auth/pagina');
           });
         }
+        aziendeRoute = require('../backend/nodi/aziende-prova-route').mount(app,{
+          account:aziende,accessi:loginProva,client:authClient,origine:origineLogin });
         return loginProva;
       } });
     serverLogin.on('request', centro.app);
@@ -359,7 +370,7 @@ async function collauda({ manuale = false } = {}) {
     assert.equal((await req('/api/admin', ownerCookie)).status, 200);
     // L'admin non ottiene automaticamente una licenza aziendale.
     assert.equal((await req('/api/search?tipo=moto&marca=Yamaha', ownerCookie)).status, 403);
-    await richiestaLogin('logout', {}, ownerCookie);
+    // La sessione Admin resta disponibile per il collaudo del percorso aziende.
     const registraCliente = async suffisso => {
       const e = `cliente-${suffisso}-${crypto.randomBytes(4).toString('hex')}@amr.invalid`;
       const p = crypto.randomBytes(20).toString('hex');
@@ -431,6 +442,87 @@ async function collauda({ manuale = false } = {}) {
     assert.equal(centro.lavori.size,0);
     await assert.rejects(sql(`INSERT INTO amr_accessi.membri VALUES ('${b.id}','A');`));
     risultati.push('Centro reale: login sintetico escluso; admin MFA; moduli separati; scadenza in coda e revoca in volo senza annunci; ricerca condivisa consegnata solo al destinatario autorizzato');
+    fase = 'invito reale del referente';
+    const op = crypto.randomUUID(), aziendaId='invito-'+op;
+    const destinatario='referente-'+crypto.randomBytes(4).toString('hex')+'@amr.invalid';
+    const pwInvito=crypto.randomBytes(20).toString('hex');
+    const invitoBody={operazione:op,id:aziendaId,nome:'AMR collaudo',email:destinatario,moduli:['moto']};
+    const aziendeReq=(v,cookie,body)=>req('/api/auth/aziende/'+v,cookie,body===undefined?'GET':'POST',body);
+    assert.equal((await aziendeReq('invita',b.cookie,invitoBody)).status,403);
+    assert.equal((await aziendeReq('invita',null,invitoBody)).status,401);
+    const inv=await aziendeReq('invita',ownerCookie,invitoBody);assert.equal(inv.status,200);
+    const invData=await inv.json();assert.ok(!('token' in invData));assert.equal(invData.consegna,'locale_non_inviata');
+    const invToken=new URL(invData.link).hash.slice(1);assert.match(invToken,/^[a-f0-9]{64}$/);
+    const again=await aziendeReq('invita',ownerCookie,invitoBody);assert.equal(again.status,200);
+    assert.equal((await again.json()).link,invData.link);
+    const invDuplicato=await aziendeReq('invita',ownerCookie,{...invitoBody,
+      operazione:crypto.randomUUID(),id:'duplicato-'+crypto.randomUUID()});
+    assert.equal(invDuplicato.status,409);
+    assert.equal((await invDuplicato.json()).codice,'invito_esistente');
+    const anticipata=await aziendeReq('attiva',ownerCookie,{operazione:crypto.randomUUID(),id:aziendaId});
+    assert.equal(anticipata.status,409);
+    const signupInv=await aziendeReq('registra',null,{token:invToken,password:pwInvito});assert.equal(signupInv.status,200);
+    assert.equal((await aziendeReq('verifica',null,{token:invToken})).status,200);
+    assert.ok((await aziendeReq('accetta',null,{token:invToken,password:pwInvito})).status>=400);
+    let messaggio;
+    for(let n=0;n<40&&!messaggio;n++){
+      const mailList=await(await fetch('http://'+mailAddress+'/api/v2/messages',{signal:AbortSignal.timeout(3000)})).json();
+      messaggio=mailList.items?.find(v=>v.Raw.To.includes(destinatario));
+      if(!messaggio)await new Promise(r=>setTimeout(r,100));
+    }
+    assert.ok(messaggio);
+    const corpoMail=messaggio.Content.Body.replace(/=\r?\n/g,'').replace(/=([0-9A-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));
+    const ticketInv=corpoMail.match(/ticket=([^&\s"<>]+)/)?.[1];assert.ok(ticketInv);
+    const challengeInv=corpoMail.match(/codeChallenge=([A-Za-z0-9_-]{43})/)?.[1];assert.ok(challengeInv);
+    const verificaInv=await fetch(base+'/verify?ticket='+ticketInv+'&codeChallenge='+challengeInv+'&redirectTo='+encodeURIComponent(origineLogin+'/api/auth/aziende/pagina'),{redirect:'manual',signal:AbortSignal.timeout(10000)});
+    assert.ok([200,302,303,307].includes(verificaInv.status));
+    assert.ok(!/refreshToken|refresh_token/i.test(verificaInv.headers.get('location')||''));
+    const accettato=await aziendeReq('accetta',null,{token:invToken,password:pwInvito});assert.equal(accettato.status,200);
+    assert.ok((await aziendeReq('accetta',null,{token:invToken,password:pwInvito})).status>=400);
+    const loginReferente=await richiestaLogin('login',{email:destinatario,password:pwInvito});assert.equal(loginReferente.status,200);
+    const cookieReferente=loginReferente.headers.getSetCookie().find(v=>v.startsWith('amr_sessione_prova=')).split(';')[0];
+    assert.equal((await req('/api/search?tipo=moto&marca=Yamaha',cookieReferente)).status,403);
+    const attBody={operazione:crypto.randomUUID(),id:aziendaId};
+    assert.equal((await aziendeReq('attiva',ownerCookie,attBody)).status,200);
+    const primaScadenza=await sql(`SELECT scadenza FROM amr_accessi.aziende WHERE id='${aziendaId}';`);
+    assert.equal(await sql(`SELECT scadenza=attivata_il+interval '1 year' AND attivata_il>=accettata_il FROM amr_accessi.aziende WHERE id='${aziendaId}';`),'t');
+    assert.equal((await aziendeReq('attiva',ownerCookie,attBody)).status,200);
+    assert.equal(await sql(`SELECT scadenza FROM amr_accessi.aziende WHERE id='${aziendaId}';`),primaScadenza);
+    const infoRef=await(await richiestaLogin('me',undefined,cookieReferente)).json();
+    assert.equal(infoRef.aziendaValida,true);assert.deepEqual(infoRef.moduli,['moto']);
+    assert.equal((await req('/api/search?tipo=auto&marca=Fiat',cookieReferente)).status,403);
+    await assert.rejects(writerPool.query('SELECT * FROM auth.users'));
+    await assert.rejects(writerPool.query('SELECT * FROM amr_accessi.aziende'));
+    fase='quota commerciale PostgreSQL concorrente';
+    const adminFixture={persona:preMfa.user.id,epoca:0,mfa:true};
+    for(let n=0;n<6;n++)await sql(`INSERT INTO amr_accessi.aziende(id,scadenza,moduli) VALUES ('quota_${n}',now()+interval '1 day',ARRAY['moto']);`);
+    assert.equal(await sql('SELECT count(*) FROM amr_accessi.aziende;'),'9');
+    const held=await writerPool.connect();let ultima;
+    try{
+      await held.query('BEGIN');
+      await held.query("SET LOCAL application_name='amr_azienda_quota_holder'");
+      const bound=require('../backend/nodi/aziende-postgres-prova').creaAziendePostgres({pool:held});
+      ultima=await bound.invita(adminFixture,{operazione:crypto.randomUUID(),id:'quota_prima',nome:'Quota prima',email:'quota-prima@amr.invalid',moduli:['moto']});
+      const seconda=aziende.invita(adminFixture,{operazione:crypto.randomUUID(),id:'quota_seconda',nome:'Quota seconda',email:'quota-seconda@amr.invalid',moduli:['moto']}).then(v=>({v}),e=>({e}));
+      let contesa=false;
+      for(let n=0;n<10&&!contesa;n++){
+        contesa=await sql("SELECT count(*) FROM pg_stat_activity WHERE usename='amr_commerciale' AND wait_event_type='Lock';")==='1';
+        if(!contesa)await new Promise(r=>setTimeout(r,25));
+      }
+      assert.equal(contesa,true);await held.query('COMMIT');
+      assert.equal((await seconda).e?.codice,'quota_aziende');
+    }finally{await held.query('ROLLBACK').catch(()=>{});held.release();}
+    assert.equal(await sql('SELECT count(*) FROM amr_accessi.aziende;'),'10');
+    assert.equal(await sql("SELECT count(*) FROM amr_accessi.aziende WHERE id='quota_seconda';"),'0');
+    // Token valido con l'identità verificata sbagliata non viene consumato.
+    await assert.rejects(aziende.accetta(b.id,ultima.token),e=>e.codice==='invito_non_valido');
+    assert.equal((await aziende.invito(ultima.token)).email,'quota-prima@amr.invalid');
+    await assert.rejects(writerPool.query('SELECT amr_accessi.aziende_elenco($1::uuid,0,false)',[preMfa.user.id]),e=>e.code==='P0001'&&e.message==='accesso_non_autorizzato');
+    await sql("UPDATE amr_accessi.aziende_inviti SET creata_il=now()-interval '8 days',scadenza=now()-interval '1 second' WHERE azienda='quota_prima';");
+    await assert.rejects(aziende.invito(ultima.token),e=>e.codice==='invito_non_valido');
+    assert.equal((await aziende.elenco(adminFixture)).aziende.find(v=>v.id==='quota_prima').stato,'scaduto');
+    risultati.push('Quote aziende reali: contesa del lock osservata sul decimo posto, una sola creazione e rollback della seconda; identità estranea non consuma invito');
+    risultati.push('Aziende reali: invito Admin monouso, email verificata e PKCE; solo Moto dopo attivazione; retry non rinnova scadenza; scrittore senza lettura Auth');
     fase = 'concorrenza PostgreSQL';
     await sql(fs.readFileSync(path.join(__dirname, '../test/fixtures/nhost-quote.sql'), 'utf8'));
     const esito = p => p.then(value => ({ status: 'fulfilled', value }),
@@ -458,10 +550,24 @@ async function collauda({ manuale = false } = {}) {
     await sql("SET ROLE amr_collaudo_senza_permessi; SELECT 1;");
     await assert.rejects(sql('SET ROLE amr_collaudo_senza_permessi; SELECT * FROM amr_prova.membri;'));
     risultati.push('PostgreSQL: attesa del lock osservata, un solo ultimo posto; appartenenza univoca e ruolo senza permessi negato');
+    if(manuale) await sql('BEGIN; DELETE FROM amr_accessi.aziende_operazioni; DELETE FROM amr_accessi.aziende_inviti; DELETE FROM amr_accessi.membri; DELETE FROM amr_accessi.aziende; COMMIT;');
     for (const r of risultati) console.log('OK · ' + r);
     console.log('Collaudo locale completato: login Nhost e permessi PostgreSQL collegati al centro.');
     if (manuale) {
+      fase = 'collegamento worker reale iMac';
+      workerManuale = require('../backend/nodi/worker-processo-prova').avviaWorker({
+        origine: origineLogin, token: nodeToken, directory: path.join(directory, 'worker-imac') });
+      for (let n = 0; n < 150 && !workerManuale.terminato; n++) {
+        const nodo = centro.nodi.get('locale');
+        if (nodo && Date.now() - nodo.visto < 6000 && !nodo.simulato) break;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      assert.ok(!workerManuale.terminato && centro.nodi.get('locale')
+        && Date.now() - centro.nodi.get('locale').visto < 6000 && !centro.nodi.get('locale').simulato);
+      console.log('Worker reale iMac collegato: le ricerche dal frontend interrogano i portali.');
       console.log('Preparazione account: ' + origineLogin + '/api/auth/prepara');
+      console.log('Gestione aziende: ' + origineLogin + '/api/auth/aziende/pagina');
+      console.log('Posta locale di verifica (nessun invio esterno): http://' + mailAddress);
       console.log('Il processo resta aperto. Ctrl+C elimina account, database e container sintetici.');
       await new Promise(resolve => {
         const chiudi = () => { process.off('SIGINT', chiudi); process.off('SIGTERM', chiudi); resolve(); };
@@ -489,7 +595,10 @@ async function collauda({ manuale = false } = {}) {
       ? ` · ricevuto ${e.actual}, atteso ${e.expected}` : '';
     throw new Error('Collaudo interrotto nella fase: ' + fase + (punto ? ' · ' + punto : '') + confronto + (diagnosi ? ' · ' + diagnosi : ''));
   } finally {
+    await workerManuale?.close();
     if (centro) centro.close(); else loginProva?.close();
+    aziendeRoute?.close();
+    await writerPool?.end();
     await pool?.end();
     if (serverLogin) {
       serverLogin.closeAllConnections();
