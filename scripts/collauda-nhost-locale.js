@@ -131,6 +131,8 @@ async function collauda({ manuale = false } = {}) {
     { timeout: 600000, maxBuffer: 4 * 1024 * 1024,
       ...(extra[0] === 'down' ? {} : { signal: fermata.signal }) })).stdout.trim();
   const sql = async testo => {
+    // Conservare il punto della fixture prima dei callback, senza testo SQL/dati.
+    const fixturePunto = [...new Set(new Error().stack?.match(/nodi-colleghi-pg\.test\.js:[1-9]\d*:[1-9]\d*/g) || [])].slice(0,3);
     const child = require('node:child_process').spawn('docker', [...args, 'exec', '-T', 'postgres',
       'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres'], {
       stdio: ['pipe', 'pipe', 'pipe'], signal: fermata.signal });
@@ -143,7 +145,7 @@ async function collauda({ manuale = false } = {}) {
     return new Promise((resolve, reject) => {
       child.on('error', () => { clearTimeout(timer); reject(new Error('psql non avviato')); });
       child.on('close', code => { clearTimeout(timer); code === 0 ? resolve(out.trim())
-        : reject(Object.assign(new Error('verifica PostgreSQL fallita'),{code:sqlState})); });
+        : reject(Object.assign(new Error('verifica PostgreSQL fallita'),{code:sqlState,fixturePunto})); });
     });
   };
   let fase = 'avvio';
@@ -716,7 +718,10 @@ async function collauda({ manuale = false } = {}) {
     const confronto = typeof e.actual === 'number' && typeof e.expected === 'number'
       ? ` · ricevuto ${e.actual}, atteso ${e.expected}` : '';
     const sqlState = /^[A-Z0-9]{5}$/.test(e.code || '') ? ' · SQLSTATE '+e.code : '';
-    throw new Error('Collaudo interrotto nella fase: ' + fase + (punto ? ' · ' + punto : '') + confronto + sqlState + (diagnosi ? ' · ' + diagnosi : ''));
+    const fixture = Array.isArray(e.fixturePunto) ? e.fixturePunto.slice(0,3)
+      .filter(p=>typeof p==='string'&&/^nodi-colleghi-pg\.test\.js:[1-9]\d*:[1-9]\d*$/.test(p)) : [];
+    throw new Error('Collaudo interrotto nella fase: ' + fase + (punto ? ' · ' + punto : '') + confronto
+      + sqlState + (fixture.length?' · fixture '+fixture.join(', '):'') + (diagnosi ? ' · ' + diagnosi : ''));
   } finally {
     for (const chiudi of [() => workerManuale?.close(),
       () => centro ? centro.close() : loginProva?.close(), () => aziendeRoute?.close(), () => colleghiRoute?.close(),
