@@ -7,9 +7,81 @@ autorizzazione non riguarda produzione, M2, portali reali o invii ai clienti.
 Il primo servizio serve il prototipo, Auth e autorizzazioni commerciali;
 il frontend AMR completo rimane il successivo lavoro coordinato con APP.
 
-La console disponibile è alla pagina di login. È stato chiesto al proprietario
-di accedere senza comunicare credenziali in chat. **Progetto e servizio remoto
-non ancora creati**; nessuna spesa attivata da questa lavorazione.
+Il proprietario ha completato il login e attivato autonomamente il piano Pro.
+La console verificata il 2 ottobre mostra l'organizzazione `AMR` sul piano Pro
+e un solo progetto `AMR`, appena creato a Frankfurt (`eu-central-1`), con zero
+utenti/richieste e nessun deploy. Il proprietario ha scelto esplicitamente di
+**usare questo progetto come staging**, evitando un secondo progetto attivo.
+Il **servizio preliminare Run è stato creato il 3 ottobre**, dopo la conferma
+esplicita del proprietario; ha zero repliche e non esegue il centro. Le metriche
+della console non provano che il DB sia vuoto: prima delle migrazioni va
+controllata l'assenza di dati e integrazioni da preservare.
+
+Il dashboard Billing mostra Pro a **25 USD/mese** e una stima della prossima
+fattura di **30,50 USD**. Il dettaglio mostra 25 USD di canone e zero addebiti
+compute/egress/add-on; non spiega nella vista consultata la differenza fra
+canone e totale. Non è una misura del futuro costo del centro Run. Il listino
+e la documentazione ufficiali indicano crediti compute condivisi per 15 USD,
+circa 15 USD/mese di compute base per ogni progetto aggiuntivo e addebiti Run
+secondo le risorse. Un avviso di spesa non equivale a un tetto automatico.
+
+Il proprietario riferisce inoltre l'acquisto di `automotoradar.it` su GoDaddy
+e un piano Netlify da 20 EUR/mese. DNS, fatture GoDaddy/Netlify e hosting
+esistenti non sono stati verificati né modificati. La configurazione concordata
+resta un servizio Run con frontend e backend insieme; separare il frontend su
+Netlify richiede una decisione distinta e verifiche di origine/cookie/sessione.
+
+### Preparazione remota del 2–3 ottobre
+
+Prima della creazione, la vista Run mostrava **nessun servizio**. Nel form sono stati
+verificati `amr-centro-staging`, registry Nhost e zero repliche. Con risorse
+candidate **0,5 vCPU / 1024 MiB**, la stima del form è **25 USD/mese con una
+replica**, **0 USD di compute con zero repliche**. La replica a uno è stata
+solo selezionata nel form per leggere il preventivo e riportata a zero, senza
+avvio. Nessun volume, porta o segreto è stato creato in questa preparazione.
+
+Un primo invio del form con immagine vuota non ha prodotto un servizio
+visibile; la causa non è dimostrata. Un successivo invio, con tag esplicito,
+è stato **rifiutato dalla revisione automatica**: configurazione ancora priva
+di segreti, porta, volume e health check, immagine non verificata. Non è stato
+ritentato con un altro canale.
+
+La [guida ufficiale del registry](https://docs.nhost.io/products/run/registry)
+prevede di creare prima il servizio a zero repliche con registry Nhost e
+immagine vuota: il percorso privato è generato alla creazione, poi si carica
+l'immagine e si completa la configurazione. Questa è una fase preliminare,
+non un deploy funzionante. Il proprietario ha poi autorizzato specificamente
+questa sola creazione ferma, senza porte, volumi o segreti; l'avvio, il costo
+Run effettivo e la pubblicazione rimangono controlli successivi. La
+configurazione completa in TOML resta il candidato del servizio prima dell'avvio.
+
+### Servizio preliminare verificato il 3 ottobre
+
+Creato **un solo** servizio `amr-centro-staging`, ID
+`40f9c208-5e1b-49ac-afcd-54e56d70de8b`. Dopo l'invio del form è stata confermata
+la schermata `Confirm Resources`: zero repliche, 0,062 vCPU / 128 MiB e
+stima compute **0 USD/mese**. La vista Run mostra un servizio; la sua
+configurazione salvata, riaperta tramite `View Service`, conferma:
+
+- registry Nhost generato:
+  `registry.eu-central-1.nhost.run/40f9c208-5e1b-49ac-afcd-54e56d70de8b`;
+- zero repliche, autoscaler disattivato;
+- nessuna porta, volume o variabile aggiunti; health check non attivato;
+- nessuna immagine caricata da questa lavorazione, nessun digest remoto
+  ancora verificato e nessun aggiornamento successivo inviato.
+
+CPU/RAM minime sono soltanto il valore preliminare del servizio fermo, non il
+dimensionamento del centro. Il candidato completo resta 0,5 vCPU / 1024 MiB,
+con il preventivo di 25 USD/mese sopra verificato. Lo staging applicativo non
+è ancora avviato né collaudato nel cloud; nessun accesso M2 o ai portali.
+
+Il proprietario ha chiesto se eliminare in futuro lo staging dopo aver creato
+la produzione e quale utilità avrebbe conservarli entrambi. La raccomandazione
+è mantenere un ambiente di collaudo separato, eventualmente in pausa fra prove,
+per aggiornamenti, Auth/MFA, autorizzazioni, migrazioni e restore. È una proposta:
+non autorizza un secondo progetto, cancellazioni o costi aggiuntivi. Migrazioni,
+configurazione e artefatti collaudati sono riutilizzabili; account di prova,
+credenziali e stato operativo non vanno promossi implicitamente in produzione.
 
 Baseline committata: `646fcbe6eb576f354de8dd675c30d330dc8941c9`.
 La [configurazione Run](../../scripts/nhost/centro-staging.toml) è inizialmente
@@ -64,9 +136,10 @@ processo, distinto dal numero di processi che Run deve avviare.
 
 ## Attivazione, un gate alla volta
 
-1. **Progetto isolato.** Dopo il login, verificare organizzazione, piano,
-   regione, preventivo e progetto di staging. Usare l'indirizzo Nhost; nessuna
-   integrazione GitHub con deploy automatici. Non cambiare il progetto esistente.
+1. **Progetto isolato.** Usare il progetto `AMR` a Frankfurt come staging,
+   secondo la scelta del proprietario. Verificare preventivo delle risorse Run
+   prima di avviarle. Usare l'indirizzo Nhost; nessuna integrazione GitHub con
+   deploy automatici e nessun cambio al servizio M2 o a un ambiente clienti.
 2. **Artefatto.** Preparare i soli blob del commit approvato con
    `scripts/prepara-contesto-centro.js`, costruire e collaudare l'immagine.
    Pubblicare nel registry privato e fissare `AMR_RUN_IMAGE` al digest remoto

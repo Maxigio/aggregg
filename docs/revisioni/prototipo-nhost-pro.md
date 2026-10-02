@@ -193,3 +193,19 @@ backend, con Auth e PostgreSQL separati nello stesso progetto. Il
 [mappa di integrazione con APP](amr-centro-mappa-funzionalita.md) distinguono
 preparazione, integrazione dell'app completa e prove cloud ancora necessarie.
 Nessun servizio, spesa, deploy o intervento M2 è stato autorizzato da questo gate.
+
+### Staging e nuova review — 2 ottobre 2026
+
+Decisione successiva: il proprietario ha autorizzato **Nhost staging separato**.
+Il [pacchetto e la procedura](staging-nhost.md) sono committati in `75207a7`;
+il servizio preliminare `amr-centro-staging` è stato creato il 3 ottobre con
+zero repliche, senza porte, volumi o segreti. Non esegue ancora il centro;
+configurazione completa e avvio restano gate separati. Il gate locale
+dell'immagine `646fcbe` ha completato
+HTTPS, Auth/PostgreSQL, SIGTERM e persistenza; resta distinto dalla prova cloud.
+
+La [nuova review del branch](branch-nodi-2026-10-02-646fcbe.md) registra finding
+con prove e controprove su scheduler, account e ripristino. Quei finding non
+sono stati corretti né autorizzati implicitamente dall'attivazione dello staging.
+M2 e produzione restano esclusi. Le sezioni precedenti sono storico delle
+decisioni e non attestano automaticamente lo stato corrente.
