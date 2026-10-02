@@ -11,6 +11,7 @@ const { NOMI: FILTRI_AUTO } = require('../filtri-auto');
 const filtriAuto = require('../filtri-auto');
 const province = require('../../data/province.json');
 const { creaAutorizzazioniDettagli } = require('./autorizzazioni-dettagli');
+const { creaBudgetRicerca, creaLimitiRicerca, TEMPO_RICERCA_MS } = require('./limiti-ricerca');
 
 const MODULI = { aziendaA: ['auto', 'moto'], aziendaB: ['moto'] };
 const SETTE_GIORNI = 7 * 86400000;
@@ -34,7 +35,11 @@ function filtriAmmessi(query) {
 }
 
 function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FINO_AL,
+  timeoutRicercaMs = TEMPO_RICERCA_MS, oraMono = () => performance.now(),
+  maxPersona = 2, maxTotale = 60,
   adminLocale = false, accountProva = null, inizializzaAccessi = null }) {
+  // Validare prima di aprire il registro o inizializzare altri provider.
+  const limitiRicerca = creaLimitiRicerca({ timeoutMs: timeoutRicercaMs, maxPersona, maxTotale, oraMono });
   if (accountProva && inizializzaAccessi) throw new Error('due provider di accesso non ammessi');
   if (!tokens || !Object.keys(tokens).length || !directory
       || Object.values(tokens).some(t => typeof t !== 'string' || t.length < 32)) {
@@ -135,12 +140,20 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     }
     return { azienda: s.azienda, moduli: MODULI[s.azienda] };
   }
-  async function verificaDestinatari(destinatari) {
+  async function verificaDestinatari(destinatari, budget = null) {
+    budget?.controlla();
     if (!destinatari) return;
     let indisponibile = null;
     for (const verifica of destinatari) {
-      try { await verifica(); return; }
-      catch (e) { if (![401, 403].includes(e.status)) indisponibile = e; }
+      budget?.controlla();
+      try {
+        if (budget) await budget.attendi(verifica); else await verifica();
+        budget?.controlla();
+        if (destinatari.has(verifica)) return;
+      } catch (e) {
+        budget?.controlla();
+        if (![401, 403].includes(e.status)) indisponibile = e;
+      }
     }
     if (indisponibile) throw Object.assign(new Error('autorizzazione_non_disponibile'), { status: 503 });
     throw Object.assign(new Error('accesso_interrotto'), { status: 403, codice: 'accesso_interrotto' });
@@ -198,6 +211,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   }
   function assegna(n, lavoro, limite = timeoutMs) {
     const avvia = () => {
+      const budget = lavoro.ricerca?.budget;
+      budget?.controlla();
+      if (budget) limite = Math.min(limite, budget.restante());
       // Dopo l'attesa dei permessi, sospensione/scadenza del nodo possono essere cambiate.
       if (chiuso || !disponibile(n) || fontiDelLavoro(lavoro).some(f => !disponibile(n, f))) {
         throw Object.assign(new Error('nodo non disponibile'), { status: 503 });
@@ -215,7 +231,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
           }
           registra(record, record.iniziato ? 'incerto' : 'interrotto');
           reject(Object.assign(new Error(record.iniziato ? 'esito incerto: nodo senza risposta' : 'nodo non disponibile'),
-            { incerto: record.iniziato }));
+            { incerto: record.iniziato, interrotto: !record.iniziato }));
         }, limite);
         record.timer = timer;
         lavori.set(record.idLavoro, record);
@@ -223,7 +239,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         registra(record, 'attesa');
       });
     };
-    return lavoro.destinatari ? verificaDestinatari(lavoro.destinatari).then(avvia) : avvia();
+    return lavoro.destinatari ? verificaDestinatari(lavoro.destinatari, lavoro.ricerca?.budget).then(avvia) : avvia();
   }
   function sceglie(fonti, escluso = null) {
     return [...nodi.values()].filter(n => n.id !== escluso && !n.simulato && disponibile(n))
@@ -247,12 +263,14 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       lavori.delete(job.idLavoro);
       clearTimeout(job.timer);
       registra(job, 'interrotto');
-      job.reject(esito instanceof Error ? esito : new Error('lavoro non avviato: nodo o fonte sospesa'));
+      job.reject(esito instanceof Error ? esito : Object.assign(new Error('lavoro non avviato: nodo o fonte sospesa'),
+        { interrotto: true }));
       return false;
     });
   }
   const controlloNodi = setInterval(() => {
     for (const job of lavori.values()) {
+      if (job.ricerca && (!job.ricerca.destinatari.size || job.ricerca.budget.signal.aborted)) continue;
       const n = nodi.get(job.nodoAssegnato);
       if (n && ora() - n.visto <= 6000) continue;
       if (!job.iniziato) {
@@ -271,7 +289,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       if (n) { n.coda = n.coda.filter(x => x !== job); if (job.iniziato) n.occupato = false; }
       registra(job, job.iniziato ? 'incerto' : 'interrotto');
       job.reject(Object.assign(new Error(job.iniziato ? 'esito incerto: nodo disconnesso'
-        : 'nodo non disponibile'), { incerto: job.iniziato }));
+        : 'nodo non disponibile'), { incerto: job.iniziato, interrotto: !job.iniziato }));
     }
   }, 1000);
   controlloNodi.unref();
@@ -280,7 +298,10 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       .filter(([k]) => !['fetta','fonti','subitoMainStart','subitoRecuperoStart'].includes(k))
       .sort(([a], [b]) => a.localeCompare(b)));
   }
-  async function ricercaSenzaCondivisione(azienda, input, destinatari) {
+  async function ricercaSenzaCondivisione(azienda, input, ricerca) {
+    const { budget } = ricerca;
+    const destinatari = ricerca.verifica ? ricerca.destinatari : null;
+    budget.controlla();
     const parsed = parseSearchParams(input);
     if (parsed.errors) return { status: 400, body: { error: parsed.errors.join(', ') } };
     const fonti = parsed.params.tipo === 'auto' ? ['subito', 'autoscout'] : FONTI_PAGINA;
@@ -306,9 +327,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       delete query.subitoMainStart;
       delete query.subitoRecuperoStart;
     }
-    const base = await assegna(primario, { idLavoro: crypto.randomUUID(), azienda,
-      operazione: 'ricerca', input: query, destinatari,
-      assegnazioneMs: Math.round(performance.now() - assegnazioneDa) });
+    const base = await budget.attendi(() => assegna(primario, { idLavoro: crypto.randomUUID(), azienda,
+      operazione: 'ricerca', input: query, destinatari, ricerca,
+      assegnazioneMs: Math.round(performance.now() - assegnazioneDa) }));
     if (base.status !== 200) return base;
     if (!base.body || !Array.isArray(base.body.risultati) || !base.body.sources
         || richieste.some(f => typeof base.body.sources[f]?.status !== 'string')) {
@@ -325,7 +346,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       const s = base.body.sources?.[fonte];
       const daAlternativo = !suPrimario.includes(fonte) || s?.erroreHttp === 429;
       if (!daAlternativo) continue;
-      await verificaDestinatari(destinatari);
+      await verificaDestinatari(destinatari, budget);
       const assegnazioneFonteDa = performance.now();
       const primaScelta = ancoraValida ? nodi.get(precedente.fonti[fonte]) : null;
       const alternativo = primaScelta && primaScelta.id !== primario.id && !primaScelta.simulato
@@ -335,10 +356,11 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       if (!alternativo) { avvisi.push(`${fonte}: nessun nodo alternativo disponibile`); continue; }
       let alternativa;
       try {
-        alternativa = await assegna(alternativo, { idLavoro: crypto.randomUUID(), azienda,
-          operazione: 'fonte', fonte, input, destinatari,
-          assegnazioneMs: Math.round(performance.now() - assegnazioneFonteDa) }, Math.min(timeoutMs, 50000));
+        alternativa = await budget.attendi(() => assegna(alternativo, { idLavoro: crypto.randomUUID(), azienda,
+          operazione: 'fonte', fonte, input, destinatari, ricerca,
+          assegnazioneMs: Math.round(performance.now() - assegnazioneFonteDa) }, Math.min(timeoutMs, 50000)));
       } catch (e) {
+        budget.controlla();
         avvisi.push(`${fonte}: secondo nodo senza conferma; esito ${e.incerto ? 'incerto' : 'non disponibile'}`);
         continue;
       }
@@ -352,49 +374,86 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         ? `${fonte}: nodo simulato, nessun portale interrogato` : `${fonte}: nodo alternativo senza risultato completo`);
     }
     async function termina(body) {
+      budget.controlla();
       const datoAffinita = { ts: ora(), fonti: { ...(ancoraValida ? precedente.fonti : {}), ...assegnate } };
       affinita.set(chiave, datoAffinita);
       // Il Set può ricevere destinatari durante i controlli asincroni dei permessi.
       for (const verifica of destinatari || []) {
         try {
-          const destinatario = await verifica();
+          const destinatario = await budget.attendi(verifica);
+          if (!destinatari.has(verifica)) continue;
           affinita.set(chiaveAffinita(destinatario.azienda, input), datoAffinita);
-        } catch { /* Non autorizzare nuove pagine per un destinatario revocato. */ }
+        } catch { budget.controlla(); /* Non autorizzare nuove pagine per un destinatario revocato. */ }
       }
+      budget.controlla();
       while (affinita.size > 100) affinita.delete(affinita.keys().next().value);
       return { status: 200, body: { ...body, avvisiNodi: avvisi } };
     }
     if (!Object.keys(sostituzioni).length) return termina(base.body);
-    await verificaDestinatari(destinatari);
+    await verificaDestinatari(destinatari, budget);
     return termina(componiRicerca(base.body, sostituzioni));
   }
 
-  function ricerca(azienda, query, verifica = null) {
+  function ricerca(azienda, query, verifica = null, richiesta = null) {
     if ((accountProva || accessi) && !verifica) throw Object.assign(new Error('identita_richiesta'), { status: 401 });
+    const budgetRichiesta = richiesta?.budget || creaBudgetRicerca({ timeoutMs: timeoutRicercaMs, oraMono });
+    const verificaAttiva = richiesta ? () => richiesta.verifica(verifica)
+      : verifica || (() => ({ azienda }));
     const avvia = () => {
+      budgetRichiesta.controlla();
       if (chiuso) throw Object.assign(new Error('centro interrotto'), { status: 503 });
       const input = filtriAmmessi(query);
       const prima = Number(input.fetta || 0) === 0 && !input.fonti
         && input.subitoMainStart == null && input.subitoRecuperoStart == null;
-      const destinatari = verifica ? new Set([verifica]) : null;
-      if (!prima) return ricercaSenzaCondivisione(azienda, input, destinatari);
-      const chiave = REVISIONE + ':' + JSON.stringify(Object.entries(input).sort(([a], [b]) => a.localeCompare(b)));
-      const esistente = condivise.get(chiave);
+      const chiave = prima ? REVISIONE + ':' + JSON.stringify(Object.entries(input).sort(([a], [b]) => a.localeCompare(b))) : null;
+      let voce = prima ? condivise.get(chiave) : null;
+      const esistente = voce && !voce.budget.signal.aborted;
+      let meta;
       if (esistente) {
-        if (verifica) esistente.destinatari?.add(verifica);
-        const meta = { idLavoro: crypto.randomUUID(), azienda, operazione: 'condivisa', input,
+        meta = { idLavoro: crypto.randomUUID(), azienda, operazione: 'condivisa', input,
           creato: ora() };
         registra(meta, 'in_corso');
-        return esistente.promessa.then(r => { registra(meta, r.status === 200 ? 'concluso' : 'errore'); return r; },
-          e => { registra(meta, e.incerto ? 'incerto' : 'errore'); throw e; });
+      } else {
+        voce = { budget: creaBudgetRicerca({ scadeAl: budgetRichiesta.scadeAl, oraMono }),
+          destinatari: new Set([verificaAttiva]), avviati: new Set(), verifica: !!verifica };
+        const operazione = voce;
+        operazione.budget.signal.addEventListener('abort', () => {
+          if (prima && condivise.get(chiave) === operazione) condivise.delete(chiave);
+          for (const n of nodi.values()) interrompiAccodati(n, null,
+            job => job.ricerca === operazione ? operazione.budget.signal.reason : false);
+        }, { once: true });
+        voce.promessa = voce.budget.attendi(() => ricercaSenzaCondivisione(azienda, input, operazione));
+        if (prima) condivise.set(chiave, voce);
+        voce.promessa.finally(() => {
+          operazione.budget.chiudi();
+          if (prima && condivise.get(chiave) === operazione) condivise.delete(chiave);
+        }).catch(() => {});
       }
-      const promessa = ricercaSenzaCondivisione(azienda, input, destinatari);
-      const voce = { promessa, destinatari };
-      condivise.set(chiave, voce);
-      promessa.finally(() => { if (condivise.get(chiave) === voce) condivise.delete(chiave); }).catch(() => {});
-      return promessa;
+      voce.destinatari.add(verificaAttiva);
+      if (richiesta) richiesta.operazione = voce;
+      const rimuovi = () => {
+        voce.destinatari.delete(verificaAttiva);
+        if (!voce.destinatari.size) voce.budget.interrompi();
+      };
+      budgetRichiesta.signal.addEventListener('abort', rimuovi, { once: true });
+      return budgetRichiesta.attendi(() => voce.promessa).then(r => {
+        if (meta && !chiuso) registra(meta, r.status === 200 ? 'concluso' : 'errore');
+        return r;
+      }, e => {
+        if (meta && !chiuso) registra(meta, e.incerto || voce.avviati.size ? 'incerto'
+          : ['ricerca_scaduta', 'ricerca_abbandonata'].includes(e.codice) ? 'interrotto' : 'errore');
+        throw e;
+      }).finally(() => {
+        budgetRichiesta.signal.removeEventListener('abort', rimuovi); rimuovi();
+      });
     };
-    return verifica ? Promise.resolve().then(verifica).then(avvia) : avvia();
+    let promessa;
+    try { promessa = verifica ? budgetRichiesta.attendi(verificaAttiva).then(avvia) : avvia(); }
+    catch (e) { if (!richiesta) budgetRichiesta.chiudi(); throw e; }
+    const out = promessa.finally(() => { if (!richiesta) budgetRichiesta.chiudi(); });
+    // Il chiamante locale può osservare l'esito soltanto dopo il prossimo heartbeat.
+    out.catch(() => {});
+    return out;
   }
 
   app.use('/_nodo', nodoAutorizzato, express.json({ limit: '8mb' }));
@@ -467,7 +526,10 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         .some(f => n.sospese.has(f) || n.fonti[f]?.fermo));
       let job;
       while ((job = n.coda[0])) {
-        try { await verificaDestinatari(job.destinatari); }
+        try {
+          await verificaDestinatari(job.destinatari, job.ricerca?.budget);
+          job.ricerca?.budget.controlla();
+        }
         catch (e) {
           if (!bootValido(req)) return bootObsoleto(res);
           if (chiuso) return res.sendStatus(503);
@@ -485,6 +547,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       }
       if (!job) return res.sendStatus(204);
       n.occupato = true; job.iniziato = true;
+      job.ricerca?.avviati.add(job.idLavoro);
       job.iniziatoMono = performance.now();
       job.codaMs = Math.round(job.iniziatoMono - job.accodatoMono);
       registra(job, 'in_corso');
@@ -510,6 +573,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     job.http = esito.status;
     lavori.delete(idLavoro); clearTimeout(job.timer);
     nodi.get(id).occupato = false;
+    job.ricerca?.avviati.delete(idLavoro);
     registra(job, esito.status === 200 ? 'concluso' : 'errore');
     segnalaFonti(job, esito);
     job.resolve(esito);
@@ -625,13 +689,39 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     evento(sospeso ? 'sospensione_aggiunta' : 'sospensione_rimossa', { nodo: n.id, fonte: fonte || null });
     res.json({ ok: true });
   });
+  function erroreRicerca(req, res, e) {
+    if (res.destroyed || res.writableEnded) return;
+    const incerto = !!e.incerto || (e.codice === 'ricerca_scaduta' && !!req.limiteRicerca?.operazione?.avviati.size);
+    res.status([400, 403, 429, 504].includes(e.status) ? e.status : incerto ? 504 : 503)
+      .json({ error: e.status === 403 ? 'accesso_interrotto' : e.message,
+        ...(e.codice ? { codice: e.codice } : {}),
+        interrotto: !incerto && (!!e.interrotto || e.status === 403 || ['ricerca_scaduta', 'ricerca_abbandonata'].includes(e.codice)), incerto });
+  }
+  // Anche chi attende i permessi occupa un posto, prima di qualunque await.
+  app.get('/api/search', (req, res, next) => {
+    const s = sessione(req);
+    if (!s) return res.sendStatus(401);
+    try {
+      const richiesta = limitiRicerca.ammetti(s);
+      req.limiteRicerca = richiesta;
+      res.once('close', () => {
+        if (!res.writableEnded) richiesta.budget.interrompi();
+        richiesta.termina();
+      });
+      next();
+    } catch (e) { erroreRicerca(req, res, e); }
+  });
   app.use('/api', async (req, res, next) => {
     const s = sessione(req);
     if (!s) return res.sendStatus(401);
     try {
-      const c = await verificaSessione(s);
+      const c = req.limiteRicerca ? await req.limiteRicerca.verifica(() => verificaSessione(s))
+        : await verificaSessione(s);
       req.sessioneProva = s; req.azienda = c.azienda; req.moduli = c.moduli; next();
-    } catch (e) { res.status(e.status || 503).json({ codice: e.codice || 'accesso_interrotto', interrotto: true }); }
+    } catch (e) {
+      if (req.limiteRicerca) erroreRicerca(req, res, e);
+      else res.status(e.status || 503).json({ codice: e.codice || 'accesso_interrotto', interrotto: true });
+    }
   });
   app.get('/api/test/me', (req, res) => res.json({ azienda: req.azienda, moduli: req.moduli }));
   app.get('/api/filtri', (req, res) => res.json({
@@ -641,20 +731,19 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   }));
   app.get('/api/search', async (req, res) => {
     if (!req.moduli.includes(req.query.tipo)) return res.sendStatus(403);
-    let abbandonata = false;
-    res.on('close', () => { if (!res.writableEnded) abbandonata = true; });
+    const richiesta = req.limiteRicerca;
     try {
-      const out = await ricerca(req.azienda, req.query, () => verificaSessione(req.sessioneProva, req.query.tipo));
-      if (!abbandonata) {
-        await verificaSessione(req.sessioneProva, req.query.tipo);
+      const out = await ricerca(req.azienda, req.query, () => verificaSessione(req.sessioneProva, req.query.tipo), richiesta);
+      if (!res.destroyed) {
+        await richiesta.verifica(() => verificaSessione(req.sessioneProva, req.query.tipo));
         // Non mutare porzioni condivise/cache: ogni sessione riceve firme proprie.
         const body = out.status === 200 ? { ...out.body, risultati: (out.body.risultati || [])
           .map(r => ({ ...r, accessoDettagli: autorizzazioniDettagli.emetti(req.sessioneProva,r.url,req.query.tipo) })) } : out.body;
+        richiesta.budget.controlla();
         res.status(out.status).json(body);
       }
-    } catch (e) { if (!abbandonata) res.status(e.status === 400 ? 400 : e.status === 403 ? 403 : e.incerto ? 504 : 503)
-      .json({ error: e.status === 403 ? 'accesso_interrotto' : e.message,
-        interrotto: e.status === 403, incerto: !!e.incerto }); }
+    } catch (e) { erroreRicerca(req, res, e); }
+    finally { richiesta.termina(); }
   });
   for (const [percorso, operazione] of [['brands','marche'],['models','modelli'],['versioni','versioni']]) {
     app.get('/api/' + percorso, async (req, res) => {
@@ -707,6 +796,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   return { app, db, nodi, lavori, ricerca, close: () => {
     if (chiuso) return;
     chiuso = true;
+    limitiRicerca.close();
     accessi?.close();
     for (const job of lavori.values()) {
       clearTimeout(job.timer);
@@ -720,7 +810,10 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
 
 if (require.main === module) {
   const { app } = creaCentro({ tokens: JSON.parse(process.env.AMR_NODI_TOKENS || '{}'),
-    directory: process.env.AMR_NODI_DATA_DIR, adminLocale: process.env.AMR_NODI_ADMIN_LOCALE === '1' });
+    directory: process.env.AMR_NODI_DATA_DIR, adminLocale: process.env.AMR_NODI_ADMIN_LOCALE === '1',
+    timeoutRicercaMs: Number(process.env.AMR_NODI_RICERCA_TIMEOUT_MS ?? TEMPO_RICERCA_MS),
+    maxPersona: Number(process.env.AMR_NODI_RICERCHE_MAX_PERSONA ?? 2),
+    maxTotale: Number(process.env.AMR_NODI_RICERCHE_MAX_TOTALE ?? 60) });
   app.listen(Number(process.env.AMR_CENTRO_PORT || 47360), '127.0.0.1', () =>
     console.log('Prototipo centro su http://127.0.0.1:' + (process.env.AMR_CENTRO_PORT || 47360)));
 }

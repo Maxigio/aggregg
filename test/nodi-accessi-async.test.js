@@ -7,7 +7,7 @@ const { mount } = require('../backend/nodi/login-nhost-prova');
 const { creaAccessiPostgres } = require('../backend/nodi/accessi-postgres-prova');
 const pausa = ms => new Promise(r => setTimeout(r, ms));
 
-async function setup(t, timeoutMs = 2000) {
+async function setup(t, timeoutMs = 2000, maxPersona = 2) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-accessi-async-'));
   const server = require('node:http').createServer();
   await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -20,7 +20,7 @@ async function setup(t, timeoutMs = 2000) {
     if (offline) throw Object.assign(new Error('database_non_disponibile'), {status:503});
     return value;
   };
-  const centro = creaCentro({ directory:dir, tokens:{n1:'1'.repeat(64)}, timeoutMs, adminLocale:true,
+  const centro = creaCentro({ directory:dir, tokens:{n1:'1'.repeat(64)}, timeoutMs, maxPersona, adminLocale:true,
     inizializzaAccessi: app => mount(app,{ origine, identita, cookiePath:'/', client:{
       login:async()=>({session:{user:{id:persona,emailVerified:true},accessToken:'sintetico',refreshToken:'sintetico'}}),
       logout:async()=>{},
@@ -61,7 +61,7 @@ test('permessi asincroni: timeout durante il poll non consegna un lavoro già el
 });
 
 test('coda piena: il limite di ammissione non impedisce di consegnare i dieci lavori accodati',async t=>{
-  const f=await setup(t,600), pendenti=[];
+  const f=await setup(t,600,10), pendenti=[];
   for(let i=0;i<10;i++){pendenti.push(f.cerca('Marca'+i));await f.attendiCoda(i+1);}
   const r=await f.node('/_nodo/poll?id=n1');assert.equal(r.status,200);
   assert.equal(f.centro.nodi.get('n1').coda.length,9);
