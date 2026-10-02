@@ -496,6 +496,12 @@ async function collauda({ manuale = false } = {}) {
     const infoRef=await(await richiestaLogin('me',undefined,cookieReferente)).json();
     assert.equal(infoRef.aziendaValida,true);assert.deepEqual(infoRef.moduli,['moto']);
     assert.equal((await req('/api/search?tipo=auto&marca=Fiat',cookieReferente)).status,403);
+    await sql(`UPDATE amr_accessi.aziende SET accettata_il=now()-interval '2 years',
+      attivata_il=now()-interval '1 year',scadenza=now()-interval '1 second' WHERE id='${aziendaId}';`);
+    assert.equal((await aziende.elenco({persona:preMfa.user.id,epoca:0,mfa:true})).aziende
+      .find(v=>v.id===aziendaId).stato,'scaduta');
+    assert.equal((await req('/api/search?tipo=moto&marca=Yamaha',cookieReferente)).status,403);
+    await sql(`UPDATE amr_accessi.aziende SET scadenza=now()+interval '1 day' WHERE id='${aziendaId}';`);
     await assert.rejects(writerPool.query('SELECT * FROM auth.users'));
     await assert.rejects(writerPool.query('SELECT * FROM amr_accessi.aziende'));
     fase='quota commerciale PostgreSQL concorrente';

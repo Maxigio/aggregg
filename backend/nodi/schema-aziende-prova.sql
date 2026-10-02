@@ -325,7 +325,8 @@ DECLARE v_aziende jsonb;
 BEGIN
   PERFORM amr_accessi.aziende_admin(p_persona, p_epoca, p_mfa);
   SELECT coalesce(jsonb_agg(jsonb_build_object('id', a.id, 'nome', coalesce(a.nome, a.id),
-    'stato', CASE WHEN a.attiva THEN 'attiva' WHEN a.accettata_il IS NOT NULL
+    'stato', CASE WHEN a.attiva AND a.scadenza <= statement_timestamp() THEN 'scaduta'
+      WHEN a.attiva THEN 'attiva' WHEN a.accettata_il IS NOT NULL
       THEN 'accettato' WHEN i.persona IS NULL AND i.scadenza <= statement_timestamp()
       THEN 'scaduto' ELSE 'pending' END,
     'scadenza', CASE WHEN a.attiva THEN a.scadenza ELSE NULL END,

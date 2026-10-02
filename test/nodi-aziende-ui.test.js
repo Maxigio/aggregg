@@ -47,6 +47,13 @@ test('UI account nel centro: Admin, invito, idempotenza, cliente e logout senza 
   });
   browser = await chromium.launch({ headless: true, executablePath: browserPath });
   const context = await browser.newContext(), page = await context.newPage();
+  await page.addInitScript(() => {
+    const originale = window.setInterval;
+    window.setInterval = (fn, ms, ...args) => {
+      if (ms === 30000) window.aggiornaAccountProva = fn;
+      return originale(fn, ms, ...args);
+    };
+  });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   // Login sintetico tramite le vere rotte AMR: nessun cookie reale letto.
   await page.goto(origine + '/api/auth/pagina');
@@ -68,6 +75,12 @@ test('UI account nel centro: Admin, invito, idempotenza, cliente e logout senza 
     const ids = Array.from(document.querySelectorAll('[id]'), e => e.id);
     return ids.length === new Set(ids).size;
   }), true);
+  const primaFocus = elencoCount;
+  await page.getByRole('button', { name: 'Attiva per un anno' }).focus();
+  await page.evaluate(() => window.aggiornaAccountProva());
+  await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
+  assert.ok(elencoCount > primaFocus);
+  assert.equal(await page.getByRole('button', { name: 'Attiva per un anno' }).evaluate(b => b === document.activeElement), true);
   // Aggiornamento account non cambia il pulsante della diagnostica e viceversa.
   const prima = elencoCount;
   await page.locator('#account-aggiorna').click();

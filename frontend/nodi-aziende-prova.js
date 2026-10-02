@@ -69,6 +69,8 @@
   const aziende = (v, body) => api('/api/auth/aziende/' + v, body);
   async function azione(fn) {
     if (occupato) return;
+    const focusPrima = document.activeElement;
+    const focusAzienda = root.contains(focusPrima) ? focusPrima.dataset.azienda : null;
     occupato = true; revisione++;
     root.querySelectorAll('button').forEach(b => b.disabled = true);
     try { await fn(); }
@@ -77,12 +79,19 @@
     finally {
       occupato = false; root.querySelectorAll('button').forEach(b => b.disabled = false);
       root.querySelectorAll('input[type=password]').forEach(i => i.value = '');
+      if (focusAzienda && (document.activeElement === document.body || document.activeElement === focusPrima)) {
+        Array.from($('aziende').querySelectorAll('button[data-azienda]'))
+          .find(b => b.dataset.azienda === focusAzienda)?.focus({ preventScroll: true });
+      }
     }
   }
   // Identificativi di operazione stabili anche dopo un aggiornamento dell'elenco.
   const attivazioni = new Map();
   async function elenco() {
     const data = await aziende('elenco');
+    const lista = $('aziende');
+    const attivo = document.activeElement;
+    const focusAzienda = lista.contains(attivo) ? attivo.dataset.azienda : null;
     aziendeCorrenti = data.aziende || [];
     $('admin').hidden = false; $('aziende').replaceChildren();
     for (const a of data.aziende || []) {
@@ -94,6 +103,7 @@
       box.append(p);
       if (a.stato === 'accettato') {
         const b = document.createElement('button'); b.className = 'btn primary'; b.type = 'button';
+        b.dataset.azienda = a.id;
         b.textContent = 'Attiva per un anno';
         if (!attivazioni.has(a.id)) attivazioni.set(a.id, crypto.randomUUID());
         b.addEventListener('click', () => azione(async () => {
@@ -105,6 +115,11 @@
       $('aziende').append(box);
     }
     if (!data.aziende?.length) $('aziende').textContent = 'Nessuna azienda: crea il primo invito.';
+    if (focusAzienda) {
+      const equivalente = Array.from(lista.querySelectorAll('button[data-azienda]'))
+        .find(b => b.dataset.azienda === focusAzienda);
+      equivalente?.focus({ preventScroll: true });
+    }
   }
   async function sessione() {
     const versione = ++revisione;
