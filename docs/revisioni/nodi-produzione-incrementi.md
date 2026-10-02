@@ -84,7 +84,8 @@ Ulteriore controprova: commit con risposta persa viene riconciliato usando una
 lettura Admin del registro operazioni PRIMA dell'elenco aggiornato. Questo evita
 sia riuso di vecchie revoche sia un doppio rinnovo dopo una lettura obsoleta.
 
-Da completare: colleghi, gestione sessioni. Non dichiarare i metodi
+Da completare: inviti colleghi con prenotazione dei posti, revoca membri/inviti
+pending, cambio referente riservato al proprietario e gestione sessioni. Non dichiarare i metodi
 SQLite sintetici come implementazione commerciale. Riutilizzare funzioni atomiche
 con ruoli ristretti, controllo identità/epoca dentro la transazione e quote esistenti.
 
@@ -107,7 +108,7 @@ Non configurare lifecycle di cancellazione sugli oggetti del repository restic.
   costi a consumo. Standard, non Infrequent Access. Gratuità non garantita.
 - S3 compatibile non significa tutte le operazioni S3 supportate; prova sul provider
   necessaria. Backup riuscito non significa ripristino provato.
-- Journal 90 giorni e 14 copie DB giornaliere separati; errore persistente Admin,
+- Da implementare: journal 90 giorni e 14 copie DB giornaliere separati; errore persistente Admin,
   senza annullare l'operazione commerciale già confermata.
 
 Fonti ricontrollate: [restic](https://restic.net/),
@@ -128,3 +129,14 @@ Le prove locali non certificano proxy, SMTP o prestazioni remote.
 100/100 test `nodi-*` passati, zero skip, con provider sintetici, repository restic
 temporanei e preload anti-dotenv. I test SQLite commerciali restano prove sintetiche;
 non sostituiscono il collaudo PostgreSQL né il gate cloud.
+
+Comando della run (binario restic di prova esplicito, nessuna configurazione reale):
+
+```sh
+AMR_TEST_RESTIC=/private/tmp/amr-restic-0.19.1/restic NODE_OPTIONS=--require=./test/no-dotenv-preload.cjs node --test test/nodi-*.test.js
+```
+
+Log locale: `/private/tmp/amr-incrementi-suite4.log`. Collaudo PostgreSQL automatico
+separato: `/private/tmp/amr-rinnovi-pg2.log`. Questi log temporanei non sono un
+artefatto di rilascio permanente. Il binario esplicito evita skip restic; il suo
+SHA256 è stato verificato nell'approvvigionamento, non dal wrapper runtime.
