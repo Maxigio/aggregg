@@ -1,0 +1,118 @@
+# Staging inizialmente fermo e non pubblico. Attivare solo dopo i controlli
+# descritti in docs/revisioni/staging-nhost.md. Mai segreti letterali qui.
+name = "amr-centro-staging"
+
+[image]
+image = "{{ secrets.AMR_RUN_IMAGE }}"
+
+[[environment]]
+name = "NODE_ENV"
+value = "production"
+
+[[environment]]
+name = "PORT"
+value = "3000"
+
+[[environment]]
+name = "AMR_CENTRO_ORIGINE"
+value = "{{ secrets.AMR_CENTRO_ORIGINE }}"
+
+[[environment]]
+name = "AMR_NHOST_AUTH_URL"
+value = "{{ secrets.AMR_NHOST_AUTH_URL }}"
+
+[[environment]]
+name = "AMR_CENTRO_PROXY_IP"
+value = "{{ secrets.AMR_CENTRO_PROXY_IP }}"
+
+[[environment]]
+name = "AMR_CENTRO_REPLICHE"
+value = "1"
+
+[[environment]]
+name = "AMR_NODI_TOKENS"
+value = "{{ secrets.AMR_NODI_TOKENS }}"
+
+[[environment]]
+name = "AMR_NODI_RELEASE_FILE"
+value = "/opt/amr/release.json"
+
+[[environment]]
+name = "AMR_NODI_DATA_DIR"
+value = "/var/lib/amr"
+
+[[environment]]
+name = "AMR_NODI_RICERCA_TIMEOUT_MS"
+value = "60000"
+
+[[environment]]
+name = "AMR_NODI_RICERCHE_MAX_PERSONA"
+value = "2"
+
+[[environment]]
+name = "AMR_NODI_RICERCHE_MAX_TOTALE"
+value = "60"
+
+[[environment]]
+name = "AMR_PG_HOST"
+value = "postgres-service"
+
+[[environment]]
+name = "AMR_PG_PORT"
+value = "5432"
+
+[[environment]]
+name = "AMR_PG_DATABASE"
+value = "{{ secrets.AMR_PG_DATABASE }}"
+
+[[environment]]
+name = "AMR_PG_RETE_PRIVATA"
+value = "1"
+
+[[environment]]
+name = "AMR_PG_LETTURA_USER"
+value = "amr_gateway"
+
+[[environment]]
+name = "AMR_PG_LETTURA_PASSWORD"
+value = "{{ secrets.AMR_PG_LETTURA_PASSWORD }}"
+
+[[environment]]
+name = "AMR_PG_COMMERCIALE_USER"
+value = "amr_commerciale"
+
+[[environment]]
+name = "AMR_PG_COMMERCIALE_PASSWORD"
+value = "{{ secrets.AMR_PG_COMMERCIALE_PASSWORD }}"
+
+[[environment]]
+name = "AMR_PG_BACKUP_USER"
+value = "amr_copie"
+
+[[environment]]
+name = "AMR_PG_BACKUP_PASSWORD"
+value = "{{ secrets.AMR_PG_BACKUP_PASSWORD }}"
+
+[[ports]]
+port = 3000
+type = "http"
+publish = false
+
+[resources]
+replicas = 0
+
+# Candidato di staging, da dimensionare dopo misure e preventivo nel dashboard.
+# CPU in millicpu e RAM in MiB, non le unità ambigue della guida narrativa.
+[resources.compute]
+cpu = 500
+memory = 1024
+
+[[resources.storage]]
+name = "amr-centro-dati"
+path = "/var/lib/amr"
+capacity = 1
+
+[healthCheck]
+port = 3000
+initialDelaySeconds = 30
+probePeriodSeconds = 60
