@@ -13,6 +13,10 @@ test('UI account nel centro: Admin, invito, idempotenza, cliente e logout senza 
   await new Promise(r => server.once('listening', r));
   const origine = 'http://127.0.0.1:' + server.address().port;
   let aziendeRoute, operazioni = [], failElenco = false, elencoCount = 0, token = 'a'.repeat(64), invitoPersistente = null;
+  let commerciale = null;
+  let oraLimite = Date.now();
+  let perdiRevoca = false;
+  const modifiche = [];
   const centro = creaCentro({ directory: dir, tokens: { locale: 'a'.repeat(64) }, adminLocale: true,
     inizializzaAccessi: app => {
       const accessi = require('../backend/nodi/login-nhost-prova').mount(app, { origine, cookiePath: '/',
@@ -20,11 +24,11 @@ test('UI account nel centro: Admin, invito, idempotenza, cliente e logout senza 
           mfa: async () => ({ session: { user: { id: 'admin', emailVerified: true },
             accessToken: 'sintetico', refreshToken: 'sintetico' } }), logout: async () => {} },
         identita: async () => ({ attiva: true, admin: true, epoca: 0 }) });
-      aziendeRoute = require('../backend/nodi/aziende-prova-route').mount(app, { origine, accessi,
+      aziendeRoute = require('../backend/nodi/aziende-prova-route').mount(app, { origine, accessi, ora:()=>oraLimite,
         account: { elenco: async () => {
           elencoCount++;
           if (failElenco) throw Object.assign(new Error('KO sintetico'), { status: 503 });
-          return { aziende: [{ id: 'cliente', nome: '<script>errore()</script>', stato: 'accettato' },
+          return { aziende: [commerciale || { id: 'cliente', nome: '<script>errore()</script>', stato: 'accettato' },
             ...(invitoPersistente ? [{id:invitoPersistente.id,nome:invitoPersistente.nome,stato:'pending'}] : [])] };
         }, invita: async (s, b) => {
           if (invitoPersistente && b.operazione !== invitoPersistente.operazione) {
@@ -36,6 +40,16 @@ test('UI account nel centro: Admin, invito, idempotenza, cliente e logout senza 
           invitoPersistente = {...b}; return {ok:true,token};
         },
         attiva: async (s, b) => { operazioni.push(b.operazione); return { ok: true }; },
+        rinnova: async (s,b) => {
+          modifiche.push({verbo:'rinnova',...b}); commerciale.stato = 'attiva';
+          return {ok:true};
+        },
+        revocaAzienda: async (s,b) => {
+          modifiche.push({verbo:'revoca',...b}); commerciale.stato = 'revocata';
+          if (perdiRevoca) { perdiRevoca=false; throw Object.assign(new Error('risposta persa'),{status:503}); }
+          return {ok:true};
+        },
+        statoOperazione: async (s,b) => ({confermata:modifiche.some(op=>op.operazione===b.operazione&&op.id===b.id)}),
         invito: async () => ({ email: 'ref@amr.invalid' }) }, client: {} });
       return accessi;
     } });
@@ -97,6 +111,44 @@ test('UI account nel centro: Admin, invito, idempotenza, cliente e logout senza 
   await page.getByRole('button', { name: 'Attiva per un anno' }).click();
   await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
   assert.equal(operazioni.length, 2); assert.equal(operazioni[0], operazioni[1]);
+  commerciale = {id:'cliente',nome:'Cliente',stato:'attiva',scadenza:'2027-10-02T00:00:00.000Z'};
+  await page.locator('#account-aggiorna').click();
+  await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
+  page.on('dialog', dialog => dialog.accept());
+  failElenco = true;
+  await page.getByRole('button',{name:'Revoca accesso azienda'}).click();
+  await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
+  // Mutazione riuscita, lettura fallita: ripetere il gesto ritenta solo la lettura.
+  await page.getByRole('button',{name:'Revoca accesso azienda'}).click();
+  await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
+  assert.equal(modifiche.length,1);
+  failElenco = false;
+  await page.getByRole('button',{name:'Revoca accesso azienda'}).click();
+  await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
+  assert.equal(await page.locator('#account-aggiorna').evaluate(b=>b===document.activeElement),true);
+  await page.getByRole('button',{name:'Rinnova e riattiva'}).click();
+  await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
+  await page.getByRole('button',{name:'Revoca accesso azienda'}).click();
+  await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
+  assert.equal(modifiche.length,3);
+  assert.notEqual(modifiche[0].operazione,modifiche[2].operazione);
+  await page.getByRole('button',{name:'Rinnova e riattiva'}).click();
+  await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
+  perdiRevoca = true;
+  await page.getByRole('button',{name:'Revoca accesso azienda'}).click();
+  await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
+  const revocaSenzaAck = modifiche.at(-1).operazione;
+  await page.locator('#account-aggiorna').click();
+  await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
+  await page.getByRole('button',{name:'Rinnova e riattiva'}).click();
+  await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
+  await page.getByRole('button',{name:'Revoca accesso azienda'}).click();
+  await page.waitForFunction(() => !document.getElementById('account-aggiorna').disabled);
+  assert.notEqual(modifiche.at(-1).operazione,revocaSenzaAck);
+  commerciale = null;
+  // Le molte controprove sopra occupano una finestra intera: la successiva
+  // sequenza UI esercita una nuova finestra, senza indebolire il limite reale.
+  oraLimite += 60001;
   await page.locator('#account-invita input[name=email]').fill('ref@amr.invalid');
   await page.locator('#account-invita button').click();
   await page.waitForSelector('#account-consegna a');

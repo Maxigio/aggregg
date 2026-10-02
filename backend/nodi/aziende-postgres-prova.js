@@ -86,6 +86,22 @@ function creaAziendePostgres({ pool }) {
       return esegui('SELECT amr_accessi.aziende_attiva($1::uuid, $2::integer, $3::boolean, '
         + '$4::uuid, $5::text) AS risultato', [...admin(session), ...operazione(input)]);
     },
+    async rinnova(session, input) {
+      const params = [...admin(session), ...operazione(input)];
+      const data = input.scadenza;
+      if (data != null && (typeof data !== 'string' || !Number.isFinite(Date.parse(data))
+          || new Date(data).toISOString() !== data)) throw errore('input_non_valido');
+      return esegui('SELECT amr_accessi.aziende_rinnova($1::uuid,$2::integer,$3::boolean,$4::uuid,$5::text,$6::timestamptz) AS risultato',
+        [...params, data ?? null]);
+    },
+    async revocaAzienda(session, input) {
+      return esegui('SELECT amr_accessi.aziende_revoca($1::uuid,$2::integer,$3::boolean,$4::uuid,$5::text) AS risultato',
+        [...admin(session), ...operazione(input)]);
+    },
+    async statoOperazione(session, input) {
+      return esegui('SELECT amr_accessi.aziende_operazione($1::uuid,$2::integer,$3::boolean,$4::uuid,$5::text) AS risultato',
+        [...admin(session), ...operazione(input)]);
+    },
     async elenco(session) {
       return esegui('SELECT amr_accessi.aziende_elenco($1::uuid, $2::integer, $3::boolean) AS risultato',
         admin(session));

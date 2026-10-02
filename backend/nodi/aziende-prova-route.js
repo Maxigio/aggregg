@@ -3,14 +3,14 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 
 // Solo il collaudo loopback: nessun invio SMTP esterno o backup dichiarato riuscito.
-function mount(app, { account, accessi, client, origine }) {
+function mount(app, { account, accessi, client, origine, ora = () => Date.now() }) {
   const express = require('express');
   const url = new URL(origine);
   if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.origin !== origine) {
     throw new Error('aziende del collaudo solo su loopback');
   }
   const consegne = new Map();
-  let attive = 0, tentativi = 0, finestra = Date.now();
+  let attive = 0, tentativi = 0, finestra = ora();
   app.use('/api/auth/aziende', (req, res, next) => {
     res.set('Referrer-Policy', 'no-referrer');
     if (req.headers.host !== url.host || !['127.0.0.1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) return res.sendStatus(403);
@@ -18,7 +18,7 @@ function mount(app, { account, accessi, client, origine }) {
     next();
   }, express.json({ limit: '4kb', strict: true }));
   const protetta = fn => async (req, res) => {
-    if (Date.now() - finestra >= 60000) { finestra = Date.now(); tentativi = 0; }
+    if (ora() - finestra >= 60000) { finestra = ora(); tentativi = 0; }
     if (attive >= 4 || tentativi >= 30) return res.status(429).set('Retry-After','60').json({ codice:'troppi_tentativi' });
     attive++; tentativi++;
     try { await fn(req,res); }
@@ -49,6 +49,9 @@ function mount(app, { account, accessi, client, origine }) {
       ...(copia ? { link:origine+'/api/auth/aziende/pagina#'+copia.token } : {}) });
   }));
   app.post('/api/auth/aziende/attiva', protetta(async(req,res) => res.json(await account.attiva(await admin(req),req.body))));
+  app.post('/api/auth/aziende/rinnova', protetta(async(req,res) => res.json(await account.rinnova(await admin(req),req.body))));
+  app.post('/api/auth/aziende/revoca', protetta(async(req,res) => res.json(await account.revocaAzienda(await admin(req),req.body))));
+  app.post('/api/auth/aziende/operazione', protetta(async(req,res) => res.json(await account.statoOperazione(await admin(req),req.body))));
   app.post('/api/auth/aziende/invito', protetta(async(req,res) => {
     const i = await account.invito(req.body?.token);
     res.json(i);

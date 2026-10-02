@@ -71,6 +71,7 @@
     if (occupato) return;
     const focusPrima = document.activeElement;
     const focusAzienda = root.contains(focusPrima) ? focusPrima.dataset.azienda : null;
+    const focusAzione = focusPrima?.dataset?.azione || '';
     occupato = true; revisione++;
     root.querySelectorAll('button').forEach(b => b.disabled = true);
     try { await fn(); }
@@ -80,19 +81,45 @@
       occupato = false; root.querySelectorAll('button').forEach(b => b.disabled = false);
       root.querySelectorAll('input[type=password]').forEach(i => i.value = '');
       if (focusAzienda && (document.activeElement === document.body || document.activeElement === focusPrima)) {
-        Array.from($('aziende').querySelectorAll('button[data-azienda]'))
-          .find(b => b.dataset.azienda === focusAzienda)?.focus({ preventScroll: true });
+        const equivalente = Array.from($('aziende').querySelectorAll('[data-azienda]'))
+          .find(b => b.dataset.azienda === focusAzienda && (b.dataset.azione || '') === focusAzione);
+        (equivalente || (!$('admin').hidden && $('aggiorna')))?.focus({ preventScroll: true });
       }
     }
   }
   // Identificativi di operazione stabili anche dopo un aggiornamento dell'elenco.
   const attivazioni = new Map();
+  const modifiche = new Map();
+  const dateRinnovo = new Map();
+  function operazioneStabile(chiave) {
+    if (!modifiche.has(chiave)) modifiche.set(chiave, { id: crypto.randomUUID(), confermata: false });
+    return modifiche.get(chiave);
+  }
+  async function modifica(verbo, chiave, body) {
+    const operazione = operazioneStabile(chiave);
+    operazione.azienda = body.id;
+    if (!operazione.confermata) {
+      await aziende(verbo, { ...body, operazione: operazione.id });
+      operazione.confermata = true;
+    }
+  }
   async function elenco() {
+    // Un timeout non dimostra rollback. Confermare l'ID nel DB evita di riusare
+    // una vecchia revoca dopo un successivo ciclo di riattivazione.
+    for (const op of modifiche.values()) if (!op.confermata) {
+      const stato = await aziende('operazione', { id: op.azienda, operazione: op.id });
+      op.confermata = stato.confermata === true;
+    }
     const data = await aziende('elenco');
     const lista = $('aziende');
     const attivo = document.activeElement;
     const focusAzienda = lista.contains(attivo) ? attivo.dataset.azienda : null;
+    const focusAzione = attivo?.dataset?.azione || '';
+    for (const data of lista.querySelectorAll('input[data-azienda]')) dateRinnovo.set(data.dataset.azienda,data.value);
     aziendeCorrenti = data.aziende || [];
+    // Una mutazione confermata resta riprovabile soltanto finché manca la
+    // lettura aggiornata. La successiva azione intenzionale ha un nuovo ID.
+    for (const [key, op] of modifiche) if (op.confermata) modifiche.delete(key);
     $('admin').hidden = false; $('aziende').replaceChildren();
     for (const a of data.aziende || []) {
       const box = document.createElement('article'), p = document.createElement('p');
@@ -112,13 +139,43 @@
           await elenco();
         })); box.append(b);
       }
+      if (['attiva','scaduta','revocata'].includes(a.stato)) {
+        const form = document.createElement('form'), label = document.createElement('label');
+        label.textContent = 'Scadenza personalizzata (facoltativa)';
+        const data = document.createElement('input'); data.type = 'datetime-local'; label.append(data);
+        data.dataset.azienda = a.id; data.dataset.azione = 'scadenza'; data.value = dateRinnovo.get(a.id) || '';
+        const rinnova = document.createElement('button'); rinnova.type = 'submit'; rinnova.className = 'btn';
+        rinnova.textContent = a.stato === 'revocata' ? 'Rinnova e riattiva' : 'Rinnova per un anno';
+        rinnova.dataset.azienda = a.id; rinnova.dataset.azione = 'rinnova';
+        form.append(label, rinnova);
+        form.addEventListener('submit', e => { e.preventDefault(); azione(async () => {
+          const scadenza = data.value ? new Date(data.value).toISOString() : null;
+          const key = JSON.stringify(['rinnova',a.id,a.scadenza,scadenza]);
+          await modifica('rinnova', key, { id:a.id, scadenza });
+          $('stato').textContent = 'Rinnovo confermato. Copia esterna ancora da configurare.';
+          await elenco();
+        }); });
+        box.append(form);
+        if (a.stato !== 'revocata') {
+          const revoca = document.createElement('button'); revoca.type = 'button'; revoca.className = 'btn';
+          revoca.textContent = 'Revoca accesso azienda'; revoca.dataset.azienda = a.id; revoca.dataset.azione = 'revoca';
+          revoca.addEventListener('click', () => {
+            if (!confirm('Revocare subito tutti gli accessi di questa azienda?')) return;
+            azione(async () => {
+              await modifica('revoca', JSON.stringify(['revoca',a.id,a.scadenza]), { id:a.id });
+              $('stato').textContent = 'Accesso azienda revocato. Copia esterna ancora da configurare.';
+              await elenco();
+            });
+          }); box.append(revoca);
+        }
+      }
       $('aziende').append(box);
     }
     if (!data.aziende?.length) $('aziende').textContent = 'Nessuna azienda: crea il primo invito.';
     if (focusAzienda) {
-      const equivalente = Array.from(lista.querySelectorAll('button[data-azienda]'))
-        .find(b => b.dataset.azienda === focusAzienda);
-      equivalente?.focus({ preventScroll: true });
+      const equivalente = Array.from(lista.querySelectorAll('[data-azienda]'))
+        .find(b => b.dataset.azienda === focusAzienda && (b.dataset.azione || '') === focusAzione);
+      (equivalente || $('aggiorna')).focus({ preventScroll: true });
     }
   }
   async function sessione() {

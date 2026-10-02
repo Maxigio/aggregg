@@ -55,12 +55,23 @@ avvio prima di comparire in quel processo.
 
 C01: scope aziendale conservato case-sensitive e delimitato come JSON, mentre
 la normalizzazione dei filtri resta invariata. Test con `ACME` / `acme` verifica
-richieste distinte e riuso nello stesso scope. 9/9 baseline passati con fonti simulate.
+richieste distinte e riuso nello stesso scope. La review ha trovato anche collisioni
+fra delimitatori presenti nei filtri: ora la chiave serializza coppie campo/valore
+JSON, senza eccezioni sui surrogate Unicode isolati. 10/10 baseline passati.
 R11 (dettagli dopo oltre 300 URL) resta da correggere.
 
 ## 2. Ciclo commerciale PostgreSQL
 
-Da completare: rinnovo/revoca, colleghi, gestione sessioni. Non dichiarare i metodi
+Rinnovo/revoca azienda implementati nel collaudo PostgreSQL: default un anno dalla
+scadenza futura, altrimenti dalla conferma, con data esplicita modificabile. Revoca
+separata incrementa le epoche dei membri: riattivare non resuscita vecchie sessioni.
+Operazioni atomiche e idempotenti; retry con parametri diversi rifiutato.
+Collaudo PostgreSQL automatico passato, senza riavviare lo stack manuale.
+Review UI: corretto riuso di ID dopo revoca/riattivazione/revoca; una mutazione
+confermata con elenco fallito ritenta soltanto la lettura. Focus ha un ripiego
+stabile quando il controllo scompare. Test browser della sequenza passato.
+
+Da completare: colleghi, gestione sessioni. Non dichiarare i metodi
 SQLite sintetici come implementazione commerciale. Riutilizzare funzioni atomiche
 con ruoli ristretti, controllo identità/epoca dentro la transazione e quote esistenti.
 
@@ -70,6 +81,13 @@ Decisione dell'utente: backup open source + storage gestito, sostituisce OneDriv
 Candidato: restic + endpoint S3 separato (R2 Standard in giurisdizione UE).
 Prima verificare restore locale; poi collaudo storage reale con configurazione del
 proprietario, senza leggere credenziali in chat. Nessun account/bucket attivato.
+
+Primitiva restic collaudata con binario ufficiale 0.19.1 verificato SHA256, due
+repository locali separati e dati sintetici: copia, check con lettura dei dati,
+restore verificato byte per byte. Output del processo e percorsi sensibili non
+propagati all'API. Restore in directory nuova, mai sopra il database vivo.
+Questo non prova ancora pg_dump/pg_restore, outbox transazionale, retention e S3.
+Non configurare lifecycle di cancellazione sugli oggetti del repository restic.
 
 - restic cifra repository lato client; password va custodita fuori dal repository.
 - R2: 10 GB-mese / 1 milione operazioni A / 10 milioni B inclusi; oltre soglia
@@ -91,3 +109,9 @@ Fonti ricontrollate: [restic](https://restic.net/),
 Ancora da implementare/collaudare: persistenza, HTTPS, compatibilità release/cataloghi,
 revoca credenziali nodo, deadline, riavvio e restore. Nessun coinvolgimento M2.
 Le prove locali non certificano proxy, SMTP o prestazioni remote.
+
+## Verifica complessiva corrente
+
+98/98 test `nodi-*` passati, zero skip, con provider sintetici, repository restic
+temporanei e preload anti-dotenv. I test SQLite commerciali restano prove sintetiche;
+non sostituiscono il collaudo PostgreSQL né il gate cloud.
