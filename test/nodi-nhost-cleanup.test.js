@@ -14,7 +14,7 @@ test('collaudo Nhost: listen fallito raggiunge il cleanup dei soli container di 
     const chiamate = [], modulo = { exports: {} };
     let ascoltatoriErrore;
     const source = fs.readFileSync(path.join(__dirname, '../scripts/collauda-nhost-locale.js'), 'utf8')
-      .replace('module.exports = { configura, IMMAGINI, totp, credenzialiLocali };', 'module.exports = { collauda };');
+      .replace(/module.exports = \{[^\n]+\};/, 'module.exports = { collauda };');
     vm.runInNewContext(source, {
       module: modulo, process: processo, __dirname: path.join(__dirname, '../scripts'),
       AbortController, AbortSignal, Buffer, URL, setTimeout, clearTimeout,

@@ -8,7 +8,7 @@ test('collaudo Nhost: SIGTERM iniziale cancella avvio e svolge cleanup una sola 
   const processo=new EventEmitter(); processo.env={AMR_NHOST_DOCKER_HOST:'unix:///synthetic/amr-auth/docker.sock'};
   const modulo={exports:{}}, calls=[];let abort;
   const source=fs.readFileSync(path.join(__dirname,'../scripts/collauda-nhost-locale.js'),'utf8')
-    .replace('module.exports = { configura, IMMAGINI, totp, credenzialiLocali };',
+    .replace(/module.exports = \{[^\n]+\};/,
       'module.exports = { collauda };');
   vm.runInNewContext(source,{module:modulo,process:processo,__dirname:path.join(__dirname,'../scripts'),
     AbortController,AbortSignal,Buffer,URL,console:{log(){},error(){}},setTimeout,clearTimeout,
@@ -45,6 +45,17 @@ test('collaudo Nhost: verifica email, MFA e destinatari SMTP soltanto locali', (
 
 test('il generatore TOTP di prova rispetta il vettore RFC 6238 SHA1 a 59 secondi', () => {
   assert.equal(totp('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', 59000), '287082');
+});
+
+test('posta del collaudo: non decodificare =AF come quoted-printable in un URL 7bit', () => {
+  const { corpoMailLocale } = require('../scripts/collauda-nhost-locale');
+  const url = 'http://127.0.0.1:5555/verify?codeChallenge=AF' + 'x'.repeat(41);
+  for(const encoding of ['7bit','8bit','binary','']) {
+    assert.equal(corpoMailLocale({Content:{Body:url,Headers:{'Content-Transfer-Encoding':[encoding]}}}),url);
+  }
+  const qp = url.replace('=', '=3D').slice(0,40)+'=\r\n'+url.replace('=', '=3D').slice(40);
+  assert.equal(corpoMailLocale({Content:{Body:qp,Headers:{'Content-Transfer-Encoding':['quoted-printable']}}}),url);
+  assert.equal(corpoMailLocale({Content:{Body:Buffer.from(url).toString('base64'),Headers:{'content-transfer-encoding':['base64']}}}),url);
 });
 
 

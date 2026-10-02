@@ -67,6 +67,17 @@ function totp(secret, adesso = Date.now()) {
 }
 
 const ENV_COLLAUDO = path.join(__dirname, '../.env.collaudo-nhost');
+function corpoMailLocale(messaggio) {
+  const body = messaggio.Content.Body;
+  const header = Object.entries(messaggio.Content.Headers || {})
+    .find(([nome]) => nome.toLowerCase() === 'content-transfer-encoding')?.[1];
+  const encoding = String(Array.isArray(header) ? header[0] : header || '').trim().toLowerCase();
+  if (encoding === 'quoted-printable') return Buffer.from(body.replace(/=\r?\n/g, '')
+    .replace(/=([0-9A-F]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16))), 'latin1').toString('utf8');
+  if (encoding === 'base64') return Buffer.from(body, 'base64').toString('utf8');
+  if (!encoding || ['7bit','8bit','binary'].includes(encoding)) return body;
+  throw new Error('Codifica della posta locale non supportata');
+}
 function credenzialiLocali(file = ENV_COLLAUDO) {
   let config;
   try {
@@ -200,8 +211,7 @@ async function collauda({ manuale = false } = {}) {
       await new Promise(resolve => setTimeout(resolve, 250));
     }
     assert.ok(messages.items?.length);
-    const mail = messages.items[0].Content.Body.replace(/=\r?\n/g, '')
-      .replace(/=([0-9A-F]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    const mail = corpoMailLocale(messages.items[0]);
     assert.ok(mail.includes(base + '/verify'));
     const match = mail.match(/ticket=([^&\s"<>]+)/); assert.ok(match);
     fase = 'conferma email';
@@ -394,7 +404,7 @@ async function collauda({ manuale = false } = {}) {
         if (!m) await new Promise(r => setTimeout(r, 100));
       }
       assert.ok(m);
-      const html = m.Content.Body.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h,16)));
+      const html = corpoMailLocale(m);
       const ticket = html.match(/ticket=([^&\s"<>]+)/)?.[1]; assert.ok(ticket);
       const v = await fetch(base + '/verify?ticket=' + ticket + '&redirectTo=' + encodeURIComponent('http://127.0.0.1:3000'), { redirect: 'manual', signal: AbortSignal.timeout(10000) });
       assert.ok([200,302,303,307].includes(v.status));
@@ -483,7 +493,7 @@ async function collauda({ manuale = false } = {}) {
       if(!messaggio)await new Promise(r=>setTimeout(r,100));
     }
     assert.ok(messaggio);
-    const corpoMail=messaggio.Content.Body.replace(/=\r?\n/g,'').replace(/=([0-9A-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));
+    const corpoMail=corpoMailLocale(messaggio);
     const ticketInv=corpoMail.match(/ticket=([^&\s"<>]+)/)?.[1];assert.ok(ticketInv);
     const challengeInv=corpoMail.match(/codeChallenge=([A-Za-z0-9_-]{43})/)?.[1];assert.ok(challengeInv);
     const verificaInv=await fetch(base+'/verify?ticket='+ticketInv+'&codeChallenge='+challengeInv+'&redirectTo='+encodeURIComponent(origineLogin+'/api/auth/aziende/pagina'),{redirect:'manual',signal:AbortSignal.timeout(10000)});
@@ -679,4 +689,4 @@ async function collauda({ manuale = false } = {}) {
 }
 
 if (require.main === module) collauda({ manuale: process.argv.includes('--manuale') }).catch(e => { console.error(e.message); process.exitCode = 1; });
-module.exports = { configura, IMMAGINI, totp, credenzialiLocali };
+module.exports = { configura, IMMAGINI, totp, credenzialiLocali, corpoMailLocale };
