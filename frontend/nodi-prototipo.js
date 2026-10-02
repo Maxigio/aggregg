@@ -9,8 +9,10 @@ let identita = null, moduli = [], modelli = [], sequenzaMarche = 0, sequenzaMode
   sequenzaVersioni = 0, sequenzaRicerca = 0, sequenzaStato = 0;
 let parametriRicerca = null, pagina = 0, fontiCorrenti = null, risultatiCorrenti = [], ricercaOccupata = false;
 let filtriModificati = false, paginaIncompleta = null;
+let primaPaginaMancante = {}, pagineFonti = {};
 let paginaLavori = 1, paginaVisualizzata = 1, pagineDisponibili = 1;
 let nodiElencati = '', diagnosticaAbilitata = false;
+let aggiornamentoStato = 0;
 let accountAbilitato = false, accessoSintetico = false;
 const aree = ['ricercaPanel', 'diagnosticaPanel', 'accountPanel'];
 function aggiornaAree(aggiornaIndirizzo = true, focus = document.activeElement) {
@@ -166,6 +168,35 @@ function elemento(tag, testo, classe) {
   if (classe) e.className = classe;
   return e;
 }
+const riprovaFonti = elemento('button', 'Riprova fonti mancanti', 'btn quiet more');
+riprovaFonti.id = 'riprovaFonti'; riprovaFonti.type = 'button'; riprovaFonti.hidden = true;
+$('altri').before(riprovaFonti);
+function fonteInPausa(s) {
+  return s?.pausa?.fermo && (s.pausa.fino == null || s.pausa.fino > Date.now());
+}
+function fonteFallita(s) {
+  return !s || s.parzialeRete || ['error', 'timeout'].includes(s.status)
+    || s.status === 'skipped' && (s.pausa?.fermo || s.reason === 'in pausa dopo un blocco');
+}
+function aggiornaRetryPrimaPagina(avvisa = false) {
+  const mancanti = Object.entries(primaPaginaMancante);
+  riprovaFonti.hidden = !mancanti.length;
+  riprovaFonti.disabled = ricercaOccupata || filtriModificati
+    || !mancanti.some(([, s]) => !fonteInPausa(s.source));
+  if (!avvisa) return;
+  for (const avviso of $('avvisi').querySelectorAll('[data-prima-pagina]')) avviso.remove();
+  for (const [fonte, { source: s }] of mancanti) {
+    const pausa = fonteInPausa(s) ? ' Fonte in pausa'
+      + (s.pausa.fino != null ? ' fino alle ' + new Date(s.pausa.fino).toLocaleTimeString('it-IT') : '') + '.' : '';
+    const avviso = elemento('div', `${nomiFonti[fonte] || fonte}: prima pagina mancante. ${s?.reason || s?.parziale || 'Risposta non disponibile'}${s?.erroreHttp === 429 ? ' (429)' : ''}.${pausa} Riprova le fonti mancanti.`, 'alert');
+    avviso.dataset.primaPagina = fonte; $('avvisi').append(avviso);
+  }
+}
+function fontiConAltrePagine() {
+  return Object.entries(fontiCorrenti || {}).filter(([f, s]) => !primaPaginaMancante[f]
+    && s && s.hasMore !== false && ['ok', 'empty'].includes(s.status) && (pagineFonti[f] ?? pagina) < 50)
+    .map(([f]) => f);
+}
 function statoClasse(stato) {
   return ['ok', 'concluso', 'online', 'empty'].includes(stato) ? 'ok'
     : ['errore', 'error', 'timeout', 'incerto', 'interrotto'].includes(stato) ? 'bad' : 'wait';
@@ -188,7 +219,8 @@ function renderStato(data) {
   $('metriche').replaceChildren(...metriche.map(([n, etichetta]) => {
     const card = elemento('div', '', 'metric'); card.append(elemento('b', n), elemento('span', etichetta)); return card;
   }));
-  const box = $('nodi'); box.replaceChildren();
+  const box = $('nodi'), focusNodo = box.contains(document.activeElement) ? document.activeElement : null;
+  box.replaceChildren();
   if (!nodi.length) box.append(elemento('p', 'Nessun nodo collegato.', 'muted'));
   for (const n of nodi) {
     const card = elemento('article', '', 'node-card'), head = elemento('div', '', 'node-head');
@@ -209,6 +241,7 @@ function renderStato(data) {
     for (const fonte of ['', 'subito', 'autoscout', 'moto']) {
       const attiva = fonte ? n.sospese.includes(fonte) : n.sospeso;
       const b = elemento('button', `${attiva ? 'Riattiva' : 'Sospendi'} ${fonte ? nomiFonti[fonte] : 'nodo'}`, attiva ? 'active' : '');
+      b.dataset.nodo = n.id; b.dataset.fonte = fonte;
       b.type = 'button'; b.disabled = !n.online;
       b.addEventListener('click', async () => {
         b.disabled = true;
@@ -221,6 +254,11 @@ function renderStato(data) {
     }
     card.append(actions);
     box.append(card);
+  }
+  if (focusNodo && document.activeElement === document.body) {
+    const equivalente = Array.from(box.querySelectorAll('button'))
+      .find(b => b.dataset.nodo === focusNodo.dataset.nodo && b.dataset.fonte === focusNodo.dataset.fonte);
+    (equivalente && !equivalente.disabled ? equivalente : $('nodoOsservato')).focus({ preventScroll: true });
   }
   const tbody = $('lavori'), scroll = tbody.closest('.table-scroll');
   const focus = tbody.contains(document.activeElement) ? document.activeElement : null;
@@ -272,6 +310,7 @@ function renderStato(data) {
 async function aggiornaStato(manuale = false) {
   if (!diagnosticaAbilitata) return;
   const numero = ++sequenzaStato;
+  aggiornamentoStato = numero;
   if (manuale) { $('aggiorna').disabled = true; $('lavoriPrima').disabled = true;
     $('lavoriDopo').disabled = true; $('aggiornato').textContent = 'Aggiornamento in corso…'; }
   try {
@@ -288,6 +327,7 @@ async function aggiornaStato(manuale = false) {
     const url = () => '/api/admin?pagina=' + paginaLavori
       + ($('nodoOsservato').value ? '&nodo=' + encodeURIComponent($('nodoOsservato').value) : '');
     let dettaglio = await leggi(url());
+    if (numero !== sequenzaStato) return;
     if (paginaLavori > (dettaglio.pagine || 1)) {
       paginaLavori = dettaglio.pagine || 1;
       dettaglio = await leggi(url());
@@ -297,22 +337,27 @@ async function aggiornaStato(manuale = false) {
     paginaLavori = paginaVisualizzata;
     $('aggiornato').textContent = 'Stato non disponibile: ' + e.message;
   } }
-  finally { if (manuale) { $('aggiorna').disabled = false;
-    $('lavoriPrima').disabled = paginaLavori <= 1;
-    $('lavoriDopo').disabled = paginaLavori >= pagineDisponibili;
-  } }
+  finally {
+    if (numero === sequenzaStato) {
+      aggiornamentoStato = 0; $('aggiorna').disabled = false;
+      $('lavoriPrima').disabled = paginaLavori <= 1;
+      $('lavoriDopo').disabled = paginaLavori >= pagineDisponibili;
+    }
+  }
 }
-function renderRisultato(body, aggiungi = false, richieste = null) {
+function renderRisultato(body, aggiungi = false, richieste = null, paginaRisposta = pagina) {
   const righe = Array.isArray(body.risultati) ? body.risultati : [];
   risultatiCorrenti = aggiungi ? [...risultatiCorrenti, ...righe] : righe;
   fontiCorrenti = { ...(aggiungi ? fontiCorrenti : {}), ...Object.fromEntries(
     Object.entries(body.sources || {}).filter(([f]) => !aggiungi || !richieste || richieste.includes(f))) };
   $('ricercaStato').textContent = `${risultatiCorrenti.length} annunci`;
-  $('risultatoAiuto').textContent = `Pagina ${pagina + 1} · ${righe.length} risultati in questa risposta`;
+  $('risultatoAiuto').textContent = `Pagina ${paginaRisposta + 1} · ${righe.length} risultati in questa risposta`;
   const alert = $('avvisi'); alert.replaceChildren();
   for (const testo of body.avvisiNodi || []) alert.append(elemento('div', testo, 'alert'));
+  for (const testo of paginaIncompleta?.avvisiErrori || []) alert.append(elemento('div', testo, 'alert'));
   for (const [fonte, s] of Object.entries(body.sources || {})) {
     if (aggiungi && richieste && !richieste.includes(fonte)) continue;
+    if (primaPaginaMancante[fonte]) continue;
     if (!aggiungi && tipo() === 'auto' && fonte === 'moto' && s?.status === 'skipped') continue;
     if (s && (['error', 'timeout', 'skipped'].includes(s.status) || s.parziale || s.parzialeRete)) {
       alert.append(elemento('div', `${nomiFonti[fonte] || fonte}: ${s.reason || s.parziale || 'risposta parziale o non disponibile'}`, 'alert'));
@@ -324,9 +369,10 @@ function renderRisultato(body, aggiungi = false, richieste = null) {
     card.append(elemento('b', nomiFonti[fonte] || fonte), elemento('span', `${s.status} · ${s.count ?? 0} qui${s.hasMore === true ? ' · altre pagine' : ''}`));
     fonti.append(card);
   }
-  const lista = $('risultati'); lista.replaceChildren();
+  const lista = $('risultati');
+  if (!aggiungi || !lista.querySelector('.listing')) lista.replaceChildren();
   if (!risultatiCorrenti.length) lista.append(elemento('p', 'Nessun annuncio in questa ricerca.', 'muted'));
-  for (const r of risultatiCorrenti) {
+  for (const r of righe) {
     const card = elemento('article', '', 'listing');
     let url = null;
     try { const x = new URL(r.url); if (x.protocol === 'https:') url = x.href; } catch (_) {}
@@ -365,26 +411,58 @@ function renderRisultato(body, aggiungi = false, richieste = null) {
     }
     lista.append(card);
   }
-  $('altri').hidden = !paginaIncompleta &&
-    (!Object.values(fontiCorrenti || {}).some(s => s && s.hasMore !== false && ['ok', 'empty'].includes(s.status)) || pagina >= 50);
+  $('altri').hidden = !paginaIncompleta && !fontiConAltrePagine().length;
   $('altri').disabled = filtriModificati;
+  aggiornaRetryPrimaPagina(true);
 }
-async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0) {
+async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0, riprovaPrima = false) {
   if (ricercaOccupata) return;
+  const focusRetry = riprovaPrima && document.activeElement === riprovaFonti;
   ricercaOccupata = true; form.querySelector('[type=submit]').disabled = true; $('altri').disabled = true;
   const id = ++sequenzaRicerca;
   $('ricercaStato').textContent = 'Ricerca in corso…';
   if (!aggiungi) { $('risultatoAiuto').textContent = 'Il nodo sta interrogando le fonti selezionate.';
+    primaPaginaMancante = {}; pagineFonti = {}; paginaIncompleta = null; filtriModificati = false;
+    pagina = 0; risultatiCorrenti = []; fontiCorrenti = null;
     $('risultati').replaceChildren(); $('fonti').replaceChildren(); $('avvisi').replaceChildren(); }
+  aggiornaRetryPrimaPagina();
   try {
     const body = await leggi('/api/search?' + query);
     if (id === sequenzaRicerca) {
       const richieste = query.get('fonti')?.split(',') || null;
-      const fallite = aggiungi ? (richieste || []).filter(f => {
+      if (!aggiungi || riprovaPrima) {
+        // Un retry può ripresentare righe parziali già visibili: conserva anche i loro dettagli.
+        if (riprovaPrima) {
+          const viste = new Set(risultatiCorrenti.map(r => JSON.stringify([r.fonte, r.url])));
+          body.risultati = (body.risultati || []).filter(r => richieste.includes(r.fonte)
+            && !(r.url && viste.has(JSON.stringify([r.fonte, r.url]))));
+        }
+        for (const f of richieste || Object.keys(body.sources || {})) {
+          const s = body.sources?.[f], precedente = primaPaginaMancante[f];
+          if (fonteFallita(s)) {
+            const soloRecupero = f === 'subito' && s?.parzialeRete
+              && s.errori?.some(e => e.fase === 'recupero')
+              && s.errori.every(e => e.fase === 'recupero') && s.recuperoNextStart != null;
+            primaPaginaMancante[f] = { source: s, parziale: precedente?.parziale || (soloRecupero ? s : null) };
+          } else {
+            if (precedente?.parziale) body.sources[f] = { ...s,
+              count: risultatiCorrenti.filter(r => r.fonte === f).length
+                + (body.risultati || []).filter(r => r.fonte === f).length,
+              totale: precedente.parziale.totale ?? s.totale,
+              mainNextStart: precedente.parziale.mainNextStart,
+              hasMore: precedente.parziale.mainNextStart != null || s.recuperoNextStart != null };
+            delete primaPaginaMancante[f]; pagineFonti[f] = 0;
+          }
+        }
+        renderRisultato(body, aggiungi, richieste, paginaRichiesta);
+        if (!paginaIncompleta) $('altri').textContent = 'Carica altro';
+        await aggiornaStato(); return;
+      }
+      const fallite = (richieste || []).filter(f => {
         const s = body.sources?.[f];
         return !s || s.parzialeRete || !['ok', 'empty'].includes(s.status)
-          && !(s.status === 'skipped' && s.hasMore === false);
-      }) : [];
+          && !(s.status === 'skipped' && s.hasMore === false && !fonteFallita(s));
+      });
       const completaFonte = (accumulo, fonte) => {
         const s = body.sources[fonte];
         const righe = (body.risultati || []).filter(r => r.fonte === fonte);
@@ -417,8 +495,9 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0) {
         accumulo.fallite = fallite;
         paginaIncompleta = accumulo;
         $('ricercaStato').textContent = 'Pagina incompleta';
-        $('avvisi').replaceChildren(...fallite.map(f => elemento('div',
-          `${nomiFonti[f] || f}: ${body.sources?.[f]?.reason || 'risposta non disponibile'}. Riprova questa pagina.`, 'alert')));
+        accumulo.avvisiErrori = fallite.map(f =>
+          `${nomiFonti[f] || f}: ${body.sources?.[f]?.reason || 'risposta non disponibile'}. Riprova questa pagina.`);
+        $('avvisi').replaceChildren(...accumulo.avvisiErrori.map(testo => elemento('div', testo, 'alert')));
         $('altri').hidden = false;
         $('altri').textContent = 'Riprova questa pagina';
       } else {
@@ -436,8 +515,9 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0) {
           richieste.push(...Object.keys(paginaIncompleta.sources));
           paginaIncompleta = null;
         }
-        pagina = paginaRichiesta;
-        renderRisultato(body, aggiungi, richieste);
+        pagina = Math.max(pagina, paginaRichiesta);
+        for (const f of richieste || []) pagineFonti[f] = paginaRichiesta;
+        renderRisultato(body, aggiungi, richieste, paginaRichiesta);
         $('altri').textContent = 'Carica altro';
       }
     }
@@ -446,11 +526,15 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0) {
     if (id === sequenzaRicerca) {
       $('ricercaStato').textContent = 'Non riuscita';
       $('avvisi').replaceChildren(elemento('div', e.message, 'alert'));
-      if (aggiungi) $('altri').textContent = 'Riprova questa pagina';
+      if (aggiungi && !riprovaPrima) $('altri').textContent = 'Riprova questa pagina';
     }
   } finally {
     if (id === sequenzaRicerca) {
       ricercaOccupata = false; form.querySelector('[type=submit]').disabled = false; $('altri').disabled = filtriModificati;
+      aggiornaRetryPrimaPagina(true);
+      if (focusRetry && !filtriModificati && document.activeElement === document.body) {
+        (riprovaFonti.hidden ? $('risultati') : riprovaFonti).focus({ preventScroll: true });
+      }
     }
   }
 }
@@ -461,6 +545,7 @@ async function applicaIdentita(data) {
   paginaLavori = 1;
   parametriRicerca = null; pagina = 0; fontiCorrenti = null; risultatiCorrenti = [];
   paginaIncompleta = null; filtriModificati = false;
+  primaPaginaMancante = {}; pagineFonti = {}; aggiornaRetryPrimaPagina();
   $('ricercaStato').textContent = 'In attesa';
   $('fonti').replaceChildren(); $('risultati').replaceChildren(); $('avvisi').replaceChildren();
   $('altri').hidden = true; $('altri').textContent = 'Carica altro';
@@ -482,7 +567,10 @@ async function applicaIdentita(data) {
 // Una sessione cambiata invalida anche risposte e pagine in attesa nel browser.
 function terminaContesto() {
   sequenzaRicerca++; sequenzaStato++; sequenzaMarche++; sequenzaModelli++; sequenzaVersioni++;
+  aggiornamentoStato = 0;
+  $('aggiorna').disabled = false; $('lavoriPrima').disabled = true; $('lavoriDopo').disabled = true;
   identita = null; moduli = []; parametriRicerca = null; paginaIncompleta = null;
+  primaPaginaMancante = {}; pagineFonti = {}; aggiornaRetryPrimaPagina();
   risultatiCorrenti = []; fontiCorrenti = null; ricercaOccupata = false;
   form.hidden = true; $('altri').hidden = true;
   for (const id of ['fonti', 'risultati', 'avvisi', 'metriche', 'nodi', 'lavori', 'eventi']) $(id).replaceChildren();
@@ -518,6 +606,7 @@ function filtriCambiati() {
   if (!parametriRicerca) return;
   filtriModificati = true;
   $('altri').disabled = true;
+  aggiornaRetryPrimaPagina();
   $('risultatoAiuto').textContent = 'Filtri modificati: avvia una nuova ricerca per continuare.';
 }
 form.addEventListener('input', filtriCambiati);
@@ -544,9 +633,9 @@ form.addEventListener('submit', e => {
 $('altri').addEventListener('click', () => {
   if (!parametriRicerca || ricercaOccupata || filtriModificati) return;
   const q = new URLSearchParams(parametriRicerca);
-  const prossimaPagina = paginaIncompleta?.pagina ?? pagina + 1;
-  const fonti = paginaIncompleta?.fallite || Object.entries(fontiCorrenti || {})
-    .filter(([, s]) => s && s.hasMore !== false && ['ok', 'empty'].includes(s.status)).map(([f]) => f);
+  const disponibili = fontiConAltrePagine();
+  const prossimaPagina = paginaIncompleta?.pagina ?? Math.min(...disponibili.map(f => (pagineFonti[f] ?? pagina) + 1));
+  const fonti = paginaIncompleta?.fallite || disponibili.filter(f => (pagineFonti[f] ?? pagina) + 1 === prossimaPagina);
   if (!fonti.length) return;
   q.set('fetta', String(prossimaPagina)); q.set('fonti', fonti.join(','));
   if (fonti.includes('subito')) {
@@ -557,6 +646,18 @@ $('altri').addEventListener('click', () => {
       : cursore.recuperoNextStart ?? -1));
   }
   inviaRicerca(q, true, prossimaPagina);
+});
+riprovaFonti.addEventListener('click', () => {
+  if (!parametriRicerca || ricercaOccupata || filtriModificati) return;
+  const fonti = Object.keys(primaPaginaMancante).filter(f => !fonteInPausa(primaPaginaMancante[f].source));
+  if (!fonti.length) return;
+  const q = new URLSearchParams(parametriRicerca);
+  q.set('fetta', '0'); q.set('fonti', fonti.join(','));
+  const parziale = primaPaginaMancante.subito?.parziale;
+  if (fonti.includes('subito') && parziale) {
+    q.set('subitoMainStart', '-1'); q.set('subitoRecuperoStart', String(parziale.recuperoNextStart));
+  }
+  inviaRicerca(q, true, 0, true);
 });
 $('aggiorna').addEventListener('click', () => aggiornaStato(true));
 $('nodoOsservato').addEventListener('change', () => { paginaLavori = 1; aggiornaStato(true); });
@@ -575,7 +676,10 @@ $('cancellaLavori').addEventListener('click', async () => {
   finally { bottone.disabled = false; }
 });
 form.hidden = true;
-setInterval(() => { if (!$('aggiorna').disabled) aggiornaStato(); }, 3000);
+setInterval(() => {
+  aggiornaRetryPrimaPagina();
+  if (!aggiornamentoStato && !$('aggiorna').disabled) aggiornaStato();
+}, 3000);
 leggi('/api/test/config').then(async config => {
   if (config.accesso === 'nhost') {
     document.querySelector('.identity-card').hidden = true;
