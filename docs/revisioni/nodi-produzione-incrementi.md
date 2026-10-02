@@ -21,7 +21,7 @@ avvio prima di comparire in quel processo.
   indipendente ripetuta senza altri finding. Nessun uso di credenziali reali.
 - Limite: sessioni ancora RAM/loopback; questo fix non realizza il login cloud.
 
-### Coordinamento — in verifica
+### Coordinamento — completato
 
 - R02: fonte registrata nel job dettaglio; pausa ferma gli accodati, non gli avviati.
 - R04: heartbeat serializzati e attesi prima del cambio job. La controprova ha
@@ -31,9 +31,15 @@ avvio prima di comparire in quel processo.
   Poll/esiti del boot sostituito rifiutati. Nessuno storico illimitato dei boot.
 - Compatibilità locale: fixture legacy ammesse finché il nodo non è registrato;
   l'entrypoint pubblico dovrà rifiutare il protocollo legacy. Non è un gate cloud.
-- R03: scelta di composizione ancora nell'interview; non cambiata implicitamente.
+- R03: composizione nel centro approvata dopo confronto mantenibilità/prestazioni/
+  sicurezza. Stessa funzione pura, controllo destinatari, nessun job di composizione.
+  La perdita del primario dopo risposta non elimina la porzione recuperata.
+- Review indipendente ha individuato e corretto due regressioni del handshake:
+  riconferma boot dopo l'await permessi; un 409 di esito scaduto non arresta il worker.
+- Suite prototipo: 94/94 test passati, zero skip, provider simulati e preload
+  anti-dotenv. Review indipendenti e controprove di composizione senza nuovi finding.
 
-### Lifecycle e Admin — in verifica
+### Lifecycle e Admin — completati
 
 - R07/R08: stop cancella startup e figli; segnali installati prima del primo await;
   cleanup indipendenti e Docker down non cancellato dal segnale di stop.
@@ -41,8 +47,16 @@ avvio prima di comparire in quel processo.
 - R10: refresh conserva focus del pulsante senza spostarlo da input/navigazione.
 - Prove lifecycle: 9/9 configurazione e launcher, più review VM indipendente.
 - Prova UI: browser headless, un test completo passato; controprove indipendenti
-  su focus input, focus esterno e cambio focus durante fetch. SQL: test automatico
-  PostgreSQL separato avviato; esito da registrare, stack manuale non riavviato.
+  su focus input, focus esterno e cambio focus durante fetch. Collaudo automatico
+  PostgreSQL separato passato: stato scaduta e ricerca negata, oltre alle precedenti
+  prove login/MFA, quote, privilegi e inviti. Stack manuale non riavviato.
+
+### Cache — completata
+
+C01: scope aziendale conservato case-sensitive e delimitato come JSON, mentre
+la normalizzazione dei filtri resta invariata. Test con `ACME` / `acme` verifica
+richieste distinte e riuso nello stesso scope. 9/9 baseline passati con fonti simulate.
+R11 (dettagli dopo oltre 300 URL) resta da correggere.
 
 ## 2. Ciclo commerciale PostgreSQL
 

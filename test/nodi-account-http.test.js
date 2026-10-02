@@ -246,23 +246,19 @@ test('HTTP: errore del controllo in coda è indisponibilità, non revoca, e non 
   assert.equal(JSON.stringify(body).includes('SQL'),false);
 });
 
-for (const statusComposizione of [200, 503]) test('HTTP: destinatario aderente durante composizione acquisisce affinità, HTTP '+statusComposizione,async t=>{
+test('HTTP: destinatario aderente durante failover acquisisce affinità senza job di composizione',async t=>{
   const f=await setup(t), a=await f.login('rA'), b=await f.login('rB');
   const first=f.cerca(a), main=await f.poll();
   await f.esito(main,{...risposta(),sources:{...risposta().sources,subito:{status:'error',erroreHttp:429,count:0}}});
   const alternate=await f.poll('n2');assert.equal(alternate.fonte,'subito');
-  await f.esito(alternate,risposta('alternativa'),'n2');
-  const compose=await f.poll();assert.equal(compose.operazione,'componi');
   const second=f.cerca(b);
   for(let n=0;n<100;n++){
     if(f.centro.db.prepare("SELECT count(*) n FROM lavori WHERE operazione='condivisa'").get().n===1)break;
     await new Promise(resolve=>setTimeout(resolve,5));
   }
   assert.equal(f.centro.db.prepare("SELECT count(*) n FROM lavori WHERE operazione='condivisa'").get().n,1);
-  const {componiRicerca}=require('../backend/nodi/componi-ricerca');
-  await f.esito(compose, statusComposizione === 200
-    ? componiRicerca(compose.input.principale,compose.input.sostituzioni)
-    : {error:'composizione non disponibile'}, 'n1', statusComposizione);
+  await f.esito(alternate,risposta('alternativa'),'n2');
+  assert.equal(f.centro.nodi.get('n1').coda.length,0);
   assert.equal((await first).status,200);assert.equal((await second).status,200);
   f.centro.nodi.get('n1').coda.push({idLavoro:'carico',input:{},operazione:'diagnostica'});
   const page=f.req('/api/search?tipo=moto&marca=Yamaha&modello=MT-07&fetta=1&fonti=autoscout',b);

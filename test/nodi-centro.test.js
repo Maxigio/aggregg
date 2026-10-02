@@ -37,12 +37,6 @@ test('centro locale: autenticazione dei nodi, isolamento dei moduli e failover d
   const esito = (id, lavoro, body) => node(id, 'POST', '/_nodo/esito', {
     idLavoro: lavoro.idLavoro, tentativo: lavoro.tentativo, esito: { status: 200, body },
   });
-  const completaSulPrincipale = async () => {
-    const lavoro = await poll('a');
-    assert.equal(lavoro.operazione,'componi');
-    assert.equal((await esito('a', lavoro,
-      componiRicerca(lavoro.input.principale, lavoro.input.sostituzioni))).status,200);
-  };
   try {
     assert.equal((await node('a','POST','/_nodo/heartbeat',{ revisione:'imac-1',fonti:{} }, tokens.b)).status,401);
     assert.equal((await fetch(url+'/_nodo/heartbeat',{method:'POST',
@@ -95,7 +89,6 @@ test('centro locale: autenticazione dei nodi, isolamento dei moduli e failover d
     const sostituta = { risultati:[{fonte:'subito',id:'s1'}],totale:1,
       sources:{subito:{status:'ok',count:1}},versioneConto:null,versionePerFonte:null };
     assert.equal((await esito('b',seconda,sostituta)).status,200);
-    await completaSulPrincipale();
     const r = await richiesta, body = await r.json();
     assert.equal(r.status,200);
     assert.deepEqual(body.risultati.map(x=>x.id),['s1','a1']);
@@ -104,13 +97,13 @@ test('centro locale: autenticazione dei nodi, isolamento dei moduli e failover d
     const eventi = (await (await fetch(url + '/api/admin',{headers:{cookie:cookieOperatore}})).json()).eventi;
     assert.equal(eventi.some(e => e.codice === 'fonte_limitata' && e.fonte === 'subito' && e.http === 429), true);
     const admin = await (await fetch(url + '/api/admin',{headers:{cookie:cookieOperatore}})).json();
-    assert.equal(admin.lavori.length,4);
+    assert.equal(admin.lavori.length,3);
     assert.equal(admin.lavori.every(x=>x.azienda==='aziendaB'),true);
     assert.equal(admin.lavori.every(x => !Object.hasOwn(x, 'risultati') && !Object.hasOwn(x.filtri, 'risultati')),true);
     const pubblici = await (await fetch(url + '/api/stato')).json();
     assert.equal(pubblici.lavori.every(x => !Object.hasOwn(x, 'filtri')), true);
     assert.equal(pubblici.lavori.find(x => x.id === prima.idLavoro).nodo, 'a');
-    assert.deepEqual(admin.lavori.find(x=>x.operazione==='componi').filtri,{fonti:['subito']});
+    assert.equal(admin.lavori.some(x=>x.operazione==='componi'),false);
     assert.equal((await node('a','POST','/_nodo/esito',{idLavoro:prima.idLavoro,tentativo:1,esito:{status:200,body:base}})).status,409);
 
     const pagina = fetch(url + '/api/search?tipo=moto&marca=Yamaha&modello=MT-07&fetta=1&fonti=subito,autoscout',
@@ -124,7 +117,6 @@ test('centro locale: autenticazione dei nodi, isolamento dei moduli e failover d
     assert.equal(subitoPagina.fonte,'subito');
     assert.equal((await esito('b',subitoPagina,{risultati:[{fonte:'subito',id:'s2'}],
       sources:{subito:{status:'ok',count:1}},versioneConto:null,versionePerFonte:null})).status,200);
-    await completaSulPrincipale();
     assert.equal((await pagina).status,200);
     assert.equal((await fetch(url + '/api/admin/nodi/b', { method:'POST',
       headers:{cookie:cookieOperatore,'x-amr-local-admin':'1','content-type':'application/json'},body:JSON.stringify({sospeso:true}) })).status,200);
@@ -188,7 +180,6 @@ test('centro locale: autenticazione dei nodi, isolamento dei moduli e failover d
     const altra = await poll('b');
     assert.equal(altra.fonte,'subito');
     assert.equal((await esito('b',altra,sostituta)).status,200);
-    await completaSulPrincipale();
     assert.equal((await richiestaSospesa).status,200);
   } finally {
     await new Promise(resolve => server.close(resolve));
@@ -539,6 +530,34 @@ test('sospensione: interrompe la coda ma lascia terminare un lavoro gia avviato'
   } finally {await new Promise(resolve=>server.close(resolve));centro.close();fs.rmSync(dir,{recursive:true,force:true})}
 });
 
+test('dettagli: sospensione della fonte ferma solo i job non ancora avviati', async t => {
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'amr-detail-pausa-'));
+  const token='a'.repeat(64), centro=creaCentro({adminLocale:true,tokens:{a:token},directory:dir,timeoutMs:3000});
+  const server=await new Promise(r=>{const s=centro.app.listen(0,'127.0.0.1',()=>r(s));});
+  t.after(async()=>{centro.close();server.closeAllConnections();await new Promise(r=>server.close(r));fs.rmSync(dir,{recursive:true,force:true});});
+  const base='http://127.0.0.1:'+server.address().port;
+  const node=(route,body)=>fetch(base+'/_nodo/'+route,{method:body?'POST':'GET',headers:{'x-amr-node-id':'a',
+    'x-amr-node-token':token,...(body?{'content-type':'application/json'}:{})},...(body?{body:JSON.stringify({id:'a',...body})}:{})});
+  const beat=(fermo=false)=>node('heartbeat',{revisione:'imac-1',occupato:false,
+    fonti:{subito:{fermo},autoscout:{fermo:false},moto:{fermo:false}}});
+  const poll=async()=>{for(let i=0;i<100;i++){const r=await node('poll?id=a');if(r.status===200)return r.json();await new Promise(r=>setTimeout(r,5));}throw Error('job assente');};
+  const finish=(j,body)=>node('esito',{idLavoro:j.idLavoro,tentativo:j.tentativo,esito:{status:200,body}});
+  const pause=sospeso=>fetch(base+'/api/admin/nodi/a',{method:'POST',headers:{'x-amr-local-admin':'1',
+    'content-type':'application/json'},body:JSON.stringify({sospeso,fonte:'subito'})});
+  await beat();const login=await fetch(base+'/api/test/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({azienda:'aziendaA'})});
+  const cookie=login.headers.get('set-cookie').split(';')[0],url='https://www.subito.it/auto/sintetico.htm';
+  const initial=fetch(base+'/api/search?tipo=auto&marca=Fiat',{headers:{cookie}}),j=await poll();
+  await finish(j,{risultati:[{fonte:'subito',id:'s1',url}],sources:{subito:{status:'ok'},autoscout:{status:'empty'}}});assert.equal((await initial).status,200);
+  const detail=()=>fetch(base+'/api/detail?url='+encodeURIComponent(url),{headers:{cookie}});
+  const waitQueue=async()=>{for(let i=0;i<100&&!centro.nodi.get('a').coda.length;i++)await new Promise(r=>setTimeout(r,5));assert.equal(centro.nodi.get('a').coda.length,1);};
+  await beat();const queued=detail();await waitQueue();await pause(true);
+  assert.equal((await queued).status,503);assert.equal((await node('poll?id=a')).status,204);
+  await pause(false);await beat();const blocked=detail();await waitQueue();await beat(true);
+  assert.equal((await node('poll?id=a')).status,204);assert.equal((await blocked).status,503);
+  await beat();const started=detail(),d=await poll();assert.equal(d.fonte,'subito');await pause(true);
+  await finish(d,{ok:true});assert.equal((await started).status,200);
+});
+
 test('diagnostica: tempi separati senza usare orologi di macchine diverse', async () => {
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'amr-nodi-tempi-'));
   const tokens={a:'a'.repeat(64)}, centro=creaCentro({adminLocale:true,tokens,directory:dir});
@@ -608,10 +627,7 @@ test('failover preferisce il secondo nodo reale al simulatore', async () => {
     await fetch(url+'/_nodo/esito',{method:'POST',headers:headers('c'),body:JSON.stringify({id:'c',
       idLavoro:fonte.idLavoro,tentativo:fonte.tentativo,
       esito:{status:200,body:{...rispostaDaPagina(),sources:{subito:{status:'empty',count:0}}}}})});
-    const componi=await (await fetch(url+'/_nodo/poll?id=a',{headers:headers('a')})).json();
-    await fetch(url+'/_nodo/esito',{method:'POST',headers:headers('a'),body:JSON.stringify({id:'a',
-      idLavoro:componi.idLavoro,tentativo:componi.tentativo,
-      esito:{status:200,body:componiRicerca(componi.input.principale,componi.input.sostituzioni)}})});
+    assert.equal(centro.nodi.get('a').coda.length,0);
     assert.equal((await pending).status,200);
   } finally {await new Promise(resolve=>server.close(resolve));centro.close();fs.rmSync(dir,{recursive:true,force:true})}
 });

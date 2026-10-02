@@ -6,7 +6,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { DatabaseSync } = require('node:sqlite');
 const { parseSearchParams, FONTI_PAGINA } = require('../ricerca-parametri');
-const { porzioneCompleta } = require('./componi-ricerca');
+const { porzioneCompleta, componiRicerca } = require('./componi-ricerca');
 const { NOMI: FILTRI_AUTO } = require('../filtri-auto');
 const filtriAuto = require('../filtri-auto');
 const province = require('../../data/province.json');
@@ -86,6 +86,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   });
   let chiuso = false;
   const nodi = new Map(), lavori = new Map(), sessioni = new Map(), condivise = new Map(), affinita = new Map();
+  const epocaCentro = crypto.randomUUID();
   const accessi = inizializzaAccessi ? inizializzaAccessi(app) : null;
   const stessoToken = (ricevuto, id) => {
     if (typeof ricevuto !== 'string' || typeof id !== 'string' || !Object.hasOwn(tokens, id)) return false;
@@ -232,7 +233,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     return candidati.find(n => !n.simulato) || null;
   }
   function fontiDelLavoro(job) {
-    if (job.operazione === 'fonte') return [job.fonte];
+    if (job.operazione === 'fonte' || job.operazione === 'dettaglio') return [job.fonte];
     if (job.operazione !== 'ricerca') return [];
     return job.input.fonti?.split(',')
       || (job.input.tipo === 'auto' ? ['subito', 'autoscout'] : FONTI_PAGINA);
@@ -347,7 +348,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     async function termina(body) {
       const datoAffinita = { ts: ora(), fonti: { ...(ancoraValida ? precedente.fonti : {}), ...assegnate } };
       affinita.set(chiave, datoAffinita);
-      // Il Set può ricevere altri destinatari anche durante la composizione sul nodo.
+      // Il Set può ricevere destinatari durante i controlli asincroni dei permessi.
       for (const verifica of destinatari || []) {
         try {
           const destinatario = await verifica();
@@ -358,12 +359,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       return { status: 200, body: { ...body, avvisiNodi: avvisi } };
     }
     if (!Object.keys(sostituzioni).length) return termina(base.body);
-    try {
-      const finale = await assegna(primario, { idLavoro: crypto.randomUUID(), azienda,
-        operazione: 'componi', input: { principale: base.body, sostituzioni }, destinatari });
-      if (finale.status === 200) return termina(finale.body);
-    } catch (e) { avvisi.push(`composizione sul nodo principale senza conferma: ${e.incerto ? 'esito incerto' : 'nodo non disponibile'}`); }
-    return termina(base.body);
+    await verificaDestinatari(destinatari);
+    return termina(componiRicerca(base.body, sostituzioni));
   }
 
   function ricerca(azienda, query, verifica = null) {
@@ -395,11 +392,46 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   }
 
   app.use('/_nodo', nodoAutorizzato, express.json({ limit: '8mb' }));
+  app.get('/_nodo/registrazione', (req, res) => res.json({ epoca: epocaCentro,
+    boot: nodi.get(req.get('x-amr-node-id'))?.boot || null }));
+  app.post('/_nodo/registrazione', (req, res) => {
+    const id = req.get('x-amr-node-id'), { epoca, boot, precedente } = req.body || {};
+    if (epoca !== epocaCentro || !/^[a-f0-9-]{36}$/.test(boot || '')) return res.sendStatus(409);
+    let n = nodi.get(id);
+    if (n?.boot === boot) return res.json({ ok: true });
+    if ((n?.boot || null) !== precedente) return res.sendStatus(409);
+    if (!n) {
+      const sospensioni = db.prepare('SELECT fonte FROM sospensioni WHERE nodo=?').all(id).map(r => r.fonte);
+      n = { id, coda: [], sospese: new Set(sospensioni.filter(Boolean)), sospeso: sospensioni.includes('') };
+      nodi.set(id, n);
+    }
+    n.boot = boot; n.sequenza = 0; n.visto = 0;
+    res.json({ ok: true });
+  });
+  function bootValido(req) {
+    const n = nodi.get(req.get('x-amr-node-id'));
+    if ((n?.boot || req.get('x-amr-node-boot') || req.get('x-amr-center-epoch'))
+        && (!n?.boot || req.get('x-amr-node-boot') !== n.boot || req.get('x-amr-center-epoch') !== epocaCentro)) {
+      return false;
+    }
+    return true;
+  }
+  const bootObsoleto = res => res.set('x-amr-node-obsoleto', '1').sendStatus(409);
+  app.use('/_nodo', (req, res, next) => {
+    if (!bootValido(req)) return bootObsoleto(res);
+    next();
+  });
   app.post('/_nodo/heartbeat', (req, res) => {
     const { id, revisione, fonti, occupato, idLavoroAttivo, simulato } = req.body || {};
     if (id !== req.get('x-amr-node-id')) return res.sendStatus(403);
     if (!/^[a-zA-Z0-9_-]{1,40}$/.test(id || '') || !fonti || typeof fonti !== 'object') return res.sendStatus(400);
     let n = nodi.get(id);
+    if (n?.boot) {
+      const seq = req.body.sequenza;
+      if (!Number.isSafeInteger(seq) || seq < 1) return res.sendStatus(400);
+      if (seq <= n.sequenza) return res.json({ ok: true, accepted: false });
+      n.sequenza = seq;
+    }
     if (!n) {
       const sospensioni = db.prepare('SELECT fonte FROM sospensioni WHERE nodo=?').all(id).map(r => r.fonte);
       n = { id, coda: [], sospese: new Set(sospensioni.filter(Boolean)),
@@ -431,10 +463,12 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       while ((job = n.coda[0])) {
         try { await verificaDestinatari(job.destinatari); }
         catch (e) {
+          if (!bootValido(req)) return bootObsoleto(res);
           if (chiuso) return res.sendStatus(503);
           if (lavori.get(job.idLavoro) === job) interrompiAccodati(n, null, x => x === job ? e : false);
           continue;
         }
+        if (!bootValido(req)) return bootObsoleto(res);
         if (chiuso) return res.sendStatus(503);
         // Il timer, una sospensione o una disconnessione possono rimuovere il record durante l'await.
         if (lavori.get(job.idLavoro) !== job || n.coda[0] !== job) continue;
@@ -655,7 +689,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       const n = nodoPerFonte(fonte);
       if (!n) return res.status(503).json({ error: 'nodo non disponibile' });
       const out = await assegna(n, { idLavoro: crypto.randomUUID(), azienda: req.azienda,
-        operazione: 'dettaglio', input: { url },
+        operazione: 'dettaglio', fonte, input: { url },
         destinatari: new Set([() => verificaSessione(req.sessioneProva, tipo)]),
         assegnazioneMs: Math.round(performance.now() - assegnazioneDa) });
       await verificaSessione(req.sessioneProva, tipo);

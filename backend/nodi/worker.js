@@ -10,19 +10,32 @@ const token = process.env.AMR_NODI_TOKEN;
 let attivo = true;
 let inCorso = null;
 let controllerAttivo = null;
+let heartbeatInVolo = null;
+const boot = require('node:crypto').randomUUID();
+let epocaCentro, sequenza = 0;
+const headers = () => ({ 'x-amr-node-token': token, 'x-amr-node-id': id,
+  ...(epocaCentro ? { 'x-amr-node-boot': boot, 'x-amr-center-epoch': epocaCentro } : {}) });
 const pausa = ms => new Promise(r => setTimeout(r, ms));
 async function post(percorso, body) {
   const r = await fetch(origine + percorso, { method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-amr-node-token': token, 'x-amr-node-id': id },
+    headers: { 'content-type': 'application/json', ...headers() },
     body: JSON.stringify(body), signal: AbortSignal.timeout(4000) });
-  if (!r.ok) throw new Error(`centro ${r.status}`);
+  if (!r.ok) {
+    if (r.headers?.get('x-amr-node-obsoleto') === '1') { attivo = false; controllerAttivo?.abort(); }
+    throw new Error(`centro ${r.status}`);
+  }
   return r;
 }
 
 async function heartbeat() {
-  await post('/_nodo/heartbeat', { id, revisione: 'imac-1', occupato: !!inCorso,
+  if (heartbeatInVolo) return heartbeatInVolo;
+  const richiesta = post('/_nodo/heartbeat', { id, revisione: 'imac-1', occupato: !!inCorso,
+    sequenza: ++sequenza,
     idLavoroAttivo: inCorso?.idLavoro || null,
     simulato: process.env.AMR_NODO_SIMULATO === '1', fonti: statoFonti() });
+  heartbeatInVolo = richiesta;
+  try { await richiesta; }
+  finally { if (heartbeatInVolo === richiesta) heartbeatInVolo = null; }
 }
 
 function esitoSimulato(lavoro) {
@@ -42,16 +55,26 @@ async function avvia() {
   if (!origine || !id || !token || !/^http:\/\/127\.0\.0\.1:\d+$/.test(origine)) {
     throw new Error('Il nodo di prova richiede centro loopback, ID e token');
   }
+  const registro = await fetch(origine + '/_nodo/registrazione', {
+    headers: headers(), signal: AbortSignal.timeout(4000) });
+  if (!registro.ok) throw new Error('registrazione nodo non disponibile');
+  const contesto = await registro.json();
+  epocaCentro = contesto.epoca;
+  if (!attivo) return;
+  await post('/_nodo/registrazione', { epoca: epocaCentro, boot, precedente: contesto.boot });
   while (attivo) {
     try {
       await heartbeat();
       if (!attivo) break;
       const r = await fetch(`${origine}/_nodo/poll?id=${encodeURIComponent(id)}`, {
-        headers: { 'x-amr-node-token': token, 'x-amr-node-id': id }, signal: AbortSignal.timeout(4000),
+        headers: headers(), signal: AbortSignal.timeout(4000),
       });
       if (!attivo) { await r.body?.cancel(); break; }
       if (r.status === 204) { await pausa(250); continue; }
-      if (!r.ok) throw new Error(`poll ${r.status}`);
+      if (!r.ok) {
+        if (r.headers?.get('x-amr-node-obsoleto') === '1') attivo = false;
+        throw new Error(`poll ${r.status}`);
+      }
       const lavoro = await r.json();
       if (!attivo) break;
       inCorso = lavoro;
@@ -65,6 +88,8 @@ async function avvia() {
       catch (e) { esito = { status: 502, body: { error: e.message || 'errore nodo' } }; }
       const durataMs = Math.round(performance.now() - inizioLavoro);
       clearInterval(controllo);
+      // clearInterval non annulla un invio già partito: finirlo prima di cambiare job.
+      await heartbeatInVolo?.catch(() => ctrl.abort());
       try { if (!ctrl.signal.aborted) await post('/_nodo/esito', { id, idLavoro: lavoro.idLavoro,
         tentativo: lavoro.tentativo, esito, durataMs }); }
       finally { inCorso = null; controllerAttivo = null; }
