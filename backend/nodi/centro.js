@@ -12,6 +12,7 @@ const filtriAuto = require('../filtri-auto');
 const province = require('../../data/province.json');
 const { creaAutorizzazioniDettagli } = require('./autorizzazioni-dettagli');
 const { creaBudgetRicerca, creaLimitiRicerca, TEMPO_RICERCA_MS } = require('./limiti-ricerca');
+const compat = require('./compatibilita-nodo');
 
 const MODULI = { aziendaA: ['auto', 'moto'], aziendaB: ['moto'] };
 const SETTE_GIORNI = 7 * 86400000;
@@ -37,10 +38,16 @@ function filtriAmmessi(query) {
 function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FINO_AL,
   timeoutRicercaMs = TEMPO_RICERCA_MS, oraMono = () => performance.now(),
   maxPersona = 2, maxTotale = 60,
-  adminLocale = false, accountProva = null, inizializzaAccessi = null }) {
+  adminLocale = false, accountProva = null, inizializzaAccessi = null, compatibilita = null, trasporto = null }) {
   // Validare prima di aprire il registro o inizializzare altri provider.
   const limitiRicerca = creaLimitiRicerca({ timeoutMs: timeoutRicercaMs, maxPersona, maxTotale, oraMono });
+  const releaseAttesa = compatibilita === null ? null : compat.valida(compatibilita);
+  const revisioneRicerca = releaseAttesa ? JSON.stringify(releaseAttesa) : REVISIONE;
   if (accountProva && inizializzaAccessi) throw new Error('due provider di accesso non ammessi');
+  if (trasporto && (!inizializzaAccessi || !releaseAttesa || accountProva)) {
+    throw new Error('centro remoto richiede accessi verificati e release esplicita');
+  }
+  const sicurezza = trasporto ? require('./trasporto-prova').creaTrasporto(trasporto) : null;
   if (!tokens || !Object.keys(tokens).length || !directory
       || Object.values(tokens).some(t => typeof t !== 'string' || t.length < 32)) {
     throw new Error('token per nodo e directory necessari');
@@ -57,6 +64,17 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     }
   }
   db.exec('CREATE TABLE IF NOT EXISTS sospensioni (nodo TEXT NOT NULL, fonte TEXT NOT NULL, PRIMARY KEY (nodo, fonte))');
+  db.exec('CREATE TABLE IF NOT EXISTS token_revocati (nodo TEXT NOT NULL, impronta TEXT NOT NULL, PRIMARY KEY(nodo,impronta))');
+  const tokenRevocati = new Set(db.prepare('SELECT nodo,impronta FROM token_revocati').all()
+    .map(r => r.nodo+':'+r.impronta));
+  const improntaToken = id => crypto.createHash('sha256').update(tokens[id]).digest('hex');
+  const tokenRevocato = id => typeof id !== 'string' || !Object.hasOwn(tokens,id)
+    || tokenRevocati.has(id+':'+improntaToken(id));
+  const stessoToken = (ricevuto, id) => {
+    if (typeof ricevuto !== 'string' || tokenRevocato(id)) return false;
+    const a = Buffer.from(ricevuto), b = Buffer.from(tokens[id]);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  };
   db.exec('CREATE TABLE IF NOT EXISTS eventi (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, livello TEXT NOT NULL, codice TEXT NOT NULL, lavoro TEXT, nodo TEXT, fonte TEXT, azienda TEXT, http INTEGER)');
   db.exec('CREATE INDEX IF NOT EXISTS eventi_ts ON eventi(ts)');
   function evento(codice, { lavoro = null, nodo = null, fonte = null, azienda = null, http = null } = {}) {
@@ -82,11 +100,20 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   pulizia.unref();
   const app = express();
   app.disable('x-powered-by');
+  if (sicurezza) {
+    app.set('trust proxy',sicurezza.trustProxy);
+    app.use(sicurezza.verificaTrasporto);
+    app.use((req,res,next) => {
+      if (req.path.startsWith('/_nodo/') && req.headers.origin === undefined
+          && stessoToken(req.get('x-amr-node-token'),req.get('x-amr-node-id'))) return next();
+      sicurezza.verificaOrigine(req,res,next);
+    });
+  }
   app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
     res.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'");
-    if (!/^127\.0\.0\.1:\d+$/.test(req.headers.host || '')) return res.sendStatus(403);
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && req.headers.origin
+    if (!sicurezza && !/^127\.0\.0\.1:\d+$/.test(req.headers.host || '')) return res.sendStatus(403);
+    if (!sicurezza && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && req.headers.origin
         && req.headers.origin !== `http://${req.headers.host}`) return res.sendStatus(403);
     next();
   });
@@ -94,12 +121,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   const nodi = new Map(), lavori = new Map(), sessioni = new Map(), condivise = new Map(), affinita = new Map();
   const epocaCentro = crypto.randomUUID();
   const autorizzazioniDettagli = creaAutorizzazioniDettagli({ ora });
-  const accessi = inizializzaAccessi ? inizializzaAccessi(app) : null;
-  const stessoToken = (ricevuto, id) => {
-    if (typeof ricevuto !== 'string' || typeof id !== 'string' || !Object.hasOwn(tokens, id)) return false;
-    const a = Buffer.from(ricevuto), b = Buffer.from(tokens[id] || '');
-    return a.length === b.length && crypto.timingSafeEqual(a, b);
-  };
+  let accessi;
+  try { accessi = inizializzaAccessi ? inizializzaAccessi(app) : null; }
+  catch(e) { clearInterval(pulizia);db.close();throw e; }
   const nodoAutorizzato = (req, res, next) => stessoToken(req.get('x-amr-node-token'),
     req.get('x-amr-node-id'))
     ? next() : res.sendStatus(401);
@@ -205,9 +229,12 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     }
   }
   function disponibile(n, fonte = null, consideraCoda = true) {
-    if (!n || ora() - n.visto > 6000 || n.revisione !== REVISIONE || n.sospeso
+    if (!n || tokenRevocato(n.id) || ora() - n.visto > 6000 || !releaseValida(n) || n.sospeso
         || (consideraCoda && n.coda.length >= 10)) return false;
     return !fonte || (!n.sospese.has(fonte) && !n.fonti[fonte]?.fermo);
+  }
+  function releaseValida(n) {
+    return releaseAttesa ? compat.compatibile(releaseAttesa, n?.compatibilita) : n?.revisione === REVISIONE;
   }
   function assegna(n, lavoro, limite = timeoutMs) {
     const avvia = () => {
@@ -294,7 +321,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   }, 1000);
   controlloNodi.unref();
   function chiaveAffinita(azienda, input) {
-    return azienda + ':' + REVISIONE + ':' + JSON.stringify(Object.entries(input)
+    return azienda + ':' + revisioneRicerca + ':' + JSON.stringify(Object.entries(input)
       .filter(([k]) => !['fetta','fonti','subitoMainStart','subitoRecuperoStart'].includes(k))
       .sort(([a], [b]) => a.localeCompare(b)));
   }
@@ -405,7 +432,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       const input = filtriAmmessi(query);
       const prima = Number(input.fetta || 0) === 0 && !input.fonti
         && input.subitoMainStart == null && input.subitoRecuperoStart == null;
-      const chiave = prima ? REVISIONE + ':' + JSON.stringify(Object.entries(input).sort(([a], [b]) => a.localeCompare(b))) : null;
+      const chiave = prima ? revisioneRicerca + ':' + JSON.stringify(Object.entries(input).sort(([a], [b]) => a.localeCompare(b))) : null;
       let voce = prima ? condivise.get(chiave) : null;
       const esistente = voce && !voce.budget.signal.aborted;
       let meta;
@@ -458,9 +485,15 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
 
   app.use('/_nodo', nodoAutorizzato, express.json({ limit: '8mb' }));
   app.get('/_nodo/registrazione', (req, res) => res.json({ epoca: epocaCentro,
-    boot: nodi.get(req.get('x-amr-node-id'))?.boot || null }));
+    boot: nodi.get(req.get('x-amr-node-id'))?.boot || null,
+    ...(releaseAttesa ? { compatibilita: releaseAttesa } : {}) }));
   app.post('/_nodo/registrazione', (req, res) => {
     const id = req.get('x-amr-node-id'), { epoca, boot, precedente } = req.body || {};
+    if (releaseAttesa && !compat.compatibile(releaseAttesa, req.body?.compatibilita)) {
+      const precedente = nodi.get(id);
+      if (precedente) precedente.compatibilita = null;
+      return res.sendStatus(409);
+    }
     if (epoca !== epocaCentro || !/^[a-f0-9-]{36}$/.test(boot || '')) return res.sendStatus(409);
     let n = nodi.get(id);
     if (n?.boot === boot) return res.json({ ok: true });
@@ -471,10 +504,13 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       nodi.set(id, n);
     }
     n.boot = boot; n.sequenza = 0; n.visto = 0;
+    n.compatibilita = releaseAttesa ? compat.valida(req.body.compatibilita) : null;
     res.json({ ok: true });
   });
   function bootValido(req) {
     const n = nodi.get(req.get('x-amr-node-id'));
+    if (releaseAttesa && (!n?.boot || req.get('x-amr-node-boot') !== n.boot
+        || req.get('x-amr-center-epoch') !== epocaCentro)) return false;
     if ((n?.boot || req.get('x-amr-node-boot') || req.get('x-amr-center-epoch'))
         && (!n?.boot || req.get('x-amr-node-boot') !== n.boot || req.get('x-amr-center-epoch') !== epocaCentro)) {
       return false;
@@ -489,6 +525,11 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   app.post('/_nodo/heartbeat', (req, res) => {
     const { id, revisione, fonti, occupato, idLavoroAttivo, simulato } = req.body || {};
     if (id !== req.get('x-amr-node-id')) return res.sendStatus(403);
+    if (releaseAttesa && !compat.compatibile(releaseAttesa, req.body?.compatibilita)) {
+      const precedente = nodi.get(id);
+      if (precedente) precedente.compatibilita = null;
+      return res.sendStatus(409);
+    }
     if (!/^[a-zA-Z0-9_-]{1,40}$/.test(id || '') || !fonti || typeof fonti !== 'object') return res.sendStatus(400);
     let n = nodi.get(id);
     if (n?.boot) {
@@ -511,6 +552,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       avviato.reject(Object.assign(new Error('esito incerto: worker riavviato'), { incerto: true }));
     }
     n.visto = ora(); n.revisione = revisione; n.fonti = fonti; n.simulato = !!simulato;
+    n.compatibilita = releaseAttesa ? compat.valida(req.body.compatibilita) : null;
     n.occupato = !!occupato;
     res.json({ ok: true });
   });
@@ -518,7 +560,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     if (req.query.id !== req.get('x-amr-node-id')) return res.sendStatus(403);
     const n = nodi.get(req.query.id);
     if (chiuso) return res.sendStatus(503);
-    if (!n || ora() - n.visto > 6000 || n.revisione !== REVISIONE) return res.sendStatus(409);
+    if (!n || ora() - n.visto > 6000 || !releaseValida(n)) return res.sendStatus(409);
     if (n.occupato || n.sospeso || n.pollInCorso) return res.sendStatus(204);
     n.pollInCorso = true;
     try {
@@ -631,19 +673,20 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     } catch (e) { res.status(e.status || 503).json({ codice: e.codice || 'autorizzazione_non_disponibile' }); }
   }
   app.use('/api/stato', adminDiProva);
+  const statoNodo = n => ({ id:n.id, online:!tokenRevocato(n.id) && ora()-n.visto<6000,
+    autorizzato:!tokenRevocato(n.id), compatibile:releaseValida(n), occupato:n.occupato,
+    simulato:n.simulato,sospeso:n.sospeso,sospese:[...n.sospese],fonti:n.fonti });
   app.get('/api/stato', (req, res) => {
     pulisci();
     const nodo = typeof req.query.nodo === 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(req.query.nodo)
       ? req.query.nodo : null;
-    res.json({ nodi: [...nodi.values()].filter(n => !nodo || n.id === nodo).map(n => ({ id: n.id, online: ora() - n.visto < 6000,
-      occupato: n.occupato, simulato: n.simulato, sospeso: n.sospeso,
-      sospese: [...n.sospese], fonti: n.fonti })),
+    res.json({ nodi: [...nodi.values()].filter(n => !nodo || n.id === nodo).map(statoNodo),
     ...paginaLavori(req, false), lavoriAttivi: nodo
       ? db.prepare("SELECT count(*) AS n FROM lavori WHERE stato IN ('attesa','in_corso') AND nodo=?").get(nodo).n
       : db.prepare("SELECT count(*) AS n FROM lavori WHERE stato IN ('attesa','in_corso')").get().n });
   });
   app.use('/api/admin', adminDiProva, (req, res, next) => {
-    if (!adminLocale) return res.sendStatus(404);
+    if (!adminLocale && !(sicurezza && accessi)) return res.sendStatus(404);
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)
         && req.get('x-amr-local-admin') !== '1') return res.sendStatus(403);
     next();
@@ -652,8 +695,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     pulisci();
     const nodo = typeof req.query.nodo === 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(req.query.nodo)
       ? req.query.nodo : null;
-    res.json({ nodi: [...nodi.values()].filter(n => !nodo || n.id === nodo).map(n => ({ id: n.id, online: ora() - n.visto < 6000,
-      occupato: n.occupato, simulato: n.simulato, sospeso: n.sospeso, sospese: [...n.sospese], fonti: n.fonti })),
+    res.json({ nodi: [...nodi.values()].filter(n => !nodo || n.id === nodo).map(statoNodo),
       ...paginaLavori(req, true),
       lavoriAttivi: nodo
         ? db.prepare("SELECT count(*) AS n FROM lavori WHERE stato IN ('attesa','in_corso') AND nodo=?").get(nodo).n
@@ -688,6 +730,21 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     if (sospeso) interrompiAccodati(n, fonte || null);
     evento(sospeso ? 'sospensione_aggiunta' : 'sospensione_rimossa', { nodo: n.id, fonte: fonte || null });
     res.json({ ok: true });
+  });
+  app.post('/api/admin/nodi/:id/revoca-token', express.json({limit:'1kb'}), (req,res) => {
+    const id=req.params.id;
+    if (!Object.hasOwn(tokens,id)) return res.sendStatus(404);
+    if (!req.body || Array.isArray(req.body) || Object.keys(req.body).length) return res.sendStatus(400);
+    db.prepare('INSERT OR IGNORE INTO token_revocati(nodo,impronta) VALUES(?,?)').run(id,improntaToken(id));
+    tokenRevocati.add(id+':'+improntaToken(id));
+    const n=nodi.get(id);
+    if(n) interrompiAccodati(n);
+    for(const job of lavori.values()) if(job.nodoAssegnato===id) {
+      lavori.delete(job.idLavoro);clearTimeout(job.timer);registra(job,'incerto');
+      job.reject(Object.assign(new Error('credenziale nodo revocata: esito incerto'),{incerto:true}));
+    }
+    evento('credenziale_revocata',{nodo:id});
+    res.json({ok:true});
   });
   function erroreRicerca(req, res, e) {
     if (res.destroyed || res.writableEnded) return;
@@ -793,6 +850,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'prototipo.html')));
   app.get('/prototipo.css', (req, res) => res.type('css').sendFile(path.join(__dirname, '../../frontend/nodi-prototipo.css')));
   app.get('/prototipo.js', (req, res) => res.type('js').sendFile(path.join(__dirname, '../../frontend/nodi-prototipo.js')));
+  app.get('/prototipo-backup.js', (req, res) => res.type('js').sendFile(path.join(__dirname, '../../frontend/nodi-backup-prova.js')));
   return { app, db, nodi, lavori, ricerca, close: () => {
     if (chiuso) return;
     chiuso = true;

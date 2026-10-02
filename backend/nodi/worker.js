@@ -1,7 +1,6 @@
 'use strict';
 
-const { esegui, statoFonti } = require('./operazioni');
-const annullo = require('../annullo');
+let esegui, statoFonti, annullo;
 
 const origine = process.env.AMR_CENTRO_URL;
 const id = process.env.AMR_NODO_ID;
@@ -13,11 +12,13 @@ let controllerAttivo = null;
 let heartbeatInVolo = null;
 const boot = require('node:crypto').randomUUID();
 let epocaCentro, sequenza = 0;
+let release = null;
 const headers = () => ({ 'x-amr-node-token': token, 'x-amr-node-id': id,
   ...(epocaCentro ? { 'x-amr-node-boot': boot, 'x-amr-center-epoch': epocaCentro } : {}) });
 const pausa = ms => new Promise(r => setTimeout(r, ms));
 async function post(percorso, body) {
   const r = await fetch(origine + percorso, { method: 'POST',
+    redirect: 'error',
     headers: { 'content-type': 'application/json', ...headers() },
     body: JSON.stringify(body), signal: AbortSignal.timeout(4000) });
   if (!r.ok) {
@@ -30,6 +31,7 @@ async function post(percorso, body) {
 async function heartbeat() {
   if (heartbeatInVolo) return heartbeatInVolo;
   const richiesta = post('/_nodo/heartbeat', { id, revisione: 'imac-1', occupato: !!inCorso,
+    ...(release ? { compatibilita: release } : {}),
     sequenza: ++sequenza,
     idLavoroAttivo: inCorso?.idLavoro || null,
     simulato: process.env.AMR_NODO_SIMULATO === '1', fonti: statoFonti() });
@@ -52,22 +54,42 @@ function esitoSimulato(lavoro) {
 }
 
 async function avvia() {
-  if (!origine || !id || !token || !/^http:\/\/127\.0\.0\.1:\d+$/.test(origine)) {
-    throw new Error('Il nodo di prova richiede centro loopback, ID e token');
+  let url;
+  try { url = new URL(origine); } catch { throw new Error('Configurazione del centro non valida'); }
+  if (!id || !token || url.origin !== origine || url.username || url.password
+      || (url.protocol !== 'https:' && !/^http:\/\/127\.0\.0\.1:\d+$/.test(origine))) {
+    throw new Error('Il nodo richiede un centro HTTPS o loopback, ID e token');
   }
+  const compat = process.env.AMR_NODI_RELEASE_FILE ? require('./compatibilita-nodo') : null;
+  if (compat) {
+    let artefatto;
+    try {
+      const fs = require('node:fs'), file = process.env.AMR_NODI_RELEASE_FILE, stat = fs.lstatSync(file);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 4 * 1024 * 1024) throw new Error();
+      artefatto = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch { throw new Error('manifest_release_non_valido'); }
+    release = compat.verificaArtefatto(artefatto, require('node:path').resolve(__dirname, '../..'));
+  }
+  if (url.protocol === 'https:' && !release) throw new Error('Il nodo remoto richiede i metadati della release');
+  if (!attivo) return;
+  // Il gate precede il caricamento degli scraper e qualunque chiamata al centro.
+  ({ esegui, statoFonti } = require('./operazioni'));
+  annullo = require('../annullo');
   const registro = await fetch(origine + '/_nodo/registrazione', {
-    headers: headers(), signal: AbortSignal.timeout(4000) });
+    headers: headers(), redirect: 'error', signal: AbortSignal.timeout(4000) });
   if (!registro.ok) throw new Error('registrazione nodo non disponibile');
   const contesto = await registro.json();
+  if (compat && !compat.compatibile(release, contesto.compatibilita)) throw new Error('Release del centro incompatibile');
   epocaCentro = contesto.epoca;
   if (!attivo) return;
-  await post('/_nodo/registrazione', { epoca: epocaCentro, boot, precedente: contesto.boot });
+  await post('/_nodo/registrazione', { epoca: epocaCentro, boot, precedente: contesto.boot,
+    ...(release ? { compatibilita: release } : {}) });
   while (attivo) {
     try {
       await heartbeat();
       if (!attivo) break;
       const r = await fetch(`${origine}/_nodo/poll?id=${encodeURIComponent(id)}`, {
-        headers: headers(), signal: AbortSignal.timeout(4000),
+        headers: headers(), redirect: 'error', signal: AbortSignal.timeout(4000),
       });
       if (!attivo) { await r.body?.cancel(); break; }
       if (r.status === 204) { await pausa(250); continue; }
@@ -83,7 +105,9 @@ async function avvia() {
       const controllo = setInterval(() => heartbeat().catch(() => ctrl.abort()), 2000);
       let esito;
       const inizioLavoro = performance.now();
-      try { esito = process.env.AMR_NODO_SIMULATO === '1' ? esitoSimulato(lavoro)
+      try { esito = lavoro.versioneProtocollo !== 1
+        ? { status: 409, body: { error: 'protocollo del lavoro incompatibile' } }
+        : process.env.AMR_NODO_SIMULATO === '1' ? esitoSimulato(lavoro)
         : await annullo.dentro(ctrl.signal, () => esegui(lavoro)); }
       catch (e) { esito = { status: 502, body: { error: e.message || 'errore nodo' } }; }
       const durataMs = Math.round(performance.now() - inizioLavoro);

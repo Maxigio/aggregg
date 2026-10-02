@@ -47,7 +47,7 @@ test('worker: stop durante il poll non avvia il lavoro ricevuto dopo', async () 
     const processo = new EventEmitter();
     processo.env = { AMR_CENTRO_URL:'http://127.0.0.1:1234',AMR_NODO_ID:'locale',AMR_NODI_TOKEN:'sintetico' };
     const modulo = {exports:{}};
-    const context = vm.createContext({module:modulo,process:processo,AbortSignal,AbortController,performance,
+    const context = vm.createContext({module:modulo,process:processo,AbortSignal,AbortController,performance,URL,
       setTimeout,clearTimeout,setInterval,clearInterval,
       require: name => name === 'node:crypto' ? require(name) : name === './operazioni' ? {statoFonti:()=>({}),esegui:async()=>{eseguiti++;return {status:200,body:{}};}}
         : {dentro:async(signal,fn)=>fn()},
@@ -68,7 +68,7 @@ test('worker: heartbeat pendente termina prima dell’esito e del lavoro success
   const modulo = { exports:{} }, ordine = [];
   let timer, terminaA, terminaB, terminaHeartbeat, pollCount = 0;
   const tick = async () => { for(let i=0;i<30;i++) await Promise.resolve(); };
-  const context = vm.createContext({ module:modulo, process:processo, AbortSignal, AbortController, performance,
+  const context = vm.createContext({ module:modulo, process:processo, AbortSignal, AbortController, performance, URL,
     setTimeout, clearTimeout, setInterval:fn=>{timer=fn;return 1;}, clearInterval:()=>{},
     require:name=>name==='node:crypto'?require(name):name==='./operazioni'?{statoFonti:()=>({}),esegui:job=>{
       ordine.push('avvio-'+job.idLavoro);
@@ -76,7 +76,7 @@ test('worker: heartbeat pendente termina prima dell’esito e del lavoro success
     }}:{dentro:(_s,fn)=>fn()},
     fetch:async(url,opt)=>{
       if(url.endsWith('/registrazione'))return {ok:true,json:async()=>({epoca:'centro',boot:null})};
-      if(url.includes('/poll'))return {ok:true,status:200,json:async()=>({idLavoro:++pollCount===1?'A':'B',tentativo:1,input:{}})};
+      if(url.includes('/poll'))return {ok:true,status:200,json:async()=>({versioneProtocollo:1,idLavoro:++pollCount===1?'A':'B',tentativo:1,input:{}})};
       const body=JSON.parse(opt.body);
       if(url.endsWith('/heartbeat')&&body.idLavoroAttivo==='A')return new Promise(r=>{terminaHeartbeat=()=>{ordine.push('heartbeat-A');r({ok:true});};});
       if(url.endsWith('/esito'))ordine.push('esito-'+body.idLavoro);
