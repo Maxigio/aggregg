@@ -187,10 +187,12 @@ const searchCache = new Map();
 function searchCacheKey(p) {
 
   const avanzati = filtriAuto.chiaveCache(p.filtriAuto);
-  return ['_cacheScope', 'tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax',
+  const richiesta = JSON.stringify(['tipo', 'marca', 'modello', 'prezzoMin', 'prezzoMax', 'annoMin', 'annoMax', 'kmMin', 'kmMax',
           'regione', 'raggio', 'mmmvAutoscout', 'motoitBrandSlug', 'motoitModelSlug', 'motoitBikeCode',
           'versione', 'fetta', 'fontiPagina', 'subitoMainStart', 'subitoRecuperoStart']
-    .map(f => `${f}=${p[f] ?? ''}`).concat(`avanzati=${avanzati}`).join('&').toLowerCase();
+    .map(f => [f, String(p[f] ?? '')])
+    .concat([['avanzati', avanzati]])).toLowerCase();
+  return JSON.stringify(p._cacheScope ?? '') + ':' + richiesta;
 }
 function cacheable(data) {
 

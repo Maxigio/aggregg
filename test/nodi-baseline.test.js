@@ -104,6 +104,31 @@ test('Auto: Fiat Panda conserva i filtri nativi delle due fonti senza Moto.it', 
   ]);
 });
 
+test('cache coordinatore: scope azienda case-sensitive, filtri identici riusati nello stesso scope', async () => {
+  const { runSearch } = require('../backend/ricerca-coordinatore');
+  const { parseSearchParams } = require('../backend/ricerca-parametri');
+  tipo = 'auto'; calls.length = 0;
+  const input = { tipo, marca: 'Fiat', modello: 'Panda', prezzoMin: '2134', fetta: '1', fonti: 'subito' };
+  const esegui = scope => runSearch({ ...parseSearchParams(input).params, _cacheScope: scope });
+  await esegui('ACME');
+  const prima = calls.length; assert.ok(prima > 0);
+  await esegui('ACME'); assert.equal(calls.length, prima);
+  await esegui('acme'); assert.ok(calls.length > prima);
+});
+
+test('cache coordinatore: delimitatori nei filtri non producono collisioni', () => {
+  const source = fs.readFileSync(path.join(__dirname,'../backend/ricerca-coordinatore.js'),'utf8');
+  const funzione = source.match(/function searchCacheKey\(p\) \{[\s\S]*?\n\}/)[0];
+  const key = require('node:vm').runInNewContext('(' + funzione + ')', {
+    filtriAuto: require('../backend/filtri-auto') });
+  const a = { _cacheScope:'ACME',marca:'BMW&modello=GS',modello:'ADV' };
+  const b = { _cacheScope:'ACME',marca:'BMW',modello:'GS&modello=ADV' };
+  assert.notEqual(key(a),key(b));
+  assert.equal(key(b),key({...b,marca:'bmw',modello:'gs&modello=adv'}));
+  assert.doesNotThrow(()=>key({...b,modello:'\ud800'}));
+  assert.notEqual(key({...b,modello:'\ud800'}),key({...b,modello:'\ufffd'}));
+});
+
 test('Moto: Yamaha MT-07 conserva i filtri nativi delle tre fonti', async () => {
   tipo = 'moto'; calls.length = 0; unexpectedGet = 0;
   const data = await cerca({ tipo, marca: 'Yamaha', modello: 'MT-07' });
