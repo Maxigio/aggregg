@@ -114,6 +114,93 @@ test('login Nhost: massimo quattro chiamate contemporanee, nessuna coda illimita
   for (const r of await Promise.all(pending)) assert.equal(r.status, 200);
 });
 
+test('login Nhost: logout durante MFA impedisce cookie tardivo e revoca il provider', async t => {
+  let completa, revocate = 0;
+  const f = await setup(t, { ruolo: { attiva: true, admin: true }, client: {
+    login: async () => ({ mfa: { ticket: 'ticket-sintetico' } }),
+    mfa: () => new Promise(r => { completa = r; }), logout: async () => { revocate++; },
+  } });
+  const cookie = getCookie(await f.login(), 'amr_mfa_prova');
+  const pending = f.req('mfa', { otp: '123456' }, cookie);
+  for (let i = 0; i < 100 && !completa; i++) await new Promise(r => setTimeout(r, 5));
+  assert.ok(completa);
+  assert.equal((await f.req('logout', {}, cookie)).status, 200);
+  completa(session);
+  const r = await pending;
+  assert.equal(r.status, 401); assert.equal(revocate, 1);
+  assert.equal(r.headers.getSetCookie().some(v => v.startsWith('amr_sessione_prova=')), false);
+});
+
+test('login Nhost: revoca durante provider prevale, ma una nuova autenticazione resta possibile', async t => {
+  let completa, revocate = 0;
+  const f = await setup(t, { client: { login: () => new Promise(r => { completa = r; }),
+    logout: async () => { revocate++; } } });
+  const pending = f.login();
+  for (let i = 0; i < 100 && !completa; i++) await new Promise(r => setTimeout(r, 5));
+  assert.ok(completa); f.auth.revocaPersona('persona'); completa(session);
+  assert.equal((await pending).status, 401); assert.equal(revocate, 1);
+  completa = null; const next = f.login();
+  for (let i = 0; i < 100 && !completa; i++) await new Promise(r => setTimeout(r, 5));
+  assert.ok(completa); completa(session); assert.equal((await next).status, 200);
+});
+
+test('login Nhost: contesto browser cancella password pendente e nuovo login cancella la vecchia MFA', async t => {
+  let completa, mfaCompleta, attende = true;
+  const f = await setup(t, { client: {
+    login: () => attende ? new Promise(r => { completa = r; }) : Promise.resolve({ mfa: { ticket: 'ticket' } }),
+    mfa: () => new Promise(r => { mfaCompleta = r; }),
+  } });
+  const contesto = getCookie(await f.req('me'), 'amr_accesso_prova');
+  const pending = f.login(contesto);
+  for (let i = 0; i < 100 && !completa; i++) await new Promise(r => setTimeout(r, 5));
+  assert.ok(completa); await f.req('logout', {}, contesto); completa(session);
+  assert.equal((await pending).status, 401);
+  attende = false;
+  const first = await f.login(contesto), old = getCookie(first, 'amr_mfa_prova');
+  const pendingMfa = f.req('mfa', { otp: '123456' }, contesto + '; ' + old);
+  for (let i = 0; i < 100 && !mfaCompleta; i++) await new Promise(r => setTimeout(r, 5));
+  assert.ok(mfaCompleta);
+  const next = await f.login(contesto + '; ' + old); assert.equal(next.status, 200);
+  const nuovaMfa = getCookie(next, 'amr_mfa_prova');
+  mfaCompleta(session);
+  const obsoleta = await pendingMfa;
+  assert.equal(obsoleta.status, 401);
+  assert.equal(obsoleta.headers.getSetCookie().some(v => v.startsWith('amr_mfa_prova=')), false);
+  mfaCompleta = null;
+  const finale = f.req('mfa', { otp: '123456' }, contesto + '; ' + nuovaMfa);
+  for (let i = 0; i < 100 && !mfaCompleta; i++) await new Promise(r => setTimeout(r, 5));
+  assert.ok(mfaCompleta); mfaCompleta(session);
+  assert.equal((await finale).status, 200);
+});
+
+test('login Nhost: diniego e scadenza revocano provider senza cambiare errore originale', async t => {
+  let revocate = 0;
+  const denied = await setup(t, { ruolo: { attiva: false }, client: {
+    logout: async () => { revocate++; throw Error('provider offline'); },
+  } });
+  const r = await denied.login(); assert.equal(r.status, 403);
+  assert.equal((await r.json()).codice, 'accesso_non_autorizzato'); assert.equal(revocate, 1);
+  let completa;
+  const stale = await setup(t, { client: { login: () => new Promise(r => { completa = r; }),
+    logout: async () => { revocate++; } } });
+  const pending = stale.login();
+  for (let i = 0; i < 100 && !completa; i++) await new Promise(r => setTimeout(r, 5));
+  assert.ok(completa); stale.avanza(3 * 60000); completa(session);
+  assert.equal((await pending).status, 401); assert.equal(revocate, 2);
+});
+
+test('login Nhost: a cap pieno la rotazione valida riesce e un nuovo browser resta escluso', async t => {
+  const f = await setup(t); let cookie;
+  for (let i = 0; i < 100; i++) {
+    if (i % 20 === 0) f.avanza(60000);
+    const r = await f.login(); assert.equal(r.status, 200); cookie = getCookie(r, 'amr_sessione_prova');
+  }
+  f.avanza(60000);
+  const rotated = await f.login(cookie); assert.equal(rotated.status, 200);
+  assert.equal((await f.req('me', undefined, cookie)).status, 401);
+  assert.equal((await f.login()).status, 503);
+});
+
 test('client Auth: localhost obbligatorio, redirect vietati ed errori senza dettagli sensibili', async () => {
   assert.throws(() => creaClient({ base: 'https://esempio.invalid/v1' }));
   let opt;

@@ -1,0 +1,79 @@
+# Preparazione del centro AMR — incrementi del 2 ottobre 2026
+
+Richiesta: implementare i quattro passi successivi alla review `fce9319`, con prove,
+controprove, review indipendente e commit separati. Nessun deploy, servizio cloud
+attivato, accesso M2 o prova live degli scraper impliciti. Lo stack manuale con
+l'azienda del proprietario resta intatto. Le modifiche backend richiedono un nuovo
+avvio prima di comparire in quel processo.
+
+## 1. Difetti locali del prototipo
+
+### Login — completato
+
+- R01: il contesto browser registra il tentativo prima del provider; logout e
+  revoca lo invalidano. Controlli prima e dopo la lettura asincrona dei permessi.
+- R05: un login respinto chiude la sessione provider appena ricevuta; il fallimento
+  di questo cleanup non sostituisce l'errore originale.
+- R06: quota piena ammette la rotazione di una sessione esistente valida.
+- Review indipendente: trovata e corretta la cancellazione tardiva del cookie MFA
+  di un nuovo login. Test completa il nuovo tentativo dopo la risposta obsoleta.
+- Prove: 14/14 test Auth con provider sintetico, preload anti-dotenv; review
+  indipendente ripetuta senza altri finding. Nessun uso di credenziali reali.
+- Limite: sessioni ancora RAM/loopback; questo fix non realizza il login cloud.
+
+### Coordinamento — in verifica
+
+- R02: fonte registrata nel job dettaglio; pausa ferma gli accodati, non gli avviati.
+- R04: heartbeat serializzati e attesi prima del cambio job. La controprova ha
+  mostrato che il timeout locale non impedisce l'elaborazione remota tardiva:
+  aggiunto handshake esplicito con epoca del centro, boot del worker e sequenza.
+  CAS sul boot precedente; retry registrazione idempotente, senza reset sequenza.
+  Poll/esiti del boot sostituito rifiutati. Nessuno storico illimitato dei boot.
+- Compatibilità locale: fixture legacy ammesse finché il nodo non è registrato;
+  l'entrypoint pubblico dovrà rifiutare il protocollo legacy. Non è un gate cloud.
+- R03: scelta di composizione ancora nell'interview; non cambiata implicitamente.
+
+### Lifecycle e Admin — in verifica
+
+- R07/R08: stop cancella startup e figli; segnali installati prima del primo await;
+  cleanup indipendenti e Docker down non cancellato dal segnale di stop.
+- R09: elenco distingue azienda scaduta da attiva, coerentemente con autorizzazione.
+- R10: refresh conserva focus del pulsante senza spostarlo da input/navigazione.
+- Prove lifecycle: 9/9 configurazione e launcher, più review VM indipendente.
+- Prova UI: browser headless, un test completo passato; controprove indipendenti
+  su focus input, focus esterno e cambio focus durante fetch. SQL: test automatico
+  PostgreSQL separato avviato; esito da registrare, stack manuale non riavviato.
+
+## 2. Ciclo commerciale PostgreSQL
+
+Da completare: rinnovo/revoca, colleghi, gestione sessioni. Non dichiarare i metodi
+SQLite sintetici come implementazione commerciale. Riutilizzare funzioni atomiche
+con ruoli ristretti, controllo identità/epoca dentro la transazione e quote esistenti.
+
+## 3. Backup
+
+Decisione dell'utente: backup open source + storage gestito, sostituisce OneDrive.
+Candidato: restic + endpoint S3 separato (R2 Standard in giurisdizione UE).
+Prima verificare restore locale; poi collaudo storage reale con configurazione del
+proprietario, senza leggere credenziali in chat. Nessun account/bucket attivato.
+
+- restic cifra repository lato client; password va custodita fuori dal repository.
+- R2: 10 GB-mese / 1 milione operazioni A / 10 milioni B inclusi; oltre soglia
+  costi a consumo. Standard, non Infrequent Access. Gratuità non garantita.
+- S3 compatibile non significa tutte le operazioni S3 supportate; prova sul provider
+  necessaria. Backup riuscito non significa ripristino provato.
+- Journal 90 giorni e 14 copie DB giornaliere separati; errore persistente Admin,
+  senza annullare l'operazione commerciale già confermata.
+
+Fonti ricontrollate: [restic](https://restic.net/),
+[cifratura](https://restic.readthedocs.io/en/stable/070_encryption.html),
+[retention](https://restic.readthedocs.io/en/stable/060_forget.html),
+[R2 listino](https://developers.cloudflare.com/r2/pricing/),
+[R2 S3](https://developers.cloudflare.com/r2/api/s3/api/),
+[R2 giurisdizioni](https://developers.cloudflare.com/r2/reference/data-location/).
+
+## 4. Entrypoint e staging
+
+Ancora da implementare/collaudare: persistenza, HTTPS, compatibilità release/cataloghi,
+revoca credenziali nodo, deadline, riavvio e restore. Nessun coinvolgimento M2.
+Le prove locali non certificano proxy, SMTP o prestazioni remote.
