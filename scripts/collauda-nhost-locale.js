@@ -143,7 +143,13 @@ async function collauda({ manuale = false } = {}) {
     const authAddress = await docker('port', 'mail', '4000');
     const mailAddress = await docker('port', 'mail', '8025');
     serverLogin = require('node:http').createServer();
-    await new Promise(resolve => serverLogin.listen(0, '127.0.0.1', resolve));
+    await new Promise((resolve, reject) => {
+      serverLogin.once('error', reject);
+      serverLogin.listen(0, '127.0.0.1', () => {
+        serverLogin.off('error', reject);
+        resolve();
+      });
+    });
     const origineLogin = 'http://127.0.0.1:' + serverLogin.address().port;
     assert.match(authAddress, /^127\.0\.0\.1:\d+$/);
     assert.match(mailAddress, /^127\.0\.0\.1:\d+$/);
