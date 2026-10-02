@@ -113,11 +113,16 @@ async function collauda({ manuale = false } = {}) {
     encryption: crypto.randomBytes(32).toString('hex') })), { mode: 0o600 });
   // Il daemon è esplicito; il contesto Docker globale e quello CRM non cambiano.
   const args = ['--host', host, 'compose', '--project-name', progetto, '-f', file];
+  const fermata = new AbortController();
+  const interrompi = () => fermata.abort();
+  process.on('SIGINT', interrompi); process.on('SIGTERM', interrompi);
   const docker = async (...extra) => (await esegui('docker', [...args, ...extra],
-    { timeout: 600000, maxBuffer: 4 * 1024 * 1024 })).stdout.trim();
+    { timeout: 600000, maxBuffer: 4 * 1024 * 1024,
+      ...(extra[0] === 'down' ? {} : { signal: fermata.signal }) })).stdout.trim();
   const sql = async testo => {
     const child = require('node:child_process').spawn('docker', [...args, 'exec', '-T', 'postgres',
-      'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres'], { stdio: ['pipe', 'pipe', 'pipe'] });
+      'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres'], {
+      stdio: ['pipe', 'pipe', 'pipe'], signal: fermata.signal });
     let out = ''; child.stdout.on('data', b => { out += b; });
     // Gli errori SQL possono contenere dati: il test registra solo l'esito.
     child.stderr.resume(); child.stdin.on('error', () => {}); child.stdin.end(testo);
@@ -570,8 +575,8 @@ async function collauda({ manuale = false } = {}) {
       console.log('Posta locale di verifica (nessun invio esterno): http://' + mailAddress);
       console.log('Il processo resta aperto. Ctrl+C elimina account, database e container sintetici.');
       await new Promise(resolve => {
-        const chiudi = () => { process.off('SIGINT', chiudi); process.off('SIGTERM', chiudi); resolve(); };
-        process.once('SIGINT', chiudi); process.once('SIGTERM', chiudi);
+        if (fermata.signal.aborted) return resolve();
+        fermata.signal.addEventListener('abort', resolve, { once: true });
       });
     }
   } catch (e) {
@@ -595,14 +600,16 @@ async function collauda({ manuale = false } = {}) {
       ? ` · ricevuto ${e.actual}, atteso ${e.expected}` : '';
     throw new Error('Collaudo interrotto nella fase: ' + fase + (punto ? ' · ' + punto : '') + confronto + (diagnosi ? ' · ' + diagnosi : ''));
   } finally {
-    await workerManuale?.close();
-    if (centro) centro.close(); else loginProva?.close();
-    aziendeRoute?.close();
-    await writerPool?.end();
-    await pool?.end();
-    if (serverLogin) {
-      serverLogin.closeAllConnections();
-      await new Promise(resolve => serverLogin.close(resolve));
+    for (const chiudi of [() => workerManuale?.close(),
+      () => centro ? centro.close() : loginProva?.close(), () => aziendeRoute?.close(),
+      () => writerPool?.end(), () => pool?.end(), async () => {
+        if (serverLogin) {
+          serverLogin.closeAllConnections();
+          await new Promise(resolve => serverLogin.close(resolve));
+        }
+      }]) {
+      try { await chiudi(); }
+      catch { console.error('Chiusura di una risorsa locale non riuscita; continuo la pulizia.'); }
     }
     try {
       await docker('down', '--volumes', '--remove-orphans');
@@ -610,6 +617,8 @@ async function collauda({ manuale = false } = {}) {
     } catch {
       // Conservare il compose protetto permette di riprovare la pulizia.
       console.error('Pulizia container non riuscita; configurazione protetta conservata: ' + directory);
+    } finally {
+      process.off('SIGINT', interrompi); process.off('SIGTERM', interrompi);
     }
   }
 }

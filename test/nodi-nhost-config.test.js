@@ -3,6 +3,25 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { configura, totp } = require('../scripts/collauda-nhost-locale');
 
+test('collaudo Nhost: SIGTERM iniziale cancella avvio e svolge cleanup una sola volta', async () => {
+  const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),{EventEmitter}=require('node:events');
+  const processo=new EventEmitter(); processo.env={AMR_NHOST_DOCKER_HOST:'unix:///synthetic/amr-auth/docker.sock'};
+  const modulo={exports:{}}, calls=[];let abort;
+  const source=fs.readFileSync(path.join(__dirname,'../scripts/collauda-nhost-locale.js'),'utf8')
+    .replace('module.exports = { configura, IMMAGINI, totp, credenzialiLocali };',
+      'module.exports = { collauda };');
+  vm.runInNewContext(source,{module:modulo,process:processo,__dirname:path.join(__dirname,'../scripts'),
+    AbortController,AbortSignal,Buffer,URL,console:{log(){},error(){}},setTimeout,clearTimeout,
+    require:name=>name==='node:fs'?{mkdtempSync:()=>'/synthetic',chmodSync(){},writeFileSync(){},rmSync(){calls.push('rimossa');}}
+      :name==='node:util'?{promisify:()=>async(_bin,args,opts)=>{
+        if(args.includes('down')){assert.equal(opts.signal,undefined);calls.push('down');return{stdout:''};}
+        calls.push('up');return new Promise((_,reject)=>{opts.signal.addEventListener('abort',()=>reject(Error('abort')),{once:true});abort=()=>processo.emit('SIGTERM');});
+      }}:require(name)});
+  const pending=modulo.exports.collauda();assert.ok(abort);abort();abort();
+  await assert.rejects(pending,/Collaudo interrotto/);
+  assert.deepEqual(calls,['up','down','rimossa']);assert.equal(processo.listenerCount('SIGTERM'),0);
+});
+
 test('collaudo Nhost: soltanto Auth e mail locali sono pubblicati, nessun file host montato', () => {
   const c = configura({ password: 'sintetica', jwt: 'sintetico', admin: 'sintetico' });
   for (const [nome, servizio] of Object.entries(c.services)) {
