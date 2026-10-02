@@ -31,17 +31,29 @@ async function centro(t,{directory,tokens={locale:'a'.repeat(64)}}={}) {
   const server=http.createServer(servizio.app);await new Promise((r,j)=>{server.once('error',j);server.listen(0,'127.0.0.1',r);});
   let chiuso=false;const close=async()=>{if(chiuso)return;chiuso=true;servizio.close();server.closeAllConnections();await new Promise(r=>server.close(r));};
   t.after(async()=>{await close();if(!directory)fs.rmSync(dir,{recursive:true,force:true});});
-  const call=(url,body,headers={})=>new Promise((resolve,reject)=>{
-    const req=http.request({host:'127.0.0.1',port:server.address().port,path:url,method:body===undefined?'GET':'POST',
+  const call=(url,body,headers={},method=body===undefined?'GET':'POST')=>new Promise((resolve,reject)=>{
+    const req=http.request({host:'127.0.0.1',port:server.address().port,path:url,method,
       headers:{host:'amr.invalid','x-forwarded-proto':'https',...(body===undefined?{}:{'content-type':'application/json'}),...headers}},res=>{
       let raw='';res.setEncoding('utf8');res.on('data',v=>{raw+=v;});
-      res.on('end',()=>resolve({status:res.statusCode,json:async()=>JSON.parse(raw)}));
+      res.on('end',()=>resolve({status:res.statusCode,raw,headers:res.headers,json:async()=>JSON.parse(raw)}));
     });req.on('error',reject);req.end(body===undefined?undefined:JSON.stringify(body));
   });
   return {servizio,call,close,dir};
 }
 const nodo={'x-amr-node-id':'locale','x-amr-node-token':'a'.repeat(64)};
 const admin={origin:'https://amr.invalid',cookie:'admin=prova','x-amr-local-admin':'1'};
+test('sonda: solo GET/HEAD esatti, nessun requisito Host/TLS e nessun bypass API',async t=>{
+  const f=await centro(t);
+  const interno={host:'interno.invalid','x-forwarded-proto':'http',origin:'https://evil.invalid'};
+  const r=await f.call('/healthz',undefined,interno);
+  assert.equal(r.status,200);assert.equal(r.raw,'ok');assert.equal(r.headers['cache-control'],'no-store');
+  assert.equal((await f.call('/healthz',undefined,interno,'HEAD')).raw,'');
+  for(const url of ['/healthz/','/healthz?x=1','//healthz','/%68ealthz','/api/admin','/_nodo/registrazione']) {
+    assert.equal((await f.call(url,undefined,interno)).status,403);
+  }
+  assert.equal((await f.call('/healthz',{},interno)).status,403);
+  f.servizio.close();assert.equal((await f.call('/healthz',undefined,interno)).status,503);
+});
 test('centro HTTPS: eccezione Origin solo nodo autenticato, Admin mai pubblico',async t=>{
   const f=await centro(t);
   assert.equal((await f.call('/api/admin')).status,403);

@@ -138,8 +138,12 @@ async function collauda({ manuale = false } = {}) {
       stdio: ['pipe', 'pipe', 'pipe'], signal: fermata.signal });
     let out = ''; child.stdout.on('data', b => { out += b; });
     // Solo SQLSTATE per diagnosticare fixture/schema senza riportare dati.
-    let sqlState = '';
-    child.stderr.on('data', b => { sqlState ||= /ERROR:\s+([A-Z0-9]{5})(?:\s|$)/.exec(b.toString())?.[1] || ''; });
+    let sqlState = '', sqlTail = '';
+    child.stderr.on('data', b => {
+      const chunk = sqlTail + b.toString();
+      sqlState ||= /ERROR:\s+([A-Z0-9]{5})(?:\s|$)/.exec(chunk)?.[1] || '';
+      sqlTail = chunk.slice(-64);
+    });
     child.stdin.on('error', () => {}); child.stdin.end('\\set VERBOSITY sqlstate\n'+testo);
     const timer = setTimeout(() => child.kill(), 20000);
     return new Promise((resolve, reject) => {
@@ -152,7 +156,7 @@ async function collauda({ manuale = false } = {}) {
   const risultati = [];
   let diagnosi = '';
   let serverLogin, loginProva, centro, pool, writerPool, aziendeRoute, colleghiRoute, workerManuale;
-  let backupPool, backupWorker, backupNotifiche;
+  let backupPool, backupWorker, backupNotifiche, conservaTemporanei = false;
   try {
     await docker('up', '-d', '--wait', 'postgres', 'mail');
     await sql('CREATE SCHEMA auth;');
@@ -561,6 +565,32 @@ async function collauda({ manuale = false } = {}) {
     const infoRef=await(await richiestaLogin('me',undefined,cookieReferente)).json();
     assert.equal(infoRef.aziendaValida,true);assert.deepEqual(infoRef.moduli,['moto']);
     assert.equal((await req('/api/search?tipo=auto&marca=Fiat',cookieReferente)).status,403);
+    if (!manuale && process.env.AMR_TEST_CENTRO_IMAGE) {
+      fase = 'immagine centro HTTPS e riavvio';
+      try {
+        risultati.push(await require('./collauda-centro-immagine-locale').collaudaImmagine({
+          host,docker,directory,image:process.env.AMR_TEST_CENTRO_IMAGE,readerPassword,writerPassword,backupPassword,
+          email,password,totpSecret:generated.data.totpSecret,persona:preMfa.user.id,sql,signal:fermata.signal,
+          referente:{email:destinatario,password:pwInvito},
+        }));
+      } catch(e) {
+        conservaTemporanei = e.conservaTemporanei === true;
+        // Metadati del gate controllati; mai il messaggio/stderr del processo.
+        const faseGate=['parametri','fixture e immagine locale','certificato e proxy TLS',
+          'avvio centro con configurazione esplicita','guard HTTPS, UI e API senza sessione',
+          'password e MFA reali attraverso HTTPS','registrazione worker e compatibilità del manifest',
+          'referente HTTPS, modulo Moto e risultato sintetico Subito',
+          'sospensione manuale e revoca del token via Admin','SIGTERM, stesso volume SQLite e sessioni invalidate']
+          .includes(e.faseGate)?e.faseGate:'';
+        const punto=typeof e.puntoGate==='string'&&/^collauda-centro-immagine-locale\.js:[1-9]\d*:[1-9]\d*$/.test(e.puntoGate)
+          ? e.puntoGate : '';
+        const codice=typeof e.codeGate==='string'&&/^(?:[A-Z][A-Z_]{0,19}|[A-Z0-9]{5})$/.test(e.codeGate)?e.codeGate:'';
+        const confronto=e.confrontoGate&&Number.isFinite(e.confrontoGate.actual)&&Number.isFinite(e.confrontoGate.expected)
+          ? `ricevuto ${e.confrontoGate.actual}, atteso ${e.confrontoGate.expected}` : '';
+        diagnosi=[faseGate,punto,codice,confronto].filter(Boolean).join(' · ');
+        throw e;
+      }
+    }
     await sql(`UPDATE amr_accessi.aziende SET accettata_il=now()-interval '2 years',
       attivata_il=now()-interval '1 year',scadenza=now()-interval '1 second' WHERE id='${aziendaId}';`);
     assert.equal((await aziende.elenco({persona:preMfa.user.id,epoca:0,mfa:true})).aziende
@@ -718,8 +748,11 @@ async function collauda({ manuale = false } = {}) {
     const confronto = typeof e.actual === 'number' && typeof e.expected === 'number'
       ? ` · ricevuto ${e.actual}, atteso ${e.expected}` : '';
     const sqlState = /^[A-Z0-9]{5}$/.test(e.code || '') ? ' · SQLSTATE '+e.code : '';
-    const fixture = Array.isArray(e.fixturePunto) ? e.fixturePunto.slice(0,3)
-      .filter(p=>typeof p==='string'&&/^nodi-colleghi-pg\.test\.js:[1-9]\d*:[1-9]\d*$/.test(p)) : [];
+    const fixture = [...new Set([
+      ...(Array.isArray(e.fixturePunto) ? e.fixturePunto : []),
+      ...(typeof e.stack==='string' ? e.stack.split('\n').filter(p=>/^\s+at /.test(p))
+        .flatMap(p=>p.match(/nodi-colleghi-pg\.test\.js:[1-9]\d*:[1-9]\d*/g)||[]) : []),
+    ])].filter(p=>typeof p==='string'&&/^nodi-colleghi-pg\.test\.js:[1-9]\d*:[1-9]\d*$/.test(p)).slice(0,3);
     throw new Error('Collaudo interrotto nella fase: ' + fase + (punto ? ' · ' + punto : '') + confronto
       + sqlState + (fixture.length?' · fixture '+fixture.join(', '):'') + (diagnosi ? ' · ' + diagnosi : ''));
   } finally {
@@ -736,7 +769,10 @@ async function collauda({ manuale = false } = {}) {
     }
     try {
       await docker('down', '--volumes', '--remove-orphans');
-      fs.rmSync(directory, { recursive: true, force: true });
+      // Un gate figlio può conservare configurazioni necessarie per ripulire
+      // risorse ancora attive: non eliminare indirettamente il suo recupero.
+      if (conservaTemporanei) console.error('Temporanei protetti del gate immagine conservati: '+directory);
+      else fs.rmSync(directory, { recursive: true, force: true });
     } catch {
       // Conservare il compose protetto permette di riprovare la pulizia.
       console.error('Pulizia container non riuscita; configurazione protetta conservata: ' + directory);

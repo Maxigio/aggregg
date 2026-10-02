@@ -41,7 +41,10 @@ L'entrypoint non applica migrazioni né crea utenti o ruoli automaticamente.
 ## Confini verificati nel codice
 
 - Host, Origin, TLS e duplicati degli header vengono controllati prima degli
-  handler. Il proxy autorizzato deve sovrascrivere `X-Forwarded-Proto`.
+  handler applicativi. Il proxy autorizzato deve sovrascrivere `X-Forwarded-Proto`.
+  La sola sonda GET/HEAD `/healthz`, senza query, risponde prima dei guard:
+  restituisce `ok` senza interrogare Auth, database o portali. Non è una
+  verifica del funzionamento delle dipendenze.
 - Cookie Secure in HTTPS, HttpOnly e SameSite; guard indipendenti sulle rotte di
   login, sessioni, aziende, colleghi e backup. Il controllo della sessione e dei
   permessi resta server-side anche quando il trasporto è valido.
@@ -122,6 +125,15 @@ locale incluso. Prova dell'inventario, non ancora dell'immagine installata.
 
 Il collaudo browser automatico usa risposte simulate; l'accettazione manuale
 delle nuove funzioni e il trasporto Nhost reale rimangono da eseguire.
+
+### Immagine installata — incremento del 2 ottobre 2026
+
+Il [registro dell'immagine](immagine-centro-locale.md) documenta il successivo
+collaudo Linux con dipendenze installate, HTTPS verificato, Auth/MFA e PostgreSQL
+reali della fixture, ricerca Moto simulata e riavvio sullo stesso volume.
+La ricetta e il contesto dal commit sono preparati localmente: non è stata
+attivata né distribuita una configurazione Nhost. Le evidenze precedenti
+restano la baseline del loro commit; non descrivono l'ambiente cloud.
 
 ## Fonti autorevoli
 

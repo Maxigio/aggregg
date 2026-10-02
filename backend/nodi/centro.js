@@ -98,9 +98,18 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   pulisci();
   const pulizia = setInterval(pulisci, 3600000);
   pulizia.unref();
+  let chiuso = false;
   const app = express();
   app.disable('x-powered-by');
   if (sicurezza) {
+    // Nhost interroga HTTP interno senza Host pubblico o credenziali. Solo
+    // questa URL esatta risponde prima dei guard; non attesta Auth/DB/fonti.
+    app.use((req,res,next) => {
+      if (req.url !== '/healthz' || !['GET','HEAD'].includes(req.method)) return next();
+      res.set('Cache-Control','no-store');
+      res.set('X-Content-Type-Options','nosniff');
+      res.status(chiuso ? 503 : 200).type('text/plain').send(chiuso ? 'unavailable' : 'ok');
+    });
     app.set('trust proxy',sicurezza.trustProxy);
     app.use(sicurezza.verificaTrasporto);
     app.use((req,res,next) => {
@@ -117,7 +126,6 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         && req.headers.origin !== `http://${req.headers.host}`) return res.sendStatus(403);
     next();
   });
-  let chiuso = false;
   const nodi = new Map(), lavori = new Map(), sessioni = new Map(), condivise = new Map(), affinita = new Map();
   const epocaCentro = crypto.randomUUID();
   const autorizzazioniDettagli = creaAutorizzazioniDettagli({ ora });

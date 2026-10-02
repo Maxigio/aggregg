@@ -4,6 +4,7 @@ const fs = require('node:fs'), os = require('node:os'), path = require('node:pat
 const { valida, compatibile, hashCataloghi, hashCodice, listaCataloghi, validaArtefatto,
   verificaArtefatto, listaCodice, CATALOGHI } = require('../backend/nodi/compatibilita-nodo');
 const { prepara } = require('../scripts/prepara-release-nodi');
+const { preparaContesto } = require('../scripts/prepara-contesto-centro');
 const manifest = () => ({ protocollo: 1, release: 'a'.repeat(40), codice: 'b'.repeat(64), cataloghi: 'c'.repeat(64) });
 test('nodi: protocollo, release, codice e cataloghi devono coincidere', () => {
   const m = manifest(); assert.deepEqual(valida(m), m); assert.ok(compatibile(m, { ...m, altra: true }));
@@ -26,6 +27,7 @@ function fixture(t) {
     fs.readFileSync(path.join(__dirname,'../backend/nodi',nome)));
   scrivi('backend/nodi/operazioni.js','module.exports={};');scrivi('package.json','{}');scrivi('package-lock.json','{}');
   for(const nome of ['frontend/prova.js','pagine/prova.html','scripts/prova.js'])scrivi(nome,'// fixture');
+  scrivi('scripts/docker/centro.Dockerfile',fs.readFileSync(path.join(__dirname,'../scripts/docker/centro.Dockerfile')));
   const calls=[];let head='a'.repeat(40),catturato;
   const git=(_bin,args)=>{
     calls.push(args);
@@ -113,6 +115,36 @@ test('builder: uno SHA catturato anche se HEAD/checkout cambiano; nessuna lettur
   fs.writeFileSync(path.join(f.dir,'backend/nodi/worker.js'),'checkout modificato');
   const nuovo=prepara({radice:f.dir,git:f.git});assert.equal(nuovo.codice,f.artefatto.codice);
   assert.throws(()=>verificaArtefatto(nuovo,f.dir),/codice_release_incompatibile/);
+});
+test('contesto Docker: solo blob pubblici, ricetta del commit e file locali ignorati',t=>{
+  const f=fixture(t),parent=fs.mkdtempSync(path.join(os.tmpdir(),'amr-parent-'));
+  t.after(()=>fs.rmSync(parent,{recursive:true,force:true}));
+  fs.writeFileSync(path.join(f.dir,'package.json'),'checkout non distribuito');
+  fs.writeFileSync(path.join(f.dir,'.env'),'dato sintetico privato');
+  fs.writeFileSync(path.join(f.dir,'data/auth.json'),'dato sintetico privato');
+  const {directory,manifest}=preparaContesto({radice:f.dir,genitore:parent,git:f.git});
+  assert.deepEqual(verificaArtefatto(manifest,directory),{
+    protocollo:manifest.protocollo,release:manifest.release,codice:manifest.codice,cataloghi:manifest.cataloghi});
+  assert.equal(fs.readFileSync(path.join(directory,'package.json'),'utf8'),'{}');
+  assert.equal(fs.readFileSync(path.join(directory,'Dockerfile'),'utf8'),
+    fs.readFileSync(path.join(directory,'scripts/docker/centro.Dockerfile'),'utf8'));
+  assert.equal(fs.existsSync(path.join(directory,'.env')),false);
+  assert.equal(fs.existsSync(path.join(directory,'data/auth.json')),false);
+  assert.ok(f.calls.filter(c=>c[0]==='show').every(c=>!c[1].includes('.env')&&!c[1].includes('auth.json')));
+  if(process.platform!=='win32')assert.equal(fs.statSync(directory).mode&0o777,0o700);
+});
+test('contesto Docker: drift durante la copia fallisce e pulisce soltanto la directory posseduta',t=>{
+  const f=fixture(t),parent=fs.mkdtempSync(path.join(os.tmpdir(),'amr-parent-'));
+  t.after(()=>fs.rmSync(parent,{recursive:true,force:true}));
+  fs.writeFileSync(path.join(parent,'preservare'),'non toccare');
+  let copie=0;
+  const git=(bin,args,opt)=>{
+    const buffer=f.git(bin,args,opt);
+    if(args[0]==='show'&&args[1].endsWith(':package.json')&&++copie===2)return Buffer.from('{"drift":true}');
+    return buffer;
+  };
+  assert.throws(()=>preparaContesto({radice:f.dir,genitore:parent,git}),/contesto_centro_non_preparato/);
+  assert.deepEqual(fs.readdirSync(parent),['preservare']);
 });
 test('inventario: percorsi assoluti/traversal/privati, duplicati e incompletezza rifiutati prima dei blob',t=>{
   const f=fixture(t);
