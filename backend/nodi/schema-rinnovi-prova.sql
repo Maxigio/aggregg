@@ -15,6 +15,7 @@ GRANT UPDATE(epoca) ON amr_accessi.persone TO amr_aziende_definitore;
 CREATE FUNCTION amr_accessi.aziende_rinnova(p_persona uuid,p_epoca integer,p_mfa boolean,
   p_operazione uuid,p_id text,p_scadenza timestamptz) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog SET timezone='UTC'
+SET datestyle='ISO, MDY'
 AS $$
 DECLARE v_op amr_accessi.aziende_operazioni%ROWTYPE;
   v_a amr_accessi.aziende%ROWTYPE; v_fino timestamptz; v_ora timestamptz;

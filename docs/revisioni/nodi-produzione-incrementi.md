@@ -164,3 +164,21 @@ Il parser resta invariato e i cursori Subito richiesti sono conservati.
 Il nuovo test distribuito falliva con HTTP 400 prima del fix; dopo il fix passano
 entrambi gli ordini delle fonti. Suite pertinente: 18/18. Review indipendente:
 nessun finding confermato aperto. Prove simulate, nessun portale o M2 interrogato.
+
+## F11 — cleanup dell'avvio fallito, risolto
+
+L'errore asincrono di `listen` rigetta l'avvio dentro il `try/finally` del collaudo.
+Il test VM del launcher reale verifica cleanup e rimozione dei listener; la
+controprova con il vecchio listener non raggiungeva il cleanup. Commit `da1d343`.
+Nessuna modifica o chiusura dello stack manuale dell'utente.
+
+## F05 — rinnovo indipendente da DateStyle, risolto
+
+La funzione PostgreSQL imposta ISO/UTC per scrivere e confrontare le scadenze.
+Collaudo PostgreSQL 16/Nhost separato passato: retry della stessa operazione con
+DateStyle SQL/DMY, Postgres/MDY e German/DMY; un secondo aggiunto alla data resta
+un conflitto. Migration esplicita per i database già inizializzati, non applicata
+automaticamente al collaudo manuale. Review indipendente senza finding aperti.
+I record originari ISO restano compatibili; record importati con date ambigue in
+altri formati richiedono riconciliazione prima della migration. Nessuna promessa
+di correggere automaticamente un dato storico di cui non conosciamo il formato.

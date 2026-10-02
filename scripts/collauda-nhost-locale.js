@@ -520,7 +520,19 @@ async function collauda({ manuale = false } = {}) {
     assert.equal(await sql(`SELECT scadenza FROM amr_accessi.aziende WHERE id='${aziendaId}';`),rinnovata);
     const dataEdited=new Date(Date.now()+2*365*86400000).toISOString();
     await assert.rejects(aziende.rinnova(gestore,{...rinnovo,scadenza:dataEdited}),e=>e.codice==='operazione_in_conflitto');
-    await aziende.rinnova(gestore,{id:aziendaId,operazione:crypto.randomUUID(),scadenza:dataEdited});
+    const rinnovoEdited={id:aziendaId,operazione:crypto.randomUUID(),scadenza:dataEdited};
+    await aziende.rinnova(gestore,rinnovoEdited);
+    for (const stile of ['SQL, DMY','Postgres, MDY','German, DMY']) {
+      const ripetuto=JSON.parse(await sql(`SET DateStyle='${stile}';
+        SET ROLE amr_aziende_scrittore;
+        SELECT amr_accessi.aziende_rinnova('${gestore.persona}',0,true,
+          '${rinnovoEdited.operazione}','${aziendaId}','${dataEdited}'::timestamptz);`));
+      assert.equal(ripetuto.giaEseguita,true);
+      assert.equal(new Date(ripetuto.scadenza).toISOString(),dataEdited);
+    }
+    await assert.rejects(sql(`SET DateStyle='SQL, DMY'; SET ROLE amr_aziende_scrittore;
+      SELECT amr_accessi.aziende_rinnova('${gestore.persona}',0,true,
+        '${rinnovoEdited.operazione}','${aziendaId}', '${dataEdited}'::timestamptz+interval '1 second');`));
     await assert.rejects(aziende.rinnova(gestore,{id:aziendaId,operazione:crypto.randomUUID(),scadenza:'2000-01-01T00:00:00.000Z'}),e=>e.codice==='input_non_valido');
     const referenteProvider=await authClient.login(destinatario,pwInvito);
     const personaReferente=referenteProvider.session.user.id;
