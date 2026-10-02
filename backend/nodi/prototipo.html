@@ -24,6 +24,15 @@
       <section id="accountPanel" class="section" aria-labelledby="accountTitolo" hidden>
         <div class="section-head"><h2 id="accountTitolo">Account e aziende</h2></div>
         <div class="panel account-panel" data-account-prototipo><p role="status">Caricamento gestione account…</p></div>
+        <div class="panel account-panel" data-colleghi-prototipo><p role="status">Caricamento colleghi…</p></div>
+        <section class="panel account-panel" data-backup-prototipo hidden aria-labelledby="backupTitolo">
+          <h3 id="backupTitolo">Copie di sicurezza</h3>
+          <p>Journal commerciale e database separati. Nessun archivio di annunci.</p>
+          <p data-backup-avviso role="status" aria-live="polite"></p>
+          <dl data-backup-stato></dl>
+          <button type="button" class="btn quiet" data-backup-aggiorna>Aggiorna stato backup</button>
+          <button type="button" class="btn quiet" data-backup-riprova>Riprova le copie in attesa</button>
+        </section>
       </section>
       <section id="diagnosticaPanel" class="section" aria-labelledby="statoTitolo" hidden>
         <div class="section-head"><h2 id="statoTitolo">Nodi e lavori</h2><div class="section-tools"><label for="nodoOsservato">Nodo osservato</label><select id="nodoOsservato"><option value="">Tutti i nodi</option></select><button type="button" id="aggiorna" class="btn quiet">↻ Aggiorna</button></div></div>

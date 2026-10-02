@@ -231,7 +231,8 @@ function renderStato(data) {
     for (const fonte of ['subito', 'autoscout', 'moto']) {
       const fermo = n.sospeso || n.sospese.includes(fonte) || n.fonti?.[fonte]?.fermo;
       const fine = n.fonti?.[fonte]?.fino;
-      const testo = !n.online ? 'Nodo offline' : n.sospeso || n.sospese.includes(fonte) ? 'Sospesa da Admin'
+      const testo = n.autorizzato === false ? 'Credenziale revocata' : !n.online ? 'Nodo offline'
+        : n.compatibile === false ? 'Release incompatibile' : n.sospeso || n.sospese.includes(fonte) ? 'Sospesa da Admin'
         : n.fonti?.[fonte]?.fermo ? `Pausa automatica${Number.isFinite(fine) ? ' fino alle ' + new Date(fine).toLocaleTimeString('it-IT') : ''}`
           : 'Disponibile';
       const row = elemento('div', '', 'source-row'); row.append(elemento('span', nomiFonti[fonte]), elemento('span', testo, fermo ? 'stop' : '')); rows.append(row);
@@ -250,6 +251,18 @@ function renderStato(data) {
           body: JSON.stringify({ fonte: fonte || null, sospeso: !attiva }) });
           await aggiornaStato();
         } catch (e) { $('aggiornato').textContent = e.message; b.disabled = false; }
+      }); actions.append(b);
+    }
+    if (n.autorizzato !== false) {
+      const b = elemento('button','Revoca credenziale'); b.type='button';b.dataset.nodo=n.id;b.dataset.fonte='credenziale';
+      b.addEventListener('click', async()=>{
+        if (!window.confirm('Revocare la credenziale del nodo? I lavori avviati avranno esito incerto. Per ricollegarlo servirà una nuova chiave.')) return;
+        b.disabled=true;
+        try {
+          await leggi(`/api/admin/nodi/${encodeURIComponent(n.id)}/revoca-token`,{method:'POST',
+            headers:{'content-type':'application/json','x-amr-local-admin':'1'},body:'{}'});
+          await aggiornaStato();
+        } catch(e) { $('aggiornato').textContent=e.message;b.disabled=false; }
       }); actions.append(b);
     }
     card.append(actions);
@@ -690,6 +703,10 @@ leggi('/api/test/config').then(async config => {
     script.onerror = () => { $('accountPanel').querySelector('[data-account-prototipo]').textContent =
       'Gestione account non disponibile. Ricarica la pagina per riprovare.'; };
     document.head.append(script);
+    for (const src of ['/api/auth/colleghi/pagina.js', '/prototipo-backup.js']) {
+      const aggiunto = document.createElement('script'); aggiunto.src = src; aggiunto.defer = true;
+      document.head.append(aggiunto);
+    }
   } else {
     accessoSintetico = true; diagnosticaAbilitata = true; aggiornaAree(); aggiornaStato();
     try { const data = await leggi('/api/test/me'); $('azienda').value = data.azienda; await applicaIdentita(data); }
