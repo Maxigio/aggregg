@@ -139,13 +139,34 @@ test('HTTP: prima pagina condivisa sopravvive alla scadenza del primo destinatar
 test('HTTP: revoca dopo inizio del dettaglio blocca il body e i cataloghi successivi',async t=>{
   const f=await setup(t);f.entra('a');const cookie=await f.login('a');
   const pending=f.cerca(cookie), job=await f.poll();await f.esito(job,risposta());
-  assert.equal((await pending).status,200);
-  const detail=f.req('/api/detail?url='+encodeURIComponent(risposta().risultati[0].url),cookie);
+  const search = await pending; assert.equal(search.status,200);
+  const row = (await search.json()).risultati[0];
+  const detail=f.req('/api/detail?'+new URLSearchParams({url:row.url,accessoDettagli:row.accessoDettagli}),cookie);
   const detailJob=await f.poll();assert.equal(detailJob.operazione,'dettaglio');
   f.account.revoca(f.account.sessione('rA'),{persona:'a'});
   await f.esito(detailJob,{desc:'annuncio di prova',images:['https://example.invalid/img']});
   await interrotto(await detail);
   assert.equal((await f.req('/api/brands?tipo=moto',cookie)).status,403);
+});
+
+test('HTTP: dettaglio oltre 300 risultati resta accessibile solo alla sessione destinataria',async t=>{
+  const f=await setup(t), a=await f.login('rA'),b=await f.login('rB');
+  const pending=f.cerca(a), job=await f.poll();
+  const body=risposta();
+  body.risultati=Array.from({length:301},(_,i)=>risposta('s'+i).risultati[0]);
+  await f.esito(job,body);
+  const row=(await(await pending).json()).risultati[0];
+  const query=new URLSearchParams({url:row.url,accessoDettagli:row.accessoDettagli});
+  assert.equal((await f.req('/api/detail?'+query,b)).status,403);
+  assert.equal(f.centro.lavori.size,0);
+  const altered=new URLSearchParams(query);altered.set('url',row.url+'?altro');
+  assert.equal((await f.req('/api/detail?'+altered,a)).status,403);
+  const detail=f.req('/api/detail?'+query,a), d=await f.poll();
+  assert.equal(d.input.url,row.url);
+  await f.esito(d,{ok:true,detail:{cilindrata:600}});
+  assert.equal((await detail).status,200);
+  // Il centro aggiunge l'autorizzazione alla copia per browser, mai alla porzione del nodo.
+  assert.equal('accessoDettagli' in body.risultati[0],false);
 });
 
 test('HTTP: scadenza durante cataloghi non consegna il risultato già ricevuto dal nodo',async t=>{

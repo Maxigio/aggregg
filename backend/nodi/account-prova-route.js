@@ -34,7 +34,6 @@ function mount(app, { account, sessione, listaSessioni, revocaSessione }) {
         const risultato = account[metodo](req.identitaProva, req.body);
         if (metodo === 'accetta') {
           req.sessioneAccountProva.azienda = risultato.azienda;
-          req.sessioneAccountProva.annunci.clear();
         }
         res.json(risultato);
       } catch (e) {

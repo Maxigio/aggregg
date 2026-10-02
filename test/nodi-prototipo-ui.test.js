@@ -22,12 +22,21 @@ test('prototipo: aggiornamento lavori conserva dettagli, focus e scroll senza co
   browser = await chromium.launch({ headless: true, executablePath: browserPath });
   const page = await browser.newPage(); const errors = []; page.on('pageerror', e => errors.push(e.message));
   let aggiornamenti = 0, inverti = false, rimossi = new Set(), nuovaMarca = 'BMW';
+  let dettagli = 0;
+  let consegnaDettagli;
   await page.route('**/api/**', async route => {
     const url = new URL(route.request().url());
     let json;
     if (url.pathname === '/api/test/config') json = {accesso:'sintetico'};
     else if (url.pathname === '/api/test/me') { await route.fulfill({status:401,json:{}}); return; }
     else if (url.pathname === '/api/stato') json = {nodi:[]};
+    else if (url.pathname === '/api/detail') {
+      dettagli++;
+      assert.equal(url.searchParams.get('accessoDettagli'),'firma-sintetica');
+      assert.equal(url.searchParams.get('url'),'https://www.subito.it/moto/prova.htm');
+      json={ok:true,detail:{cambio:'<script>non_eseguire()</script>',cilindrata:600}};
+      await new Promise(resolve=>{consegnaDettagli=resolve;});
+    }
     else if (url.pathname === '/api/admin') {
       aggiornamenti++;
       const lavori = Array.from({length:20},(_, i) => ({
@@ -76,5 +85,24 @@ test('prototipo: aggiornamento lavori conserva dettagli, focus e scroll senza co
   rimossi = new Set(Array.from({length:20},(_,i)=>'job-'+i));
   await page.waitForFunction(() => document.getElementById('lavori').textContent.includes('Nessun lavoro'));
   assert.equal(await page.locator('#lavori tr').count(),1);
+  await page.evaluate(() => {
+    document.getElementById('ricercaPanel').hidden=false;
+    renderRisultato({risultati:[{titolo:'Moto',url:'https://www.subito.it/moto/prova.htm',
+      fonte:'subito',accessoDettagli:'firma-sintetica'}],sources:{}});
+  });
+  assert.equal(dettagli,0);
+  await page.locator('#risultati summary').click();
+  for(let i=0;!consegnaDettagli&&i<100;i++)await page.waitForTimeout(5);
+  assert.ok(consegnaDettagli);
+  // Una pagina successiva fallita cambia la sequenza HTTP, non la card esistente.
+  await page.evaluate(()=>{sequenzaRicerca++;});
+  consegnaDettagli();
+  await page.waitForFunction(()=>document.querySelector('#risultati details p').textContent.includes('600'));
+  assert.equal(dettagli,1);
+  assert.equal(await page.locator('#risultati script').count(),0);
+  await page.locator('#risultati summary').click();
+  await page.locator('#risultati summary').click();
+  await page.waitForTimeout(100);
+  assert.equal(dettagli,1);
   assert.deepEqual(errors,[]);
 });

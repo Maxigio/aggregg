@@ -10,6 +10,7 @@ const { porzioneCompleta, componiRicerca } = require('./componi-ricerca');
 const { NOMI: FILTRI_AUTO } = require('../filtri-auto');
 const filtriAuto = require('../filtri-auto');
 const province = require('../../data/province.json');
+const { creaAutorizzazioniDettagli } = require('./autorizzazioni-dettagli');
 
 const MODULI = { aziendaA: ['auto', 'moto'], aziendaB: ['moto'] };
 const SETTE_GIORNI = 7 * 86400000;
@@ -87,6 +88,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   let chiuso = false;
   const nodi = new Map(), lavori = new Map(), sessioni = new Map(), condivise = new Map(), affinita = new Map();
   const epocaCentro = crypto.randomUUID();
+  const autorizzazioniDettagli = creaAutorizzazioniDettagli({ ora });
   const accessi = inizializzaAccessi ? inizializzaAccessi(app) : null;
   const stessoToken = (ricevuto, id) => {
     if (typeof ricevuto !== 'string' || typeof id !== 'string' || !Object.hasOwn(tokens, id)) return false;
@@ -524,7 +526,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     } else if (typeof azienda !== 'string' || !Object.hasOwn(MODULI, azienda)) return res.sendStatus(400);
     const cookie = crypto.randomBytes(24).toString('hex');
     sessioni.set(cookie, { azienda: accountProva ? contesto?.azienda : azienda,
-      identita, ts: ora(), annunci: new Map() });
+      identita, ts: ora() });
     if (sessioni.size > 50) {
       const prima = sessioni.keys().next().value;
       sessioni.get(prima).revocata = true;
@@ -641,12 +643,10 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       const out = await ricerca(req.azienda, req.query, () => verificaSessione(req.sessioneProva, req.query.tipo));
       if (!abbandonata) {
         await verificaSessione(req.sessioneProva, req.query.tipo);
-        if (out.status === 200) for (const r of out.body.risultati || []) {
-          if (typeof r.url !== 'string') continue;
-          req.sessioneProva.annunci.set(impronta(r.url), req.query.tipo);
-          if (req.sessioneProva.annunci.size > 300) req.sessioneProva.annunci.delete(req.sessioneProva.annunci.keys().next().value);
-        }
-        res.status(out.status).json(out.body);
+        // Non mutare porzioni condivise/cache: ogni sessione riceve firme proprie.
+        const body = out.status === 200 ? { ...out.body, risultati: (out.body.risultati || [])
+          .map(r => ({ ...r, accessoDettagli: autorizzazioniDettagli.emetti(req.sessioneProva,r.url,req.query.tipo) })) } : out.body;
+        res.status(out.status).json(body);
       }
     } catch (e) { if (!abbandonata) res.status(e.status === 400 ? 400 : e.status === 403 ? 403 : e.incerto ? 504 : 503)
       .json({ error: e.status === 403 ? 'accesso_interrotto' : e.message,
@@ -674,7 +674,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   app.get('/api/detail', async (req, res) => {
     const url = req.query.url;
     if (typeof url !== 'string' || url.length > 2048) return res.sendStatus(400);
-    const tipo = req.sessioneProva.annunci.get(impronta(url));
+    const tipo = autorizzazioniDettagli.verifica(req.sessioneProva,url,req.query.accessoDettagli);
     if (!tipo || !req.moduli.includes(tipo)) return res.sendStatus(403);
     try {
       let fonte;

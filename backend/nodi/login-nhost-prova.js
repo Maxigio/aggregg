@@ -90,7 +90,7 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     if (vecchia) sessioni.delete(vecchia);
     const token = crypto.randomBytes(32).toString('hex');
     sessioni.set(impronta(token), { chiave: impronta(token), persona: s.user.id, mfa, provider: s,
-      epoca: ruolo.epoca ?? 0, azienda: ruolo.azienda, annunci: new Map(), scadenza: ora() + durataMs });
+      epoca: ruolo.epoca ?? 0, azienda: ruolo.azienda, scadenza: ora() + durataMs });
     res.clearCookie('amr_mfa_prova', options);
     res.cookie('amr_sessione_prova', token, { ...options, maxAge: durataMs });
     res.json({ ok: true });

@@ -547,8 +547,10 @@ test('dettagli: sospensione della fonte ferma solo i job non ancora avviati', as
   await beat();const login=await fetch(base+'/api/test/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({azienda:'aziendaA'})});
   const cookie=login.headers.get('set-cookie').split(';')[0],url='https://www.subito.it/auto/sintetico.htm';
   const initial=fetch(base+'/api/search?tipo=auto&marca=Fiat',{headers:{cookie}}),j=await poll();
-  await finish(j,{risultati:[{fonte:'subito',id:'s1',url}],sources:{subito:{status:'ok'},autoscout:{status:'empty'}}});assert.equal((await initial).status,200);
-  const detail=()=>fetch(base+'/api/detail?url='+encodeURIComponent(url),{headers:{cookie}});
+  await finish(j,{risultati:[{fonte:'subito',id:'s1',url}],sources:{subito:{status:'ok'},autoscout:{status:'empty'}}});
+  const initialResponse=await initial;assert.equal(initialResponse.status,200);
+  const grant=(await initialResponse.json()).risultati[0].accessoDettagli;
+  const detail=()=>fetch(base+'/api/detail?'+new URLSearchParams({url,accessoDettagli:grant}),{headers:{cookie}});
   const waitQueue=async()=>{for(let i=0;i<100&&!centro.nodi.get('a').coda.length;i++)await new Promise(r=>setTimeout(r,5));assert.equal(centro.nodi.get('a').coda.length,1);};
   await beat();const queued=detail();await waitQueue();await pause(true);
   assert.equal((await queued).status,503);assert.equal((await node('poll?id=a')).status,204);

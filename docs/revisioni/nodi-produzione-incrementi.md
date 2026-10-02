@@ -58,7 +58,17 @@ la normalizzazione dei filtri resta invariata. Test con `ACME` / `acme` verifica
 richieste distinte e riuso nello stesso scope. La review ha trovato anche collisioni
 fra delimitatori presenti nei filtri: ora la chiave serializza coppie campo/valore
 JSON, senza eccezioni sui surrogate Unicode isolati. 10/10 baseline passati.
-R11 (dettagli dopo oltre 300 URL) resta da correggere.
+R11: autorizzazioni dettagli firmate approvate dall'utente e implementate in un
+modulo dedicato. HMAC con chiave per sessione, URL/modulo/azienda e scadenza della
+sessione; controllo dei permessi correnti resta prima e dopo il lavoro del nodo.
+Nessun elenco URL in RAM, nessuna autorizzazione nei dati persistiti del job.
+Copie per destinatario impediscono che una firma modifichi la risposta condivisa.
+Il frontend invia la firma soltanto aprendo il dettaglio, con retry esplicito.
+Review ha trovato una regressione: la sequenza della paginazione invalidava anche
+le card ancora visibili. Ora il completamento è legato alla card connessa: nuove
+ricerche/logout rimuovono la card, una pagina fallita invece non la invalida.
+Prove: 301 risultati su HTTP, 500 firme unitarie, URL e sessione alterate,
+revoca in volo, scadenza esatta, XSS e paginazione durante dettaglio in browser.
 
 ## 2. Ciclo commerciale PostgreSQL
 
@@ -70,6 +80,9 @@ Collaudo PostgreSQL automatico passato, senza riavviare lo stack manuale.
 Review UI: corretto riuso di ID dopo revoca/riattivazione/revoca; una mutazione
 confermata con elenco fallito ritenta soltanto la lettura. Focus ha un ripiego
 stabile quando il controllo scompare. Test browser della sequenza passato.
+Ulteriore controprova: commit con risposta persa viene riconciliato usando una
+lettura Admin del registro operazioni PRIMA dell'elenco aggiornato. Questo evita
+sia riuso di vecchie revoche sia un doppio rinnovo dopo una lettura obsoleta.
 
 Da completare: colleghi, gestione sessioni. Non dichiarare i metodi
 SQLite sintetici come implementazione commerciale. Riutilizzare funzioni atomiche
@@ -112,6 +125,6 @@ Le prove locali non certificano proxy, SMTP o prestazioni remote.
 
 ## Verifica complessiva corrente
 
-98/98 test `nodi-*` passati, zero skip, con provider sintetici, repository restic
+100/100 test `nodi-*` passati, zero skip, con provider sintetici, repository restic
 temporanei e preload anti-dotenv. I test SQLite commerciali restano prove sintetiche;
 non sostituiscono il collaudo PostgreSQL né il gate cloud.

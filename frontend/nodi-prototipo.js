@@ -334,6 +334,35 @@ function renderRisultato(body, aggiungi = false, richieste = null) {
     else card.append(elemento('strong', r.titolo || 'Annuncio'));
     const prezzo = Number.isFinite(r.prezzo) ? new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(r.prezzo) : 'Prezzo non indicato';
     card.append(elemento('div', [nomiFonti[r.fonte] || r.fonte, prezzo, r.anno, r.km != null ? `${r.km} km` : null].filter(Boolean).join(' · '), 'meta'));
+    if (url && r.accessoDettagli) {
+      const box = document.createElement('details');
+      box.append(elemento('summary', 'Dettagli'));
+      const stato = elemento('p', '', 'muted'), retry = elemento('button', 'Riprova');
+      retry.type = 'button'; retry.hidden = true;
+      box.append(stato, retry);
+      let occupato = false, completato = false;
+      const carica = async () => {
+        if (occupato || completato) return;
+        occupato = true; retry.hidden = true; stato.textContent = 'Caricamento dettagli…';
+        try {
+          const d = await leggi('/api/detail?' + new URLSearchParams({ url:r.url, accessoDettagli:r.accessoDettagli }));
+          if (!card.isConnected) return;
+          const campi = { cambio:'Cambio', potenzaCv:'Potenza CV', cilindrata:'Cilindrata',
+            proprietari:'Proprietari', allestimento:'Allestimento', revisione:'Revisione' };
+          const valori = Object.entries(campi).filter(([k]) => d.detail?.[k] != null)
+            .map(([k, label]) => label + ': ' + d.detail[k]);
+          stato.textContent = valori.length ? valori.join(' · ') : 'Dettagli non disponibili.';
+          completato = Boolean(valori.length); retry.hidden = completato;
+        } catch (e) {
+          if (card.isConnected) {
+            stato.textContent = e.message || 'Dettagli non disponibili.'; retry.hidden = false;
+          }
+        } finally { occupato = false; }
+      };
+      box.addEventListener('toggle', () => { if (box.open) carica(); });
+      retry.addEventListener('click', carica);
+      card.append(box);
+    }
     lista.append(card);
   }
   $('altri').hidden = !paginaIncompleta &&
