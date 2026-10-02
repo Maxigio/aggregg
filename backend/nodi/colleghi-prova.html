@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Colleghi — collaudo locale AMR</title><link rel="stylesheet" href="/api/auth/pagina.css">
+<script src="/api/auth/colleghi/pagina.js" defer></script></head><body><main data-colleghi>
+<h2 class="solo-pagina">Colleghi</h2><p>Tre persone per azienda, compreso il referente e gli inviti in attesa. Gli inviti scadono dopo sette giorni.</p>
+<p>Inviti disponibili solo tramite link locale, senza invio email. La verifica dell’email usa la casella locale.</p>
+<p id="colleghi-sessione" role="status">Verifica della sessione…</p>
+<p class="solo-pagina"><a href="/api/auth/pagina">Accedi</a> · <a href="/#accountPanel">Torna all’account</a></p>
+<button id="colleghi-aggiorna" type="button">Aggiorna colleghi</button>
+<section id="colleghi-gestione" hidden>
+<form id="colleghi-azienda" hidden><label>Azienda<select name="id" required><option value="">Scegli l’azienda</option></select></label><button>Apri azienda</button></form>
+<form id="colleghi-invita"><label>Email del collega<input name="email" type="email" autocomplete="email" required maxlength="254"></label><button>Crea invito locale</button></form>
+<p id="colleghi-consegna"></p><div id="colleghi-elenco"></div>
+<p>Solo l’Admin con MFA può trasferire il ruolo a un collega attivo con email verificata. Il vecchio referente resta collega.</p>
+</section>
+<section id="colleghi-destinatario" hidden><h2>Accetta l’invito</h2><p id="colleghi-invito"></p>
+<p>Registrati, verifica l’email nella casella locale e torna qui. Se hai già un account verificato, passa all’accettazione.</p>
+<form id="colleghi-registra"><label>Password<input name="password" type="password" autocomplete="new-password" required minlength="15" maxlength="50"></label><label>Ripeti password<input name="conferma" type="password" autocomplete="new-password" required minlength="15" maxlength="50"></label><button>Registra e richiedi verifica email</button></form>
+<button id="colleghi-reinvia" type="button">Reinvia verifica email alla casella locale</button>
+<form id="colleghi-accetta"><label>Password dell’account verificato<input name="password" type="password" autocomplete="current-password" required minlength="15" maxlength="50"></label><button>Accetta invito</button></form>
+</section><p id="colleghi-stato" role="status" aria-live="polite"></p>
+</main></body></html>
