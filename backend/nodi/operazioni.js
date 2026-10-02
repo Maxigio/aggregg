@@ -39,6 +39,10 @@ async function esegui(lavoro) {
       if (!['subito', 'autoscout', 'moto'].includes(lavoro.fonte)) throw new Error('fonte non valida');
       query.fetta = String(query.fetta ?? 0);
       query.fonti = lavoro.fonte;
+      if (lavoro.fonte !== 'subito') {
+        delete query.subitoMainStart;
+        delete query.subitoRecuperoStart;
+      }
     }
     const parsed = parseSearchParams(query);
     if (parsed.errors) return { status: 400, body: { error: parsed.errors.join(', ') } };

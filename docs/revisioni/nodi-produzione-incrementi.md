@@ -154,3 +154,13 @@ separato, browser con API simulate e fault injection, tre review indipendenti.
 Nessun commit, deploy, accesso M2, riavvio del collaudo manuale o nuova chiamata
 ai portali. Rimangono da completare ciclo commerciale, backup integrato,
 entrypoint pubblico e integrazione di tutte le funzionalità Auto/Moto dell'app.
+# Incrementi successivi alla review del 2 ottobre
+
+## F01 — cursori per fonte, risolto
+
+Il centro rimuove i cursori Subito dal payload del primario quando non gli assegna
+Subito; il worker fa altrettanto per le operazioni `fonte` delle altre piattaforme.
+Il parser resta invariato e i cursori Subito richiesti sono conservati.
+Il nuovo test distribuito falliva con HTTP 400 prima del fix; dopo il fix passano
+entrambi gli ordini delle fonti. Suite pertinente: 18/18. Review indipendente:
+nessun finding confermato aperto. Prove simulate, nessun portale o M2 interrogato.

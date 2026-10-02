@@ -302,6 +302,10 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     if (suPrimario.length !== richieste.length) {
       query.fonti = suPrimario.join(','); query.fetta = String(query.fetta ?? 0);
     }
+    if (!suPrimario.includes('subito')) {
+      delete query.subitoMainStart;
+      delete query.subitoRecuperoStart;
+    }
     const base = await assegna(primario, { idLavoro: crypto.randomUUID(), azienda,
       operazione: 'ricerca', input: query, destinatari,
       assegnazioneMs: Math.round(performance.now() - assegnazioneDa) });
