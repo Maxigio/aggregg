@@ -175,3 +175,21 @@ Decisione e incremento successivi: pagina AMR centrale con sessione server-side,
 ### Incremento locale: login e permessi reali collegati al centro — 1 ottobre 2026
 
 Login server-side precedente committato in `ae33f5f`; successivo incremento non ancora committato. Registro con implementazione, review, prove e limiti: [centro-accessi-postgres.md](centro-accessi-postgres.md). Nhost e PostgreSQL locali verificano identità, moduli, scadenza e revoca durante coda/lavoro; il ruolo lettore non accede a hash o tabelle Auth. Quote SQL collaudate separatamente: non ancora CRUD commerciale del nuovo schema. Predisposta modalità manuale con password scelta dal proprietario nel proprio terminale; nessuna password permanente creata per lui. Nessun cloud o M2 coinvolto.
+
+### Aggiornamento di riferimento — 2 ottobre 2026
+
+Le sezioni precedenti descrivono incrementi storici, non lo stato corrente.
+La review e gli incrementi successivi sono registrati in
+[branch-nodi-2026-10-02-30a1f12.md](branch-nodi-2026-10-02-30a1f12.md).
+Colleghi e trasferimento del referente usano ora PostgreSQL reale; journal
+commerciale e database hanno backup cifrati separati nel collaudo restic locale,
+con replay e restore verificati. OneDrive è stato sostituito dalla decisione
+**backup open source e storage gestito**: lo storage remoto resta da attivare e
+collaudare; non esiste ancora una copia esterna garantita dalle prove locali.
+
+Il proprietario ha confermato un solo servizio AMR su Nhost Run per frontend e
+backend, con Auth e PostgreSQL separati nello stesso progetto. Il
+[gate HTTPS locale](centro-https-run.md) e la
+[mappa di integrazione con APP](amr-centro-mappa-funzionalita.md) distinguono
+preparazione, integrazione dell'app completa e prove cloud ancora necessarie.
+Nessun servizio, spesa, deploy o intervento M2 è stato autorizzato da questo gate.
