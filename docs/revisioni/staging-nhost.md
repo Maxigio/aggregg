@@ -169,6 +169,15 @@ processo, distinto dal numero di processi che Run deve avviare.
    una prova dedicate, o una migrazione deliberata. Non dichiarare il gate
    backup concluso sulla base del solo mount persistente.
 
+### Incremento di recovery prima del candidato successivo
+
+B01 della review è affrontato nel [registro della numerazione journal](ripristino-journal-sequenza.md).
+Prima di riaprire un database ripristinato, applicare dal manifest fidato la
+migrazione `backend/nodi/schema-ripristino-sequenza.sql` dopo `pg_restore`,
+quindi eseguire la finalizzazione offline. Un dump storico può contenere la
+vecchia funzione. La prova locale del nuovo incremento non aggiorna l'immagine
+`646fcbe`, non applica migrazioni Nhost e non avvia il servizio Run fermo.
+
 ## Aggiornamento e rollback con manutenzione
 
 Un solo scheduler è un requisito: `replicas=1` non è un lock fra due processi.

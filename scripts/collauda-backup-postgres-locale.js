@@ -89,6 +89,7 @@ async function collaudaBackup({ args, directory, fileCompose, docker, sql, backu
       } finally { input.fill(0); }
     };
     await ripristinaDump(path.join(dbDir,'database.dump'),'postgres');
+    await client.query(fs.readFileSync(path.join(__dirname,'../backend/nodi/schema-ripristino-sequenza.sql'),'utf8'));
     const prima=(await client.query('SELECT scadenza FROM amr_accessi.aziende WHERE id=$1',[azienda])).rows[0].scadenza;
     assert.notEqual(prima.toISOString(),scadenza);
     const { applicaJournal }=require('../backend/nodi/ripristino-journal');

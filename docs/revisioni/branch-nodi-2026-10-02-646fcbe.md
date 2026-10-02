@@ -272,3 +272,12 @@ Tutti gli stack creati dalla prova sono stati rimossi. Le due istanze manuali
 preesistenti sono rimaste attive. Nessun database, account o servizio remoto
 è stato coinvolto. B01 è ora confermato anche sul percorso PostgreSQL reale;
 la proposta richiede ancora implementazione e collaudo dedicati.
+
+## B01: incremento concluso il 3 ottobre
+
+Il [registro dedicato](ripristino-journal-sequenza.md) documenta correzione,
+migrazione per dump storici, prove prima/dopo e review indipendente. B01 è
+risolto sul codice locale: gate PostgreSQL/Auth/restic **6/6 pass**, suite
+**1.212 pass su 1.216, quattro gate opt-in esclusi, zero failure**. Gli altri
+finding sopra non sono stati corretti da questo incremento. Lo staging fermo
+e la vecchia immagine non contengono implicitamente questa correzione.

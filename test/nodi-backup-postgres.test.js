@@ -11,6 +11,7 @@ const { creaRestic } = require('../backend/nodi/backup-restic');
 const { creaBackupPostgres, creaDumpPostgres, creaStatoBackup, collegaNotificheBackup } = require('../backend/nodi/backup-postgres-prova');
 const { creaAziendePostgres } = require('../backend/nodi/aziende-postgres-prova');
 const { creaColleghiPostgres } = require('../backend/nodi/colleghi-postgres-prova');
+const { applicaJournal } = require('../backend/nodi/ripristino-journal');
 const host = process.env.AMR_TEST_BACKUP_DOCKER_HOST;
 
 function comando(args, input, maxBytes = 64 * 1024 * 1024) {
@@ -249,21 +250,12 @@ test('backup PG16/Auth reale: transazioni, ruoli, lease/CAS, journal indipendent
       assert.ok(BigInt(checkpoint)<BigInt(journal.sequenza));
       assert.equal((await target.pool.query('SELECT count(*)::int n FROM auth.refresh_tokens')).rows[0].n>0,true);
       assert.equal((await target.pool.query('SELECT count(*)::int n FROM amr_accessi.membri WHERE persona=$1',[collega.id])).rows[0].n,1);
-      // Replay fidato in fixture: sostituisce la membership, applica anche epoca
-      // del rimosso. Non crea identità Auth assenti, token o consegne email.
+      // Il restore esercita l'helper effettivo, compresi checkpoint e audit.
       const replay = await target.pool.connect();
-      await replay.query('BEGIN');
       try {
-        await replay.query('SET CONSTRAINTS ALL DEFERRED');
-        for (const p of journal.persone) {
-          await replay.query('INSERT INTO amr_accessi.persone(id,attiva,epoca) VALUES($1,$2,$3) ON CONFLICT(id) DO UPDATE SET attiva=EXCLUDED.attiva,epoca=EXCLUDED.epoca',[p.id,p.attiva,p.epoca]);
-        }
-        await replay.query('DELETE FROM amr_accessi.membri WHERE azienda=$1',[journal.azienda.id]);
-        for (const p of journal.persone.filter(p=>p.membro)) await replay.query('INSERT INTO amr_accessi.membri(persona,azienda) VALUES($1,$2)',[p.id,journal.azienda.id]);
-        const a = journal.azienda;
-        await replay.query('UPDATE amr_accessi.aziende SET attiva=$2,moduli=$3,scadenza=$4,referente=$5 WHERE id=$1',[a.id,a.attiva,a.moduli,a.scadenza,a.referente]);
-        await replay.query('COMMIT');
-      } catch (e) { await replay.query('ROLLBACK');throw e; }
+        assert.equal((await applicaJournal({client:replay,journal})).stato,'applicato');
+        assert.equal((await applicaJournal({client:replay,journal})).giaEseguita,true);
+      }
       finally { replay.release(); }
       assert.equal((await target.pool.query('SELECT count(*)::int n FROM amr_accessi.membri WHERE persona=$1',[collega.id])).rows[0].n,0);
       assert.equal((await target.pool.query('SELECT scadenza::text FROM amr_accessi.aziende WHERE id=$1',[journal.azienda.id])).rows[0].scadenza,
@@ -279,6 +271,80 @@ test('backup PG16/Auth reale: transazioni, ruoli, lease/CAS, journal indipendent
       const restoredWriter = new Pool({...target.poolConfig,options:'-c role=amr_aziende_scrittore'});pools.push(restoredWriter);
       await assert.rejects(creaStatoBackup({pool:restoredWriter}).stato(sessione),e=>e.codice==='sessione_revocata');
       await assert.rejects(restoredWriter.query('SELECT * FROM auth.users'));
+      fase = 'secondo restore dopo riapertura';
+      await t.test('restore, replay e riapertura: nuovo rinnovo recuperabile da un secondo dump precedente',async()=>{
+        const dump = await comando([...target.args,'exec','-T','postgres','pg_dump','-U','postgres','--format=custom']);
+        try {
+          const scadenza = new Date(Date.now()+1000*86400000).toISOString(), operazione = crypto.randomUUID();
+          await creaAziendePostgres({pool:restoredWriter}).rinnova({...sessione,epoca:1},
+            {id:input.id,operazione,scadenza});
+          const nuovo = (await target.pool.query('SELECT journal FROM amr_backup.outbox WHERE id=$1',
+            ['journal:aziende:'+operazione])).rows[0].journal;
+          assert.ok(BigInt(nuovo.sequenza)>BigInt(journal.sequenza),
+            'Le nuove operazioni devono seguire la massima sequenza recuperata');
+          await target.pool.query('CREATE DATABASE restore_successivo');
+          await comando([...target.args,'exec','-T','postgres','pg_restore','--exit-on-error','--single-transaction',
+            '-U','postgres','--dbname','restore_successivo'],dump);
+          const successivo = new Pool({...target.poolConfig,database:'restore_successivo'});pools.push(successivo);
+          const c = await successivo.connect();
+          try {
+            assert.equal((await applicaJournal({client:c,journal:nuovo})).stato,'applicato');
+            assert.equal((await applicaJournal({client:c,journal:nuovo})).giaEseguita,true);
+            assert.equal((await applicaJournal({client:c,journal})).giaEseguita,true);
+            assert.equal((await c.query('SELECT scadenza FROM amr_accessi.aziende WHERE id=$1',
+              [input.id])).rows[0].scadenza.toISOString(),scadenza);
+          } finally { c.release(); }
+        } finally { dump.fill(0); }
+      });
+      await t.test('finalizzazione: massimo globale fra aziende, rollback e patch riapplicabile senza privilegi web',async()=>{
+        const c = await target.pool.connect();
+        try {
+          const prima = (await c.query('SELECT azienda,sequenza::text FROM amr_backup.aziende_sequenza ORDER BY azienda')).rows;
+          const altra = {...journal,dominio:'aziende',tipo:'invita',operazione:crypto.randomUUID(),
+            sequenza:'500',destinatario:null,invito:null,persone:[],
+            azienda:{...journal.azienda,id:'recuperata_dopo_dump',nome:'Seconda sintetica',attiva:false,
+              referente:null,accettata_il:null,attivata_il:null}};
+          assert.equal((await applicaJournal({client:c,journal:altra})).stato,'applicato');
+          // Anche un dump storico deve ricevere la definizione dal manifest fidato.
+          // Questa variante legacy non riallinea la sequenza e non offre accessi.
+          await c.query(`CREATE OR REPLACE FUNCTION amr_backup.invalida_accessi_ripristinati() RETURNS void
+            LANGUAGE plpgsql AS $$ BEGIN RETURN; END $$`);
+          const patch = fs.readFileSync(path.join(__dirname,'../backend/nodi/schema-ripristino-sequenza.sql'),'utf8');
+          await c.query(patch);await c.query(patch);
+          await c.query('SELECT amr_backup.invalida_accessi_ripristinati()');
+          assert.equal((await c.query('SELECT last_value::text FROM amr_backup.sequenza')).rows[0].last_value,'500');
+          assert.deepEqual((await c.query('SELECT azienda,sequenza::text FROM amr_backup.aziende_sequenza ORDER BY azienda')).rows,prima);
+          await c.query('BEGIN');await c.query("SELECT nextval('amr_backup.sequenza')");await c.query('ROLLBACK');
+          await c.query('SELECT amr_backup.invalida_accessi_ripristinati()');
+          assert.equal((await c.query('SELECT last_value::text FROM amr_backup.sequenza')).rows[0].last_value,'501');
+          assert.equal((await c.query("SELECT nextval('amr_backup.sequenza')::text n")).rows[0].n,'502');
+          await assert.rejects(restoredWriter.query('SELECT amr_backup.invalida_accessi_ripristinati()'),{code:'42501'});
+          await c.query('BEGIN');
+          try {
+            const epoche = (await c.query('SELECT id,epoca FROM amr_accessi.persone ORDER BY id')).rows;
+            await c.query('DROP TABLE amr_ripristino.operazioni');
+            await assert.rejects(c.query('SELECT amr_backup.invalida_accessi_ripristinati()'),
+              e=>e.message==='backup_restore_audit_non_verificato');
+            await c.query('ROLLBACK');
+            assert.deepEqual((await c.query('SELECT id,epoca FROM amr_accessi.persone ORDER BY id')).rows,epoche);
+            assert.equal((await c.query('SELECT last_value::text FROM amr_backup.sequenza')).rows[0].last_value,'502');
+          } finally { await c.query('ROLLBACK'); }
+        } finally { c.release(); }
+      });
+      await t.test('finalizzazione di un dump vuoto conserva il primo valore non ancora usato',async()=>{
+        const c = await target.pool.connect();
+        try {
+          await c.query('BEGIN');
+          await c.query('DROP SCHEMA amr_ripristino CASCADE');
+          await c.query('DELETE FROM amr_backup.outbox');
+          await c.query('DELETE FROM amr_backup.aziende_sequenza');
+          await c.query('ALTER SEQUENCE amr_backup.sequenza RESTART WITH 1');
+          await c.query('SELECT amr_backup.invalida_accessi_ripristinati()');
+          assert.deepEqual((await c.query('SELECT last_value::text,is_called FROM amr_backup.sequenza')).rows[0],
+            {last_value:'1',is_called:false});
+          assert.equal((await c.query("SELECT nextval('amr_backup.sequenza')::text n")).rows[0].n,'1');
+        } finally { await c.query('ROLLBACK');c.release(); }
+      });
       await target.startAuth();
       assert.ok((await target.auth('/token',{refreshToken:admin.session.refreshToken})).status>=400);
       const nuovo = await target.auth('/signin/email-password',{email:admin.email,password:admin.password});
@@ -288,6 +354,8 @@ test('backup PG16/Auth reale: transazioni, ruoli, lease/CAS, journal indipendent
       t.diagnostic('PG16/Auth: outbox + lease/CAS + privilegi + dump/restore in cluster nuovo + revoca da journal + refresh invalidati + epoca Admin incrementata; nuovo JWT nel test.');
     } catch (e) {
       // Nessun errore raw SQL/Docker/Auth: può includere credenziali sintetiche.
+      const posizione = e.stack?.split('\n').find(r=>r.includes(__filename));
+      if (posizione) t.diagnostic('Posizione della prova: '+posizione.trim());
       throw new Error('backup PG/Auth fallito: '+fase+' ['+(typeof e.code==='string' && /^[a-z0-9_]+$/i.test(e.code)?e.code:'test')+']');
     }
   });
