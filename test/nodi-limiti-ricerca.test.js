@@ -273,11 +273,13 @@ test('O01: tutti disconnessi dopo avvio, termina e scarta senza recuperi né riu
   richiesta.abort(); await f.attendi(() => record.destinatari.size === 0);
   assert.equal(f.centro.lavori.has(job.idLavoro), true);
   const nuova = f.cerca(cookie);
-  await f.attendi(() => f.centro.nodi.get('a').coda.length === 1);
+  // Il vecchio job termina su A; la nuova ricerca distinta può usare B libero.
+  await f.attendi(() => f.centro.nodi.get('b').coda.length === 1);
+  const nuovoJob = await f.poll('b'); assert.notEqual(nuovoJob.idLavoro, job.idLavoro);
   assert.equal((await f.esito('a', job, risposta({ subito: { status: 'error', erroreHttp: 429 } }))).status, 200);
+  assert.equal((await f.nodo('a', 'poll?id=a')).status, 204);
   assert.equal((await f.nodo('b', 'poll?id=b')).status, 204);
-  const nuovoJob = await f.poll(); assert.notEqual(nuovoJob.idLavoro, job.idLavoro);
-  await f.esito('a', nuovoJob); assert.equal((await nuova.promise).status, 200);
+  await f.esito('b', nuovoJob); assert.equal((await nuova.promise).status, 200);
   assert.equal(f.centro.db.prepare("SELECT count(*) AS n FROM lavori WHERE operazione='fonte'").get().n, 0);
 });
 

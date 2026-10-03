@@ -54,6 +54,13 @@ Dodici regressioni, suite scheduler/centro/permessi **35/35**, seconda review
 indipendente conclusa senza finding residui. Nessuna prova su portali reali;
 il cambio nodo continua a dichiarare che la copertura può variare.
 
+La suite completa ha individuato anche un'aspettativa legacy O01: imponeva
+alla nuova ricerca il nodo A ancora occupato da un job abbandonato, anziché B
+libero. Riprodotta isolatamente, poi aggiornata senza cambiare il runtime.
+Il test continua a provare che il 429 tardivo di A non avvia recuperi, il nuovo
+job ha ID distinto e nessuna operazione `fonte` viene creata per l'abbandonato.
+Suite limiti/scheduler **33/33**, controprova indipendente O01 **3/3**.
+
 ## U02 — Disponibilità persistente dell'invito
 
 SQL distingue operazione confermata e invito ancora pending: retry identico e
