@@ -119,3 +119,22 @@ MFA, rotazione e nuovo login. **56/56**, review indipendente e controprova
 con cookie jar browser: nessun cookie tardivo, provider ripulito una sola volta,
 nuovo accesso preservato. Provider sintetico; gate reale locale successivo.
 Non era dimostrato un difetto della UI ordinaria, che aveva già il bootstrap.
+
+## B03 — Retry della pulizia restic
+
+Finding preesistente scoperto dalla review B02: `forget --prune` può rimuovere
+gli snapshot prima che prune fallisca; il retry con remove vuoto saltava prune,
+chiudeva pending e consentiva la pulizia SQL. Riprodotto anche sul commit
+precedente B02, quindi distinto da una regressione introdotta dal cap.
+
+Ora: check completo, forget degli ID approvati in batch, prune separato anche
+con remove vuoto. Il pending SQL già esistente resta aperto fino al successo;
+nessun nuovo schema o stato persistente. Due fallimenti mantengono avviso e
+journal; il terzo successo chiude pending, poi pulisce. Review indipendente
+ricontrollata anche ricreando il worker fra retry. **39/39 con restic reale**;
+validazione, cap e dry-run preservati. Nessun finding residuo verificato.
+
+Costo: check e prune possono essere onerosi anche senza nuove eliminazioni;
+timeout restano espliciti, le rimozioni già riuscite non sono rollbackabili.
+La separazione segue il contratto [restic forget/prune](https://restic.readthedocs.io/en/stable/060_forget.html),
+non presume che un comando fallito abbia annullato ogni effetto.

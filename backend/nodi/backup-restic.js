@@ -119,12 +119,13 @@ function creaRestic({ binario, ambiente, spawnProcesso = spawn }) {
           throw new Error('backup_retention_non_sicura');
         }
       }
-      if (!dryRun && removed.length) {
+      if (!dryRun) {
         await repo.verifica();
-        // ponytail: massimo 10 batch, prune ripetuto; prune unico richiede retry persistente dedicato.
         for (let i = 0; i < removed.length; i += BATCH_RETENTION) {
-          await esegui(['forget', '--prune', ...removed.slice(i, i + BATCH_RETENTION).map(s => s.id)]);
+          await esegui(['forget', ...removed.slice(i, i + BATCH_RETENTION).map(s => s.id)]);
         }
+        // Il pending resta aperto se prune fallisce: sul retry remove può essere già vuoto.
+        await esegui(['prune']);
       }
       return { dryRun, conservate: kept.length, eliminate: dryRun ? 0 : removed.length, eliminabili: removed.length };
     },

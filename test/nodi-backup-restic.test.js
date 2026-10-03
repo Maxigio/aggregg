@@ -3,6 +3,7 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), crypto = require('node:crypto');
 const { EventEmitter } = require('node:events'), { PassThrough } = require('node:stream');
 const { creaRestic } = require('../backend/nodi/backup-restic');
+const { creaBackupPostgres } = require('../backend/nodi/backup-postgres-prova');
 
 const MiB = 1024 * 1024;
 function pianoSintetico(conservate = 1, eliminate = 0) {
@@ -25,7 +26,7 @@ function resticSimulato(risposte) {
   const repo = creaRestic({ binario: '/sintetico/restic', ambiente: {
     RESTIC_REPOSITORY: '/sintetico/journal', RESTIC_PASSWORD_FILE: '/sintetico/password'
   }, spawnProcesso(binario, args) {
-    const risposta = risposte[chiamate.length] || {};
+    const risposta = typeof risposte === 'function' ? risposte(args) : risposte[chiamate.length] || {};
     chiamate.push(args);
     const child = new EventEmitter();
     child.stdout = new PassThrough(); child.stderr = new PassThrough(); child.stdin = new PassThrough();
@@ -92,11 +93,11 @@ test('restic: piano esattamente 16 MiB ammesso, un byte in più rifiutato', asyn
   const piano = pianoSintetico(), json = Buffer.from(JSON.stringify(piano));
   for (const extra of [0, 1]) await t.test('16 MiB + ' + extra, async () => {
     const output = Buffer.alloc(16 * MiB + extra, ' '); json.copy(output);
-    const f = resticSimulato([{ output }]);
+    const f = resticSimulato([{ output }, {}, {}]);
     const esito = f.repo.retention('journal', { dryRun: false, snapshot: piano[0].keep[0].id });
     if (extra) await assert.rejects(esito, /backup_non_disponibile/);
     else assert.equal((await esito).conservate, 1);
-    assert.equal(f.chiamate.length, 1);
+    assert.equal(f.chiamate.length, extra ? 1 : 3);
   });
 });
 
@@ -159,14 +160,15 @@ test('restic: timeout non riapre il buffer, escalation e cleanup restano attivi'
 
 test('restic: applicazione in batch da 1000 usa solo ID approvati dopo il check', async () => {
   const piano = pianoConRimozioni(2501);
-  const f = resticSimulato([{ output: JSON.stringify(piano) }, {}, {}, {}, {}]);
+  const f = resticSimulato([{ output: JSON.stringify(piano) }, {}, {}, {}, {}, {}]);
   assert.equal((await f.repo.retention('journal', { dryRun: false, snapshot: piano[0].keep[0].id })).eliminate, 2501);
   assert.deepEqual(f.chiamate[1], ['--no-cache', 'check', '--read-data']);
-  const batches = f.chiamate.slice(2);
-  assert.deepEqual(batches.map(args => args.length - 3), [1000, 1000, 501]);
-  for (const args of batches) assert.deepEqual(args.slice(0, 3), ['--no-cache', 'forget', '--prune']);
-  assert.deepEqual(batches.flatMap(args => args.slice(3)), piano[0].remove.map(s => s.id));
+  const batches = f.chiamate.slice(2, -1);
+  assert.deepEqual(batches.map(args => args.length - 2), [1000, 1000, 501]);
+  for (const args of batches) assert.deepEqual(args.slice(0, 2), ['--no-cache', 'forget']);
+  assert.deepEqual(batches.flatMap(args => args.slice(2)), piano[0].remove.map(s => s.id));
   assert.ok(!batches.some(args => args.includes(piano[0].keep[0].id)));
+  assert.deepEqual(f.chiamate.at(-1), ['--no-cache', 'prune']);
 });
 
 test('restic: secondo batch fallito interrompe senza esito di successo', async () => {
@@ -175,8 +177,99 @@ test('restic: secondo batch fallito interrompe senza esito di successo', async (
   await assert.rejects(f.repo.retention('journal', { dryRun: false, snapshot: piano[0].keep[0].id }),
     e => e.message === 'backup_non_disponibile');
   assert.equal(f.chiamate.length, 4);
-  assert.deepEqual(f.chiamate[2].slice(3), piano[0].remove.slice(0, 1000).map(s => s.id));
-  assert.deepEqual(f.chiamate[3].slice(3), piano[0].remove.slice(1000, 2000).map(s => s.id));
+  assert.deepEqual(f.chiamate[2].slice(2), piano[0].remove.slice(0, 1000).map(s => s.id));
+  assert.deepEqual(f.chiamate[3].slice(2), piano[0].remove.slice(1000, 2000).map(s => s.id));
+  assert.ok(!f.chiamate.some(args => args[1] === 'prune'));
+});
+
+test('restic: applicazione senza remove esegue check e prune per entrambe le categorie', async t => {
+  for (const categoria of ['journal', 'database']) await t.test(categoria, async () => {
+    const piano = pianoSintetico();
+    if (categoria === 'database') {
+      piano[0].paths = ['/database.dump']; piano[0].tags = ['database'];
+      piano[0].keep[0].paths = ['/database.dump']; piano[0].keep[0].tags = ['database'];
+    }
+    const f = resticSimulato([{ output: JSON.stringify(piano) }, {}, {}]);
+    assert.deepEqual(await f.repo.retention(categoria, { dryRun: false, snapshot: piano[0].keep[0].id }),
+      { dryRun: false, conservate: 1, eliminate: 0, eliminabili: 0 });
+    assert.equal(f.chiamate.length, 3);
+    assert.deepEqual(f.chiamate[1], ['--no-cache', 'check', '--read-data']);
+    assert.deepEqual(f.chiamate[2], ['--no-cache', 'prune']);
+  });
+  await t.test('check fallito non chiama prune', async () => {
+    const piano = pianoSintetico(), f = resticSimulato([{ output: JSON.stringify(piano) }, { code: 1 }]);
+    await assert.rejects(f.repo.retention('journal', { dryRun: false, snapshot: piano[0].keep[0].id }), /backup_non_disponibile/);
+    assert.equal(f.chiamate.length, 2);
+  });
+});
+
+test('restic: dry-run senza o con remove non chiama check, forget applicato o prune', async t => {
+  for (const rimozioni of [0, 1501]) await t.test('remove: ' + rimozioni, async () => {
+    const piano = pianoConRimozioni(rimozioni), f = resticSimulato([{ output: JSON.stringify(piano) }]);
+    assert.deepEqual(await f.repo.retention('journal', { snapshot: piano[0].keep[0].id }),
+      { dryRun: true, conservate: 1, eliminate: 0, eliminabili: rimozioni });
+    assert.equal(f.chiamate.length, 1); assert.ok(f.chiamate[0].includes('--dry-run'));
+  });
+});
+
+test('restic e worker: dopo forget il retry senza remove resta pending finché prune riesce', async t => {
+  const piano = pianoConRimozioni(1), snapshot = piano[0].keep[0].id;
+  let rimosso = false, tentativiPrune = 0, pruneRiuscito = false, pending = true, pulizie = 0;
+  const eventi = [], esiti = [];
+  const prune = () => {
+    tentativiPrune++;
+    const code = tentativiPrune <= 2 ? 1 : 0;
+    pruneRiuscito = code === 0;
+    eventi.push(pruneRiuscito ? 'prune:ok' : 'prune:errore');
+    return { code, stderr: code ? 'errore-prune-sintetico' : undefined };
+  };
+  const f = resticSimulato(args => {
+    const comando = args[1];
+    eventi.push('restic:' + comando);
+    if (comando === 'cat') return { output: JSON.stringify({ id: 'a'.repeat(64) }) };
+    if (comando === 'check') return {};
+    if (comando === 'prune') return prune();
+    assert.equal(comando, 'forget');
+    if (args.includes('--dry-run')) return { output: JSON.stringify([{ ...piano[0], remove: rimosso ? [] : piano[0].remove }]) };
+    rimosso = true;
+    // Riproduce anche il comportamento precedente: forget riuscito, prune fallito.
+    return args.includes('--prune') ? prune() : {};
+  });
+  const pool = { async query(query, args = []) {
+    const funzione = query.match(/^SELECT amr_backup\.(\w+)\(/)?.[1];
+    eventi.push('sql:' + funzione);
+    let risultato;
+    switch (funzione) {
+      case 'programma_database': case 'configura': risultato = true; break;
+      case 'claim': risultato = null; break;
+      case 'retention_pending': risultato = pending ? [{ categoria: 'journal', snapshot }] : []; break;
+      case 'esito_retention': esiti.push([...args]); pending = args[2]; risultato = true; break;
+      case 'pulisci': pulizie++; risultato = true; break;
+      default: assert.fail('SQL inatteso nel pool sintetico: ' + funzione);
+    }
+    return { rows: [{ risultato }] };
+  } };
+  const worker = creaBackupPostgres({ pool, repositoryJournal: f.repo,
+    repositoryDatabase: { identita: async () => 'b'.repeat(64) },
+    dumpDatabase: () => assert.fail('nessun dump nel test retention'), applicaRetention: true });
+  t.after(() => worker.stop());
+  for (let i = 1; i <= 2; i++) {
+    assert.equal((await worker.drain()).ok, true);
+    assert.equal(rimosso, true);
+    assert.deepEqual({ pending, pulizie, pruneRiuscito }, { pending: true, pulizie: 0, pruneRiuscito: false });
+    assert.equal(tentativiPrune, i);
+    assert.deepEqual(esiti.at(-1), ['journal', snapshot, true]);
+  }
+  assert.equal((await worker.drain()).ok, true);
+  assert.equal(tentativiPrune, 3); assert.equal(pruneRiuscito, true);
+  assert.equal(pending, false); assert.equal(pulizie, 1);
+  assert.deepEqual(esiti.at(-1), ['journal', snapshot, false]);
+  assert.ok(eventi.indexOf('prune:ok') < eventi.lastIndexOf('sql:esito_retention'));
+  assert.ok(eventi.lastIndexOf('sql:esito_retention') < eventi.indexOf('sql:pulisci'));
+  assert.equal(f.chiamate.filter(args => args[1] === 'check').length, 3);
+  assert.equal(f.chiamate.filter(args => args[1] === 'forget' && !args.includes('--dry-run')).length, 1);
+  assert.equal((await worker.drain()).ok, true);
+  assert.equal(tentativiPrune, 3); assert.equal(pulizie, 1); assert.equal(esiti.length, 3);
 });
 
 test('restic: valida tutto il piano prima di check o eliminazioni', async t => {
