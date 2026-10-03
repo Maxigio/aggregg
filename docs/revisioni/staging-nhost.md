@@ -248,3 +248,17 @@ riportato nelle sezioni precedenti resta l'ultima osservazione della console,
 non una nuova verifica. Per il collegamento, centro e worker devono ricevere
 il medesimo manifest. Occorre ancora completare i gate di attivazione sopra,
 con autorizzazione della configurazione e dell'avvio effettivi.
+
+## Pacchetto preparato e nuova review — 3 ottobre 2026
+
+Il [pacchetto locale](staging-pacchetto-2026-10-03.md) registra il contesto
+`fc1b7f2`, le impronte delle migrazioni, i ruoli runtime e le controprove CLI.
+Run/configurazione/compatibilità/HTTPS passano 54/54. Configurazione positiva
+accettata; campo sconosciuto, CPU errata e segreto mancante rifiutati.
+Non è stata creata una nuova immagine né aggiornato il servizio remoto.
+
+La nuova review ha riprodotto un conflitto di recovery non coperto dal gate
+precedente: dump con invito pending, accettazione post-dump e replay fallito.
+È verificato su PostgreSQL 16 per referente e collega; la modifica alla
+politica di replay è in discussione. Il gate backup/clienti resta aperto:
+la prova precedente superata non dimostra copertura di questo nuovo scenario.
