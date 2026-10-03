@@ -1,7 +1,7 @@
 'use strict';
 
 const test = require('node:test'), assert = require('node:assert/strict');
-const { applicaJournal } = require('../backend/nodi/ripristino-journal');
+const { applicaJournal, applicaJournalOrdinati } = require('../backend/nodi/ripristino-journal');
 const id = n => '00000000-0000-4000-8000-' + String(n).padStart(12, '0');
 const clone = v => structuredClone(v);
 function journal() {
@@ -49,6 +49,7 @@ function database() {
     else if (sql.startsWith('SELECT id FROM auth.users')) return {rows:values[0].filter(p=>stato.auth.has(p)).map(id=>({id}))};
     else if (sql.startsWith('SELECT id,admin')) return {rows:values[0].filter(p=>stato.persone.has(p)).map(p=>stato.persone.get(p))};
     else if (sql.startsWith('SELECT persona,azienda')) return {rows:values[0].filter(p=>stato.membri.has(p)).map(persona=>({persona,azienda:stato.membri.get(persona)}))};
+    else if (sql.startsWith('SELECT i.persona') || sql.startsWith('SELECT prenotazioni.azienda')) return {rows:[]};
     else if (sql.startsWith('INSERT INTO amr_accessi.persone')) {
       const [id,attiva,epoca]=values,p=stato.persone.get(id);
       stato.persone.set(id,{id,attiva,admin:p?.admin??false,epoca:Math.max(p?.epoca??0,epoca)});
@@ -223,6 +224,37 @@ test('journal: nuova azienda ripristinata senza usare le funzioni live o creare 
   j.operazione=id(101);j.sequenza='13';
   await applicaJournal({client:d.client,journal:j});
   assert.equal(d.stato.sequenze.get('sintetica'),'13');assert.equal(d.stato.dumpSequenze.has('sintetica'),false);
+});
+
+test('batch offline: ordina prima di applicare, valida tutto prima di SQL e rende il retry idempotente',async()=>{
+  const d=database(),primo=journal(),secondo=clone(primo);
+  secondo.operazione=id(101);secondo.sequenza='13';secondo.azienda.nome='Snapshot finale';
+  const esiti=await applicaJournalOrdinati({client:d.client,journals:[secondo,primo]});
+  assert.ok(esiti.every(e=>e.stato==='applicato'&&!e.giaEseguita));
+  assert.deepEqual([...d.stato.operazioni.values()].map(e=>e.sequenza),['12','13']);
+  assert.equal(d.stato.aziende.get('sintetica').nome,'Snapshot finale');
+  assert.ok((await applicaJournalOrdinati({client:d.client,journals:[secondo,primo]})).every(e=>e.giaEseguita));
+  const altra=database(),rotto=clone(secondo);rotto.sequenza='zero';
+  await assert.rejects(applicaJournalOrdinati({client:altra.client,journals:[primo,rotto]}),codice('ripristino_journal_non_valido'));
+  assert.equal(altra.chiamate.length,0);
+});
+
+test('batch offline: errore ferma i successivi e impedisce uso concorrente dello stesso client',async()=>{
+  const d=database(),primo=journal(),secondo=clone(primo);secondo.sequenza='13';secondo.operazione=id(101);
+  let libera;d.client.prima=sql=>sql==='BEGIN'?new Promise(r=>{libera=r;}):undefined;
+  const p=applicaJournalOrdinati({client:d.client,journals:[primo,secondo]});
+  await assert.rejects(applicaJournal({client:d.client,journal:primo}),codice('ripristino_client_occupato'));
+  await assert.rejects(applicaJournalOrdinati({client:d.client,journals:[primo]}),codice('ripristino_client_occupato'));
+  d.client.prima=null;d.client.guasto=sql=>sql.startsWith('INSERT INTO amr_accessi.persone')?new Error('guasto'):null;
+  libera();await assert.rejects(p,codice('ripristino_non_disponibile'));
+  assert.equal(d.chiamate.filter(c=>c.sql==='BEGIN').length,1);assert.equal(d.stato.operazioni.size,0);
+});
+
+test('journal: revoca_invito non scambia l identificatore dell invito per una persona Auth',async()=>{
+  const d=database(),j=journal();j.tipo='revoca_invito';j.destinatario=id(900);
+  j.invito={id:id(900),stato:'revocato',scadenza:'2026-10-08T00:00:00Z',persona:null};
+  await applicaJournal({client:d.client,journal:j});
+  assert.ok(!d.chiamate.find(c=>c.sql.startsWith('SELECT id FROM auth.users')).values[0].includes(id(900)));
 });
 
 test('journal: watermark richiesto anche per retry già auditato; monotonicità anche dopo nuovi dump',async()=>{

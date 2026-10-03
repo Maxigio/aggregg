@@ -11,7 +11,7 @@ const { creaRestic } = require('../backend/nodi/backup-restic');
 const { creaBackupPostgres, creaDumpPostgres, creaStatoBackup, collegaNotificheBackup } = require('../backend/nodi/backup-postgres-prova');
 const { creaAziendePostgres } = require('../backend/nodi/aziende-postgres-prova');
 const { creaColleghiPostgres } = require('../backend/nodi/colleghi-postgres-prova');
-const { applicaJournal } = require('../backend/nodi/ripristino-journal');
+const { applicaJournal, applicaJournalOrdinati } = require('../backend/nodi/ripristino-journal');
 const host = process.env.AMR_TEST_BACKUP_DOCKER_HOST;
 
 function comando(args, input, maxBytes = 64 * 1024 * 1024) {
@@ -253,8 +253,8 @@ test('backup PG16/Auth reale: transazioni, ruoli, lease/CAS, journal indipendent
       // Il restore esercita l'helper effettivo, compresi checkpoint e audit.
       const replay = await target.pool.connect();
       try {
-        assert.equal((await applicaJournal({client:replay,journal})).stato,'applicato');
-        assert.equal((await applicaJournal({client:replay,journal})).giaEseguita,true);
+        assert.equal((await applicaJournalOrdinati({client:replay,journals:[journal]}))[0].stato,'applicato');
+        assert.equal((await applicaJournalOrdinati({client:replay,journals:[journal]}))[0].giaEseguita,true);
       }
       finally { replay.release(); }
       assert.equal((await target.pool.query('SELECT count(*)::int n FROM amr_accessi.membri WHERE persona=$1',[collega.id])).rows[0].n,0);

@@ -7,6 +7,7 @@ const TIPI = {
   colleghi: ['invita', 'accetta', 'revoca', 'revoca_invito', 'cambia_referente'],
 };
 const inUso = new WeakSet(), inutilizzabili = new WeakSet();
+const batchInUso = new WeakSet();
 
 class ErroreRipristino extends Error {
   constructor(codice) { super(codice); this.codice = codice; this.manuale = true; }
@@ -93,9 +94,9 @@ function validaJournal(input) {
 
 // Solo un client dedicato dell'operatore, su DB separato e senza transazione
 // preesistente. Non apre connessioni, non rilascia il client e non ripristina Auth.
-// Inviti e operazioni sono metadata dell'audit: il journal non contiene email,
-// impronte o risultati necessari a ricreare quelle tabelle operative.
-async function applicaJournal({ client, journal: input } = {}) {
+// Il journal non permette di ricreare inviti assenti o risultati operativi.
+// Può riconciliare soltanto una prenotazione già presente nel dump.
+async function applicaJournalInterno({ client, journal: input } = {}) {
   if (!client || typeof client.query !== 'function') throw errore('ripristino_client_non_valido');
   if (inutilizzabili.has(client)) throw errore('ripristino_client_non_utilizzabile');
   if (inUso.has(client)) throw errore('ripristino_client_occupato');
@@ -145,12 +146,13 @@ async function applicaJournal({ client, journal: input } = {}) {
     if (stessaSequenza || (!anteDump && precedente === BigInt(j.sequenza))) throw errore('ripristino_sequenza_in_conflitto');
     const stato = anteDump || BigInt(j.sequenza) < precedente ? 'superato' : 'applicato';
     if (stato === 'applicato') {
-      const ids = [...new Set([j.attore, j.destinatario, j.invito?.persona, j.azienda.referente,
+      const destinatarioPersona = j.dominio === 'colleghi' && j.tipo === 'revoca_invito' ? null : j.destinatario;
+      const ids = [...new Set([j.attore, destinatarioPersona, j.invito?.persona, j.azienda.referente,
         ...j.persone.map(p => p.id)].filter(Boolean))].sort();
       const auth = (await client.query('SELECT id FROM auth.users WHERE id=ANY($1::uuid[]) FOR KEY SHARE', [ids])).rows;
       if (ids.some(id => !auth.some(p => p.id === id))) throw errore('ripristino_identita_mancante');
       // I lock impediscono modifiche fra controllo dei conflitti e sostituzione.
-      await client.query('LOCK TABLE amr_accessi.aziende, amr_accessi.persone, amr_accessi.membri IN SHARE ROW EXCLUSIVE MODE');
+      await client.query('LOCK TABLE amr_accessi.aziende, amr_accessi.persone, amr_accessi.membri, amr_accessi.aziende_inviti, amr_accessi.colleghi_inviti IN SHARE ROW EXCLUSIVE MODE');
       const presenti = (await client.query('SELECT id,admin FROM amr_accessi.persone WHERE id=ANY($1::uuid[])',
         [j.persone.map(p => p.id)])).rows;
       if (j.persone.some(p => p.membro && presenti.some(v => v.id === p.id && v.admin))) {
@@ -169,6 +171,44 @@ async function applicaJournal({ client, journal: input } = {}) {
       // anche per un'azienda esistente quando il DB contiene già dieci aziende.
       if (!aggiornata.rowCount) await client.query(`INSERT INTO amr_accessi.aziende
         (id,nome,attiva,moduli,scadenza,referente,accettata_il,attivata_il) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, valori);
+      if (j.invito && (j.tipo === 'accetta' || j.tipo === 'revoca_invito')) {
+        const collega = j.dominio === 'colleghi';
+        const tabella = collega ? 'colleghi_inviti' : 'aziende_inviti';
+        const i = (await client.query(`SELECT i.persona,i.azienda=$2 AS azienda_coerente,
+          ${collega ? 'i.stato' : "CASE WHEN i.persona IS NULL THEN 'pending' ELSE 'accettato' END"} AS stato,
+          i.scadenza=$3::timestamptz AS scadenza_coerente,
+          lower(i.email)=(SELECT lower(email) FROM auth.users WHERE id=$4) AS identita_coerente,
+          i.accettata_il=$5::timestamptz AS accettazione_coerente,
+          $5::timestamptz>=i.creata_il AND $5::timestamptz<i.scadenza AS data_coerente
+          FROM amr_accessi.${tabella} i WHERE i.id=$1 FOR UPDATE`,
+        [j.invito.id,a.id,j.invito.scadenza,j.invito.persona,j.confermata_il])).rows[0];
+        if (i) {
+          if (!i.azienda_coerente || !i.scadenza_coerente || i.persona !== null && i.persona !== j.invito.persona
+              || i.stato !== 'pending' && i.stato !== j.invito.stato) throw errore('ripristino_invito_in_conflitto');
+          if (j.tipo === 'accetta') {
+            if (j.invito.stato !== 'accettato' || !i.identita_coerente || !i.data_coerente
+                || i.stato === 'accettato' && !i.accettazione_coerente
+                || !j.persone.some(p => p.id === j.invito.persona && p.membro)) {
+              throw errore('ripristino_invito_in_conflitto');
+            }
+            if (i.stato === 'pending') await client.query(`UPDATE amr_accessi.${tabella}
+              SET persona=$2,accettata_il=$3${collega ? ",stato='accettato'" : ''} WHERE id=$1`,
+            [j.invito.id,j.invito.persona,j.confermata_il]);
+          } else if (collega && j.invito.stato === 'revocato' && i.stato === 'pending') {
+            await client.query("UPDATE amr_accessi.colleghi_inviti SET stato='revocato',revocata_il=$2 WHERE id=$1",
+              [j.invito.id,j.confermata_il]);
+          } else if (!collega || j.invito.stato !== 'revocato') throw errore('ripristino_invito_in_conflitto');
+        }
+      }
+      const prenotazioni = (await client.query(`SELECT prenotazioni.azienda FROM (
+        SELECT azienda,lower(email) AS email FROM amr_accessi.aziende_inviti
+          WHERE persona IS NULL AND scadenza>clock_timestamp()
+        UNION ALL SELECT azienda,email FROM amr_accessi.colleghi_inviti
+          WHERE stato='pending' AND scadenza>clock_timestamp()
+        ) prenotazioni JOIN auth.users u ON lower(u.email)=prenotazioni.email
+        WHERE u.id=ANY($1::uuid[])`, [j.persone.filter(p=>p.membro).map(p=>p.id)])).rows;
+      if (prenotazioni.length) throw errore(prenotazioni.some(p=>p.azienda!==a.id)
+        ? 'ripristino_appartenenza_in_conflitto' : 'ripristino_accettazione_mancante');
       await client.query('DELETE FROM amr_accessi.membri WHERE azienda=$1', [a.id]);
       for (const p of j.persone.filter(p => p.membro)) await client.query('INSERT INTO amr_accessi.membri(persona,azienda) VALUES($1,$2)', [p.id,a.id]);
     }
@@ -189,4 +229,25 @@ async function applicaJournal({ client, journal: input } = {}) {
   } finally { inUso.delete(client); }
 }
 
-module.exports = { applicaJournal };
+async function applicaJournal(args = {}) {
+  if (batchInUso.has(args.client)) throw errore('ripristino_client_occupato');
+  return applicaJournalInterno(args);
+}
+
+// Solo recovery offline: validare l'intero input prima di iniziare; ogni journal
+// resta atomico e idempotente. Un errore ferma il batch e il DB non va riaperto.
+async function applicaJournalOrdinati({ client, journals } = {}) {
+  if (!client || typeof client.query !== 'function') throw errore('ripristino_client_non_valido');
+  if (batchInUso.has(client) || inUso.has(client)) throw errore('ripristino_client_occupato');
+  if (!Array.isArray(journals)) invalido();
+  const ordinati = journals.map(j=>validaJournal(j).journal).sort((a,b)=>
+    BigInt(a.sequenza)<BigInt(b.sequenza)?-1:BigInt(a.sequenza)>BigInt(b.sequenza)?1:0);
+  batchInUso.add(client);
+  try {
+    const esiti=[];
+    for (const journal of ordinati) esiti.push(await applicaJournalInterno({client,journal}));
+    return esiti;
+  } finally { batchInUso.delete(client); }
+}
+
+module.exports = { applicaJournal, applicaJournalOrdinati };

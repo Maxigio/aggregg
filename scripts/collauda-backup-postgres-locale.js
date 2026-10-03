@@ -92,8 +92,9 @@ async function collaudaBackup({ args, directory, fileCompose, docker, sql, backu
     await client.query(fs.readFileSync(path.join(__dirname,'../backend/nodi/schema-ripristino-sequenza.sql'),'utf8'));
     const prima=(await client.query('SELECT scadenza FROM amr_accessi.aziende WHERE id=$1',[azienda])).rows[0].scadenza;
     assert.notEqual(prima.toISOString(),scadenza);
-    const { applicaJournal }=require('../backend/nodi/ripristino-journal');
-    await applicaJournal({client,journal}); await applicaJournal({client,journal});
+    const { applicaJournalOrdinati }=require('../backend/nodi/ripristino-journal');
+    await applicaJournalOrdinati({client,journals:[journal]});
+    await applicaJournalOrdinati({client,journals:[journal]});
     const dopo=(await client.query('SELECT scadenza FROM amr_accessi.aziende WHERE id=$1',[azienda])).rows[0].scadenza;
     assert.equal(dopo.toISOString(),scadenza);
     const vecchiaEpoca=(await client.query('SELECT epoca FROM amr_accessi.persone WHERE id=$1',[admin.persona])).rows[0].epoca;
