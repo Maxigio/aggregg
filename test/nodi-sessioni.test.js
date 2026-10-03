@@ -30,11 +30,24 @@ async function setup(t, { identita, logout = async () => {}, cleanupMs } = {}) {
       ...(cookie ? { cookie } : {}), ...extra,
     }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
-  const login = (persona = 'anna', cookie) => req('login', { email: persona + '@amr.invalid', password: 'password-sintetica' }, cookie);
+  const login = async (persona = 'anna', cookie) => {
+    let contesto = (cookie || '').split(';').map(v => v.trim()).find(v => v.startsWith('amr_accesso_prova='));
+    if (!contesto) {
+      const bootstrap = await req('me', undefined, cookie);
+      contesto = bootstrap.headers.getSetCookie().find(v => v.startsWith('amr_accesso_prova=')).split(';')[0];
+      cookie = [cookie, contesto].filter(Boolean).join('; ');
+    }
+    const r = await req('login', { email: persona + '@amr.invalid', password: 'password-sintetica' }, cookie);
+    r.cookieContesto = contesto;
+    return r;
+  };
   return { req, login, accessi, ruoli, revocate, origine, avanza: ms => { now += ms; } };
 }
 function cookies(r, prima = '') {
   const jar = new Map(prima.split(';').map(v => v.trim().split('=')).filter(v => v[0]));
+  if (r.cookieContesto) {
+    const [key, value] = r.cookieContesto.split('='); jar.set(key, value);
+  }
   for (const header of r.headers.getSetCookie()) {
     const [key, value] = header.split(';')[0].split('=');
     if (value) jar.set(key, value); else jar.delete(key);

@@ -391,14 +391,18 @@ async function collauda({ manuale = false } = {}) {
         ...(body === undefined ? {} : { origin: origineLogin, 'content-type': 'application/json' }),
         ...(cookie ? { cookie } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal: AbortSignal.timeout(15000) });
-    const challengeAmr = await richiestaLogin('login', { email, password });
+    const loginConContesto = async body => {
+      const bootstrap = await richiestaLogin('me');assert.equal(bootstrap.status,401);
+      const cookieContesto = bootstrap.headers.getSetCookie().find(v => v.startsWith('amr_accesso_prova='))?.split(';')[0];
+      assert.match(cookieContesto || '', /^amr_accesso_prova=[a-f0-9]{64}$/);
+      return { risposta: await richiestaLogin('login', body, cookieContesto), cookieContesto };
+    };
+    const { risposta: challengeAmr, cookieContesto } = await loginConContesto({ email, password });
     fase = 'login AMR → Auth';
     diagnosi += ' · HTTP ' + challengeAmr.status + ' · ' + String((await challengeAmr.clone().json()).codice || 'esito senza errore');
     assert.equal(challengeAmr.status, 200); assert.deepEqual(await challengeAmr.json(), { mfa: true });
     const cookieMfa = challengeAmr.headers.getSetCookie().find(v => v.startsWith('amr_mfa_prova=')).split(';')[0];
-    const cookieContesto = challengeAmr.headers.getSetCookie().find(v => v.startsWith('amr_accesso_prova='))?.split(';')[0];
-    assert.ok(cookieContesto);
-    assert.equal((await richiestaLogin('me', undefined, cookieMfa)).status, 401);
+    assert.equal((await richiestaLogin('me', undefined, cookieMfa + '; ' + cookieContesto)).status, 401);
     const mfaAmr = await richiestaLogin('mfa', { otp: totp(generated.data.totpSecret) }, cookieMfa + '; ' + cookieContesto);
     fase = 'MFA AMR → Auth';
     diagnosi = 'HTTP ' + mfaAmr.status + ' · ' + String((await mfaAmr.clone().json()).codice || 'esito senza errore');
@@ -426,12 +430,12 @@ async function collauda({ manuale = false } = {}) {
       ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(15000) });
     assert.equal((await req('/api/test/login', null, 'POST', { azienda: 'aziendaA' })).status, 404);
     assert.equal((await req('/api/admin')).status, 401);
-    const ownerLogin = await richiestaLogin('login', { email, password });
+    const { risposta: ownerLogin, cookieContesto: ownerContesto } = await loginConContesto({ email, password });
     assert.equal(ownerLogin.status, 200);
     const ownerMfaCookie = ownerLogin.headers.getSetCookie().find(v => v.startsWith('amr_mfa_prova=')).split(';')[0];
-    const ownerMfa = await richiestaLogin('mfa', { otp: totp(generated.data.totpSecret) }, ownerMfaCookie);
+    const ownerMfa = await richiestaLogin('mfa', { otp: totp(generated.data.totpSecret) }, ownerMfaCookie + '; ' + ownerContesto);
     assert.equal(ownerMfa.status, 200);
-    const ownerCookie = ownerMfa.headers.getSetCookie().find(v => v.startsWith('amr_sessione_prova=')).split(';')[0];
+    const ownerCookie = ownerContesto + '; ' + ownerMfa.headers.getSetCookie().find(v => v.startsWith('amr_sessione_prova=')).split(';')[0];
     assert.equal((await req('/api/admin', ownerCookie)).status, 200);
     // L'admin non ottiene automaticamente una licenza aziendale.
     assert.equal((await req('/api/search?tipo=moto&marca=Yamaha', ownerCookie)).status, 403);
@@ -458,9 +462,9 @@ async function collauda({ manuale = false } = {}) {
         INSERT INTO amr_accessi.aziende(id,scadenza,moduli) VALUES ('${suffisso}',now()+interval '1 day',
           ARRAY[${suffisso === 'A' ? "'auto','moto'" : "'moto'"}]);
         INSERT INTO amr_accessi.membri VALUES ('${id}','${suffisso}');`);
-      const r = await richiestaLogin('login', { email: e, password: p });
+      const { risposta: r, cookieContesto: contestoCliente } = await loginConContesto({ email: e, password: p });
       assert.equal(r.status, 200); assert.deepEqual(await r.json(), { ok: true });
-      return { id, cookie: r.headers.getSetCookie().find(v => v.startsWith('amr_sessione_prova=')).split(';')[0] };
+      return { id, cookie: contestoCliente + '; ' + r.headers.getSetCookie().find(v => v.startsWith('amr_sessione_prova=')).split(';')[0] };
     };
     const a = await registraCliente('A'), b = await registraCliente('B');
     assert.equal((await req('/api/search?tipo=auto&marca=Fiat', b.cookie)).status, 403);
@@ -553,8 +557,8 @@ async function collauda({ manuale = false } = {}) {
     assert.ok(!/refreshToken|refresh_token/i.test(verificaInv.headers.get('location')||''));
     const accettato=await aziendeReq('accetta',null,{token:invToken,password:pwInvito});assert.equal(accettato.status,200);
     assert.ok((await aziendeReq('accetta',null,{token:invToken,password:pwInvito})).status>=400);
-    const loginReferente=await richiestaLogin('login',{email:destinatario,password:pwInvito});assert.equal(loginReferente.status,200);
-    const cookieReferente=loginReferente.headers.getSetCookie().find(v=>v.startsWith('amr_sessione_prova=')).split(';')[0];
+    const {risposta:loginReferente,cookieContesto:contestoReferente}=await loginConContesto({email:destinatario,password:pwInvito});assert.equal(loginReferente.status,200);
+    const cookieReferente=contestoReferente+'; '+loginReferente.headers.getSetCookie().find(v=>v.startsWith('amr_sessione_prova=')).split(';')[0];
     assert.equal((await req('/api/search?tipo=moto&marca=Yamaha',cookieReferente)).status,403);
     const attBody={operazione:crypto.randomUUID(),id:aziendaId};
     assert.equal((await aziendeReq('attiva',ownerCookie,attBody)).status,200);

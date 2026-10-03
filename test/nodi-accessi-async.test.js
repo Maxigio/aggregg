@@ -30,9 +30,11 @@ async function setup(t, timeoutMs = 2000, maxPersona = 2) {
   const req=(route, cookie, method='GET', body)=>fetch(origine+route,{method,
     headers:{...(cookie?{cookie}:{}),...(body?{origin:origine,'content-type':'application/json'}:{})},
     ...(body?{body:JSON.stringify(body)}:{})});
-  const login=await req('/api/auth/login',null,'POST',{email:'test@amr.invalid',password:'sintetica-locale'});
+  const bootstrap=await req('/api/auth/me');assert.equal(bootstrap.status,401);
+  const contesto=bootstrap.headers.getSetCookie().find(v=>v.startsWith('amr_accesso_prova=')).split(';')[0];
+  const login=await req('/api/auth/login',contesto,'POST',{email:'test@amr.invalid',password:'sintetica-locale'});
   assert.equal(login.status,200);
-  const cookie=login.headers.getSetCookie().find(v=>v.startsWith('amr_sessione_prova=')).split(';')[0];
+  const cookie=contesto+'; '+login.headers.getSetCookie().find(v=>v.startsWith('amr_sessione_prova=')).split(';')[0];
   const node=(route,method='GET',body)=>fetch(origine+route,{method,headers:{'x-amr-node-id':'n1','x-amr-node-token':'1'.repeat(64),
     ...(body?{'content-type':'application/json'}:{})},...(body?{body:JSON.stringify({id:'n1',...body})}:{})});
   await node('/_nodo/heartbeat','POST',{revisione:'imac-1',occupato:false,fonti:{subito:{fermo:false},autoscout:{fermo:false},moto:{fermo:false}}});

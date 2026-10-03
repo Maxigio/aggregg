@@ -105,3 +105,17 @@ il successivo; la manutenzione non viene confermata come completata.
 
 Confronto: [restic retention](https://restic.readthedocs.io/en/stable/060_forget.html).
 I numeri scelti sono capacità iniziali, non garanzie universali della fonte.
+
+## C01 — Contesto stabilito prima del login
+
+Hardening del percorso API: senza cookie di contesto valido, il login risponde
+401 prima del provider e non genera un altro contesto. `/me` e la pagina di
+login restano il bootstrap. Il contesto collega i tentativi e il logout, non
+autentica la persona. I client dei test e degli script seguono il bootstrap
+HTTP reale, senza fabbricare header nella risposta del login.
+
+Regressioni: contesto assente/malformato/duplicato, logout durante password e
+MFA, rotazione e nuovo login. **56/56**, review indipendente e controprova
+con cookie jar browser: nessun cookie tardivo, provider ripulito una sola volta,
+nuovo accesso preservato. Provider sintetico; gate reale locale successivo.
+Non era dimostrato un difetto della UI ordinaria, che aveva già il bootstrap.

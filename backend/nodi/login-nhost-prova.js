@@ -141,6 +141,9 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
   }
   app.post('/api/auth/login', protetta(async (req, res) => {
     if (chiuso) throw errore(503, 'identita_non_disponibile');
+    // Il bootstrap deve precedere il login: il logout usa lo stesso contesto.
+    const key = cookie(req, 'amr_accesso_prova');
+    if (!key) throw errore(401, 'ripeti_login');
     const { email, password } = req.body || {};
     if (typeof email !== 'string' || email.length > 254 || !email.includes('@')
         || typeof password !== 'string' || !password.length || password.length > 50) {
@@ -152,7 +155,6 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
       tentativiAccesso.delete(vecchio.tentativo.browser);
     }
     if (precedente) challenge.delete(precedente);
-    const key = browser(req, res);
     if (!tentativiAccesso.has(key) && tentativiAccesso.size >= 50) throw errore(503, 'challenge_non_disponibili');
     const tentativo = { browser: key, revisione: sequenzaRevoche, scadenza: ora() + 3 * 60000, inVolo: true };
     tentativiAccesso.set(key, tentativo);

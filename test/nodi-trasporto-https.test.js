@@ -40,7 +40,15 @@ async function setup(t, { tls, proxyAttendibili = [], origine = 'https://amr.inv
     });
     r.on('error', reject); r.end(body === undefined ? undefined : JSON.stringify(body));
   });
-  const login = (cookie, extra) => req('login', { email: 'anna@amr.invalid', password: 'password-sintetica' }, cookie, extra);
+  const login = async (cookies, extra) => {
+    const bootstrap = await req('me', undefined, cookies, extra);
+    const contesto = (cookies || '').split(';').map(v => v.trim()).find(v => v.startsWith('amr_accesso_prova='))
+      || cookie(bootstrap);
+    const r = await req('login', { email: 'anna@amr.invalid', password: 'password-sintetica' },
+      [cookies, cookie(bootstrap)].filter(Boolean).join('; '), extra);
+    r.cookieContesto = contesto;
+    return r;
+  };
   return { req, login, auth, setMfa: () => { mfa = true; } };
 }
 const cookie = r => (r.headers['set-cookie'] || []).map(v => v.split(';')[0]).filter(v => !v.endsWith('=')).join('; ');
@@ -51,7 +59,7 @@ test('HTTPS TLS reale sintetico: cookie Secure su sessione/MFA/clear, rotte prop
   const r = await f.login(); assert.equal(r.status, 200);
   for (const h of r.headers['set-cookie']) { assert.match(h, /; Secure/); assert.match(h, /; HttpOnly/); assert.match(h, /SameSite=Strict/); }
   assert.equal(r.headers['strict-transport-security'], 'max-age=31536000');
-  const c = cookie(r);
+  const c = r.cookieContesto + '; ' + cookie(r);
   const lista = await f.req('sessioni', undefined, c); assert.equal(lista.status, 200);
   assert.equal(lista.json().sessioni.length, 1);
   const revoca = await f.req('sessioni/revoca', { id: lista.json().sessioni[0].id }, c);
@@ -63,7 +71,7 @@ test('HTTPS TLS reale sintetico: cookie Secure su sessione/MFA/clear, rotte prop
   assert.equal((await f.req('me', undefined, c)).status, 401);
   f.setMfa(); const challenge = await f.login();
   assert.match(challenge.headers['set-cookie'].find(v => v.startsWith('amr_mfa_prova=')), /; Secure/);
-  const finale = await f.req('mfa', { otp: '123456' }, cookie(challenge)); assert.equal(finale.status, 200);
+  const finale = await f.req('mfa', { otp: '123456' }, challenge.cookieContesto + '; ' + cookie(challenge)); assert.equal(finale.status, 200);
   for (const h of finale.headers['set-cookie']) assert.match(h, /; Secure/);
   const precedente = cookie(finale); f.auth.close();
   const nuovo = await setup(t, { tls });
@@ -80,7 +88,7 @@ test('HTTPS da proxy esplicito: Host/Origin/protocollo negati prima di login e r
   const viaProxy = { 'x-forwarded-proto': 'https' };
   const r = await f.login(undefined, viaProxy); assert.equal(r.status, 200);
   for (const h of r.headers['set-cookie']) assert.match(h, /; Secure/);
-  const c = cookie(r), lista = await f.req('sessioni', undefined, c, viaProxy); assert.equal(lista.status, 200);
+  const c = r.cookieContesto + '; ' + cookie(r), lista = await f.req('sessioni', undefined, c, viaProxy); assert.equal(lista.status, 200);
   const id = lista.json().sessioni[0].id;
   assert.equal((await f.req('sessioni/revoca', { id }, c, { ...viaProxy, origin: '' })).status, 403);
   assert.equal((await f.req('me', undefined, c, viaProxy)).status, 200);
