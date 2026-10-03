@@ -244,13 +244,16 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   function releaseValida(n) {
     return releaseAttesa ? compat.compatibile(releaseAttesa, n?.compatibilita) : n?.revisione === REVISIONE;
   }
-  function assegna(n, lavoro, limite = timeoutMs) {
+  function assegna(selezione, lavoro, limite = timeoutMs) {
     const avvia = () => {
       const budget = lavoro.ricerca?.budget;
       budget?.controlla();
       if (budget) limite = Math.min(limite, budget.restante());
+      // Scelta e accodamento sono sincroni dopo la verifica dei permessi.
+      const n = typeof selezione === 'function' ? selezione() : selezione;
       // Dopo l'attesa dei permessi, sospensione/scadenza del nodo possono essere cambiate.
-      if (chiuso || !disponibile(n) || fontiDelLavoro(lavoro).some(f => !disponibile(n, f))) {
+      if (chiuso || !disponibile(n) || n.id === lavoro.nodoEscluso
+          || fontiDelLavoro(lavoro).some(f => !disponibile(n, f))) {
         throw Object.assign(new Error('nodo non disponibile'), { status: 503 });
       }
       return new Promise((resolve, reject) => {
@@ -276,14 +279,14 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     };
     return lavoro.destinatari ? verificaDestinatari(lavoro.destinatari, lavoro.ricerca?.budget).then(avvia) : avvia();
   }
-  function sceglie(fonti, escluso = null) {
-    return [...nodi.values()].filter(n => n.id !== escluso && !n.simulato && disponibile(n))
+  const carico = n => n.coda.length + Number(!!n.occupato);
+  function sceglie(fonti, escluso = null, idoneo = () => true) {
+    return [...nodi.values()].filter(n => n.id !== escluso && !n.simulato && disponibile(n) && idoneo(n))
       .sort((a, b) => fonti.filter(f => disponibile(b, f)).length
-        - fonti.filter(f => disponibile(a, f)).length || a.coda.length - b.coda.length)[0] || null;
+        - fonti.filter(f => disponibile(a, f)).length || carico(a) - carico(b))[0] || null;
   }
   function nodoPerFonte(fonte) {
-    const candidati = [...nodi.values()].filter(n => disponibile(n, fonte));
-    return candidati.find(n => !n.simulato) || null;
+    return sceglie([fonte], null, n => disponibile(n, fonte));
   }
   function fontiDelLavoro(job) {
     if (job.operazione === 'fonte' || job.operazione === 'dettaglio') return [job.fonte];
@@ -310,8 +313,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       if (n && ora() - n.visto <= 6000) continue;
       if (!job.iniziato) {
         const richieste = fontiDelLavoro(job);
-        const alternativo = [...nodi.values()].find(x => x.id !== job.nodoAssegnato
-          && !x.simulato && richieste.every(f => disponibile(x, f)) && disponibile(x));
+        const alternativo = sceglie(richieste, job.nodoAssegnato,
+          x => x.id !== job.nodoEscluso && richieste.every(f => disponibile(x, f)));
         if (alternativo && alternativo.id !== job.nodoAssegnato) {
           if (n) n.coda = n.coda.filter(x => x !== job);
           job.nodoAssegnato = alternativo.id;
@@ -347,33 +350,41 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     const vincoloPagina = Number(input.fetta || 0) > 0 && ancoraValida;
     const preferito = vincoloPagina ? nodi.get(precedente.fonti[richieste[0]]) : null;
     const assegnazioneDa = performance.now();
-    const primario = preferito && !preferito.simulato && disponibile(preferito)
-      ? preferito : sceglie(richieste);
-    if (!primario) return { status: 503, body: { error: 'nessun nodo disponibile' } };
-    const suPrimario = richieste.filter(f => disponibile(primario, f)
-      && (!vincoloPagina || !precedente.fonti[f] || precedente.fonti[f] === primario.id
+    const assegnabili = n => richieste.filter(f => disponibile(n, f)
+      && (!vincoloPagina || !precedente.fonti[f] || precedente.fonti[f] === n.id
         || !disponibile(nodi.get(precedente.fonti[f]), f)));
-    if (!suPrimario.length) return { status: 503, body: { error: 'nessuna fonte disponibile' } };
-    const query = { ...input };
-    if (suPrimario.length !== richieste.length) {
-      query.fonti = suPrimario.join(','); query.fetta = String(query.fetta ?? 0);
-    }
-    if (!suPrimario.includes('subito')) {
-      delete query.subitoMainStart;
-      delete query.subitoRecuperoStart;
-    }
-    const base = await budget.attendi(() => assegna(primario, { idLavoro: crypto.randomUUID(), azienda,
-      operazione: 'ricerca', input: query, destinatari, ricerca,
-      assegnazioneMs: Math.round(performance.now() - assegnazioneDa) }));
+    let suPrimario;
+    const lavoroBase = { idLavoro: crypto.randomUUID(), azienda,
+      operazione: 'ricerca', destinatari, ricerca,
+      assegnazioneMs: Math.round(performance.now() - assegnazioneDa) };
+    const selezionaPrimario = () => {
+      // Nodo, fonti e query devono fotografare lo stesso stato dopo i permessi.
+      const primario = preferito && !preferito.simulato && assegnabili(preferito).length
+        ? preferito : sceglie(richieste, null, n => assegnabili(n).length > 0);
+      if (!primario) return null;
+      suPrimario = assegnabili(primario);
+      const query = { ...input };
+      if (suPrimario.length !== richieste.length) {
+        query.fonti = suPrimario.join(','); query.fetta = String(query.fetta ?? 0);
+      }
+      if (!suPrimario.includes('subito')) {
+        delete query.subitoMainStart;
+        delete query.subitoRecuperoStart;
+      }
+      lavoroBase.input = query;
+      return primario;
+    };
+    const base = await budget.attendi(() => assegna(selezionaPrimario, lavoroBase));
     if (base.status !== 200) return base;
     if (!base.body || !Array.isArray(base.body.risultati) || !base.body.sources
         || richieste.some(f => typeof base.body.sources[f]?.status !== 'string')) {
       return { status: 502, body: { error: 'risposta di ricerca non valida dal nodo' } };
     }
     const sostituzioni = {}, avvisi = [], assegnate = {};
-    for (const f of suPrimario) assegnate[f] = primario.id;
+    const esecutoreBase = base.nodoEsecutore;
+    for (const f of suPrimario) assegnate[f] = esecutoreBase;
     if (ancoraValida) for (const f of suPrimario) {
-      if (precedente.fonti[f] && precedente.fonti[f] !== primario.id) {
+      if (precedente.fonti[f] && precedente.fonti[f] !== esecutoreBase) {
         avvisi.push(`${f}: pagina richiesta su un altro nodo; la copertura può cambiare`);
       }
     }
@@ -383,16 +394,19 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       if (!daAlternativo) continue;
       await verificaDestinatari(destinatari, budget);
       const assegnazioneFonteDa = performance.now();
-      const primaScelta = ancoraValida ? nodi.get(precedente.fonti[fonte]) : null;
-      const alternativo = primaScelta && primaScelta.id !== primario.id && !primaScelta.simulato
-        && disponibile(primaScelta, fonte) ? primaScelta
-        : [...nodi.values()].find(n => n.id !== primario.id && !n.simulato && disponibile(n, fonte))
-          || [...nodi.values()].find(n => n.id !== primario.id && n.simulato && disponibile(n, fonte));
+      const selezionaAlternativo = () => {
+        const primaScelta = ancoraValida ? nodi.get(precedente.fonti[fonte]) : null;
+        return primaScelta && primaScelta.id !== esecutoreBase && !primaScelta.simulato
+          && disponibile(primaScelta, fonte) ? primaScelta
+          : sceglie([fonte], esecutoreBase, n => disponibile(n, fonte))
+            || [...nodi.values()].find(n => n.id !== esecutoreBase && n.simulato && disponibile(n, fonte));
+      };
+      const alternativo = selezionaAlternativo();
       if (!alternativo) { avvisi.push(`${fonte}: nessun nodo alternativo disponibile`); continue; }
       let alternativa;
       try {
-        alternativa = await budget.attendi(() => assegna(alternativo, { idLavoro: crypto.randomUUID(), azienda,
-          operazione: 'fonte', fonte, input, destinatari, ricerca,
+        alternativa = await budget.attendi(() => assegna(selezionaAlternativo, { idLavoro: crypto.randomUUID(), azienda,
+          operazione: 'fonte', fonte, input, destinatari, ricerca, nodoEscluso: esecutoreBase,
           assegnazioneMs: Math.round(performance.now() - assegnazioneFonteDa) }, Math.min(timeoutMs, 50000)));
       } catch (e) {
         budget.controlla();
@@ -401,11 +415,11 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       }
       if (alternativa.status === 200 && porzioneCompleta(alternativa.body, fonte)) {
         sostituzioni[fonte] = alternativa.body;
-        assegnate[fonte] = alternativo.id;
-        if (ancoraValida && precedente.fonti[fonte] && precedente.fonti[fonte] !== alternativo.id) {
+        assegnate[fonte] = alternativa.nodoEsecutore;
+        if (ancoraValida && precedente.fonti[fonte] && precedente.fonti[fonte] !== alternativa.nodoEsecutore) {
           avvisi.push(`${fonte}: pagina richiesta su un altro nodo; la copertura può cambiare`);
         }
-      } else avvisi.push(alternativo.simulato
+      } else avvisi.push(nodi.get(alternativa.nodoEsecutore)?.simulato
         ? `${fonte}: nodo simulato, nessun portale interrogato` : `${fonte}: nodo alternativo senza risultato completo`);
     }
     async function termina(body) {
@@ -626,7 +640,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     job.ricerca?.avviati.delete(idLavoro);
     registra(job, esito.status === 200 ? 'concluso' : 'errore');
     segnalaFonti(job, esito);
-    job.resolve(esito);
+    // Metadato interno autorevole, dopo token/boot/epoch e CAS del job.
+    job.resolve({ status: esito.status, body: esito.body, nodoEsecutore: job.nodoAssegnato });
     res.json({ ok: true });
   });
 
@@ -818,9 +833,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       try {
         // Il catalogo locale resta utilizzabile anche quando Moto.it è in pausa.
         const assegnazioneDa = performance.now();
-        const n = [...nodi.values()].find(n => !n.simulato && disponibile(n));
+        const n = sceglie([]);
         if (!n) return res.status(503).json({ error: 'nodo non disponibile' });
-        const out = await assegna(n, { idLavoro: crypto.randomUUID(), azienda: req.azienda,
+        const out = await assegna(() => sceglie([]), { idLavoro: crypto.randomUUID(), azienda: req.azienda,
           operazione, input, destinatari: new Set([() => verificaSessione(req.sessioneProva, req.query.tipo)]),
           assegnazioneMs: Math.round(performance.now() - assegnazioneDa) });
         await verificaSessione(req.sessioneProva, req.query.tipo);
@@ -846,7 +861,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       const assegnazioneDa = performance.now();
       const n = nodoPerFonte(fonte);
       if (!n) return res.status(503).json({ error: 'nodo non disponibile' });
-      const out = await assegna(n, { idLavoro: crypto.randomUUID(), azienda: req.azienda,
+      const out = await assegna(() => nodoPerFonte(fonte), { idLavoro: crypto.randomUUID(), azienda: req.azienda,
         operazione: 'dettaglio', fonte, input: { url },
         destinatari: new Set([() => verificaSessione(req.sessioneProva, tipo)]),
         assegnazioneMs: Math.round(performance.now() - assegnazioneDa) });

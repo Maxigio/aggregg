@@ -36,3 +36,20 @@ trenta richieste anonime/letture seguite da revoca ammessa, indipendenza fra
 persone, saturazione, scadenza e recupero degli slot solo al settlement.
 I numeri sono limiti iniziali del prototipo, non una capacità di produzione
 certificata da [OWASP API4](https://api-security.owasp.org/editions/2023/en/0xa4-unrestricted-resource-consumption/).
+
+## S01/S02/S03 — Selezione e affinità dello scheduler
+
+Risolti insieme perché condividono assegnazione e record del lavoro. A parità
+di copertura il carico include coda e lavoro attivo; una pagina mantiene il suo
+nodo sano, ma può usare un nodo idoneo se la fonte è in pausa. Affinità, avvisi
+e esclusione dopo 429 usano l'esecutore effettivo del record centrale, verificato
+da token/boot/epoca e settlement del job, senza fidarsi del body del worker.
+Menu e dettagli rivalutano anche il carico dopo l'attesa dei permessi.
+
+Review indipendente: trovato un nuovo 503 quando il precedente owner rientrava
+durante i permessi. Regressione rossa e controprova verde sul codice intermedio;
+corretto ricalcolando nodo, porzione e query insieme, sincronicamente prima della
+coda, dai parametri originali. I cursori non sono ricostruiti dalla prima pagina.
+Dodici regressioni, suite scheduler/centro/permessi **35/35**, seconda review
+indipendente conclusa senza finding residui. Nessuna prova su portali reali;
+il cambio nodo continua a dichiarare che la copertura può variare.

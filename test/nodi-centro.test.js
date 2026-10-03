@@ -453,7 +453,7 @@ test('lavoro non ancora iniziato passa al secondo nodo senza ripetizioni', async
   const headers=id=>({'x-amr-node-id':id,'x-amr-node-token':tokens[id],'content-type':'application/json'});
   try {
     for(const id of ['a','b'])await fetch(url+'/_nodo/heartbeat',{method:'POST',headers:headers(id),
-      body:JSON.stringify({id,revisione:'imac-1',occupato:id==='a',
+      body:JSON.stringify({id,revisione:'imac-1',occupato:true,
         fonti:{subito:{fermo:false},autoscout:{fermo:false},moto:{fermo:false}}})});
     const pending=centro.ricerca('aziendaA',{tipo:'auto',marca:'Fiat'});
     assert.equal(centro.nodi.get('a').coda.length,1);
