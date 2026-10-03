@@ -725,7 +725,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     evento('lavori_cancellati');
     res.json({ ok: true, rimossi });
   });
-  app.post('/api/admin/nodi/:id', express.json({ limit: '1kb' }), (req, res) => {
+  app.post('/api/admin/nodi/:id', express.json({ limit: '1kb' }), adminDiProva, (req, res) => {
     const n = nodi.get(req.params.id);
     if (!n) return res.sendStatus(404);
     const { sospeso, fonte } = req.body || {};
@@ -739,7 +739,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     evento(sospeso ? 'sospensione_aggiunta' : 'sospensione_rimossa', { nodo: n.id, fonte: fonte || null });
     res.json({ ok: true });
   });
-  app.post('/api/admin/nodi/:id/revoca-token', express.json({limit:'1kb'}), (req,res) => {
+  app.post('/api/admin/nodi/:id/revoca-token', express.json({limit:'1kb'}), adminDiProva, (req,res) => {
     const id=req.params.id;
     if (!Object.hasOwn(tokens,id)) return res.sendStatus(404);
     if (!req.body || Array.isArray(req.body) || Object.keys(req.body).length) return res.sendStatus(400);
