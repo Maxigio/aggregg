@@ -11,7 +11,7 @@ function mount(app, { account, accessi, client, origine, proxyAttendibili, trasp
   const policy = require('./trasporto-prova').trasportoPerRotta({ origine, proxyAttendibili, trasporto });
   origine = policy.origine;
   const consegne = new Map();
-  let attive = 0, tentativi = 0, finestra = ora(), chiuso = false;
+  let chiuso = false;
   const pulisci = () => { for (const [k,v] of consegne) if (v.fino <= ora()) consegne.delete(k); };
   const timer = setInterval(pulisci, 30000); timer.unref();
   app.use(BASE, policy.middleware, (req,res,next) => {
@@ -21,17 +21,7 @@ function mount(app, { account, accessi, client, origine, proxyAttendibili, trasp
 
     next();
   }, express.json({ limit:'4kb', strict:true }));
-  const protetta = fn => async (req,res) => {
-    if (ora()-finestra >= 60000) { finestra=ora(); tentativi=0; }
-    if (attive >= 4 || tentativi >= 30) return res.status(429).set('Retry-After','60').json({codice:'troppi_tentativi'});
-    attive++; tentativi++;
-    try { await fn(req,res); }
-    catch (e) {
-      // Errori del client Auth e del dominio sono già depurati: mai usare message/stack.
-      res.status(Number.isInteger(e.status) && e.status >= 400 && e.status <= 599 ? e.status : 503)
-        .json({codice: typeof e.codice === 'string' ? e.codice : 'operazione_non_disponibile'});
-    } finally { attive--; }
-  };
+  const protetta = require('./limiti-gestione').creaLimitiGestione({ accessi, ora });
   async function gestore(req, soloAdmin = false) {
     const s = accessi.sessione(req);
     const c = await accessi.verifica(s, soloAdmin ? {admin:true} : {});
@@ -55,10 +45,10 @@ function mount(app, { account, accessi, client, origine, proxyAttendibili, trasp
   app.post(BASE+'/elenco', protetta(async(req,res) => {
     const s = await gestore(req);
     res.json(await account.elenco(s,{id:req.body?.id}));
-  }));
+  }, { lettura: true }));
   app.post(BASE+'/operazione', protetta(async(req,res) => {
     res.json(await account.statoOperazione(await gestore(req),richiesta(req.body)));
-  }));
+  }, { lettura: true }));
   app.post(BASE+'/invita', protetta(async(req,res) => {
     const s = await gestore(req); pulisci();
     const out = await account.invita(s,{...richiesta(req.body),email:req.body?.email});
@@ -83,18 +73,18 @@ function mount(app, { account, accessi, client, origine, proxyAttendibili, trasp
   app.post(BASE+'/referente', protetta(async(req,res) => {
     res.json(await account.cambiaReferente(await gestore(req,true),{...richiesta(req.body),persona:req.body?.persona}));
   }));
-  app.post(BASE+'/invito', protetta(async(req,res) => res.json(await datiInvito(req.body))));
+  app.post(BASE+'/invito', protetta(async(req,res) => { res.json(await datiInvito(req.body)); }, { pubblica: true }));
   app.post(BASE+'/registra', protetta(async(req,res) => {
     password(req.body);
     const i = await datiInvito(req.body);
     await client.registra(i.email,req.body.password,origine+BASE+'/pagina');
     res.json({ok:true,verificaEmail:true});
-  }));
+  }, { pubblica: true }));
   app.post(BASE+'/verifica', protetta(async(req,res) => {
     const i = await datiInvito(req.body);
     await client.reinviaVerifica(i.email,origine+BASE+'/pagina');
     res.json({ok:true});
-  }));
+  }, { pubblica: true }));
   app.post(BASE+'/accetta', protetta(async(req,res) => {
     password(req.body);
     if (typeof req.body.operazione !== 'string' || !UUID.test(req.body.operazione)) throw errore('input_non_valido');
@@ -105,7 +95,7 @@ function mount(app, { account, accessi, client, origine, proxyAttendibili, trasp
       if (!p?.session?.user?.emailVerified || !UUID.test(p.session.user.id || '')) throw errore('identita_non_verificata',403);
       res.json(await account.accetta(p.session.user.id,{token:req.body.token,operazione:req.body.operazione}));
     } finally { if (p?.session) await client.logout(p.session).catch(()=>{}); }
-  }));
+  }, { pubblica: true }));
   app.use(BASE,(err,req,res,next) => res.status(err.status===413 ? 413 : 400).json({codice:'input_non_valido'}));
   return {close() { chiuso=true; clearInterval(timer); consegne.clear(); }};
 }

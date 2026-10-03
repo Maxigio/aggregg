@@ -253,10 +253,10 @@ test('sessioni: lettore offline, concorrenza e rate limit indipendenti dal login
   offline = true;
   const guasto = await f.req('sessioni', undefined, a); assert.equal(guasto.status, 503);
   assert.equal(JSON.stringify(await guasto.json()).includes('secret'), false); offline = false;
-  attendi = true; const pending = Array.from({ length: 4 }, () => f.req('sessioni', undefined, a));
+  attendi = true; const pending = Array.from({ length: 3 }, () => f.req('sessioni', undefined, a));
   try {
-    for (let i = 0; i < 100 && completi.length < 4; i++) await new Promise(r => setTimeout(r, 5));
-    assert.equal(completi.length, 4); assert.equal((await f.req('sessioni', undefined, a)).status, 429);
+    for (let i = 0; i < 100 && completi.length < 3; i++) await new Promise(r => setTimeout(r, 5));
+    assert.equal(completi.length, 3); assert.equal((await f.req('sessioni', undefined, a)).status, 429);
   } finally { attendi = false; completi.forEach(r => r()); }
   for (const r of await Promise.all(pending)) assert.equal(r.status, 200);
   f.avanza(60000);

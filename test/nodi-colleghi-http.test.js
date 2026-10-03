@@ -81,3 +81,17 @@ test('colleghi HTTP: limiti body, credenziali e rate; GET non consuma inviti',as
   for(let i=0;i<30;i++) await f.req('elenco',{id:'prova'});
   assert.equal((await f.req('elenco',{id:'prova'})).status,429);
 });
+test('colleghi: anonimi e letture non impediscono una revoca autorizzata',async t=>{
+ const f=await setup(t);
+ for(let i=0;i<30;i++) {
+  assert.equal((await f.req('elenco',{id:'prova'},null)).status,401);
+  assert.equal((await f.req('elenco',{id:'prova'})).status,200);
+ }
+ assert.equal((await f.req('elenco',{id:'prova'})).status,429);
+ assert.equal((await f.req('revoca',{id:'prova',persona:provider,operazione:f.operazione})).status,200);
+});
+
+test('colleghi: invito valido consultabile senza sessione',async t=>{
+ const f=await setup(t);const r=await f.req('invito',{token},null);
+ assert.equal(r.status,200);assert.equal((await r.json()).stato,'pending');
+});

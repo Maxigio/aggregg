@@ -8,16 +8,8 @@ function mount(app, { account, accessi, client, origine, proxyAttendibili, trasp
   const policy = require('./trasporto-prova').trasportoPerRotta({ origine, proxyAttendibili, trasporto });
   origine = policy.origine;
   const consegne = new Map();
-  let attive = 0, tentativi = 0, finestra = ora();
   app.use('/api/auth/aziende', policy.middleware, express.json({ limit: '4kb', strict: true }));
-  const protetta = fn => async (req, res) => {
-    if (ora() - finestra >= 60000) { finestra = ora(); tentativi = 0; }
-    if (attive >= 4 || tentativi >= 30) return res.status(429).set('Retry-After','60').json({ codice:'troppi_tentativi' });
-    attive++; tentativi++;
-    try { await fn(req,res); }
-    catch(e) { res.status(e.status || 503).json({ codice: e.codice || 'operazione_non_disponibile' }); }
-    finally { attive--; }
-  };
+  const protetta = require('./limiti-gestione').creaLimitiGestione({ accessi, ora });
   const errore = () => Object.assign(new Error('input_non_valido'),{status:400,codice:'input_non_valido'});
   const credenziali = body => {
     if (typeof body?.password !== 'string' || body.password.length < 15 || body.password.length > 50
@@ -30,7 +22,7 @@ function mount(app, { account, accessi, client, origine, proxyAttendibili, trasp
   };
   app.get('/api/auth/aziende/pagina', (req,res) => res.sendFile(path.join(__dirname,'aziende-prova.html')));
   app.get('/api/auth/aziende/pagina.js', (req,res) => res.sendFile(path.join(__dirname,'../../frontend/nodi-aziende-prova.js')));
-  app.get('/api/auth/aziende/elenco', protetta(async(req,res) => res.json(await account.elenco(await admin(req)))));
+  app.get('/api/auth/aziende/elenco', protetta(async(req,res) => { res.json(await account.elenco(await admin(req))); }, { lettura: true }));
   app.post('/api/auth/aziende/invita', protetta(async(req,res) => {
     const s = await admin(req);
     // Le copie di consegna sono solo RAM e hanno la medesima scadenza dell'invito.
@@ -44,17 +36,17 @@ function mount(app, { account, accessi, client, origine, proxyAttendibili, trasp
   app.post('/api/auth/aziende/attiva', protetta(async(req,res) => res.json(await account.attiva(await admin(req),req.body))));
   app.post('/api/auth/aziende/rinnova', protetta(async(req,res) => res.json(await account.rinnova(await admin(req),req.body))));
   app.post('/api/auth/aziende/revoca', protetta(async(req,res) => res.json(await account.revocaAzienda(await admin(req),req.body))));
-  app.post('/api/auth/aziende/operazione', protetta(async(req,res) => res.json(await account.statoOperazione(await admin(req),req.body))));
+  app.post('/api/auth/aziende/operazione', protetta(async(req,res) => { res.json(await account.statoOperazione(await admin(req),req.body)); }, { lettura: true }));
   app.post('/api/auth/aziende/invito', protetta(async(req,res) => {
     const i = await account.invito(req.body?.token);
     res.json(i);
-  }));
+  }, { pubblica: true }));
   app.post('/api/auth/aziende/registra', protetta(async(req,res) => {
     credenziali(req.body);
     const i = await account.invito(req.body?.token);
     await client.registra(i.email,req.body.password,origine+'/api/auth/aziende/pagina');
     res.json({ok:true,verificaEmail:true});
-  }));
+  }, { pubblica: true }));
   app.post('/api/auth/aziende/accetta', protetta(async(req,res) => {
     credenziali(req.body);
     const i = await account.invito(req.body?.token);
@@ -67,12 +59,12 @@ function mount(app, { account, accessi, client, origine, proxyAttendibili, trasp
       }
       res.json(await account.accetta(p.session.user.id,req.body.token));
     } finally { if(p?.session) await client.logout(p.session).catch(()=>{}); }
-  }));
+  }, { pubblica: true }));
   app.post('/api/auth/aziende/verifica', protetta(async(req,res) => {
     const i = await account.invito(req.body?.token);
     await client.reinviaVerifica(i.email,origine+'/api/auth/aziende/pagina');
     res.json({ok:true});
-  }));
+  }, { pubblica: true }));
   app.use('/api/auth/aziende',(err,req,res,next)=>res.status(err.status===413?413:400).json({codice:'input_non_valido'}));
   return { close:()=>consegne.clear() };
 }

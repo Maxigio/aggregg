@@ -86,3 +86,19 @@ for(const [route,body,table] of [[
  '/api/admin/nodi/fixture',{sospeso:true},'sospensioni']]) {
  test('Admin ricontrollato dopo body tardivo: '+table,()=>adminBody(route,body,table));
 }
+
+test('sessioni: trenta richieste anonime o letture non impediscono la revoca',async()=>{
+ const f=await fixture();try{
+  const a=await f.login(), b=await f.login();
+  const lista=await f.request('/api/auth/sessioni',{cookie:a});
+  const id=JSON.parse(lista.raw).sessioni.find(s=>!s.corrente).id;
+  f.avanza(60000);
+  for(let i=0;i<30;i++) {
+   assert.equal((await f.request('/api/auth/sessioni')).status,401);
+   assert.equal((await f.request('/api/auth/sessioni',{cookie:a})).status,200);
+  }
+  assert.equal((await f.request('/api/auth/sessioni',{cookie:a})).status,429);
+  assert.equal((await f.request('/api/auth/sessioni/revoca',{body:{id},cookie:a})).status,200);
+  assert.equal((await f.request('/api/auth/me',{cookie:b})).status,401);
+ }finally{await f.close();}
+});

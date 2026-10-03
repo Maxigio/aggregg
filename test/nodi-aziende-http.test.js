@@ -14,3 +14,12 @@ test('aziende: accettazione usa UUID provider, non ruolo/identità del browser, 
 test('aziende: invito invalido e password troppo lunga non chiamano il provider',async t=>{const f=await setup(t);assert.equal((await f.req('registra',{token:'invalido',password:'password-sintetica'})).status,403);assert.equal((await f.req('registra',{token:f.token,password:'x'.repeat(51)})).status,400);assert.equal(f.chiamate.length,0);});
 test('aziende: recupero autorizzato usa la consegna dell’operazione originale',async t=>{const f=await setup(t);const primo=await(await f.req('invita',{operazione:'op'},'admin=1')).json();const retry=await(await f.req('invita',{operazione:'retry'},'admin=1')).json();assert.equal(retry.link,primo.link);assert.equal(retry.operazione,'op');assert.equal(retry.giaCreata,true);assert.equal(Object.hasOwn(retry,'token'),false);});
 test('aziende: signup Nhost usa PKCE senza ruoli o metadata client',async()=>{let payload;const client=require('../backend/nodi/nhost-auth-client').creaClient({base:'http://127.0.0.1:1234/v1',richiesta:async(url,opts)=>{assert.equal(url,'http://127.0.0.1:1234/v1/signup/email-password');payload=JSON.parse(opts.body);return{ok:true,json:async()=>({session:null})};}});await client.registra('prova@amr.invalid','password-sintetica','http://127.0.0.1:5555/api/auth/aziende/pagina');assert.match(payload.codeChallenge,/^[A-Za-z0-9_-]{43}$/);assert.deepEqual(payload.options,{redirectTo:'http://127.0.0.1:5555/api/auth/aziende/pagina'});assert.ok(!('allowedRoles' in payload));});
+test('aziende: anonimi e letture non esauriscono il budget delle mutazioni',async t=>{
+ const f=await setup(t);
+ for(let i=0;i<30;i++) {
+  assert.equal((await f.req('elenco')).status,401);
+  assert.equal((await f.req('elenco',null,'admin=1')).status,200);
+ }
+ assert.equal((await f.req('elenco',null,'admin=1')).status,429);
+ assert.equal((await f.req('attiva',{},'admin=1')).status,200);
+});
