@@ -147,6 +147,10 @@ processo, distinto dal numero di processi che Run deve avviare.
 3. **Database e Auth.** Verificare versione/permessi del PostgreSQL Nhost;
    applicare in ordine accessi, aziende, rinnovi, patch DateStyle, colleghi e
    backup. I tre login devono ricevere soltanto i rispettivi ruoli ristretti.
+   Su un DB esistente con la vecchia funzione inviti, applicare anche
+   `backend/nodi/schema-inviti-consegna.sql` dopo aziende; la nuova installazione
+   ha già la stessa definizione. Verificare un invito pending, accettato e
+   scaduto senza copiare account dal collaudo locale.
    Verificare signup, email, MFA Admin, scadenza, quote e revoca. Non tracciare
    le tabelle applicative in GraphQL con accessi non equivalenti. Non copiare
    account, password, cookie o dump dal collaudo manuale locale.
@@ -222,3 +226,25 @@ Questa procedura deve ancora essere provata sul provider prima del gate clienti.
 La validazione TOML non verifica raggiungibilità di Auth/DB, contenuto del
 registry, permessi del volume, strategia di rollout o costo. Questi sono gate
 remoti ancora aperti, non una certificazione di produzione.
+
+## Candidato locale aggiornato — 3 ottobre 2026
+
+Le [correzioni successive alla review](correzioni-nodi-2026-10-03.md) sono
+state implementate, sottoposte a review indipendente e verificate. Nuovo
+artefatto locale `amr-centro:staging-a05d45a`, release
+`a05d45a61e659bb8d7a3fe93fadcc53d08d2cdab`; il registro riporta ID Docker,
+impronte e rapporto con i commit successivi di soli test/documenti.
+
+Suite completa: 1.279 pass, zero failure, quattro gate opt-in separati.
+Restic reale 39/39, backup PostgreSQL/Auth/restic 6/6; il gate completo del
+container con Auth/PostgreSQL locali è passato, incluse HTTPS, MFA, permessi,
+ricerca sintetica e riavvio. Un primo giro si era fermato prima dell'immagine
+nella prova concorrente dei colleghi: causa non dimostrata, limiti non
+allargati. Il confronto e l'incertezza rimangono nel registro.
+
+Questo incremento non ha modificato la console o configurazione remota,
+caricato un'immagine, creato segreti/volumi o avviato Run. Lo stato remoto
+riportato nelle sezioni precedenti resta l'ultima osservazione della console,
+non una nuova verifica. Per il collegamento, centro e worker devono ricevere
+il medesimo manifest. Occorre ancora completare i gate di attivazione sopra,
+con autorizzazione della configurazione e dell'avvio effettivi.

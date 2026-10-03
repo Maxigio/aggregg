@@ -145,3 +145,88 @@ Costo: check e prune possono essere onerosi anche senza nuove eliminazioni;
 timeout restano espliciti, le rimozioni già riuscite non sono rollbackabili.
 La separazione segue il contratto [restic forget/prune](https://restic.readthedocs.io/en/stable/060_forget.html),
 non presume che un comando fallito abbia annullato ogni effetto.
+
+## Verifica finale e prossimo gate
+
+Commit separati per intervento, senza includere il lavoro parallelo APP:
+
+| Commit | Intervento |
+| --- | --- |
+| `c34d361` | Registro dei finding iniziali |
+| `8ef883e` | A02: sessione Admin dopo il body |
+| `0f8441f` | A01: budget di lettura e mutazione |
+| `84a4124` | S01/S02/S03: assegnazione e affinità effettive |
+| `8bf8948` | U02: inviti ancora disponibili |
+| `4e0d790` | U01/U03/U04: focus e draft per persona |
+| `4d082c4` | B02: capacità della retention |
+| `1af17e5` | C01: contesto prima del provider Auth |
+| `a05d45a` | B03: prune completato prima della pulizia SQL |
+| `4af66ba` | Aspettativa legacy O01 allineata allo scheduler |
+
+Tutti i finding del candidato `6655950` trattati in questo incremento hanno
+una correzione e prove circoscritte; B03 è il finding aggiuntivo confermato
+dalla review indipendente. Le prove sono locali, non una certificazione del
+servizio remoto o dell'intera integrazione APP.
+
+- Suite completa sul commit `4af66ba`: **1.283 test, 1.279 pass, zero failure,
+  quattro skip opt-in**. Dati e log temporanei, dotenv disabilitato, nessuna
+  chiamata ai portali. Il runner Node usa concorrenza quattro.
+- Gate separato restic reale: **39/39**, senza skip; validazione del piano,
+  capacità, interruzione, retry di prune e pending fino al successo.
+- Gate separato PostgreSQL 16/Auth/restic: **6/6**, senza skip; transazioni,
+  lease/CAS e privilegi, restore in altro cluster, replay, riapertura e secondo
+  restore, watermark e finalizzazione della sequenza.
+- Gate completo Auth/PostgreSQL e immagine Linux: passato. Include quota
+  concorrente e privilegi dei colleghi, invito pending/scaduto/accettato,
+  login email/password e MFA reali locali, revoca in coda/in volo, HTTPS,
+  ricerca Moto sintetica, sospensione/revoca nodo, SIGTERM e riavvio sullo
+  stesso volume. Nessun risultato live o account reale nel collaudo.
+- UI: prove headless simulate già registrate sopra; il collaudo manuale
+  del proprietario sul frontend aggiornato rimane da eseguire.
+
+Un primo giro del gate Auth/immagine si è fermato nella prova dell'ultimo
+posto concorrente, `nodi-colleghi-pg.test.js:97`, prima di avviare l'immagine.
+La diagnostica conserva il punto, ma non il valore stringa dell'asserzione:
+non permette di distinguere con certezza un timeout da un'altra risposta.
+Il giro successivo identico, senza il gate backup parallelo, ha completato
+anche questa prova; non sono stati allargati timeout, quote o privilegi.
+La causa del primo fallimento resta **non dimostrata**. Non lo si attribuisce
+automaticamente al carico, né si deduce da un solo successo l'assenza di
+instabilità della fixture. Il gate remoto dovrà confermare il comportamento
+nella configurazione effettiva.
+
+Artefatto locale: `amr-centro:staging-a05d45a`, release
+`a05d45a61e659bb8d7a3fe93fadcc53d08d2cdab`, Linux amd64, utente `node`,
+116.623.233 byte. ID Docker locale:
+`sha256:dc4a0f424776aa171c7649b7d4a8d9fed8a4a972e65969689d80e5be97542daa`.
+Impronta codice:
+`c5a7870b798d3ceb4dc1390a0307f6ccca67d5a11d2af7d94a0f0270f8b6ce65`;
+cataloghi:
+`0f20b3c6473b8c28890724f17b073ffff6d0073e0c090e96cb3c61c176252657`.
+Il build context contiene esclusivamente blob committati; l'ID Docker locale
+non è il digest del registry Nhost. Fra questa release e `4af66ba` cambiano
+solo il registro e l'aspettativa legacy O01 del test, non l'inventario runtime.
+La preparazione del manifest di `4af66ba` ha confermato le stesse impronte
+codice/cataloghi, con un identificatore di release diverso.
+Centro e worker remoti dovranno usare lo **stesso manifest di release**, anche
+quando le impronte dei file non cambiano.
+
+Log temporanei: `/private/tmp/amr-nodi-correzioni-full-finale-20261003.log`,
+`/private/tmp/amr-prune-retry-after-real.log`,
+`/private/tmp/amr-nodi-backup-pg-finale-20261003.log`,
+`/private/tmp/amr-nodi-build-20261003.log`,
+`/private/tmp/amr-nodi-image-gate-20261003.log` (giro interrotto),
+`/private/tmp/amr-nodi-image-gate-counter-20261003.log` (gate completo).
+Sono evidenze temporanee: scenari e risultati restano descritti qui e nelle
+fixture durabili del repository.
+
+Cleanup dei container automatici verificato; i due stack manuali preesistenti
+sono rimasti attivi. Nessun push, upload del registry, modifica o avvio Run,
+lettura di credenziali reali, collegamento M2 o traffico ai portali.
+
+Prossimo passo: [gate staging Nhost](staging-nhost.md), con artefatto candidato
+e configurazione reviewabili prima dell'attivazione remota. Restano separati
+schema/ruoli e Auth/MFA/recovery Admin reali, SMTP, backup esterno e restore
+SQLite, volume UID 1000, ingress/header/timeout 60 secondi, CPU/RAM e costi,
+arresto e rollback senza due scheduler, integrazione completa APP. Nessuno
+di questi controlli è sostituito dal solo `200` di `/healthz`.
