@@ -347,7 +347,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     const chiave = chiaveAffinita(azienda, input);
     const precedente = affinita.get(chiave);
     const ancoraValida = precedente && ora() - precedente.ts < 30 * 60000;
-    const vincoloPagina = Number(input.fetta || 0) > 0 && ancoraValida;
+    const vincoloPagina = ancoraValida && (Number(input.fetta || 0) > 0
+      || Number(input.fetta) === 0 && !!input.fonti);
     const preferito = vincoloPagina ? nodi.get(precedente.fonti[richieste[0]]) : null;
     const assegnazioneDa = performance.now();
     const assegnabili = n => richieste.filter(f => disponibile(n, f)
@@ -380,7 +381,16 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         || richieste.some(f => typeof base.body.sources[f]?.status !== 'string')) {
       return { status: 502, body: { error: 'risposta di ricerca non valida dal nodo' } };
     }
-    const sostituzioni = {}, avvisi = [], assegnate = {};
+    const sostituzioni = {}, avvisi = [], assegnate = {}, fallite = {};
+    function fallimentoOmessa(fonte, reason, stato = {}) {
+      if (suPrimario.includes(fonte)) return;
+      // Nessuna riga delegata consegnata: non avanzare con i cursori di una porzione scartata.
+      fallite[fonte] = { status: stato.status === 'timeout' ? 'timeout' : 'error',
+        reason: (stato.status !== 'skipped' && stato.reason) || stato.parziale || reason,
+        count: 0, totale: null, hasMore: null,
+        ...Object.fromEntries(['erroreTipo', 'erroreHttp', 'erroreCodice', 'pausa', 'incerto', 'interrotto']
+          .filter(k => stato[k] !== undefined).map(k => [k, stato[k]])) };
+    }
     const esecutoreBase = base.nodoEsecutore;
     for (const f of suPrimario) assegnate[f] = esecutoreBase;
     if (ancoraValida) for (const f of suPrimario) {
@@ -402,7 +412,11 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
             || [...nodi.values()].find(n => n.id !== esecutoreBase && n.simulato && disponibile(n, fonte));
       };
       const alternativo = selezionaAlternativo();
-      if (!alternativo) { avvisi.push(`${fonte}: nessun nodo alternativo disponibile`); continue; }
+      if (!alternativo) {
+        avvisi.push(`${fonte}: nessun nodo alternativo disponibile`);
+        fallimentoOmessa(fonte, 'nessun nodo alternativo disponibile', s);
+        continue;
+      }
       let alternativa;
       try {
         alternativa = await budget.attendi(() => assegna(selezionaAlternativo, { idLavoro: crypto.randomUUID(), azienda,
@@ -411,6 +425,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       } catch (e) {
         budget.controlla();
         avvisi.push(`${fonte}: secondo nodo senza conferma; esito ${e.incerto ? 'incerto' : 'non disponibile'}`);
+        fallimentoOmessa(fonte, `secondo nodo senza conferma; esito ${e.incerto ? 'incerto' : 'non disponibile'}`,
+          { ...s, ...(e.incerto !== undefined ? { incerto: e.incerto } : {}),
+            ...(e.interrotto !== undefined ? { interrotto: e.interrotto } : {}) });
         continue;
       }
       if (alternativa.status === 200 && porzioneCompleta(alternativa.body, fonte)) {
@@ -419,8 +436,15 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         if (ancoraValida && precedente.fonti[fonte] && precedente.fonti[fonte] !== alternativa.nodoEsecutore) {
           avvisi.push(`${fonte}: pagina richiesta su un altro nodo; la copertura può cambiare`);
         }
-      } else avvisi.push(nodi.get(alternativa.nodoEsecutore)?.simulato
-        ? `${fonte}: nodo simulato, nessun portale interrogato` : `${fonte}: nodo alternativo senza risultato completo`);
+      } else {
+        avvisi.push(nodi.get(alternativa.nodoEsecutore)?.simulato
+          ? `${fonte}: nodo simulato, nessun portale interrogato` : `${fonte}: nodo alternativo senza risultato completo`);
+        fallimentoOmessa(fonte, 'nodo alternativo senza risultato completo', {
+          ...s, ...Object.fromEntries(['incerto', 'interrotto'].filter(k => alternativa.body[k] !== undefined)
+            .map(k => [k, alternativa.body[k]])),
+          ...(alternativa.status >= 400 ? { erroreHttp: alternativa.status } : {}),
+          ...alternativa.body.sources?.[fonte] });
+      }
     }
     async function termina(body) {
       budget.controlla();
@@ -436,7 +460,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       }
       budget.controlla();
       while (affinita.size > 100) affinita.delete(affinita.keys().next().value);
-      return { status: 200, body: { ...body, avvisiNodi: avvisi } };
+      return { status: 200, body: { ...body, sources: { ...body.sources, ...fallite },
+        ...(fallite.subito ? { subitoStatus: fallite.subito.status, subitoReason: fallite.subito.reason } : {}),
+        avvisiNodi: avvisi } };
     }
     if (!Object.keys(sostituzioni).length) return termina(base.body);
     await verificaDestinatari(destinatari, budget);

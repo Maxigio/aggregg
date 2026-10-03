@@ -216,3 +216,107 @@ for(const durantePermessi of [false,true])test('S02: owner torna '+(durantePerme
   assert.equal((await r.json()).risultati.length,1);
  }finally{libera();await f.close();}
 });
+
+for(const caso of ['nessun-nodo','timeout-fonte','429-pausa','http-429','parziale-con-righe',
+  'settlement-in-coda','settlement-incerto','completa'])test('R1: fonte omessa recuperabile dopo '+caso,async()=>{
+ const f=await fixture('fonte-omessa',{timeoutMs:300});
+ const riga=(fonte,id)=>({fonte,id,url:'https://www.'+(fonte==='subito'?'subito.it':'autoscout24.it')+'/annunci/'+id});
+ const omessa={status:'skipped',reason:'fonte esaurita nelle pagine precedenti',count:0,hasMore:false};
+ const principale={...completa,risultati:[riga('autoscout','principale')],totale:1,
+  subitoStatus:'skipped',subitoReason:omessa.reason,
+  sources:{...completa.sources,subito:omessa,autoscout:{status:'ok',count:1,hasMore:false}}};
+ try{
+  await f.hb('a',true);
+  if(caso!=='nessun-nodo'){
+   await f.hb('b');
+   assert.equal((await f.req('/api/admin/nodi/b',{cookie:'admin',body:{sospeso:true,fonte:'autoscout'}})).status,200);
+  }
+  const p=f.cerca('tipo=auto&marca=Fiat');await attendi(()=>f.c.lavori.size===1);
+  const ja=await(await f.poll('a')).json();assert.equal(ja.input.fonti,'autoscout');
+  await f.esito('a',ja,principale);
+  let statoAlternativo;
+  if(caso!=='nessun-nodo'){
+   await attendi(()=>f.c.lavori.size===1&&[...f.c.lavori.values()][0].operazione==='fonte');
+   assert.equal([...f.c.lavori.values()][0].nodoAssegnato,'b');
+   if(caso!=='settlement-in-coda'){
+    const jb=await(await f.poll('b')).json();assert.equal(jb.fonte,'subito');
+    if(caso!=='settlement-incerto'){
+     statoAlternativo=caso==='429-pausa'?{status:'error',reason:'limite fonte',erroreHttp:429,
+      pausa:{fermo:true,fino:Date.now()+60000,motivo:'429'},incerto:true}
+      :caso==='timeout-fonte'?{status:'timeout',reason:'timeout fonte'}
+      :{status:'ok',count:1,hasMore:true,mainNextStart:50,recuperoNextStart:0,
+       ...(caso==='parziale-con-righe'?{parzialeRete:true,reason:'risposta incompleta',errori:[{fase:'recupero'}]}:{})};
+     const risposta={...completa,risultati:['completa','parziale-con-righe'].includes(caso)?[riga('subito','alternativa')]:[],
+      sources:{...completa.sources,subito:statoAlternativo}};
+     if(caso==='http-429')assert.equal((await f.req('/_nodo/esito',{id:'b',body:{id:'b',idLavoro:jb.idLavoro,
+      tentativo:jb.tentativo,esito:{status:429,body:{error:'nodo limitato',incerto:true}}}})).status,200);
+     else assert.equal((await f.esito('b',jb,risposta)).status,200);
+    }
+   }
+  }
+  const r=await p;assert.equal(r.status,200);const data=await r.json(),stato=data.sources.subito;
+  assert.deepEqual(data.sources.autoscout,principale.sources.autoscout);
+  if(caso==='completa'){
+   assert.deepEqual(stato,statoAlternativo);
+   assert.deepEqual(data.risultati.map(r=>r.id),['alternativa','principale']);
+   assert.equal(data.subitoStatus,'ok');assert.deepEqual(data.avvisiNodi,[]);
+  }else{
+   assert.equal(stato.status,caso==='timeout-fonte'?'timeout':'error');
+   assert.notEqual(stato.reason,omessa.reason);assert.equal(stato.count,0);assert.equal(stato.hasMore,null);
+   assert.deepEqual(data.risultati.map(r=>r.id),['principale']);
+   assert.equal(data.subitoStatus,stato.status);assert.equal(data.subitoReason,stato.reason);
+   // Il caller UI riconosce error/timeout senza avanzare dai cursori della porzione non consegnata.
+   for(const campo of ['mainNextStart','recuperoNextStart','errori'])assert.equal(Object.hasOwn(stato,campo),false);
+   if(['429-pausa','http-429'].includes(caso)){assert.equal(stato.erroreHttp,429);assert.equal(stato.incerto,true);}
+   if(caso==='429-pausa')assert.deepEqual(stato.pausa,statoAlternativo.pausa);
+   if(caso==='settlement-incerto')assert.equal(stato.incerto,true);
+   if(caso==='settlement-in-coda')assert.equal(stato.interrotto,true);
+  }
+  assert.deepEqual(principale.sources.subito,omessa);
+ }finally{await f.close();}
+});
+
+test('R1 controprova: alternativa fallita conserva la porzione primaria con righe e 429',async()=>{
+ const f=await fixture('primaria-parziale');try{
+  await f.hb('a');await f.hb('b');
+  const p=f.cerca('tipo=auto&marca=Fiat');await attendi(()=>f.c.lavori.size===1);
+  const stato={status:'ok',count:1,erroreHttp:429,parzialeRete:true,mainNextStart:50,
+   pausa:{fermo:true,fino:Date.now()+60000,motivo:'429'}};
+  const body={...completa,risultati:[{fonte:'subito',id:'primaria',url:'https://www.subito.it/annunci/primaria'}],totale:1,
+   sources:{...completa.sources,subito:stato}};
+  await f.esito('a',await(await f.poll('a')).json(),body);
+  await attendi(()=>f.c.lavori.size===1&&[...f.c.lavori.values()][0].operazione==='fonte');
+  await f.esito('b',await(await f.poll('b')).json(),{...completa,sources:{...completa.sources,subito:{status:'timeout'}}});
+  const r=await p;assert.equal(r.status,200);const data=await r.json();
+  assert.deepEqual(data.sources.subito,stato);assert.deepEqual(data.risultati.map(r=>r.id),['primaria']);
+ }finally{await f.close();}
+});
+
+test('R2: retry esplicito pagina zero resta sull owner sano occupato; nuova ricerca usa B libero',async()=>{
+ const f=await fixture('retry-zero');try{
+  await f.hb('a');await f.hb('b');
+  const prima=f.cerca('tipo=auto&marca=Fiat');await attendi(()=>f.c.lavori.size===1);
+  await f.esito('a',await(await f.poll('a')).json(),{...completa,
+   sources:{...completa.sources,autoscout:{status:'error',reason:'temporaneo'}}});assert.equal((await prima).status,200);
+  const occupata=f.cerca('tipo=auto&marca=Renault');await attendi(()=>f.c.lavori.size===1);
+  const ja=await(await f.poll('a')).json();
+  const retry=f.cerca('tipo=auto&marca=Fiat&fetta=0&fonti=autoscout','due');await attendi(()=>f.c.lavori.size===2);
+  assert.equal([...f.c.lavori.values()].find(j=>!j.iniziato).nodoAssegnato,'a');
+  const nuova=f.cerca('tipo=auto&marca=Citroen','due');await attendi(()=>f.c.lavori.size===3);
+  assert.equal([...f.c.lavori.values()].find(j=>j.input.marca==='Citroen').nodoAssegnato,'b');
+  await f.esito('b',await(await f.poll('b')).json(),completa);assert.equal((await nuova).status,200);
+  await f.esito('a',ja,completa);assert.equal((await occupata).status,200);
+  const jr=await(await f.poll('a')).json();assert.equal(jr.input.fetta,'0');assert.equal(jr.input.fonti,'autoscout');
+  await f.esito('a',jr,completa);const r=await retry;assert.equal(r.status,200);assert.deepEqual((await r.json()).avvisiNodi,[]);
+ }finally{await f.close();}
+});
+
+test('R2 controprova: retry pagina zero passa a B se la fonte dell owner è in pausa',async()=>{
+ const f=await fixture('retry-zero-pausa');try{
+  await f.hb('a');await f.hb('b');await primaPagina(f);await f.hb('a',true);
+  const p=f.cerca('tipo=auto&marca=Fiat&fetta=0&fonti=subito');await attendi(()=>f.c.lavori.size===1);
+  assert.equal([...f.c.lavori.values()][0].nodoAssegnato,'b');
+  await f.esito('b',await(await f.poll('b')).json(),vuota);const r=await p;assert.equal(r.status,200);
+  assert.ok((await r.json()).avvisiNodi.some(x=>x.includes('altro nodo')));
+ }finally{await f.close();}
+});
