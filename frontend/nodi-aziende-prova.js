@@ -27,7 +27,7 @@
   }
   const $ = id => root.querySelector('#account-' + id);
   let token = incorporato ? '' : location.hash.slice(1), occupato = false, revisione = 0;
-  let revocaInCorso = null;
+  let revocaInCorso = null, persona = null;
   const avvisoSessioni = document.createElement('p');
   avvisoSessioni.id = 'account-sessioni-avviso'; avvisoSessioni.hidden = true;
   avvisoSessioni.setAttribute('role', 'status'); $('sessioni-panel').append(avvisoSessioni);
@@ -73,10 +73,12 @@
         + ' · accesso ' + new Date(s.creata).toLocaleString('it-IT')
         + ' · scadenza ' + new Date(s.scadenza).toLocaleString('it-IT');
       const b = document.createElement('button'); b.type = 'button'; b.className = 'btn quiet';
+      b.dataset.sessione = s.id;
       b.textContent = s.corrente ? 'Termina questa sessione' : 'Revoca sessione';
       b.addEventListener('click', () => azione(async () => {
         const esito = await api('/api/auth/sessioni/revoca', { id: s.id });
         if (s.corrente) {
+          aggiornaPersona(null);
           nascondiGestione(); nascondiSessioni(); comunica(null);
           $('esci').hidden = true; $('sessione').textContent = 'Sessione terminata.';
         }
@@ -104,6 +106,7 @@
     const d = await r.json().catch(() => ({}));
     if (!r.ok) {
       if ([401, 403].includes(r.status) && ['sessione_non_valida', 'sessione_revocata', 'accesso_non_autorizzato'].includes(d.codice)) {
+        if (d.codice !== 'accesso_non_autorizzato') aggiornaPersona(null);
         nascondiGestione(); nascondiSessioni(); comunica(null);
       }
       throw Object.assign(new Error(messaggi[d.codice] || `Operazione non riuscita (HTTP ${r.status}). Aggiorna lo stato prima di riprovare.`), { codice: d.codice });
@@ -116,6 +119,7 @@
     interrompiRevoca();
     const focusPrima = document.activeElement;
     const focusAzienda = root.contains(focusPrima) ? focusPrima.dataset.azienda : null;
+    const focusSessione = root.contains(focusPrima) ? focusPrima.dataset.sessione : null;
     const focusAzione = focusPrima?.dataset?.azione || '';
     occupato = true; revisione++;
     root.querySelectorAll('button').forEach(b => b.disabled = true);
@@ -125,10 +129,14 @@
     finally {
       occupato = false; root.querySelectorAll('button').forEach(b => b.disabled = false);
       root.querySelectorAll('input[type=password]').forEach(i => i.value = '');
-      if (focusAzienda && (document.activeElement === document.body || document.activeElement === focusPrima)) {
-        const equivalente = Array.from($('aziende').querySelectorAll('[data-azienda]'))
-          .find(b => b.dataset.azienda === focusAzienda && (b.dataset.azione || '') === focusAzione);
-        (equivalente || (!$('admin').hidden && $('aggiorna')))?.focus({ preventScroll: true });
+      if ((focusAzienda || focusSessione) && (document.activeElement === document.body || document.activeElement === focusPrima)) {
+        const equivalente = focusSessione
+          ? Array.from($('sessioni').querySelectorAll('[data-sessione]')).find(b => b.dataset.sessione === focusSessione)
+          : Array.from($('aziende').querySelectorAll('[data-azienda]'))
+            .find(b => b.dataset.azienda === focusAzienda && (b.dataset.azione || '') === focusAzione);
+        const fallback = focusSessione && !$('sessioni-panel').hidden ? $('sessioni-aggiorna')
+          : focusAzienda && !$('admin').hidden ? $('aggiorna') : $('sessione-aggiorna');
+        (equivalente || fallback).focus({ preventScroll: true });
       }
     }
   }
@@ -229,10 +237,12 @@
     const me = await r.json().catch(() => ({}));
     if (versione !== revisione) return;
     if (!r.ok) {
+      if ([401, 403].includes(r.status)) aggiornaPersona(null);
       nascondiGestione(); nascondiSessioni(); $('esci').hidden = true;
       $('sessione').textContent = r.status >= 500 ? 'Verifica account non disponibile.' : 'Nessuna sessione attiva. Accedi per continuare.';
       comunica(null); return;
     }
+    aggiornaPersona(me.persona);
     $('esci').hidden = false;
     $('sessione').textContent = me.admin ? 'Admin autenticato con MFA · gestione aziende abilitata'
       : me.aziendaValida ? 'Azienda ' + me.azienda + ' · moduli: ' + (me.moduli || []).join(', ')
@@ -242,6 +252,17 @@
     await elencoSessioni();
   }
   let operazione = crypto.randomUUID(), idInvito = 'azienda-' + operazione, ultimoBody = '';
+  function aggiornaPersona(prossima) {
+    if (persona === prossima) return;
+    persona = prossima;
+    // Il draft e gli UUID appartengono alla persona, non al polling o al ruolo.
+    $('invita').reset();
+    // La perdita d'accesso conserva l'esito di una revoca appena confermata.
+    if (prossima !== null) $('stato').textContent = '';
+    operazione = crypto.randomUUID(); idInvito = 'azienda-' + operazione; ultimoBody = '';
+    attivazioni.clear(); modifiche.clear(); dateRinnovo.clear();
+    nascondiGestione(); nascondiSessioni();
+  }
   $('invita').addEventListener('submit', e => {
     e.preventDefault(); azione(async () => {
       const f = e.target.elements;
@@ -297,6 +318,7 @@
     if (versione === revisione) mostraRevoca(null, corrente);
   }
   $('esci').addEventListener('click', () => azione(async () => {
+    aggiornaPersona(null);
     nascondiGestione(); nascondiSessioni(); comunica(null);
     const esito = await api('/api/auth/logout', {});
     $('esci').hidden = true; $('sessione').textContent = 'Sessione terminata.';

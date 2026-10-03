@@ -68,3 +68,21 @@ Prove SQL reali PostgreSQL 16 e HTTP **9/9**, incluso invito scaduto e accettato
 Review indipendente di route, UI e SQL senza finding confermati. Il link può
 diventare obsoleto dopo la risposta se un'altra richiesta consuma l'invito:
 il successivo lookup continua a negarlo; non si promette validità futura.
+
+## U01/U03/U04 — Focus e stato della persona
+
+I pulsanti sessione hanno identità stabile: il polling conserva il focus oppure
+lo sposta al refresh disponibile se la voce scompare. Non ruba il focus spostato
+dall'utente durante la richiesta. Perdita dei permessi non invoca `.focus()` su
+`false`: sceglie un controllo effettivo ancora visibile.
+
+Il draft, gli UUID di operazione e le mappe locali sono ripuliti al cambio o
+alla perdita della persona verificata. Refresh della stessa persona e guasto
+transitorio 503 conservano il draft; perdita di ruolo non equivale da sola a
+cambio persona. Nessuna cancellazione delle operazioni confermate nel DB.
+Sette regressioni inizialmente rosse; test browser headless con API loopback
+simulate **13/13**, review indipendente senza finding. Il collaudo manuale
+del proprietario sul frontend aggiornato non è ancora eseguito.
+
+Riferimenti: [W3C focus order](https://www.w3.org/WAI/WCAG22/Understanding/focus-order.html)
+e [MDN optional chaining](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Optional_chaining).

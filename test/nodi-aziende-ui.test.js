@@ -8,7 +8,7 @@ const browserPath = process.env.AMR_TEST_CHROMIUM || (fs.existsSync(chromium.exe
   ? chromium.executablePath() : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
 const browserDisponibile = { skip: !fs.existsSync(browserPath) && 'Chromium non disponibile' };
 
-async function apriAccountSintetico(t, api) {
+async function apriAccountSintetico(t, api, { pollingManuale = false } = {}) {
   const server = require('node:http').createServer((req, res) => {
     if (req.url === '/') {
       res.setHeader('content-type', 'text/html; charset=utf-8');
@@ -26,6 +26,13 @@ async function apriAccountSintetico(t, api) {
   browser = await chromium.launch({ headless: true, executablePath: browserPath });
   const page = await browser.newPage(), errors = [];
   page.on('pageerror', e => errors.push(e.message));
+  if (pollingManuale) await page.addInitScript(() => {
+    const originale = window.setInterval;
+    window.setInterval = (fn, ms, ...args) => {
+      if (ms === 30000) { window.aggiornaAccountProva = fn; return 0; }
+      return originale(fn, ms, ...args);
+    };
+  });
   const origine = 'http://127.0.0.1:' + server.address().port;
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
@@ -43,6 +50,146 @@ async function apriAccountSintetico(t, api) {
   await page.waitForFunction(() => document.getElementById('account-sessioni-panel')?.hidden === false
     && document.getElementById('account-sessione-aggiorna')?.disabled === false);
   return { page, errors };
+}
+
+async function aggiornaAccountProva(page) {
+  await page.evaluate(() => window.aggiornaAccountProva());
+  await page.waitForFunction(() => !document.getElementById('account-sessione-aggiorna').disabled);
+}
+
+test('U01: polling sessioni conserva il focus per ID, ripiega se rimosso e rispetta il focus spostato', browserDisponibile, async t => {
+  const corrente = { id: 'a'.repeat(64), corrente: true, creata: '2026-10-03T08:00:00Z', scadenza: '2026-10-04T08:00:00Z' };
+  const altra = { ...corrente, id: 'b'.repeat(64), corrente: false };
+  let sessioni = [corrente, altra], trattieni = false, pendente, arrivata;
+  const { page, errors } = await apriAccountSintetico(t, async (route, url) => {
+    if (url.pathname !== '/api/auth/sessioni') return false;
+    if (trattieni) { pendente = route; arrivata(); return true; }
+    await route.fulfill({ json: { sessioni } }); return true;
+  }, { pollingManuale: true });
+  await page.getByRole('button', { name: 'Revoca sessione', exact: true }).focus();
+  sessioni = [altra, corrente];
+  await aggiornaAccountProva(page);
+  assert.equal(await page.getByRole('button', { name: 'Revoca sessione', exact: true }).evaluate(b => b === document.activeElement), true);
+  sessioni = [corrente];
+  await aggiornaAccountProva(page);
+  assert.equal(await page.locator('#account-sessioni-aggiorna').evaluate(b => b === document.activeElement), true);
+  await page.getByRole('button', { name: 'Termina questa sessione', exact: true }).focus();
+  trattieni = true;
+  const richiesta = new Promise(resolve => { arrivata = resolve; });
+  await page.evaluate(() => window.aggiornaAccountProva()); await richiesta;
+  await page.locator('#account-invita input[name=email]').focus();
+  await pendente.fulfill({ json: { sessioni } });
+  await page.waitForFunction(() => !document.getElementById('account-sessione-aggiorna').disabled);
+  assert.equal(await page.locator('#account-invita input[name=email]').evaluate(i => i === document.activeElement), true);
+  assert.deepEqual(errors, []);
+});
+
+test('U03: perdita ruolo o sessione durante polling usa un fallback visibile senza false.focus', browserDisponibile, async t => {
+  let stato = 'admin';
+  const { page, errors } = await apriAccountSintetico(t, async (route, url) => {
+    if (url.pathname === '/api/auth/me') {
+      await route.fulfill({ status: stato === 'scaduta' ? 401 : 200,
+        json: { persona: 'persona-sintetica', admin: stato === 'admin' } }); return true;
+    }
+    if (url.pathname === '/api/auth/aziende/elenco') {
+      await route.fulfill({ json: { aziende: [{ id: 'azienda', nome: 'Fixture', stato: 'accettato' }] } }); return true;
+    }
+    return false;
+  }, { pollingManuale: true });
+  for (const perdita of ['ruolo', 'scaduta']) {
+    await page.getByRole('button', { name: 'Attiva per un anno' }).focus();
+    stato = perdita; await aggiornaAccountProva(page);
+    assert.deepEqual(errors, []);
+    assert.equal(await page.locator('#account-admin').isVisible(), false);
+    assert.equal(await page.locator('#account-sessione-aggiorna').evaluate(b => b === document.activeElement), true);
+    stato = 'admin'; await aggiornaAccountProva(page);
+  }
+});
+
+test('U04: stessa persona conserva draft e UUID dopo cambio ruolo o 503; persona diversa li azzera', browserDisponibile, async t => {
+  let persona = 'admin-primo', admin = true, indisponibile = false;
+  const richieste = [];
+  const { page, errors } = await apriAccountSintetico(t, async (route, url) => {
+    if (url.pathname === '/api/auth/me') {
+      await route.fulfill({ status: indisponibile ? 503 : 200, json: { persona, admin } }); return true;
+    }
+    if (url.pathname === '/api/auth/aziende/invita') {
+      const body = route.request().postDataJSON(); richieste.push(body);
+      await route.fulfill({ json: { ok: true, id: body.id, operazione: body.operazione,
+        link: url.origin + '/api/auth/aziende/pagina#sintetico' } }); return true;
+    }
+    return false;
+  }, { pollingManuale: true });
+  const nome = page.locator('#account-invita input[name=nome]'), email = page.locator('#account-invita input[name=email]');
+  const submit = async () => {
+    await page.locator('#account-invita button').click();
+    await page.waitForFunction(() => !document.querySelector('#account-invita button').disabled);
+  };
+  await nome.fill('Draft sintetico'); await email.fill('draft@amr.invalid'); await submit();
+  const prima = richieste[0];
+  await aggiornaAccountProva(page);
+  assert.equal(await nome.inputValue(), prima.nome); assert.equal(await email.inputValue(), prima.email);
+  assert.equal(await page.locator('#account-consegna a').count(), 1);
+  await submit(); assert.equal(richieste[1].operazione, prima.operazione); assert.equal(richieste[1].id, prima.id);
+  admin = false; await aggiornaAccountProva(page);
+  admin = true; await aggiornaAccountProva(page);
+  assert.equal(await nome.inputValue(), prima.nome); assert.equal(await email.inputValue(), prima.email);
+  await submit(); assert.equal(richieste.at(-1).operazione, prima.operazione);
+  indisponibile = true; await aggiornaAccountProva(page);
+  indisponibile = false; await aggiornaAccountProva(page);
+  assert.equal(await nome.inputValue(), prima.nome); assert.equal(await email.inputValue(), prima.email);
+  await submit(); assert.equal(richieste.at(-1).operazione, prima.operazione);
+  persona = 'admin-secondo'; await aggiornaAccountProva(page);
+  assert.equal(await email.inputValue(), '');
+  assert.equal(await nome.evaluate(i => i.value === i.defaultValue), true);
+  assert.equal(await page.locator('#account-consegna a').count(), 0);
+  assert.equal(await page.locator('#account-stato').textContent(), '');
+  await nome.fill(prima.nome); await email.fill(prima.email); await submit();
+  assert.notEqual(richieste.at(-1).operazione, prima.operazione); assert.notEqual(richieste.at(-1).id, prima.id);
+  assert.deepEqual(errors, []);
+});
+
+for (const perdita of ['logout', 'revoca corrente', '401', '403']) {
+  test('U04: ' + perdita + ' azzera draft e UUID senza conservarli al nuovo accesso', browserDisponibile, async t => {
+    let attiva = true;
+    const richieste = [];
+    const { page, errors } = await apriAccountSintetico(t, async (route, url) => {
+      if (url.pathname === '/api/auth/me') {
+        await route.fulfill({ status: attiva ? 200 : perdita === '403' ? 403 : 401,
+          json: { persona: 'admin-sintetico', admin: true } }); return true;
+      }
+      if (url.pathname === '/api/auth/sessioni') {
+        await route.fulfill({ json: { sessioni: [{ id: 'c'.repeat(64), corrente: true,
+          creata: '2026-10-03T08:00:00Z', scadenza: '2026-10-04T08:00:00Z' }] } }); return true;
+      }
+      if (url.pathname === '/api/auth/logout' || url.pathname === '/api/auth/sessioni/revoca') {
+        attiva = false; await route.fulfill({ json: { ok: true, provider: { stato: 'confirmed' } } }); return true;
+      }
+      if (url.pathname === '/api/auth/aziende/invita') {
+        const body = route.request().postDataJSON(); richieste.push(body);
+        await route.fulfill({ json: { ok: true, id: body.id, operazione: body.operazione } }); return true;
+      }
+      return false;
+    }, { pollingManuale: true });
+    const nome = page.locator('#account-invita input[name=nome]'), email = page.locator('#account-invita input[name=email]');
+    await nome.fill('Draft sintetico'); await email.fill('draft@amr.invalid');
+    await page.locator('#account-invita button').click();
+    await page.waitForFunction(() => !document.querySelector('#account-invita button').disabled);
+    const prima = richieste[0];
+    if (perdita === 'logout') await page.locator('#account-esci').click();
+    else if (perdita === 'revoca corrente') await page.getByRole('button', { name: 'Termina questa sessione', exact: true }).click();
+    else { attiva = false; await aggiornaAccountProva(page); }
+    await page.waitForFunction(() => !document.getElementById('account-sessione-aggiorna').disabled);
+    assert.equal(await email.inputValue(), '');
+    assert.equal(await nome.evaluate(i => i.value === i.defaultValue), true);
+    attiva = true; await aggiornaAccountProva(page);
+    assert.equal(await page.locator('#account-stato').textContent(), '');
+    await nome.fill(prima.nome); await email.fill(prima.email);
+    await page.locator('#account-invita button').click();
+    await page.waitForFunction(() => !document.querySelector('#account-invita button').disabled);
+    assert.notEqual(richieste[1].operazione, prima.operazione); assert.notEqual(richieste[1].id, prima.id);
+    assert.deepEqual(errors, []);
+  });
 }
 
 test('F13: refresh account chiude il pending invalidato e una risposta tardiva non sovrascrive una nuova azione', browserDisponibile, async t => {
@@ -329,9 +476,11 @@ test('UI account nel centro: Admin, invito, idempotenza, cliente e logout senza 
             if(b.operazione===invitoPersistente.operazione && b.id!==invitoPersistente.id) {
               throw Object.assign(new Error('operazione_in_conflitto'),{status:409,codice:'operazione_in_conflitto'});
             }
-            return {ok:true,id:invitoPersistente.id,operazione:invitoPersistente.operazione,giaCreata:true};
+            return {ok:true,id:invitoPersistente.id,operazione:invitoPersistente.operazione,giaCreata:true,tokenDisponibile:true};
           }
-          invitoPersistente = {...b}; return {ok:true,id:b.id,operazione:b.operazione,token};
+          // L'ID indipendente resta stabile anche nella copia di consegna RAM.
+          invitoPersistente = {...b,id:'invito-'+b.operazione};
+          return {ok:true,id:invitoPersistente.id,operazione:b.operazione,token,tokenDisponibile:true};
         },
         attiva: async (s, b) => { operazioni.push(b.operazione); return { ok: true }; },
         rinnova: async (s,b) => {
@@ -448,8 +597,6 @@ test('UI account nel centro: Admin, invito, idempotenza, cliente e logout senza 
   await page.waitForSelector('#account-consegna a');
   assert.match(await page.locator('#account-stato').textContent(), /non inviato/);
   const primoLink = await page.locator('#account-consegna a').getAttribute('href');
-  // Simula un invito preesistente con ID aziendale indipendente dall'operazione.
-  invitoPersistente.id = 'invito-' + invitoPersistente.operazione;
   // Ricaricare perde l'operazione nel browser, ma non deve bloccare l'invito esistente.
   await page.reload(); await page.waitForSelector('.area-nav a[href="#accountPanel"]:not([hidden])');
   await page.locator('.area-nav a[href="#accountPanel"]').click();
