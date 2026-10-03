@@ -1,6 +1,8 @@
 'use strict';
 const { spawn } = require('node:child_process');
 const fs = require('node:fs'), path = require('node:path');
+const LIMITE_OUTPUT = 1024 * 1024;
+const LIMITE_PIANO = 16 * LIMITE_OUTPUT, MAX_SNAPSHOT = 10000, BATCH_RETENTION = 1000;
 
 // Il chiamante passa un ambiente dedicato: nessuna lettura automatica dei .env.
 // stdout/stderr restic possono contenere percorsi e configurazione: non esporli.
@@ -16,29 +18,36 @@ function creaRestic({ binario, ambiente, spawnProcesso = spawn }) {
     if (!relativo.startsWith('..' + path.sep) && relativo !== '..') throw new Error('backup_non_configurato');
   }
   const env = { PATH: process.env.PATH, LANG: 'C', TZ: 'UTC', ...ambiente };
-  const esegui = (args, input) => new Promise((resolve, reject) => {
+  const esegui = (args, input, limiteOutput = LIMITE_OUTPUT) => new Promise((resolve, reject) => {
     let child;
     try { child = spawnProcesso(binario, ['--no-cache', ...args], { env, stdio: ['pipe', 'pipe', 'pipe'] }); }
     catch { return reject(new Error('backup_non_disponibile')); }
-    let output = '', troppo = false;
-    const timer = setTimeout(() => { troppo = true; child.kill('SIGTERM'); }, 120000);
+    let output = Buffer.alloc(limiteOutput), byte = 0, troppo = false;
+    const interrompi = () => {
+      if (troppo) return;
+      troppo = true; output = undefined; child.kill('SIGTERM');
+    };
+    const timer = setTimeout(interrompi, 120000);
     const escalation = setTimeout(() => child.kill('SIGKILL'), 125000);
     child.stdout.on('data', b => {
-      if (Buffer.byteLength(output) + b.length > 1024 * 1024) {
-        troppo = true; child.kill('SIGTERM');
-      } else output += b.toString('utf8');
+      if (troppo) return;
+      if (b.length > limiteOutput - byte) interrompi();
+      else { b.copy(output, byte); byte += b.length; }
     });
     child.stderr.resume(); child.stdin.on('error', () => {});
-    child.once('error', () => { clearTimeout(timer); clearTimeout(escalation); reject(new Error('backup_non_disponibile')); });
+    child.once('error', () => {
+      troppo = true; output = undefined;
+      clearTimeout(timer); clearTimeout(escalation); reject(new Error('backup_non_disponibile'));
+    });
     child.once('close', code => {
       clearTimeout(timer); clearTimeout(escalation);
-      if (code !== 0 || troppo) return reject(new Error('backup_non_disponibile'));
-      resolve(output);
+      if (code !== 0 || troppo) { output = undefined; return reject(new Error('backup_non_disponibile')); }
+      resolve(output.toString('utf8', 0, byte)); output = undefined;
     });
     child.stdin.end(input);
   });
-  const json = async args => {
-    try { return JSON.parse(await esegui(args)); }
+  const json = async (args, limiteOutput) => {
+    try { return JSON.parse(await esegui(args, undefined, limiteOutput)); }
     catch { throw new Error('backup_non_disponibile'); }
   };
   const filename = categoria => categoria === 'journal' ? 'operazioni.json' : 'database.dump';
@@ -80,17 +89,22 @@ function creaRestic({ binario, ambiente, spawnProcesso = spawn }) {
       }
       const gruppi = await json(['forget', '--json', '--dry-run', '--host', 'amr-centro',
         '--path', '/' + filename(categoria), '--tag', categoria, '--group-by', 'host,paths,tags',
-        ...(categoria === 'journal' ? ['--keep-within', '90d', '--keep-last', '1'] : ['--keep-daily', '14'])]);
+        ...(categoria === 'journal' ? ['--keep-within', '90d', '--keep-last', '1'] : ['--keep-daily', '14'])], LIMITE_PIANO);
       if (!Array.isArray(gruppi)) throw new Error('backup_retention_non_sicura');
-      const kept = [], removed = [];
+      let totale = 0;
       for (const gruppo of gruppi) {
-        if (!Array.isArray(gruppo.keep) || (gruppo.remove != null && !Array.isArray(gruppo.remove))) {
+        if (!Array.isArray(gruppo?.keep) || (gruppo.remove != null && !Array.isArray(gruppo.remove))) {
           throw new Error('backup_retention_non_sicura');
         }
+        totale += gruppo.keep.length + (gruppo.remove?.length || 0);
+        if (totale > MAX_SNAPSHOT) throw new Error('backup_retention_non_sicura');
+      }
+      const kept = [], removed = [];
+      for (const gruppo of gruppi) {
         kept.push(...gruppo.keep); removed.push(...(gruppo.remove || []));
       }
       const tutti = [...kept, ...removed];
-      if (!kept.some(s => s.id === snapshot) || tutti.some(s => !/^[a-f0-9]{64}$/.test(s.id || '')
+      if (!kept.some(s => s?.id === snapshot) || tutti.some(s => !s || !/^[a-f0-9]{64}$/.test(s.id || '')
           || s.hostname !== 'amr-centro' || s.paths?.length !== 1 || s.paths[0] !== '/' + filename(categoria)
           || s.tags?.length !== 1 || s.tags[0] !== categoria || !Number.isFinite(Date.parse(s.time)))
           || new Set(tutti.map(s => s.id)).size !== tutti.length) {
@@ -107,7 +121,10 @@ function creaRestic({ binario, ambiente, spawnProcesso = spawn }) {
       }
       if (!dryRun && removed.length) {
         await repo.verifica();
-        await esegui(['forget', '--prune', ...removed.map(s => s.id)]);
+        // ponytail: massimo 10 batch, prune ripetuto; prune unico richiede retry persistente dedicato.
+        for (let i = 0; i < removed.length; i += BATCH_RETENTION) {
+          await esegui(['forget', '--prune', ...removed.slice(i, i + BATCH_RETENTION).map(s => s.id)]);
+        }
       }
       return { dryRun, conservate: kept.length, eliminate: dryRun ? 0 : removed.length, eliminabili: removed.length };
     },

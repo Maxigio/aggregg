@@ -86,3 +86,22 @@ del proprietario sul frontend aggiornato non è ancora eseguito.
 
 Riferimenti: [W3C focus order](https://www.w3.org/WAI/WCAG22/Understanding/focus-order.html)
 e [MDN optional chaining](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Optional_chaining).
+
+## B02 — Capacità del piano di retention
+
+Limiti confermati dal proprietario: **10.000 snapshot e 16 MiB** per il piano,
+**1 MiB** per gli altri comandi. Conta i byte prima di decodificare UTF-8;
+timeout e overflow scartano il buffer e ignorano i chunk successivi. Superata
+la capacità, manutenzione fallita visibile, nessuna copia non validata eliminata.
+Il cap limita l'output acquisito, non tutta la memoria di Node o restic.
+
+Il piano completo è validato prima delle eliminazioni; ID, repository, categoria,
+tempo e copia corrente conservata restano controllati. Batch di massimo 1.000
+ID evitano un unico argv sproporzionato. Dodici regressioni rosse prima del fix;
+suite con restic reale locale **31/31**, senza skip. Review indipendente senza
+regressioni B02: ha confermato un difetto preesistente nel retry di `prune`,
+affrontato nel passo successivo. Un batch riuscito non è annullato se fallisce
+il successivo; la manutenzione non viene confermata come completata.
+
+Confronto: [restic retention](https://restic.readthedocs.io/en/stable/060_forget.html).
+I numeri scelti sono capacità iniziali, non garanzie universali della fonte.
