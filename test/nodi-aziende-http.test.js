@@ -1,11 +1,11 @@
 'use strict';
 const test=require('node:test');const assert=require('node:assert/strict');const express=require('express');
 const {mount}=require('../backend/nodi/aziende-prova-route');
-async function setup(t){const app=express();const server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});const origine='http://127.0.0.1:'+server.address().port;
+async function setup(t, {invita}={}){const app=express();const server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});const origine='http://127.0.0.1:'+server.address().port;
 const chiamate=[];const errore=()=>Object.assign(new Error('sessione_non_valida'),{status:401,codice:'sessione_non_valida'});
 const accessi={sessione:req=>req.headers.cookie==='admin=1'?{persona:'owner',epoca:2,mfa:true}:null,verifica:async s=>{if(!s)throw errore();}};
 const token='a'.repeat(64);let logout=0;
-const api=mount(app,{origine,accessi,account:{invita:async(s,b)=>{chiamate.push(['invita',s,b]);return b.operazione==='retry'?{ok:true,operazione:'op',giaCreata:true}:{ok:true,operazione:b.operazione,token};},elenco:async()=>({aziende:[]}),attiva:async()=>({ok:true}),invito:async tok=>{if(tok!==token)throw Object.assign(new Error('invito_non_valido'),{status:403,codice:'invito_non_valido'});return{email:'ref@amr.invalid'};},accetta:async(id,tok)=>{chiamate.push(['accetta',id,tok]);return{ok:true};}},client:{registra:async(...args)=>chiamate.push(['registra',...args]),login:async()=>({session:{user:{id:'ref',emailVerified:true},accessToken:'segreto-provider'}}),logout:async()=>{logout++;}}});
+const api=mount(app,{origine,accessi,account:{invita:invita || (async(s,b)=>{chiamate.push(['invita',s,b]);return b.operazione==='retry'?{ok:true,id:'azienda',operazione:'op',giaCreata:true,tokenDisponibile:true}:{ok:true,id:'azienda',operazione:b.operazione,tokenDisponibile:true,token};}),elenco:async()=>({aziende:[]}),attiva:async()=>({ok:true}),invito:async tok=>{if(tok!==token)throw Object.assign(new Error('invito_non_valido'),{status:403,codice:'invito_non_valido'});return{email:'ref@amr.invalid'};},accetta:async(id,tok)=>{chiamate.push(['accetta',id,tok]);return{ok:true};}},client:{registra:async(...args)=>chiamate.push(['registra',...args]),login:async()=>({session:{user:{id:'ref',emailVerified:true},accessToken:'segreto-provider'}}),logout:async()=>{logout++;}}});
 t.after(async()=>{api.close();server.closeAllConnections();await new Promise(r=>server.close(r));});
 const req=(v,body,cookie,origin=origine)=>fetch(origine+'/api/auth/aziende/'+v,{method:body?'POST':'GET',headers:{...(cookie?{cookie}:{}),...(body?{'content-type':'application/json',origin}:{})},...(body?{body:JSON.stringify(body)}:{})});return{req,chiamate,token,origine,logout:()=>logout};}
 test('aziende: Origin errato e Admin assente non creano inviti',async t=>{const f=await setup(t);assert.equal((await f.req('invita',{},'admin=1','https://altro.invalid')).status,403);assert.equal((await f.req('invita',{})).status,401);assert.equal(f.chiamate.length,0);});
@@ -22,4 +22,16 @@ test('aziende: anonimi e letture non esauriscono il budget delle mutazioni',asyn
  }
  assert.equal((await f.req('elenco',null,'admin=1')).status,429);
  assert.equal((await f.req('attiva',{},'admin=1')).status,200);
+});
+
+test('aziende: consegna RAM non ripubblica invito accettato o scaduto',async t=>{
+ let prima=true,pending=true;
+ const f=await setup(t,{invita:async()=>{const out={ok:true,id:'azienda',operazione:'op',tokenDisponibile:pending,
+  ...(prima?{token:'a'.repeat(64)}:{})};prima=false;return out;}});
+ assert.ok((await(await f.req('invita',{},'admin=1')).json()).link);
+ assert.ok((await(await f.req('invita',{},'admin=1')).json()).link);
+ pending=false;
+ assert.equal('link' in await(await f.req('invita',{},'admin=1')).json(),false);
+ pending=true; // Una copia ritirata non ricompare se il DB viene cambiato dopo.
+ assert.equal('link' in await(await f.req('invita',{},'admin=1')).json(),false);
 });

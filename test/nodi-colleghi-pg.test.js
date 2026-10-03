@@ -42,6 +42,23 @@ async function provaColleghiPostgres({sql,pool,identita}) {
     const refA=await persona('ref-a'), refB=await persona('ref-b');
     const c1=await persona('collega-1',false), c2=await persona('collega-2'), c3=await persona('collega-3');
     const a=prefix+'_a', b=prefix+'_b';
+    const aziendaInvito=prefix+'_pending', datiInvito=input(aziendaInvito,{nome:'Stato invito',email:refA.email,moduli:['moto']});
+    const primaConsegna=await aziende.invita(admin,datiInvito);
+    assert.equal(primaConsegna.tokenDisponibile,true);
+    assert.equal((await aziende.invita(admin,datiInvito)).tokenDisponibile,true);
+    const dopoReload=await aziende.invita(admin,{...datiInvito,id:prefix+'_nuovo',operazione:crypto.randomUUID()});
+    assert.equal(dopoReload.id,aziendaInvito);assert.equal(dopoReload.tokenDisponibile,true);
+    await sql(`UPDATE amr_accessi.aziende_inviti SET creata_il=clock_timestamp()-interval '8 days',scadenza=clock_timestamp()-interval '1 second' WHERE azienda='${aziendaInvito}';`);
+    assert.equal((await aziende.invita(admin,datiInvito)).tokenDisponibile,false);
+    await sql(`UPDATE amr_accessi.aziende_inviti SET scadenza=clock_timestamp()+interval '1 day' WHERE azienda='${aziendaInvito}';`);
+    await aziende.accetta(refA.id,primaConsegna.token);
+    assert.equal((await aziende.invita(admin,datiInvito)).tokenDisponibile,false);
+    // Fixture esaurita, eliminata prima dei test commerciali già presenti.
+    await sql(`BEGIN; DELETE FROM amr_accessi.membri WHERE azienda='${aziendaInvito}';
+      DELETE FROM amr_accessi.aziende_operazioni WHERE azienda='${aziendaInvito}';
+      DELETE FROM amr_accessi.aziende_inviti WHERE azienda='${aziendaInvito}';
+      DELETE FROM amr_accessi.aziende WHERE id='${aziendaInvito}'; COMMIT;`);
+    risultati.push('invito azienda: pending recuperabile, scadenza e accettazione ritirano disponibilità SQL');
     await creaAzienda(a,refA); await creaAzienda(b,refB);
     const sa={persona:refA.id,epoca:0,mfa:false}, sb={persona:refB.id,epoca:0,mfa:false};
     for(const q of ['SELECT * FROM auth.users','SELECT * FROM amr_accessi.persone',
@@ -255,6 +272,7 @@ if (require.main === module) test('colleghi PostgreSQL 16: lifecycle reale isola
       for(const schema of ['accessi','aziende','rinnovi','colleghi']) {
         await sql(fs.readFileSync(path.join(__dirname,'../backend/nodi/schema-'+schema+'-prova.sql'),'utf8'));
       }
+      await sql(fs.readFileSync(path.join(__dirname,'../backend/nodi/schema-inviti-consegna.sql'),'utf8'));
       await sql('CREATE ROLE prova_writer LOGIN IN ROLE amr_aziende_scrittore;CREATE ROLE prova_reader LOGIN IN ROLE amr_accessi_lettore;');
       const published=docker(['port',name,'5432/tcp']);assert.match(published,/^127\.0\.0\.1:\d+$/);
       const config={host:'127.0.0.1',port:Number(published.split(':')[1]),database:'postgres',max:4,

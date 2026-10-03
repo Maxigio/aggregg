@@ -53,3 +53,18 @@ coda, dai parametri originali. I cursori non sono ricostruiti dalla prima pagina
 Dodici regressioni, suite scheduler/centro/permessi **35/35**, seconda review
 indipendente conclusa senza finding residui. Nessuna prova su portali reali;
 il cambio nodo continua a dichiarare che la copertura può variare.
+
+## U02 — Disponibilità persistente dell'invito
+
+SQL distingue operazione confermata e invito ancora pending: retry identico e
+recupero dopo reload possono riconsegnare il link soltanto prima della scadenza
+e dell'accettazione. La copia RAM richiede anche azienda e attore corrispondenti;
+viene eliminata quando il DB dichiara il token non disponibile. Nessun nuovo
+invito o azienda è creato dal retry. Dopo riavvio la copia RAM rimane persa.
+
+Nuove installazioni e patch `schema-inviti-consegna.sql` hanno la medesima
+funzione; la patch è transazionale e non cambia dati, token o privilegi.
+Prove SQL reali PostgreSQL 16 e HTTP **9/9**, incluso invito scaduto e accettato.
+Review indipendente di route, UI e SQL senza finding confermati. Il link può
+diventare obsoleto dopo la risposta se un'altra richiesta consuma l'invito:
+il successivo lookup continua a negarlo; non si promette validità futura.

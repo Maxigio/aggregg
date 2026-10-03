@@ -26,12 +26,14 @@ function mount(app, { account, accessi, client, origine, proxyAttendibili, trasp
   app.post('/api/auth/aziende/invita', protetta(async(req,res) => {
     const s = await admin(req);
     // Le copie di consegna sono solo RAM e hanno la medesima scadenza dell'invito.
-    for(const [k,v] of consegne) if(v.fino <= Date.now()) consegne.delete(k);
+    for(const [k,v] of consegne) if(v.fino <= ora()) consegne.delete(k);
     const out = await account.invita(s,req.body);
-    if(out.token) consegne.set(out.operazione,{token:out.token,fino:Date.now()+7*86400000});
+    if(out.token) consegne.set(out.operazione,{token:out.token,azienda:out.id,attore:s.persona,fino:ora()+7*86400000});
+    if (!out.tokenDisponibile) consegne.delete(out.operazione);
     const copia = consegne.get(out.operazione);
     res.json({ ...out, token:undefined, consegna:'locale_non_inviata',
-      ...(copia ? { link:origine+'/api/auth/aziende/pagina#'+copia.token } : {}) });
+      ...(out.tokenDisponibile && copia?.azienda === out.id && copia.attore === s.persona
+        ? { link:origine+'/api/auth/aziende/pagina#'+copia.token } : {}) });
   }));
   app.post('/api/auth/aziende/attiva', protetta(async(req,res) => res.json(await account.attiva(await admin(req),req.body))));
   app.post('/api/auth/aziende/rinnova', protetta(async(req,res) => res.json(await account.rinnova(await admin(req),req.body))));

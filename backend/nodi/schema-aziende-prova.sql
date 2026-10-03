@@ -178,7 +178,10 @@ BEGIN
       RAISE EXCEPTION USING MESSAGE = 'operazione_in_conflitto', ERRCODE = 'P0001';
     END IF;
     RETURN jsonb_build_object('ok', true, 'id', p_id, 'operazione', p_operazione,
-      'giaCreata', true, 'tokenDisponibile', false);
+      'giaCreata', true, 'tokenDisponibile', EXISTS (
+        SELECT 1 FROM amr_accessi.aziende_inviti i JOIN amr_accessi.aziende a ON a.id=i.azienda
+        WHERE i.azienda=p_id AND i.persona IS NULL AND i.scadenza>clock_timestamp()
+          AND NOT a.attiva AND a.referente IS NULL));
   END IF;
   IF EXISTS (SELECT 1 FROM amr_accessi.aziende WHERE id = p_id) THEN
     RAISE EXCEPTION USING MESSAGE = 'azienda_esistente', ERRCODE = 'P0001';
@@ -196,7 +199,10 @@ BEGIN
       RAISE EXCEPTION USING MESSAGE = 'invito_esistente', ERRCODE = 'P0001';
     END IF;
     RETURN jsonb_build_object('ok', true, 'id', v_op.azienda, 'operazione', v_op.id,
-      'giaCreata', true, 'tokenDisponibile', false);
+      'giaCreata', true, 'tokenDisponibile', EXISTS (
+        SELECT 1 FROM amr_accessi.aziende_inviti i JOIN amr_accessi.aziende a ON a.id=i.azienda
+        WHERE i.azienda=v_op.azienda AND i.persona IS NULL AND i.scadenza>clock_timestamp()
+          AND NOT a.attiva AND a.referente IS NULL));
   END IF;
   IF (SELECT count(*) FROM amr_accessi.aziende) >= 10 THEN
     RAISE EXCEPTION USING MESSAGE = 'quota_aziende', ERRCODE = 'P0001';
