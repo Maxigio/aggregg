@@ -209,3 +209,20 @@ con prove e controprove su scheduler, account e ripristino. Quei finding non
 sono stati corretti né autorizzati implicitamente dall'attivazione dello staging.
 M2 e produzione restano esclusi. Le sezioni precedenti sono storico delle
 decisioni e non attestano automaticamente lo stato corrente.
+
+### Recovery e review aggiornata — 3 ottobre 2026
+
+Commit `e1e3f76` della preparazione e dei registri; successivo `6655950`
+corregge la numerazione dei journal dopo recovery, con migrazione per dump
+storici e secondo restore verificato: [registro B01](ripristino-journal-sequenza.md).
+Gate PG16/Auth/restic locale 6/6; suite 1.212 pass, quattro gate opt-in
+esclusi e zero failure. Nessuna migrazione cloud o nuova immagine distribuita.
+
+La [review del candidato 6655950](branch-nodi-2026-10-03-6655950.md) distingue
+nove finding confermati ancora aperti da due rischi condizionati. Include
+tre nuovi difetti su comando Admin tardivo, affinità dopo riassegnazione e
+focus alla perdita dell'accesso. Permessi di consegna, composizione, confini
+HTTPS e assenza di annunci nei registri reggono le controprove locali; non
+equivale a collaudo cloud o della UI in browser. Questi finding non sono
+stati corretti implicitamente. Il servizio Run resta fermo; prima del gate
+clienti servono correzioni, configurazione/cloud verificati e integrazione APP.

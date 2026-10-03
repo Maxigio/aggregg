@@ -281,3 +281,9 @@ risolto sul codice locale: gate PostgreSQL/Auth/restic **6/6 pass**, suite
 **1.212 pass su 1.216, quattro gate opt-in esclusi, zero failure**. Gli altri
 finding sopra non sono stati corretti da questo incremento. Lo staging fermo
 e la vecchia immagine non contengono implicitamente questa correzione.
+
+Review successiva sul candidato `6655950`:
+[branch-nodi-2026-10-03-6655950.md](branch-nodi-2026-10-03-6655950.md).
+Riconferma i difetti ancora aperti, documenta tre finding nuovi e separa
+due rischi condizionati dai problemi riprodotti. È il riferimento corrente
+per priorità e gate dopo la chiusura B01.
