@@ -259,6 +259,26 @@ Non è stata creata una nuova immagine né aggiornato il servizio remoto.
 
 La nuova review ha riprodotto un conflitto di recovery non coperto dal gate
 precedente: dump con invito pending, accettazione post-dump e replay fallito.
-È verificato su PostgreSQL 16 per referente e collega; la modifica alla
-politica di replay è in discussione. Il gate backup/clienti resta aperto:
-la prova precedente superata non dimostra copertura di questo nuovo scenario.
+È verificato su PostgreSQL 16 per referente e collega. La proposta era in
+discussione in questa fase; l'approvazione e la chiusura sono registrate sotto.
+La prova precedente superata non dimostrava copertura di questo scenario.
+
+## Chiusura della review e recovery — 4 ottobre 2026
+
+Il proprietario ha scelto il replay completo ordinato e la conclusione dei
+comandi commerciali già ammessi prima del logout, negando quelli nuovi.
+La [review del branch](branch-nodi-2026-10-03-fc1b7f2.md) distingue quest'ultima
+policy dai quattro difetti confermati e corretti: retry/affinità (`8379b87`),
+inviti pending e UUID invito nel recovery (`024af78`).
+
+Suite finale locale: 1.298 test, 1.293 pass, zero failure, cinque skip opt-in.
+Recovery PG16 con dump/inviti 1/1 e gate Auth/PostgreSQL/restic 6/6 eseguiti
+separatamente e passati; review indipendente senza ulteriori finding confermati.
+Il [registro recovery](ripristino-inviti-2026-10-04.md) documenta atomicità per
+journal, idempotenza, stop al primo errore e limiti sulla completezza delle copie.
+
+L'immagine `a05d45a` e il contesto `fc1b7f2` sono ora evidenze storiche: non
+contengono questi fix runtime. Prima dell'upload serve rigenerare e collaudare
+l'immagine dal commit candidato scelto. Nessun servizio remoto è stato
+modificato o avviato. Backup su storage reale, proxy/volume, SMTP, ingress,
+carico e integrazione completa APP restano gate da chiudere prima dei clienti.
