@@ -352,3 +352,15 @@ PG18/Auth/MFA/HTTPS/restart/restic **PASS, exit 0 e cleanup verificato**.
 Il [registro ingress](staging-ingress-2026-10-04.md) riporta impronte e
 controprove. Nessuna mutazione remota: il gate Nhost peer/header/tempi rimane
 aperto e richiede la scelta della misura lato server prima dell'app reale.
+
+## Preparazione della sonda lato server — 4 ottobre, incremento successivo
+
+Preparata una [sonda isolata](sonda-proxy-staging-2026-10-04.md) senza import
+AMR, Auth/DB, storage o scraper e con template Run separato ancora fermo e
+non pubblico. Misura peer privati/header solo nei log filtrati e risponde
+senza esporli; client HTTPS senza credenziali, retry o redirect. Controprove
+anche su header anticipati e attese effettive 55/65 secondi (PASS locale).
+Il comando alternativo è documentato e validato dalla CLI ufficiale.
+Nessun upload/avvio remoto: questo chiude la preparazione della misura,
+non il gate ingress Nhost o il deploy ai clienti. Il registro distingue
+stato del prototipo/centro, gate dell'app commerciale e verifiche remote.
