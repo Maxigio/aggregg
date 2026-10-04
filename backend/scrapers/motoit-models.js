@@ -139,6 +139,9 @@ async function getBrandModels(brandSlug, opts = {}) {
       .filter(x => x.name && x.slug);
   }
   const p = cached(modelsCache, `m:${brandSlug}`, TTL_MS, async () => {
+    // Il centro può vietare nuovi accessi di rete: catalogo, cache e
+    // download già avviati restano utilizzabili senza un'altra chiamata.
+    if (opts.soloLocale) throw new Error('Moto.it sospesa dall’operatore: catalogo remoto non consultato');
     try {
       return await salute.richiesta('moto', async () => {
         const j = await fetchJson(`${API}/models/${encodeURIComponent(brandSlug)}/Used`);

@@ -225,6 +225,34 @@ pendenti possono ancora negare temporaneamente un nuovo bootstrap con 429:
 è il limite preesistente, non un cookie tardivo. Sessioni in RAM, una replica;
 nessun collaudo manuale o staging remoto eseguito per deduzione.
 
+## N01 e N02 — ulteriori finding del branch, chiusi
+
+Il reviewer ricostruisce la base `81e25ab` e segue centro, worker, menu e
+salute. Riproduce con HTTP sintetico due difetti, assenti dalle precedenti
+conclusioni: menu/dettagli abbandonati ancora consegnabili; sospensione
+manuale Moto.it ignorata dal fallback remoto del menu.
+
+N01: il destinatario HTTP viene ritirato alla chiusura della risposta;
+la coda cancella solo i suoi lavori ancora non consegnati, con stato
+`interrotto`. I permessi verificano la connessione prima e dopo l’attesa.
+I job già avviati terminano; un altro destinatario non viene interrotto.
+Nessun annullamento dei download del nodo dedotto dalla chiusura browser.
+
+N02: il poll del menu modelli trasmette le sospensioni manuali correnti
+del nodo come metadato separato dall’input utente. L’esecutore lo valida;
+la rotta permette catalogo, cache e download già iniziati, ma il cache-miss
+Moto.it sospeso non avvia HTTP. Rifiuto dichiarato, non memorizzato come
+elenco vuoto e non registrato come nuovo 429. L’AMR ordinario senza metadato
+mantiene il comportamento attuale; release/hash identici richiesti nel Run.
+
+Prove: brands/models/versioni/detail abbandonati, chiusura nei controlli
+asincroni e nel poll, job già consegnato, pausa dopo accodamento,
+cache hit/miss, catalogo locale e inflight. Suite generale 1.335 casi:
+1.330 pass, zero failure, cinque skip opt-in. Review indipendente: 96 test
+pertinenti e nove controprove, nessun finding residuo nei due fix.
+Due errori del reviewer provenivano da temporanei riutilizzati: rerun pulito
+7/7; non modificati codice o criteri per mascherarli.
+
 Fonti primarie:
 - [RFC 6265](https://www.rfc-editor.org/rfc/rfc6265.html), §1, §4.1.1, §4.1.2.
 - [W3C Web Locks](https://www.w3.org/TR/web-locks/), §2.4, §2.6, §3.2.

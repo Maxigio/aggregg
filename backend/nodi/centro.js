@@ -307,6 +307,25 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       return false;
     });
   }
+  function destinatarioHttp(req, res, tipo) {
+    const destinatari = new Set();
+    const verifica = async () => {
+      if (res.destroyed) throw Object.assign(new Error('richiesta interrotta'), { interrotto: true });
+      await verificaSessione(req.sessioneProva, tipo);
+      if (res.destroyed) throw Object.assign(new Error('richiesta interrotta'), { interrotto: true });
+    };
+    destinatari.add(verifica);
+    const abbandona = () => {
+      if (res.writableEnded) return;
+      destinatari.delete(verifica);
+      // Il browser non attende più: ritirare solo i lavori non ancora consegnati.
+      for (const n of nodi.values()) interrompiAccodati(n, null, job =>
+        job.destinatari === destinatari ? Object.assign(new Error('richiesta interrotta'), { interrotto: true }) : false);
+    };
+    res.once('close', abbandona);
+    if (res.destroyed) abbandona();
+    return { destinatari, termina: () => res.removeListener('close', abbandona) };
+  }
   const controlloNodi = setInterval(() => {
     for (const job of lavori.values()) {
       if (job.ricerca && (!job.ricerca.destinatari.size || job.ricerca.budget.signal.aborted)) continue;
@@ -647,7 +666,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       job.codaMs = Math.round(job.iniziatoMono - job.accodatoMono);
       registra(job, 'in_corso');
       res.json({ versioneProtocollo: 1, idLavoro: job.idLavoro, tentativo: job.tentativo,
-        azienda: job.azienda, operazione: job.operazione, fonte: job.fonte, input: job.input });
+        azienda: job.azienda, operazione: job.operazione, fonte: job.fonte, input: job.input,
+        ...(job.operazione === 'modelli' ? { fontiSospese: [...n.sospese] } : {}) });
     } finally { n.pollInCorso = false; }
   });
   app.post('/_nodo/esito', (req, res) => {
@@ -861,18 +881,20 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       if (!req.moduli.includes(req.query.tipo)) return res.sendStatus(403);
       const input = Object.fromEntries(Object.entries(req.query).filter(([k, v]) =>
         ['tipo','marca','modello'].includes(k) && typeof v === 'string' && v.length <= 120));
+      const destinatario = destinatarioHttp(req, res, req.query.tipo);
       try {
         // Il catalogo locale resta utilizzabile anche quando Moto.it è in pausa.
         const assegnazioneDa = performance.now();
         const n = sceglie([]);
         if (!n) return res.status(503).json({ error: 'nodo non disponibile' });
         const out = await assegna(() => sceglie([]), { idLavoro: crypto.randomUUID(), azienda: req.azienda,
-          operazione, input, destinatari: new Set([() => verificaSessione(req.sessioneProva, req.query.tipo)]),
+          operazione, input, destinatari: destinatario.destinatari,
           assegnazioneMs: Math.round(performance.now() - assegnazioneDa) });
         await verificaSessione(req.sessioneProva, req.query.tipo);
         res.status(out.status).json(out.body);
-      } catch (e) { res.status(e.status === 403 ? 403 : e.incerto ? 504 : 503)
-        .json({ error: e.message, interrotto: e.status === 403, incerto: !!e.incerto }); }
+      } catch (e) { if (!res.destroyed) res.status(e.status === 403 ? 403 : e.incerto ? 504 : 503)
+        .json({ error: e.message, interrotto: e.status === 403 || !!e.interrotto, incerto: !!e.incerto }); }
+      finally { destinatario.termina(); }
     });
   }
   app.get('/api/detail', async (req, res) => {
@@ -880,6 +902,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     if (typeof url !== 'string' || url.length > 2048) return res.sendStatus(400);
     const tipo = autorizzazioniDettagli.verifica(req.sessioneProva,url,req.query.accessoDettagli);
     if (!tipo || !req.moduli.includes(tipo)) return res.sendStatus(403);
+    const destinatario = destinatarioHttp(req, res, tipo);
     try {
       let fonte;
       try {
@@ -894,12 +917,13 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       if (!n) return res.status(503).json({ error: 'nodo non disponibile' });
       const out = await assegna(() => nodoPerFonte(fonte), { idLavoro: crypto.randomUUID(), azienda: req.azienda,
         operazione: 'dettaglio', fonte, input: { url },
-        destinatari: new Set([() => verificaSessione(req.sessioneProva, tipo)]),
+        destinatari: destinatario.destinatari,
         assegnazioneMs: Math.round(performance.now() - assegnazioneDa) });
       await verificaSessione(req.sessioneProva, tipo);
       res.status(out.status).json(out.body);
-    } catch (e) { res.status(e.status === 403 ? 403 : e.incerto ? 504 : 503)
-      .json({ error: e.message, interrotto: e.status === 403, incerto: !!e.incerto }); }
+    } catch (e) { if (!res.destroyed) res.status(e.status === 403 ? 403 : e.incerto ? 504 : 503)
+      .json({ error: e.message, interrotto: e.status === 403 || !!e.interrotto, incerto: !!e.incerto }); }
+    finally { destinatario.termina(); }
   });
   app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'prototipo.html')));
   app.get('/prototipo.css', (req, res) => res.type('css').sendFile(path.join(__dirname, '../../frontend/nodi-prototipo.css')));

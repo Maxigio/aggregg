@@ -16,14 +16,14 @@ const appMenu = { get: (percorso, handler) => menu.set(percorso, handler) };
 require('../menu-ricerca-route').mount(appMenu);
 const dettaglio = handlerDi(require('../dettaglio-route'), '/api/detail', { chiaveLimite: () => 'nodo-locale' });
 
-function chiama(handler, query) {
+function chiama(handler, query, fontiSospese = []) {
   return new Promise((resolve, reject) => {
     const res = {
       statusCode: 200,
       status(n) { this.statusCode = n; return this; },
       json(body) { resolve({ status: this.statusCode, body }); return this; },
     };
-    Promise.resolve().then(() => handler({ query }, res)).catch(reject);
+    Promise.resolve().then(() => handler({ query, fontiSospese }, res)).catch(reject);
   });
 }
 
@@ -50,7 +50,10 @@ async function esegui(lavoro) {
     return { status: 200, body: await runSearch(parsed.params) };
   }
   if (operazione === 'modelli' || operazione === 'marche' || operazione === 'versioni') {
-    return chiama(menu.get('/api/' + (operazione === 'marche' ? 'brands' : operazione === 'modelli' ? 'models' : 'versioni')), input);
+    const sospese = lavoro.fontiSospese;
+    if (sospese !== undefined && (!Array.isArray(sospese) || sospese.length > 3
+        || sospese.some(f => !['subito', 'autoscout', 'moto'].includes(f)))) throw new Error('sospensioni non valide');
+    return chiama(menu.get('/api/' + (operazione === 'marche' ? 'brands' : operazione === 'modelli' ? 'models' : 'versioni')), input, sospese);
   }
   if (operazione === 'dettaglio') return chiama(dettaglio, input);
   throw new Error('operazione non valida');

@@ -64,7 +64,8 @@ function mount(app) {
       if (brandSlug) {
         try {
 
-          const apiModels = await getBrandModels(brandSlug, { rilancia: true });
+          const apiModels = await getBrandModels(brandSlug, { rilancia: true,
+            soloLocale: req.fontiSospese?.includes('moto') === true });
           const byName = new Map(modelli.map(m => [norm(m.nome), m]));
           for (const am of apiModels) {
             const hit = byName.get(norm(am.name));
