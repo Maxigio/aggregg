@@ -129,3 +129,22 @@ Fonti ufficiali ricontrollate:
 [Nhost health checks](https://docs.nhost.io/products/run/health-checks).
 Supportano digest, contesto minimo, separazione build/deploy e limiti della
 liveness; non attestano il comportamento remoto del nostro pacchetto.
+
+## Candidato aggiornato dopo la review: b1d9d6d
+
+La prova precedente su `9ed5479` rimane storica. Nuovo contesto materializzato
+dal commit `b1d9d6dd7717ce0fa7e5fd34b6e73127f7b7cca3`, senza checkout,
+credenziali o DB reali. Build locale `amr-centro:b1d9d6d`, linux/amd64,
+utente `node`, ID
+`sha256:85c0edd1f6177f2ada8b817871110b1679ad7a397362004ae6e117b9f4560ea2`.
+
+Gate integrato passato al primo giro: PostgreSQL 18.6, Auth 0.49.1,
+restic 0.19.1, HTTPS, protocollo `/finalizza`, ruoli, quote, revoche,
+ricerca sintetica, SIGTERM, riavvio/stesso volume e restore nel secondo
+cluster. Manifest dell’immagine confrontato con il candidato. Cleanup
+verificato; otto container manuali e due reti preesistenti preservati.
+
+Nessun upload o avvio Nhost, nessun M2/portale. Il commit documentale
+successivo non cambia implicitamente la release provata. Evidenze,
+controprove e gate remoti aperti nella
+[review finale del branch](branch-nodi-2026-10-04-finale.md).

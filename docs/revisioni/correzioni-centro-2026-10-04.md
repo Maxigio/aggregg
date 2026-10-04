@@ -253,6 +253,15 @@ pertinenti e nove controprove, nessun finding residuo nei due fix.
 Due errori del reviewer provenivano da temporanei riutilizzati: rerun pulito
 7/7; non modificati codice o criteri per mascherarli.
 
+## Chiusura del turno e prossimo gate
+
+Baseline `35c83bc`, C03 `3cc4d78`, nodi `b1d9d6d`. Il candidato
+`b1d9d6d` supera anche il gate locale completo dell’immagine con
+PG18/Auth/HTTPS/restic, riavvio e restore separato: exit 0 e cleanup verificato.
+Review finale commerciale/recovery/Run: 93 test indipendenti, nessun nuovo
+finding confermato. [Review complessiva](branch-nodi-2026-10-04-finale.md)
+con prove distinte, limiti e ordine del gate remoto. Nessun cloud/M2 modificato.
+
 Fonti primarie:
 - [RFC 6265](https://www.rfc-editor.org/rfc/rfc6265.html), §1, §4.1.1, §4.1.2.
 - [W3C Web Locks](https://www.w3.org/TR/web-locks/), §2.4, §2.6, §3.2.
