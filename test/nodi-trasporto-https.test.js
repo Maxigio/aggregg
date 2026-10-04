@@ -41,10 +41,10 @@ async function setup(t, { tls, proxyAttendibili = [], origine = 'https://amr.inv
     r.on('error', reject); r.end(body === undefined ? undefined : JSON.stringify(body));
   });
   const login = async (cookies, extra) => {
-    const bootstrap = await req('me', undefined, cookies, extra);
+    const bootstrap = await req('bootstrap', {login:true}, cookies, extra);
     const contesto = (cookies || '').split(';').map(v => v.trim()).find(v => v.startsWith('amr_accesso_prova='))
       || cookie(bootstrap);
-    const r = await req('login', { email: 'anna@amr.invalid', password: 'password-sintetica' },
+    const r = await req('login', { email: 'anna@amr.invalid', password: 'password-sintetica', tentativo: bootstrap.status===200 ? bootstrap.json().tentativo : undefined },
       [cookies, cookie(bootstrap)].filter(Boolean).join('; '), extra);
     r.cookieContesto = contesto;
     return r;

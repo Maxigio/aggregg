@@ -36,6 +36,8 @@ async function manda(endpoint, body) {
   occupato = true; sequenza++;
   document.querySelectorAll('button').forEach(b => { b.disabled = true; });
   try {
+    if (endpoint === 'login') body = { ...body, tentativo: (await window.amrBootstrap(true)).tentativo };
+    else if (endpoint === 'mfa' || navigator.locks) await window.amrBootstrap();
     const r = await fetch('/api/auth/' + endpoint, { method: 'POST', credentials: 'same-origin',
       headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
     const data = await r.json();
@@ -49,7 +51,7 @@ async function manda(endpoint, body) {
     else if (endpoint === 'logout') { prototipo.hidden = true; login.hidden = false; mfa.hidden = true; logout.hidden = true;
       mostraRevoca(data.provider); void seguiRevoca(data.provider, sequenza); }
     else { prototipo.hidden = false; login.hidden = true; mfa.hidden = true; logout.hidden = false; stato.textContent = 'Accesso verificato dal backend.'; location.replace('/'); }
-  } catch { stato.textContent = 'Esito non confermato. Ripeti il login.'; login.hidden = false; mfa.hidden = true; }
+  } catch (e) { stato.textContent = e.preparazione ? e.message : 'Esito non confermato. Ripeti il login.'; login.hidden = false; mfa.hidden = true; }
   finally {
     login.elements.password.value = ''; mfa.elements.otp.value = '';
     occupato = false; document.querySelectorAll('button').forEach(b => { b.disabled = false; });
@@ -61,8 +63,8 @@ mfa.addEventListener('submit', e => { e.preventDefault(); manda('mfa', { otp: mf
 logout.addEventListener('click', () => manda('logout', {}));
 
 const sequenzaIniziale = sequenza;
-fetch('/api/auth/me', { credentials: 'same-origin', signal: AbortSignal.timeout(5000) }).then(async r => {
+window.amrBootstrap().then(() => fetch('/api/auth/me', { credentials: 'same-origin', signal: AbortSignal.timeout(5000) })).then(async r => {
   if (!r.ok || sequenzaIniziale !== sequenza) return;
   login.hidden = true; logout.hidden = false; prototipo.hidden = false;
   stato.textContent = 'Sessione attiva.'; location.replace('/');
-}).catch(() => {});
+}).catch(e => { if (sequenzaIniziale === sequenza) stato.textContent = e.message; });

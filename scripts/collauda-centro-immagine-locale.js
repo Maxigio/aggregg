@@ -261,11 +261,11 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
         }
       };
       const cookie=()=>[...jar].map(([k,v])=>k+'='+v).join('; ');
-      const bootstrap=await request('/api/auth/me');
-      assert.equal(bootstrap.status,401);aggiorna(bootstrap);
+      const bootstrap=await request('/api/auth/bootstrap',{method:'POST',body:{login:true}});
+      assert.equal(bootstrap.status,200);aggiorna(bootstrap);
       controlla(jar.has('amr_accesso_prova'));
       const challenge=await request('/api/auth/login',{method:'POST',
-        body:{email:credenziali.email,password:credenziali.password},cookie:cookie()});
+        body:{email:credenziali.email,password:credenziali.password,tentativo:json(bootstrap).tentativo},cookie:cookie()});
       assert.equal(challenge.status,200);aggiorna(challenge);
       if(admin) {
         assert.deepEqual(json(challenge),{mfa:true});

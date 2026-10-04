@@ -40,9 +40,9 @@ async function fixture({admin=false,pending=false}={}) {
   });
  }
  async function login(cookie) {
-  const bootstrap=await request('/api/auth/me',{cookie});
+  const bootstrap=await request('/api/auth/bootstrap',{cookie,body:{login:true}});
   cookie=jar(bootstrap,cookie);
-  let r=await request('/api/auth/login',{body:{email:'fixture@amr.invalid',password:'password-sintetica'},cookie});
+  let r=await request('/api/auth/login',{body:{email:'fixture@amr.invalid',password:'password-sintetica',tentativo:JSON.parse(bootstrap.raw).tentativo},cookie});
   assert.equal(r.status,200); cookie=jar(r,cookie);
   if(admin){r=await request('/api/auth/mfa',{body:{otp:'123456'},cookie});assert.equal(r.status,200);cookie=jar(r,cookie);}
   return cookie;

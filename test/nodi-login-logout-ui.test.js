@@ -8,7 +8,7 @@ function pagina({ leggi = async () => ({ stato: 'confirmed' }) } = {}) {
     hidden: false, elements: { password: { value: '' }, otp: { value: '' }, email: { value: '' } }, addEventListener() {},
   }]));
   const timers = [], richieste = [], id = 'a'.repeat(64);
-  const ctx = vm.createContext({ AbortSignal, setTimeout: fn => timers.push(fn),
+  const ctx = vm.createContext({navigator: { locks: {} }, window: { amrBootstrap: async () => ({ tentativo: "a".repeat(64) }) }, AbortSignal, setTimeout: fn => timers.push(fn),
     location: { replace() {} }, document: { querySelector: s => nodes[s.slice(1)], querySelectorAll: () => [] },
     fetch: async (url, options) => {
       richieste.push({ url, options });

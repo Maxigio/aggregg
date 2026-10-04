@@ -411,11 +411,12 @@ async function collauda({ manuale = false } = {}) {
         ...(cookie ? { cookie } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal: AbortSignal.timeout(15000) });
     const loginConContesto = async body => {
-      const bootstrap = await richiestaLogin('me');assert.equal(bootstrap.status,401);
+      const bootstrap = await richiestaLogin('bootstrap', { login: true });assert.equal(bootstrap.status,200);
       const cookieContesto = bootstrap.headers.getSetCookie().find(v => v.startsWith('amr_accesso_prova='))?.split(';')[0];
       assert.match(cookieContesto || '', /^amr_accesso_prova=[a-f0-9]{64}$/);
-      return { risposta: await richiestaLogin('login', body, cookieContesto), cookieContesto };
+      return { risposta: await richiestaLogin('login', { ...body, tentativo: (await bootstrap.json()).tentativo }, cookieContesto), cookieContesto };
     };
+    fase = 'bootstrap esplicito AMR';
     const { risposta: challengeAmr, cookieContesto } = await loginConContesto({ email, password });
     fase = 'login AMR → Auth';
     diagnosi += ' · HTTP ' + challengeAmr.status + ' · ' + String((await challengeAmr.clone().json()).codice || 'esito senza errore');

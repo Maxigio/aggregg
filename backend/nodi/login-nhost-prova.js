@@ -70,7 +70,7 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
   }
   function statoLogout(contestoBrowser, quanti) {
     // Senza una sessione nota non abbiamo prova della revoca remota.
-    if (!quanti) return { risposta: { stato: 'unconfirmed', id: null }, completa() {} };
+    if (!quanti || !contestoBrowser) return { risposta: { stato: 'unconfirmed', id: null }, completa() {} };
     if (chiuso || esitiLogout.size >= 100) return { risposta: { stato: 'unconfirmed', id: null }, completa() {} };
     const id = crypto.randomBytes(32).toString('hex');
     const s = { browser: contestoBrowser, stato: 'pending', restanti: quanti, fallita: false,
@@ -84,7 +84,7 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     } };
   }
   const errore = (status, codice) => Object.assign(new Error(codice), { status, codice });
-  let attive = 0, inizioFinestra = ora(), tentativi = 0;
+  let attive = 0, inizioFinestra = ora(), tentativi = 0, preparazioni = 0;
   app.use('/api/auth', trasporto.middleware, (req, res, next) => {
     res.set('Cache-Control', 'no-store');
     res.set('X-Content-Type-Options', 'nosniff');
@@ -93,16 +93,18 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
   }, express.json({ limit: '4kb', strict: true }));
   const path = require('node:path');
   app.get('/api/auth/pagina', (req, res) => {
-    browser(req, res); res.sendFile(path.join(__dirname, 'login-nhost-prova.html'));
+    res.sendFile(path.join(__dirname, 'login-nhost-prova.html'));
   });
+  app.get('/api/auth/bootstrap.js', (req, res) => res.sendFile(path.join(__dirname, '../../frontend/nodi-bootstrap-prova.js')));
   app.get('/api/auth/pagina.js', (req, res) => res.sendFile(path.join(__dirname, '../../frontend/nodi-login-prova.js')));
   app.get('/api/auth/pagina.css', (req, res) => res.sendFile(path.join(__dirname, '../../frontend/nodi-login-prova.css')));
-  const protetta = fn => async (req, res) => {
-    if (ora() - inizioFinestra >= 60000) { inizioFinestra = ora(); tentativi = 0; }
-    if (attive >= 4 || tentativi >= 20) {
+  const protetta = (fn, preparazione = false) => async (req, res) => {
+    if (ora() - inizioFinestra >= 60000) { inizioFinestra = ora(); tentativi = 0; preparazioni = 0; }
+    if (attive >= 4 || (preparazione ? preparazioni : tentativi) >= 20) {
       res.set('Retry-After', '60'); return res.status(429).json({ codice: 'troppi_tentativi', riprovaFra: 60 });
     }
-    tentativi++; attive++;
+    if (preparazione) preparazioni++; else tentativi++;
+    attive++;
     try { await fn(req, res); }
     catch (e) {
       if (e.status === 429 && e.riprovaFra) res.set('Retry-After', String(e.riprovaFra));
@@ -111,6 +113,21 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     }
     finally { attive--; }
   };
+  const preparaLogin = protetta(async (req, res) => {
+    if (chiuso) throw errore(503, 'identita_non_disponibile');
+    const key = browser(req, res);
+    if (!tentativiAccesso.has(key) && tentativiAccesso.size >= 50) throw errore(503, 'challenge_non_disponibili');
+    const handle = crypto.randomBytes(32).toString('hex');
+    tentativiAccesso.set(key, { browser: key, handle: impronta(handle), usato: false,
+      revisione: sequenzaRevoche, scadenza: ora() + 3 * 60000, inVolo: false });
+    for (const [id, s] of challenge) if (s.tentativo.browser === key) challenge.delete(id);
+    res.json({ ok: true, tentativo: handle });
+  }, true);
+  app.post('/api/auth/bootstrap', (req, res) => {
+    if (req.body?.login === true) return preparaLogin(req, res);
+    if (chiuso) return res.status(503).json({ codice: 'identita_non_disponibile' });
+    browser(req, res); res.json({ ok: true });
+  });
   async function creaSessione(req, res, provider, mfa, tentativo) {
     valido(tentativo);
     const s = provider?.session;
@@ -128,7 +145,7 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     const ritirata = sessioni.get(vecchia)?.provider;
     if (vecchia) sessioni.delete(vecchia);
     const token = crypto.randomBytes(32).toString('hex');
-    sessioni.set(impronta(token), { chiave: impronta(token), persona: s.user.id, mfa, provider: s,
+    sessioni.set(impronta(token), { chiave: impronta(token), persona: s.user.id, mfa, provider: s, browser: tentativo.browser,
       id: crypto.randomBytes(32).toString('hex'), creata: ora(),
       epoca: ruolo.epoca ?? 0, azienda: ruolo.azienda, scadenza: ora() + durataMs });
     res.clearCookie('amr_mfa_prova', options);
@@ -149,15 +166,12 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
         || typeof password !== 'string' || !password.length || password.length > 50) {
       throw errore(400, 'input_non_valido');
     }
-    const precedente = cookie(req, 'amr_mfa_prova');
-    const vecchio = challenge.get(precedente);
-    if (vecchio && tentativiAccesso.get(vecchio.tentativo.browser) === vecchio.tentativo) {
-      tentativiAccesso.delete(vecchio.tentativo.browser);
-    }
-    if (precedente) challenge.delete(precedente);
-    if (!tentativiAccesso.has(key) && tentativiAccesso.size >= 50) throw errore(503, 'challenge_non_disponibili');
-    const tentativo = { browser: key, revisione: sequenzaRevoche, scadenza: ora() + 3 * 60000, inVolo: true };
-    tentativiAccesso.set(key, tentativo);
+    const tentativo = tentativiAccesso.get(key);
+    const handle = req.body?.tentativo;
+    if (!tentativo || tentativo.usato || typeof handle !== 'string' || !/^[a-f0-9]{64}$/.test(handle)
+        || tentativo.handle !== impronta(handle)) throw errore(401, 'ripeti_login');
+    valido(tentativo);
+    tentativo.usato = true; tentativo.inVolo = true;
     let result, accettato = false, attendeMfa = false;
     try {
       result = await client.login(email, password);
@@ -227,26 +241,26 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
   }
   const contesto = req => verifica(sessione(req));
   app.get('/api/auth/me', async (req, res) => {
-    browser(req, res);
     try { res.json(await contesto(req)); }
     catch (e) { res.status(e.status || 503).json({ codice: e.codice || 'identita_non_disponibile' }); }
   });
   function logout(req, res) {
     const pending = cookie(req, 'amr_mfa_prova'), p = challenge.get(pending);
-    const contestoBrowser = browser(req, res);
+    const contestoBrowser = cookie(req, 'amr_accesso_prova');
     const cancellati = new Set([p?.tentativo, tentativiAccesso.get(contestoBrowser)].filter(t => t?.inVolo));
     if (p && tentativiAccesso.get(p.tentativo.browser) === p.tentativo) tentativiAccesso.delete(p.tentativo.browser);
     if (pending) challenge.delete(pending);
     if (contestoBrowser) tentativiAccesso.delete(contestoBrowser);
     const key = cookie(req, 'amr_sessione_prova'), s = sessioni.get(key);
-    if (key) sessioni.delete(key);
+    const ritirate = [...sessioni.values()].filter(v => v === s || (contestoBrowser && v.browser === contestoBrowser));
+    for (const v of ritirate) sessioni.delete(v.chiave);
     res.clearCookie('amr_sessione_prova', options); res.clearCookie('amr_mfa_prova', options);
-    const esito = statoLogout(contestoBrowser, cancellati.size + Number(Boolean(s)));
+    const esito = statoLogout(contestoBrowser, cancellati.size + ritirate.length);
     for (const t of cancellati) t.esitoLogout = esito;
     // Risposta e clear-cookie definitivi prima del provider: nessun callback
     // remoto conserva res o può toccare i cookie di un successivo login.
     res.json({ ok: true, provider: esito.risposta });
-    if (s) void revocaProvider({ session: s.provider }, true).then(esito.completa);
+    for (const v of ritirate) void revocaProvider({ session: v.provider }, true).then(esito.completa);
   }
   app.post('/api/auth/logout', logout);
   // Sessioni del solo processo di prova: l'handle gestionale non autentica.
@@ -265,7 +279,7 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     if (!target) throw errore(404, 'sessione_non_disponibile');
     if (target === s) return logout(req, res);
     sessioni.delete(target.chiave);
-    const esito = statoLogout(browser(req, res), 1);
+    const esito = statoLogout(cookie(req, 'amr_accesso_prova'), 1);
     res.json({ ok: true, provider: esito.risposta });
     // Nessun req/res nel callback: il chiamante è ricontrollato nel job bounded.
     void revocaProvider({ session: target.provider }, true, s).then(esito.completa);

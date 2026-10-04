@@ -14,23 +14,29 @@ async function setup(t, { client = {}, ruolo = { attiva: true, admin: false }, i
   const auth = mount(app, { client: { login: async () => session, logout: async () => {}, ...client },
     identita: identita || (async () => ruolo), origine, ora: () => now, cleanupMs });
   t.after(async () => { auth.close(); server.closeAllConnections(); await new Promise(r => server.close(r)); });
-  const req = (route, body, cookie, extra = {}) => fetch(origine + '/api/auth/' + route, {
+  const req = async (route, body, cookie, extra = {}) => { const r = await fetch(origine + '/api/auth/' + route, {
     method: body === undefined ? 'GET' : 'POST', headers: {
       ...(body === undefined ? {} : { origin: origine, 'content-type': 'application/json' }),
       ...(cookie ? { cookie } : {}), ...extra }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    r.cookieContesto = (cookie || '').split(';').map(v => v.trim()).find(v => v.startsWith('amr_accesso_prova='));
+    return r;
+  };
   const login = async cookie => {
     let contesto = (cookie || '').split(';').map(v => v.trim()).find(v => v.startsWith('amr_accesso_prova='));
-    if (!contesto) {
-      contesto = getCookie(await req('me', undefined, cookie), 'amr_accesso_prova');
-      cookie = [cookie, contesto].filter(Boolean).join('; ');
-    }
-    const r = await req('login', { email: 'persona@amr.invalid', password: 'password-sintetica', admin: true }, cookie);
+    const bootstrap = await req('bootstrap', { login: true }, cookie);
+    if (!bootstrap.ok) return bootstrap;
+    contesto ||= getCookie(bootstrap, 'amr_accesso_prova');
+    if (!(cookie || '').includes('amr_accesso_prova=')) cookie = [cookie, contesto].filter(Boolean).join('; ');
+    const { tentativo } = await bootstrap.json();
+    const r = await req('login', { email: 'persona@amr.invalid', password: 'password-sintetica', admin: true, tentativo }, cookie);
     r.cookieContesto = contesto; // Metadato dell'helper, distinto dagli header HTTP del login.
     return r;
   };
   return { req, login, auth, ruolo, avanza: ms => { now += ms; }, origine };
 }
-const getCookie = (r, name) => r.headers.getSetCookie().find(v => v.startsWith(name + '=')).split(';')[0];
+const getCookie = (r, name) => r.headers.getSetCookie().find(v => v.startsWith(name + '='))?.split(';')[0]
+  || (name === 'amr_accesso_prova' ? r.cookieContesto : undefined);
+const loginCookies = r => [r.cookieContesto, getCookie(r, 'amr_sessione_prova')].filter(Boolean).join('; ');
 
 test('login Nhost: contesto assente, malformato o duplicato nega prima del provider', async t => {
   let chiamate = 0, cleanup = 0;
@@ -50,19 +56,16 @@ test('login Nhost: contesto assente, malformato o duplicato nega prima del provi
   assert.equal(chiamate, 0); assert.equal(cleanup, 0);
 });
 
-test('login Nhost: bootstrap me o pagina fornisce il contesto, il login non lo genera', async t => {
-  let chiamate = 0;
-  const f = await setup(t, { client: { login: async () => { chiamate++; return session; } } });
-  for (const route of ['me', 'pagina']) {
-    const bootstrap = await f.req(route);
-    assert.equal(bootstrap.status, route === 'me' ? 401 : 200);
-    const contesto = getCookie(bootstrap, 'amr_accesso_prova');
-    const r = await f.req('login', { email: 'persona@amr.invalid', password: 'password-sintetica' }, contesto);
-    assert.equal(r.status, 200);
-    assert.equal(r.headers.getSetCookie().some(v => v.startsWith('amr_accesso_prova=')), false);
-    assert.equal((await f.req('me', undefined, contesto + '; ' + getCookie(r, 'amr_sessione_prova'))).status, 200);
-  }
-  assert.equal(chiamate, 2);
+test('C03: solo bootstrap crea il contesto; letture e logout anonimi non lo sovrascrivono', async t => {
+  const f = await setup(t);
+  for (const route of ['me', 'pagina']) assert.deepEqual((await f.req(route)).headers.getSetCookie(), []);
+  assert.ok((await f.req('logout', {})).headers.getSetCookie().every(v => !v.startsWith('amr_accesso_prova=')));
+  const primo = await f.req('bootstrap', {}), contesto = getCookie(primo, 'amr_accesso_prova');
+  assert.equal(primo.status, 200);
+  const secondo = await f.req('bootstrap', {}, contesto);
+  assert.equal(secondo.status, 200); assert.deepEqual(secondo.headers.getSetCookie(), []);
+  const r = await f.login(contesto); assert.equal(r.status, 200);
+  assert.equal(r.headers.getSetCookie().some(v => v.startsWith('amr_accesso_prova=')), false);
 });
 
 test('login Nhost: logout con contesto durante password pendente nega e pulisce una sola volta', { timeout: 5000 }, async t => {
@@ -72,8 +75,8 @@ test('login Nhost: logout con contesto durante password pendente nega e pulisce 
     login: async () => { chiamate++; entra(); await attesa; return session; },
     logout: async () => { cleanup++; },
   } });
-  const contesto = getCookie(await f.req('me'), 'amr_accesso_prova');
-  const pending = f.req('login', { email: 'persona@amr.invalid', password: 'password-sintetica' }, contesto);
+  const contesto = getCookie(await f.req('bootstrap', {}), 'amr_accesso_prova');
+  const pending = f.login(contesto);
   try {
     await entrata;
     const out = await (await f.req('logout', {}, contesto)).json();
@@ -98,7 +101,7 @@ test('logout separato: risposta immediata, login successivo e altro dispositivo 
       revocate.push(s.refreshToken); await new Promise(r => { completa = r; }); attive.delete(s.refreshToken);
     },
   } });
-  const altro = getCookie(await f.login(), 'amr_sessione_prova');
+  const altro = loginCookies(await f.login());
   const jar = new Map();
   const applicaCookie = r => {
     for (const header of r.headers.getSetCookie()) {
@@ -107,7 +110,7 @@ test('logout separato: risposta immediata, login successivo e altro dispositivo 
     }
   };
   const cookies = () => [...jar].map(([k, v]) => k + '=' + v).join('; ');
-  applicaCookie(await f.req('me'));
+  applicaCookie(await f.req('bootstrap', {}));
   applicaCookie(await f.login(cookies()));
   const vecchia = cookies();
   const r = await f.req('logout', {}, cookies());
@@ -133,10 +136,10 @@ test('logout separato: risposta immediata, login successivo e altro dispositivo 
 
 test('logout separato: esito opaco vincolato al browser, con scadenza e senza cookie sullo status', async t => {
   const f = await setup(t);
-  const cookie = getCookie(await f.login(), 'amr_sessione_prova');
+  const cookie = loginCookies(await f.login());
   const r = await f.req('logout', {}, cookie), data = await r.json();
   const browser = getCookie(r, 'amr_accesso_prova');
-  for (const estraneo of [undefined, cookie, getCookie(await f.req('me'), 'amr_accesso_prova')]) {
+  for (const estraneo of [undefined, cookie.split('; ').find(v => v.startsWith('amr_sessione_prova=')), getCookie(await f.req('bootstrap', {}), 'amr_accesso_prova')]) {
     assert.equal((await f.req('logout/stato', { id: data.provider.id }, estraneo)).status, 404);
   }
   assert.equal((await f.req('logout/stato', { id: 'errato' }, browser)).status, 404);
@@ -153,7 +156,7 @@ test('logout separato: esito opaco vincolato al browser, con scadenza e senza co
 test('logout separato: timeout non diventa conferma tardiva e close ritira gli esiti', { timeout: 5000 }, async t => {
   let completa;
   const f = await setup(t, { cleanupMs: 40, client: { logout: () => new Promise(r => { completa = r; }) } });
-  const cookie = getCookie(await f.login(), 'amr_sessione_prova');
+  const cookie = loginCookies(await f.login());
   const r = await f.req('logout', {}, cookie), data = await r.json();
   const browser = getCookie(r, 'amr_accesso_prova');
   await new Promise(r => setTimeout(r, 60));
@@ -174,7 +177,7 @@ test('logout separato: password e MFA cancellate restano pending fino al cleanup
       mfa: () => new Promise(r => { completaProvider = r; }),
       logout: () => new Promise(r => { completaCleanup = r; }),
     } });
-    const browser = getCookie(await f.req('me'), 'amr_accesso_prova');
+    const browser = getCookie(await f.req('bootstrap', {}), 'amr_accesso_prova');
     const cookies = mfa ? browser + '; ' + getCookie(await f.login(browser), 'amr_mfa_prova') : browser;
     const pending = mfa ? f.req('mfa', { otp: '123456' }, cookies) : f.login(cookies);
     for (let i = 0; i < 100 && !completaProvider; i++) await new Promise(r => setTimeout(r, 5));
@@ -201,7 +204,7 @@ test('logout separato: quota senza coda, timeout non libera slot ancora occupati
     logout: () => new Promise(r => { completi.push(r); }),
   } });
   const esci = async () => {
-    const cookie = getCookie(await f.login(), 'amr_sessione_prova');
+    const cookie = loginCookies(await f.login());
     const r = await f.req('logout', {}, cookie);
     return { data: await r.json(), browser: getCookie(r, 'amr_accesso_prova') };
   };
@@ -231,7 +234,7 @@ test('logout separato: memoria esiti limitata, saturazione non impedisce il logo
   const cookies = [];
   for (let i = 0; i < 100; i++) {
     if (i % 20 === 0) f.avanza(60000);
-    cookies.push(getCookie(await f.login(), 'amr_sessione_prova'));
+    cookies.push(loginCookies(await f.login()));
   }
   let primo;
   for (const cookie of cookies) {
@@ -240,21 +243,21 @@ test('logout separato: memoria esiti limitata, saturazione non impedisce il logo
     primo ||= { id: data.provider.id, browser: getCookie(r, 'amr_accesso_prova') };
   }
   f.avanza(60000);
-  const nuova = getCookie(await f.login(), 'amr_sessione_prova');
+  const nuova = loginCookies(await f.login());
   assert.deepEqual(await (await f.req('logout', {}, nuova)).json(), { ok: true, provider: { stato: 'unconfirmed', id: null } });
   assert.equal((await f.req('me', undefined, nuova)).status, 401);
   assert.equal(revocate.length, 101);
   assert.equal((await (await f.req('logout/stato', { id: primo.id }, primo.browser)).json()).provider.stato, 'confirmed');
   f.avanza(5 * 60000);
-  const ultima = getCookie(await f.login(), 'amr_sessione_prova');
+  const ultima = loginCookies(await f.login());
   assert.ok((await (await f.req('logout', {}, ultima)).json()).provider.id);
 });
 
 test('logout separato: token condiviso non revoca altra postazione e resta non confermato', async t => {
   let chiamate = 0;
   const f = await setup(t, { client: { logout: async () => { chiamate++; } } });
-  const altra = getCookie(await f.login(), 'amr_sessione_prova');
-  const cookie = getCookie(await f.login(), 'amr_sessione_prova');
+  const altra = loginCookies(await f.login());
+  const cookie = loginCookies(await f.login());
   const r = await f.req('logout', {}, cookie), data = await r.json();
   const browser = getCookie(r, 'amr_accesso_prova');
   assert.equal((await (await f.req('logout/stato', { id: data.provider.id }, browser)).json()).provider.stato, 'unconfirmed');
@@ -266,7 +269,7 @@ test('logout separato: token condiviso non revoca altra postazione e resta non c
 test('logout separato: provider di un login cancellato fallisce, nessuna conferma inventata', { timeout: 5000 }, async t => {
   let fallisci;
   const f = await setup(t, { client: { login: () => new Promise((_, reject) => { fallisci = reject; }) } });
-  const browser = getCookie(await f.req('me'), 'amr_accesso_prova');
+  const browser = getCookie(await f.req('bootstrap', {}), 'amr_accesso_prova');
   const pending = f.login(browser);
   for (let i = 0; i < 100 && !fallisci; i++) await new Promise(r => setTimeout(r, 5));
   assert.ok(fallisci);
@@ -300,7 +303,7 @@ test('cleanup Auth: massimo otto chiamate reali, close non avvia retry né liber
   let esito;
   try {
     for (let i = 0; i < 4; i++) {
-      const cookie = getCookie(await f.login(), 'amr_sessione_prova');
+      const cookie = loginCookies(await f.login());
       const r = await f.req('logout', {}, cookie);
       esito = { data: await r.json(), browser: getCookie(r, 'amr_accesso_prova') };
     }
@@ -359,9 +362,9 @@ test('login Nhost: rotazione non revoca refresh token condivisi con sessioni att
         refreshToken: numero < 3 || condivisoConNuova ? 'condiviso' : 'distinto' } }),
       logout: async s => { revocate.push(s.refreshToken); },
     } });
-    const altro = getCookie(await f.login(), 'amr_sessione_prova');
-    const vecchia = getCookie(await f.login(), 'amr_sessione_prova');
-    const nuova = getCookie(await f.login(vecchia), 'amr_sessione_prova');
+    const altro = loginCookies(await f.login());
+    const vecchia = loginCookies(await f.login());
+    const nuova = loginCookies(await f.login(vecchia));
     assert.deepEqual(revocate, []);
     assert.equal((await f.req('me', undefined, vecchia)).status, 401);
     for (const cookie of [altro, nuova]) assert.equal((await f.req('me', undefined, cookie)).status, 200);
@@ -376,7 +379,7 @@ test('login Nhost: diniego della rotazione conserva la precedente e pulisce solo
       refreshToken: 'refresh-' + numero } }),
     logout: async s => { revocate.push(s.refreshToken); },
   } });
-  const vecchia = getCookie(await f.login(), 'amr_sessione_prova');
+  const vecchia = loginCookies(await f.login());
   f.ruolo.attiva = false;
   const r = await f.login(vecchia); assert.equal(r.status, 403);
   assert.equal(r.headers.getSetCookie().some(v => v.startsWith('amr_sessione_prova=')), false);
@@ -393,7 +396,7 @@ test('login Nhost: cleanup della rotazione offline non revoca il nuovo accesso',
       refreshToken: 'refresh-' + numero } }),
     logout: async s => { revocate.push(s.refreshToken); throw Error('offline-sintetico'); },
   } });
-  const vecchia = getCookie(await f.login(), 'amr_sessione_prova');
+  const vecchia = loginCookies(await f.login());
   const r = await f.login(vecchia);
   assert.equal(r.status, 200); assert.deepEqual(await r.json(), { ok: true });
   assert.deepEqual(revocate, ['refresh-1']);
@@ -415,7 +418,7 @@ test('login Nhost: cleanup pendente non blocca risposta e non annulla revoca o n
       }
     },
   } });
-  const vecchia = getCookie(await f.login(), 'amr_sessione_prova');
+  const vecchia = loginCookies(await f.login());
   const pending = f.login(vecchia);
   await iniziato;
   try {
@@ -425,7 +428,7 @@ test('login Nhost: cleanup pendente non blocca risposta e non annulla revoca o n
     assert.equal((await f.req('me', undefined, ruotata)).status, 200);
     f.auth.revocaPersona('persona');
     assert.equal((await f.req('me', undefined, ruotata)).status, 401);
-    const nuova = getCookie(await f.login(ruotata), 'amr_sessione_prova');
+    const nuova = loginCookies(await f.login(ruotata));
     completaCleanup();
     assert.equal((await f.req('me', undefined, nuova)).status, 200);
     assert.deepEqual(revocate, ['refresh-1']);
@@ -474,13 +477,13 @@ test('login Nhost: Admin senza MFA negato; challenge server monouso, due invii n
 
 test('login Nhost: logout revoca anche con provider offline, revoca persona e ruolo aggiornato', async t => {
   const f = await setup(t, { client: { logout: async () => { throw new Error('offline'); } } });
-  const cookie = getCookie(await f.login(), 'amr_sessione_prova');
+  const cookie = loginCookies(await f.login());
   const r = await f.req('logout', {}, cookie), data = await r.json();
   assert.equal(data.ok, true); assert.equal(data.provider.stato, 'pending');
   const stato = await f.req('logout/stato', { id: data.provider.id }, getCookie(r, 'amr_accesso_prova'));
   assert.equal((await stato.json()).provider.stato, 'unconfirmed');
   assert.equal((await f.req('me', undefined, cookie)).status, 401);
-  const next = getCookie(await f.login(), 'amr_sessione_prova');
+  const next = loginCookies(await f.login());
   f.ruolo.attiva = false; assert.equal((await f.req('me', undefined, next)).status, 403);
   f.ruolo.attiva = true; f.auth.revocaPersona('persona'); assert.equal((await f.req('me', undefined, next)).status, 401);
 });
@@ -488,7 +491,7 @@ test('login Nhost: logout revoca anche con provider offline, revoca persona e ru
 test('login Nhost: revoca avvenuta durante controllo asincrono prevale', async t => {
   let release, attendi = false;
   const f = await setup(t, { identita: async () => { if (attendi) await new Promise(r => { release = r; }); return { attiva: true }; } });
-  const cookie = getCookie(await f.login(), 'amr_sessione_prova'); attendi = true;
+  const cookie = loginCookies(await f.login()); attendi = true;
   const pending = f.req('me', undefined, cookie);
   for (let i = 0; i < 100 && !release; i++) await new Promise(r => setTimeout(r, 5));
   assert.ok(release); f.auth.revocaPersona('persona'); release(); assert.equal((await pending).status, 401);
@@ -564,7 +567,7 @@ test('login Nhost: contesto browser cancella password pendente e nuovo login can
     login: () => attende ? new Promise(r => { completa = r; }) : Promise.resolve({ mfa: { ticket: 'ticket' } }),
     mfa: () => new Promise(r => { mfaCompleta = r; }),
   } });
-  const contesto = getCookie(await f.req('me'), 'amr_accesso_prova');
+  const contesto = getCookie(await f.req('bootstrap', {}), 'amr_accesso_prova');
   const pending = f.login(contesto);
   for (let i = 0; i < 100 && !completa; i++) await new Promise(r => setTimeout(r, 5));
   assert.ok(completa); await f.req('logout', {}, contesto); completa(session);
@@ -640,4 +643,46 @@ test('client Auth: localhost obbligatorio, redirect vietati ed errori senza dett
   const knownDelay = creaClient({ base: 'http://127.0.0.1:4000/v1', richiesta: async () =>
     new Response('Too many requests', { status: 429, headers: { 'retry-after': '300' } }) });
   await assert.rejects(knownDelay.login('a@amr.invalid', 'segreta'), e => e.riprovaFra === 300);
+});
+
+test('C03: logout annulla anche il tentativo preparato ma non ancora consegnato; nuovo handle valido e monouso', async t => {
+  let chiamate = 0;
+  const f = await setup(t, { client: { login: async () => { chiamate++; return session; } } });
+  const prep = await f.req('bootstrap', { login: true });
+  const contesto = getCookie(prep, 'amr_accesso_prova'), { tentativo } = await prep.json();
+  await f.req('logout', {}, contesto);
+  const body = { email: 'persona@amr.invalid', password: 'password-sintetica', tentativo };
+  const vecchia = await f.req('login', body, contesto);
+  assert.equal(vecchia.status, 401); assert.deepEqual(vecchia.headers.getSetCookie(), []);
+  assert.equal(chiamate, 0);
+  const nuova = await f.req('bootstrap', { login: true }, contesto);
+  body.tentativo = (await nuova.json()).tentativo;
+  const altro = getCookie(await f.req('bootstrap', {}), 'amr_accesso_prova');
+  assert.equal((await f.req('login', body, altro)).status, 401);
+  assert.equal((await f.req('login', body, contesto)).status, 200);
+  assert.equal((await f.req('login', body, contesto)).status, 401);
+  assert.equal(chiamate, 1);
+  body.tentativo = (await (await f.req('bootstrap', { login: true }, contesto)).json()).tentativo;
+  f.avanza(3 * 60000);
+  assert.equal((await f.req('login', body, contesto)).status, 401);
+  assert.equal(chiamate, 1);
+});
+
+test('C03: handle preparati in finestre precedenti non aggirano il limite delle chiamate al provider', async t => {
+  let chiamate = 0;
+  const f = await setup(t, { client: { login: async () => { chiamate++; return session; } } });
+  const preparati = [];
+  for (let finestra = 0; finestra < 2; finestra++) {
+    if (finestra) f.avanza(60000);
+    for (let i = 0; i < 20; i++) {
+      const r = await f.req('bootstrap', { login: true }); assert.equal(r.status, 200);
+      preparati.push({ cookie: getCookie(r, 'amr_accesso_prova'), tentativo: (await r.json()).tentativo });
+    }
+  }
+  for (let i = 0; i < 21; i++) {
+    const p = preparati[i];
+    const r = await f.req('login', { email: 'persona@amr.invalid', password: 'password-sintetica', tentativo: p.tentativo }, p.cookie);
+    assert.equal(r.status, i < 20 ? 200 : 429);
+  }
+  assert.equal(chiamate, 20);
 });

@@ -32,12 +32,12 @@ async function setup(t, { identita, logout = async () => {}, cleanupMs } = {}) {
   });
   const login = async (persona = 'anna', cookie) => {
     let contesto = (cookie || '').split(';').map(v => v.trim()).find(v => v.startsWith('amr_accesso_prova='));
-    if (!contesto) {
-      const bootstrap = await req('me', undefined, cookie);
-      contesto = bootstrap.headers.getSetCookie().find(v => v.startsWith('amr_accesso_prova=')).split(';')[0];
-      cookie = [cookie, contesto].filter(Boolean).join('; ');
-    }
-    const r = await req('login', { email: persona + '@amr.invalid', password: 'password-sintetica' }, cookie);
+    const bootstrap = await req('bootstrap', { login: true }, cookie);
+    if (bootstrap.status !== 200) return bootstrap;
+    contesto ||= bootstrap.headers.getSetCookie().find(v => v.startsWith('amr_accesso_prova=')).split(';')[0];
+    if (!(cookie || '').includes('amr_accesso_prova=')) cookie = [cookie, contesto].filter(Boolean).join('; ');
+    const { tentativo } = await bootstrap.json();
+    const r = await req('login', { email: persona + '@amr.invalid', password: 'password-sintetica', tentativo }, cookie);
     r.cookieContesto = contesto;
     return r;
   };

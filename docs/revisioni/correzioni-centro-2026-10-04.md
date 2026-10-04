@@ -92,3 +92,103 @@ con API simulate: ampliamento, elenco versioni monco con payload HTML,
 append stessa/altra fonte, errore/retry e reset della ricerca. Il primo giro
 UI dedicato è 10/10; fixture aggiornate per lo script bootstrap C03.
 Collaudo manuale dell'utente e staging remoto non ancora eseguiti.
+
+## C03 — in lavorazione, decisione finale pendente
+
+Confermato dall'utente: logout comune alle schede dello stesso browser;
+un nuovo login dopo il logout deve poter riuscire, altri browser indipendenti.
+
+Nel worktree: POST bootstrap esplicito coordinato tramite Web Locks, nessuna
+creazione di cookie su pagina/me/logout, handle monouso del tentativo legato
+al contesto (tre minuti, massimo 50), logout che ritira anche le sessioni
+del contesto già emesse. Tentativi preparati prima ma recapitati dopo il
+logout: 401, zero chiamate al provider. Bootstrap ordinario non sostituisce
+un login o MFA pendente. Chiamanti API devono seguire il protocollo.
+
+Controprova ulteriore: accumulare handle su finestre diverse aggirava il
+limite al provider nella prima implementazione. Corretto: due contatori
+separati, 20 preparazioni/min e limite originale 20 login/MFA/min; massimo
+quattro operazioni contemporanee. Test dedicato: 40 handle preparati,
+20 login effettivi, 21esimo negato 429 senza chiamare Nhost.
+
+40/40 prove mirate finali (HTTP, headless due schede + browser indipendente,
+login successivo, scadenza/replay/contesto estraneo, browser senza Web Locks).
+Review indipendente backend 34/34, ma finding residuo confermato: una risposta
+login già emessa prima del logout e consegnata dopo un nuovo login può
+sovrascrivere il cookie nuovo. Il vecchio cookie è revocato: nessun accesso
+riaperto, ma /me torna 401. C03 NON chiuso e non committato.
+
+Proposta in interview: separare verifica provider e finalizzazione breve dei
+cookie, serializzando quest'ultima con logout fra schede. Attendere la scelta
+prima di implementare; tenere la verifica password/MFA fuori dal lock.
+Fonti: [Web Locks](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API),
+[OWASP Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html).
+
+## Verifica trasversale provvisoria
+
+Suite completa locale: 1309 PASS, 0 failure, 5 gate opzionali esclusi (1314
+casi), Node 24.21.0, dotenv disabilitato, dati/log temporanei. Successivamente
+aggiunta e superata la controprova del limite provider; il conteggio completo
+precedente non viene attribuito a un futuro commit ancora da completare.
+
+Primo gate integrato PG18/Auth/restic fermato alla fixture che leggeva il
+contesto da GET me. Aggiornato il chiamante al POST bootstrap con handle e
+rilanciato il gate: completato con cleanup verificato. Include Auth reale,
+PostgreSQL locale, restic e restore; non include il gate dell'immagine del
+centro. Gli errori iniziali delle fixture non sono PASS.
+Nessuna prova su cloud, portali o M2, nessun deploy/upload. Collaudo manuale
+utente e immagine finale da verificare dopo chiusura del protocollo C03.
+
+## C03 — ricerca autorevole prima della decisione
+
+Richiesta dell'utente: verificare prove e controprove della finalizzazione
+separata, senza implementarla prima della discussione. Ricerca del 4 ottobre.
+
+- Verificato nello standard: RFC 6265, §4.1.1, descrive la race fra risposte
+  concorrenti con Set-Cookie; §4.1.2 descrive la sostituzione del cookie con
+  stesso nome, dominio e path. La revoca server nega il vecchio accesso ma
+  non impedisce al browser di sostituire il cookie nuovo con quello revocato.
+  Questo corrisponde alla riproduzione locale residua, non a un bypass auth.
+- Verificato nella specifica W3C: Web Locks coordina gli agenti che condividono
+  lo storage bucket; il lock dura fino al settlement della callback. Il signal
+  della richiesta di lock vale prima dell'acquisizione, non cancella il lavoro
+  già dentro la callback. Un lock mantenuto solo per bootstrap non ordina le
+  risposte di login/MFA/logout inviate dopo il suo rilascio.
+- Controprova alla garanzia universale: si tratta di coordinamento cooperativo.
+  Non autentica il chiamante e non vincola chiamanti API che saltano il frontend.
+  Sicurezza e revoca devono restare sul server. Inoltre le porte separano le
+  origin ma non i cookie: il collaudo su più porte dello stesso host richiede
+  namespace distinti o host distinti. Rischio condizionato, non nuova collisione
+  osservata su una configurazione attiva.
+- OWASP richiede invalidazione server al logout e un nuovo identificatore di
+  sessione all'autenticazione. Non promuovere il cookie anonimo a credenziale,
+  né aggirare la rotazione con una sessione autenticata fissa. Le difese CSRF
+  devono coprire anche il login; restano necessari i controlli Origin/Host e
+  i controlli del tentativo sul server.
+- Nhost documenta password → ticket MFA → sessione. La finalizzazione AMR è
+  distinta: non sostituisce MFA e non deve esporre i token Nhost al browser.
+
+Raccomandazione (inferenza progettuale, non ricetta prescritta dagli standard):
+verificare password/MFA fuori dal lock, conservare solo temporaneamente sul
+server l'esito collegato al tentativo, poi finalizzare tramite un identificatore
+opaco monouso. Il server ricontrolla scadenza, contesto, revoca, identità e
+permessi prima di creare una sessione nuova. Logout invalida anche gli esiti
+non ancora finalizzati. Limiti, scadenza e cleanup coprono gli esiti abbandonati.
+Coordinare nello stesso frontend tutte le operazioni che scrivono o cancellano
+cookie, comprese MFA, bootstrap, rotazione e revoca della sessione corrente.
+
+Non dimostrato: comportamento completo della proposta con timeout, chiusura
+della scheda e perdita della risposta. Un errore del fetch non prova un rollback
+sul server e non annulla un cookie già ricevuto. Prima della chiusura servono
+prove con header ritardati, risposta persa dopo creazione della sessione,
+logout durante provider/finalizzazione, replay, due schede e browser indipendenti.
+Non introdurre un reset automatico o un lock `steal` come presunta soluzione.
+La finalizzazione resta sospesa; nessuna modifica applicativa in questa ricerca.
+
+Fonti primarie:
+- [RFC 6265](https://www.rfc-editor.org/rfc/rfc6265.html), §1, §4.1.1, §4.1.2.
+- [W3C Web Locks](https://www.w3.org/TR/web-locks/), §2.4, §2.6, §3.2.
+- [OWASP Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html), rotazione e invalidazione.
+- [OWASP CSRF Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html), login CSRF e controlli di origine.
+- [Nhost MFA](https://docs.nhost.io/products/auth/mfa), ticket e verifica TOTP.
+- [WHATWG Fetch](https://fetch.spec.whatwg.org/), §3.1.2, elaborazione Set-Cookie; ulteriori aperture della pagina sono fallite per timeout dello strumento, non del servizio AMR.
