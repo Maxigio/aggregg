@@ -309,16 +309,20 @@ async function collauda({ manuale = false } = {}) {
     assert.equal(stillValid.status, 200);
     risultati.push('Logout: refresh negato; verifica del precedente access JWT HTTP ' + stillValid.status);
     fase = 'pagina AMR e sessione server-side';
-    await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-accessi-prova.sql'), 'utf8'));
+    if (VERSIONE_POSTGRES === '18') {
+      risultati.push(await require('./collauda-schema-staging-locale').collaudaSchema({ sql, controprove: !manuale }));
+    } else {
+      for (const nome of ['accessi', 'aziende', 'rinnovi', 'colleghi', 'backup']) {
+        await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-' + nome + '-prova.sql'), 'utf8'));
+      }
+    }
     await sql(`INSERT INTO amr_accessi.persone(id,admin) VALUES ('${preMfa.user.id}',true);`);
-    await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-aziende-prova.sql'), 'utf8'));
-    await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-rinnovi-prova.sql'), 'utf8'));
-    await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-colleghi-prova.sql'), 'utf8'));
-    await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-backup-prova.sql'), 'utf8'));
     const writerPassword = crypto.randomBytes(32).toString('hex');
-    await sql(`CREATE ROLE amr_commerciale LOGIN PASSWORD '${writerPassword}' IN ROLE amr_aziende_scrittore,amr_colleghi_scrittore;`);
+    await sql(VERSIONE_POSTGRES === '18' ? `ALTER ROLE amr_commerciale LOGIN PASSWORD '${writerPassword}';`
+      : `CREATE ROLE amr_commerciale LOGIN PASSWORD '${writerPassword}' IN ROLE amr_aziende_scrittore,amr_colleghi_scrittore;`);
     const readerPassword = crypto.randomBytes(32).toString('hex');
-    await sql(`CREATE ROLE amr_gateway LOGIN PASSWORD '${readerPassword}' IN ROLE amr_accessi_lettore;`);
+    await sql(VERSIONE_POSTGRES === '18' ? `ALTER ROLE amr_gateway LOGIN PASSWORD '${readerPassword}';`
+      : `CREATE ROLE amr_gateway LOGIN PASSWORD '${readerPassword}' IN ROLE amr_accessi_lettore;`);
     const pgAddress = await docker('port', 'postgres', '5432');
     assert.match(pgAddress, /^127\.0\.0\.1:\d+$/);
     pool = new (require('pg').Pool)({ host: '127.0.0.1', port: Number(pgAddress.split(':')[1]),
@@ -330,7 +334,8 @@ async function collauda({ manuale = false } = {}) {
       statement_timeout:2500,lock_timeout:1500,connectionTimeoutMillis:2000,query_timeout:3000 });
     writerPool.on('error',()=>{});
     const backupPassword = crypto.randomBytes(32).toString('hex');
-    await sql(`CREATE ROLE amr_copie LOGIN PASSWORD '${backupPassword}' IN ROLE amr_backup_esecutore;`);
+    await sql(VERSIONE_POSTGRES === '18' ? `ALTER ROLE amr_copie LOGIN PASSWORD '${backupPassword}';`
+      : `CREATE ROLE amr_copie LOGIN PASSWORD '${backupPassword}' IN ROLE amr_backup_esecutore;`);
     backupPool = new (require('pg').Pool)({ host:'127.0.0.1',port:Number(pgAddress.split(':')[1]),
       user:'amr_copie',password:backupPassword,database:'postgres',max:2,
       statement_timeout:2500,connectionTimeoutMillis:2000,query_timeout:3000 });

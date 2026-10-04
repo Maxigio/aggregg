@@ -321,3 +321,12 @@ usa il mount corretto anche nel restore. Test pertinenti 66/66, review
 indipendente senza nuovi finding bloccanti. Prove e limiti nel registro sopra:
 repository restic locali, nessun backup esterno o mutazione Nhost, nessun M2.
 L'incremento degli strumenti 18 e i nuovi documenti restano non committati.
+
+## Pacchetto SQL locale — 4 ottobre, incremento successivo
+
+Profilo 18 e inventario committati in `cba704d`. Preparato il
+[pacchetto di installazione](staging-schema-2026-10-04.md): otto definizioni da
+HEAD in una transazione, preflight e tre runtime NOLOGIN. Il collaudo prova
+il percorso installatore senza CREATEROLE → SET LOCAL ROLE, rollback e ACL,
+vincolando le impronte del checkout a quelle del candidato prima del primo SQL.
+Nessuna migrazione remota; password/LOGIN e configurazione Run restano separate.
