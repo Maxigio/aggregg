@@ -24,7 +24,7 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     return /^[a-f0-9]{64}$/.test(value) ? impronta(value) : null;
   };
   const eliminaScaduti = () => {
-    for (const m of [sessioni, challenge, tentativiAccesso]) for (const [k, s] of m) if (s.scadenza <= ora()) m.delete(k);
+    for (const m of [sessioni, challenge, tentativiAccesso]) for (const [k, s] of m) if (s.scadenza <= ora()) { m.delete(k); if (m === tentativiAccesso) void ritiraEsito(s); }
     for (const [k, s] of esitiLogout) if (s.scadenza <= ora()) { clearTimeout(s.timer); esitiLogout.delete(k); }
   };
   const timer = setInterval(eliminaScaduti, 30000); timer.unref();
@@ -36,6 +36,11 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     const token = crypto.randomBytes(32).toString('hex');
     res.cookie('amr_accesso_prova', token, options);
     return impronta(token);
+  }
+  function ritiraEsito(tentativo) {
+    const esito = tentativo.esito;
+    tentativo.esito = null;
+    return esito?.provider?.session ? revocaProvider(esito.provider) : Promise.resolve(false);
   }
   function valido(tentativo) {
     if (chiuso || tentativiAccesso.get(tentativo.browser) !== tentativo || tentativo.scadenza <= ora()) {
@@ -84,7 +89,7 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     } };
   }
   const errore = (status, codice) => Object.assign(new Error(codice), { status, codice });
-  let attive = 0, inizioFinestra = ora(), tentativi = 0, preparazioni = 0;
+  let attive = 0, inizioFinestra = ora(), tentativi = 0, preparazioni = 0, finalizzazioni = 0;
   app.use('/api/auth', trasporto.middleware, (req, res, next) => {
     res.set('Cache-Control', 'no-store');
     res.set('X-Content-Type-Options', 'nosniff');
@@ -99,11 +104,11 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
   app.get('/api/auth/pagina.js', (req, res) => res.sendFile(path.join(__dirname, '../../frontend/nodi-login-prova.js')));
   app.get('/api/auth/pagina.css', (req, res) => res.sendFile(path.join(__dirname, '../../frontend/nodi-login-prova.css')));
   const protetta = (fn, preparazione = false) => async (req, res) => {
-    if (ora() - inizioFinestra >= 60000) { inizioFinestra = ora(); tentativi = 0; preparazioni = 0; }
-    if (attive >= 4 || (preparazione ? preparazioni : tentativi) >= 20) {
+    if (ora() - inizioFinestra >= 60000) { inizioFinestra = ora(); tentativi = 0; preparazioni = 0; finalizzazioni = 0; }
+    if (attive >= 4 || (preparazione === 'finalizza' ? finalizzazioni >= 40 : (preparazione ? preparazioni : tentativi) >= 20)) {
       res.set('Retry-After', '60'); return res.status(429).json({ codice: 'troppi_tentativi', riprovaFra: 60 });
     }
-    if (preparazione) preparazioni++; else tentativi++;
+    if (preparazione === 'finalizza') finalizzazioni++; else if (preparazione) preparazioni++; else tentativi++;
     attive++;
     try { await fn(req, res); }
     catch (e) {
@@ -117,6 +122,8 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     if (chiuso) throw errore(503, 'identita_non_disponibile');
     const key = browser(req, res);
     if (!tentativiAccesso.has(key) && tentativiAccesso.size >= 50) throw errore(503, 'challenge_non_disponibili');
+    const precedente = tentativiAccesso.get(key);
+    if (precedente) void ritiraEsito(precedente);
     const handle = crypto.randomBytes(32).toString('hex');
     tentativiAccesso.set(key, { browser: key, handle: impronta(handle), usato: false,
       revisione: sequenzaRevoche, scadenza: ora() + 3 * 60000, inVolo: false });
@@ -141,9 +148,10 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     if (!ruolo?.attiva || (ruolo.admin && !mfa)) throw errore(403, 'accesso_non_autorizzato');
     eliminaScaduti();
     const vecchia = cookie(req, 'amr_sessione_prova');
-    if (sessioni.size >= 100 && !sessioni.has(vecchia)) throw errore(503, 'sessioni_non_disponibili');
-    const ritirata = sessioni.get(vecchia)?.provider;
-    if (vecchia) sessioni.delete(vecchia);
+    const ritirate = [...sessioni.values()].filter(v => v.chiave === vecchia || v.browser === tentativo.browser);
+    if (sessioni.size - ritirate.length >= 100) throw errore(503, 'sessioni_non_disponibili');
+    if (req.aborted || res.destroyed) throw errore(401, 'ripeti_login');
+    for (const v of ritirate) sessioni.delete(v.chiave);
     const token = crypto.randomBytes(32).toString('hex');
     sessioni.set(impronta(token), { chiave: impronta(token), persona: s.user.id, mfa, provider: s, browser: tentativo.browser,
       id: crypto.randomBytes(32).toString('hex'), creata: ora(),
@@ -154,11 +162,18 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     res.json({ ok: true });
     // Cleanup mirato dopo l'esito locale: non revocare token ancora in uso,
     // né far dipendere la rotazione dalla disponibilità del provider.
-    if (ritirata) await revocaProvider({ session: ritirata });
+    for (const v of ritirate) void revocaProvider({ session: v.provider });
+  }
+  function preparaEsito(req, res, tentativo, provider, mfa) {
+    valido(tentativo);
+    if (req.aborted || res.destroyed) throw errore(401, 'ripeti_login');
+    const conferma = crypto.randomBytes(32).toString('hex');
+    tentativo.esito = { provider, mfa, conferma: impronta(conferma) };
+    // La risposta lenta non modifica alcun cookie. I token rimangono nel server.
+    res.json({ conferma });
   }
   app.post('/api/auth/login', protetta(async (req, res) => {
     if (chiuso) throw errore(503, 'identita_non_disponibile');
-    // Il bootstrap deve precedere il login: il logout usa lo stesso contesto.
     const key = cookie(req, 'amr_accesso_prova');
     if (!key) throw errore(401, 'ripeti_login');
     const { email, password } = req.body || {};
@@ -166,31 +181,18 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
         || typeof password !== 'string' || !password.length || password.length > 50) {
       throw errore(400, 'input_non_valido');
     }
-    const tentativo = tentativiAccesso.get(key);
-    const handle = req.body?.tentativo;
+    const tentativo = tentativiAccesso.get(key), handle = req.body?.tentativo;
     if (!tentativo || tentativo.usato || typeof handle !== 'string' || !/^[a-f0-9]{64}$/.test(handle)
         || tentativo.handle !== impronta(handle)) throw errore(401, 'ripeti_login');
-    valido(tentativo);
-    tentativo.usato = true; tentativo.inVolo = true;
-    let result, accettato = false, attendeMfa = false;
+    valido(tentativo); tentativo.usato = true; tentativo.inVolo = true;
+    let result, preparato = false;
     try {
       result = await client.login(email, password);
-      valido(tentativo);
-      if (typeof result?.mfa?.ticket === 'string' && !result.session) {
-        eliminaScaduti();
-        if (challenge.size >= 50) throw errore(503, 'challenge_non_disponibili');
-        const token = crypto.randomBytes(32).toString('hex');
-        challenge.set(impronta(token), { ticket: result.mfa.ticket, scadenza: tentativo.scadenza,
-          tentativo, usato: false });
-        res.cookie('amr_mfa_prova', token, { ...options, maxAge: 3 * 60000 });
-        attendeMfa = true;
-        return res.json({ mfa: true });
-      }
-      await creaSessione(req, res, result, false, tentativo); accettato = true;
+      preparaEsito(req, res, tentativo, result, false); preparato = true;
     } finally {
       tentativo.inVolo = false;
-      if (!attendeMfa && tentativiAccesso.get(key) === tentativo) tentativiAccesso.delete(key);
-      if (!accettato) {
+      if (!preparato) {
+        if (tentativiAccesso.get(key) === tentativo) tentativiAccesso.delete(key);
         const ok = await revocaProvider(result);
         tentativo.esitoLogout?.completa(Boolean(result?.session) && ok);
       }
@@ -201,25 +203,53 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     const key = cookie(req, 'amr_mfa_prova'), pending = challenge.get(key);
     if (!pending || pending.usato) throw errore(401, 'ripeti_login');
     valido(pending.tentativo);
-    // Restare registrato durante l'await rende il tentativo cancellabile dal logout.
-    pending.usato = true;
-    pending.tentativo.inVolo = true;
-    let result, accettato = false;
+    pending.usato = true; pending.tentativo.inVolo = true;
+    let result, preparato = false;
     try {
       result = await client.mfa(pending.ticket, req.body.otp);
-      await creaSessione(req, res, result, true, pending.tentativo); accettato = true;
+      preparaEsito(req, res, pending.tentativo, result, true); preparato = true;
     } finally {
       pending.tentativo.inVolo = false;
       if (challenge.get(key) === pending) challenge.delete(key);
-      if (tentativiAccesso.get(pending.tentativo.browser) === pending.tentativo) {
-        tentativiAccesso.delete(pending.tentativo.browser);
-      }
-      if (!accettato) {
+      if (!preparato) {
+        if (tentativiAccesso.get(pending.tentativo.browser) === pending.tentativo) tentativiAccesso.delete(pending.tentativo.browser);
         const ok = await revocaProvider(result);
         pending.tentativo.esitoLogout?.completa(Boolean(result?.session) && ok);
       }
     }
   }));
+  app.post('/api/auth/finalizza', protetta(async (req, res) => {
+    const key = cookie(req, 'amr_accesso_prova'), tentativo = tentativiAccesso.get(key);
+    const conferma = req.body?.conferma, esito = tentativo?.esito;
+    if (!tentativo || !esito || tentativo.inVolo || typeof conferma !== 'string'
+        || !/^[a-f0-9]{64}$/.test(conferma) || esito.conferma !== impronta(conferma)) throw errore(401, 'ripeti_login');
+    valido(tentativo);
+    // Il possesso del solo handle non basta: servono contesto, origine e stato server.
+    tentativo.esito = null; tentativo.inVolo = true;
+    let accettato = false, attendeMfa = false;
+    try {
+      const provider = esito.provider;
+      if (!esito.mfa && typeof provider?.mfa?.ticket === 'string' && !provider.session) {
+        if (challenge.size >= 50) throw errore(503, 'challenge_non_disponibili');
+        if (req.aborted || res.destroyed) throw errore(401, 'ripeti_login');
+        const token = crypto.randomBytes(32).toString('hex');
+        challenge.set(impronta(token), { ticket: provider.mfa.ticket, scadenza: tentativo.scadenza, tentativo, usato: false });
+        res.cookie('amr_mfa_prova', token, { ...options, maxAge: Math.max(1, tentativo.scadenza - ora()) });
+        res.json({ mfa: true }); attendeMfa = true;
+      } else {
+        await creaSessione(req, res, provider, esito.mfa, tentativo); accettato = true;
+      }
+    } finally {
+      tentativo.inVolo = false;
+      if (!attendeMfa && tentativiAccesso.get(key) === tentativo) tentativiAccesso.delete(key);
+      if (!accettato) {
+        // La risposta negativa deve liberare il lock del browser prima del
+        // cleanup Nhost, così il logout locale non dipende dal provider.
+        void revocaProvider(esito.provider).then(ok =>
+          tentativo.esitoLogout?.completa(Boolean(esito.provider?.session) && ok));
+      }
+    }
+  }, 'finalizza'));
   function sessione(req) {
     eliminaScaduti(); return sessioni.get(cookie(req, 'amr_sessione_prova')) || null;
   }
@@ -250,16 +280,20 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     const cancellati = new Set([p?.tentativo, tentativiAccesso.get(contestoBrowser)].filter(t => t?.inVolo));
     if (p && tentativiAccesso.get(p.tentativo.browser) === p.tentativo) tentativiAccesso.delete(p.tentativo.browser);
     if (pending) challenge.delete(pending);
+    const preparato = tentativiAccesso.get(contestoBrowser);
+    const haProvider = Boolean(preparato?.esito?.provider?.session);
     if (contestoBrowser) tentativiAccesso.delete(contestoBrowser);
+    for (const [k, c] of challenge) if (c.tentativo.browser === contestoBrowser) challenge.delete(k);
     const key = cookie(req, 'amr_sessione_prova'), s = sessioni.get(key);
     const ritirate = [...sessioni.values()].filter(v => v === s || (contestoBrowser && v.browser === contestoBrowser));
     for (const v of ritirate) sessioni.delete(v.chiave);
     res.clearCookie('amr_sessione_prova', options); res.clearCookie('amr_mfa_prova', options);
-    const esito = statoLogout(contestoBrowser, cancellati.size + ritirate.length);
+    const esito = statoLogout(contestoBrowser, cancellati.size + ritirate.length + (haProvider ? 1 : 0));
     for (const t of cancellati) t.esitoLogout = esito;
     // Risposta e clear-cookie definitivi prima del provider: nessun callback
     // remoto conserva res o può toccare i cookie di un successivo login.
     res.json({ ok: true, provider: esito.risposta });
+    if (preparato) void ritiraEsito(preparato).then(ok => { if (haProvider) esito.completa(ok); });
     for (const v of ritirate) void revocaProvider({ session: v.provider }, true).then(esito.completa);
   }
   app.post('/api/auth/logout', logout);
@@ -299,6 +333,7 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     revoche.set(persona, ++sequenzaRevoche);
     for (const [k, s] of sessioni) if (s.persona === persona) sessioni.delete(k);
   }, close: () => {
+    for (const t of tentativiAccesso.values()) void ritiraEsito(t);
     chiuso = true; clearInterval(timer);
     for (const s of esitiLogout.values()) clearTimeout(s.timer);
     esitiLogout.clear();

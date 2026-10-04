@@ -100,10 +100,9 @@
     }
   }
   async function api(url, body, timeoutMs = 15000) {
-    if (['/api/auth/logout', '/api/auth/sessioni/revoca'].includes(url) && window.amrBootstrap && navigator.locks) {
-      await window.amrBootstrap();
-    }
-    const r = await fetch(url, { method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin',
+    const invia = ['/api/auth/logout', '/api/auth/sessioni/revoca'].includes(url) && window.amrCookieFetch && navigator.locks
+      ? window.amrCookieFetch : fetch;
+    const r = await invia(url, { method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin',
       headers: body === undefined ? {} : { 'content-type': 'application/json' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(timeoutMs) });
     const d = await r.json().catch(() => ({}));

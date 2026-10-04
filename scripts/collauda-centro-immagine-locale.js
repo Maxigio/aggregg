@@ -261,18 +261,24 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
         }
       };
       const cookie=()=>[...jar].map(([k,v])=>k+'='+v).join('; ');
+      const autenticazione = async (route,body) => {
+        const r=await request(route,{method:'POST',body,cookie:cookie()});
+        assert.equal(r.status,200);controlla(!r.headers['set-cookie']);
+        const conferma=json(r).conferma;controlla(/^[a-f0-9]{64}$/.test(conferma));
+        return request('/api/auth/finalizza',{method:'POST',body:{conferma},cookie:cookie()});
+      };
       const bootstrap=await request('/api/auth/bootstrap',{method:'POST',body:{login:true}});
       assert.equal(bootstrap.status,200);aggiorna(bootstrap);
       controlla(jar.has('amr_accesso_prova'));
-      const challenge=await request('/api/auth/login',{method:'POST',
-        body:{email:credenziali.email,password:credenziali.password,tentativo:json(bootstrap).tentativo},cookie:cookie()});
+      const challenge=await autenticazione('/api/auth/login',
+        {email:credenziali.email,password:credenziali.password,tentativo:json(bootstrap).tentativo});
       assert.equal(challenge.status,200);aggiorna(challenge);
       if(admin) {
         assert.deepEqual(json(challenge),{mfa:true});
         controlla(jar.has('amr_mfa_prova')&&jar.has('amr_accesso_prova')&&!jar.has('amr_sessione_prova'));
         assert.equal((await request('/api/auth/me',{cookie:cookie()})).status,401);
         const otp=require('./collauda-nhost-locale').totp(totpSecret);
-        const finale=await request('/api/auth/mfa',{method:'POST',body:{otp},cookie:cookie()});
+        const finale=await autenticazione('/api/auth/mfa',{otp});
         assert.equal(finale.status,200);assert.deepEqual(json(finale),{ok:true});aggiorna(finale);
       } else assert.deepEqual(json(challenge),{ok:true});
       controlla(jar.has('amr_sessione_prova')&&!jar.has('amr_mfa_prova'));

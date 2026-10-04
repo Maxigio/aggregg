@@ -24,12 +24,17 @@ async function setup(t, { identita, logout = async () => {}, cleanupMs } = {}) {
       logout: async s => { revocate.push(s.refreshToken); await logout(s); },
     },
   });
-  const req = (route, body, cookie, extra = {}) => fetch(origine + '/api/auth/' + route, {
+  const raw = (route, body, cookie, extra = {}) => fetch(origine + '/api/auth/' + route, {
     method: body === undefined ? 'GET' : 'POST', headers: {
       ...(body === undefined ? {} : { origin: origine, 'content-type': 'application/json' }),
       ...(cookie ? { cookie } : {}), ...extra,
     }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
+  const req = async (route, body, cookie, extra) => {
+    const r = await raw(route, body, cookie, extra);
+    return ['login', 'mfa'].includes(route) ? require('./nodi-auth-finalizza.cjs').finalizza(r,
+      conferma => raw('finalizza', { conferma }, cookie, extra)) : r;
+  };
   const login = async (persona = 'anna', cookie) => {
     let contesto = (cookie || '').split(';').map(v => v.trim()).find(v => v.startsWith('amr_accesso_prova='));
     const bootstrap = await req('bootstrap', { login: true }, cookie);

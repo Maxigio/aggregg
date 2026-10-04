@@ -11,6 +11,7 @@ test('pagina login: una lettura iniziale tardiva non riapre la sessione dopo log
   const navigazioni=[];
   const ctx=vm.createContext({navigator: { locks: {} }, window: { amrBootstrap: async () => ({ tentativo: "a".repeat(64) }) },location:{replace:url=>navigazioni.push(url)},document:{querySelector:s=>nodes[s.slice(1)],querySelectorAll:()=>[]},AbortSignal,
     fetch:async url=>url.endsWith('/me')?new Promise(r=>{completa=r;}):{ok:true,json:async()=>({ok:true,providerRevocato:true})}});
+  ctx.window.amrCookieFetch = (...args) => ctx.fetch(...args);
   vm.runInContext(script,ctx);
   await vm.runInContext("manda('login', {})",ctx);assert.equal(nodes.prototipo.hidden,false);assert.deepEqual(navigazioni,['/']);
   await vm.runInContext("manda('logout', {})",ctx);assert.equal(nodes.prototipo.hidden,true);
@@ -52,8 +53,11 @@ test('C03: due schede iniziali condividono contesto e logout; altro browser e lo
   // Un altro browser ha una sessione autonoma anche per la stessa persona.
   const altro = await browser.newContext();
   const prep = await altro.request.post(origine + '/api/auth/bootstrap', { headers: { origin: origine }, data: {login:true} });
-  assert.equal((await altro.request.post(origine + '/api/auth/login', { headers: { origin: origine },
-    data: { email: 'sintetica@amr.invalid', password: 'password-sintetica', tentativo: (await prep.json()).tentativo } })).status(), 200);
+  const preparata = await altro.request.post(origine + '/api/auth/login', { headers: { origin: origine },
+    data: { email: 'sintetica@amr.invalid', password: 'password-sintetica', tentativo: (await prep.json()).tentativo } });
+  assert.equal(preparata.status(), 200);
+  assert.equal((await altro.request.post(origine + '/api/auth/finalizza', { headers: { origin: origine },
+    data: { conferma: (await preparata.json()).conferma } })).status(), 200);
   await b.evaluate(() => manda('logout', {})); libera();
   await a.waitForFunction(() => document.getElementById('stato').textContent.includes('Ripeti il login'));
   assert.equal((await context.request.get(origine + '/api/auth/me')).status(), 401);

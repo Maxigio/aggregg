@@ -31,13 +31,18 @@ async function fixture({admin=false,pending=false}={}) {
     },mfa:async()=>structuredClone(provider),logout:async()=>{rilasciProvider++;}}});return accessi;
   }});
  const server=http.createServer(centro.app);await new Promise((r,j)=>{server.once('error',j);server.listen(0,'127.0.0.1',r);});
- function request(route,{body,cookie,method,headers={}}={}) {
+ function rawRequest(route,{body,cookie,method,headers={}}={}) {
   return new Promise((resolve,reject)=>{
    const req=http.request({host:'127.0.0.1',port:server.address().port,path:route,method:method||(body===undefined?'GET':'POST'),
     headers:{host:'amr.invalid','x-forwarded-proto':'https',...(cookie?{cookie}:{}),...(body===undefined?{}:{origin:origine,'content-type':'application/json'}),'x-amr-local-admin':'1',...headers}},res=>{
      let raw='';res.setEncoding('utf8');res.on('data',v=>raw+=v);res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,raw}));
     });req.on('error',reject);req.end(body===undefined?undefined:JSON.stringify(body));
   });
+ }
+ async function request(route, options={}) {
+  const r=await rawRequest(route,options);
+  return ['/api/auth/login','/api/auth/mfa'].includes(route)?require('./nodi-auth-finalizza.cjs').finalizza(r,
+   conferma=>rawRequest('/api/auth/finalizza',{...options,body:{conferma}})):r;
  }
  async function login(cookie) {
   const bootstrap=await request('/api/auth/bootstrap',{cookie,body:{login:true}});

@@ -51,3 +51,12 @@ Prossimo passo: integrare questo esito autenticato con lo schema commerciale Pos
 ## Stato successivo — collegamento del centro
 
 Il lavoro descritto sopra è committato in `ae33f5f`. Il successivo incremento locale è documentato in [centro-accessi-postgres.md](centro-accessi-postgres.md): sessione collegata al centro, permessi PostgreSQL e controlli asincroni. Le limitazioni storiche sopra descrivono il primo collaudo separato; non costituiscono lo stato dell'incremento successivo.
+
+## Aggiornamento 4 ottobre: protocollo di finalizzazione
+
+Login e MFA restituiscono ora `{conferma}` senza cookie. Il frontend esegue
+poi `/api/auth/finalizza` sotto lo stesso Web Lock di bootstrap/logout: questo
+passaggio restituisce `{ok:true}` o `{mfa:true}` e i relativi cookie. I vecchi
+chiamanti diretti devono seguire il protocollo; non è una modifica agli
+scraper. Prove, controprove e limiti in
+[correzioni-centro-2026-10-04.md](correzioni-centro-2026-10-04.md), ultima sezione C03.

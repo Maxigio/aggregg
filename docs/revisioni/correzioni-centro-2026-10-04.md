@@ -185,6 +185,46 @@ logout durante provider/finalizzazione, replay, due schede e browser indipendent
 Non introdurre un reset automatico o un lock `steal` come presunta soluzione.
 La finalizzazione resta sospesa; nessuna modifica applicativa in questa ricerca.
 
+## C03 — chiuso nel protocollo locale dopo l’autorizzazione successiva
+
+Il commit `35c83bc` fissa la preparazione già verificata. Il successivo
+intervento separa login/MFA da `/api/auth/finalizza`: le risposte lente del
+provider non scrivono cookie; restituiscono solo una conferma casuale monouso.
+Il backend conserva l’esito per il tentativo corrente, vincolato al contesto
+HttpOnly, all’origine e alla scadenza di tre minuti. La finalizzazione rilegge
+identità, epoca e revoche dopo l’attesa; nessun token Nhost arriva al browser.
+
+Bootstrap, finalizzazione, logout e revoca della sessione corrente usano lo
+stesso Web Lock nel frontend. La verifica provider resta fuori dal lock.
+Timeout della fetch reale, senza `Promise.race` o `steal`: non si finge che
+una risposta non ricevuta equivalga a rollback. Il successivo login ritira
+anche sessioni del contesto il cui cookie non è stato consegnato.
+
+La review indipendente ha riprodotto e fatto correggere due problemi:
+
+- cleanup Nhost sul diniego tratteneva il lock: ora prosegue separatamente,
+  conservando l’esito di revoca pendente senza ritardare la risposta locale;
+- a quota 100 il recupero del cookie perso era negato: la quota considera
+  prima le sessioni dello stesso contesto da sostituire, senza ammettere
+  nuovi browser oltre il limite.
+
+Controprove: conferma estranea/riusata/scaduta, logout durante provider e
+identità asincrona, MFA, socket chiuso, due schede e risposta finalizzata
+ritardata/annullata. Chromium headless sintetico verifica l’ordine dei cookie
+e il timeout effettivo. Il reviewer ripristina i due bug solo in memoria:
+ricompaiono, poi le correzioni superano 57 test mirati. Nessun finding
+residuo confermato nel diff Auth. Il gruppo Auth/HTTP/nodi è 101/101;
+suite generale e gate dell’immagine aggiornati nella review finale.
+
+Limiti: Web Locks coordina il nostro frontend, non è una difesa server contro
+client arbitrari; origine, handle e revoche sono verificati separatamente.
+Il controllo PostgreSQL della finalizzazione può ancora ritardare il lock;
+l’attesa per acquisirlo è limitata a cinque secondi. Cleanup provider bounded
+e best effort, non garanzia di revoca remota. Quattro chiamate provider già
+pendenti possono ancora negare temporaneamente un nuovo bootstrap con 429:
+è il limite preesistente, non un cookie tardivo. Sessioni in RAM, una replica;
+nessun collaudo manuale o staging remoto eseguito per deduzione.
+
 Fonti primarie:
 - [RFC 6265](https://www.rfc-editor.org/rfc/rfc6265.html), §1, §4.1.1, §4.1.2.
 - [W3C Web Locks](https://www.w3.org/TR/web-locks/), §2.4, §2.6, §3.2.

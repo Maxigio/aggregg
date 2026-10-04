@@ -18,6 +18,7 @@ function pagina({ leggi = async () => ({ stato: 'confirmed' }) } = {}) {
       return { ok: true, json: async () => data };
     },
   });
+  ctx.window.amrCookieFetch = (...args) => ctx.fetch(...args);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../frontend/nodi-login-prova.js'), 'utf8'), ctx);
   return { ctx, nodes, timers, richieste, id, async tick() {
     assert.ok(timers.length); timers.shift()(); await new Promise(r => setImmediate(r));

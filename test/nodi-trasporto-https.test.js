@@ -30,7 +30,7 @@ async function setup(t, { tls, proxyAttendibili = [], origine = 'https://amr.inv
   const session = () => ({ session: { user: { id: 'anna', emailVerified: true }, accessToken: 'access-' + ++numero, refreshToken: 'refresh-' + numero } });
   auth = mount(app, { origine, ...(trasporto ? { trasporto } : { proxyAttendibili }), cookiePath: '/', identita: async () => ({ attiva: true, epoca: 0 }),
     client: { login: async () => mfa ? { mfa: { ticket: 'ticket-sintetico' } } : session(), mfa: async () => session(), logout: async () => {} } });
-  const req = (route, body, cookie, extra = {}, ca = tls?.cert) => new Promise((resolve, reject) => {
+  const raw = (route, body, cookie, extra = {}, ca = tls?.cert) => new Promise((resolve, reject) => {
     const r = (tls ? https : http).request({ hostname: '127.0.0.1', port: server.address().port,
       ca, path: '/api/auth/' + route, method: body === undefined ? 'GET' : 'POST',
       headers: { host: new URL(origine).host, ...(body === undefined ? {} : { origin: origine, 'content-type': 'application/json' }),
@@ -40,6 +40,11 @@ async function setup(t, { tls, proxyAttendibili = [], origine = 'https://amr.inv
     });
     r.on('error', reject); r.end(body === undefined ? undefined : JSON.stringify(body));
   });
+  const req = async (route, body, cookie, extra, ca) => {
+    const r = await raw(route, body, cookie, extra, ca);
+    return ['login', 'mfa'].includes(route) ? require('./nodi-auth-finalizza.cjs').finalizza(r,
+      conferma => raw('finalizza', { conferma }, cookie, extra, ca)) : r;
+  };
   const login = async (cookies, extra) => {
     const bootstrap = await req('bootstrap', {login:true}, cookies, extra);
     const contesto = (cookies || '').split(';').map(v => v.trim()).find(v => v.startsWith('amr_accesso_prova='))

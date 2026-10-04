@@ -37,10 +37,17 @@ async function manda(endpoint, body) {
   document.querySelectorAll('button').forEach(b => { b.disabled = true; });
   try {
     if (endpoint === 'login') body = { ...body, tentativo: (await window.amrBootstrap(true)).tentativo };
-    else if (endpoint === 'mfa' || navigator.locks) await window.amrBootstrap();
-    const r = await fetch('/api/auth/' + endpoint, { method: 'POST', credentials: 'same-origin',
+    else if (endpoint === 'mfa') await window.amrBootstrap();
+    const invia = endpoint === 'logout' && navigator.locks ? window.amrCookieFetch : fetch;
+    let r = await invia('/api/auth/' + endpoint, { method: 'POST', credentials: 'same-origin',
       headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
-    const data = await r.json();
+    let data = await r.json();
+    if (r.ok && data.conferma) {
+      r = await window.amrCookieFetch('/api/auth/finalizza', { method: 'POST', credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' }, body: JSON.stringify({ conferma: data.conferma }),
+        signal: AbortSignal.timeout(15000) });
+      data = await r.json();
+    }
     if (!r.ok) {
       stato.textContent = data.codice === 'troppi_tentativi' && Number.isSafeInteger(data.riprovaFra)
         ? `Troppi tentativi. Riprova fra ${data.riprovaFra} secondi.`

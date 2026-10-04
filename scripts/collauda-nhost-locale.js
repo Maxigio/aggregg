@@ -405,11 +405,19 @@ async function collauda({ manuale = false } = {}) {
         return loginProva;
       } });
     serverLogin.on('request', centro.app);
-    const richiestaLogin = (endpoint, body, cookie) => fetch(origineLogin + '/api/auth/' + endpoint, {
+    const richiestaLoginRaw = (endpoint, body, cookie) => fetch(origineLogin + '/api/auth/' + endpoint, {
       method: body === undefined ? 'GET' : 'POST', headers: {
         ...(body === undefined ? {} : { origin: origineLogin, 'content-type': 'application/json' }),
         ...(cookie ? { cookie } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal: AbortSignal.timeout(15000) });
+    const richiestaLogin = async (route, body, cookie) => {
+      const r = await richiestaLoginRaw(route, body, cookie);
+      if (!['login', 'mfa'].includes(route) || r.status !== 200) return r;
+      const data = await r.clone().json();
+      assert.deepEqual(r.headers.getSetCookie(), []);
+      assert.match(data.conferma, /^[a-f0-9]{64}$/);
+      return richiestaLoginRaw('finalizza', { conferma: data.conferma }, cookie);
+    };
     const loginConContesto = async body => {
       const bootstrap = await richiestaLogin('bootstrap', { login: true });assert.equal(bootstrap.status,200);
       const cookieContesto = bootstrap.headers.getSetCookie().find(v => v.startsWith('amr_accesso_prova='))?.split(';')[0];

@@ -32,7 +32,10 @@ async function setup(t, timeoutMs = 2000, maxPersona = 2) {
     ...(body?{body:JSON.stringify(body)}:{})});
   const bootstrap=await req('/api/auth/bootstrap',undefined,'POST',{login:true});assert.equal(bootstrap.status,200);
   const contesto=bootstrap.headers.getSetCookie().find(v=>v.startsWith('amr_accesso_prova=')).split(';')[0];
-  const login=await req('/api/auth/login',contesto,'POST',{email:'test@amr.invalid',password:'sintetica-locale',tentativo:(await bootstrap.json()).tentativo});
+  const preparata=await req('/api/auth/login',contesto,'POST',{email:'test@amr.invalid',password:'sintetica-locale',tentativo:(await bootstrap.json()).tentativo});
+  assert.equal(preparata.status,200);
+  const login=await require('./nodi-auth-finalizza.cjs').finalizza(preparata,
+    conferma=>req('/api/auth/finalizza',contesto,'POST',{conferma}));
   assert.equal(login.status,200);
   const cookie=contesto+'; '+login.headers.getSetCookie().find(v=>v.startsWith('amr_sessione_prova=')).split(';')[0];
   const node=(route,method='GET',body)=>fetch(origine+route,{method,headers:{'x-amr-node-id':'n1','x-amr-node-token':'1'.repeat(64),
