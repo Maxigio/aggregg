@@ -1,5 +1,15 @@
 # Pacchetto della misura ingress Nhost — 4 ottobre 2026
 
+**Aggiornamento 5 ottobre:** upload e due tentativi di avvio della sola
+sonda autorizzati ed eseguiti. Il primo ha registrato `exec format error`;
+la variante multiarch con identico sorgente passa gli smoke test locali
+ma non ha raggiunto healthz remoto nel secondo tentativo. Run ripristinato
+e verificato a zero repliche dopo entrambi. Misure del proxy non eseguite;
+causa dell'indisponibilità del secondo tentativo non determinata. Evidenze
+e limiti nel
+[registro della review](branch-nodi-2026-10-04-staging.md#gate-remoto-limite-confermato).
+Le sezioni seguenti conservano la preparazione antecedente alla prova.
+
 ## Stato e perimetro
 
 Preparazione locale, non autorizzazione al deploy. Branch
@@ -19,9 +29,10 @@ Le prove locali precedenti e i loro limiti sono nel
 - Immagine locale già costruita da `bc4444e39c0bbdbf9ea06856cfa685d904986bb1`:
   `amr-centro:bc4444e`, linux/amd64, UID 1000, Node 24.21.0.
 - ID locale `sha256:add38acd65c934c86a0ac5449ecd28d04cd7146555a4fb2b19580c6d403201ff`.
-  Non è il digest del manifest nel registry; quest'ultimo si verifica dopo
-  l'upload e prima dell'attivazione. Non sostituire implicitamente l'immagine
-  con una build del checkout o con un tag aggiornato.
+  Il verificatore remoto deve confrontare il manifest, non presumere che
+  l'ID locale sia sempre il digest della config OCI. In questo daemon l'ID
+  coincide con il manifest remoto, verificato dopo l'upload. Non sostituire
+  implicitamente l'immagine con una build del checkout o un tag aggiornato.
 - Registry mostrato dalla console:
   `registry.eu-central-1.nhost.run/40f9c208-5e1b-49ac-afcd-54e56d70de8b`.
 - URL previsto dal form non salvato:
@@ -55,7 +66,7 @@ già consumati dagli altri servizi. Questa misura non verifica il costo
 complessivo del futuro AMR. La scadenza di 15 minuti della sonda chiude
 l'ammissione diagnostica, **non** arresta Run o la fatturazione.
 
-## Esecuzione proposta, ancora da autorizzare
+## Esecuzione preparata prima dell'autorizzazione
 
 1. Ricontrollare che il servizio sia ancora vuoto e fermo. Se è cambiato,
    fermarsi prima di sovrascrivere configurazioni altrui.
