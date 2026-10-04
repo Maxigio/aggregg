@@ -138,7 +138,40 @@ e corrette. Un timer non garantisce un limite superiore preciso; un timeout
 del client non attribuisce automaticamente la causa all'ingress. Nessun
 ulteriore difetto di sicurezza confermato nel nuovo codice. Il conteggio della
 suite è una prova del main, non una suite indipendente duplicata dal reviewer.
-Controllo dell'immagine/entrypoint da registrare dopo la conclusione.
+Il reviewer ha eseguito la suite nuova 9/9 (una prova lenta esclusa), oltre
+a controprove indipendenti su scadenza durante attesa, duplicati/overflow e
+SIGTERM durante attesa. Prova lenta e suite completa restano prove del main.
+
+## Candidato committato e container
+
+Implementazione e registro iniziale: **`bc4444e`**. Contesto materializzato
+solo dai blob del commit; build senza rete con dipendenze in cache.
+
+- release `bc4444e39c0bbdbf9ea06856cfa685d904986bb1`;
+- immagine locale `amr-centro:bc4444e`, Linux amd64, utente `node`;
+- ID Docker `sha256:add38acd65c934c86a0ac5449ecd28d04cd7146555a4fb2b19580c6d403201ff`;
+- codice `9e945d3e1ad45cc323dcca021a4fcad1cd5c202beb43781544216e47a50fb578`;
+- cataloghi `0f20b3c6473b8c28890724f17b073ffff6d0073e0c090e96cb3c61c176252657`.
+
+Comando alternativo della sonda provato dentro questa immagine: UID 1000,
+Node 24.21.0, `/healthz` e risposta diagnostica corretti, SIGTERM **exit 0**,
+nessun OOM. Container con rete assente, filesystem read-only, capability
+rimosse, senza mount, credenziali o porte pubblicate. Cleanup verificato:
+restano soltanto gli otto container manuali preesistenti.
+
+Il primo smoke tentava un bind della sorgente host che Colima non condivide:
+configurazione respinta prima dell'avvio. Il collaudo valido usa la sorgente
+già contenuta nell'immagine immutabile, non un allargamento dei mount del VM.
+Questo è un check dell'entrypoint della sonda, **non** una nuova esecuzione
+del gate completo Auth/PG/restic del centro o un digest registry.
+Il runtime applicativo è invariato rispetto a `7b7d881`; i nuovi strumenti
+cambiano l'inventario del manifest e vanno distribuiti insieme al worker nel
+futuro gate applicativo. Il commit successivo delle sole evidenze non
+sostituisce il candidato collaudato.
+
+Evidenze: `/private/tmp/amr-sonda-context-20261004.json`,
+`/private/tmp/amr-sonda-image-build-20261004.log`,
+`/private/tmp/amr-sonda-container-20261004.log`.
 
 ## Prossimo gate remoto da autorizzare
 

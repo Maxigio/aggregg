@@ -364,3 +364,10 @@ Il comando alternativo è documentato e validato dalla CLI ufficiale.
 Nessun upload/avvio remoto: questo chiude la preparazione della misura,
 non il gate ingress Nhost o il deploy ai clienti. Il registro distingue
 stato del prototipo/centro, gate dell'app commerciale e verifiche remote.
+
+Incremento committato in `bc4444e`: 1.347 test passati, zero failure, sei skip
+opt-in; attese 55/65 s eseguite separatamente (1/1 PASS). Review indipendente
+9/9 e controprove, due imprecisioni documentali corrette. Immagine locale
+dallo stesso commit: entrypoint della sonda PASS con UID 1000/Node 24.21.0,
+SIGTERM exit 0 e cleanup verificato. Non è il gate Auth/DB completo né una
+prova dell'ingress Nhost. Nessuna mutazione remota o M2.
