@@ -91,11 +91,48 @@ test('collaudo immagine: errore di cleanup preserva il flag nel chiamante',async
       backupPassword:'sintetico',email:'fixture@amr.invalid',password:'sintetico',generated:{data:{totpSecret:'SYNTHETIC'}},
       preMfa:{user:{id:'sintetico'}},sql(){},fermata:{signal:new AbortController().signal},
       destinatario:'ref@amr.invalid',pwInvito:'sintetico',conservaTemporanei:false,diagnosi:'',
+      manifestAtteso:{},
       require:()=>({collaudaImmagine:async()=>{throw e;}})};
     await assert.rejects(vm.runInNewContext('(async()=>{'+source.slice(inizio,fine)+'})()',c),err=>err===e);
     assert.equal(c.conservaTemporanei,conserva);
     assert.equal(c.diagnosi,conserva?'fixture e immagine locale · collauda-centro-immagine-locale.js:99:7 · 42703 · ricevuto 403, atteso 200'
       :'ricevuto 403, atteso 200');
     assert.ok(!c.diagnosi.includes('segreto'));
+  }
+});
+
+test('collaudo immagine: il manifest deve coincidere con il candidato atteso',()=>{
+  const source=fs.readFileSync(path.join(__dirname,'../scripts/collauda-centro-immagine-locale.js'),'utf8');
+  const start=source.indexOf('const wire ='),end=source.indexOf("await attendi(async()=>{const r=await request('/api/test/config')",start);
+  assert.ok(start>0&&end>start);
+  const expected={protocollo:1,release:'a'.repeat(40),codice:'b'.repeat(64),cataloghi:'c'.repeat(64)};
+  const run=manifest=>vm.runInNewContext(source.slice(start,end),{
+    manifest,atteso:expected,assert,require});
+  assert.doesNotThrow(()=>run({...expected}));
+  for(const campo of ['release','codice','cataloghi'])assert.throws(()=>run({...expected,
+    [campo]:'d'.repeat(campo==='release'?40:64)}));
+});
+
+test('collaudo Nhost: cleanup fallito rifiuta il gate e conserva i temporanei',async()=>{
+  const source=fs.readFileSync(path.join(__dirname,'../scripts/collauda-nhost-locale.js'),'utf8');
+  const start=source.indexOf('for (const chiudi of [');
+  const fineFinally=source.indexOf('\n  }\n  if (!manuale) console.log',start);
+  const end=fineFinally>=0?fineFinally:source.indexOf('\n}\n\nif (require.main',start);
+  assert.ok(start>0&&end>start);
+  for(const guasto of ['nessuno','down','risorsa']){
+    const calls=[],processo=new EventEmitter(),controller=new AbortController();
+    const c={workerManuale:undefined,centro:undefined,loginProva:guasto==='risorsa'?{close(){throw Error('dato privato');}}:undefined,
+      aziendeRoute:undefined,colleghiRoute:undefined,backupNotifiche:undefined,backupWorker:undefined,
+      backupPool:undefined,writerPool:undefined,pool:undefined,serverLogin:undefined,
+      docker:async()=>{calls.push('down');if(guasto==='down')throw Error('dato privato');},
+      fs:{rmSync(){calls.push('rm');}},directory:'/synthetic',conservaTemporanei:false,
+      puliziaIncompleta:false,manuale:false,process:processo,interrompi:()=>controller.abort(),
+      console:{log(){},error(){}},Error};
+    // Rimuove soltanto la graffa che chiude il finally; esegue il vero cleanup.
+    const body=source.slice(start,end).replace(/\n  }\s*$/,'');
+    const pending=vm.runInNewContext('(async()=>{'+body+'})()',c);
+    if(guasto==='nessuno'){await pending;assert.deepEqual(calls,['down','rm']);}
+    else{await assert.rejects(pending,e=>/pulizia incompleta/i.test(e.message)&&!e.message.includes('dato privato'));
+      assert.deepEqual(calls,['down']);}
   }
 });

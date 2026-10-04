@@ -113,6 +113,8 @@ async function collauda({ manuale = false } = {}) {
     throw new Error('Impostare AMR_NHOST_DOCKER_HOST sul socket del profilo isolato amr-auth');
   }
   const credenziali = manuale ? credenzialiLocali() : null;
+  const manifestAtteso = !manuale && process.env.AMR_TEST_CENTRO_IMAGE
+    ? require('./prepara-release-nodi').prepara() : undefined;
   const password = credenziali?.password ?? crypto.randomBytes(20).toString('hex');
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-nhost-locale-'));
   fs.chmodSync(directory, 0o700);
@@ -156,7 +158,7 @@ async function collauda({ manuale = false } = {}) {
   const risultati = [];
   let diagnosi = '';
   let serverLogin, loginProva, centro, pool, writerPool, aziendeRoute, colleghiRoute, workerManuale;
-  let backupPool, backupWorker, backupNotifiche, conservaTemporanei = false;
+  let backupPool, backupWorker, backupNotifiche, conservaTemporanei = false, puliziaIncompleta = false;
   try {
     await docker('up', '-d', '--wait', 'postgres', 'mail');
     await sql('CREATE SCHEMA auth;');
@@ -336,6 +338,7 @@ async function collauda({ manuale = false } = {}) {
     risultati.push('Ruolo PostgreSQL del centro: legge solo la funzione dei permessi, nessun accesso a utenti/hash/tabelle');
     if (!manuale) {
       fase = 'colleghi PostgreSQL: quote, ruoli e revoche';
+      diagnosi = '';
       risultati.push(...await require('../test/nodi-colleghi-pg.test').provaColleghiPostgres({sql,pool:writerPool,identita}));
     }
     const authClient = require('../backend/nodi/nhost-auth-client').creaClient({ base });
@@ -574,6 +577,7 @@ async function collauda({ manuale = false } = {}) {
       try {
         risultati.push(await require('./collauda-centro-immagine-locale').collaudaImmagine({
           host,docker,directory,image:process.env.AMR_TEST_CENTRO_IMAGE,readerPassword,writerPassword,backupPassword,
+          manifestAtteso,
           email,password,totpSecret:generated.data.totpSecret,persona:preMfa.user.id,sql,signal:fermata.signal,
           referente:{email:destinatario,password:pwInvito},
         }));
@@ -710,7 +714,7 @@ async function collauda({ manuale = false } = {}) {
     }
     if(manuale) await sql('BEGIN; DELETE FROM amr_backup.outbox; DELETE FROM amr_accessi.colleghi_operazioni; DELETE FROM amr_accessi.colleghi_inviti; DELETE FROM amr_accessi.aziende_operazioni; DELETE FROM amr_accessi.aziende_inviti; DELETE FROM amr_accessi.membri; DELETE FROM amr_accessi.aziende; COMMIT;');
     for (const r of risultati) console.log('OK · ' + r);
-    console.log('Collaudo locale completato: login Nhost e permessi PostgreSQL collegati al centro.');
+    if (manuale) console.log('Collaudo manuale pronto: login Nhost e permessi PostgreSQL collegati al centro.');
     if (manuale) {
       fase = 'collegamento worker reale iMac';
       workerManuale = require('../backend/nodi/worker-processo-prova').avviaWorker({
@@ -752,13 +756,18 @@ async function collauda({ manuale = false } = {}) {
     const confronto = typeof e.actual === 'number' && typeof e.expected === 'number'
       ? ` · ricevuto ${e.actual}, atteso ${e.expected}` : '';
     const sqlState = /^[A-Z0-9]{5}$/.test(e.code || '') ? ' · SQLSTATE '+e.code : '';
+    const dominio = ['input_non_valido','accesso_non_autorizzato','sessione_revocata',
+      'invito_non_valido','referente_non_valido','collega_non_valido','operazione_in_conflitto',
+      'azienda_esistente','invito_esistente','quota_aziende','quota_persone',
+      'appartenenza_esistente','azienda_non_pronta','operazione_non_disponibile'].includes(e.codice)
+      ? ' · dominio '+e.codice : '';
     const fixture = [...new Set([
       ...(Array.isArray(e.fixturePunto) ? e.fixturePunto : []),
       ...(typeof e.stack==='string' ? e.stack.split('\n').filter(p=>/^\s+at /.test(p))
         .flatMap(p=>p.match(/nodi-colleghi-pg\.test\.js:[1-9]\d*:[1-9]\d*/g)||[]) : []),
     ])].filter(p=>typeof p==='string'&&/^nodi-colleghi-pg\.test\.js:[1-9]\d*:[1-9]\d*$/.test(p)).slice(0,3);
     throw new Error('Collaudo interrotto nella fase: ' + fase + (punto ? ' · ' + punto : '') + confronto
-      + sqlState + (fixture.length?' · fixture '+fixture.join(', '):'') + (diagnosi ? ' · ' + diagnosi : ''));
+      + sqlState + dominio + (fixture.length?' · fixture '+fixture.join(', '):'') + (diagnosi ? ' · ' + diagnosi : ''));
   } finally {
     for (const chiudi of [() => workerManuale?.close(),
       () => centro ? centro.close() : loginProva?.close(), () => aziendeRoute?.close(), () => colleghiRoute?.close(),
@@ -769,21 +778,24 @@ async function collauda({ manuale = false } = {}) {
         }
       }]) {
       try { await chiudi(); }
-      catch { console.error('Chiusura di una risorsa locale non riuscita; continuo la pulizia.'); }
+      catch { puliziaIncompleta = true; console.error('Chiusura di una risorsa locale non riuscita; continuo la pulizia.'); }
     }
     try {
       await docker('down', '--volumes', '--remove-orphans');
       // Un gate figlio può conservare configurazioni necessarie per ripulire
       // risorse ancora attive: non eliminare indirettamente il suo recupero.
-      if (conservaTemporanei) console.error('Temporanei protetti del gate immagine conservati: '+directory);
+      if (conservaTemporanei || puliziaIncompleta) console.error('Temporanei protetti del collaudo conservati: '+directory);
       else fs.rmSync(directory, { recursive: true, force: true });
     } catch {
+      puliziaIncompleta = true;
       // Conservare il compose protetto permette di riprovare la pulizia.
       console.error('Pulizia container non riuscita; configurazione protetta conservata: ' + directory);
     } finally {
       process.off('SIGINT', interrompi); process.off('SIGTERM', interrompi);
     }
+    if (puliziaIncompleta) throw new Error('Collaudo locale: pulizia incompleta; verificare le risorse di prova prima di ripetere.');
   }
+  if (!manuale) console.log('Collaudo locale completato: login Nhost e permessi PostgreSQL collegati al centro, cleanup verificato.');
 }
 
 if (require.main === module) collauda({ manuale: process.argv.includes('--manuale') }).catch(e => { console.error(e.message); process.exitCode = 1; });

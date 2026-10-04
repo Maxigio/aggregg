@@ -41,7 +41,7 @@ process.once('SIGTERM',()=>{server.close();server.closeAllConnections();});
 `;
 
 async function collaudaImmagine({ host, docker, directory, image, readerPassword,
-  writerPassword, backupPassword, email, password, totpSecret, persona, referente, sql, signal } = {}) {
+  writerPassword, backupPassword, email, password, totpSecret, persona, referente, sql, signal, manifestAtteso } = {}) {
   let fase = 'parametri', work, esito, fallimento;
   const risorse = [], collegamenti = [];
   const nonce = crypto.randomBytes(8).toString('hex');
@@ -49,6 +49,7 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
   const ingresso = rete + '-ingresso';
   const volume = rete + '-dati', volumeTls = rete + '-tls-file', label = 'amr.collaudo.immagine';
   let cliEnv;
+  let atteso;
   // Ogni errore attraversa il guard finale: mai Error/stdout/stderr o cause raw.
   const cli = async (args, cleanup = false, timeout = 30000) => {
     const result = await run('docker', ['--host', host, ...args], {
@@ -65,6 +66,7 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
     signal?.addEventListener('abort', abort, { once: true });
   });
   try {
+    atteso = require('../backend/nodi/compatibilita-nodo').valida(manifestAtteso);
     controlla(typeof host === 'string' && /^unix:\/\/\/[^\r\n\0]+\/amr-auth\/docker\.sock$/.test(host));
     controlla(typeof docker === 'function' && typeof sql === 'function');
     // Un tag locale approvato dal chiamante, senza registry, digest remoto o pull implicito.
@@ -223,6 +225,7 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
     const manifest = JSON.parse(await cli(['exec',centro,'node','-e',verifica]));
     const wire = require('../backend/nodi/compatibilita-nodo').valida(manifest);
     assert.deepEqual(Object.keys(manifest).sort(),['cataloghi','codice','protocollo','release']);
+    assert.deepEqual(wire,atteso);
     await attendi(async()=>{const r=await request('/api/test/config');return r.status===200&&json(r).accesso==='nhost';});
     assert.equal(await cli(['network','inspect','--format','{{.Internal}}|{{len .Containers}}',rete]),'true|4');
     assert.equal(await cli(['network','inspect','--format','{{.Internal}}|{{len .Containers}}',ingresso]),'false|1');

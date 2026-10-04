@@ -282,3 +282,21 @@ contengono questi fix runtime. Prima dell'upload serve rigenerare e collaudare
 l'immagine dal commit candidato scelto. Nessun servizio remoto è stato
 modificato o avviato. Backup su storage reale, proxy/volume, SMTP, ingress,
 carico e integrazione completa APP restano gate da chiudere prima dei clienti.
+
+## Immagine aggiornata e gate locale — 4 ottobre 2026
+
+Costruita `amr-centro:staging-468b79c` dai blob del commit, con manifest e
+impronte aggiornati; il [registro dell'immagine](staging-immagine-2026-10-04.md)
+riporta ID Docker, prove, correzioni degli strumenti e limiti.
+Gate reale locale HTTPS/Auth/PostgreSQL/worker simulato **passato con exit 0**;
+65/65 test pertinenti, zero skip. Verificati riavvio sullo stesso volume e cleanup.
+
+La review ha corretto due difetti del collaudo: immagine non vincolata al
+candidato atteso e cleanup fallito non necessariamente segnalato come failure.
+Un primo giro si è fermato prima dell'immagine nella fixture delle quote;
+il giro diagnostico è passato senza modificare quote o timeout. La causa
+del primo fallimento resta non dimostrata, non dichiarata risolta.
+
+Le correzioni degli strumenti restano non committate. Prima di un upload
+rigenerare l'artefatto dal prossimo commit che le includerà. Nessun upload,
+segreto, volume o avvio Run remoto effettuato; M2 e portali esclusi.
