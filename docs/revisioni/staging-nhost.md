@@ -330,3 +330,18 @@ HEAD in una transazione, preflight e tre runtime NOLOGIN. Il collaudo prova
 il percorso installatore senza CREATEROLE → SET LOCAL ROLE, rollback e ACL,
 vincolando le impronte del checkout a quelle del candidato prima del primo SQL.
 Nessuna migrazione remota; password/LOGIN e configurazione Run restano separate.
+
+## Preparazione del controllo ingress — 4 ottobre, dopo la review finale
+
+La [review finale del candidato](branch-nodi-2026-10-04-finale.md) ha chiuso il
+gate locale `b1d9d6d`, incluso PG18/Auth/MFA/HTTPS/restic. Il
+[nuovo controllo ingress](staging-ingress-2026-10-04.md) riusa quel percorso
+per una CLI anonima, senza modificare il runtime o il TOML Run.
+
+Il test esterno non può conoscere il peer del socket visto dal container.
+Il gate remoto resta aperto: prima dell'avvio dell'app occorre concordare una
+misura lato server o un contratto equivalente del provider, senza indovinare
+gli IP attendibili. Nessun upload, migrazione, segreto, volume o avvio Nhost,
+M2 o chiamata ai portali in questo incremento. Il nuovo script cambia
+l'inventario del manifest: prima di un futuro upload rigenerare l'artefatto
+dal candidato approvato, senza promuovere implicitamente la vecchia immagine.

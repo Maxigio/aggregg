@@ -240,12 +240,11 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
       '/api/auth/pagina.js','/api/auth/aziende/pagina.js','/api/auth/colleghi/pagina.js']) {
       assert.equal((await request(route)).status,200);
     }
-    // Il proxy deve sovrascrivere gli header inoltrati anche se il client li falsifica.
     assert.equal((await request('/',{headers:{forwarded:'for=192.0.2.1;proto=http',
       'x-forwarded-proto':'http','x-forwarded-host':'evil.invalid','x-forwarded-for':'192.0.2.1'}})).status,200);
-    assert.equal((await request('/api/admin')).status,401);
-    assert.equal((await request('/api/auth/backup/stato')).status,401);
-    assert.equal((await request('/api/test/login',{method:'POST',body:{azienda:'aziendaA'}})).status,404);
+    // Stesso strumento anonimo utilizzabile sul futuro staging; CA solo della fixture.
+    const ingressoVerificato = await require('./nhost/collauda-ingress-staging').collaudaIngress({ origine, ca, signal });
+    assert.equal(ingressoVerificato.ok, true, JSON.stringify(ingressoVerificato));
 
     fase = 'password e MFA reali attraverso HTTPS';
     const login = async (credenziali={email,password},admin=true) => {
