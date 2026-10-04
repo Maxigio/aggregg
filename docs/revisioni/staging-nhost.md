@@ -345,3 +345,10 @@ gli IP attendibili. Nessun upload, migrazione, segreto, volume o avvio Nhost,
 M2 o chiamata ai portali in questo incremento. Il nuovo script cambia
 l'inventario del manifest: prima di un futuro upload rigenerare l'artefatto
 dal candidato approvato, senza promuovere implicitamente la vecchia immagine.
+
+Il nuovo candidato **`7b7d881`** è stato poi costruito e collaudato localmente:
+1.338 test passati, zero failure, cinque skip opt-in; gate immagine reale con
+PG18/Auth/MFA/HTTPS/restart/restic **PASS, exit 0 e cleanup verificato**.
+Il [registro ingress](staging-ingress-2026-10-04.md) riporta impronte e
+controprove. Nessuna mutazione remota: il gate Nhost peer/header/tempi rimane
+aperto e richiede la scelta della misura lato server prima dell'app reale.

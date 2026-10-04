@@ -152,8 +152,37 @@ ambiente vuoto, dotenv disabilitato e dati temporanei. I controlli opt-in non
 sono coperti da questo conteggio. Log
 `/private/tmp/amr-ingress-suite-finale-20261004.log`; gruppo mirato
 `/private/tmp/amr-ingress-focused-20261004.log`.
-Il gate immagine aggiornato resta da eseguire dal commit del nuovo strumento;
-non lo si deduce dal precedente PASS `b1d9d6d`.
+Il nuovo strumento è committato in **`7b7d881`**. Il gate integrato della
+relativa immagine è **passato, exit 0, cleanup verificato**, senza rilanci o
+modifiche alle quote: PostgreSQL 18.6, Auth 0.49.1, HTTPS con la medesima
+sonda anonima, login/MFA e autorizzazioni, worker simulato, ricerca Moto/Subito,
+SIGTERM 0, stesso volume dopo restart e credenziali revocate ancora negate.
+Restic 0.19.1: repository locali separati e restore/replay in secondo cluster.
+Non è un'esecuzione Nhost o una prova di storage esterno operativo.
+
+Artefatto dai soli blob del commit, build senza rete e dipendenze in cache:
+
+- release: `7b7d881b958510df3e3dc9e0e4e8a5cd4755d5b6`;
+- immagine locale: `amr-centro:7b7d881`, Linux amd64, utente `node`;
+- ID Docker: `sha256:2dba94a5a0e3c7cdc41a301195c579ad63bb26730cdeb73eac691eaf34161430`;
+- codice: `745d6a4f39bf9399f6f49437693cef0733e0756132a1b58bccac9c3dcc8ee938`;
+- cataloghi: `0f20b3c6473b8c28890724f17b073ffff6d0073e0c090e96cb3c61c176252657`;
+- SQL prima installazione: 78.320 byte, SHA-256
+  `ce0abebdc98bf88d940a4a5d66d4c4547e5556d601ff315c575af284910bfc8a`.
+
+L'ID locale non è un digest del registry. Il commit successivo di questo
+resoconto sarà solo documentale: non sostituisce implicitamente il candidato
+collaudato. Le definizioni SQL sono invariate, il pacchetto registra la release
+nuova; nessuna applicazione cloud.
+
+Evidenze:
+`/private/tmp/amr-ingress-context-20261004.json`,
+`/private/tmp/amr-ingress-image-build-20261004.log`,
+`/private/tmp/amr-ingress-image-gate-20261004.log`,
+`/private/tmp/amr-ingress-schema-20261004.sql`.
+Inventario finale Docker: gli otto container manuali preesistenti ancora
+attivi, nessun container del gate residuo. Nessun avvio/deploy remoto, M2,
+richiesta ai portali o riavvio del prototipo manuale.
 
 ## Fonti ufficiali ricontrollate
 
