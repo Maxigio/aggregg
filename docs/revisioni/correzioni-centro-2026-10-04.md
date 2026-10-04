@@ -40,3 +40,21 @@ possono ancora impedire la consegna fino alla deadline, ma non producono
 un falso lavoro iniziato/incerto. Prestazioni del provider remoto da collaudare.
 Fonte: [Node HTTP](https://nodejs.org/docs/latest-v24.x/api/http.html), ciclo
 di vita della risposta distinto da quello della richiesta.
+
+## B05 — chiuso
+
+Audit del restore identificato da `(dominio, id)`, come i writer aziende e
+colleghi. `dominio` deriva dal journal, con vincolo NOT NULL e allowlist.
+La sequenza aziendale resta unica: due UUID uguali in domini diversi sono
+ammessi solo con sequenze diverse. Fingerprint e watermark non cambiano.
+
+Migrazione dell'audit legacy nella stessa transazione/advisory lock del
+replay, senza cancellare righe. Audit malformato: rollback e riconciliazione
+manuale, senza ricreare identità Auth. Nessun database reale modificato.
+
+27/27 test unitari; PostgreSQL 18.6 isolato: migrazione popolata e riapplicata,
+UUID tra domini, conflitto fingerprint, dump/restore post-migrazione e
+rollback del legacy senza dominio. Review indipendente: nessun difetto
+applicativo residuo. Un errore nella fixture cross-domain usava un ID invito
+come persona Auth: corretta la fixture, preservata la guardia sull'identità.
+Fonte: [PostgreSQL generated columns](https://www.postgresql.org/docs/18/ddl-generated-columns.html).

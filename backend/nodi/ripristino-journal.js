@@ -124,12 +124,31 @@ async function applicaJournalInterno({ client, journal: input } = {}) {
       CREATE TABLE IF NOT EXISTS amr_ripristino.aziende (
         azienda text PRIMARY KEY, sequenza bigint NOT NULL CHECK (sequenza > 0));
       CREATE TABLE IF NOT EXISTS amr_ripristino.operazioni (
-        id uuid PRIMARY KEY, azienda text NOT NULL, sequenza bigint NOT NULL CHECK (sequenza > 0),
+        id uuid NOT NULL, azienda text NOT NULL, sequenza bigint NOT NULL CHECK (sequenza > 0),
         impronta text NOT NULL CHECK (impronta ~ '^[a-f0-9]{64}$'),
         stato text NOT NULL CHECK (stato IN ('applicato','superato')), journal jsonb NOT NULL,
-        importata_il timestamptz NOT NULL DEFAULT clock_timestamp(), UNIQUE(azienda,sequenza));
+        dominio text GENERATED ALWAYS AS (journal->>'dominio') STORED NOT NULL CHECK (dominio IN ('aziende','colleghi')),
+        importata_il timestamptz NOT NULL DEFAULT clock_timestamp(), PRIMARY KEY(dominio,id), UNIQUE(azienda,sequenza));
       REVOKE ALL ON ALL TABLES IN SCHEMA amr_ripristino FROM PUBLIC`);
-    const op = (await client.query('SELECT impronta,stato FROM amr_ripristino.operazioni WHERE id=$1', [j.operazione])).rows[0];
+    // Audit legacy: stessa transazione e advisory lock del replay. La colonna
+    // generata conserva il dominio del journal senza backfill o perdita di righe.
+    await client.query(`DO $$ DECLARE v_nome name; v_colonne text[];
+      BEGIN
+        SELECT c.conname, array_agg(a.attname::text ORDER BY k.ord) INTO v_nome,v_colonne
+        FROM pg_constraint c CROSS JOIN LATERAL unnest(c.conkey) WITH ORDINALITY k(attnum,ord)
+        JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum
+        WHERE c.conrelid='amr_ripristino.operazioni'::regclass AND c.contype='p'
+        GROUP BY c.conname;
+        IF v_colonne=ARRAY['id']::text[] THEN
+          ALTER TABLE amr_ripristino.operazioni ADD COLUMN dominio text
+            GENERATED ALWAYS AS (journal->>'dominio') STORED NOT NULL CHECK (dominio IN ('aziende','colleghi'));
+          EXECUTE format('ALTER TABLE amr_ripristino.operazioni DROP CONSTRAINT %I',v_nome);
+          ALTER TABLE amr_ripristino.operazioni ADD PRIMARY KEY(dominio,id);
+        ELSIF v_colonne IS DISTINCT FROM ARRAY['dominio','id']::text[] THEN
+          RAISE EXCEPTION 'ripristino_audit_non_valido';
+        END IF;
+      END $$`);
+    const op = (await client.query('SELECT impronta,stato FROM amr_ripristino.operazioni WHERE dominio=$1 AND id=$2', [j.dominio,j.operazione])).rows[0];
     if (op) {
       if (op.impronta !== impronta) throw errore('ripristino_operazione_in_conflitto');
       await client.query('COMMIT'); iniziata = false;
@@ -225,7 +244,7 @@ async function applicaJournalInterno({ client, journal: input } = {}) {
       catch { inutilizzabili.add(client); throw errore('ripristino_rollback_non_disponibile'); }
     }
     if (e instanceof ErroreRipristino) throw e;
-    throw errore(['23503','23505','23514'].includes(e?.code) ? 'ripristino_vincolo_in_conflitto' : 'ripristino_non_disponibile');
+    throw errore(['23502','23503','23505','23514'].includes(e?.code) ? 'ripristino_vincolo_in_conflitto' : 'ripristino_non_disponibile');
   } finally { inUso.delete(client); }
 }
 

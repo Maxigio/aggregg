@@ -38,8 +38,8 @@ function database() {
     if (sql === 'BEGIN') { assert.equal(precedente,undefined); precedente=clone(stato); }
     else if (sql === 'COMMIT') { assert.ok(precedente); precedente=undefined; }
     else if (sql === 'ROLLBACK') { assert.ok(precedente);stato=precedente;precedente=undefined; }
-    else if (/^SET |^SELECT pg_advisory|^CREATE SCHEMA|^LOCK TABLE/.test(sql)) {}
-    else if (sql.startsWith('SELECT impronta,stato')) return {rows:stato.operazioni.has(values[0])?[stato.operazioni.get(values[0])]:[]};
+    else if (/^SET |^SELECT pg_advisory|^CREATE SCHEMA|^LOCK TABLE|^DO \$\$/.test(sql)) {}
+    else if (sql.startsWith('SELECT impronta,stato')) return {rows:stato.operazioni.has(values[0]+':'+values[1])?[stato.operazioni.get(values[0]+':'+values[1])]:[]};
     else if (sql.startsWith('SELECT sequenza::text FROM amr_backup.aziende_sequenza')) {
       if (!stato.watermarkTabella) throw Object.assign(new Error('tabella assente'),{code:'42P01'});
       return {rows:stato.dumpSequenze.has(values[0])?[{sequenza:stato.dumpSequenze.get(values[0])}]:[]};
@@ -64,8 +64,8 @@ function database() {
     } else if (sql.startsWith('INSERT INTO amr_ripristino.aziende')) stato.sequenze.set(values[0],values[1]);
     else if (sql.startsWith('INSERT INTO amr_ripristino.operazioni')) {
       const [id,azienda,sequenza,impronta,statoOp,json]=values;
-      assert.equal(stato.operazioni.has(id),false);
-      stato.operazioni.set(id,{id,azienda,sequenza,impronta,stato:statoOp,journal:JSON.parse(json)});
+      assert.equal(stato.operazioni.has(JSON.parse(json).dominio+':'+id),false);
+      stato.operazioni.set(JSON.parse(json).dominio+':'+id,{id,azienda,sequenza,impronta,stato:statoOp,journal:JSON.parse(json)});
     } else assert.fail('SQL non previsto dal mock: '+sql);
     return {rowCount:1,rows:[]};
   }};
@@ -84,7 +84,7 @@ test('journal offline: snapshot atomico, audit privato e massima epoca; nessun r
   assert.deepEqual(d.stato.persone.get(id(1)),{id:id(1),attiva:true,admin:true,epoca:20});
   assert.equal(d.stato.persone.get(id(4)).epoca,11);
   assert.equal(d.stato.sequenze.get('sintetica'),'12');
-  const op=d.stato.operazioni.get(j.operazione);
+  const op=d.stato.operazioni.get(j.dominio+':'+j.operazione);
   assert.match(op.impronta,/^[a-f0-9]{64}$/);assert.equal(op.journal.confermata_il,'2026-10-02T12:00:00.123456Z');
   assert.equal(d.chiamate[0].sql,'BEGIN');assert.equal(d.chiamate.at(-1).sql,'COMMIT');
   const ddl=d.chiamate.find(c=>c.sql.startsWith('CREATE SCHEMA')).sql;
@@ -107,11 +107,26 @@ test('journal: stesso op e fingerprint no-op anche dopo snapshot successivi, ord
 });
 
 test('journal: op UUID riusato con payload diverso rifiutato; microsecondi inclusi nel fingerprint',async()=>{
-  for(const cambia of [j=>{j.azienda.nome='Diversa';},j=>{j.confermata_il='2026-10-02T12:00:00.123457Z';},j=>{j.dominio='aziende';j.tipo='rinnova';}]){
+  for(const cambia of [j=>{j.azienda.nome='Diversa';},j=>{j.confermata_il='2026-10-02T12:00:00.123457Z';}]){
     const d=database(),j=journal();await applicaJournal({client:d.client,journal:j});const prima=clone(d.stato);
     cambia(j);await assert.rejects(applicaJournal({client:d.client,journal:j}),codice('ripristino_operazione_in_conflitto'));
     assert.deepEqual(d.stato,prima);assert.equal(d.chiamate.at(-1).sql,'ROLLBACK');
   }
+});
+
+test('journal: stesso UUID fra domini ammesso, sequenza aziendale e impronte restano vincolanti', async () => {
+  const d = database(), j = journal();
+  await applicaJournal({ client: d.client, journal: j });
+  const altro = clone(j); altro.dominio = 'aziende'; altro.tipo = 'rinnova';
+  await assert.rejects(applicaJournal({ client: d.client, journal: altro }), codice('ripristino_sequenza_in_conflitto'));
+  altro.sequenza = '13';
+  assert.deepEqual(await applicaJournal({ client: d.client, journal: altro }), { stato: 'applicato', giaEseguita: false });
+  assert.equal(d.stato.operazioni.size, 2);
+  assert.equal(d.stato.sequenze.get('sintetica'), '13');
+  assert.equal((await applicaJournal({ client: d.client, journal: j })).giaEseguita, true);
+  assert.equal((await applicaJournal({ client: d.client, journal: altro })).giaEseguita, true);
+  altro.azienda.nome = 'Impronta in conflitto';
+  await assert.rejects(applicaJournal({ client: d.client, journal: altro }), codice('ripristino_operazione_in_conflitto'));
 });
 
 test('journal: vecchio snapshot dopo nuovo è solo audit superato, senza regressione; sequenze per azienda',async()=>{
@@ -147,7 +162,7 @@ test('journal: dump già più recente protegge dal primo replay vecchio, prima a
 test('journal: record al watermark del dump superato, fingerprint dei retry comunque verificato',async()=>{
   const d=database(),j=journal();j.sequenza='10';
   assert.deepEqual(await applicaJournal({client:d.client,journal:j}),{stato:'superato',giaEseguita:false});
-  assert.equal(scrittureCommerciali(d).length,0);assert.equal(d.stato.operazioni.get(j.operazione).stato,'superato');
+  assert.equal(scrittureCommerciali(d).length,0);assert.equal(d.stato.operazioni.get(j.dominio+':'+j.operazione).stato,'superato');
   assert.deepEqual(await applicaJournal({client:d.client,journal:j}),{stato:'superato',giaEseguita:true});
   j.azienda.nome='Collisione';await assert.rejects(applicaJournal({client:d.client,journal:j}),codice('ripristino_operazione_in_conflitto'));
 });
@@ -218,7 +233,7 @@ test('journal: nuova azienda ripristinata senza usare le funzioni live o creare 
   const d=database(),j=journal();d.stato.aziende.clear();d.stato.membri.clear();d.stato.dumpSequenze.clear();
   j.dominio='aziende';j.tipo='attiva';j.invito={id:id(500),stato:'accettato',scadenza:'2026-01-08T00:00:00Z',persona:id(2)};
   await applicaJournal({client:d.client,journal:j});
-  assert.equal(d.stato.aziende.size,1);assert.deepEqual(d.stato.operazioni.get(j.operazione).journal.invito,{...j.invito,scadenza:'2026-01-08T00:00:00.000000Z'});
+  assert.equal(d.stato.aziende.size,1);assert.deepEqual(d.stato.operazioni.get(j.dominio+':'+j.operazione).journal.invito,{...j.invito,scadenza:'2026-01-08T00:00:00.000000Z'});
   assert.equal(d.chiamate.filter(c=>c.sql.startsWith('INSERT INTO amr_accessi.aziende')).length,1);
   assert.ok(scrittureCommerciali(d).every(c=>!/(?:inviti|operazioni|scrivi)/.test(c.sql)));
   j.operazione=id(101);j.sequenza='13';

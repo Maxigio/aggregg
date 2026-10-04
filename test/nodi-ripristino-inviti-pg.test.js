@@ -10,6 +10,11 @@ const {creaAziendePostgres}=require(root+'/backend/nodi/aziende-postgres-prova')
 const {creaColleghiPostgres}=require(root+'/backend/nodi/colleghi-postgres-prova');
 const {applicaJournal,applicaJournalOrdinati}=require(root+'/backend/nodi/ripristino-journal');
 const host=process.env.AMR_TEST_RESTORE_DOCKER_HOST;
+const versione = process.env.AMR_TEST_POSTGRES_VERSIONE || '16';
+assert.ok(['16', '18'].includes(versione));
+const immagine = versione === '18'
+ ? 'postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650'
+ : 'postgres:16';
 const name='amr-pending-proof-'+crypto.randomBytes(6).toString('hex');
 let pools,started;
 function cmd(args,input) {
@@ -29,10 +34,10 @@ function cmd(args,input) {
   });
  });
 }
-test('PG16: dump pending, accettazioni, replay ordinato e dipendenza mancante',
+test('PG'+versione+': dump pending, replay ordinato e migrazione audit legacy senza perdita',
  {skip:!host&&'Impostare AMR_TEST_RESTORE_DOCKER_HOST',timeout:120000},async()=>{
  assert.match(host,/^unix:\/\/.*\/amr-auth\/docker\.sock$/);pools=[];started=false;try{
- await cmd(['run','-d','--name',name,'-e','POSTGRES_HOST_AUTH_METHOD=trust','-p','127.0.0.1::5432','postgres:16']);started=true;
+ await cmd(['run','-d','--name',name,'-e','POSTGRES_HOST_AUTH_METHOD=trust','-p','127.0.0.1::5432',immagine]);started=true;
  for(let i=0;i<60;i++){try{await cmd(['exec',name,'pg_isready','-h','127.0.0.1','-U','postgres']);break;}catch{if(i===59)throw new Error('PG not ready');await new Promise(r=>setTimeout(r,250));}}
  const address=(await cmd(['port',name,'5432'])).toString().trim();assert.match(address,/^127\.0\.0\.1:\d+$/);
  const connect=database=>{const pool=new Pool({host:'127.0.0.1',port:Number(address.split(':')[1]),user:'postgres',database,max:2,statement_timeout:15000});pool.on('error',()=>{});pools.push(pool);return pool;};
@@ -74,4 +79,36 @@ test('PG16: dump pending, accettazioni, replay ordinato e dipendenza mancante',
  const c=await recovery.connect();try {await applicaJournalOrdinati({client:c,journals:[revoca]});}finally{c.release();}
  assert.equal((await recovery.query('SELECT stato FROM amr_accessi.colleghi_inviti WHERE id=$1',[unrelated.invito])).rows[0].stato,'revocato');
  assert.equal((await recovery.query('SELECT count(*)::int n FROM amr_accessi.membri')).rows[0].n,3);
+ // B05: rendere legacy l'audit popolato, poi provarne migrazione e idempotenza.
+ const audit = (await recovery.query('SELECT id,azienda,sequenza,impronta,stato,journal,importata_il FROM amr_ripristino.operazioni ORDER BY sequenza')).rows;
+ await recovery.query('ALTER TABLE amr_ripristino.operazioni DROP CONSTRAINT operazioni_pkey; ALTER TABLE amr_ripristino.operazioni DROP COLUMN dominio; ALTER TABLE amr_ripristino.operazioni ADD PRIMARY KEY(id)');
+ const migrazione = await recovery.connect();
+ try {
+   assert.equal((await applicaJournal({client:migrazione,journal:revoca})).giaEseguita,true);
+   assert.deepEqual((await recovery.query('SELECT id,azienda,sequenza,impronta,stato,journal,importata_il FROM amr_ripristino.operazioni ORDER BY sequenza')).rows,audit);
+   const altro = structuredClone(revoca); altro.dominio='aziende'; altro.tipo='rinnova'; altro.invito=null; altro.destinatario=null;
+   altro.sequenza=String(BigInt(revoca.sequenza)+1n);
+   assert.equal((await applicaJournal({client:migrazione,journal:altro})).giaEseguita,false);
+   assert.equal((await applicaJournal({client:migrazione,journal:altro})).giaEseguita,true);
+   assert.equal((await recovery.query('SELECT count(*)::int n FROM amr_ripristino.operazioni WHERE id=$1',[revoca.operazione])).rows[0].n,2);
+   altro.azienda.nome='Impronta diversa';
+   await assert.rejects(applicaJournal({client:migrazione,journal:altro}),{codice:'ripristino_operazione_in_conflitto'});
+ } finally { migrazione.release(); }
+ // Un secondo dump/restore conserva chiave, impronte e righe migrate.
+ const dumpAudit=await cmd(['exec',name,'pg_dump','-U','postgres','-Fc','recovery']);
+ await source.query('CREATE DATABASE recovery_audit');
+ await cmd(['exec','-i',name,'pg_restore','-U','postgres','--exit-on-error','-d','recovery_audit'],dumpAudit);
+ const auditRestaurato=connect('recovery_audit');
+ assert.deepEqual((await auditRestaurato.query('SELECT dominio,id,impronta FROM amr_ripristino.operazioni ORDER BY sequenza')).rows,
+   (await recovery.query('SELECT dominio,id,impronta FROM amr_ripristino.operazioni ORDER BY sequenza')).rows);
+ // Audit legacy malformato: aggiunta della colonna e replay fanno rollback insieme.
+ await source.query('CREATE DATABASE audit_invalido');
+ const bad=connect('audit_invalido');
+ await bad.query('CREATE SCHEMA amr_backup; CREATE TABLE amr_backup.aziende_sequenza(azienda text,sequenza bigint); CREATE SCHEMA amr_ripristino; CREATE TABLE amr_ripristino.operazioni(id uuid PRIMARY KEY,azienda text,sequenza bigint,impronta text,stato text,journal jsonb,importata_il timestamptz)');
+ await bad.query("INSERT INTO amr_ripristino.operazioni VALUES($1,'second',1,$2,'applicato','{}',clock_timestamp())",[crypto.randomUUID(),'a'.repeat(64)]);
+ const badClient=await bad.connect();
+ try { await assert.rejects(applicaJournal({client:badClient,journal:revoca}),{codice:'ripristino_vincolo_in_conflitto'}); }
+ finally { badClient.release(); }
+ assert.equal((await bad.query("SELECT count(*)::int n FROM pg_attribute WHERE attrelid='amr_ripristino.operazioni'::regclass AND attname='dominio' AND NOT attisdropped")).rows[0].n,0);
+ assert.equal((await bad.query('SELECT count(*)::int n FROM amr_ripristino.operazioni')).rows[0].n,1);
  }finally{for(const p of pools)await p.end();if(started)await cmd(['rm','-f','-v',name]);}});
