@@ -4,6 +4,30 @@ const fs = require('node:fs'), path = require('node:path');
 const LIMITE_OUTPUT = 1024 * 1024;
 const LIMITE_PIANO = 16 * LIMITE_OUTPUT, MAX_SNAPSHOT = 10000, BATCH_RETENTION = 1000;
 
+function percorsoReale(percorso) {
+  let corrente = path.isAbsolute(percorso) ? percorso : process.cwd() + path.sep + percorso;
+  const mancanti = [];
+  for (;;) {
+    try { fs.lstatSync(corrente); }
+    catch (e) {
+      if (e.code !== 'ENOENT' || path.dirname(corrente) === corrente) throw e;
+      mancanti.unshift(path.basename(corrente)); corrente = path.dirname(corrente);
+      continue;
+    }
+    return path.join(fs.realpathSync.native(corrente), ...mancanti);
+  }
+}
+
+function verificaSeparazione(ambiente) {
+  const repo = ambiente.RESTIC_REPOSITORY;
+  const locale = repo.startsWith('local:') ? repo.slice(6)
+    : path.isAbsolute(repo) || !repo.includes(':') || repo.startsWith('../') ? repo : null;
+  if (locale === null) return;
+  // Il backend locale restic pulisce il percorso prima di aprire i file del repo.
+  const relativo = path.relative(percorsoReale(path.resolve(locale)), percorsoReale(ambiente.RESTIC_PASSWORD_FILE));
+  if (!relativo.startsWith('..' + path.sep) && relativo !== '..') throw new Error('backup_non_configurato');
+}
+
 // Il chiamante passa un ambiente dedicato: nessuna lettura automatica dei .env.
 // stdout/stderr restic possono contenere percorsi e configurazione: non esporli.
 function creaRestic({ binario, ambiente, spawnProcesso = spawn }) {
@@ -12,14 +36,15 @@ function creaRestic({ binario, ambiente, spawnProcesso = spawn }) {
   if (ambiente.RESTIC_PASSWORD || ambiente.RESTIC_PASSWORD_COMMAND || ambiente.RESTIC_REPOSITORY_FILE) {
     throw new Error('backup_non_configurato');
   }
-  if (!path.isAbsolute(ambiente.RESTIC_PASSWORD_FILE)) throw new Error('backup_non_configurato');
-  if (path.isAbsolute(ambiente.RESTIC_REPOSITORY)) {
-    const relativo = path.relative(path.resolve(ambiente.RESTIC_REPOSITORY), path.resolve(ambiente.RESTIC_PASSWORD_FILE));
-    if (!relativo.startsWith('..' + path.sep) && relativo !== '..') throw new Error('backup_non_configurato');
-  }
+  if (typeof ambiente.RESTIC_REPOSITORY !== 'string' || typeof ambiente.RESTIC_PASSWORD_FILE !== 'string'
+      || !path.isAbsolute(ambiente.RESTIC_PASSWORD_FILE)) throw new Error('backup_non_configurato');
   const env = { PATH: process.env.PATH, LANG: 'C', TZ: 'UTC', ...ambiente };
+  // Risolvi anche gli alias e i genitori esistenti di un repository nuovo.
+  // Ricontrolla prima di ogni comando: un symlink può cambiare dopo il setup.
+  try { verificaSeparazione(env); } catch { throw new Error('backup_non_configurato'); }
   const esegui = (args, input, limiteOutput = LIMITE_OUTPUT) => new Promise((resolve, reject) => {
     let child;
+    try { verificaSeparazione(env); } catch { return reject(new Error('backup_non_configurato')); }
     try { child = spawnProcesso(binario, ['--no-cache', ...args], { env, stdio: ['pipe', 'pipe', 'pipe'] }); }
     catch { return reject(new Error('backup_non_disponibile')); }
     let output = Buffer.alloc(limiteOutput), byte = 0, troppo = false;

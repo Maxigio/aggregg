@@ -60,6 +60,65 @@ test('restic: configurazione esplicita senza caricamento env', () => {
     RESTIC_REPOSITORY: '/repo', RESTIC_PASSWORD_FILE: '/repo/password' } }), /backup_non_configurato/);
 });
 
+test('restic: la password resta fuori dal repository anche con alias locali', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-restic-percorsi-'));
+  const repository = path.join(dir, 'repository'), password = path.join(repository, 'password');
+  fs.mkdirSync(repository); fs.writeFileSync(password, 'password-sintetica', { mode: 0o600 });
+  const aliasRepo = path.join(dir, 'alias-repository'), aliasPassword = path.join(dir, 'alias-password');
+  fs.symlinkSync(repository, aliasRepo); fs.symlinkSync(password, aliasPassword);
+  fs.mkdirSync(path.join(repository, 'interna')); fs.mkdirSync(path.join(dir, 'links'));
+  const linkInterno = path.join(dir, 'links', 'interna'); fs.symlinkSync(path.join(repository, 'interna'), linkInterno);
+  const crea = (repo, pw = password) => creaRestic({ binario: '/sintetico/restic',
+    ambiente: { RESTIC_REPOSITORY: repo, RESTIC_PASSWORD_FILE: pw } });
+  try {
+    for (const [nome, repo, pw] of [
+      ['assoluto', repository, password],
+      ['relativo', path.relative(process.cwd(), repository), password],
+      ['local assoluto', 'local:' + repository, password],
+      ['local relativo', 'local:' + path.relative(process.cwd(), repository), password],
+      ['symlink repository', aliasRepo, password],
+      ['symlink password', repository, aliasPassword],
+      ['genitore lessicale del repository', linkInterno + '/..', path.join(dir, 'links', 'password')],
+      ['directory non ancora creata', path.join(aliasRepo, 'nuova'), path.join(repository, 'nuova', 'password')],
+    ]) await t.test(nome, () => assert.throws(() => crea(repo, pw), /backup_non_configurato/));
+    await t.test('password esterna e directory nuova sono ammesse', () => {
+      assert.doesNotThrow(() => crea(path.join(aliasRepo, 'nuova'), path.join(dir, 'password-esterna')));
+      assert.doesNotThrow(() => crea(path.join(dir, 'repository-altro'), password));
+      assert.doesNotThrow(() => crea(linkInterno + '/..', password));
+      assert.doesNotThrow(() => crea('s3:https://storage.example.invalid/bucket', password));
+    });
+    await t.test('symlink non risolvibile rifiutato senza percorso nell’errore', () => {
+      const mancante = path.join(dir, 'mancante'); fs.symlinkSync(path.join(dir, 'non-esiste'), mancante);
+      assert.throws(() => crea(mancante), e => e.message === 'backup_non_configurato' && !e.path);
+    });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('restic: ricontrolla gli alias prima del comando, senza cambiare i repository remoti', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-restic-alias-'));
+  const repository = path.join(dir, 'repository'), esterno = path.join(dir, 'esterno');
+  const password = path.join(repository, 'password'), alias = path.join(dir, 'alias');
+  fs.mkdirSync(repository); fs.mkdirSync(esterno); fs.writeFileSync(password, 'sintetica', { mode: 0o600 });
+  fs.symlinkSync(esterno, alias);
+  let chiamate = 0;
+  try {
+    const repo = creaRestic({ binario: '/sintetico/restic', ambiente: {
+      RESTIC_REPOSITORY: alias, RESTIC_PASSWORD_FILE: password },
+    spawnProcesso() { chiamate++; throw new Error('non deve partire'); } });
+    fs.unlinkSync(alias); fs.symlinkSync(repository, alias);
+    await assert.rejects(repo.inizializza(), e => e.message === 'backup_non_configurato' && !e.path);
+    assert.equal(chiamate, 0);
+    const remoto = 's3:https://storage.example.invalid:443/bucket';
+    const s3 = creaRestic({ binario: '/sintetico/restic', ambiente: {
+      RESTIC_REPOSITORY: remoto, RESTIC_PASSWORD_FILE: password },
+    spawnProcesso(_binario, _args, { env }) {
+      assert.equal(env.RESTIC_REPOSITORY, remoto); chiamate++; throw new Error('trasporto simulato');
+    } });
+    await assert.rejects(s3.inizializza(), /backup_non_disponibile/);
+    assert.equal(chiamate, 1);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('restic: piano da 2500 snapshot con reasons supera 1 MiB e resta valido', async () => {
   const piano = pianoSintetico(2500), output = JSON.stringify(piano);
   assert.equal(piano[0].reasons.length, 2500);
@@ -303,6 +362,26 @@ test('restic: valida tutto il piano prima di check o eliminazioni', async t => {
     assert.equal(f.chiamate.length, 2);
   });
 });
+
+test('restic reale: il repository con symlink/.. segue la normalizzazione del backend',
+  { skip: !process.env.AMR_TEST_RESTIC && 'Impostare AMR_TEST_RESTIC al binario verificato' }, async t => {
+    for (const prefisso of ['', 'local:']) await t.test(prefisso || 'senza prefisso', async t => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-restic-normalizza-'));
+      t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+      const fisico = path.join(dir, 'fisico'), links = path.join(dir, 'links');
+      fs.mkdirSync(path.join(fisico, 'interna'), { recursive: true }); fs.mkdirSync(links);
+      fs.symlinkSync(path.join(fisico, 'interna'), path.join(links, 'interna'));
+      const interno = path.join(links, 'password'), esterno = path.join(fisico, 'password');
+      for (const file of [interno, esterno]) fs.writeFileSync(file, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
+      const crea = password => creaRestic({ binario: process.env.AMR_TEST_RESTIC, ambiente: {
+        RESTIC_REPOSITORY: prefisso + path.join(links, 'interna') + '/..', RESTIC_PASSWORD_FILE: password } });
+      assert.throws(() => crea(interno), /backup_non_configurato/);
+      const repo = crea(esterno);
+      await repo.inizializza(); await repo.copia(Buffer.from('sintetico'), 'journal'); await repo.verifica();
+      assert.equal(fs.existsSync(path.join(links, 'config')), true);
+      assert.equal(fs.existsSync(path.join(fisico, 'config')), false);
+    });
+  });
 
 test('restic reale: repository cifrati separati, restore e password errata',
   { skip: !process.env.AMR_TEST_RESTIC && 'Impostare AMR_TEST_RESTIC al binario verificato' }, async t => {
