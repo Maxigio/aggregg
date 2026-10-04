@@ -10,6 +10,7 @@ let identita = null, moduli = [], modelli = [], sequenzaMarche = 0, sequenzaMode
 let parametriRicerca = null, pagina = 0, fontiCorrenti = null, risultatiCorrenti = [], ricercaOccupata = false;
 let filtriModificati = false, paginaIncompleta = null;
 let primaPaginaMancante = {}, pagineFonti = {};
+let avvisiCopertura = new Set(), avvisiNodiCorrenti = [];
 let paginaLavori = 1, paginaVisualizzata = 1, pagineDisponibili = 1;
 let nodiElencati = '', diagnosticaAbilitata = false;
 let aggiornamentoStato = 0;
@@ -358,6 +359,18 @@ async function aggiornaStato(manuale = false) {
     }
   }
 }
+// Gli avvisi sui filtri restano associati alle righe già pubblicate; un retry
+// sostituisce soltanto gli errori correnti, non la loro provenienza.
+function renderAvvisiRicerca(errori = paginaIncompleta?.avvisiErrori || []) {
+  const testi = new Set([...avvisiNodiCorrenti, ...avvisiCopertura, ...errori]);
+  for (const [fonte, s] of Object.entries(fontiCorrenti || {})) {
+    if (!s || primaPaginaMancante[fonte] || (tipo() === 'auto' && fonte === 'moto' && s.status === 'skipped')) continue;
+    if (['error', 'timeout', 'skipped'].includes(s.status) || s.parziale || s.parzialeRete) {
+      testi.add(`${nomiFonti[fonte] || fonte}: ${s.reason || s.parziale || 'risposta parziale o non disponibile'}`);
+    }
+  }
+  $('avvisi').replaceChildren(...[...testi].map(testo => elemento('div', testo, 'alert')));
+}
 function renderRisultato(body, aggiungi = false, richieste = null, paginaRisposta = pagina) {
   const righe = Array.isArray(body.risultati) ? body.risultati : [];
   risultatiCorrenti = aggiungi ? [...risultatiCorrenti, ...righe] : righe;
@@ -365,17 +378,21 @@ function renderRisultato(body, aggiungi = false, richieste = null, paginaRispost
     Object.entries(body.sources || {}).filter(([f]) => !aggiungi || !richieste || richieste.includes(f))) };
   $('ricercaStato').textContent = `${risultatiCorrenti.length} annunci`;
   $('risultatoAiuto').textContent = `Pagina ${paginaRisposta + 1} · ${righe.length} risultati in questa risposta`;
-  const alert = $('avvisi'); alert.replaceChildren();
-  for (const testo of body.avvisiNodi || []) alert.append(elemento('div', testo, 'alert'));
-  for (const testo of paginaIncompleta?.avvisiErrori || []) alert.append(elemento('div', testo, 'alert'));
+  if (!aggiungi) avvisiCopertura.clear();
+  avvisiNodiCorrenti = body.avvisiNodi || [];
   for (const [fonte, s] of Object.entries(body.sources || {})) {
-    if (aggiungi && richieste && !richieste.includes(fonte)) continue;
-    if (primaPaginaMancante[fonte]) continue;
-    if (!aggiungi && tipo() === 'auto' && fonte === 'moto' && s?.status === 'skipped') continue;
-    if (s && (['error', 'timeout', 'skipped'].includes(s.status) || s.parziale || s.parzialeRete)) {
-      alert.append(elemento('div', `${nomiFonti[fonte] || fonte}: ${s.reason || s.parziale || 'risposta parziale o non disponibile'}`, 'alert'));
+    if (!s || (aggiungi && richieste && !richieste.includes(fonte))) continue;
+    const testi = [];
+    if (s.allargato) testi.push(s.reason || 'Ricerca allargata rispetto ai filtri selezionati.');
+    if (s.modelloKoRete) testi.push('Il catalogo modelli non è stato letto correttamente: ricerca allargata alla marca e filtrata sui titoli.');
+    if (s.versioneElencoMonco) testi.push(String(s.versioneElencoMonco));
+    else if (s.versioneKoRete) testi.push('Il catalogo versioni non è stato letto correttamente: il filtro versione non è stato verificato.');
+    if (Array.isArray(s.versioneIgnorata) && s.versioneIgnorata.length) {
+      testi.push(`Parti del filtro versione assenti dal catalogo e non applicate: ${s.versioneIgnorata.join(', ')}.`);
     }
+    for (const testo of testi) avvisiCopertura.add(`${nomiFonti[fonte] || fonte}: ${testo}`);
   }
+  renderAvvisiRicerca();
   const fonti = $('fonti'); fonti.replaceChildren();
   for (const [fonte, s] of Object.entries(fontiCorrenti || {})) {
     const card = elemento('div', '', 'source-box');
@@ -393,6 +410,24 @@ function renderRisultato(body, aggiungi = false, richieste = null, paginaRispost
     else card.append(elemento('strong', r.titolo || 'Annuncio'));
     const prezzo = Number.isFinite(r.prezzo) ? new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(r.prezzo) : 'Prezzo non indicato';
     card.append(elemento('div', [nomiFonti[r.fonte] || r.fonte, prezzo, r.anno, r.km != null ? `${r.km} km` : null].filter(Boolean).join(' · '), 'meta'));
+    const dichiarazioni = {
+      'senza-versione': 'Il venditore non ha indicato la versione.',
+      'senza-modello': 'Il venditore non ha indicato il modello: corrispondenza ricavata dal titolo.',
+      'altro-modello': 'La ricerca è stata allargata: questo annuncio dichiara un modello diverso.',
+      'versione-non-verificata': 'Versione non verificata.',
+    };
+    const avvisi = new Set();
+    if (Object.hasOwn(dichiarazioni, r.dichiarazione)) avvisi.add(dichiarazioni[r.dichiarazione]);
+    if (r.versioneEsito === 'smentita') avvisi.add('La versione dichiarata non corrisponde a quella cercata.');
+    else if (r.versioneEsito === 'ignota' && !['altro-modello', 'senza-modello'].includes(r.dichiarazione)) {
+      avvisi.add('Versione non verificata.');
+    }
+    if (avvisi.size) {
+      const box = document.createElement('details');
+      box.append(elemento('summary', 'Avvisi sull’annuncio'));
+      for (const testo of avvisi) box.append(elemento('p', testo, 'muted'));
+      card.append(box);
+    }
     if (url && r.accessoDettagli) {
       const box = document.createElement('details');
       box.append(elemento('summary', 'Dettagli'));
@@ -437,6 +472,7 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0, riprov
   if (!aggiungi) { $('risultatoAiuto').textContent = 'Il nodo sta interrogando le fonti selezionate.';
     primaPaginaMancante = {}; pagineFonti = {}; paginaIncompleta = null; filtriModificati = false;
     pagina = 0; risultatiCorrenti = []; fontiCorrenti = null;
+    avvisiCopertura.clear(); avvisiNodiCorrenti = [];
     $('risultati').replaceChildren(); $('fonti').replaceChildren(); $('avvisi').replaceChildren(); }
   aggiornaRetryPrimaPagina();
   try {
@@ -510,7 +546,7 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0, riprov
         $('ricercaStato').textContent = 'Pagina incompleta';
         accumulo.avvisiErrori = fallite.map(f =>
           `${nomiFonti[f] || f}: ${body.sources?.[f]?.reason || 'risposta non disponibile'}. Riprova questa pagina.`);
-        $('avvisi').replaceChildren(...accumulo.avvisiErrori.map(testo => elemento('div', testo, 'alert')));
+        renderAvvisiRicerca(accumulo.avvisiErrori);
         $('altri').hidden = false;
         $('altri').textContent = 'Riprova questa pagina';
       } else {
@@ -538,7 +574,7 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0, riprov
   } catch (e) {
     if (id === sequenzaRicerca) {
       $('ricercaStato').textContent = 'Non riuscita';
-      $('avvisi').replaceChildren(elemento('div', e.message, 'alert'));
+      renderAvvisiRicerca([e.message]);
       if (aggiungi && !riprovaPrima) $('altri').textContent = 'Riprova questa pagina';
     }
   } finally {
@@ -557,6 +593,7 @@ async function applicaIdentita(data) {
   aggiornaAree();
   paginaLavori = 1;
   parametriRicerca = null; pagina = 0; fontiCorrenti = null; risultatiCorrenti = [];
+  avvisiCopertura.clear(); avvisiNodiCorrenti = [];
   paginaIncompleta = null; filtriModificati = false;
   primaPaginaMancante = {}; pagineFonti = {}; aggiornaRetryPrimaPagina();
   $('ricercaStato').textContent = 'In attesa';
@@ -585,6 +622,7 @@ function terminaContesto() {
   identita = null; moduli = []; parametriRicerca = null; paginaIncompleta = null;
   primaPaginaMancante = {}; pagineFonti = {}; aggiornaRetryPrimaPagina();
   risultatiCorrenti = []; fontiCorrenti = null; ricercaOccupata = false;
+  avvisiCopertura.clear(); avvisiNodiCorrenti = [];
   form.hidden = true; $('altri').hidden = true;
   for (const id of ['fonti', 'risultati', 'avvisi', 'metriche', 'nodi', 'lavori', 'eventi']) $(id).replaceChildren();
   $('ricercaStato').textContent = 'In attesa';
@@ -639,6 +677,7 @@ form.addEventListener('submit', e => {
   e.preventDefault();
   if (ricercaOccupata) return;
   try { parametriRicerca = preparaRicerca(); pagina = 0; risultatiCorrenti = []; fontiCorrenti = null;
+    avvisiCopertura.clear(); avvisiNodiCorrenti = [];
     paginaIncompleta = null; filtriModificati = false;
     $('altri').hidden = true; $('altri').textContent = 'Carica altro'; messaggio(''); inviaRicerca(parametriRicerca, false, 0); }
   catch (errore) { messaggio(errore.message); }

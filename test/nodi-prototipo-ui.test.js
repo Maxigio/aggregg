@@ -16,7 +16,7 @@ async function attendiRichieste(lista, numero) {
 async function apriPrototipo(t, api) {
   const server = require('node:http').createServer((req, res) => {
     const files = { '/': 'backend/nodi/prototipo.html', '/prototipo.js': 'frontend/nodi-prototipo.js',
-      '/prototipo.css': 'frontend/nodi-prototipo.css' };
+      '/prototipo.css': 'frontend/nodi-prototipo.css', '/api/auth/bootstrap.js': 'frontend/nodi-bootstrap-prova.js' };
     const file = files[req.url];
     if (!file) { res.writeHead(404).end(); return; }
     res.setHeader('content-type', req.url.endsWith('.js') ? 'text/javascript'
@@ -42,7 +42,7 @@ async function apriPrototipo(t, api) {
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (url.origin !== origine) return route.abort();
-    if (!url.pathname.startsWith('/api/')) return route.continue();
+    if (!url.pathname.startsWith('/api/') || url.pathname === '/api/auth/bootstrap.js') return route.continue();
     if (url.pathname === '/api/search') assert.equal(parseSearchParams(Object.fromEntries(url.searchParams)).errors,
       undefined, 'La query della UI deve rispettare il contratto backend');
     if (await api?.(route, url)) return;
@@ -58,6 +58,41 @@ async function apriPrototipo(t, api) {
   await page.waitForFunction(() => document.getElementById('aggiornato').textContent.startsWith('Aggiornato alle'));
   return { page, errors };
 }
+
+test('U05: ampliamenti e versioni non verificate visibili, persistenti fra pagine e senza HTML attivo', opzioniBrowser, async t => {
+  const { page, errors } = await apriPrototipo(t);
+  await page.evaluate(() => {
+    document.getElementById('ricercaPanel').hidden = false;
+    renderRisultato({ risultati: [{ titolo: 'Moto sintetica', fonte: 'autoscout',
+      url: 'https://example.invalid/moto', dichiarazione: 'versione-non-verificata', versioneEsito: 'ignota' }],
+      sources: { autoscout: { status: 'ok', allargato: 'versione', reason: 'Versione non trovata: mostro tutte le versioni.', count: 1 },
+        moto: { status: 'ok', versioneKoRete: true, versioneElencoMonco: '<img src=x onerror=alert(1)> elenco incompleto' } } });
+  });
+  assert.match(await page.locator('#avvisi').textContent(), /mostro tutte le versioni/);
+  assert.match(await page.locator('#avvisi').textContent(), /elenco incompleto/);
+  assert.equal(await page.locator('#avvisi img').count(), 0);
+  const avvisi = page.locator('#risultati details').first();
+  assert.equal(await avvisi.locator('summary').textContent(), 'Avvisi sull’annuncio');
+  await avvisi.locator('summary').click();
+  assert.equal(await avvisi.locator('p').textContent(), 'Versione non verificata.');
+  await page.evaluate(() => renderRisultato({ risultati: [], sources: { subito: { status: 'empty', count: 0 } } }, true, ['subito'], 1));
+  assert.match(await page.locator('#avvisi').textContent(), /mostro tutte le versioni/);
+  assert.equal(await avvisi.evaluate(e => e.open), true);
+  await page.evaluate(() => renderRisultato({ risultati: [], sources: { autoscout: { status: 'ok', count: 0 } } }, true, ['autoscout'], 2));
+  assert.match(await page.locator('#avvisi').textContent(), /mostro tutte le versioni/);
+  await page.evaluate(() => renderAvvisiRicerca(['HTTP 503. Riprova questa pagina.']));
+  assert.match(await page.locator('#avvisi').textContent(), /mostro tutte le versioni/);
+  assert.match(await page.locator('#avvisi').textContent(), /HTTP 503/);
+  await page.evaluate(() => renderRisultato({ risultati: [], sources: { subito: { status: 'ok', count: 0 } } }, true, ['subito'], 3));
+  assert.match(await page.locator('#avvisi').textContent(), /mostro tutte le versioni/);
+  assert.doesNotMatch(await page.locator('#avvisi').textContent(), /HTTP 503/);
+
+  await page.evaluate(() => renderRisultato({ risultati: [{ titolo: 'Moto verificata', fonte: 'subito',
+    url: 'https://example.invalid/verificata', dichiarazione: 'esatto', versioneEsito: 'confermata' }], sources: { subito: { status: 'ok' } } }));
+  assert.equal(await page.locator('#avvisi').textContent(), '');
+  assert.equal(await page.locator('#risultati details').count(), 0);
+  assert.deepEqual(errors, []);
+});
 
 test('F06: polling seriale conserva risposte lente, riparte dopo errori e consente refresh manuale', opzioniBrowser, async t => {
   let trattieni = false, versione = 0;
@@ -456,7 +491,7 @@ test('prototipo: aggiornamento lavori conserva dettagli, focus e scroll senza co
   { skip: !fs.existsSync(browserPath) && 'Chromium non disponibile' }, async t => {
   const server = require('node:http').createServer((req, res) => {
     const files = { '/': 'backend/nodi/prototipo.html', '/prototipo.js': 'frontend/nodi-prototipo.js',
-      '/prototipo.css': 'frontend/nodi-prototipo.css' };
+      '/prototipo.css': 'frontend/nodi-prototipo.css', '/api/auth/bootstrap.js': 'frontend/nodi-bootstrap-prova.js' };
     const file = files[req.url];
     if (!file) { res.writeHead(404).end(); return; }
     res.setHeader('content-type', req.url.endsWith('.js') ? 'text/javascript'
@@ -473,6 +508,7 @@ test('prototipo: aggiornamento lavori conserva dettagli, focus e scroll senza co
   let consegnaDettagli;
   await page.route('**/api/**', async route => {
     const url = new URL(route.request().url());
+    if (url.pathname === '/api/auth/bootstrap.js') return route.continue();
     let json;
     if (url.pathname === '/api/test/config') json = {accesso:'sintetico'};
     else if (url.pathname === '/api/test/me') { await route.fulfill({status:401,json:{}}); return; }

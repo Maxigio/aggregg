@@ -75,3 +75,20 @@ cambia, preservazione della categoria estranea. Review indipendente:
 La manutenzione resta seriale nella singola istanza concordata; non è un
 protocollo HA per processi multipli sul medesimo repository.
 Fonte: [restic retention](https://restic.readthedocs.io/en/stable/060_forget.html).
+
+## U05 — chiuso
+
+Il frontend del prototipo espone ampliamenti della query, cataloghi parziali,
+versioni ignorate/non verificate e dichiarazioni dell'annuncio. Gli avvisi
+di copertura restano associati ai risultati già pubblicati, anche quando
+una pagina successiva della stessa fonte non ripete il metadato o fallisce.
+Gli errori del tentativo corrente vengono sostituiti al retry; nuova ricerca,
+cambio identità e logout azzerano il contesto. Nessuna nuova chiamata fonte.
+
+Avvisi testuali, senza HTML attivo; dettagli dell'annuncio separati dai
+controlli di lettura. Review indipendente: risolti due finding iniziali
+(perdita su stessa fonte e su errore), nessun finding residuo. Prove headless
+con API simulate: ampliamento, elenco versioni monco con payload HTML,
+append stessa/altra fonte, errore/retry e reset della ricerca. Il primo giro
+UI dedicato è 10/10; fixture aggiornate per lo script bootstrap C03.
+Collaudo manuale dell'utente e staging remoto non ancora eseguiti.
