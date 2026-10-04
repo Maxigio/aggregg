@@ -10,8 +10,14 @@ const assert = require('node:assert/strict');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const esegui = promisify(execFile);
+const VERSIONE_POSTGRES = process.env.AMR_TEST_POSTGRES_VERSIONE ?? '16';
+if (!['16', '18'].includes(VERSIONE_POSTGRES)) {
+  throw new Error('versione_postgres_collaudo_non_valida');
+}
 const IMMAGINI = Object.freeze({
-  postgres: 'postgres:16@sha256:1a6ab3f5345eb6dbe04a1349529caabdb0ab09293a09590fad07b2246bfa4b54',
+  postgres: VERSIONE_POSTGRES === '18'
+    ? 'postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650'
+    : 'postgres:16@sha256:1a6ab3f5345eb6dbe04a1349529caabdb0ab09293a09590fad07b2246bfa4b54',
   auth: 'nhost/auth:0.49.1@sha256:3365cb4c3f50018f88cb723133bd498a15a7975d8d7644ab199613360bb15976',
   graphql: 'nhost/graphql-engine:v2.46.0-ce@sha256:bfc3e5fd51e87f99dc0894976f16c14165d9c0fbd1fe503a3ebfbaf02600fed0',
   mail: 'jcalonso/mailhog:v1.0.1@sha256:f35c05c5e7bd005020a7865838c198c0fcb2ce1a64c5497c4c9c72dec5050cc9',
@@ -20,7 +26,7 @@ const IMMAGINI = Object.freeze({
 function configura({ password, jwt, admin, encryption, postgresDiretto = false }) {
   return { services: {
     postgres: { image: IMMAGINI.postgres, ...(postgresDiretto ? { ports: ['127.0.0.1:0:5432'] } : {}), environment: { POSTGRES_PASSWORD: password },
-      tmpfs: ['/var/lib/postgresql/data'], healthcheck: {
+      tmpfs: [VERSIONE_POSTGRES === '18' ? '/var/lib/postgresql' : '/var/lib/postgresql/data'], healthcheck: {
         test: ['CMD-SHELL', 'pg_isready -U postgres'], interval: '2s', timeout: '2s', retries: 40 } },
     graphql: { image: IMMAGINI.graphql, depends_on: { postgres: { condition: 'service_healthy' } },
       environment: { HASURA_GRAPHQL_DATABASE_URL: `postgres://postgres:${password}@postgres:5432/postgres`,
@@ -161,6 +167,11 @@ async function collauda({ manuale = false } = {}) {
   let backupPool, backupWorker, backupNotifiche, conservaTemporanei = false, puliziaIncompleta = false;
   try {
     await docker('up', '-d', '--wait', 'postgres', 'mail');
+    const postgres = JSON.parse(await sql("SELECT json_build_object('versione',current_setting('server_version'),'directory',current_setting('data_directory'));"));
+    assert.equal(postgres.versione.split('.')[0], VERSIONE_POSTGRES);
+    assert.equal(postgres.directory, VERSIONE_POSTGRES === '18'
+      ? '/var/lib/postgresql/18/docker' : '/var/lib/postgresql/data');
+    risultati.push('PostgreSQL ' + postgres.versione + ': versione e directory temporanea verificate');
     await sql('CREATE SCHEMA auth;');
     const authAddress = await docker('port', 'mail', '4000');
     const mailAddress = await docker('port', 'mail', '8025');

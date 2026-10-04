@@ -60,7 +60,7 @@ async function collaudaBackup({ args, directory, fileCompose, docker, sql, backu
     const restorePass=crypto.randomBytes(32).toString('hex');
     const compose=JSON.parse(fs.readFileSync(fileCompose,'utf8'));
     compose.services.ripristino={image:immagini.postgres,ports:['127.0.0.1:0:5432'],
-      environment:{POSTGRES_PASSWORD:restorePass},tmpfs:['/var/lib/postgresql/data'],
+      environment:{POSTGRES_PASSWORD:restorePass},tmpfs:[...compose.services.postgres.tmpfs],
       healthcheck:{test:['CMD-SHELL','pg_isready -U postgres'],interval:'2s',timeout:'2s',retries:30}};
     fs.writeFileSync(fileCompose,JSON.stringify(compose),{mode:0o600});
     await docker('up','-d','--wait','ripristino');

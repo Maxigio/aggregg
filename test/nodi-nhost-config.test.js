@@ -32,6 +32,24 @@ test('collaudo Nhost: soltanto Auth e mail locali sono pubblicati, nessun file h
   assert.deepEqual(c.services.postgres.tmpfs, ['/var/lib/postgresql/data']);
 });
 
+test('collaudo PostgreSQL 18: directory dati interamente temporanea e immagine fissata', () => {
+  const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
+  const source = fs.readFileSync(path.join(__dirname, '../scripts/collauda-nhost-locale.js'), 'utf8');
+  const carica = versione => {
+    const modulo = { exports: {} };
+    vm.runInNewContext(source, { module: modulo, require,
+      __dirname: path.join(__dirname, '../scripts'),
+      process: { env: { AMR_TEST_POSTGRES_VERSIONE: versione } } });
+    return modulo.exports;
+  };
+  const pg18 = carica('18').configura({ password: 'sintetica', postgresDiretto: true }).services.postgres;
+  assert.match(pg18.image, /^postgres:18\.6-bookworm@sha256:[a-f0-9]{64}$/);
+  assert.equal(JSON.stringify(pg18.tmpfs), '["/var/lib/postgresql"]');
+  assert.equal(JSON.stringify(pg18.ports), '["127.0.0.1:0:5432"]');
+  assert.ok(!pg18.volumes);
+  assert.throws(() => carica('non-valida'), /versione_postgres_collaudo_non_valida/);
+});
+
 test('collaudo Nhost: verifica email, MFA e destinatari SMTP soltanto locali', () => {
   const env = configura({ password: 'sintetica', jwt: 'sintetico', admin: 'sintetico' }).services.auth.environment;
   assert.equal(env.AUTH_EMAIL_SIGNIN_EMAIL_VERIFIED_REQUIRED, 'true');

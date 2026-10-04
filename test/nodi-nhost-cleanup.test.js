@@ -56,7 +56,12 @@ test('collaudo Nhost: listen fallito raggiunge il cleanup dei soli container di 
       } } : nome === 'node:child_process' ? { spawn() {
         const child = new EventEmitter(); child.stdout = new EventEmitter();
         child.stderr = new EventEmitter(); child.stderr.resume = () => {}; child.kill = () => {};
-        child.stdin = { on() {}, end() { queueMicrotask(() => child.emit('close', 0)); } };
+        child.stdin = { on() {}, end(testo) { queueMicrotask(() => {
+          if (testo.includes("current_setting('server_version')")) {
+            child.stdout.emit('data', Buffer.from('{"versione":"16.15","directory":"/var/lib/postgresql/data"}\n'));
+          }
+          child.emit('close', 0);
+        }); } };
         return child;
       } } : nome === 'node:util' ? { promisify: () => async (_bin, args) => {
         if (args.includes('down')) chiamate.push('down');

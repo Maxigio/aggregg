@@ -300,3 +300,24 @@ del primo fallimento resta non dimostrata, non dichiarata risolta.
 Le correzioni degli strumenti restano non committate. Prima di un upload
 rigenerare l'artefatto dal prossimo commit che le includerà. Nessun upload,
 segreto, volume o avvio Run remoto effettuato; M2 e portali esclusi.
+## Aggiornamento 4 ottobre: candidato committato e inventario remoto
+
+Il gate dell'immagine del commit `9ed5479` è passato con manifest atteso e
+cleanup reale. Inventario Nhost effettuato in sola lettura: servizio ancora
+fermo senza immagine/porte/volumi; PostgreSQL remoto 18.6, nessuno schema o
+ruolo AMR cercato. Il gate storico usa PostgreSQL 16: non estenderne il PASS
+alla versione remota. Il ruolo editor può assumere postgres; nessun ruolo è
+stato assunto o modificato.
+
+Dettagli, controprove e prossimo gate nel
+[registro di inventario](staging-inventario-2026-10-04.md), incluse le modifiche
+al solo collaudo locale per il profilo 18. Restano separate l'autorizzazione
+preliminare a zero repliche e l'autorizzazione al pacchetto cloud completo.
+
+Il gate aggiuntivo PostgreSQL **18.6** è poi passato con l'immagine `9ed5479`
+e restic reale: dump, restore in secondo cluster e replay dei journal, exit 0
+e cleanup verificato. Il default locale 16 resta disponibile; la fixture 18
+usa il mount corretto anche nel restore. Test pertinenti 66/66, review
+indipendente senza nuovi finding bloccanti. Prove e limiti nel registro sopra:
+repository restic locali, nessun backup esterno o mutazione Nhost, nessun M2.
+L'incremento degli strumenti 18 e i nuovi documenti restano non committati.
