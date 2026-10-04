@@ -184,7 +184,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         if (destinatari.has(verifica)) return;
       } catch (e) {
         budget?.controlla();
-        if (![401, 403].includes(e.status)) indisponibile = e;
+        if ([401, 403].includes(e.status)) destinatari.delete(verifica);
+        else indisponibile = e;
       }
     }
     if (indisponibile) throw Object.assign(new Error('autorizzazione_non_disponibile'), { status: 503 });
@@ -616,6 +617,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         .some(f => n.sospese.has(f) || n.fonti[f]?.fermo));
       let job;
       while ((job = n.coda[0])) {
+        if (res.destroyed || res.writableEnded) return;
         try {
           await verificaDestinatari(job.destinatari, job.ricerca?.budget);
           job.ricerca?.budget.controlla();
@@ -628,6 +630,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         }
         if (!bootValido(req)) return bootObsoleto(res);
         if (chiuso) return res.sendStatus(503);
+        // Una verifica può durare più del poll del worker: nessuna consegna
+        // al socket chiuso e nessun avvio presunto. Il job resta in coda.
+        if (res.destroyed || res.writableEnded) return;
         // Il timer, una sospensione o una disconnessione possono rimuovere il record durante l'await.
         if (lavori.get(job.idLavoro) !== job || n.coda[0] !== job) continue;
         if (n.occupato || !disponibile(n, null, false) || fontiDelLavoro(job).some(f => !disponibile(n, f, false))) {
