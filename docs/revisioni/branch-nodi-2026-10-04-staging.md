@@ -123,13 +123,34 @@ garanzia di eliminazione su un filesystem guasto: il flag richiede una
 pulizia esplicita dell'area temporanea. I chiamanti attuali del restore sono
 strumenti di collaudo, non una rotta pubblica del centro.
 
-### F3 — Controllo collettivo dei destinatari — confermato, fix successivo
+### F3 — Controllo collettivo dei destinatari — confermato e corretto
 
 Main riproduce la prova HTTP indipendente: A e B, aziende diverse, stessa
 prima pagina condivisa. Con risultato a 58 secondi e controllo tardivo/revoca
 di A, anche B riceve 504. B da solo e revoca immediata di A sono controprove
 valide. Il controllo finale per destinatario deve restare obbligatorio;
 l'aggiornamento dell'affinità non deve attendere quello degli altri.
+
+La composizione pura termina senza controlli collettivi successivi alle
+chiamate ai nodi. La rotta conserva il controllo finale corrente e il budget
+di ciascun destinatario, poi registra soltanto la sua affinità. Il callback
+interno resta fuori dal body JSON; i chiamanti sintetici senza destinatari
+conservano la registrazione diretta. Restano i controlli prima di assegnare
+nuove chiamate e prima del failover.
+
+Quattro regressioni: creatore A/B, risposta semplice/composta dopo 429.
+Falliscono tutte sul codice precedente; sul fix B riceve 200 mentre A
+attende la revoca, A non riceve annunci, e il callback non è serializzato.
+Il test della deadline finale ora usa una fase esplicita anziché il numero
+dei controlli, cambiato dall'estrazione. Un primo giro interrotto per quel
+vecchio test pendente non viene contato come PASS.
+
+Main: **58 test mirati pass**, zero failure/skip, log
+`/private/tmp/amr-affinita-green2.log`. Review indipendente: **94 test pass e
+cinque prove aggiuntive**, compreso il primo harness; affinità distinta per
+azienda, paginazione sul nodo assegnato e nessuna registrazione dopo revoca
+o scadenza. Nessun nuovo finding confermato nel diff rispetto a `4fda0de`.
+Sono prove simulate locali, non una misura di latenza o carico di Nhost.
 
 La review di accessi/UI non è ancora conclusa. Il proprietario ha autorizzato
 la sola sonda remota temporanea: upload e avvio non sono ancora eseguiti.

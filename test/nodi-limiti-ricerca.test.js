@@ -74,6 +74,44 @@ async function setup(t, opzioni = {}, verifica = async s => contesto(s)) {
   return { centro, sessione, cerca, nodo, heartbeat, attendi, poll, esito };
 }
 
+for (const composta of [false, true]) for (const primaPersona of ['a', 'b'])
+test('affinità: revoca lenta di A non blocca B; creatore ' + primaPersona + ', composta ' + composta, async t => {
+  let mono = 0, finale = false;
+  const gate = differita(); t.after(() => gate.resolve());
+  const f = await setup(t, { timeoutRicercaMs: 60000, oraMono: () => mono }, async s => {
+    if (finale && s.persona === 'a') {
+      await gate.promise;
+      throw Object.assign(new Error('revoca_sintetica'), { status: 403 });
+    }
+    return contesto(s);
+  });
+  await f.heartbeat('a');
+  if (composta) await f.heartbeat('b');
+  const cookieA = f.sessione('cookie-a', 'a', 'aziendaA'), cookieB = f.sessione('cookie-b', 'b', 'aziendaB');
+  const richieste = { [primaPersona]: f.cerca(primaPersona === 'a' ? cookieA : cookieB) };
+  await f.attendi(() => f.centro.lavori.size === 1);
+  const secondaPersona = primaPersona === 'a' ? 'b' : 'a';
+  richieste[secondaPersona] = f.cerca(secondaPersona === 'a' ? cookieA : cookieB);
+  await f.attendi(() => [...f.centro.lavori.values()][0]?.destinatari.size === 2);
+  const job = await f.poll();
+  if (composta) {
+    await f.esito('a', job, risposta({ subito: { status: 'error', erroreHttp: 429, count: 0 } }));
+    const alternativo = await f.poll('b'); mono = 58000; finale = true;
+    await f.esito('b', alternativo, { ...risposta({ subito: { status: 'ok', count: 1 } }),
+      risultati: [{ id: 'subito-sintetico', fonte: 'subito', url: 'https://www.subito.it/annunci/sintetico' }] });
+  } else { mono = 58000; finale = true; await f.esito('a', job); }
+  const anticipataB = await Promise.race([richieste.b.promise, pausa(500).then(() => null)]);
+  mono = 61000; gate.resolve();
+  const [ra, rb] = await Promise.all([richieste.a.promise, richieste.b.promise]);
+  const [bodyA, bodyB] = await Promise.all([ra.json(), rb.json()]);
+  assert.equal(rb.status, 200);
+  assert.equal(anticipataB?.status, 200, 'B deve rispondere mentre A attende');
+  assert.equal(bodyB.risultati.length, composta ? 2 : 1);
+  assert.ok([403, 504].includes(ra.status));
+  assert.equal(bodyA.risultati, undefined);
+  assert.equal(Object.hasOwn(bodyB, 'registraAffinita'), false);
+});
+
 test('O01: due richieste per persona anche tra sessioni, prima dei permessi asincroni', async t => {
   const gate = differita(); let verifiche = 0;
   const f = await setup(t, {}, async s => { verifiche++; await gate.promise; return contesto(s); });
@@ -344,15 +382,15 @@ test('O02: scadenza durante controllo di failover non avvia un secondo nodo', as
   assert.equal(f.centro.db.prepare('SELECT count(*) AS n FROM lavori').get().n, 1);
 });
 
-for (const controllo of [5, 6]) test(`O02: budget comprende il controllo ${controllo === 5 ? 'affinità' : 'finale HTTP'}, nessun annuncio alla scadenza`, async t => {
-  let mono = 0, chiamate = 0; const gate = differita(), entrata = differita();
+test('O02: budget comprende il controllo finale HTTP, nessun annuncio alla scadenza', async t => {
+  let mono = 0, finale = false, entrata = false; const gate = differita();
   t.after(() => gate.resolve());
   const f = await setup(t, { timeoutRicercaMs: 1000, oraMono: () => mono }, async s => {
-    if (++chiamate === controllo) { entrata.resolve(); await gate.promise; }
+    if (finale) { entrata = true; await gate.promise; }
     return contesto(s);
   });
   await f.heartbeat('a'); const richiesta = f.cerca(f.sessione('persona-a')), job = await f.poll();
-  await f.esito('a', job); await entrata.promise;
+  finale = true; await f.esito('a', job); await f.attendi(() => entrata);
   mono = 1000; gate.resolve();
   const r = await richiesta.promise, body = await r.json();
   assert.equal(r.status, 504); assert.equal(body.codice, 'ricerca_scaduta');

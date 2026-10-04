@@ -466,26 +466,21 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
           ...alternativa.body.sources?.[fonte] });
       }
     }
-    async function termina(body) {
+    function termina(body) {
       budget.controlla();
       const datoAffinita = { ts: ora(), fonti: { ...(ancoraValida ? precedente.fonti : {}), ...assegnate } };
-      affinita.set(chiave, datoAffinita);
-      // Il Set può ricevere destinatari durante i controlli asincroni dei permessi.
-      for (const verifica of destinatari || []) {
-        try {
-          const destinatario = await budget.attendi(verifica);
-          if (!destinatari.has(verifica)) continue;
-          affinita.set(chiaveAffinita(destinatario.azienda, input), datoAffinita);
-        } catch { budget.controlla(); /* Non autorizzare nuove pagine per un destinatario revocato. */ }
+      function registraAffinita(aziendaDestinataria) {
+        affinita.set(chiaveAffinita(aziendaDestinataria, input), datoAffinita);
+        while (affinita.size > 100) affinita.delete(affinita.keys().next().value);
       }
-      budget.controlla();
-      while (affinita.size > 100) affinita.delete(affinita.keys().next().value);
+      if (!destinatari) registraAffinita(azienda);
+      // La rotta registra solo dopo il controllo finale del singolo destinatario.
+      // Un controllo lento/revocato non trattiene la risposta degli altri.
       return { status: 200, body: { ...body, sources: { ...body.sources, ...fallite },
         ...(fallite.subito ? { subitoStatus: fallite.subito.status, subitoReason: fallite.subito.reason } : {}),
-        avvisiNodi: avvisi } };
+        avvisiNodi: avvisi }, registraAffinita };
     }
     if (!Object.keys(sostituzioni).length) return termina(base.body);
-    await verificaDestinatari(destinatari, budget);
     return termina(componiRicerca(base.body, sostituzioni));
   }
 
@@ -866,11 +861,12 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     try {
       const out = await ricerca(req.azienda, req.query, () => verificaSessione(req.sessioneProva, req.query.tipo), richiesta);
       if (!res.destroyed) {
-        await richiesta.verifica(() => verificaSessione(req.sessioneProva, req.query.tipo));
+        const destinatario = await richiesta.verifica(() => verificaSessione(req.sessioneProva, req.query.tipo));
         // Non mutare porzioni condivise/cache: ogni sessione riceve firme proprie.
         const body = out.status === 200 ? { ...out.body, risultati: (out.body.risultati || [])
           .map(r => ({ ...r, accessoDettagli: autorizzazioniDettagli.emetti(req.sessioneProva,r.url,req.query.tipo) })) } : out.body;
         richiesta.budget.controlla();
+        out.registraAffinita?.(destinatario.azienda);
         res.status(out.status).json(body);
       }
     } catch (e) { erroreRicerca(req, res, e); }
