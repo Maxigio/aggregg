@@ -900,6 +900,20 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   app.get('/prototipo.css', (req, res) => res.type('css').sendFile(path.join(__dirname, '../../frontend/nodi-prototipo.css')));
   app.get('/prototipo.js', (req, res) => res.type('js').sendFile(path.join(__dirname, '../../frontend/nodi-prototipo.js')));
   app.get('/prototipo-backup.js', (req, res) => res.type('js').sendFile(path.join(__dirname, '../../frontend/nodi-backup-prova.js')));
+  // I parser possono includere un estratto del body nello stack: non inviarlo
+  // al logger predefinito Express, nemmeno in production.
+  app.use((err, req, res, next) => {
+    const status = {
+      'entity.parse.failed': 400, 'entity.too.large': 413,
+      'charset.unsupported': 415, 'encoding.unsupported': 415,
+      'request.aborted': 400, 'request.size.invalid': 400,
+    };
+    if (!Object.hasOwn(status, err.type)) return next(err);
+    evento('richiesta_non_valida', { http: status[err.type] });
+    if (!res.destroyed && !res.headersSent) {
+      res.status(status[err.type]).json({ codice: 'richiesta_non_valida' });
+    }
+  });
   return { app, db, nodi, lavori, ricerca, close: () => {
     if (chiuso) return;
     chiuso = true;
