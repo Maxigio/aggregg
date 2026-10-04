@@ -358,12 +358,40 @@ test('restic reale: retention 90 giorni e 14 giorni DB, dry-run e restore dei co
       assert.equal(piano.eliminabili, categoria === 'journal' ? 2 : 3);
       // Il dry-run conserva anche quelli candidati alla rimozione.
       await repo.ripristina(ids[0],dir);
-      await assert.rejects(repo.retention(categoria, { dryRun: false,snapshot: ids[0] }), /backup_retention_non_sicura/);
+      const protetto = await repo.retention(categoria, { dryRun: false, snapshot: ids[0] });
+      assert.equal(protetto.conservate, piano.conservate + 1);
+      assert.equal(protetto.eliminate, piano.eliminabili - 1);
+      await repo.ripristina(ids[0], dir);
       const applied = await repo.retention(categoria, { ...opts,dryRun:false });
-      assert.equal(applied.eliminate,piano.eliminabili);
+      assert.equal(applied.eliminate,1);
       await assert.rejects(repo.ripristina(ids[0],dir), /backup_non_disponibile/);
       const restored = await repo.ripristina(ids.at(-1),dir);
       assert.equal(fs.readFileSync(path.join(restored,categoria === 'journal' ? 'operazioni.json' : 'database.dump'),'utf8'), 'sintetico-0');
       await repo.ripristina(estranea.snapshot,dir); await repo.verifica();
     }
   });
+
+
+test('B06: protegge il marker scaduto dopo la validazione, senza dimenticare altri vincoli', async t => {
+  for (const categoria of ['journal', 'database']) await t.test(categoria, async () => {
+    const piano = pianoConRimozioni(2);
+    if (categoria === 'database') for (const s of [...piano[0].keep, ...piano[0].remove]) {
+      s.paths = ['/database.dump']; s.tags = ['database'];
+      s.time = piano[0].keep[0].time;
+    }
+    const marker = piano[0].remove[0].id;
+    const f = resticSimulato([{ output: JSON.stringify(piano) }, {}, {}, {}]);
+    assert.deepEqual(await f.repo.retention(categoria, { dryRun: false, snapshot: marker }),
+      { dryRun: false, conservate: 2, eliminate: 1, eliminabili: 1 });
+    assert.deepEqual(f.chiamate[2].slice(2), [piano[0].remove[1].id]);
+    for (const vizio of ['categoria', 'duplicato', 'assente', 'check']) {
+      const bad = structuredClone(piano);
+      if (vizio === 'categoria') bad[0].remove[0].tags = ['estranea'];
+      if (vizio === 'duplicato') bad[0].keep.push(bad[0].remove[0]);
+      const g = resticSimulato([{ output: JSON.stringify(bad) }, { code: vizio === 'check' ? 3 : 0 }]);
+      await assert.rejects(g.repo.retention(categoria, { dryRun: false,
+        snapshot: vizio === 'assente' ? 'f'.repeat(64) : marker }), /backup_(retention_non_sicura|non_disponibile)/);
+      assert.ok(!g.chiamate.some(args => args[1] === 'prune' || (args[1] === 'forget' && !args.includes('--dry-run'))));
+    }
+  });
+});

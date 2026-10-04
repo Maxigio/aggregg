@@ -58,3 +58,20 @@ rollback del legacy senza dominio. Review indipendente: nessun difetto
 applicativo residuo. Un errore nella fixture cross-domain usava un ID invito
 come persona Auth: corretta la fixture, preservata la guardia sull'identità.
 Fonte: [PostgreSQL generated columns](https://www.postgresql.org/docs/18/ddl-generated-columns.html).
+
+## B06 — chiuso
+
+La copia indicata dalla manutenzione può trovarsi fra gli snapshot scaduti:
+viene conservata spostandola da remove a keep, dopo aver validato l'intero
+piano originale. Non si aggirano categoria, timestamp, unicità e copertura
+90 giorni / 14 giorni DB. Al massimo una copia aggiuntiva per manutenzione.
+Assenza del marker o check fallito: nessun forget. Check/prune restano
+necessari anche quando un retry non ha più snapshot da eliminare.
+
+42/42 prove, compresi repository restic 0.19.1 reali cifrati separati:
+restore della copia protetta, eliminazione successiva quando il marker
+cambia, preservazione della categoria estranea. Review indipendente:
+49 PASS simulati e 14 controprove supplementari, nessun finding residuo.
+La manutenzione resta seriale nella singola istanza concordata; non è un
+protocollo HA per processi multipli sul medesimo repository.
+Fonte: [restic retention](https://restic.readthedocs.io/en/stable/060_forget.html).

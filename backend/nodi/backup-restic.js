@@ -104,7 +104,7 @@ function creaRestic({ binario, ambiente, spawnProcesso = spawn }) {
         kept.push(...gruppo.keep); removed.push(...(gruppo.remove || []));
       }
       const tutti = [...kept, ...removed];
-      if (!kept.some(s => s?.id === snapshot) || tutti.some(s => !s || !/^[a-f0-9]{64}$/.test(s.id || '')
+      if (!tutti.some(s => s?.id === snapshot) || tutti.some(s => !s || !/^[a-f0-9]{64}$/.test(s.id || '')
           || s.hostname !== 'amr-centro' || s.paths?.length !== 1 || s.paths[0] !== '/' + filename(categoria)
           || s.tags?.length !== 1 || s.tags[0] !== categoria || !Number.isFinite(Date.parse(s.time)))
           || new Set(tutti.map(s => s.id)).size !== tutti.length) {
@@ -119,6 +119,10 @@ function creaRestic({ binario, ambiente, spawnProcesso = spawn }) {
           throw new Error('backup_retention_non_sicura');
         }
       }
+      // Proteggi la copia dell'operazione in lavorazione solo dopo aver verificato
+      // il piano originale: non aggirare i vincoli di categoria o di retention.
+      const protetta = removed.findIndex(s => s.id === snapshot);
+      if (protetta !== -1) kept.push(...removed.splice(protetta, 1));
       if (!dryRun) {
         await repo.verifica();
         for (let i = 0; i < removed.length; i += BATCH_RETENTION) {
