@@ -100,9 +100,36 @@ sia root normale sia prefisso `local:` inizializzano la directory attesa;
 password interna rifiutata ed esterna ammessa. **57 test backup pass**, zero
 failure e zero skip, compresi i tre test con restic reale e i relativi sotto-casi.
 Log `/private/tmp/amr-restic-f1-completo.log`. Ultima controverifica del reviewer
-ancora in corso; nessun file o servizio remoto cambiato.
+conclusa: finding chiuso, nessun nuovo finding confermato. Commit `8ad685d`.
 
-Restano da trattare separatamente
-la pulizia di un restore fallito e il controllo collettivo dei destinatari
-della ricerca condivisa, riprodotti dai reviewer e ancora da controverificare
-nel main. La review di accessi e UI non è conclusa.
+### F2 — Cleanup del restore fallito non controllato — confermato e corretto
+
+La rimozione della directory temporanea poteva lanciare nel catch del restore,
+esponendo un errore del filesystem con percorso e lasciando un dump residuo.
+Main probe con root `0500`: prima `erroreSanificato=false`, nessun flag e
+`residuo=true`; dopo `erroreSanificato=true` e `residuo=false`.
+
+Correzione: ripristina `0700` soltanto sulla root privata creata dal comando,
+poi tenta la rimozione. Se chmod/rm falliscono, conserva il codice
+`backup_non_disponibile` con `cleanupIncompleto=true`, senza path/cause.
+Non forza ricorsivamente permessi o sovrascrive file vivi.
+
+Regressione: normale, root non scrivibile e rimozione fallita; gli ultimi due
+fallivano prima del fix. **56 test pass, tre gate restic opt-in esclusi** nel
+giro mirato. Review indipendente: 65 casi mirati passati, prova reale
+restore/password errata, mkdtemp fallita senza alterazione del parent,
+directory annidata non rimovibile segnalata senza errore grezzo. Non è una
+garanzia di eliminazione su un filesystem guasto: il flag richiede una
+pulizia esplicita dell'area temporanea. I chiamanti attuali del restore sono
+strumenti di collaudo, non una rotta pubblica del centro.
+
+### F3 — Controllo collettivo dei destinatari — confermato, fix successivo
+
+Main riproduce la prova HTTP indipendente: A e B, aziende diverse, stessa
+prima pagina condivisa. Con risultato a 58 secondi e controllo tardivo/revoca
+di A, anche B riceve 504. B da solo e revoca immediata di A sono controprove
+valide. Il controllo finale per destinatario deve restare obbligatorio;
+l'aggiornamento dell'affinità non deve attendere quello degli altri.
+
+La review di accessi/UI non è ancora conclusa. Il proprietario ha autorizzato
+la sola sonda remota temporanea: upload e avvio non sono ancora eseguiti.

@@ -170,8 +170,13 @@ function creaRestic({ binario, ambiente, spawnProcesso = spawn }) {
         await esegui(['restore', snapshot, '--target', destinazione, '--verify']);
         return destinazione;
       } catch {
-        if (destinazione) fs.rmSync(destinazione, { recursive: true, force: true });
-        throw new Error('backup_non_disponibile');
+        const errore = new Error('backup_non_disponibile');
+        if (destinazione) try {
+          // Il restore può modificare i permessi della radice temporanea privata.
+          fs.chmodSync(destinazione, 0o700);
+          fs.rmSync(destinazione, { recursive: true, force: true });
+        } catch { errore.cleanupIncompleto = true; }
+        throw errore;
       }
     },
   };

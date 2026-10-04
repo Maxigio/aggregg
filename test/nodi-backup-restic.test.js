@@ -119,6 +119,34 @@ test('restic: ricontrolla gli alias prima del comando, senza cambiare i reposito
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('restic: restore fallito elimina i dump o segnala la pulizia incompleta senza percorsi', async t => {
+  for (const caso of ['normale', 'directory non scrivibile', 'rimozione fallita']) await t.test(caso, async t => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-restic-cleanup-'));
+    let destinazione;
+    const rm = fs.rmSync;
+    if (caso === 'rimozione fallita') t.mock.method(fs, 'rmSync', (p, ...args) => {
+      if (p === destinazione) throw Object.assign(new Error('errore filesystem sintetico: ' + p), { path: p });
+      return rm(p, ...args);
+    });
+    const f = resticSimulato(args => ({ code: 1, azioni() {
+      destinazione = args[args.indexOf('--target') + 1];
+      fs.writeFileSync(path.join(destinazione, 'database.dump'), 'dump-sintetico');
+      if (caso === 'directory non scrivibile') fs.chmodSync(destinazione, 0o500);
+    } }));
+    try {
+      await assert.rejects(f.repo.ripristina('a'.repeat(64), dir), e =>
+        e.message === 'backup_non_disponibile' && !e.path && !e.cause
+        && !!e.cleanupIncompleto === (caso === 'rimozione fallita'));
+      assert.equal(fs.existsSync(destinazione), caso === 'rimozione fallita');
+      assert.equal(f.chiamate.length, 1);
+    } finally {
+      t.mock.restoreAll();
+      if (destinazione && fs.existsSync(destinazione)) fs.chmodSync(destinazione, 0o700);
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 test('restic: piano da 2500 snapshot con reasons supera 1 MiB e resta valido', async () => {
   const piano = pianoSintetico(2500), output = JSON.stringify(piano);
   assert.equal(piano[0].reasons.length, 2500);
