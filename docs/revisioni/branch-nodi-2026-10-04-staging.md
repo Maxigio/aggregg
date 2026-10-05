@@ -333,3 +333,25 @@ Evidenze finali e limiti nel
 [registro del protocollo](ricerche-http-asincrone-2026-10-05.md).
 Il prossimo gate riguarda un nuovo artefatto e il trasferimento HTTPS:
 nessuna immagine del centro caricata o avviata in cloud in questo incremento.
+
+## Gate locale dell'immagine con ricerche brevi — 5 ottobre
+
+Nuovo candidato `bb7b7d1`, runtime `63c60e3`. Ampliato il gate dell'immagine:
+POST breve, attesa simulata oltre il timeout del proxy, GET brevi, replay
+prima/dopo completamento senza nuovo job e vecchio GET negato anche al
+referente. Review indipendente e controprove; 29 test mirati pass.
+
+Gate Docker locale su PostgreSQL 18.6/Auth 0.49.1: exit 0, un solo job,
+avvio 22 ms, 17 consultazioni massimo 21 ms, lavoro 16.034 ms; TLS/MFA,
+ruoli, quote, revoca, restart sul volume e cleanup verificati.
+Un giro precedente si è fermato nella fixture di accettazione del referente:
+stessa intermittenza storica, causa ancora non dimostrata; il PASS successivo
+non la risolve. Evidenze e limiti nel
+[registro dell'immagine](staging-immagine-2026-10-05.md).
+
+Riletta la configurazione Nhost: `amr-centro-staging` fermo, zero repliche,
+immagine vuota e nessuna porta; nessun prototipo pubblico. Nessun upload,
+avvio cloud, modifica M2 o richiesta ai portali in questo incremento.
+Il frontend AMR principale usa ancora il GET lungo: la sua migrazione al
+contratto del centro resta nel gate APP. Prima del gate clienti va anche
+diagnosticata l'intermittenza della fixture PostgreSQL.
