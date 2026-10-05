@@ -66,6 +66,16 @@ test('staging worker: arresto idempotente del solo figlio e nessun token negli a
   await w.close(); assert.deepEqual(segnali, ['SIGTERM']);
 });
 
+test('staging worker solo stato: rifiuta worker precedenti che ignorano il vincolo', t => {
+  const vecchio = fixture(t);
+  assert.throws(() => configura({ ...vecchio, soloStato: true }), /configurazione_worker_staging_non_valida/);
+  assert.equal(fs.existsSync(vecchio.directory), false);
+  const attuale = fixture(t, fs.readFileSync(path.join(__dirname, '../backend/nodi/worker.js'), 'utf8'));
+  const c = configura({ ...attuale, soloStato: true });
+  assert.equal(c.env.AMR_NODO_SOLO_STATO, '1'); assert.equal(c.env.AMR_NODO_SIMULATO, '0');
+  assert.throws(() => configura({ ...attuale, live: true, soloStato: true }), /configurazione_worker_staging_non_valida/);
+});
+
 test('staging worker CLI: runtime scelto e morte del figlio per segnale non diventano successo', {
   skip: Number(process.versions.node.split('.')[0]) !== 24 ? 'CLI collaudata con Node 24' : false,
 }, t => {

@@ -5,8 +5,9 @@ const { verificaArtefatto } = require('../backend/nodi/compatibilita-nodo');
 
 // Il file privato contiene solo la credenziale del nodo. Non ereditiamo Auth,
 // SMTP o .env dell'app; dati e log appartengono esclusivamente al collaudo.
-function configura({ file, radice, directory, live = false }) {
+function configura({ file, radice, directory, live = false, soloStato = false }) {
   try {
+    if (typeof live !== 'boolean' || typeof soloStato !== 'boolean' || (live && soloStato)) throw new Error();
     if (![file, radice, directory].every(p => typeof p === 'string' && path.isAbsolute(p))) throw new Error();
     const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
     let config;
@@ -23,6 +24,10 @@ function configura({ file, radice, directory, live = false }) {
     const s = fs.lstatSync(releaseFile);
     if (!s.isFile() || s.isSymbolicLink() || s.size > 4 * 1024 * 1024) throw new Error();
     const manifest = verificaArtefatto(JSON.parse(fs.readFileSync(releaseFile, 'utf8')), radice);
+    // Un artefatto precedente può essere integro ma ignorare SOLO_STATO e
+    // interrogare i portali: questa modalità richiede il worker del launcher.
+    if (soloStato && !fs.readFileSync(path.join(radice, 'backend/nodi/worker.js'))
+      .equals(fs.readFileSync(path.join(__dirname, '../backend/nodi/worker.js')))) throw new Error();
     // Una directory nuova evita di riusare cache o dati dell'app. Un percorso
     // preesistente viene rifiutato; non scriviamo nell'artefatto verificato.
     const realRoot = fs.realpathSync(radice), parent = fs.realpathSync(path.dirname(directory));
@@ -32,7 +37,8 @@ function configura({ file, radice, directory, live = false }) {
     return { manifest, env: { PATH: path.dirname(process.execPath) + ':/usr/bin:/bin',
       AMR_CENTRO_URL: config.centro, AMR_NODO_ID: config.id, AMR_NODI_TOKEN: config.token,
       AMR_NODI_RELEASE_FILE: releaseFile, USER_DATA_PATH: directory, AMR_LOG_DIR: path.join(directory, 'log'),
-      AMR_NODO_SIMULATO: live ? '0' : '1' } };
+      AMR_NODO_SIMULATO: live || soloStato ? '0' : '1',
+      ...(soloStato ? { AMR_NODO_SOLO_STATO: '1' } : {}) } };
   } catch { throw new Error('configurazione_worker_staging_non_valida'); }
 }
 
@@ -56,10 +62,12 @@ if (require.main === module) {
   let worker;
   try {
     const [file, radice, directory, flag, ...resto] = process.argv.slice(2);
-    if (resto.length || (flag !== undefined && flag !== '--live') || Number(process.versions.node.split('.')[0]) !== 24) throw new Error();
-    worker = avvia({ file, radice, directory, live: flag === '--live' });
+    if (resto.length || (flag !== undefined && !['--live', '--solo-stato'].includes(flag))
+        || Number(process.versions.node.split('.')[0]) !== 24) throw new Error();
+    worker = avvia({ file, radice, directory, live: flag === '--live', soloStato: flag === '--solo-stato' });
     worker.child.once('spawn', () => console.log(JSON.stringify({ evento: 'processo_worker_avviato',
-      simulato: flag !== '--live', release: worker.manifest.release, pid: worker.child.pid })));
+      simulato: flag === undefined, soloStato: flag === '--solo-stato',
+      release: worker.manifest.release, pid: worker.child.pid })));
     worker.child.once('exit', (code, signal) => {
       console.log(JSON.stringify({ evento: 'processo_worker_terminato', code, signal }));
       process.exitCode = code ?? 1;

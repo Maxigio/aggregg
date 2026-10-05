@@ -328,10 +328,23 @@ test('menu offline del nodo conserva la forma delle rotte esistenti', async () =
   assert.deepEqual(composizione.body.risultati,base.risultati);
 });
 
-test('nodo senza esito: nessun replay automatico e risposta tardiva rifiutata', async () => {
+test('nodo senza esito: nessun replay automatico e risposta tardiva rifiutata', async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-centro-incerto-'));
   const tokens = { a:'a'.repeat(64) };
-  const centro = creaCentro({ adminLocale: true,tokens,directory:dir,timeoutMs:100});
+  // Il sorgente è identico; solo il timer lessicale del centro è controllato.
+  // I timer globali, HTTP/Undici e dei moduli dipendenti restano reali.
+  const file = path.resolve(__dirname, '../backend/nodi/centro.js'), copia = { exports: {} };
+  let scade;
+  require('node:vm').compileFunction(fs.readFileSync(file, 'utf8'),
+    ['exports', 'require', 'module', '__filename', '__dirname', 'setTimeout'], { filename: file })(
+      copia.exports, require('node:module').createRequire(file), copia, file, path.dirname(file), (fn, ms) => {
+        assert.equal(ms, 100); assert.equal(scade, undefined);
+        const timer = setTimeout(() => assert.fail('Scadenza del lavoro non pilotata'), 30000).unref();
+        t.after(() => clearTimeout(timer));
+        scade = () => { clearTimeout(timer); fn(); };
+        return timer;
+      });
+  const centro = copia.exports.creaCentro({ adminLocale: true,tokens,directory:dir,timeoutMs:100});
   const server = await new Promise(resolve => {
     const s = centro.app.listen(0,'127.0.0.1',()=>resolve(s));
   });
@@ -348,9 +361,11 @@ test('nodo senza esito: nessun replay automatico e risposta tardiva rifiutata', 
     for (let i=0;i<30;i++) {
       const p = await fetch(url+'/_nodo/poll?id=a',{headers:auth});
       if (p.status===200) { job=await p.json(); break; }
-      await new Promise(r=>setTimeout(r,5));
+      await new Promise(r=>setImmediate(r));
     }
     assert.ok(job);
+    assert.equal(centro.lavori.get(job.idLavoro).iniziato, true);
+    scade();
     const r = await pending;
     assert.equal(r.status,504);
     assert.equal((await r.json()).incerto,true);
@@ -632,4 +647,53 @@ test('failover preferisce il secondo nodo reale al simulatore', async () => {
     assert.equal(centro.nodi.get('a').coda.length,0);
     assert.equal((await pending).status,200);
   } finally {await new Promise(resolve=>server.close(resolve));centro.close();fs.rmSync(dir,{recursive:true,force:true})}
+});
+
+test('nodo solo stato: niente assegnazioni, poll, cataloghi o riattivazione tramite Admin', async t => {
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'amr-nodo-osservatore-'));
+  const token='a'.repeat(64), centro=creaCentro({adminLocale:true,tokens:{a:token},directory:dir});
+  const server=await new Promise(r=>{const s=centro.app.listen(0,'127.0.0.1',()=>r(s));});
+  t.after(async()=>{centro.close();server.closeAllConnections();await new Promise(r=>server.close(r));fs.rmSync(dir,{recursive:true,force:true});});
+  const url='http://127.0.0.1:'+server.address().port;
+  const headers={'x-amr-node-id':'a','x-amr-node-token':token,'content-type':'application/json'};
+  const beat=soloStato=>fetch(url+'/_nodo/heartbeat',{method:'POST',headers,body:JSON.stringify({id:'a',
+    revisione:'imac-1',soloStato,occupato:false,fonti:{subito:{fermo:false},autoscout:{fermo:false},moto:{fermo:false}}})});
+  await beat(false);
+  const queued=centro.ricerca('aziendaA',{tipo:'auto',marca:'Fiat'});
+  const atteso=assert.rejects(queued,/non avviato/);
+  for(let i=0;i<100&&!centro.nodi.get('a').coda.length;i++)await new Promise(r=>setTimeout(r,5));
+  assert.equal(centro.nodi.get('a').coda.length,1);
+  assert.equal((await beat(true)).status,200);await atteso;
+  assert.equal(centro.nodi.get('a').coda.length,0);
+  assert.equal(centro.db.prepare('SELECT stato FROM lavori WHERE operazione=?').get('ricerca').stato,'interrotto');
+  assert.equal((await fetch(url+'/_nodo/poll?id=a',{headers})).status,204);
+  await assert.rejects(centro.ricerca('aziendaA',{tipo:'moto',marca:'Yamaha'}),/nodo non disponibile/);
+  assert.equal((await beat('true')).status,400);assert.equal(centro.nodi.get('a').soloStato,true);
+  const login=await fetch(url+'/api/test/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({azienda:'aziendaA'})});
+  const cookie=login.headers.get('set-cookie').split(';')[0];
+  assert.equal((await fetch(url+'/api/models?tipo=moto&marca=Yamaha',{headers:{cookie}})).status,503);
+  assert.equal((await fetch(url+'/api/admin/nodi/a',{method:'POST',headers:{'content-type':'application/json','x-amr-local-admin':'1'},
+    body:JSON.stringify({sospeso:false})})).status,200);
+  assert.equal(centro.nodi.get('a').soloStato,true);
+  await assert.rejects(centro.ricerca('aziendaA',{tipo:'auto',marca:'Fiat'}),/nodo non disponibile/);
+  const stato=await (await fetch(url+'/api/admin')).json();
+  assert.equal(stato.nodi[0].soloStato,true);assert.equal(stato.nodi[0].online,true);
+});
+
+test('nodo solo stato: escluso anche dal fallback dopo 429', async t => {
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'amr-osservatore-fallback-'));
+  const tokens={a:'a'.repeat(64),b:'b'.repeat(64)};
+  const centro=creaCentro({adminLocale:true,tokens,directory:dir,timeoutMs:3000});
+  const server=await new Promise(r=>{const s=centro.app.listen(0,'127.0.0.1',()=>r(s));});
+  t.after(async()=>{centro.close();server.closeAllConnections();await new Promise(r=>server.close(r));fs.rmSync(dir,{recursive:true,force:true});});
+  const url='http://127.0.0.1:'+server.address().port, headers=id=>({'x-amr-node-id':id,'x-amr-node-token':tokens[id],'content-type':'application/json'});
+  for(const id of ['a','b'])await fetch(url+'/_nodo/heartbeat',{method:'POST',headers:headers(id),body:JSON.stringify({id,
+    revisione:'imac-1',soloStato:id==='b',simulato:id==='b',fonti:{subito:{fermo:false},autoscout:{fermo:false},moto:{fermo:false}}})});
+  const pending=centro.ricerca('aziendaA',{tipo:'auto',marca:'Fiat'});
+  const primo=await (await fetch(url+'/_nodo/poll?id=a',{headers:headers('a')})).json();
+  await fetch(url+'/_nodo/esito',{method:'POST',headers:headers('a'),body:JSON.stringify({id:'a',idLavoro:primo.idLavoro,
+    tentativo:primo.tentativo,esito:{status:200,body:{...rispostaDaPagina(),sources:{subito:{status:'error',erroreHttp:429,count:0},
+      autoscout:{status:'empty',count:0},moto:{status:'skipped',count:0}}}}})});
+  assert.equal((await pending).status,200);assert.equal(centro.nodi.get('b').coda.length,0);
+  assert.equal((await fetch(url+'/_nodo/poll?id=b',{headers:headers('b')})).status,204);
 });

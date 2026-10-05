@@ -5,6 +5,7 @@ let esegui, statoFonti, annullo;
 const origine = process.env.AMR_CENTRO_URL;
 const id = process.env.AMR_NODO_ID;
 const token = process.env.AMR_NODI_TOKEN;
+const soloStato = process.env.AMR_NODO_SOLO_STATO === '1';
 
 let attivo = true;
 let inCorso = null;
@@ -34,6 +35,7 @@ async function heartbeat() {
     ...(release ? { compatibilita: release } : {}),
     sequenza: ++sequenza,
     idLavoroAttivo: inCorso?.idLavoro || null,
+    ...(soloStato ? { soloStato: true } : {}),
     simulato: process.env.AMR_NODO_SIMULATO === '1', fonti: statoFonti() });
   heartbeatInVolo = richiesta;
   try { await richiesta; }
@@ -73,8 +75,13 @@ async function avvia() {
   if (url.protocol === 'https:' && !release) throw new Error('Il nodo remoto richiede i metadati della release');
   if (!attivo) return;
   // Il gate precede il caricamento degli scraper e qualunque chiamata al centro.
-  ({ esegui, statoFonti } = require('./operazioni'));
-  annullo = require('../annullo');
+  if (soloStato) {
+    const salute = require('../fonti-salute');
+    statoFonti = () => Object.fromEntries(['subito', 'autoscout', 'moto'].map(f => [f, salute.fermo(f)]));
+  } else {
+    ({ esegui, statoFonti } = require('./operazioni'));
+    annullo = require('../annullo');
+  }
   const registro = await fetch(origine + '/_nodo/registrazione', {
     headers: headers(), redirect: 'error', signal: AbortSignal.timeout(4000) });
   if (!registro.ok) throw new Error('registrazione nodo non disponibile');
@@ -88,6 +95,9 @@ async function avvia() {
     try {
       await heartbeat();
       if (!attivo) break;
+      // Il primo collegamento remoto prova il trasporto, senza caricare gli
+      // scraper o chiedere lavori; lo stato non attesta la salute dei portali.
+      if (soloStato) { await pausa(2000); continue; }
       const r = await fetch(`${origine}/_nodo/poll?id=${encodeURIComponent(id)}`, {
         headers: headers(), redirect: 'error', signal: AbortSignal.timeout(4000),
       });

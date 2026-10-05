@@ -240,7 +240,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     }
   }
   function disponibile(n, fonte = null, consideraCoda = true) {
-    if (!n || tokenRevocato(n.id) || ora() - n.visto > 6000 || !releaseValida(n) || n.sospeso
+    if (!n || tokenRevocato(n.id) || ora() - n.visto > 6000 || !releaseValida(n) || n.sospeso || n.soloStato
         || (consideraCoda && n.coda.length >= 10)) return false;
     return !fonte || (!n.sospese.has(fonte) && !n.fonti[fonte]?.fermo);
   }
@@ -592,14 +592,15 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     next();
   });
   app.post('/_nodo/heartbeat', (req, res) => {
-    const { id, revisione, fonti, occupato, idLavoroAttivo, simulato } = req.body || {};
+    const { id, revisione, fonti, occupato, idLavoroAttivo, simulato, soloStato } = req.body || {};
     if (id !== req.get('x-amr-node-id')) return res.sendStatus(403);
     if (releaseAttesa && !compat.compatibile(releaseAttesa, req.body?.compatibilita)) {
       const precedente = nodi.get(id);
       if (precedente) precedente.compatibilita = null;
       return res.sendStatus(409);
     }
-    if (!/^[a-zA-Z0-9_-]{1,40}$/.test(id || '') || !fonti || typeof fonti !== 'object') return res.sendStatus(400);
+    if (!/^[a-zA-Z0-9_-]{1,40}$/.test(id || '') || !fonti || typeof fonti !== 'object'
+        || (soloStato !== undefined && typeof soloStato !== 'boolean')) return res.sendStatus(400);
     let n = nodi.get(id);
     if (n?.boot) {
       const seq = req.body.sequenza;
@@ -621,8 +622,10 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       avviato.reject(Object.assign(new Error('esito incerto: worker riavviato'), { incerto: true }));
     }
     n.visto = ora(); n.revisione = revisione; n.fonti = fonti; n.simulato = !!simulato;
+    n.soloStato = !!soloStato;
     n.compatibilita = releaseAttesa ? compat.valida(req.body.compatibilita) : null;
     n.occupato = !!occupato;
+    if (n.soloStato) interrompiAccodati(n);
     res.json({ ok: true });
   });
   app.get('/_nodo/poll', async (req, res) => {
@@ -630,7 +633,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     const n = nodi.get(req.query.id);
     if (chiuso) return res.sendStatus(503);
     if (!n || ora() - n.visto > 6000 || !releaseValida(n)) return res.sendStatus(409);
-    if (n.occupato || n.sospeso || n.pollInCorso) return res.sendStatus(204);
+    if (n.occupato || n.sospeso || n.soloStato || n.pollInCorso) return res.sendStatus(204);
     n.pollInCorso = true;
     try {
       interrompiAccodati(n, null, job => fontiDelLavoro(job)
@@ -750,7 +753,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   app.use('/api/stato', adminDiProva);
   const statoNodo = n => ({ id:n.id, online:!tokenRevocato(n.id) && ora()-n.visto<6000,
     autorizzato:!tokenRevocato(n.id), compatibile:releaseValida(n), occupato:n.occupato,
-    simulato:n.simulato,sospeso:n.sospeso,sospese:[...n.sospese],fonti:n.fonti });
+    simulato:n.simulato,...(n.soloStato ? { soloStato: true } : {}),
+    sospeso:n.sospeso,sospese:[...n.sospese],fonti:n.fonti });
   app.get('/api/stato', (req, res) => {
     pulisci();
     const nodo = typeof req.query.nodo === 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(req.query.nodo)

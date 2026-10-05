@@ -93,3 +93,32 @@ test('worker: heartbeat pendente termina prima dell’esito e del lavoro success
   assert.deepEqual(ordine,['avvio-A','heartbeat-A','esito-A','avvio-B']);
   processo.emit('SIGTERM'); terminaB({status:200,body:{}}); await running;
 });
+
+test('worker solo stato: registra e invia heartbeat senza caricare scraper o chiedere lavori', async () => {
+  const vm = require('node:vm'), processo = new EventEmitter(), chiamate = [], caricati = [];
+  processo.env = { AMR_CENTRO_URL:'http://127.0.0.1:1234', AMR_NODO_ID:'osservatore',
+    AMR_NODI_TOKEN:'sintetico', AMR_NODO_SOLO_STATO:'1' };
+  const modulo = { exports:{} };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../backend/nodi/worker.js'),'utf8'), {
+    module:modulo, process:processo, AbortSignal, AbortController, performance, URL,
+    setTimeout, clearTimeout, setInterval, clearInterval,
+    require:name=>{
+      caricati.push(name);
+      if(name==='node:crypto')return require(name);
+      if(name==='../fonti-salute')return {fermo:f=>({fermo:false, fonte:f})};
+      throw new Error('caricamento vietato: '+name);
+    },
+    fetch:async(url,opt)=>{
+      chiamate.push({url, body:opt?.body&&JSON.parse(opt.body)});
+      if(url.endsWith('/heartbeat'))processo.emit('SIGTERM');
+      return {ok:true,json:async()=>({epoca:'centro',boot:null})};
+    }
+  });
+  await modulo.exports.avvia();
+  assert.deepEqual(chiamate.map(c=>new URL(c.url).pathname),[
+    '/_nodo/registrazione','/_nodo/registrazione','/_nodo/heartbeat']);
+  const hb=chiamate.at(-1).body;
+  assert.equal(hb.soloStato,true);assert.equal(hb.simulato,false);assert.equal(hb.occupato,false);
+  assert.deepEqual(Object.keys(hb.fonti),['subito','autoscout','moto']);
+  assert.ok(!caricati.includes('./operazioni'));assert.ok(!caricati.includes('../annullo'));
+});

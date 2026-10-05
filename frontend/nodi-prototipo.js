@@ -289,14 +289,16 @@ function renderStato(data) {
   for (const n of nodi) {
     const card = elemento('article', '', 'node-card'), head = elemento('div', '', 'node-head');
     const title = elemento('div', '');
-    title.append(elemento('h3', n.id), elemento('p', `${n.simulato ? 'Simulato · nessun portale interrogato' : 'Worker reale'} · ${n.occupato ? 'in lavoro' : 'libero'}`));
+    title.append(elemento('h3', n.id), elemento('p', n.soloStato ? 'Solo stato · ricerche disabilitate'
+      : `${n.simulato ? 'Simulato · nessun portale interrogato' : 'Worker reale'} · ${n.occupato ? 'in lavoro' : 'libero'}`));
     head.append(title, elemento('span', '', `status-dot${n.online ? ' live' : ''}`)); card.append(head);
     const rows = elemento('div', '', 'source-rows');
     for (const fonte of ['subito', 'autoscout', 'moto']) {
-      const fermo = n.sospeso || n.sospese.includes(fonte) || n.fonti?.[fonte]?.fermo;
+      const fermo = n.soloStato || n.sospeso || n.sospese.includes(fonte) || n.fonti?.[fonte]?.fermo;
       const fine = n.fonti?.[fonte]?.fino;
       const testo = n.autorizzato === false ? 'Credenziale revocata' : !n.online ? 'Nodo offline'
-        : n.compatibile === false ? 'Release incompatibile' : n.sospeso || n.sospese.includes(fonte) ? 'Sospesa da Admin'
+        : n.compatibile === false ? 'Release incompatibile' : n.soloStato ? 'Solo stato · portale non verificato'
+        : n.sospeso || n.sospese.includes(fonte) ? 'Sospesa da Admin'
         : n.fonti?.[fonte]?.fermo ? `Pausa automatica${Number.isFinite(fine) ? ' fino alle ' + new Date(fine).toLocaleTimeString('it-IT') : ''}`
           : 'Disponibile';
       const row = elemento('div', '', 'source-row'); row.append(elemento('span', nomiFonti[fonte]), elemento('span', testo, fermo ? 'stop' : '')); rows.append(row);

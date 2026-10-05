@@ -395,7 +395,18 @@ stabilità del proxy ancora gate separati.
 
 Login Admin e ricezione della verifica email nella casella reale sono ora
 confermati dall’utente. Il worker iMac è passato da simulato a reale sullo stesso
-artefatto `66e2b24`; registrazione e compatibilità verificate, ricerca completa
-ancora da provare. Nel [registro del collaudo nodi](staging-collaudo-nodi-2026-10-05.md)
+artefatto `66e2b24`; registrazione e compatibilità verificate. L'utente ha poi
+confermato azienda attiva, solo Moto disponibile e ricerca completata dalle
+tre fonti senza errori. Nel [registro del collaudo nodi](staging-collaudo-nodi-2026-10-05.md)
 sono separati prove cloud, test locali, istruzioni UI corrette ma non ancora
 distribuite e ostacoli al worker M2. Nessuna modifica alla produzione M2.
+
+## Preparazione M2 senza traffico — 5 ottobre
+
+Preparata e revisionata la modalità worker «solo stato», esclusa da tutti
+gli incarichi e chiaramente indicata nell'Admin. Suite finale locale: 1.460
+pass, zero failure/cancelled e nove skip opt-in; correzioni del collaudo e
+limiti nel [registro M2](m2-collegamento-solo-stato-2026-10-05.md).
+Runtime arm64 Node 24 verificato sull'iMac, non installato sull'M2.
+Il centro remoto resta su `66e2b24`: aggiornamento, backup/restore remoto,
+credenziale distinta M2 e collegamento effettivo non sono ancora eseguiti.

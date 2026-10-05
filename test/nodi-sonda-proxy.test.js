@@ -152,10 +152,12 @@ test('sonda proxy: TLS, redirect, cookie, body grande, socket e istanza diversa 
 test('sonda proxy: deadline reale e abort; configurazioni non valide non aprono rete', async t => {
   const f = await fixture(t); f.modo('infinito');
   const r = await misuraProxy({ ...f, timeoutMs: 20 });
-  assert.equal(r.ok, false); assert.equal(r.controlli[0].codice, 'timeout'); assert.equal(f.richieste.length, 1);
-  f.modo('infinito'); const a = new AbortController(); a.abort();
-  const b = await misuraProxy({ ...f, signal: a.signal }); assert.equal(b.controlli[0].codice, 'interrotto');
-  assert.equal(f.richieste.length, 0);
+  assert.equal(r.ok, false); assert.equal(r.controlli[0].codice, 'timeout');
+  // Il budget include connessione e TLS: la scadenza può precedere l'HTTP.
+  assert.equal(r.controlli.length, 1); assert.ok(f.richieste.length <= 1);
+  const abort = await fixture(t); abort.modo('infinito'); const a = new AbortController(); a.abort();
+  const b = await misuraProxy({ ...abort, signal: a.signal }); assert.equal(b.controlli[0].codice, 'interrotto');
+  assert.equal(abort.richieste.length, 0);
   for (const origine of ['http://127.0.0.1', 'https://user:password@amr.invalid', 'https://amr.invalid/x', 'https://amr.invalid/']) {
     await assert.rejects(misuraProxy({ origine }), /origine_non_valida/);
     assert.throws(() => creaSonda({ origine }), /origine_non_valida/);
@@ -167,6 +169,20 @@ test('sonda proxy: deadline reale e abort; configurazioni non valide non aprono 
     { env: {}, timeout: 10000, encoding: 'utf8' }).catch(e => e);
   assert.equal(cli.code, 1); assert.equal(JSON.parse(cli.stdout).ok, false);
   assert.equal(cli.stdout.includes(SENTINELLA), false); assert.equal(cli.stderr.includes(SENTINELLA), false);
+});
+
+test('sonda proxy: deadline prima della risoluzione DNS non invia HTTP né riprova', async t => {
+  const f = await fixture(t), risoluzioni = [];
+  const r = await misuraProxy({ ...f, origine: f.origine.replace('127.0.0.1', 'sonda.invalid'),
+    timeoutMs: 20, lookup: (_nome, opzioni, callback) => risoluzioni.push({ opzioni, callback }) });
+  assert.equal(r.ok, false); assert.equal(r.controlli[0].codice, 'timeout');
+  assert.equal(r.controlli.length, 1); assert.equal(risoluzioni.length, 1);
+  assert.equal(f.richieste.length, 0);
+  const { opzioni, callback } = risoluzioni[0];
+  if (opzioni.all) callback(null, [{ address: '127.0.0.1', family: 4 }]);
+  else callback(null, '127.0.0.1', 4);
+  await new Promise(r => setImmediate(r));
+  assert.equal(f.richieste.length, 0);
 });
 
 test('sonda proxy: rifiuta finte attese e flush anticipato anche con body corretto', async t => {

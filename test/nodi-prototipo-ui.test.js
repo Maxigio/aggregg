@@ -246,6 +246,20 @@ test('F06: polling seriale conserva risposte lente, riparte dopo errori e consen
   assert.deepEqual(errors, []);
 });
 
+test('diagnostica: nodo solo stato visibile senza indicare disponibilità dei portali', opzioniBrowser, async t => {
+  const nodi=[{id:'m2-osservatore',online:true,compatibile:true,soloStato:true,simulato:false,sospese:[],fonti:{}}];
+  const {page,errors}=await apriPrototipo(t,async(route,url)=>{
+    if(url.pathname==='/api/stato'){await route.fulfill({json:{nodi}});return true;}
+    if(url.pathname==='/api/admin'){await route.fulfill({json:{nodi,lavori:[],eventi:[],pagina:1,pagine:1,totale:0}});return true;}
+    return false;
+  });
+  const card=page.locator('#nodi .node-card');
+  assert.match(await card.innerText(),/Solo stato · ricerche disabilitate/);
+  assert.equal(await card.locator('.source-row').count(),3);
+  for(const row of await card.locator('.source-row').all())assert.match(await row.innerText(),/portale non verificato/);
+  assert.ok(!(await card.innerText()).includes('Disponibile'));assert.deepEqual(errors,[]);
+});
+
 test('F07: risposte e finally obsoleti non cambiano pagina o controlli della richiesta corrente', opzioniBrowser, async t => {
   const nodi = ['a', 'b'].map(id => ({ id, online: true, sospese: [], fonti: {} }));
   const richiesteA = [], richiesteB = [];
@@ -616,6 +630,15 @@ test('prototipo: aggiornamento lavori conserva dettagli, focus e scroll senza co
   t.after(async () => { await browser?.close(); server.closeAllConnections(); await new Promise(r => server.close(r)); });
   browser = await chromium.launch({ headless: true, executablePath: browserPath });
   const page = await browser.newPage(); const errors = []; page.on('pageerror', e => errors.push(e.message));
+  // Pilotare il callback reale evita che un poll finisca prima dell'apertura
+  // dei dettagli e renda il confronto dei contatori dipendente dal carico.
+  await page.addInitScript(() => {
+    const originale = window.setInterval;
+    window.setInterval = (fn, ms, ...args) => {
+      if (ms === 3000) { window.pollDiagnosticaProva = fn; return 0; }
+      return originale(fn, ms, ...args);
+    };
+  });
   let aggiornamenti = 0, inverti = false, rimossi = new Set(), nuovaMarca = 'BMW';
   let dettagli = 0;
   let consegnaDettagli;
@@ -654,6 +677,8 @@ test('prototipo: aggiornamento lavori conserva dettagli, focus e scroll senza co
     return {top:scroll.scrollTop,left:scroll.scrollLeft};
   });
   const prima=aggiornamenti;
+  assert.equal(await page.locator('#lavori .state').first().textContent(), 'In corso');
+  await page.evaluate(() => window.pollDiagnosticaProva());
   await page.waitForFunction(() => document.querySelector('#lavori .state').textContent==='Concluso');
   assert.ok(aggiornamenti>prima);
   assert.deepEqual(await page.evaluate(() => ({open:document.querySelector('#lavori details').open,
@@ -663,22 +688,27 @@ test('prototipo: aggiornamento lavori conserva dettagli, focus e scroll senza co
   {open:true,stesso:true,focus:true,...aperto});
   await summary.click();
   const contatore=aggiornamenti;
+  const durataPrima = await page.locator('#lavori tr').first().locator('td').nth(8).textContent();
+  await page.evaluate(() => window.pollDiagnosticaProva());
   await page.waitForFunction(n => document.querySelector('#lavori tr').children[8].textContent !== n,
-    await page.locator('#lavori tr').first().locator('td').nth(8).textContent());
+    durataPrima);
   assert.ok(aggiornamenti>contatore);
   assert.equal(await page.locator('#lavori details').first().evaluate(e=>e.open),false);
   await summary.click(); await summary.focus();
   inverti = true; nuovaMarca = 'Marca aggiornata';
+  await page.evaluate(() => window.pollDiagnosticaProva());
   await page.waitForFunction(() => document.querySelector('#lavori tr').dataset.lavoro==='job-19');
   assert.deepEqual(await page.evaluate(() => ({open:window.dettaglioOriginale.open,
     focus:document.activeElement===window.dettaglioOriginale.querySelector('summary'),
     aggiornato:window.dettaglioOriginale.querySelector('pre').textContent.includes('Marca aggiornata')})),
   {open:true,focus:true,aggiornato:true});
   rimossi.add('job-0'); rimossi.add('job-1');
+  await page.evaluate(() => window.pollDiagnosticaProva());
   await page.waitForFunction(() => !document.querySelector('[data-lavoro="job-0"]'));
   assert.equal(await page.evaluate(() => document.activeElement===document.querySelector('.table-scroll')),true);
   assert.equal(await page.locator('#lavori tr').count(),18);
   rimossi = new Set(Array.from({length:20},(_,i)=>'job-'+i));
+  await page.evaluate(() => window.pollDiagnosticaProva());
   await page.waitForFunction(() => document.getElementById('lavori').textContent.includes('Nessun lavoro'));
   assert.equal(await page.locator('#lavori tr').count(),1);
   await page.evaluate(() => {
