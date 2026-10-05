@@ -184,6 +184,11 @@ vecchia funzione. La prova locale del nuovo incremento non aggiorna l'immagine
 
 ## Aggiornamento e rollback con manutenzione
 
+Preparazione locale ripetibile introdotta nel
+[registro del 5 ottobre](aggiornamento-staging-2026-10-05.md): contesto dal
+commit e cinque configurazioni con digest per arresto, candidata e rollback.
+Il comando non effettua deploy; i gate remoti sotto restano obbligatori.
+
 Un solo scheduler è un requisito: `replicas=1` non è un lock fra due processi.
 La documentazione consultata non garantisce assenza di sovrapposizione durante
 un aggiornamento. Non usare un rolling update non verificato.

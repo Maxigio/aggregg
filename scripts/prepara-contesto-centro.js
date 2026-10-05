@@ -9,8 +9,8 @@ const {verificaArtefatto}=require('../backend/nodi/compatibilita-nodo');
 function preparaContesto({radice=path.join(__dirname,'..'),genitore=os.tmpdir(),git=execFileSync}={}) {
   const manifest=prepara({radice,git});
   const directory=fs.mkdtempSync(path.join(genitore,'amr-centro-context-'));
-  fs.chmodSync(directory,0o700);
   try {
+    fs.chmodSync(directory,0o700);
     const nomi=[...manifest.inventario.codice,...manifest.inventario.cataloghi.map(n=>'data/'+n)];
     for(const nome of nomi) {
       const buffer=git('git',['show',manifest.release+':'+nome],{cwd:radice,encoding:null,
@@ -28,7 +28,9 @@ function preparaContesto({radice=path.join(__dirname,'..'),genitore=os.tmpdir(),
     verificaArtefatto(manifest,directory);
     return {directory,manifest};
   } catch {
-    fs.rmSync(directory,{recursive:true,force:true});throw new Error('contesto_centro_non_preparato');
+    try {fs.rmSync(directory,{recursive:true,force:true});}
+    catch {throw new Error('contesto_centro_pulizia_incompleta');}
+    throw new Error('contesto_centro_non_preparato');
   }
 }
 if(require.main===module) {
