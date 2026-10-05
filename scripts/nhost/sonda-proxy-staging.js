@@ -113,7 +113,10 @@ if (require.main === module) {
       || (args.length === 4 && (args[2] !== '--ascolto' || args[3] !== '0.0.0.0'))) throw new Error();
     const sonda = creaSonda({ origine: args[1] });
     sonda.server.on('error', () => { console.error('Sonda non avviata.'); process.exitCode = 1; });
-    sonda.server.listen(3000, args[3] || '127.0.0.1');
+    sonda.server.listen(3000, args[3] || '127.0.0.1', () => {
+      console.log(JSON.stringify({ evento: 'avvio', sonda: 'proxy-v1', istanza: sonda.istanza,
+        uid: typeof process.getuid === 'function' ? process.getuid() : null }));
+    });
     for (const s of ['SIGTERM', 'SIGINT']) process.once(s, () => { void sonda.close(); });
   } catch { console.error('Usare --origine HTTPS esplicita; --ascolto 0.0.0.0 solo per il container isolato.'); process.exitCode = 1; }
 }
