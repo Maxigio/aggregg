@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
+const { randomUUID } = require('node:crypto');
 const { creaCentro } = require('../backend/nodi/centro');
 const { creaBudgetRicerca, creaLimitiRicerca, TEMPO_RICERCA_MS } = require('../backend/nodi/limiti-ricerca');
 
@@ -72,8 +73,175 @@ async function setup(t, opzioni = {}, verifica = async s => contesto(s)) {
   };
   const esito = (id, job, body = risposta()) => nodo(id, 'esito', {
     idLavoro: job.idLavoro, tentativo: job.tentativo, esito: { status: 200, body } });
-  return { centro, sessione, cerca, nodo, heartbeat, attendi, poll, esito, url };
+  const avvia = (cookie, id = randomUUID(), input = { tipo: 'auto', marca: 'Fiat' }) => fetch(url + '/api/ricerche', {
+    method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ id, input }) });
+  const consulta = (cookie, id, method = 'GET') => fetch(url + '/api/ricerche/' + id, { method, headers: { cookie } });
+  const conclusa = async (cookie, id) => {
+    for (let i = 0; i < 100; i++) {
+      const r = await consulta(cookie, id); assert.equal(r.status, 200); const data = await r.json();
+      if (data.esito) return data;
+      await pausa(5);
+    }
+    assert.fail('esito non ricevuto');
+  };
+  return { centro, sessione, cerca, nodo, heartbeat, attendi, poll, esito, url, avvia, consulta, conclusa };
 }
+
+for (const tipo of ['auto', 'moto'])
+test(`protocollo breve ${tipo}: POST ripetuto e GET ripetuti non consegnano un secondo lavoro`, async t => {
+  const f = await setup(t), cookie = f.sessione('persona-a'), id = randomUUID();
+  await f.heartbeat('a'); await f.heartbeat('b');
+  const input = { tipo, marca: 'MarcaSintetica' };
+  const primi = await Promise.all([f.avvia(cookie, id, input), f.avvia(cookie, id, input)]);
+  for (const r of primi) { assert.equal(r.status, 202); assert.equal((await r.json()).id, id); }
+  const job = await f.poll(), record = f.centro.lavori.get(job.idLavoro);
+  assert.equal(record.destinatari.size, 1);
+  for (let i = 0; i < 3; i++) {
+    assert.equal((await (await f.consulta(cookie, id)).json()).stato, 'in_corso');
+    assert.equal((await f.avvia(cookie, id, input)).status, 202);
+  }
+  assert.equal((await f.nodo('b', 'poll?id=b')).status, 204);
+  await f.esito('a', job);
+  const prima = await f.conclusa(cookie, id), seconda = await (await f.consulta(cookie, id)).json();
+  assert.deepEqual(prima.esito, seconda.esito);
+  assert.equal(prima.esito.status, 200); assert.equal(prima.esito.body.risultati[0].id, 'sintetico');
+  assert.equal(typeof prima.esito.body.risultati[0].accessoDettagli, 'string');
+  assert.equal(f.centro.db.prepare("SELECT count(*) AS n FROM lavori WHERE operazione='ricerca'").get().n, 1);
+});
+
+test('protocollo breve: risposta del POST persa dopo ammissione, il GET ritrova lo stesso lavoro', async t => {
+  const f = await setup(t), cookie = f.sessione('persona-a'), id = randomUUID();
+  await f.heartbeat('a');
+  const proxy = http.createServer((req, res) => {
+    const upstream = http.request(f.url + req.url, { method: req.method, headers: {
+      cookie: req.headers.cookie, 'content-type': 'application/json' } }, risposta => {
+      assert.equal(risposta.statusCode, 202);
+      risposta.resume(); risposta.once('end', () => res.destroy());
+    });
+    upstream.on('error', () => res.destroy()); req.pipe(upstream);
+  });
+  await new Promise((resolve, reject) => { proxy.once('error', reject); proxy.listen(0, '127.0.0.1', resolve); });
+  t.after(async () => { proxy.closeAllConnections(); await new Promise(resolve => proxy.close(resolve)); });
+  await assert.rejects(fetch(`http://127.0.0.1:${proxy.address().port}/api/ricerche`, {
+    method: 'POST', headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ id, input: { tipo: 'auto', marca: 'Fiat' } }) }));
+  assert.equal((await (await f.consulta(cookie, id)).json()).stato, 'in_corso');
+  const job = await f.poll(); await f.esito('a', job); await f.conclusa(cookie, id);
+  assert.equal((await f.avvia(cookie, id)).status, 202);
+  assert.equal((await f.nodo('a', 'poll?id=a')).status, 204);
+  assert.equal(f.centro.db.prepare('SELECT count(*) AS n FROM lavori').get().n, 1);
+});
+
+test('protocollo breve: due aziende condividono solo l’esecuzione, GET ed autorizzazioni restano separati', async t => {
+  const f = await setup(t), a = f.sessione('a'), b = f.sessione('b', 'b', 'aziendaB'),
+    idA = randomUUID(), idB = randomUUID();
+  await f.heartbeat('a');
+  await f.avvia(a, idA); const job = await f.poll(); await f.avvia(b, idB);
+  await f.attendi(() => f.centro.lavori.get(job.idLavoro).destinatari.size === 2);
+  await f.esito('a', job);
+  const outA = await f.conclusa(a, idA), outB = await f.conclusa(b, idB);
+  assert.notEqual(outA.esito.body.risultati[0].accessoDettagli, outB.esito.body.risultati[0].accessoDettagli);
+  assert.equal((await f.consulta(a, idB)).status, 404);
+  assert.equal(f.centro.db.prepare("SELECT count(*) AS n FROM lavori WHERE operazione='ricerca'").get().n, 1);
+});
+
+test('protocollo breve: ID isolato per sessione e azienda, stessa chiave con filtri diversi rifiutata', async t => {
+  const f = await setup(t), a = f.sessione('a'), stessoUtente = f.sessione('altra-sessione', 'a'),
+    b = f.sessione('b', 'b', 'aziendaB'), id = randomUUID();
+  await f.heartbeat('a'); assert.equal((await f.avvia(a, id)).status, 202);
+  const job = await f.poll();
+  assert.equal((await f.avvia(a, id, { tipo: 'auto', marca: 'Ford' })).status, 409);
+  for (const cookie of [stessoUtente, b]) {
+    for (const method of ['GET', 'DELETE']) assert.equal((await f.consulta(cookie, id, method)).status, 404);
+    assert.equal((await f.avvia(cookie, id)).status, 404);
+  }
+  await f.esito('a', job); await f.conclusa(a, id);
+  assert.equal(f.centro.db.prepare('SELECT count(*) AS n FROM lavori').get().n, 1);
+});
+
+test('protocollo breve: quota resta occupata dopo il 202 e viene liberata alla conclusione', async t => {
+  const f = await setup(t, { maxPersona: 1 }), cookie = f.sessione('a'), id = randomUUID();
+  await f.heartbeat('a'); await f.heartbeat('b');
+  assert.equal((await f.avvia(cookie, id)).status, 202);
+  assert.equal((await f.avvia(cookie)).status, 429);
+  assert.equal((await f.avvia(cookie, id)).status, 202, 'Un replay non occupa un altro posto');
+  const job = await f.poll(); await f.esito('a', job); await f.conclusa(cookie, id);
+  assert.equal((await f.avvia(cookie)).status, 202);
+});
+
+test('protocollo breve: permessi correnti prima della consegna, modulo non acquistato negato', async t => {
+  let revocata = false;
+  const f = await setup(t, {}, async s => {
+    if (revocata) throw Object.assign(new Error('revocata'), { status: 403 });
+    return { ...contesto(s), moduli: ['moto'] };
+  }), cookie = f.sessione('a'), id = randomUUID();
+  await f.heartbeat('a'); assert.equal((await f.avvia(cookie)).status, 403);
+  assert.equal((await f.avvia(cookie, id, { tipo: 'moto', marca: 'Yamaha' })).status, 202);
+  const job = await f.poll(); await f.esito('a', job); await f.conclusa(cookie, id);
+  revocata = true;
+  const r = await f.consulta(cookie, id); assert.equal(r.status, 403);
+  assert.equal((await r.json()).esito, undefined);
+});
+
+test('protocollo breve: abbandono in coda ritira il lavoro, avviato termina senza nuovi recuperi', async t => {
+  const f = await setup(t), cookie = f.sessione('a'), id = randomUUID();
+  await f.heartbeat('a'); await f.heartbeat('b');
+  assert.equal((await f.avvia(cookie, id)).status, 202);
+  await f.attendi(() => f.centro.lavori.size === 1);
+  assert.equal((await f.consulta(cookie, id, 'DELETE')).status, 200);
+  await f.attendi(() => f.centro.lavori.size === 0);
+  assert.equal((await f.nodo('a', 'poll?id=a')).status, 204);
+  const secondo = randomUUID(); assert.equal((await f.avvia(cookie, secondo)).status, 202);
+  const job = await f.poll(); assert.equal((await f.consulta(cookie, secondo, 'DELETE')).status, 200);
+  await f.esito('a', job, risposta({ subito: { status: 'error', erroreHttp: 429 } }));
+  assert.equal((await f.nodo('b', 'poll?id=b')).status, 204);
+  const r = await f.consulta(cookie, secondo); assert.equal(r.status, 410); assert.equal((await r.json()).esito, undefined);
+});
+
+test('protocollo breve: rileggere un vecchio esito non riporta la pagina successiva al nodo precedente', async t => {
+  let tempo = Date.now();
+  const f = await setup(t, { ora: () => tempo }), cookie = f.sessione('a'),
+    prima = randomUUID(), seconda = randomUUID();
+  await f.heartbeat('a'); await f.heartbeat('b');
+  await f.avvia(cookie, prima); let job = await f.poll(); await f.esito('a', job); await f.conclusa(cookie, prima);
+  tempo += 10; f.centro.nodi.get('a').sospeso = true;
+  await f.avvia(cookie, seconda); job = await f.poll('b'); await f.esito('b', job); await f.conclusa(cookie, seconda);
+  f.centro.nodi.get('a').sospeso = false;
+  assert.equal((await f.consulta(cookie, prima)).status, 200);
+  await f.avvia(cookie, randomUUID(), { tipo: 'auto', marca: 'Fiat', fetta: '1', fonti: 'autoscout' });
+  await f.attendi(() => f.centro.lavori.size === 1);
+  const record = [...f.centro.lavori.values()][0];
+  assert.equal(record.nodoAssegnato, 'b');
+});
+
+test('protocollo breve: prima consegna tardiva con timestamp uguali preserva il nodo più recente', async t => {
+  const tempo = Date.now(), f = await setup(t, { ora: () => tempo }), cookie = f.sessione('a'),
+    prima = randomUUID(), seconda = randomUUID();
+  await f.heartbeat('a'); await f.heartbeat('b');
+  await f.avvia(cookie, prima); let job = await f.poll(); await f.esito('a', job);
+  assert.equal((await (await f.avvia(cookie, prima)).json()).stato, 'conclusa', 'Non consegna ancora R1');
+  f.centro.nodi.get('a').sospeso = true;
+  await f.avvia(cookie, seconda); job = await f.poll('b'); await f.esito('b', job); await f.conclusa(cookie, seconda);
+  f.centro.nodi.get('a').sospeso = false;
+  await f.conclusa(cookie, prima);
+  await f.avvia(cookie, randomUUID(), { tipo: 'auto', marca: 'Fiat', fetta: '1', fonti: 'autoscout' });
+  await f.attendi(() => f.centro.lavori.size === 1);
+  assert.equal([...f.centro.lavori.values()][0].nodoAssegnato, 'b');
+});
+
+test('protocollo breve: deadline invariata dai GET, errore consultabile senza replay del lavoro', async t => {
+  const f = await setup(t, { timeoutRicercaMs: 200 }), cookie = f.sessione('a'), id = randomUUID();
+  await f.heartbeat('a'); assert.equal((await f.avvia(cookie, id)).status, 202);
+  const job = await f.poll();
+  for (let i = 0; i < 3; i++) { await f.consulta(cookie, id); await pausa(20); }
+  const out = await f.conclusa(cookie, id);
+  assert.equal(out.esito.status, 504); assert.equal(out.esito.body.incerto, true);
+  assert.equal(out.esito.body.risultati, undefined);
+  assert.equal((await f.esito('a', job)).status, 409);
+  assert.equal((await f.avvia(cookie, id)).status, 202);
+  assert.equal((await f.nodo('a', 'poll?id=a')).status, 204);
+  assert.equal(f.centro.db.prepare('SELECT count(*) AS n FROM lavori').get().n, 1);
+});
 
 // Solo laboratorio: i punti di taglio sono espliciti, non una simulazione
 // della configurazione privata Nhost. Il browser fa un GET; il proxy può farne due.

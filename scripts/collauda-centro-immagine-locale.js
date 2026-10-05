@@ -290,7 +290,9 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
     };
     let cookieAdmin=(await login()).cookie;
     assert.equal((await request('/api/admin',{cookie:cookieAdmin})).status,200);
-    assert.equal((await request('/api/search?tipo=moto&marca=Yamaha',{cookie:cookieAdmin})).status,403);
+    const avviaRicerca = (cookie,input,id=crypto.randomUUID()) => request('/api/ricerche',
+      {cookie,method:'POST',body:{id,input}});
+    assert.equal((await avviaRicerca(cookieAdmin,{tipo:'moto',marca:'Yamaha'})).status,403);
     const backup = async () => {
       const r=await request('/api/auth/backup/stato',{cookie:cookieAdmin});assert.equal(r.status,200);
       const d=json(r);assert.deepEqual(Object.keys(d).sort(),
@@ -338,12 +340,15 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
     assert.match(identitaReferente.azienda,/^[a-zA-Z0-9_-]{1,64}$/);
     assert.equal((await request('/api/admin',{cookie:cookieReferente})).status,403);
     assert.equal((await request('/api/auth/backup/stato',{cookie:cookieReferente})).status,403);
-    assert.equal((await request('/api/search?tipo=auto&marca=Fiat',{cookie:cookieReferente})).status,403);
+    assert.equal((await avviaRicerca(cookieReferente,{tipo:'auto',marca:'Fiat'})).status,403);
     await heartbeat('locale');
-    const ricerca=request('/api/search?tipo=moto&marca=Yamaha&modello=MT-07&fetta=0&fonti=subito',
-      {cookie:cookieReferente});
-    // Proteggere anche il fallimento prima dell'await finale, senza stampare payload.
-    ricerca.catch(()=>{});
+    const idRicerca=crypto.randomUUID();
+    const inputRicerca={tipo:'moto',marca:'Yamaha',modello:'MT-07',fetta:'0',fonti:'subito'};
+    const avvio=await avviaRicerca(cookieReferente,inputRicerca,idRicerca);
+    assert.equal(avvio.status,202);assert.equal(json(avvio).id,idRicerca);
+    assert.equal(avvio.headers.location,'/api/ricerche/'+idRicerca);
+    // Anche una risposta iniziale persa deve poter essere richiesta senza un altro job.
+    assert.equal((await avviaRicerca(cookieReferente,inputRicerca,idRicerca)).status,202);
     let lavoro;
     await attendi(async()=>{
       await heartbeat('locale');
@@ -362,8 +367,14 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
       durataMs:0,esito:{status:200,body:sintetico}};
     const conferma=await node('locale','/_nodo/esito',consegna);
     assert.equal(conferma.status,200);assert.deepEqual(json(conferma),{ok:true});
-    const risposta=await ricerca;assert.equal(risposta.status,200);
-    const risultato=json(risposta);assert.equal(risultato.totale,1);assert.equal(risultato.risultati.length,1);
+    let esitoRicerca;
+    await attendi(async()=>{
+      const r=await request('/api/ricerche/'+idRicerca,{cookie:cookieReferente});
+      assert.equal(r.status,200);const d=json(r);if(!d.esito)return false;
+      esitoRicerca=d.esito;return true;
+    },8000);
+    assert.equal(esitoRicerca.status,200);
+    const risultato=esitoRicerca.body;assert.equal(risultato.totale,1);assert.equal(risultato.risultati.length,1);
     const record=risultato.risultati[0];
     for(const campo of ['id','fonte','url'])assert.equal(record[campo],sintetico.risultati[0][campo]);
     assert.equal(typeof record.accessoDettagli,'string');controlla(record.accessoDettagli.length>0);

@@ -13,6 +13,7 @@ const province = require('../../data/province.json');
 const { creaAutorizzazioniDettagli } = require('./autorizzazioni-dettagli');
 const { creaBudgetRicerca, creaLimitiRicerca, TEMPO_RICERCA_MS } = require('./limiti-ricerca');
 const compat = require('./compatibilita-nodo');
+const { creaRicercheHttp } = require('./ricerche-http');
 
 const MODULI = { aziendaA: ['auto', 'moto'], aziendaB: ['moto'] };
 const SETTE_GIORNI = 7 * 86400000;
@@ -127,6 +128,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     next();
   });
   const nodi = new Map(), lavori = new Map(), sessioni = new Map(), condivise = new Map(), affinita = new Map();
+  let sequenzaAffinita = 0;
   const epocaCentro = crypto.randomUUID();
   const autorizzazioniDettagli = creaAutorizzazioniDettagli({ ora });
   let accessi;
@@ -468,9 +470,13 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     }
     function termina(body) {
       budget.controlla();
-      const datoAffinita = { ts: ora(), fonti: { ...(ancoraValida ? precedente.fonti : {}), ...assegnate } };
+      const datoAffinita = { ts: ora(), sequenza: ++sequenzaAffinita,
+        fonti: { ...(ancoraValida ? precedente.fonti : {}), ...assegnate } };
       function registraAffinita(aziendaDestinataria) {
-        affinita.set(chiaveAffinita(aziendaDestinataria, input), datoAffinita);
+        const key = chiaveAffinita(aziendaDestinataria, input);
+        // Un esito vecchio può essere consultato dopo una ricerca più recente.
+        if (affinita.get(key)?.sequenza > datoAffinita.sequenza) return;
+        affinita.set(key, datoAffinita);
         while (affinita.size > 100) affinita.delete(affinita.keys().next().value);
       }
       if (!destinatari) registraAffinita(azienda);
@@ -815,6 +821,21 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     evento('credenziale_revocata',{nodo:id});
     res.json({ok:true});
   });
+  const ricercheHttp = creaRicercheHttp({ sessione, verifica: async (s, tipo) => {
+    const c = await verificaSessione(s, tipo);
+    if (!c.moduli.includes(tipo)) throw Object.assign(new Error('accesso_interrotto'), { status: 403 });
+    return c;
+  },
+    limiti: limitiRicerca, ricerca, ora,
+    valida: input => {
+      const query = filtriAmmessi(input), parsed = parseSearchParams(query);
+      if (parsed.errors) throw Object.assign(new Error('ricerca_non_valida'), { status: 400, codice: 'ricerca_non_valida' });
+      return query;
+    },
+    consegna: (body, s, tipo) => ({ ...body, risultati: (body.risultati || [])
+      .map(r => ({ ...r, accessoDettagli: autorizzazioniDettagli.emetti(s, r.url, tipo) })) }),
+  });
+  ricercheHttp.mount(app);
   function erroreRicerca(req, res, e) {
     if (res.destroyed || res.writableEnded) return;
     const incerto = !!e.incerto || (e.codice === 'ricerca_scaduta' && !!req.limiteRicerca?.operazione?.avviati.size);
@@ -825,6 +846,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   }
   // Anche chi attende i permessi occupa un posto, prima di qualunque await.
   app.get('/api/search', (req, res, next) => {
+    // Il GET lungo resta disponibile solo per i collaudi locali precedenti.
+    // L'ingresso HTTPS non deve poter creare lavori con un replay del proxy.
+    if (sicurezza) return res.status(405).set('Allow', 'POST').json({ codice: 'usa_avvio_ricerca' });
     const s = sessione(req);
     if (!s) return res.sendStatus(401);
     try {
@@ -942,6 +966,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   return { app, db, nodi, lavori, ricerca, close: () => {
     if (chiuso) return;
     chiuso = true;
+    ricercheHttp.close();
     limitiRicerca.close();
     accessi?.close();
     for (const job of lavori.values()) {

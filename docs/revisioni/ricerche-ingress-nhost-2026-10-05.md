@@ -163,3 +163,8 @@ decisione dopo l'interview. Il numero di chiamate live resta condizionato.
 Il budget più breve può essere una mitigazione, non è stato adottato come
 soluzione definitiva. Questo commit fissa solo la diagnosi; il protocollo
 approvato viene sviluppato nel successivo incremento. Gate remoto aperto.
+
+Aggiornamento: implementazione e controprove del protocollo nel
+[registro dell'avvio breve](ricerche-http-asincrone-2026-10-05.md).
+I test diagnostici precedenti restano riferiti al GET locale di compatibilità;
+le nuove prove verificano un solo lavoro sul percorso POST/GET.

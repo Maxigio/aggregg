@@ -15,6 +15,7 @@ let paginaLavori = 1, paginaVisualizzata = 1, pagineDisponibili = 1;
 let nodiElencati = '', diagnosticaAbilitata = false;
 let aggiornamentoStato = 0;
 let accountAbilitato = false, accessoSintetico = false;
+let ricercaHttpAttiva = null;
 const aree = ['ricercaPanel', 'diagnosticaPanel', 'accountPanel'];
 function aggiornaAree(aggiornaIndirizzo = true, focus = document.activeElement) {
   const disponibili = { ricercaPanel: accessoSintetico || Boolean(identita && moduli.length),
@@ -55,6 +56,68 @@ async function leggi(url, opzioni) {
     ? (r.status === 504 ? 'Esito incerto: riprova esplicitamente.' : `Servizio non disponibile (HTTP ${r.status}). Riprova più tardi.`)
     : data.error || `HTTP ${r.status}`);
   return data;
+}
+function abbandonaRicercaHttp() {
+  const attiva = ricercaHttpAttiva;
+  if (!attiva) return;
+  ricercaHttpAttiva = null; attiva.controller.abort();
+  fetch('/api/ricerche/' + attiva.id, { method: 'DELETE', keepalive: true }).catch(() => {});
+}
+window.addEventListener('pagehide', abbandonaRicercaHttp);
+async function consultaRicerca(query) {
+  const attiva = { id: crypto.randomUUID(), controller: new AbortController() };
+  ricercaHttpAttiva = attiva;
+  // Il minuto appartiene al lavoro; questo margine copre avvio e consegna HTTP.
+  const signal = AbortSignal.any([attiva.controller.signal, AbortSignal.timeout(75000)]);
+  const erroreHttp = (status, data) => Object.assign(new Error(status === 404 || status === 410
+    ? 'Esito non più disponibile. Nessuna ricerca è stata ripetuta; riprova esplicitamente.'
+    : data?.incerto ? 'Esito incerto: riprova esplicitamente.'
+    : status === 401 || status === 403 ? 'Accesso interrotto. Accedi nuovamente.'
+    : data?.interrotto ? 'Ricerca interrotta. Nessun annuncio consegnato; riprova esplicitamente.'
+    : status === 504 ? 'Esito incerto: riprova esplicitamente.'
+    : status === 429 ? 'Troppe ricerche in corso. Attendi prima di riprovare.'
+    : status === 400 ? 'Ricerca non valida. Controlla i filtri.'
+    : `Servizio non disponibile (HTTP ${status}). Riprova più tardi.`), { status });
+  async function richiesta(url, opzioni) {
+    const r = await fetch(url, { ...opzioni, signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]) });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) throw erroreHttp(r.status, data);
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw erroreHttp(502, null);
+    return data;
+  }
+  try {
+    // Non ripetere questo POST in caso di perdita della risposta: l'ID resta
+    // consultabile e una nuova ricerca richiede sempre una scelta della persona.
+    let stato;
+    try {
+      await richiesta('/api/ricerche', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: attiva.id, input: Object.fromEntries(query) }) });
+    } catch (e) {
+      if ((e.status && e.status < 500) || signal.aborted) throw e;
+      // La risposta iniziale può perdersi dopo l'ammissione: cerca lo stesso ID,
+      // senza creare un secondo lavoro. Un 404 fermerà la consultazione.
+    }
+    while (!signal.aborted) {
+      try { stato = await richiesta('/api/ricerche/' + attiva.id); }
+      catch (e) {
+        if ((e.status && e.status < 500) || signal.aborted) throw e;
+        $('ricercaStato').textContent = 'Connessione interrotta: consulto lo stesso lavoro…';
+        stato = null;
+      }
+      if (stato?.esito) {
+        if (stato.esito.status !== 200) throw erroreHttp(stato.esito.status, stato.esito.body);
+        return stato.esito.body;
+      }
+      if (stato && stato.stato !== 'in_corso') throw erroreHttp(410, stato);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    throw new Error('Esito incerto: riprova esplicitamente.');
+  } catch (e) {
+    if (signal.aborted && !attiva.controller.signal.aborted) throw new Error('Esito incerto: riprova esplicitamente.');
+    throw e;
+  } finally {
+    if (ricercaHttpAttiva === attiva) ricercaHttpAttiva = null;
+  }
 }
 function opzioni(lista, valori) {
   lista.replaceChildren(...valori.map(valore => {
@@ -476,7 +539,7 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0, riprov
     $('risultati').replaceChildren(); $('fonti').replaceChildren(); $('avvisi').replaceChildren(); }
   aggiornaRetryPrimaPagina();
   try {
-    const body = await leggi('/api/search?' + query);
+    const body = await consultaRicerca(query);
     if (id === sequenzaRicerca) {
       const richieste = query.get('fonti')?.split(',') || null;
       if (!aggiungi || riprovaPrima) {
@@ -589,6 +652,7 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0, riprov
 }
 
 async function applicaIdentita(data) {
+  abbandonaRicercaHttp();
   identita = data.azienda; moduli = data.moduli; sequenzaRicerca++; ricercaOccupata = false;
   aggiornaAree();
   paginaLavori = 1;
@@ -616,6 +680,7 @@ async function applicaIdentita(data) {
 }
 // Una sessione cambiata invalida anche risposte e pagine in attesa nel browser.
 function terminaContesto() {
+  abbandonaRicercaHttp();
   sequenzaRicerca++; sequenzaStato++; sequenzaMarche++; sequenzaModelli++; sequenzaVersioni++;
   aggiornamentoStato = 0;
   $('aggiorna').disabled = false; $('lavoriPrima').disabled = true; $('lavoriDopo').disabled = true;

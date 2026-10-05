@@ -314,3 +314,22 @@ budget di 60 s. Il prossimo incremento implementa quel protocollo e conserva
 i gate separati del cloud.
 Evidenze e confronto con fonti ufficiali nel
 [registro della riproduzione](ricerche-ingress-nhost-2026-10-05.md).
+
+## Avvio breve delle ricerche — 5 ottobre
+
+Implementazione locale del protocollo approvato: POST con UUID del destinatario,
+202 e consultazione GET; replay della stessa chiave non accoda un altro lavoro.
+Frontend del prototipo aggiornato, coordinatore riusato, GET lungo disabilitato
+sull'ingresso HTTPS. Budget del lavoro 60 s, esiti solo RAM con TTL e cap;
+permessi correnti su ogni consegna. Perdita della coda al restart, nessun avvio
+automatico se l'ID manca. Quote conservate fino alla conclusione.
+
+Review indipendente: riprodotti e corretti riuso dell'affinità vecchia,
+DELETE che rinnovava la retention e completamenti su registri sostituiti.
+Seconda review: corretti anche timestamp uguali e status persi sui body
+HTTP testuali. Giro finale **99 pass, zero failure/skip**; suite completa
+prima degli ultimi fix **1.401 pass, zero failure, 7 skip opt-in**.
+Evidenze finali e limiti nel
+[registro del protocollo](ricerche-http-asincrone-2026-10-05.md).
+Il prossimo gate riguarda un nuovo artefatto e il trasferimento HTTPS:
+nessuna immagine del centro caricata o avviata in cloud in questo incremento.

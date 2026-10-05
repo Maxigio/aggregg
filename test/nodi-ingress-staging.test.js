@@ -73,7 +73,7 @@ async function fixture(t) {
 test('ingress: percorso HTTPS reale con centro e guard esistenti; niente login, annunci o cookie reinviati', async t => {
   const f = await fixture(t), esito = await collaudaIngress(f);
   assert.equal(esito.ok, true, JSON.stringify(esito));
-  assert.equal(esito.controlli.length, 15); assert.equal(f.richieste.length, 15);
+  assert.equal(esito.controlli.length, 16); assert.equal(f.richieste.length, 16);
   assert.ok(f.richieste.every(r => r.cookie === undefined)); assert.equal(f.chiamate(), 0);
   assert.equal(f.contaLavori(), 0);
   assert.equal(f.richieste.filter(r => r.url === '/api/auth/bootstrap').every(r => r.body === '{}'), true);

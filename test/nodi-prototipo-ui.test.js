@@ -39,10 +39,33 @@ async function apriPrototipo(t, api) {
     };
   });
   const origine = 'http://127.0.0.1:' + server.address().port;
+  const ricerche = new Map();
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (url.origin !== origine) return route.abort();
     if (!url.pathname.startsWith('/api/') || url.pathname === '/api/auth/bootstrap.js') return route.continue();
+    if (url.pathname === '/api/ricerche' && route.request().method() === 'POST') {
+      const { id, input } = route.request().postDataJSON();
+      assert.equal(parseSearchParams(input).errors, undefined, 'Filtri inviati nel POST validi');
+      assert.equal(ricerche.has(id), false, 'La UI non deve ripetere il POST');
+      const record = { id, stato: 'in_corso' }; ricerche.set(id, record);
+      await route.fulfill({ status: 202, json: record });
+      // Le fixture esistenti descrivono il risultato della ricerca; lo
+      // restituiamo nel nuovo involucro senza simulare una connessione lunga.
+      const query = new URL('/api/search?' + new URLSearchParams(input), origine);
+      const esito = { fulfill: async ({ status = 200, json }) => {
+        if (record.stato === 'abbandonata') return;
+        record.stato = status === 200 ? 'conclusa' : 'errore'; record.esito = { status, body: json };
+      } };
+      assert.equal(await api?.(esito, query), true, 'Fixture ricerca mancante');
+      return;
+    }
+    if (url.pathname.startsWith('/api/ricerche/')) {
+      const record = ricerche.get(url.pathname.split('/').pop());
+      assert.ok(record, 'ID di ricerca inatteso');
+      if (route.request().method() === 'DELETE') { record.stato = 'abbandonata'; delete record.esito; }
+      return route.fulfill({ json: record });
+    }
     if (url.pathname === '/api/search') assert.equal(parseSearchParams(Object.fromEntries(url.searchParams)).errors,
       undefined, 'La query della UI deve rispettare il contratto backend');
     if (await api?.(route, url)) return;
@@ -58,6 +81,96 @@ async function apriPrototipo(t, api) {
   await page.waitForFunction(() => document.getElementById('aggiornato').textContent.startsWith('Aggiornato alle'));
   return { page, errors };
 }
+
+for (const perdita of ['rete', '502'])
+test(`ricerca breve UI: POST perso (${perdita}) e GET transitorio non ripetono avvio, filtri né pagina`, opzioniBrowser, async t => {
+  const { page, errors } = await apriPrototipo(t);
+  let inizi = 0, letture = 0, id;
+  const input = { tipo: 'moto', marca: 'BMW', modello: 'R 1200 GS Adventure', versione: '',
+    fetta: '2', fonti: 'subito', subitoMainStart: '-1', subitoRecuperoStart: '50' };
+  await page.route('**/api/ricerche', async route => {
+    inizi++; const body = route.request().postDataJSON(); id = body.id;
+    assert.deepEqual(body.input, input);
+    if (perdita === 'rete') await route.abort('failed');
+    else await route.fulfill({ status: 502, json: {} });
+  });
+  await page.route('**/api/ricerche/*', async route => {
+    assert.equal(new URL(route.request().url()).pathname, '/api/ricerche/' + id);
+    assert.equal(route.request().method(), 'GET'); letture++;
+    await route.fulfill(letture === 1 ? { status: 503, json: {} } : { json: {
+      id, stato: 'conclusa', esito: { status: 200, body: { risultati: [], sources: { subito: { status: 'empty' } } } } } });
+  });
+  const data = await page.evaluate(input => consultaRicerca(new URLSearchParams(input)), input);
+  assert.equal(data.sources.subito.status, 'empty'); assert.equal(inizi, 1); assert.equal(letture, 2);
+  assert.deepEqual(errors, []);
+});
+
+test('ricerca breve UI: ID perso al restart ferma la consultazione, nessun POST automatico', opzioniBrowser, async t => {
+  const { page, errors } = await apriPrototipo(t); let inizi = 0, letture = 0;
+  await page.route('**/api/ricerche', async route => { inizi++; await route.abort('failed'); });
+  await page.route('**/api/ricerche/*', async route => { letture++; await route.fulfill({ status: 404, json: {} }); });
+  const messaggio = await page.evaluate(async () => {
+    try { await consultaRicerca(new URLSearchParams({ tipo: 'moto', marca: 'Yamaha' })); }
+    catch (e) { return e.message; }
+  });
+  assert.match(messaggio, /Nessuna ricerca è stata ripetuta/); assert.equal(inizi, 1); assert.equal(letture, 1);
+  assert.deepEqual(errors, []);
+});
+
+test('ricerca breve UI: cambio contesto invia DELETE e blocca la consegna precedente', opzioniBrowser, async t => {
+  const { page, errors } = await apriPrototipo(t); let cancellazioni = 0, pendente;
+  await page.route('**/api/ricerche', async route => {
+    await route.fulfill({ status: 202, json: { id: route.request().postDataJSON().id, stato: 'in_corso' } });
+  });
+  await page.route('**/api/ricerche/*', async route => {
+    if (route.request().method() === 'DELETE') { cancellazioni++; await route.fulfill({ json: { stato: 'abbandonata' } }); }
+    else pendente = route;
+  });
+  await page.evaluate(() => { window.ricercaProva = inviaRicerca(new URLSearchParams({ tipo: 'moto', marca: 'BMW' })); });
+  for (let i = 0; i < 100 && !pendente; i++) await page.waitForTimeout(10);
+  assert.ok(pendente); await page.evaluate(() => terminaContesto());
+  await pendente.fulfill({ json: { stato: 'conclusa', esito: { status: 200, body: {
+    risultati: [{ titolo: 'Annuncio precedente', fonte: 'subito' }], sources: { subito: { status: 'ok' } } } } } });
+  await page.evaluate(() => window.ricercaProva);
+  await page.waitForTimeout(50);
+  assert.equal(cancellazioni, 1); assert.equal(await page.locator('#risultati').textContent(), '');
+  assert.deepEqual(errors, []);
+});
+
+test('ricerca breve UI: interruzione certa e timeout incerto hanno avvisi distinti e nessun annuncio', opzioniBrowser, async t => {
+  let incerto = false;
+  const { page, errors } = await apriPrototipo(t, async (route, url) => {
+    if (url.pathname !== '/api/search') return false;
+    await route.fulfill({ status: 504, json: { codice: 'ricerca_scaduta', interrotto: !incerto, incerto } });
+    return true;
+  });
+  await page.evaluate(() => inviaRicerca(new URLSearchParams({ tipo: 'moto', marca: 'Yamaha' })));
+  assert.match(await page.locator('#avvisi').textContent(), /Ricerca interrotta/);
+  assert.doesNotMatch(await page.locator('#avvisi').textContent(), /Esito incerto/);
+  incerto = true;
+  await page.evaluate(() => inviaRicerca(new URLSearchParams({ tipo: 'moto', marca: 'Yamaha' })));
+  assert.match(await page.locator('#avvisi').textContent(), /Esito incerto/);
+  assert.equal(await page.locator('#risultati').textContent(), ''); assert.deepEqual(errors, []);
+});
+
+test('ricerca breve UI: 401/403/404/410 testuali non perdono lo status né proseguono il polling', opzioniBrowser, async t => {
+  const { page, errors } = await apriPrototipo(t); let status = 401, letture = 0;
+  await page.route('**/api/ricerche', route => route.fulfill({ status: 202, json: { stato: 'in_corso' } }));
+  await page.route('**/api/ricerche/*', async route => {
+    if (++letture === 1) await route.fulfill({ status, contentType: 'text/plain', body: 'Errore sintetico' });
+    else await route.fulfill({ json: { stato: 'conclusa', esito: { status: 200, body: { risultati: [] } } } });
+  });
+  for (status of [401, 403, 404, 410]) {
+    letture = 0;
+    const esito = await page.evaluate(async () => {
+      try { await consultaRicerca(new URLSearchParams({ tipo: 'moto', marca: 'Yamaha' })); return 'nessun errore'; }
+      catch (e) { return e.message; }
+    });
+    assert.equal(letture, 1, 'HTTP ' + status + ' non è transitorio');
+    assert.match(esito, status < 404 ? /Accesso interrotto/ : /Esito non più disponibile/);
+  }
+  assert.deepEqual(errors, []);
+});
 
 test('U05: ampliamenti e versioni non verificate visibili, persistenti fra pagine e senza HTML attivo', opzioniBrowser, async t => {
   const { page, errors } = await apriPrototipo(t);

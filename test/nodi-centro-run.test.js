@@ -77,6 +77,18 @@ test('centro HTTPS: eccezione Origin solo nodo autenticato, Admin mai pubblico',
   assert.equal((await f.call('/api/admin/nodi/locale',{sospeso:true},admin)).status,200);
   assert.equal((await f.call('/api/admin/nodi/locale/revoca-token',{}, {...admin,cookie:''})).status,403);
 });
+test('centro HTTPS: il vecchio GET non crea lavori; avvio POST e DELETE richiedono Origin',async t=>{
+  const f=await centro(t), id=require('node:crypto').randomUUID();
+  let r=await f.call('/api/search?tipo=moto&marca=Yamaha',undefined,admin);
+  assert.equal(r.status,405);assert.equal(r.headers.allow,'POST');
+  assert.equal(f.servizio.lavori.size,0);
+  const input={id,input:{tipo:'moto',marca:'Yamaha'}};
+  assert.equal((await f.call('/api/ricerche',input,{cookie:'admin=prova'})).status,403);
+  assert.equal((await f.call('/api/ricerche/'+id,undefined,{cookie:'admin=prova'},'DELETE')).status,403);
+  // L'Admin gestionale non può usare un modulo senza un'azienda valida.
+  r=await f.call('/api/ricerche',input,admin);assert.equal(r.status,403);
+  assert.equal(f.servizio.lavori.size,0);
+});
 test('credenziale nodo: revoca persistente e nuova chiave distinta',async t=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'amr-revoca-token-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
   const f=await centro(t,{directory:dir});
