@@ -308,11 +308,12 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
     const node = (id,route,body,extra={}) => request(route,{nodo:true,method:body===undefined?'GET':'POST',body,
       headers:{'x-amr-node-id':id,'x-amr-node-token':tokens[id],
         ...(boots[id]?{'x-amr-node-boot':boots[id],'x-amr-center-epoch':epoca}:{}),...extra}});
-    const heartbeat = async id => {
+    const heartbeat = async (id,idLavoroAttivo) => {
       // Solo la fixture locale è eleggibile come primario: il lavoro viene
       // completato a mano qui sotto, senza avviare worker o scraper.
       const r=await node(id,'/_nodo/heartbeat',{id,sequenza:++sequenze[id],compatibilita:wire,
-        revisione:wire.release,occupato:false,simulato:id!=='locale',
+        revisione:wire.release,occupato:!!idLavoroAttivo,simulato:id!=='locale',
+        ...(idLavoroAttivo?{idLavoroAttivo}:{}),
         fonti:{subito:{fermo:false},autoscout:{fermo:false},moto:{fermo:false}}});
       assert.equal(r.status,200);assert.deepEqual(json(r),{ok:true});
     };
@@ -341,10 +342,17 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
     assert.equal((await request('/api/admin',{cookie:cookieReferente})).status,403);
     assert.equal((await request('/api/auth/backup/stato',{cookie:cookieReferente})).status,403);
     assert.equal((await avviaRicerca(cookieReferente,{tipo:'auto',marca:'Fiat'})).status,403);
+    const legacy=await request('/api/search?tipo=moto&marca=Yamaha',{cookie:cookieReferente});
+    assert.equal(legacy.status,405);assert.equal(legacy.headers.allow,'POST');
+    assert.deepEqual(json(legacy),{codice:'usa_avvio_ricerca'});
+    const primaRicerca=await request('/api/admin',{cookie:cookieAdmin});
+    assert.equal(primaRicerca.status,200);assert.equal(json(primaRicerca).totale,0);
     await heartbeat('locale');
     const idRicerca=crypto.randomUUID();
     const inputRicerca={tipo:'moto',marca:'Yamaha',modello:'MT-07',fetta:'0',fonti:'subito'};
+    const inizioAvvio=performance.now();
     const avvio=await avviaRicerca(cookieReferente,inputRicerca,idRicerca);
+    const avvioMs=Math.round(performance.now()-inizioAvvio);
     assert.equal(avvio.status,202);assert.equal(json(avvio).id,idRicerca);
     assert.equal(avvio.headers.location,'/api/ricerche/'+idRicerca);
     // Anche una risposta iniziale persa deve poter essere richiesta senza un altro job.
@@ -360,11 +368,27 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
     assert.match(lavoro.idLavoro,/^[a-f0-9-]{36}$/);
     assert.equal(lavoro.azienda,identitaReferente.azienda);assert.equal(lavoro.operazione,'ricerca');
     assert.equal(lavoro.input.tipo,'moto');assert.equal(lavoro.input.fonti,'subito');
+    // Il lavoro supera il timeout di 15 s del proxy, ma nessuna richiesta HTTP
+    // deve restare aperta durante l'attesa. Solo heartbeat e consultazioni brevi.
+    const inizioLavoro=performance.now();
+    let consultazioni=0,maxConsultazioneMs=0;
+    do {
+      await heartbeat('locale',lavoro.idLavoro);
+      const inizioConsultazione=performance.now();
+      const r=await request('/api/ricerche/'+idRicerca,{cookie:cookieReferente});
+      maxConsultazioneMs=Math.max(maxConsultazioneMs,Math.round(performance.now()-inizioConsultazione));
+      assert.equal(r.status,200);assert.equal(json(r).stato,'in_corso');
+      assert.equal(json(r).esito,undefined);consultazioni++;
+      const residuo=16000-(performance.now()-inizioLavoro);
+      if(residuo>0)await pausa(Math.min(1000,residuo));
+    } while(performance.now()-inizioLavoro<16000);
+    const lavoroMs=Math.round(performance.now()-inizioLavoro);
+    assert.ok(lavoroMs>=16000);assert.ok(consultazioni>0);
     const sintetico={risultati:[{id:'fixture-immagine-subito',fonte:'subito',
       url:'https://www.subito.it/moto-e-scooter/fixture-amr-immagine-000000001.htm'}],totale:1,
       sources:{subito:{status:'ok',count:1},autoscout:{status:'skipped',count:0},moto:{status:'skipped',count:0}}};
     const consegna={id:'locale',idLavoro:lavoro.idLavoro,tentativo:lavoro.tentativo,
-      durataMs:0,esito:{status:200,body:sintetico}};
+      durataMs:lavoroMs,esito:{status:200,body:sintetico}};
     const conferma=await node('locale','/_nodo/esito',consegna);
     assert.equal(conferma.status,200);assert.deepEqual(json(conferma),{ok:true});
     let esitoRicerca;
@@ -385,6 +409,15 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
     assert.equal(traccia.azienda,identitaReferente.azienda);assert.equal(traccia.nodo,'locale');
     assert.equal(traccia.byte_risposta,Buffer.byteLength(JSON.stringify(consegna)));
     assert.equal(stato.lavoriAttivi,0);
+    assert.equal(stato.lavori.filter(l=>l.operazione==='ricerca'&&l.azienda===identitaReferente.azienda).length,1);
+    assert.equal((await request('/api/ricerche/'+idRicerca,{cookie:cookieReferente})).status,200);
+    assert.equal((await avviaRicerca(cookieReferente,inputRicerca,idRicerca)).status,202);
+    assert.equal((await node('locale','/_nodo/poll?id=locale')).status,204);
+    const dopoReplay=await request('/api/admin',{cookie:cookieAdmin});
+    assert.equal(dopoReplay.status,200);
+    const confermato=json(dopoReplay);assert.equal(confermato.totale,1);
+    assert.equal(confermato.lavori.length,1);assert.equal(confermato.lavori[0].id,lavoro.idLavoro);
+    assert.equal(confermato.lavoriAttivi,0);
     await heartbeat('locale');
 
     fase = 'sospensione manuale e revoca del token via Admin';
@@ -413,7 +446,9 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
     controlla(dati.eventi.some(e=>e.nodo==='locale'&&e.codice==='sospensione_aggiunta'));
     controlla(dati.eventi.some(e=>e.nodo==='revocabile'&&e.codice==='credenziale_revocata'));
     await backup();
-    esito='Immagine centro locale: artefatto e HTTPS/MFA verificati, Auto negato e ricerca Moto/Subito sintetica con byte wire; SIGTERM 0, volume persistente, sospensione/revoca conservate e vecchie sessioni negate.';
+    esito='Immagine centro locale: artefatto e HTTPS/MFA verificati, Auto negato e ricerca Moto/Subito sintetica con byte wire; '
+      +'avvio '+avvioMs+' ms, '+consultazioni+' consultazioni (max '+maxConsultazioneMs+' ms), lavoro '+lavoroMs
+      +' ms oltre il timeout proxy 15000 ms, un solo job; SIGTERM 0, volume persistente, sospensione/revoca conservate e vecchie sessioni negate.';
   } catch (e) {
     fallimento=new Error('Collaudo immagine centro interrotto nella fase: '+fase+(signal?.aborted?' (annullato)':''));
     fallimento.faseGate = fase;
