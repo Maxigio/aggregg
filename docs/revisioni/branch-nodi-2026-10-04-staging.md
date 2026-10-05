@@ -298,3 +298,19 @@ modificato, nessun centro completo in cloud e nessun portale interrogato.
 centro il timeout/retry osservato, poi scegliere la correzione. Evidenze,
 controprove e limiti nel
 [registro diagnostico](sonda-nhost-diagnostica-2026-10-05.md).
+
+## Riproduzione locale del timeout/retry — 5 ottobre
+
+Verificato sul centro HTTP reale con proxy controllato: un solo GET browser
+inoltrato due volte dopo l'abbandono può consegnare due lavori identici,
+Auto e Moto, anche con un solo nodo. La duplicazione di chiamate ai portali
+resta condizionata alle cache: non è stata misurata live. Sette nuovi casi
+diagnostici; ultimo giro pertinente **63 pass, zero failure/skip**, Node 24.21.
+Controprove per condivisione ancora attiva, ritiro dalla coda e deadline.
+
+Nessun runtime o servizio remoto modificato nel commit diagnostico. Approvato
+nell'interview l'avvio breve con ID e consultazione esito per mantenere il
+budget di 60 s. Il prossimo incremento implementa quel protocollo e conserva
+i gate separati del cloud.
+Evidenze e confronto con fonti ufficiali nel
+[registro della riproduzione](ricerche-ingress-nhost-2026-10-05.md).

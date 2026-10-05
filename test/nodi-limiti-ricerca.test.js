@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const http = require('node:http');
 const { creaCentro } = require('../backend/nodi/centro');
 const { creaBudgetRicerca, creaLimitiRicerca, TEMPO_RICERCA_MS } = require('../backend/nodi/limiti-ricerca');
 
@@ -43,11 +44,11 @@ async function setup(t, opzioni = {}, verifica = async s => contesto(s)) {
     fs.rmSync(directory, { recursive: true, force: true });
   });
   const sessione = (cookie, persona = cookie, azienda = 'aziendaA') => {
-    sessions.set(cookie, { persona, azienda }); return cookie;
+    sessions.set(cookie, { persona, azienda, scadenza: Date.now() + 3600000 }); return cookie;
   };
-  const cerca = (cookie, query = 'tipo=auto&marca=Fiat') => {
+  const cerca = (cookie, query = 'tipo=auto&marca=Fiat', origine = url) => {
     const ctrl = new AbortController(); controllers.push(ctrl);
-    const promise = fetch(url + '/api/search?' + query, { headers: { cookie }, signal: ctrl.signal });
+    const promise = fetch(origine + '/api/search?' + query, { headers: { cookie }, signal: ctrl.signal });
     promise.catch(() => {}); richieste.push(promise);
     return { promise, abort: () => ctrl.abort() };
   };
@@ -71,8 +72,170 @@ async function setup(t, opzioni = {}, verifica = async s => contesto(s)) {
   };
   const esito = (id, job, body = risposta()) => nodo(id, 'esito', {
     idLavoro: job.idLavoro, tentativo: job.tentativo, esito: { status: 200, body } });
-  return { centro, sessione, cerca, nodo, heartbeat, attendi, poll, esito };
+  return { centro, sessione, cerca, nodo, heartbeat, attendi, poll, esito, url };
 }
+
+// Solo laboratorio: i punti di taglio sono espliciti, non una simulazione
+// della configurazione privata Nhost. Il browser fa un GET; il proxy può farne due.
+async function proxyControllato(t, origine) {
+  const ingressi = [], pendenti = new Set();
+  const server = http.createServer((req, res) => {
+    const ingresso = { tentativi: [], interrompi: null, riprova: null };
+    let corrente;
+    ingressi.push(ingresso);
+    function inoltra() {
+      const tentativo = { interrotto: false, chiuso: false };
+      ingresso.tentativi.push(tentativo);
+      const upstream = http.get(origine + req.url, {
+        headers: { cookie: req.headers.cookie }, agent: false,
+      }, risposta => {
+        res.writeHead(risposta.statusCode, risposta.headers);
+        risposta.on('error', () => res.destroy()); risposta.pipe(res);
+      });
+      corrente = upstream;
+      pendenti.add(upstream);
+      upstream.on('error', () => { if (!tentativo.interrotto) res.destroy(); });
+      upstream.once('close', () => { tentativo.chiuso = true; pendenti.delete(upstream); });
+      ingresso.interrompi = () => {
+        assert.equal(res.headersSent, false);
+        tentativo.interrotto = true; upstream.destroy();
+      };
+    }
+    ingresso.riprova = () => {
+      assert.equal(ingresso.tentativi.length, 1, 'un solo retry del proxy');
+      assert.equal(ingresso.tentativi[0].chiuso, true);
+      assert.equal(res.headersSent, false); inoltra();
+    };
+    res.once('close', () => {
+      if (!res.writableEnded) corrente?.destroy();
+    });
+    inoltra();
+  });
+  t.after(async () => {
+    for (const p of pendenti) p.destroy();
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject); server.listen(0, '127.0.0.1', resolve);
+  });
+  return { url: `http://127.0.0.1:${server.address().port}`, ingressi };
+}
+
+for (const tipo of ['auto', 'moto'])
+test(`diagnosi ingress ${tipo}: un solo GET browser, retry dopo il taglio crea due lavori avviati`, async t => {
+  const f = await setup(t), proxy = await proxyControllato(t, f.url);
+  await f.heartbeat('a'); await f.heartbeat('b');
+  const cookie = f.sessione('persona-a');
+  const richiesta = f.cerca(cookie, `tipo=${tipo}&marca=MarcaSintetica`, proxy.url);
+  const primo = await f.poll('a'), record = f.centro.lavori.get(primo.idLavoro);
+  assert.equal(proxy.ingressi.length, 1); assert.equal(record.destinatari.size, 1);
+  proxy.ingressi[0].interrompi();
+  await f.attendi(() => !record.destinatari.size && proxy.ingressi[0].tentativi[0].chiuso);
+  assert.equal(f.centro.nodi.get('a').occupato, true, 'il lavoro già avviato termina');
+  proxy.ingressi[0].riprova();
+  const secondo = await f.poll('b');
+  assert.notEqual(primo.idLavoro, secondo.idLavoro);
+  assert.deepEqual(primo.input, secondo.input);
+  assert.equal(primo.azienda, secondo.azienda);
+  // Conteggia consegne reali del centro, non inventa un numero di chiamate ai portali.
+  assert.equal(f.centro.db.prepare("SELECT count(*) AS n FROM lavori WHERE stato='in_corso'").get().n, 2);
+  assert.equal((await f.esito('a', primo, risposta({ subito: { status: 'error', erroreHttp: 429 } }))).status, 200);
+  assert.equal((await f.nodo('a', 'poll?id=a')).status, 204, 'nessun recupero del lavoro abbandonato');
+  const nuovo = { ...risposta(), risultati: [{ id: 'secondo', fonte: 'autoscout',
+    url: 'https://www.autoscout24.it/annunci/secondo-sintetico' }] };
+  await f.esito('b', secondo, nuovo);
+  const ricevuta = await richiesta.promise;
+  assert.equal(ricevuta.status, 200);
+  assert.deepEqual((await ricevuta.json()).risultati.map(r => r.id), ['secondo']);
+  assert.equal(proxy.ingressi.length, 1); assert.equal(proxy.ingressi[0].tentativi.length, 2);
+  assert.equal(f.centro.db.prepare("SELECT count(*) AS n FROM lavori WHERE operazione='ricerca'").get().n, 2);
+  assert.equal(f.centro.lavori.size, 0);
+});
+
+test('diagnosi ingress: taglio prima del poll non duplica un lavoro avviato', async t => {
+  const f = await setup(t), proxy = await proxyControllato(t, f.url);
+  await f.heartbeat('a');
+  const richiesta = f.cerca(f.sessione('persona-a'), undefined, proxy.url);
+  await f.attendi(() => f.centro.lavori.size === 1);
+  const id = [...f.centro.lavori.keys()][0];
+  proxy.ingressi[0].interrompi();
+  await f.attendi(() => f.centro.lavori.size === 0 && proxy.ingressi[0].tentativi[0].chiuso);
+  assert.equal(f.centro.db.prepare('SELECT stato FROM lavori WHERE id=?').get(id).stato, 'interrotto');
+  proxy.ingressi[0].riprova();
+  const job = await f.poll(); await f.esito('a', job);
+  assert.equal((await richiesta.promise).status, 200);
+  assert.equal(f.centro.db.prepare("SELECT count(*) AS n FROM lavori WHERE stato='concluso'").get().n, 1);
+});
+
+test('diagnosi ingress: con un nodo il retry aspetta, poi consegna la stessa ricerca una seconda volta', async t => {
+  const f = await setup(t), proxy = await proxyControllato(t, f.url);
+  await f.heartbeat('a');
+  const richiesta = f.cerca(f.sessione('persona-a'), undefined, proxy.url);
+  const primo = await f.poll(), record = f.centro.lavori.get(primo.idLavoro);
+  proxy.ingressi[0].interrompi();
+  await f.attendi(() => !record.destinatari.size && proxy.ingressi[0].tentativi[0].chiuso);
+  proxy.ingressi[0].riprova();
+  await f.attendi(() => f.centro.nodi.get('a').coda.length === 1);
+  assert.equal((await f.nodo('a', 'poll?id=a')).status, 204);
+  await f.esito('a', primo);
+  const secondo = await f.poll();
+  assert.notEqual(secondo.idLavoro, primo.idLavoro); assert.deepEqual(secondo.input, primo.input);
+  await f.esito('a', secondo); assert.equal((await richiesta.promise).status, 200);
+  assert.equal(f.centro.db.prepare("SELECT count(*) AS n FROM lavori WHERE stato='concluso'").get().n, 2);
+});
+
+test('diagnosi ingress: un altro destinatario mantiene la condivisione anche dopo il taglio', async t => {
+  const f = await setup(t), proxy = await proxyControllato(t, f.url);
+  await f.heartbeat('a'); await f.heartbeat('b');
+  const cookieA = f.sessione('persona-a'), cookieB = f.sessione('persona-b', 'persona-b', 'aziendaB');
+  const a = f.cerca(cookieA, undefined, proxy.url), job = await f.poll();
+  const record = f.centro.lavori.get(job.idLavoro), b = f.cerca(cookieB);
+  await f.attendi(() => record.destinatari.size === 2);
+  proxy.ingressi[0].interrompi();
+  await f.attendi(() => record.destinatari.size === 1 && proxy.ingressi[0].tentativi[0].chiuso);
+  proxy.ingressi[0].riprova();
+  await f.attendi(() => record.destinatari.size === 2);
+  assert.equal((await f.nodo('b', 'poll?id=b')).status, 204);
+  await f.esito('a', job);
+  const [ra, rb] = await Promise.all([a.promise, b.promise]);
+  assert.equal(ra.status, 200); assert.equal(rb.status, 200);
+  const [ba, bb] = await Promise.all([ra.json(), rb.json()]);
+  assert.deepEqual(ba.risultati.map(r => r.id), bb.risultati.map(r => r.id));
+  assert.equal(typeof ba.risultati[0].accessoDettagli, 'string');
+  assert.equal(typeof bb.risultati[0].accessoDettagli, 'string');
+  assert.notEqual(ba.risultati[0].accessoDettagli, bb.risultati[0].accessoDettagli);
+  assert.equal(f.centro.db.prepare("SELECT count(*) AS n FROM lavori WHERE operazione='ricerca'").get().n, 1);
+});
+
+test('diagnosi ingress: il 504 applicativo in coda attraversa il proxy senza annunci', async t => {
+  let mono = 0;
+  const f = await setup(t, { timeoutRicercaMs: 60000, oraMono: () => mono });
+  const proxy = await proxyControllato(t, f.url);
+  await f.heartbeat('a');
+  const richiesta = f.cerca(f.sessione('persona-a'), undefined, proxy.url);
+  await f.attendi(() => f.centro.lavori.size === 1);
+  mono = 60000;
+  assert.equal((await f.nodo('a', 'poll?id=a')).status, 204);
+  const r = await richiesta.promise, body = await r.json();
+  assert.equal(r.status, 504); assert.equal(body.codice, 'ricerca_scaduta');
+  assert.equal(body.risultati, undefined); assert.equal(body.incerto, false);
+  assert.equal(proxy.ingressi.length, 1); assert.equal(proxy.ingressi[0].tentativi.length, 1);
+});
+
+test('diagnosi ingress: deadline reale sul lavoro avviato consegna esito incerto, senza annunci', async t => {
+  const f = await setup(t, { timeoutRicercaMs: 500 }), proxy = await proxyControllato(t, f.url);
+  await f.heartbeat('a');
+  const richiesta = f.cerca(f.sessione('persona-a'), undefined, proxy.url);
+  const job = await f.poll();
+  const r = await richiesta.promise, body = await r.json();
+  assert.equal(r.status, 504); assert.equal(body.incerto, true);
+  assert.equal(body.codice, 'ricerca_scaduta'); assert.equal(body.risultati, undefined);
+  await f.attendi(() => !f.centro.lavori.size);
+  assert.equal((await f.esito('a', job)).status, 409);
+  assert.equal(proxy.ingressi[0].tentativi.length, 1);
+  assert.equal(f.centro.db.prepare('SELECT stato FROM lavori WHERE id=?').get(job.idLavoro).stato, 'incerto');
+});
 
 for (const composta of [false, true]) for (const primaPersona of ['a', 'b'])
 test('affinità: revoca lenta di A non blocca B; creatore ' + primaPersona + ', composta ' + composta, async t => {
