@@ -333,6 +333,9 @@ async function collauda({ manuale = false } = {}) {
       user:'amr_commerciale',password:writerPassword,database:'postgres',max:4,
       statement_timeout:2500,lock_timeout:1500,connectionTimeoutMillis:2000,query_timeout:3000 });
     writerPool.on('error',()=>{});
+    if (!manuale) require('./diagnostica-pg-collaudo').osservaPool(writerPool, {
+      scrivi: evento => console.error('Diagnostica PostgreSQL del collaudo: ' + JSON.stringify(evento)),
+    });
     const backupPassword = crypto.randomBytes(32).toString('hex');
     await sql(VERSIONE_POSTGRES === '18' ? `ALTER ROLE amr_copie LOGIN PASSWORD '${backupPassword}';`
       : `CREATE ROLE amr_copie LOGIN PASSWORD '${backupPassword}' IN ROLE amr_backup_esecutore;`);
