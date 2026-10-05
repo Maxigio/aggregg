@@ -77,3 +77,32 @@ test('C03: senza Web Locks il bootstrap fallisce esplicitamente senza richieste'
   await assert.rejects(vm.runInContext('window.amrBootstrap(true)', ctx), /browser aggiornato/);
   assert.equal(calls, 0);
 });
+
+test('login negato: il referente senza autorizzazione riceve istruzioni sull’invito, non una richiesta MFA', async () => {
+  const nodes = Object.fromEntries(['login','mfa','stato','logout','prototipo'].map(id => [id, {
+    hidden: ['mfa','logout','prototipo'].includes(id),
+    elements: {password:{value:'password-sintetica'},otp:{value:''},email:{value:'persona@amr.invalid'}},
+    addEventListener() {},
+  }]));
+  const chiamate = [], navigazioni = [];
+  const ctx = vm.createContext({ navigator:{locks:{}}, AbortSignal,
+    window:{amrBootstrap:async () => ({tentativo:'a'.repeat(64)})},
+    location:{replace:url => navigazioni.push(url)},
+    document:{querySelector:s => nodes[s.slice(1)],querySelectorAll:() => []},
+    fetch:async url => {
+      chiamate.push(url);
+      if (url.endsWith('/login')) return {ok:true,json:async () => ({conferma:'b'.repeat(64)})};
+      if (url.endsWith('/finalizza')) return {ok:false,status:403,json:async () => ({codice:'accesso_non_autorizzato'})};
+      return {ok:false,status:401,json:async () => ({codice:'sessione_non_valida'})};
+    },
+  });
+  ctx.window.amrCookieFetch = (...args) => ctx.fetch(...args);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../frontend/nodi-login-prova.js'),'utf8'),ctx);
+  await vm.runInContext("manda('login', {})",ctx);
+  assert.ok(chiamate.includes('/api/auth/finalizza'));
+  assert.match(nodes.stato.textContent, /invito/);
+  assert.doesNotMatch(nodes.stato.textContent, /serve MFA/);
+  assert.equal(nodes.login.hidden,false); assert.equal(nodes.mfa.hidden,true);
+  assert.equal(nodes.prototipo.hidden,true); assert.deepEqual(navigazioni,[]);
+  assert.equal(nodes.login.elements.password.value,'');
+});

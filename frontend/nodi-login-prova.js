@@ -4,7 +4,7 @@ const stato = document.querySelector('#stato'), logout = document.querySelector(
 const prototipo = document.querySelector('#prototipo');
 let occupato = false, sequenza = 0;
 const messaggi = { input_non_valido: 'Controlla i dati inseriti.', accesso_negato: 'Accesso non riuscito. Ripeti il login.',
-  accesso_non_autorizzato: 'Accesso non autorizzato. Per l’Admin serve MFA.', ripeti_login: 'Ripeti il login per un nuovo codice.',
+  accesso_non_autorizzato: 'Accesso AMR non autorizzato. Se devi ancora completare l’invito, verifica l’email e accettalo dalla sua pagina. Negli altri casi, contatta l’Admin per verificare l’abilitazione dell’account.', ripeti_login: 'Ripeti il login per un nuovo codice.',
   troppi_tentativi: 'Troppi tentativi. Riprova più tardi.', identita_non_disponibile: 'Servizio di accesso non disponibile.',
   sessione_non_valida: 'Sessione terminata.' };
 function mostraRevoca(provider) {

@@ -49,7 +49,7 @@
     operazione_in_conflitto: 'I dati non coincidono con l’invito originale: verifica nome, email e moduli.',
     azienda_non_pronta: 'Il referente deve verificare l’email e accettare l’invito prima dell’attivazione.',
     operazione_non_disponibile: 'Il servizio di gestione aziende non è disponibile. Aggiorna lo stato prima di riprovare.',
-    identita_non_verificata: 'Verifica prima l’email nella casella locale.'
+    identita_non_verificata: 'Verifica prima l’email nella casella del referente.'
   };
   function comunica(contesto) {
     if (incorporato) document.dispatchEvent(new CustomEvent('amr:account', { detail: contesto }));
@@ -280,10 +280,10 @@
       $('consegna').replaceChildren();
       if (d.link) {
         const a = document.createElement('a'); a.href = d.link; a.target = '_blank'; a.rel = 'noopener noreferrer';
-        a.textContent = 'Apri invito locale del referente'; $('consegna').append(a);
+        a.textContent = 'Apri invito del referente'; $('consegna').append(a);
       } else $('consegna').textContent = 'Invito già creato: link temporaneo non disponibile dopo riavvio.';
       $('stato').textContent = d.link
-        ? 'Invito disponibile nel link qui sopra; non inviato via email. Aprilo, verifica l’email nella casella locale e accetta. Poi attiva l’azienda da Admin.'
+        ? 'Invito disponibile nel link qui sopra; non inviato via email. Aprilo, verifica l’email del referente e accetta. Poi attiva l’azienda da Admin.'
         : 'Invito già registrato; il link temporaneo non è disponibile. Nessun nuovo invito creato.';
       await elenco();
     });
@@ -330,7 +330,7 @@
     e.preventDefault(); azione(async () => {
       if (e.target.elements.password.value !== e.target.elements.conferma.value) throw new Error('Le password non coincidono.');
       await aziende('registra', { token, password: e.target.elements.password.value });
-      $('stato').textContent = 'Registrazione ricevuta. La verifica è nella posta locale, non in Gmail. Aprila in un’altra scheda e torna qui.';
+      $('stato').textContent = 'Registrazione ricevuta. Cerca il messaggio di verifica nella casella del referente, anche nello spam. Nel collaudo con Auth locale usa MailHog; nello staging Nhost usa la casella reale. Apri la verifica in un’altra scheda e torna qui per accettare l’invito.';
     });
   });
   $('accetta').addEventListener('submit', e => {
@@ -341,7 +341,7 @@
     });
   });
   $('reinvia').addEventListener('click', () => azione(async () => {
-    await aziende('verifica', { token }); $('stato').textContent = 'Verifica richiesta alla posta locale, non a Gmail.';
+    await aziende('verifica', { token }); $('stato').textContent = 'Verifica richiesta. Controlla la casella del referente; MailHog serve soltanto il collaudo con Auth locale.';
   }));
   await azione(async () => {
     if (token) {

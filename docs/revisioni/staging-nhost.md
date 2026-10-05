@@ -390,3 +390,12 @@ i rispettivi incrementi storici, non questo stato finale.
 Login e navigazione manuali restano da collaudare; non è una promozione ai
 clienti né la verifica delle ricerche live. M2 escluso, backup esterno e
 stabilità del proxy ancora gate separati.
+
+## Collaudo con iMac reale — 5 ottobre, incremento successivo
+
+Login Admin e ricezione della verifica email nella casella reale sono ora
+confermati dall’utente. Il worker iMac è passato da simulato a reale sullo stesso
+artefatto `66e2b24`; registrazione e compatibilità verificate, ricerca completa
+ancora da provare. Nel [registro del collaudo nodi](staging-collaudo-nodi-2026-10-05.md)
+sono separati prove cloud, test locali, istruzioni UI corrette ma non ancora
+distribuite e ostacoli al worker M2. Nessuna modifica alla produzione M2.
