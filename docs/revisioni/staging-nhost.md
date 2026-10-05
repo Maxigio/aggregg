@@ -371,3 +371,17 @@ opt-in; attese 55/65 s eseguite separatamente (1/1 PASS). Review indipendente
 dallo stesso commit: entrypoint della sonda PASS con UID 1000/Node 24.21.0,
 SIGTERM exit 0 e cleanup verificato. Non è il gate Auth/DB completo né una
 prova dell'ingress Nhost. Nessuna mutazione remota o M2.
+
+## Staging avviato — 5 ottobre 2026
+
+I gate successivi e lo stato cloud effettivo sono nel
+[registro della diagnosi e dello staging](staging-diagnosi-pg-2026-10-05.md),
+sezione finale. Il centro e il frontend sono ora pubblicati su Run dal
+candidato `66e2b24`; Auth/PG configurati, volume preparato separatamente e
+AMR UID 1000. Gate anonimo 13/13 PASS e collegamento dell'iMac simulato
+verificato. I precedenti paragrafi «nessuna mutazione remota» descrivono
+i rispettivi incrementi storici, non questo stato finale.
+
+Login e navigazione manuali restano da collaudare; non è una promozione ai
+clienti né la verifica delle ricerche live. M2 escluso, backup esterno e
+stabilità del proxy ancora gate separati.
