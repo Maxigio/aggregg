@@ -275,3 +275,26 @@ prossimo esperimento deve distinguere provisioning, DNS e risposta HTTP
 mentre la sola sonda è attiva, con tempi limitati e stop controllato. Non
 cambiare trust proxy né aggirare TLS per ottenere un PASS. Auth, PostgreSQL,
 volume, SMTP, storage esterno, worker iMac e M2 richiedono gate separati.
+
+## Diagnostica successiva del 5 ottobre
+
+Raggiunta la sonda multiarch; fonte remota `bc4444e` invariata. Correzioni
+ai client diagnostici (header terminali, annullamento prima del lookup),
+review indipendente, **21 test pass e uno skip**, zero failure.
+La prova remota con lookup dedicato ottiene sei controlli, ma l'attesa di
+65 secondi fallisce: log server con interruzione dopo 60.002 ms e secondo
+ingresso sul percorso, mentre il client invia una sola richiesta.
+Attribuzione al retry dell'ingress sostenuta ma non ancora documentata;
+duplicazione di chiamate scraper nell'app non dimostrata.
+
+Run torna a zero repliche e senza porte pubbliche, confermato dalla
+config e dalla console; controllo successivo non riconosce più la sonda.
+Circa 13 minuti e 30 di finestre complessive, inclusi i tentativi precedenti.
+DNS di sistema nuovamente funzionante durante l'ultimo avvio; causa della
+discordanza precedente non determinata. Nessun trust proxy o timeout AMR
+modificato, nessun centro completo in cloud e nessun portale interrogato.
+
+**Gate remoto non superato; prossimo passo:** riprodurre in locale sul
+centro il timeout/retry osservato, poi scegliere la correzione. Evidenze,
+controprove e limiti nel
+[registro diagnostico](sonda-nhost-diagnostica-2026-10-05.md).

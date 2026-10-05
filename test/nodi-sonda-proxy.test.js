@@ -6,6 +6,7 @@ const { execFileSync, execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { creaSonda, peerRegistrabile } = require('../scripts/nhost/sonda-proxy-staging');
 const { misuraProxy } = require('../scripts/nhost/misura-proxy-staging');
+const { verificaDisponibilita, attendiSonda } = require('../scripts/nhost/attendi-sonda-staging');
 const SENTINELLA = 'riservato-sintetico-non-stampare';
 const ascolta = server => new Promise((r, j) => { server.once('error', j); server.listen(0, '127.0.0.1', r); });
 async function aspetta(fn) {
@@ -16,7 +17,7 @@ async function aspetta(fn) {
 async function fixture(t, opzioni = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-sonda-proxy-'));
   const cnf = path.join(dir, 'tls.cnf'), key = path.join(dir, 'key'), cert = path.join(dir, 'cert');
-  fs.writeFileSync(cnf, '[req]\nprompt=no\ndistinguished_name=dn\nx509_extensions=ext\n[dn]\nCN=127.0.0.1\n[ext]\nsubjectAltName=IP:127.0.0.1\n');
+  fs.writeFileSync(cnf, '[req]\nprompt=no\ndistinguished_name=dn\nx509_extensions=ext\n[dn]\nCN=127.0.0.1\n[ext]\nsubjectAltName=IP:127.0.0.1,DNS:sonda.invalid\n');
   execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
     '-config', cnf, '-keyout', key, '-out', cert], { stdio: 'ignore', timeout: 10000 });
   fs.chmodSync(key, 0o600);
@@ -24,11 +25,22 @@ async function fixture(t, opzioni = {}) {
   let backend, modo = '', origine;
   const proxy = https.createServer({ key: fs.readFileSync(key), cert: ca }, (req, res) => {
     richieste.push({ url: req.url, cookie: req.headers.cookie });
+    if (modo === 'provisioning') {
+      res.writeHead(richieste.length < 3 ? 503 : 200, { 'cache-control': 'no-store' });
+      return res.end(richieste.length < 3 ? SENTINELLA : 'ok');
+    }
+    if (modo === 'limitata') { res.writeHead(429); return res.end(SENTINELLA); }
+    if (modo.endsWith('-pendente')) {
+      const risposte = { '429-pendente': [429, {}], 'redirect-pendente': [302, { location: origine + '/secondo' }],
+        'cookie-pendente': [200, { 'set-cookie': 'riservato=' + SENTINELLA }] };
+      const [status, headers] = risposte[modo];
+      res.writeHead(status, headers); res.flushHeaders(); res.write(SENTINELLA); return;
+    }
     if (modo === 'redirect') { res.writeHead(302, { location: origine + '/secondo?' + SENTINELLA }); return res.end(SENTINELLA); }
     if (modo === 'infinito') return;
     if (modo === 'cookie') { res.writeHead(200, { 'set-cookie': 'riservato=' + SENTINELLA }); return res.end('ok'); }
-    if (modo === 'grande') { res.writeHead(200); return res.end('x'.repeat(65537) + SENTINELLA); }
-    if (modo === 'troncato') { res.writeHead(200, { 'content-length': 10000 }); res.write(SENTINELLA); return setImmediate(() => res.destroy()); }
+    if (modo === 'grande') { res.writeHead(200, { 'cache-control': 'no-store' }); return res.end('x'.repeat(65537) + SENTINELLA); }
+    if (modo === 'troncato') { res.writeHead(200, { 'content-length': 10000, 'cache-control': 'no-store' }); res.write(SENTINELLA); return setImmediate(() => res.destroy()); }
     if (modo === 'anticipa' && req.url.startsWith('/sonda/attesa-')) {
       res.writeHead(200, { 'cache-control': 'no-store' }); res.flushHeaders();
     }
@@ -196,3 +208,99 @@ test('sonda proxy: attese reali 55/65 secondi senza flush anticipato',
       assert.equal(e.esito, 'risposta_inviata'); assert.ok(e.durataMs >= ms - 100);
     }
   });
+
+test('disponibilità sonda: provisioning, budget, abort e TLS distinti senza dati grezzi', async t => {
+  const f = await fixture(t), eventi = [];
+  f.modo('provisioning');
+  const r = await attendiSonda({ ...f, intervalloMs: 5, budgetMs: 1000, registra: e => eventi.push(e) });
+  assert.equal(r.ok, true); assert.equal(r.controlli.length, 3);
+  assert.deepEqual(r.controlli.map(c => c.status), [503, 503, 200]);
+  assert.equal(eventi.length, 3); assert.equal(JSON.stringify(eventi).includes(SENTINELLA), false);
+  assert.ok(f.richieste.every(q => q.url === '/healthz' && q.cookie === undefined));
+  f.modo('infinito');
+  const budget = await attendiSonda({ ...f, budgetMs: 30, intervalloMs: 5 });
+  assert.equal(budget.ok, false); assert.ok(budget.controlli.length >= 1);
+  assert.ok(budget.controlli.every(c => c.codice === 'timeout'));
+  assert.ok(budget.durataMs < 500);
+  f.modo('');
+  const a = new AbortController(); a.abort();
+  assert.equal((await attendiSonda({ ...f, signal: a.signal })).codice, 'interrotto');
+  assert.equal(f.richieste.length, 0);
+  const tls = await attendiSonda({ origine: f.origine, intervalloMs: 1 });
+  assert.equal(tls.codice, 'tls_non_valido'); assert.equal(tls.controlli.length, 1);
+  assert.equal(f.richieste.length, 0);
+  for (const modo of ['redirect', 'cookie', 'grande', 'troncato', 'limitata']) {
+    f.modo(modo); const negata = await attendiSonda({ ...f, intervalloMs: 1 });
+    assert.equal(negata.ok, false, modo); assert.equal(negata.controlli.length, 1, modo);
+    assert.equal(f.richieste.length, 1, modo); assert.equal(JSON.stringify(negata).includes(SENTINELLA), false);
+    if (modo === 'grande') assert.equal(negata.codice, 'risposta_troppo_grande');
+    if (modo === 'troncato') assert.equal(negata.codice, 'risposta_interrotta');
+  }
+});
+
+test('disponibilità sonda: DNS classificato senza errori grezzi e massimo di tentativi', async t => {
+  const { EventEmitter } = require('node:events');
+  const originale = https.get; let chiamate = 0;
+  t.after(() => { https.get = originale; });
+  https.get = (_url, opzioni) => {
+    assert.equal(opzioni.rejectUnauthorized, true); assert.equal(opzioni.agent, false);
+    assert.equal(opzioni.headers.cookie, undefined); chiamate++;
+    const req = new EventEmitter();
+    process.nextTick(() => req.emit('error', Object.assign(new Error(SENTINELLA), { code: 'ENOTFOUND' })));
+    return req;
+  };
+  const f = { origine: 'https://sonda.example.invalid', intervalloMs: 1, maxTentativi: 3 };
+  const r = await attendiSonda(f);
+  assert.equal(r.ok, false); assert.equal(chiamate, 3); assert.equal(r.controlli.length, 3);
+  assert.ok(r.controlli.every(c => c.codice === 'dns_non_disponibile' && c.fase === 'dns' && c.status === null));
+  assert.equal(JSON.stringify(r).includes(SENTINELLA), false);
+  for (const options of [{ budgetMs: 300001 }, { timeoutMs: 5001 }, { maxTentativi: 61 }, { signal: {} },
+    { origine: 'https://user:password@sonda.example.invalid' }]) {
+    await assert.rejects(attendiSonda({ ...f, ...options }));
+  }
+  assert.equal(chiamate, 3);
+  assert.equal((await verificaDisponibilita(f)).codice, 'dns_non_disponibile');
+});
+
+test('disponibilità sonda: header terminali fermano anche un body che non termina', async t => {
+  const f = await fixture(t);
+  for (const [modo, codice] of [['429-pendente', 'http_non_disponibile'],
+    ['redirect-pendente', 'redirect_non_ammesso'], ['cookie-pendente', 'cookie_inatteso']]) {
+    f.modo(modo);
+    const r = await attendiSonda({ ...f, timeoutMs: 500, budgetMs: 1500, intervalloMs: 1, maxTentativi: 3 });
+    assert.equal(r.ok, false); assert.equal(r.codice, codice, modo);
+    assert.equal(r.controlli.length, 1, modo); assert.equal(f.richieste.length, 1, modo);
+    assert.equal(JSON.stringify(r).includes(SENTINELLA), false);
+  }
+});
+
+test('sonda: lookup diagnostico esplicito mantiene verifica TLS e hostname', async t => {
+  const f = await fixture(t), nomi = [];
+  const lookup = (nome, opzioni, callback) => {
+    nomi.push(nome);
+    process.nextTick(() => opzioni.all ? callback(null, [{ address: '127.0.0.1', family: 4 }])
+      : callback(null, '127.0.0.1', 4));
+  };
+  const origine = f.origine.replace('127.0.0.1', 'sonda.invalid');
+  assert.equal((await attendiSonda({ origine, ca: f.ca, lookup })).ok, true);
+  const r = await misuraProxy({ origine, ca: f.ca, lookup });
+  assert.equal(r.ok, true, JSON.stringify(r)); assert.equal(r.controlli.length, 5);
+  assert.equal(nomi.length, 6); assert.ok(nomi.every(n => n === 'sonda.invalid'));
+  const prima = f.richieste.length;
+  const errata = origine.replace('sonda.invalid', 'certificato-errato.invalid');
+  assert.equal((await attendiSonda({ origine: errata, ca: f.ca, lookup })).codice, 'tls_non_valido');
+  assert.equal((await misuraProxy({ origine: errata, ca: f.ca, lookup })).ok, false);
+  assert.equal(f.richieste.length, prima);
+  const a = new AbortController(); a.abort(); const primaDNS = nomi.length;
+  assert.equal((await verificaDisponibilita({ origine, ca: f.ca, lookup, signal: a.signal })).codice, 'interrotto');
+  assert.equal((await misuraProxy({ origine, ca: f.ca, lookup, signal: a.signal })).controlli[0].codice, 'interrotto');
+  assert.equal(nomi.length, primaDNS);
+  const DNSko = (_nome, _opzioni, callback) => process.nextTick(() =>
+    callback(Object.assign(new Error(SENTINELLA), { code: 'ENOTFOUND' })));
+  const ko = await misuraProxy({ origine, ca: f.ca, lookup: DNSko });
+  assert.equal(ko.controlli[0].codice, 'dns_non_disponibile');
+  assert.equal(ko.controlli.length, 1); assert.equal(f.richieste.length, prima);
+  assert.equal(JSON.stringify(ko).includes(SENTINELLA), false);
+  await assert.rejects(attendiSonda({ origine, lookup: true }), /limiti_non_validi/);
+  await assert.rejects(misuraProxy({ origine, lookup: true }), /limiti_non_validi/);
+});

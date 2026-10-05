@@ -4,10 +4,11 @@ const { isIP } = require('node:net');
 const { origineValida } = require('./sonda-proxy-staging');
 
 // Misura la sonda separata. Un esito positivo non abilita trust proxy in AMR.
-async function misuraProxy({ origine, attese = false, ca, signal, timeoutMs = 5000,
+async function misuraProxy({ origine, attese = false, ca, signal, lookup, timeoutMs = 5000,
   timeoutAtteseMs = 75000, totaleMs = 160000, minAtteseMs = [55000, 65000] } = {}) {
   const url = origineValida(origine);
-  if (typeof attese !== 'boolean' || ![timeoutMs, timeoutAtteseMs, totaleMs].every(Number.isSafeInteger)
+  if (typeof attese !== 'boolean' || (lookup !== undefined && typeof lookup !== 'function')
+    || ![timeoutMs, timeoutAtteseMs, totaleMs].every(Number.isSafeInteger)
     || timeoutMs < 1 || timeoutMs > 5000 || timeoutAtteseMs < 1 || timeoutAtteseMs > 75000
     || totaleMs < 1 || totaleMs > 160000 || !Array.isArray(minAtteseMs) || minAtteseMs.length !== 2
     || minAtteseMs.some((n, i) => !Number.isSafeInteger(n) || n < 1 || n > [55000, 65000][i])) {
@@ -29,7 +30,7 @@ async function misuraProxy({ origine, attese = false, ca, signal, timeoutMs = 50
   function request(p) {
     return new Promise((resolve, reject) => {
       const avvio = performance.now();
-      const req = https.request(new URL(p.route, url), { agent: false, ca, maxHeaderSize: 16384,
+      const req = https.request(new URL(p.route, url), { agent: false, ca, lookup, maxHeaderSize: 16384,
         servername: isIP(url.hostname) || url.hostname.startsWith('[') ? '' : url.hostname,
         rejectUnauthorized: true, signal: AbortSignal.any([interruzione,
           AbortSignal.timeout(p.lenta ? timeoutAtteseMs : timeoutMs)]),
@@ -48,6 +49,11 @@ async function misuraProxy({ origine, attese = false, ca, signal, timeoutMs = 50
   }
   const controlli = [], avvio = performance.now(); let istanza;
   for (const p of prove) {
+    if (interruzione.aborted) {
+      controlli.push({ prova: p.nome, ok: false, codice: signal?.aborted ? 'interrotto' : 'timeout',
+        status: null, headerMs: null, durataMs: 0 });
+      break;
+    }
     const da = performance.now(); let ok = false, codice = 'risposta_inattesa', status = null, headerMs = null;
     try {
       const r = await request(p); status = r.status; headerMs = r.headerMs;
@@ -71,7 +77,12 @@ async function misuraProxy({ origine, attese = false, ca, signal, timeoutMs = 50
     } catch (e) {
       codice = signal?.aborted ? 'interrotto' : totale.aborted || e.name === 'AbortError' ? 'timeout'
         : ['risposta_interrotta', 'risposta_troppo_grande'].includes(e.message) ? e.message
-          : e.code === 'HPE_HEADER_OVERFLOW' ? 'header_troppo_grandi' : 'rete_o_tls';
+          : e.code === 'HPE_HEADER_OVERFLOW' ? 'header_troppo_grandi'
+            : e.code === 'ENOTFOUND' ? 'dns_non_disponibile'
+              : e.code === 'EAI_AGAIN' ? 'dns_temporaneo'
+                : e.code === 'ECONNREFUSED' ? 'connessione_rifiutata'
+                  : e.code === 'ECONNRESET' ? 'collegamento_interrotto'
+                    : 'rete_o_tls';
     }
     controlli.push({ prova: p.nome, ok, codice, status, headerMs, durataMs: Math.round(performance.now() - da) });
     if (!ok) break;

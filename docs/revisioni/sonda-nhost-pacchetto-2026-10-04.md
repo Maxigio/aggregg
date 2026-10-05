@@ -1,13 +1,12 @@
 # Pacchetto della misura ingress Nhost — 4 ottobre 2026
 
-**Aggiornamento 5 ottobre:** upload e due tentativi di avvio della sola
-sonda autorizzati ed eseguiti. Il primo ha registrato `exec format error`;
-la variante multiarch con identico sorgente passa gli smoke test locali
-ma non ha raggiunto healthz remoto nel secondo tentativo. Run ripristinato
-e verificato a zero repliche dopo entrambi. Misure del proxy non eseguite;
-causa dell'indisponibilità del secondo tentativo non determinata. Evidenze
-e limiti nel
-[registro della review](branch-nodi-2026-10-04-staging.md#gate-remoto-limite-confermato).
+**Aggiornamento 5 ottobre:** dopo i due tentativi iniziali, la stessa
+sonda multiarch è stata raggiunta e misurata. Sei controlli ottenuti;
+attesa di 65 secondi fallita, con interruzione server a circa 60 secondi
+e secondo ingresso compatibile con un retry dell'ingress. Run ripristinato
+e verificato a zero repliche, senza porte pubbliche. **Gate non superato**;
+non è stato avviato il centro AMR completo. Evidenze e limiti nel
+[registro diagnostico](sonda-nhost-diagnostica-2026-10-05.md).
 Le sezioni seguenti conservano la preparazione antecedente alla prova.
 
 ## Stato e perimetro
