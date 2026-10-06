@@ -6,6 +6,7 @@ const { creaTrasporto } = require('../../backend/nodi/trasporto-prova');
 const MAX = 64 * 1024 * 1024;
 const FILE = ['database.dump', 'globals.sql', 'lavori-prototipo.db', 'manifest.json'];
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
+const proxyDaEnv = value => (value || '').split(',').map(ip => ip.trim()).filter(Boolean);
 
 // AbortError può precedere l'uscita del child: il cleanup attende sempre close.
 function eseguiComando(bin,args,options) {
@@ -191,7 +192,7 @@ if (require.main === module) {
     const pg = { host: 'postgres-service', user: 'nhost_admin', database: env.AMR_BACKUP_DATABASE };
     if (!/^[a-z0-9]{20}$/.test(pg.database || '')) throw new Error('pg_non_configurato');
     const scadenza = Number(env.AMR_BACKUP_SCADENZA);
-    servizio = creaServer({ origine: env.AMR_BACKUP_ORIGINE, proxy: env.AMR_BACKUP_PROXY ? env.AMR_BACKUP_PROXY.split(',') : [],
+    servizio = creaServer({ origine: env.AMR_BACKUP_ORIGINE, proxy: proxyDaEnv(env.AMR_BACKUP_PROXY),
       tokenHash: env.AMR_BACKUP_TOKEN_SHA256, scadenza,
       segnala: fase => console.error('Backup non confermato: ' + fase),
       prepara: ({ signal }) => preparaCopia({ pg, signal, release: env.AMR_BACKUP_RELEASE }) });
@@ -201,4 +202,4 @@ if (require.main === module) {
     process.once('SIGTERM',servizio.chiudi); process.once('SIGINT',servizio.chiudi);
   } catch { servizio?.chiudi(); console.error('Manutenzione backup non avviata.'); process.exitCode = 1; }
 }
-module.exports = { preparaCopia, creaServer, eseguiComando, MAX, FILE, sha };
+module.exports = { preparaCopia, creaServer, eseguiComando, proxyDaEnv, MAX, FILE, sha };

@@ -84,15 +84,17 @@ async function collauda({ host, image, restic }) {
     await docker(['run','--name',nomi.init,'--user','0:0','--network','none','--mount',
       'type=volume,source='+nomi.volume+',target=/var/lib/amr','--entrypoint','node',image,'-e',inizializza]);
     fase='esportazione';
-    const env={AMR_BACKUP_ORIGINE:'http://127.0.0.1:3000',AMR_BACKUP_PROXY:'',AMR_BACKUP_DATABASE:database,
+    const env={AMR_BACKUP_ORIGINE:'https://fixture.example.invalid',AMR_BACKUP_PROXY:'127.0.0.1, 192.0.2.1',AMR_BACKUP_DATABASE:database,
       AMR_BACKUP_TOKEN_SHA256:sha(token),
       AMR_BACKUP_SCADENZA:String(Date.now()+10*60000),AMR_BACKUP_RELEASE:'f'.repeat(40)};
     await docker(['run','-d','--name',nomi.export,'--network',nomi.rete,'--mount',
       'type=volume,source='+nomi.volume+',target=/var/lib/amr',...Object.entries(env).flatMap(([k,v])=>['-e',k+'='+v]),image]);
     const leggi="let input='';process.stdin.on('data',b=>input+=b);process.stdin.on('end',async()=>{try{"
-      + "const {categoria,token}=JSON.parse(input);const r=await fetch('http://127.0.0.1:3000/backup/'+categoria,{headers:{Authorization:'Bearer '+token}});"
-      + "if(r.status!==200)throw 0;const b=Buffer.from(await r.arrayBuffer());"
-      + "if(b.length!==Number(r.headers.get('content-length'))||require('node:crypto').createHash('sha256').update(b).digest('hex')!==r.headers.get('x-amr-backup-sha256'))throw 0;"
+      + "const {categoria,token}=JSON.parse(input);const {r,b}=await new Promise((resolve,reject)=>{"
+      + "const q=require('node:http').get('http://127.0.0.1:3000/backup/'+categoria,{headers:{Authorization:'Bearer '+token,Host:'fixture.example.invalid','X-Forwarded-Proto':'https'}},r=>{"
+      + "const chunks=[];let bytes=0;r.on('data',chunk=>{bytes+=chunk.length;if(bytes>64*1024*1024)r.destroy(new Error('body_grande'));else chunks.push(chunk);});"
+      + "r.once('error',reject);r.once('end',()=>resolve({r,b:Buffer.concat(chunks)}));});q.once('error',reject);q.setTimeout(100000,()=>q.destroy(new Error('timeout')));});"
+      + "if(r.statusCode!==200||b.length!==Number(r.headers['content-length'])||require('node:crypto').createHash('sha256').update(b).digest('hex')!==r.headers['x-amr-backup-sha256'])throw 0;"
       + "process.stdout.write(b);}catch{process.exitCode=1;}});";
     let pgBytes;
     for(let i=0;i<20;i++) {

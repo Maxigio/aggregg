@@ -2,7 +2,24 @@
 const test = require('node:test'), assert = require('node:assert/strict');
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
-const { creaServer, preparaCopia, eseguiComando, sha } = require('../scripts/nhost/esporta-backup-staging');
+const { creaServer, preparaCopia, eseguiComando, proxyDaEnv, sha } = require('../scripts/nhost/esporta-backup-staging');
+
+test('avvio backup: stessa normalizzazione dei proxy del centro, nessuna fiducia a IP invalidi', () => {
+  const proxy = proxyDaEnv('127.0.0.1, 192.0.2.1, ::1 ');
+  assert.deepEqual(proxy, ['127.0.0.1', '192.0.2.1', '::1']);
+  assert.deepEqual(proxyDaEnv(undefined), []);
+  const opzioni = { origine:'https://fixture.example.invalid', tokenHash:sha('a'.repeat(64)),
+    scadenza:Date.now()+60000, prepara:async()=>{throw new Error('non_interrogare_database');} };
+  const servizio = creaServer({ ...opzioni, proxy });
+  servizio.chiudi();
+  const limite = creaServer({ ...opzioni, proxy:proxyDaEnv(Array(32).fill('127.0.0.1').join(',')) });
+  limite.chiudi();
+  for (const testo of ['127.0.0.1, proxy.example.invalid', '127.0.0.1, 192.0.2.0/24',
+    '127.0.0.1, 999.0.0.1',
+    Array(33).fill('127.0.0.1').join(',')]) {
+    assert.throws(() => creaServer({ ...opzioni, proxy:proxyDaEnv(testo) }), /proxy attendibili/);
+  }
+});
 
 async function server(t, prepara, { attesa = 60000 } = {}) {
   const token = 'a'.repeat(64), scadenza = Date.now() + attesa;

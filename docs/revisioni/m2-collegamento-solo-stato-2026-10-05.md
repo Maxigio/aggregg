@@ -336,3 +336,33 @@ Riferimenti verificati: [Run resources](https://docs.nhost.io/products/run/resou
 [healthcheck](https://docs.nhost.io/products/run/health-checks),
 [deploy CLI](https://docs.nhost.io/products/run/cli-deployments) e
 [sorgente CLI](https://github.com/nhost/nhost/blob/main/cli/cmd/run/config_deploy.go).
+
+### Correzione e collaudo dell'exporter — 6 ottobre
+
+Verificato un difetto locale di avvio: l'exporter separava i proxy sulla
+virgola senza rimuovere gli spazi, mentre il centro li normalizza. Con
+`127.0.0.1, 192.0.2.1` l'immagine precedente termina; con la correzione
+avvia il listener e `/healthz` risponde 200. La validazione continua a
+rifiutare hostname, subnet, IP non validi e più di 32 indirizzi. Questo
+non dimostra che il medesimo difetto abbia causato il precedente mancato
+avvio remoto: il valore del segreto non è stato letto.
+
+La review indipendente trova un errore aggiuntivo nel client del collaudo:
+`fetch` di Node 24.21.0 elimina l'override di `Host`. Riprodotto con un
+server loopback; sostituito con `node:http.get` nel solo collaudo, mantenendo
+timeout, cap, controllo di lunghezza e SHA-256. Nessuna modifica alla policy
+di trasporto dell'app.
+
+Nuova immagine costruita da tre soli file, con basi già presenti e digest
+fissati, senza installare dipendenze o includere il worktree nel contesto.
+Test mirati: 10/10. Collaudo effettivo Docker + Restic, con origine HTTPS
+di fixture e proxy separati da virgola/spazio: dump PostgreSQL 10.240 byte,
+SQLite 20.480 byte, due repository cifrati, verifica e restore riusciti.
+Restore PostgreSQL con rete `none`, owner, GRANT e conteggi controllati;
+SQLite integro e conteggi coerenti. Cleanup delle sole risorse create
+dal collaudo verificato. Nessun dato cloud o portale interrogato.
+
+Queste sono prove locali, non un backup reale dello staging. Nhost conferma
+che i backup gestiti PostgreSQL escludono i dati Run: la copia del volume
+resta necessaria. Riferimenti: [backup Nhost](https://docs.nhost.io/products/database/backups),
+[verifica repository Restic](https://restic.readthedocs.io/en/stable/045_working_with_repos.html).
