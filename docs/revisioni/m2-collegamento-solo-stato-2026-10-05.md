@@ -446,3 +446,80 @@ non prova il nuovo ramo HTTP, che è verificato separatamente.
 Riferimenti: [Docker multi-platform](https://docs.docker.com/build/building/multi-platform/)
 e [Nhost CLI deploy](https://docs.nhost.io/products/run/cli-deployments),
 che mostra la build per entrambe le architetture.
+
+
+### Acquisizione multiarch e checkpoint locale — 6 ottobre
+
+Il registry conferma il digest multiarch della manutenzione
+`sha256:fd8a496609c3862f9121f8e1394317836b492f926d061b751c38c7157a805a80`.
+Il log di boot remoto alle 01:41:22 UTC riporta `Architettura backup: arm64.`:
+è una prova diretta della variante eseguita da Run.
+
+La manutenzione scarica PostgreSQL (235.520 byte) e SQLite (36.864 byte),
+con lunghezza e SHA-256 controllati. Il helper, però, aspettava il riavvio
+del centro prima di avviare Restic. Un errore `cloud_rifiutato` durante la
+lettura dello stato interrompe quel percorso: i body restavano soltanto in
+RAM e nessuna copia cifrata era stata creata. Questa acquisizione NON è un
+backup conservato, né una prova di restore. La causa dell'errore di controllo
+Nhost non è dimostrata; una lettura successiva torna a funzionare.
+
+La configurazione originale era già ripristinata integralmente con una
+replica richiesta. Dopo questa verifica viene rinnovata soltanto la richiesta
+di una replica, senza risostituire immagine, segreti, porte o volume.
+Replica pronta alle 01:54:06 UTC; conferma indipendente: configurazione
+originale esatta, healthcheck 200 con body `ok`, frontend 200, API protetta
+anonima 401. Nessun coinvolgimento M2 o richiesta ai portali.
+
+Correzione del percorso: `scripts/nhost/conserva-backup-staging.js` separa
+`cifra` da `verifica`. Subito dopo il download crea due repository Restic
+separati e cifrati, ricevuta e chiave locali private. La ricevuta dichiara
+`cifrato:true, restore:false`; soltanto il restore isolato può confermare
+`restore:true`. Un errore successivo non cancella copie o chiave.
+Il restore usa una risorsa Docker nuova, PostgreSQL 18.6 fissato per digest,
+rete `none`, nessuna porta, nessun database vivo sovrascritto; cleanup delle
+sole risorse create. I dati in chiaro temporanei vengono rimossi.
+
+Il helper operativo effettua al massimo tre tentativi per le sole letture
+Nhost, non ripete mutazioni con esito incerto e non ferma nuovamente un
+originale già configurato correttamente. Prove controllate: due letture
+rifiutate e terza riuscita; recovery con originale già presente = nessuna
+mutazione; checkpoint collocato prima di arresto/riavvio e restore.
+
+Test mirati 13/13. Il runner Docker/Restic usa ora lo stesso conservatore:
+cifratura, buffer azzerati, errore cloud simulato, riapertura dal disco e
+restore isolato. La prova amd64 passa. Il collaudo arm64 e la review
+indipendente sono ancora in corso; l'acquisizione reale va ripetuta solo
+dopo questi controlli. Le copie locali temporanee non sono lo storage
+gestito di produzione. La chiave resta separata dai repository, sullo stesso
+iMac: questo protegge il transito e l'accesso locale, non la perdita del Mac.
+
+
+### Review del conservatore e controprove
+
+La review indipendente riproduce con VM due difetti: collisione del nome
+Docker seguita da cleanup del container preesistente; errore ENOSPC nella
+scrittura finale che nasconde la causa operativa. Correzioni: ownership
+nonce distinta dal nome, lettura della sola label e dell'ID prima del
+cleanup, cancellazione per ID verificato; causa operativa sanitizzata
+preservata se la ricevuta non si può aggiornare. Il gate effettivo conferma
+anche il cleanup del nuovo container. La collisione e ENOSPC sono prove
+controllate, non incidenti osservati sullo staging.
+
+Il rischio di mancata durabilità dopo perdita di alimentazione è condizionato:
+non è stato simulato un guasto fisico del disco. Aggiunto `fsync` a chiave,
+ricevuta e directory prima del successo; Restic verifica integralmente i
+repository. Questo non garantisce la conservazione in caso di guasto del Mac.
+
+La prova sul filesystem macOS conferma invece che `0700` può convivere con
+ACL permissive. Il flag `@` di `ls` può nascondere il `+`: il controllo legge
+anche le voci ACL. Un parent con ACL viene rifiutato senza modificarlo;
+l'ACL viene rimossa esclusivamente dalle risorse nuove della procedura.
+Test reale con ACL sintetica: nessuna copia creata, ACL parent preservata.
+
+Test mirati aggiornati 14/14; fixture PostgreSQL/SQLite cifrate e ripristinate
+su amd64 e arm64. Prova aggiuntiva con due processi Node distinti: il
+processo di cifratura termina prima del restore; buffer originali azzerati,
+repository riaperti da disco e dati ripristinati correttamente. Gate amd64
+ripetuto dopo le ultime correzioni, con cleanup confermato. Preflight remoto
+aggiornato: configurazione originale, HTTPS e accesso PostgreSQL compatibili;
+nessuna mutazione effettuata dal preflight.

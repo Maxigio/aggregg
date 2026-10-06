@@ -134,3 +134,44 @@ test('restore: conserva attributi e GRANT del bootstrap; rifiuta un formato inat
   assert.throws(()=>globalsPerRestore(Buffer.from(sql+sql),'postgres'),/bootstrap_non_atteso/);
   assert.throws(()=>globalsPerRestore(Buffer.from(sql),'postgres; DROP ROLE fixture'),/bootstrap_non_atteso/);
 });
+
+test('checkpoint: input invalido non crea copie e azzera i buffer ricevuti', async t => {
+  const {cifra}=require('../scripts/nhost/conserva-backup-staging');
+  const parent=fs.mkdtempSync(path.join(os.tmpdir(),'amr-checkpoint-test-'));fs.chmodSync(parent,0o700);
+  t.after(()=>fs.rmSync(parent,{recursive:true,force:true}));
+  const postgres=Buffer.from('fixture-pg'),volume=Buffer.from('fixture-sqlite');
+  await assert.rejects(cifra({postgres,volume,release:'non-valida',database:'b'.repeat(20)},
+    {parent,restic:'/fixture/restic'}),/checkpoint_non_confermato/);
+  assert.equal(fs.readdirSync(parent).length,0);
+  assert.ok(postgres.every(b=>b===0));assert.ok(volume.every(b=>b===0));
+});
+test('checkpoint: parent symlink rifiutato, file preesistenti conservati', async t => {
+  const {cifra}=require('../scripts/nhost/conserva-backup-staging');
+  const base=fs.mkdtempSync(path.join(os.tmpdir(),'amr-checkpoint-symlink-'));fs.chmodSync(base,0o700);
+  t.after(()=>fs.rmSync(base,{recursive:true,force:true}));
+  const target=path.join(base,'target');fs.mkdirSync(target,{mode:0o700});fs.writeFileSync(path.join(target,'preserva'),'fixture');
+  const parent=path.join(base,'alias');fs.symlinkSync(target,parent);
+  await assert.rejects(cifra({postgres:Buffer.from('pg'),volume:Buffer.from('sqlite'),release:'f'.repeat(40),database:'b'.repeat(20)},
+    {parent,restic:'/fixture/restic'}),/checkpoint_non_confermato/);
+  assert.deepEqual(fs.readdirSync(target),['preserva']);assert.equal(fs.readFileSync(path.join(target,'preserva'),'utf8'),'fixture');
+});
+test('restore: rifiuta una directory estranea prima di eseguire comandi', async t => {
+  const {verifica}=require('../scripts/nhost/conserva-backup-staging');
+  const parent=fs.mkdtempSync(path.join(os.tmpdir(),'amr-checkpoint-guard-'));fs.chmodSync(parent,0o700);
+  t.after(()=>fs.rmSync(parent,{recursive:true,force:true}));
+  await assert.rejects(verifica(path.join(parent,'..','estranea'),{parent,restic:'/fixture/restic'}),/checkpoint_non_atteso/);
+});
+
+test('checkpoint macOS: ACL permissiva reale rifiutata senza modificare il parent',
+  {skip:process.platform!=='darwin'}, async t => {
+    const {execFileSync}=require('node:child_process');
+    const {cifra}=require('../scripts/nhost/conserva-backup-staging');
+    const parent=fs.mkdtempSync(path.join(os.tmpdir(),'amr-checkpoint-acl-'));fs.chmodSync(parent,0o700);
+    t.after(()=>fs.rmSync(parent,{recursive:true,force:true}));
+    execFileSync('/bin/chmod',['+a','everyone allow list,search,readattr',parent]);
+    const prima=execFileSync('/bin/ls',['-lde',parent]).toString();assert.match(prima,/^\s*\d+:\s/m);
+    await assert.rejects(cifra({postgres:Buffer.from('pg'),volume:Buffer.from('sqlite'),release:'f'.repeat(40),database:'b'.repeat(20)},
+      {parent,restic:'/fixture/restic'}),/checkpoint_non_confermato/);
+    assert.equal(fs.readdirSync(parent).length,0);
+    assert.equal(execFileSync('/bin/ls',['-lde',parent]).toString(),prima);
+  });

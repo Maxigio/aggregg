@@ -2,8 +2,6 @@
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const assert = require('node:assert/strict');
-const { DatabaseSync } = require('node:sqlite');
-const { creaRestic } = require('../backend/nodi/backup-restic');
 const { sha, MAX } = require('./nhost/esporta-backup-staging');
 const PG = 'postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650';
 
@@ -106,63 +104,31 @@ async function collauda({ host, image, restic, platform = 'linux/amd64' }) {
     assert.ok(pgBytes);
     const sqliteBytes=await docker(['exec','-i',nomi.export,'node','-e',leggi],Buffer.from(JSON.stringify({categoria:'volume',token})));
     const dimensioni={postgres:pgBytes.length,volume:sqliteBytes.length};
-    fase='restic';
-    const password=path.join(directory,'chiave');fs.writeFileSync(password,crypto.randomBytes(32).toString('hex'),{mode:0o600,flag:'wx'});
-    const repos=Object.fromEntries(['postgres','volume'].map(n=>[n,creaRestic({binario:restic,
-      ambiente:{RESTIC_REPOSITORY:path.join(directory,'repo-'+n),RESTIC_PASSWORD_FILE:password}})]));
-    const buffers={postgres:pgBytes,volume:sqliteBytes},snapshot={},impronte={};
-    for(const n of Object.keys(repos)) {
-      impronte[n]=sha(buffers[n]);await repos[n].inizializza();snapshot[n]=(await repos[n].copia(buffers[n],'database')).snapshot;
-      buffers[n].fill(0);await repos[n].verifica();
-    }
-    const restored={};
-    for(const n of Object.keys(repos)) {
-      restored[n]=path.join(await repos[n].ripristina(snapshot[n],directory),'database.dump');
-      const b=fs.readFileSync(restored[n]);assert.equal(sha(b),impronte[n]);b.fill(0);
-    }
-    const estrai=async nome=>(await esegui('/usr/bin/tar',['-xOf',restored.postgres,nome]));
-    const members=(await esegui('/usr/bin/tar',['-tf',restored.postgres])).toString().trim().split('\n');
-    assert.deepEqual(members,['database.dump','globals.sql','manifest.json']);
-    const manifest=JSON.parse((await estrai('manifest.json')).toString());
-    const dump=await estrai('database.dump'),globals=await estrai('globals.sql');
-    assert.equal(sha(dump),manifest.file['database.dump'].sha256);
-    assert.equal(sha(globals),manifest.file['globals.sql'].sha256);
-    assert.equal(impronte.volume,manifest.file['lavori-prototipo.db'].sha256);
-    fase='restore_isolato';
-    await docker(['run','-d','--name',nomi.restore,'--network','none','--tmpfs',
-      '/var/lib/postgresql:rw,noexec,nosuid,size=256m','-e','POSTGRES_USER=fixture_bootstrap',
-      '-e','POSTGRES_PASSWORD='+crypto.randomBytes(32).toString('hex'),PG]);await attendi(nomi.restore);
-    fase='restore_globals';
-    assert.equal(manifest.postgres.bootstrap,'fixture_bootstrap');
-    const globalsRestore=globalsPerRestore(globals,manifest.postgres.bootstrap);
-    try {await sql(nomi.restore,'fixture_bootstrap','postgres',globalsRestore);}
-    catch(e){
-      const riga=globalsRestore.toString().split('\n')[(e.numeroRiga||0)-1]||'';
-      e.tipoSQL=/^(CREATE ROLE|ALTER ROLE|GRANT|SET|SELECT|\\connect)\b/.exec(riga)?.[1];throw e;
-    } finally {globals.fill(0);globalsRestore.fill(0);}
-    // --create conserva anche owner, ACL e impostazioni del database sorgente.
-    // Non è combinabile con --single-transaction: il target è nuovo e usa rete none.
-    fase='restore_dump';
-    await docker(['exec','-i',nomi.restore,'pg_restore','-U','fixture_bootstrap','-d','postgres',
-      '--create','--exit-on-error'],dump);dump.fill(0);
-    fase='restore_conti';
-    const counts=(await sql(nomi.restore,'fixture_bootstrap',database,
-      'SELECT count(*) FROM auth.users;SELECT count(*) FROM amr_accessi.aziende;'
-      + "SELECT has_table_privilege('amr_gateway','amr_accessi.aziende','SELECT');")).toString().trim();
-    assert.equal(counts,'2\n1\nt');
-    const numeri=counts.split('\n');
-    assert.equal(Number(numeri[0]),manifest.postgres.utenti_auth);
-    assert.equal(Number(numeri[1]),manifest.postgres.aziende);
-    fase='restore_sqlite';
-    const db=new DatabaseSync(restored.volume,{readOnly:true});
-    try {
-      assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check,'ok');
-      assert.equal(db.prepare('SELECT id FROM sospensioni').get().id,11);
-      assert.equal(db.prepare('SELECT id FROM token_revocati').get().id,22);
-      for (const nome of ['lavori','eventi','sospensioni','token_revocati']) {
-        assert.equal(db.prepare('SELECT count(*) AS n FROM '+nome).get().n,manifest.sqlite[nome]);
-      }
-    } finally { db.close(); }
+    fase='checkpoint_cifrato';
+    // Usa il percorso reale di conservazione; l'interruzione cloud simulata
+    // avviene fra i due processi e non deve perdere copie già cifrate.
+    const conservatore=require.resolve('./nhost/conserva-backup-staging');
+    const processo=azione=>"let text='';process.stdin.on('data',b=>text+=b);process.stdin.on('end',async()=>{try{"
+      + "const x=JSON.parse(text);text='';const m=require("+JSON.stringify(conservatore)+");"
+      + (azione==='cifra' ? "const b={postgres:Buffer.from(x.postgres,'base64'),volume:Buffer.from(x.volume,'base64'),release:x.release,database:x.database};x.postgres=x.volume='';const r=await m.cifra(b,x.opts);"
+        : "const r=await m.verifica(x.directory,x.opts);")
+      + "console.log(JSON.stringify(r));}catch{process.exitCode=1;}});";
+    const checkpoint=JSON.parse((await esegui(process.execPath,['-e',processo('cifra')],Buffer.from(JSON.stringify({
+      postgres:pgBytes.toString('base64'),volume:sqliteBytes.toString('base64'),release:'f'.repeat(40),database,
+      opts:{parent:directory,restic},
+    })))).toString());
+    assert.equal(checkpoint.cifrato,true);assert.equal(checkpoint.restore,false);
+    pgBytes.fill(0);sqliteBytes.fill(0);
+    assert.ok(pgBytes.every(b=>b===0));assert.ok(sqliteBytes.every(b=>b===0));
+    try { throw new Error('cloud_rifiutato_fixture'); } catch {}
+    const ricevuta=JSON.parse(fs.readFileSync(path.join(checkpoint.directory,'esito.json'),'utf8'));
+    assert.equal(ricevuta.cifrato,true);assert.equal(ricevuta.restore,false);
+    fase='restore_da_checkpoint';
+    // Riapre soltanto ricevuta, chiave e repository sul disco: nessun body RAM.
+    const ripristino=JSON.parse((await esegui(process.execPath,['-e',processo('verifica')],Buffer.from(JSON.stringify({
+      directory:checkpoint.directory,opts:{parent:directory,restic,platform},
+    })))).toString());
+    assert.equal(ripristino.restore,true);
     return { ok:true,dimensioni,postgres:'18.6',platform,repoSeparati:true,restore:true,networkRestore:'none' };
   } catch (e) {
     let faseNodo;
