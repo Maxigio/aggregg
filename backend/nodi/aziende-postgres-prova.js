@@ -77,8 +77,14 @@ function creaAziendePostgres({ pool }) {
     async invito(token) {
       return esegui('SELECT amr_accessi.aziende_invito($1::text) AS risultato', [impronta(token)]);
     },
-    async accetta(providerUUID, token) {
+    async accetta(providerUUID, token, operazione) {
       if (!valido(UUID, providerUUID)) throw errore('invito_non_valido');
+      if (operazione !== undefined) {
+        if (!valido(UUID, operazione)) throw errore('input_non_valido');
+        return esegui('SELECT amr_accessi.aziende_accetta($1::uuid, $2::text, $3::uuid) AS risultato',
+          [providerUUID, impronta(token), operazione]);
+      }
+      // Compatibilità con gli strumenti locali precedenti: monouso, senza retry.
       return esegui('SELECT amr_accessi.aziende_accetta($1::uuid, $2::text) AS risultato',
         [providerUUID, impronta(token)]);
     },

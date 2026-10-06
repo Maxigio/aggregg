@@ -1,6 +1,7 @@
 'use strict';
 const crypto = require('node:crypto');
 const path = require('node:path');
+const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 
 // Il mount non attiva invio SMTP o storage esterno.
 function mount(app, { account, accessi, client, origine, proxyAttendibili, trasporto, ora = () => Date.now() }) {
@@ -14,6 +15,11 @@ function mount(app, { account, accessi, client, origine, proxyAttendibili, trasp
   const credenziali = body => {
     if (typeof body?.password !== 'string' || body.password.length < 15 || body.password.length > 50
         || Buffer.byteLength(body.password) > 72 || /[\r\n\0]/.test(body.password)) throw errore();
+  };
+  const pending = async token => {
+    const i = await account.invito(token);
+    if (i.stato === 'accettato') throw Object.assign(new Error('invito_non_valido'),{status:403,codice:'invito_non_valido'});
+    return i;
   };
   const admin = async req => {
     const s = accessi.sessione(req);
@@ -45,25 +51,26 @@ function mount(app, { account, accessi, client, origine, proxyAttendibili, trasp
   }, { pubblica: true }));
   app.post('/api/auth/aziende/registra', protetta(async(req,res) => {
     credenziali(req.body);
-    const i = await account.invito(req.body?.token);
+    const i = await pending(req.body?.token);
     await client.registra(i.email,req.body.password,origine+'/api/auth/aziende/pagina');
     res.json({ok:true,verificaEmail:true});
   }, { pubblica: true }));
   app.post('/api/auth/aziende/accetta', protetta(async(req,res) => {
     credenziali(req.body);
+    if (typeof req.body.operazione !== 'string' || !UUID.test(req.body.operazione)) throw errore();
     const i = await account.invito(req.body?.token);
     const p = await client.login(i.email,req.body.password);
     try {
       if (p?.mfa) throw Object.assign(new Error('accettazione_mfa_non_disponibile'),{
         status:409,codice:'accettazione_mfa_non_disponibile'});
-      if (!p?.session?.user?.emailVerified || !p.session.user.id) {
+      if (!p?.session?.user?.emailVerified || !UUID.test(p.session.user.id || '')) {
         throw Object.assign(new Error('identita_non_verificata'),{status:403,codice:'identita_non_verificata'});
       }
-      res.json(await account.accetta(p.session.user.id,req.body.token));
+      res.json(await account.accetta(p.session.user.id,req.body.token,req.body.operazione));
     } finally { if(p?.session) await client.logout(p.session).catch(()=>{}); }
   }, { pubblica: true }));
   app.post('/api/auth/aziende/verifica', protetta(async(req,res) => {
-    const i = await account.invito(req.body?.token);
+    const i = await pending(req.body?.token);
     await client.reinviaVerifica(i.email,origine+'/api/auth/aziende/pagina');
     res.json({ok:true});
   }, { pubblica: true }));

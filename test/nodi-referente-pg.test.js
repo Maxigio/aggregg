@@ -65,7 +65,7 @@ test('referente PG18: sessioni precedenti, rollback, concorrenza e journal',
       CREATE TABLE auth.users(id uuid PRIMARY KEY,email text UNIQUE NOT NULL,
         email_verified boolean NOT NULL DEFAULT true,disabled boolean NOT NULL DEFAULT false,
         password_hash text,locale varchar(3) NOT NULL DEFAULT 'en');`);
-    for (const file of FILES.filter(f => !f.endsWith('/schema-referente-sessioni.sql'))) {
+    for (const file of FILES.slice(0, FILES.indexOf('backend/nodi/schema-referente-sessioni.sql'))) {
       await sql.query(fs.readFileSync(path.join(root, file), 'utf8'));
     }
     await sql.query(`CREATE ROLE prova_reader LOGIN IN ROLE amr_accessi_lettore;
@@ -176,6 +176,30 @@ test('referente PG18: sessioni precedenti, rollback, concorrenza e journal',
     assert.equal((await sql.query("SELECT has_function_privilege('public','amr_accessi.aziende_accetta(uuid,text)','EXECUTE') ok")).rows[0].ok, false);
     await assert.rejects(writer.query('SELECT * FROM amr_accessi.persone'), { code: '42501' });
     t.diagnostic('PG reale, Auth e nodo sintetici: baseline, rollback, epoch e ricerca HTTP dopo nuovo login; nessun portale');
+    await sql.query(fs.readFileSync(path.join(root, 'backend/nodi/schema-referente-retry.sql'), 'utf8'));
+    const terza = await persona('terza@amr.invalid'), terzoInvito = await invita('terza', 'terza@amr.invalid');
+    const op = crypto.randomUUID();
+    const r = await account.accetta(terza, terzoInvito.token, op);
+    assert.equal(r.giaEseguita, false);
+    assert.equal((await account.invito(terzoInvito.token)).stato, 'accettato');
+    const doppi = await Promise.all([account.accetta(terza, terzoInvito.token, op), account.accetta(terza, terzoInvito.token, op)]);
+    assert.equal(doppi.every(r => r.giaEseguita === true), true);
+    assert.equal((await identita(terza)).epoca, 4);
+    assert.equal((await sql.query("SELECT count(*)::int n FROM amr_accessi.aziende_operazioni WHERE azienda='terza' AND tipo='accetta'")).rows[0].n, 1);
+    assert.equal((await sql.query("SELECT count(*)::int n FROM amr_backup.outbox WHERE journal->>'tipo'='accetta' AND journal->'azienda'->>'id'='terza'")).rows[0].n, 1);
+    await assert.rejects(account.accetta(terza, terzoInvito.token, crypto.randomUUID()), {codice:'invito_non_valido'});
+    await assert.rejects(account.accetta(seconda, terzoInvito.token, op), {codice:'invito_non_valido'});
+    const quarta = await persona('quarta@amr.invalid'), quartoInvito = await invita('quarta', 'quarta@amr.invalid');
+    await assert.rejects(account.accetta(quarta, quartoInvito.token, op), {codice:'operazione_in_conflitto'});
+    assert.equal((await identita(quarta)).epoca, 3, 'conflitto non modifica persona');
+    await sql.query("UPDATE amr_accessi.aziende_inviti SET scadenza=clock_timestamp()-interval '1 second',creata_il=clock_timestamp()-interval '1 day' WHERE azienda='quarta'");
+    await assert.rejects(account.accetta(quarta, quartoInvito.token, crypto.randomUUID()), {codice:'invito_non_valido'});
+    await account.attiva(manager, {id:'terza',operazione:crypto.randomUUID()});
+    await account.revocaAzienda(manager, {id:'terza',operazione:crypto.randomUUID()});
+    await assert.rejects(account.invito(terzoInvito.token), {codice:'invito_non_valido'});
+    await assert.rejects(account.accetta(terza, terzoInvito.token, op), {codice:'invito_non_valido'});
+    assert.equal((await sql.query("SELECT has_function_privilege('public','amr_accessi.aziende_accetta(uuid,text,uuid)','EXECUTE') ok")).rows[0].ok, false);
+    t.diagnostic('Retry referente: stesso ID, identità/invito estranei, scadenza, revoca e journal singolo');
     // Solo il DB della fixture corrente: rendere vuoto il dominio prima del
     // collaudo colleghi consente di riusare tutte le sue prove con la migrazione.
     await sql.query(`BEGIN; DELETE FROM amr_backup.outbox;

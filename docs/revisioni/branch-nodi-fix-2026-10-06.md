@@ -47,13 +47,48 @@ intermittente della fixture. Nessuna prova manuale con tecnologia assistiva.
 
 Fondamento: [HTML focus](https://html.spec.whatwg.org/multipage/interaction.html#focusable-area).
 
+## F2 — Retry dell'accettazione del referente
+
+Implementazione: ID operazione generato nel browser e riusato nei tentativi
+della stessa pagina. Nuova migrazione append-only `schema-referente-retry.sql`:
+la conferma richiede identità verificata, stesso invito e stessa operazione;
+non aggiunge membership, epoca o journal. Il lookup di un invito consumato
+permette solo la conferma, non signup/reinvio o una nuova accettazione. Dopo
+revoca dell'azienda o cambio del referente quel percorso non conferma l'invito.
+Una riapertura della pagina segnala l'accettazione già avvenuta e propone login.
+
+Prove controllate HTTP, Chromium e PostgreSQL reale: prima risposta persa dopo
+commit, retry con stesso ID, retry concorrenti, ID/identità/invito differenti,
+scadenza, revoca e ACL. Una sola accettazione e un solo journal; provider
+sintetico. Il nuovo test browser verifica due submit con lo stesso ID e una
+sola modifica. Il pacchetto di prima installazione contiene dieci migrazioni;
+nessuna è stata applicata al cloud. Nessuna chiamata ai portali.
+
+Review indipendente: nessun finding residuo confermato. Prima del collaudo
+PostgreSQL è stato corretto un riferimento a una colonna inesistente individuato
+durante la review. HTTP/packaging: 12 pass; nuovo test browser: 1 pass; prova PG
+conclusa, con cleanup della sola fixture. Un timeout del test browser dipendeva
+da una navigazione nello stesso documento: la riapertura viene ora provata con
+reload, senza attribuire quell'errore all'app.
+
+Fondamento: riuso del protocollo già presente per i colleghi e
+[RFC 9110, idempotenza](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2.2).
+La garanzia del POST deriva dall'ID e dai controlli SQL, non dal metodo HTTP.
+
+## Decisioni confermate
+
+- C1: la revoca annulla i tentativi già creati dal backend. Il tentativo va legato
+  all'email e all'epoca SQL prima di Nhost, senza adottare una nuova epoca dopo.
+  L'ordine è quello del backend/SQL, non dell'arrivo dei clic in rete. Un nuovo
+  login dopo revoca resta possibile; i permessi commerciali rimangono negati.
+- C4: per ora accettazione senza challenge MFA. Le identità con MFA già attiva
+  restano rifiutate esplicitamente; il secondo fattore non viene aggirato.
+
 ## Lavoro restante
 
-- F2: retry idempotente dell'accettazione del referente, senza nuova membership.
 - F3: risposte tardive dei filtri e continuazioni della vecchia identità.
 - F5: annuncio accessibile del conteggio risultati.
-- C1/C4: politica dei login pendenti durante revoca e accettazione con MFA;
-  interview aperta, nessuna decisione presunta.
+- C1: implementare e collaudare la politica dei login pendenti concordata.
 - C2/C3: misurare retry menu/dettagli e traffico idle del worker con fonti simulate.
 - Ingress staging: diagnosi remota e aggiornamento conservano il proprio gate.
 - M2: collegamento solo stato successivo al collaudo staging; produzione esclusa.

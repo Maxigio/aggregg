@@ -28,6 +28,7 @@
   const $ = id => root.querySelector('#account-' + id);
   let token = incorporato ? '' : location.hash.slice(1), occupato = false, revisione = 0;
   let revocaInCorso = null, persona = null;
+  const accettazione = crypto.randomUUID();
   const avvisoSessioni = document.createElement('p');
   avvisoSessioni.id = 'account-sessioni-avviso'; avvisoSessioni.hidden = true;
   avvisoSessioni.setAttribute('role', 'status'); $('sessioni-panel').append(avvisoSessioni);
@@ -335,9 +336,9 @@
   });
   $('accetta').addEventListener('submit', e => {
     e.preventDefault(); azione(async () => {
-      await aziende('accetta', { token, password: e.target.elements.password.value });
+      await aziende('accetta', { token, password: e.target.elements.password.value, operazione: accettazione });
       token = ''; $('destinatario').hidden = true;
-      $('stato').textContent = 'Invito accettato. Le ricerche restano bloccate fino all’attivazione dell’Admin.';
+      $('stato').textContent = 'Invito accettato. Accedi nuovamente con il tuo account; le ricerche restano bloccate fino all’attivazione dell’Admin.';
     });
   });
   $('reinvia').addEventListener('click', () => azione(async () => {
@@ -346,6 +347,11 @@
   await azione(async () => {
     if (token) {
       const i = await aziende('invito', { token });
+      if (i.stato === 'accettato') {
+        token = ''; $('destinatario').hidden = true;
+        $('stato').textContent = 'Invito già accettato. Accedi con il tuo account; l’Admin gestisce l’attivazione.';
+        return;
+      }
       $('invito').textContent = 'Destinatario: ' + i.email; $('destinatario').hidden = false;
       $('sessione-aggiorna').hidden = true;
       $('sessione').textContent = 'Invito del referente · nessun accesso Admin richiesto per accettarlo.';
