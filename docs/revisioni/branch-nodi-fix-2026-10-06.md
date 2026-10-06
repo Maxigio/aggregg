@@ -32,11 +32,26 @@ Gate: migrazione collaudata localmente, non applicata allo staging né all'M2.
 Il pacchetto di prima installazione include ora nove migrazioni. Il guard del
 collaudo rifiuta anche un candidato privo di uno dei file prima di contattare SQL.
 
+## F4 — Focus dopo modifica dei colleghi
+
+Implementazione: il fallback avviene nel `finally` dell'azione, dopo la
+riabilitazione dei controlli. Richiede controllo originario rimosso, focus sul
+body, stessa versione/azienda e destinazione visibile; non sottrae il focus
+spostato dall'utente. Tolto il precedente tentativo su un pulsante disabilitato.
+
+Prove: test in Chromium reale con backend sintetico, revoca riuscita e fallback
+su Aggiorna; controprova con focus spostato su un input durante l'attesa e risposta
+tardiva dopo logout. Review indipendente senza finding confermati. Il polling
+iniziale del test attende anche la presenza del template, evitando un errore
+intermittente della fixture. Nessuna prova manuale con tecnologia assistiva.
+
+Fondamento: [HTML focus](https://html.spec.whatwg.org/multipage/interaction.html#focusable-area).
+
 ## Lavoro restante
 
 - F2: retry idempotente dell'accettazione del referente, senza nuova membership.
 - F3: risposte tardive dei filtri e continuazioni della vecchia identità.
-- F4/F5: focus dopo revoca e annuncio accessibile del conteggio risultati.
+- F5: annuncio accessibile del conteggio risultati.
 - C1/C4: politica dei login pendenti durante revoca e accettazione con MFA;
   interview aperta, nessuna decisione presunta.
 - C2/C3: misurare retry menu/dettagli e traffico idle del worker con fonti simulate.

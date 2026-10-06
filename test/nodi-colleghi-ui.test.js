@@ -36,7 +36,7 @@ test('colleghi UI: frammento embedded, testo sicuro, idempotenza e risposta tard
     browser=await chromium.launch({headless:true,executablePath:browserPath});
     const page=await browser.newPage(); const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(origine+'/');
-    await page.waitForFunction(()=>document.querySelector('#colleghi-azienda select').options.length===3);
+    await page.waitForFunction(()=>document.querySelector('#colleghi-azienda select')?.options.length===3);
     assert.match(await page.locator('#colleghi-azienda select').textContent(),/Azienda principale/);
     assert.equal(await page.locator('[data-colleghi-prototipo] .solo-pagina').count(),0);
     await page.locator('#colleghi-azienda select').selectOption('prova');
@@ -85,8 +85,20 @@ test('colleghi UI: frammento embedded, testo sicuro, idempotenza e risposta tard
     await page.locator('#colleghi-aggiorna').click();
     await page.getByRole('button',{name:'Revoca collega'}).click();
     await page.waitForFunction(()=>!document.querySelector('#colleghi-elenco').textContent.includes('collega@amr.invalid'));
+    await page.waitForFunction(()=>!document.querySelector('#colleghi-aggiorna').disabled);
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'colleghi-aggiorna');
     const revoche=richieste.filter(r=>r.tipo==='revoca');assert.equal(revoche.length,2);
     assert.notEqual(revoche[0].operazione,revoche[1].operazione);
+    membri.push({persona:collega,email:'collega@amr.invalid',referente:false,attiva:true});
+    await page.locator('#colleghi-aggiorna').click();
+    await page.waitForFunction(()=>!document.querySelector('#colleghi-aggiorna').disabled);
+    let liberaFocus;attesa=new Promise(r=>{liberaFocus=r;});
+    await page.getByRole('button',{name:'Revoca collega'}).click();
+    await page.locator('#colleghi-invita input').focus();
+    liberaFocus();attesa=null;
+    await page.waitForFunction(()=>!document.querySelector('#colleghi-aggiorna').disabled);
+    assert.equal(await page.evaluate(()=>document.activeElement===document.querySelector('#colleghi-invita input')),true,
+      'il completamento non deve sottrarre il focus spostato dall’utente');
     let libera;attesa=new Promise(r=>{libera=r;});
     const arrivata=new Promise(resolve=>page.once('request',r=>{if(r.url().endsWith('/api/auth/me'))resolve();}));
     await page.locator('#colleghi-aggiorna').click();await arrivata;

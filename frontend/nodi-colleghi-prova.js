@@ -53,6 +53,7 @@
   }
   async function azione(fn) {
     if (occupato) return;
+    const focus=document.activeElement, aziendaIniziale=azienda;
     occupato=true; const v=versione; $('stato').textContent='';
     root.querySelectorAll('button').forEach(b=>b.disabled=true);
     try { await fn(); }
@@ -62,6 +63,13 @@
     finally {
       occupato=false; root.querySelectorAll('button').forEach(b=>b.disabled=false);
       root.querySelectorAll('input[type=password]').forEach(i=>i.value='');
+      // Ripristinare soltanto il focus perso rimuovendo il controllo azionato.
+      // Attendere la riabilitazione e non sottrarre il focus spostato dall'utente.
+      const destinazione=$('aggiorna');
+      if (v===versione && aziendaIniziale===azienda && focus && !focus.isConnected
+        && document.activeElement===document.body && destinazione.getClientRects().length) {
+        destinazione.focus({preventScroll:true});
+      }
       if (aggiornamentoRichiesto) { aggiornamentoRichiesto=false; void azione(sessione); }
     }
   }
@@ -95,7 +103,7 @@
       b.addEventListener('click',()=>azione(async()=>{
         await modifica(verbo,dati);
         if (verbo==='revoca-invito') $('consegna').replaceChildren();
-        $('stato').textContent='Operazione confermata.'; await elenco(); $('aggiorna').focus();
+        $('stato').textContent='Operazione confermata.'; await elenco();
       })); box.append(b);
     }
     for (const m of data.membri) {
