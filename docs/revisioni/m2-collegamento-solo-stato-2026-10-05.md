@@ -762,3 +762,25 @@ Restano invariati il blocco 403 dello staging, l'autorizzazione pendente della
 sonda remota e il gate M2 `--solo-stato`. Il report distingue checkout,
 immagine candidata e ultima versione remota verificata: nessun nuovo deploy
 o collegamento è attestato da questo commit.
+
+### Correzioni locali successive alla review del 6 ottobre
+
+Il [registro delle correzioni](/Volumes/MAIN/BananaChePrezzi-main/docs/revisioni/branch-nodi-fix-2026-10-06.md)
+documenta F1–F5 e la decisione C1 ora implementate, le controprove e i limiti.
+L'utente ha rinviato il protocollo breve di menu/dettagli al collaudo staging:
+non è stato modificato. Le nuove migrazioni sono tre, append-only; il pacchetto
+di prima installazione contiene undici migrazioni e non va riapplicato al DB
+esistente. L'aggiornamento remoto richiede backup/restore e un proprio gate.
+
+Queste correzioni e le prove Auth/PostgreSQL locali non attestano una nuova
+immagine distribuita, la risoluzione dell'ingress o un collegamento M2. Nessuna
+operazione remota è stata eseguita in questo incremento; resta la sequenza
+diagnosi ingress → staging verificato → M2 solo stato/compatibilità.
+
+Il gate locale resta distinto: durante il collaudo Auth/PostgreSQL 18 è
+ricomparso un `23514` nell'accettazione del referente. Il rifiuto è verificato,
+la causa non ancora attribuita. Aggiunta diagnostica limitata ai nomi noti
+dei CHECK, con prove privacy e osservatori temporanei della sola fixture;
+vincoli, scadenze e SQL applicativo non sono stati indeboliti. Un successivo
+PASS locale, anche strumentato, non dimostra la risoluzione del precedente
+episodio né autorizza l'aggiornamento remoto o il collegamento M2.

@@ -8,6 +8,8 @@ const FUNZIONI = new Set(['amr_accessi.aziende_invita', 'amr_accessi.aziende_acc
   'amr_accessi.colleghi_quota', 'amr_accessi.colleghi_posti', 'amr_backup.accoda_operazione']);
 const DOMINI = new Set(['operazione_non_disponibile', 'invito_non_valido', 'referente_non_valido',
   'quota_persone', 'quota_aziende', 'appartenenza_esistente', 'azienda_non_pronta']);
+const VINCOLI = new Set(['aziende_prova_stato', 'aziende_inviti_check',
+  'aziende_inviti_check1', 'aziende_inviti_check2']);
 
 // Osserva esclusivamente il pool della fixture, prima che il dominio mascheri
 // gli errori. Nessuna query aggiuntiva, lettura dei parametri o diagnostica raw.
@@ -34,7 +36,9 @@ function osservaPool(pool, { scrivi, adesso = () => performance.now() }) {
           if (Number.isSafeInteger(pool[nome]) && pool[nome] >= 0) contatori[nome] = pool[nome];
         }
         scrivi({ operazione, tipo, sqlstate, ms: Math.max(0, Math.round(adesso() - iniziata)),
-          dominio: DOMINI.has(e?.message) ? e.message : null, funzioni, pool: contatori });
+          dominio: DOMINI.has(e?.message) ? e.message : null,
+          vincolo: sqlstate && VINCOLI.has(e?.constraint) ? e.constraint : null,
+          funzioni, pool: contatori });
       } catch { /* La diagnostica non cambia mai l'esito della query. */ }
     }
     const callback = args.at(-1);

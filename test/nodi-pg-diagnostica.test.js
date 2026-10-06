@@ -18,10 +18,23 @@ test('diagnostica PG: errore e parametri originali conservati, solo allowlist in
   await assert.rejects(pool.query(sql, params), e => e === error);
   assert.equal(args[0][1], params);
   assert.deepEqual(output, [{ operazione: 'aziende_accetta', tipo: 'server_sql', sqlstate: '23514', ms: 0,
-    dominio: null, funzioni: [{ funzione: 'amr_accessi.aziende_accetta', riga: 41 }],
+    dominio: null, vincolo: null, funzioni: [{ funzione: 'amr_accessi.aziende_accetta', riga: 41 }],
     pool: { totalCount: 4, idleCount: 2, waitingCount: 1 } }]);
   assert.doesNotMatch(JSON.stringify(output), /sentinella/);
   ripristina(); assert.equal(pool.query, originale);
+});
+
+test('diagnostica PG: nome CHECK solo dalla allowlist, senza detail o nomi arbitrari',async()=>{
+  const ammessi=['aziende_prova_stato','aziende_inviti_check','aziende_inviti_check1','aziende_inviti_check2'];
+  for(const vincolo of [...ammessi,'email-sentinella','aziende_sentinella','aziende_inviti_scadenza_check',undefined]){
+    const error=Object.assign(new DatabaseError('dato-sentinella',0,'error'),{
+      code:'23514',constraint:vincolo,detail:'token-sentinella'});
+    const eventi=[],pool={query:()=>Promise.reject(error)};
+    osservaPool(pool,{scrivi:e=>eventi.push(e)});
+    await assert.rejects(pool.query(sql),e=>e===error);
+    assert.equal(eventi[0].vincolo,ammessi.includes(vincolo)?vincolo:null);
+    assert.doesNotMatch(JSON.stringify(eventi),/sentinella/);
+  }
 });
 
 test('diagnostica PG: EPIPE del socket non diventa un SQLSTATE', async () => {
