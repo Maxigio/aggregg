@@ -55,15 +55,17 @@ function validaStato(stato) {
   chiavi(c.healthCheck, ['port', 'initialDelaySeconds', 'probePeriodSeconds']);
   if (c.healthCheck.port !== 3000 || c.healthCheck.initialDelaySeconds !== 30 || c.healthCheck.probePeriodSeconds !== 60) errore();
   const nomi = [...Object.keys(PUBBLICHE), ...SEGRETE, 'AMR_CENTRO_ORIGINE', 'AMR_NHOST_AUTH_URL', 'AMR_CENTRO_PROXY_IP'];
-  if (!Array.isArray(c.environment) || c.environment.length !== nomi.length) errore();
+  const opzionale = 'AMR_CENTRO_PROPRIETARIO_ID';
+  if (!Array.isArray(c.environment) || ![nomi.length, nomi.length + 1].includes(c.environment.length)) errore();
   const env = Object.create(null);
   for (const voce of c.environment) {
     chiavi(voce, ['name', 'value']);
-    if (!nomi.includes(voce.name) || typeof voce.value !== 'string' || Object.hasOwn(env, voce.name)) errore();
+    if ((!nomi.includes(voce.name) && voce.name !== opzionale) || typeof voce.value !== 'string' || Object.hasOwn(env, voce.name)) errore();
     env[voce.name] = voce.value;
   }
   for (const [nome, value] of Object.entries(PUBBLICHE)) if (env[nome] !== value) errore();
   for (const nome of SEGRETE) if (env[nome] !== riferimento(nome)) errore();
+  if (env[opzionale] !== undefined && env[opzionale] !== riferimento(opzionale)) errore();
   for (const [nome, value] of [['AMR_CENTRO_ORIGINE', ORIGINE], ['AMR_NHOST_AUTH_URL', AUTH]]) {
     if (env[nome] !== value && env[nome] !== riferimento(nome)) errore();
   }
@@ -72,6 +74,7 @@ function validaStato(stato) {
     && (!proxy || proxy.length > 512 || proxy.split(',').some(ip => !net.isIP(ip.trim())))) errore();
   // Riusa la validazione runtime con soli valori sintetici. Non risolve segreti Nhost.
   configura({ ...env, AMR_CENTRO_ORIGINE: ORIGINE, AMR_NHOST_AUTH_URL: AUTH,
+    ...(env[opzionale] === undefined ? {} : { [opzionale]: '00000000-0000-4000-8000-000000000001' }),
     AMR_CENTRO_PROXY_IP: proxy === riferimento('AMR_CENTRO_PROXY_IP') ? '127.0.0.1' : proxy,
     AMR_NODI_TOKENS: JSON.stringify({ sintetico: 'a'.repeat(64) }), AMR_PG_DATABASE: 'postgres',
     ...Object.fromEntries(SEGRETE.filter(n => n.endsWith('_PASSWORD')).map(n => [n, 'sintetico-non-segreto'])) });

@@ -15,12 +15,12 @@ function jar(r, old='') {
   for(const h of r.headers['set-cookie'] || []) {const [k,v]=h.split(';')[0].split('=');v?out.set(k,v):out.delete(k);}
   return [...out].map(([k,v])=>k+'='+v).join('; ');
 }
-async function fixture({admin=false,pending=false}={}) {
+async function fixture({admin=false,pending=false,proprietarioId=null}={}) {
  const directory=fs.mkdtempSync('/private/tmp/amr-account-review-');
  let now=Date.now(), resolveLogin, loginEntrato, ruoloLetture=0, rilasciProvider=0;
  const loginIniziato=new Promise(r=>loginEntrato=r);
  const origine='https://amr.invalid'; let accessi;
- const centro=creaCentro({directory,tokens:{fixture:'a'.repeat(64)},compatibilita:{protocollo:1,release:'b'.repeat(40),codice:'c'.repeat(64),cataloghi:'d'.repeat(64)},
+ const centro=creaCentro({directory,tokens:{fixture:'a'.repeat(64)},proprietarioId,compatibilita:{protocollo:1,release:'b'.repeat(40),codice:'c'.repeat(64),cataloghi:'d'.repeat(64)},
   trasporto:{origine,proxyAttendibili:['127.0.0.1']},
   inizializzaAccessi:app=>{
    accessi=mount(app,{origine,trasporto:{origine,proxyAttendibili:['127.0.0.1']},cookiePath:'/',ora:()=>now,
@@ -110,6 +110,17 @@ test('stato diagnostico RAM: richiede Admin MFA anche se il registro SQL non è 
   assert.equal((await admin.request('/api/auth/logout',{body:{},cookie})).status,200);
   assert.equal((await admin.request('/api/admin/diagnostica',{cookie})).status,401);
  } finally {await referente.close();await admin.close();}
+});
+
+test('ricerca personale: sessione del login MFA senza azienda, logout revoca il nuovo ingresso', async () => {
+ const f=await fixture({admin:true,proprietarioId:persona});try {
+  assert.equal((await f.request('/api/admin/ricerca/filtri')).status,401);
+  const cookie=await f.login();
+  assert.equal((await f.request('/api/admin/ricerca/filtri',{cookie})).status,200);
+  assert.equal((await f.request('/api/filtri',{cookie})).status,403);
+  assert.equal((await f.request('/api/auth/logout',{body:{},cookie})).status,200);
+  assert.equal((await f.request('/api/admin/ricerca/filtri',{cookie})).status,401);
+ }finally{await f.close();}
 });
 
 test('sessioni: trenta richieste anonime o letture non impediscono la revoca',async()=>{

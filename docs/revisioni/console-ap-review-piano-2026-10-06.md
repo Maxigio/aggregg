@@ -384,3 +384,84 @@ SQLite in RAM/HTTP: 202 interrotto prima del ritorno del provider e non
 rilanciato dopo ON/OFF; ricerca condivisa già iniziata con failover 200;
 UPDATE SQLite rifiutato senza cambiare ammissione o stato persistente.
 La ricevuta principale resta quella Node 24.21.0 citata sopra.
+
+## Incremento 6 — ricerca diagnostica personale, API senza impersonazione
+
+L'utente ha approvato ID Nhost personale + Admin/MFA, separato dalle aziende.
+`backend/nodi/ricerca-proprietario.js` verifica l'identità corrente tramite
+lo stesso provider (`admin:true`, senza attivare il requisito commerciale del
+parametro `tipo`), confronta la persona restituita con la configurazione e
+ammette soltanto Auto/Moto. Errori del provider negano l'accesso senza
+trasmetterne messaggi grezzi. Nessuna modifica alla sessione originale né
+inserimento in aziende/membri commerciali.
+
+Contratti preparati, ancora senza frontend:
+
+- `POST /api/admin/ricerche`: avvio con ID, GET/DELETE sul relativo ID;
+- `/api/admin/ricerca/filtri`, `/brands`, `/models`, `/versioni`, `/detail`:
+  stessi handler del percorso clienti, con verificatore personale prima
+  dell'accodamento, al poll e alla consegna;
+- il risultato mantiene formato, cataloghi, filtri e scraper esistenti.
+  L'ID appartiene alla sessione originale e al suo contesto; il ruolo corrente
+  viene verificato anche alla rilettura di un risultato concluso.
+
+Un'unica istanza del registry e dei limiter conserva cap globale, quote per
+persona, 50/100 ID, deadline e TTL. I due ingressi non raddoppiano RAM o posti.
+Le prime pagine dei clienti continuano a condividere il lavoro identico fra
+loro; quelle personali hanno un contesto distinto. Il campo tecnico `azienda`
+del job contiene `diagnostica:<UUID>`, trasmesso a `_cacheScope`: non è una
+licenza o una riga commerciale. Affinità/cursori restano separati. Le firme
+dei dettagli includono anche il contesto, impedendo l'attraversamento fra i
+due ingressi perfino quando una sessione è autorizzata su entrambi.
+
+Configurazione opzionale `AMR_CENTRO_PROPRIETARIO_ID`: se assente l'ingresso
+personale resta negato; un valore malformato impedisce l'avvio. Il pacchetto
+staging accetta soltanto il riferimento `{{ secrets.AMR_CENTRO_PROPRIETARIO_ID }}`,
+lo preserva in aggiornamento e rollback e valida con UUID sintetico senza
+risolverlo. Nessun identificatore reale letto, richiesto in chat o configurato
+remotamente. Prima dell'attivazione servirà inserirlo nell'ambiente autorizzato.
+
+Debunking progettuale indipendente: ownership, chiavi di condivisione e
+verificatori hardcoded impedivano una semplice sostituzione del guard con
+`admin:true`. Tutti e tre i passaggi sono stati adattati. Il rischio condizionato
+di attraversamento delle firme nella stessa sessione è coperto dal contesto
+firmato. Questo non cambia le autorizzazioni commerciali delle API clienti.
+
+Ricevuta del gate esteso, Node 24.21.0, SQLite/HTTP locali e provider simulato,
+dotenv escluso: `/private/tmp/amr-proprietario-gate-Z2rmhm/test.tap`,
+**164 pass, 2 skip**, zero fail/cancelled. Gate finale degli endpoint, quote,
+firme, login/logout, avvio Run e pacchetto:
+`/private/tmp/amr-proprietario-finali-vWVIf4/test.tap`, **79 pass, 2 skip**.
+Gli skip sono i gate opt-in del pacchetto sul vero HEAD e della CLI Nhost:
+non dimostrano build o deploy del nuovo candidato.
+
+Prove e controprove: Admin senza azienda autorizzato solo sul nuovo percorso;
+cliente, altro Admin, MFA assente e revoca negati; ID/DELETE/retry isolati per
+sessione e contesto; RAM/ID/TTL condivisi; cap personale e globale condivisi
+anche con l'ingresso clienti; stessi menu/dettagli; firme non trasferibili;
+failover 429 e pagina successiva con stessi cursori e affinità. Login/MFA
+sono il modulo reale AMR con provider sintetico, non un login Nhost remoto.
+
+Riferimento: [OWASP Authorization](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html)
+per least privilege, controllo su ogni richiesta e proprietà delle risorse.
+L'ID personale configurato è un vincolo aggiuntivo, non una credenziale e non
+sostituisce sessione, ruolo attuale o MFA. Nessuna nuova dipendenza, richiesta
+ai portali, modifica frontend, deploy o connessione M2.
+
+Review finale indipendente rispetto a `b270694`: nessun finding confermato.
+33/33 prove mirate su Node 26.4.0, inclusi controtest temporanei senza modifiche:
+revoca dopo il primario impedisce il recupero; recupero autorizzato mantiene
+lo scope; revoca dopo il poll impedisce la consegna di cataloghi/dettagli;
+ID e firme non attraversano contesti/sessioni. Il reviewer ha letto la
+ricevuta Node 24.21.0 del gate esteso; Node 26 non sostituisce tale gate.
+
+### Prossimo confine operativo
+
+Manutenzione e ricerca personale sono contratti backend implementati e
+verificati localmente. La console attuale non li usa ancora. Prima della UI:
+preparare il candidato e il backup ripristinabile, chiudere ingress/login/MFA
+e compatibilità nello staging, poi collegare M2 **solo stato** con processo
+isolato. Le prove live M2 richiedono ancora pause e limiti coordinati con la
+produzione dello stesso IP. Il solo routing simulato non chiude questo gate.
+Capacità diagnostica, storage e policy delle sonde/notifiche restano incrementi
+distinti; nessuna delle due nuove funzioni autorizza un deploy implicito.

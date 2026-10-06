@@ -15,6 +15,7 @@ const { creaBudgetRicerca, creaLimitiRicerca, TEMPO_RICERCA_MS } = require('./li
 const compat = require('./compatibilita-nodo');
 const { creaRicercheHttp } = require('./ricerche-http');
 const { misuraRegistro } = require('./diagnostica-risorse');
+const { creaRicercaProprietario, idValido: idProprietarioValido } = require('./ricerca-proprietario');
 
 const MODULI = { aziendaA: ['auto', 'moto'], aziendaB: ['moto'] };
 const SETTE_GIORNI = 7 * 86400000;
@@ -40,9 +41,13 @@ function filtriAmmessi(query) {
 function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FINO_AL,
   timeoutRicercaMs = TEMPO_RICERCA_MS, oraMono = () => performance.now(),
   maxPersona = 2, maxTotale = 60,
-  adminLocale = false, accountProva = null, inizializzaAccessi = null, compatibilita = null, trasporto = null }) {
+  adminLocale = false, accountProva = null, inizializzaAccessi = null, compatibilita = null, trasporto = null,
+  proprietarioId = null }) {
   // Validare prima di aprire il registro o inizializzare altri provider.
   const limitiRicerca = creaLimitiRicerca({ timeoutMs: timeoutRicercaMs, maxPersona, maxTotale, oraMono });
+  if (proprietarioId !== null && (!idProprietarioValido(proprietarioId) || !inizializzaAccessi)) {
+    throw new Error('configurazione_proprietario_non_valida');
+  }
   const releaseAttesa = compatibilita === null ? null : compat.valida(compatibilita);
   const revisioneRicerca = releaseAttesa ? JSON.stringify(releaseAttesa) : REVISIONE;
   if (accountProva && inizializzaAccessi) throw new Error('due provider di accesso non ammessi');
@@ -174,8 +179,11 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   let sequenzaAffinita = 0;
   const epocaCentro = crypto.randomUUID();
   const autorizzazioniDettagli = creaAutorizzazioniDettagli({ ora });
-  let accessi;
-  try { accessi = inizializzaAccessi ? inizializzaAccessi(app) : null; }
+  let accessi, proprietario;
+  try {
+    accessi = inizializzaAccessi ? inizializzaAccessi(app) : null;
+    proprietario = creaRicercaProprietario({ identificatore: proprietarioId, accessi });
+  }
   catch(e) { clearInterval(pulizia);db.close();throw e; }
   const nodoAutorizzato = (req, res, next) => stessoToken(req.get('x-amr-node-token'),
     req.get('x-amr-node-id'))
@@ -357,7 +365,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     const destinatari = new Set();
     const verifica = async () => {
       if (res.destroyed) throw Object.assign(new Error('richiesta interrotta'), { interrotto: true });
-      await verificaSessione(req.sessioneProva, tipo);
+      await verificaDellaRichiesta(req, tipo);
       if (res.destroyed) throw Object.assign(new Error('richiesta interrotta'), { interrotto: true });
     };
     destinatari.add(verifica);
@@ -547,7 +555,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       const input = filtriAmmessi(query);
       const prima = Number(input.fetta || 0) === 0 && !input.fonti
         && input.subitoMainStart == null && input.subitoRecuperoStart == null;
-      const chiave = prima ? revisioneRicerca + ':' + JSON.stringify(Object.entries(input).sort(([a], [b]) => a.localeCompare(b))) : null;
+      const chiave = prima ? JSON.stringify([richiesta?.contesto || 'cliente', revisioneRicerca,
+        Object.entries(input).sort(([a], [b]) => a.localeCompare(b))]) : null;
       let voce = prima ? condivise.get(chiave) : null;
       const esistente = voce && !voce.budget.signal.aborted;
       let meta;
@@ -924,10 +933,27 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       if (parsed.errors) throw Object.assign(new Error('ricerca_non_valida'), { status: 400, codice: 'ricerca_non_valida' });
       return query;
     },
-    consegna: (body, s, tipo) => ({ ...body, risultati: (body.risultati || [])
-      .map(r => ({ ...r, accessoDettagli: autorizzazioniDettagli.emetti(s, r.url, tipo) })) }),
+    consegna: (body, s, tipo, contesto) => ({ ...body, risultati: (body.risultati || [])
+      .map(r => ({ ...r, accessoDettagli: autorizzazioniDettagli.emetti(s, r.url, tipo, contesto) })) }),
   });
   ricercheHttp.mount(app);
+  ricercheHttp.mount(app, { percorso: '/api/admin/ricerche', contesto: 'proprietario',
+    verifica: proprietario.verifica, aziendaSessione: proprietario.ambitoSessione });
+  app.use('/api/admin/ricerca', async (req, res, next) => {
+    const s = sessione(req);
+    try {
+      const c = await proprietario.verifica(s);
+      req.sessioneProva = s; req.azienda = c.azienda; req.moduli = c.moduli;
+      req.contestoRicerca = 'proprietario';
+      req.verificaRicerca = tipo => proprietario.verifica(s, tipo);
+      next();
+    } catch (e) { res.status(e.status || 503).json({ codice: e.codice || 'autorizzazione_non_disponibile' }); }
+  });
+  app.get('/api/admin/ricerca/filtri', filtriRicerca);
+  for (const [percorso, operazione] of [['brands','marche'],['models','modelli'],['versioni','versioni']]) {
+    app.get('/api/admin/ricerca/' + percorso, menuRicerca(operazione));
+  }
+  app.get('/api/admin/ricerca/detail', dettaglioRicerca);
   function erroreRicerca(req, res, e) {
     if (res.destroyed || res.writableEnded) return;
     const incerto = !!e.incerto || (e.codice === 'ricerca_scaduta' && !!req.limiteRicerca?.operazione?.avviati.size);
@@ -967,11 +993,12 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     }
   });
   app.get('/api/test/me', (req, res) => res.json({ azienda: req.azienda, moduli: req.moduli }));
-  app.get('/api/filtri', (req, res) => res.json({
+  function filtriRicerca(req, res) { res.json({
     regioni: [...new Set(Object.values(province).map(p => p.regione))].sort((a, b) => a.localeCompare(b, 'it')),
     filtriAuto: filtriAuto.NOMI.map(nome => ({ nome,
       etichetta: filtriAuto.TAB.filtri[nome].etichetta, voci: filtriAuto.voci(nome) })),
-  }));
+  }); }
+  app.get('/api/filtri', filtriRicerca);
   app.get('/api/search', async (req, res) => {
     if (!req.moduli.includes(req.query.tipo)) return res.sendStatus(403);
     const richiesta = req.limiteRicerca;
@@ -990,7 +1017,13 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     finally { richiesta.termina(); }
   });
   for (const [percorso, operazione] of [['brands','marche'],['models','modelli'],['versioni','versioni']]) {
-    app.get('/api/' + percorso, async (req, res) => {
+    app.get('/api/' + percorso, menuRicerca(operazione));
+  }
+  function verificaDellaRichiesta(req, tipo) {
+    return req.verificaRicerca ? req.verificaRicerca(tipo) : verificaSessione(req.sessioneProva, tipo);
+  }
+  function menuRicerca(operazione) {
+    return async (req, res) => {
       if (!req.moduli.includes(req.query.tipo)) return res.sendStatus(403);
       const input = Object.fromEntries(Object.entries(req.query).filter(([k, v]) =>
         ['tipo','marca','modello'].includes(k) && typeof v === 'string' && v.length <= 120));
@@ -1003,17 +1036,18 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         const out = await assegna(() => sceglie([]), { idLavoro: crypto.randomUUID(), azienda: req.azienda,
           operazione, input, destinatari: destinatario.destinatari,
           assegnazioneMs: Math.round(performance.now() - assegnazioneDa) });
-        await verificaSessione(req.sessioneProva, req.query.tipo);
+        await verificaDellaRichiesta(req, req.query.tipo);
         res.status(out.status).json(out.body);
       } catch (e) { if (!res.destroyed) res.status(e.status === 403 ? 403 : e.incerto ? 504 : 503)
         .json({ error: e.message, interrotto: e.status === 403 || !!e.interrotto, incerto: !!e.incerto }); }
       finally { destinatario.termina(); }
-    });
+    };
   }
-  app.get('/api/detail', async (req, res) => {
+  app.get('/api/detail', dettaglioRicerca);
+  async function dettaglioRicerca(req, res) {
     const url = req.query.url;
     if (typeof url !== 'string' || url.length > 2048) return res.sendStatus(400);
-    const tipo = autorizzazioniDettagli.verifica(req.sessioneProva,url,req.query.accessoDettagli);
+    const tipo = autorizzazioniDettagli.verifica(req.sessioneProva,url,req.query.accessoDettagli, req.contestoRicerca);
     if (!tipo || !req.moduli.includes(tipo)) return res.sendStatus(403);
     const destinatario = destinatarioHttp(req, res, tipo);
     try {
@@ -1032,12 +1066,12 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         operazione: 'dettaglio', fonte, input: { url },
         destinatari: destinatario.destinatari,
         assegnazioneMs: Math.round(performance.now() - assegnazioneDa) });
-      await verificaSessione(req.sessioneProva, tipo);
+      await verificaDellaRichiesta(req, tipo);
       res.status(out.status).json(out.body);
     } catch (e) { if (!res.destroyed) res.status(e.status === 403 ? 403 : e.incerto ? 504 : 503)
       .json({ error: e.message, interrotto: e.status === 403 || !!e.interrotto, incerto: !!e.incerto }); }
     finally { destinatario.termina(); }
-  });
+  }
   app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'prototipo.html')));
   app.get('/prototipo.css', (req, res) => res.type('css').sendFile(path.join(__dirname, '../../frontend/nodi-prototipo.css')));
   app.get('/prototipo.js', (req, res) => res.type('js').sendFile(path.join(__dirname, '../../frontend/nodi-prototipo.js')));

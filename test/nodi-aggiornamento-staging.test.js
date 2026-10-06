@@ -75,6 +75,18 @@ test('staging: anche origine, auth e proxy possono rimanere riferimenti non riso
   assert.deepEqual(validaStato(s), s);
   assert.ok(toml(s.config).includes('{{ secrets.AMR_NODI_TOKENS }}'));
 });
+test('staging: ID proprietario opzionale solo come riferimento, preservato al rollback', () => {
+  const s = stato(), name = 'AMR_CENTRO_PROPRIETARIO_ID';
+  s.config.environment.push({ name, value: '{{ secrets.' + name + ' }}' });
+  assert.deepEqual(validaStato(s), s);
+  const p = preparaPiano({ stato: s, candidato: wire('b'), image: digest('b') });
+  assert.deepEqual(p.configurazioni['05-rollback-avvio'], s.config);
+  assert.ok(toml(p.configurazioni['03-candidato-avvio']).includes('{{ secrets.' + name + ' }}'));
+  for (const value of ['00000000-0000-4000-8000-000000000001', '{{ secrets.ALTRO }}', '']) {
+    s.config.environment.at(-1).value = value;
+    assert.throws(() => validaStato(s), /pacchetto_staging_non_valido/);
+  }
+});
 test('staging: legge una sola FD, rifiuta symlink, JSON grande o segreti senza riportarli', t => {
   const dir = temporanea(t), file = path.join(dir, 'stato.json');
   fs.writeFileSync(file, JSON.stringify(stato())); assert.deepEqual(leggiStato(file), stato());

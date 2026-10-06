@@ -17,6 +17,7 @@ async function fixture(t, opzioni = {}) {
     ricerca: () => { chiamate++; return { status: 200, body: { risultati: [{ id: 'annuncio-sintetico' }] } }; },
     ...opzioni });
   servizio.mount(app);
+  if (opzioni.secondoIngresso) servizio.mount(app, opzioni.secondoIngresso);
   const server = await new Promise((resolve, reject) => {
     const server = app.listen(0, '127.0.0.1', () => resolve(server)); server.once('error', reject);
   });
@@ -25,10 +26,10 @@ async function fixture(t, opzioni = {}) {
     await new Promise(resolve => server.close(resolve));
   });
   const url = 'http://127.0.0.1:' + server.address().port;
-  const avvia = (id = randomUUID(), identita) => fetch(url + '/api/ricerche', { method: 'POST',
+  const avvia = (id = randomUUID(), identita, percorso = '/api/ricerche') => fetch(url + percorso, { method: 'POST',
     headers: { 'content-type': 'application/json', ...(identita ? { 'x-identita-prova': identita } : {}) },
     body: JSON.stringify({ id, input: { tipo: 'auto', marca: 'Fiat' } }) });
-  const consulta = (id, method = 'GET', identita) => fetch(url + '/api/ricerche/' + id,
+  const consulta = (id, method = 'GET', identita, percorso = '/api/ricerche') => fetch(url + percorso + '/' + id,
     { method, headers: identita ? { 'x-identita-prova': identita } : {} });
   return { avvia, consulta, tempo: n => { ora = n; }, chiamate: () => chiamate };
 }
@@ -60,6 +61,23 @@ test('ricerche HTTP: cap degli ID non si aggira con esiti piccoli, scadenza libe
   const f = await fixture(t, { maxRegistri: 1 }), id = randomUUID();
   await f.avvia(id); assert.equal((await f.avvia()).status, 503); assert.equal(f.chiamate(), 1);
   f.tempo(5000); assert.equal((await f.avvia()).status, 202); assert.equal(f.chiamate(), 2);
+});
+
+test('ricerche HTTP: due ingressi condividono cap RAM, registro ID e cleanup', async t => {
+  const percorso = '/api/admin/ricerche';
+  const f = await fixture(t, { maxRegistri: 2, maxByte: 90,
+    secondoIngresso: { percorso, contesto: 'proprietario',
+      aziendaSessione: () => 'diagnostica:fixture', verifica: async () => ({ azienda: 'diagnostica:fixture' }) } });
+  const a = randomUUID(), b = randomUUID();
+  await f.avvia(a); assert.equal((await f.avvia(b, undefined, percorso)).status, 202);
+  assert.equal((await (await f.consulta(a)).json()).esito.status, 200);
+  assert.equal((await (await f.consulta(b, 'GET', undefined, percorso)).json()).esito.body.codice, 'risultato_non_disponibile');
+  assert.equal((await f.avvia()).status, 503, 'Cap ID unico anche fra contesti');
+  assert.equal((await f.consulta(a, 'GET', undefined, percorso)).status, 404);
+  f.tempo(1000);
+  assert.equal((await f.consulta(a)).status, 410); assert.equal((await f.consulta(b, 'GET', undefined, percorso)).status, 410);
+  assert.equal((await f.avvia()).status, 503, 'Le tombstone restano conteggiate');
+  f.tempo(5000); assert.equal((await f.avvia(randomUUID(), undefined, percorso)).status, 202);
 });
 
 test('ricerche HTTP: 50 ID per persona fra sessioni, 100 per azienda e posti separati', async t => {

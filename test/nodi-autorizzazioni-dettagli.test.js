@@ -24,3 +24,13 @@ test('dettagli firmati: oltre 300 risultati, URL e sessioni separate, scadenza e
   assert.equal(auth.verifica(a,url,primo),null);
   assert.equal(auth.emetti(a,url,'moto'),null);
 });
+
+test('dettagli firmati: contesto diagnostico distinto anche nella stessa sessione', () => {
+  const auth = creaAutorizzazioniDettagli({ ora: () => 1000 }), s = { scadenza: 2000 };
+  const url = 'https://www.subito.it/moto/fixture.htm';
+  const owner = auth.emetti(s, url, 'moto', 'proprietario'), cliente = auth.emetti(s, url, 'moto');
+  assert.equal(auth.verifica(s, url, owner, 'proprietario'), 'moto');
+  assert.equal(auth.verifica(s, url, owner), null);
+  assert.equal(auth.verifica(s, url, cliente, 'proprietario'), null);
+  assert.equal(auth.verifica(s, url, cliente), 'moto');
+});

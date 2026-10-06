@@ -4,6 +4,8 @@ const path = require('node:path');
 // Configurazione esplicita dell'entrypoint remoto. Nessun .env caricato qui.
 function configura(env) {
   const errore = () => { throw new Error('configurazione_centro_run_non_valida'); };
+  const proprietarioId = env.AMR_CENTRO_PROPRIETARIO_ID ?? null;
+  if (proprietarioId !== null && !require('./ricerca-proprietario').idValido(proprietarioId)) errore();
   const intero = (nome, defaultValue, max) => {
     const n = Number(env[nome] ?? defaultValue);
     if (!Number.isSafeInteger(n) || n < 1 || n > max) errore();
@@ -42,7 +44,7 @@ function configura(env) {
       statement_timeout:2500,lock_timeout:1500,connectionTimeoutMillis:2000,query_timeout:3000 };
   }
   if (new Set(Object.values(pools).map(p=>p.user)).size!==3) errore();
-  return {origine:origine.origin,auth:auth.href,proxy,tokens,pools,
+  return {origine:origine.origin,auth:auth.href,proxy,tokens,pools,proprietarioId,
     port:intero('PORT',3000,65535),directory:env.AMR_NODI_DATA_DIR,releaseFile:env.AMR_NODI_RELEASE_FILE,
     timeoutRicercaMs:intero('AMR_NODI_RICERCA_TIMEOUT_MS',60000,300000),
     maxPersona:intero('AMR_NODI_RICERCHE_MAX_PERSONA',2,60),maxTotale:intero('AMR_NODI_RICERCHE_MAX_TOTALE',60,300)};

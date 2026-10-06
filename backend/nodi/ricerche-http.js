@@ -65,10 +65,12 @@ function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegn
     }
     r.fine = ora();
   }
-  const posseduto = (req, id) => {
+  const posseduto = (req, id, contesto, aziendaSessione) => {
     if (!idValido(id)) throw errore('ricerca_non_trovata', 404);
     const r = registri.get(id), s = sessione(req);
-    if (!r || r.sessione !== s || r.azienda !== s?.azienda) throw errore('ricerca_non_trovata', 404);
+    if (!r || r.sessione !== s || r.contesto !== contesto || r.azienda !== aziendaSessione(s)) {
+      throw errore('ricerca_non_trovata', 404);
+    }
     return r;
   };
   function rispostaErrore(res, e) {
@@ -86,8 +88,10 @@ function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegn
     try { return await posto.verifica(() => fn(s)); }
     finally { posto.termina(); }
   }
-  function mount(app) {
-    app.post('/api/ricerche', express.json({ limit: '8kb' }), async (req, res) => {
+  function mount(app, { percorso = '/api/ricerche', contesto = 'cliente',
+    verifica: verificatore = verifica, aziendaSessione = s => s?.azienda } = {}) {
+    const posseduta = (req, id) => posseduto(req, id, contesto, aziendaSessione);
+    app.post(percorso, express.json({ limit: '8kb' }), async (req, res) => {
       let richiesta, staccata = false;
       const abbandona = () => { if (!staccata && !res.writableEnded) richiesta?.budget.interrompi(); };
       res.once('close', abbandona);
@@ -101,38 +105,39 @@ function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegn
         const s = sessione(req); if (!s) throw errore('accesso_interrotto', 401);
         let r = registri.get(id);
         if (r) {
-          r = posseduto(req, id);
-          await autorizza(req, () => verifica(s, r.tipo));
+          r = posseduta(req, id);
+          await autorizza(req, () => verificatore(s, r.tipo));
           pulisci();
           if (registri.get(id) !== r) throw errore('ricerca_non_trovata', 404);
           if (r.impronta !== impronta) throw errore('chiave_ricerca_riutilizzata', 409);
-          return res.status(202).set('Retry-After', '1').set('Location', '/api/ricerche/' + id).json(metadati(r));
+          return res.status(202).set('Retry-After', '1').set('Location', percorso + '/' + id).json(metadati(r));
         }
         if (registri.size >= maxRegistri) throw errore('esiti_non_disponibili', 503);
         richiesta = limiti.ammetti(s);
         // Anche l'avvio deve rispondere brevemente se i permessi non si leggono.
-        const c = await autorizza(req, () => richiesta.verifica(() => verifica(s, query.tipo)));
+        const c = await autorizza(req, () => richiesta.verifica(() => verificatore(s, query.tipo)));
         richiesta.budget.controlla();
         if (res.destroyed || chiuso) throw errore('ricerca_abbandonata', 503);
         pulisci();
         // Nessun await fra secondo controllo e inserimento: due POST concorrenti
         // con la stessa chiave non possono creare due esecuzioni.
         if (registri.has(id)) {
-          r = posseduto(req, id);
+          r = posseduta(req, id);
           if (r.impronta !== impronta) throw errore('chiave_ricerca_riutilizzata', 409);
-          return res.status(202).set('Retry-After', '1').set('Location', '/api/ricerche/' + id).json(metadati(r));
+          return res.status(202).set('Retry-After', '1').set('Location', percorso + '/' + id).json(metadati(r));
         }
         if (registri.size >= maxRegistri) throw errore('esiti_non_disponibili', 503);
         const epocaAmmessa = ammissione();
         const persona = s.persona || s.identita?.persona || s.identita || s;
         controllaRegistri(persona, c.azienda);
-        r = { id, sessione: s, persona, azienda: c.azienda, tipo: query.tipo, impronta,
+        r = { id, sessione: s, persona, azienda: c.azienda, contesto, tipo: query.tipo, impronta,
           stato: 'in_corso', json: null, byte: 0, affinita: null, richiesta };
         registri.set(id, r); staccata = true;
         richiesta = null;
         const ammessa = r.richiesta;
         ammessa.ammissione = epocaAmmessa;
-        Promise.resolve().then(() => ricerca(c.azienda, query, () => verifica(s, query.tipo), ammessa))
+        ammessa.contesto = contesto;
+        Promise.resolve().then(() => ricerca(c.azienda, query, () => verificatore(s, query.tipo), ammessa))
           .then(out => terminale(r, { status: out.status, body: out.body }, out.registraAffinita),
             e => terminale(r, esitoErrore(e, ammessa)))
           .catch(() => terminale(r, { status: 503, body: { codice: 'ricerca_non_disponibile' } }))
@@ -142,30 +147,30 @@ function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegn
             // completamento non deve trattenere i risultati oltre il TTL.
             r.richiesta = null;
           });
-        res.status(202).set('Retry-After', '1').set('Location', '/api/ricerche/' + id).json(metadati(r));
+        res.status(202).set('Retry-After', '1').set('Location', percorso + '/' + id).json(metadati(r));
       } catch (e) { rispostaErrore(res, e); }
       finally { richiesta?.termina(); res.removeListener('close', abbandona); }
     });
-    app.get('/api/ricerche/:id', async (req, res) => {
+    app.get(percorso + '/:id', async (req, res) => {
       try {
-        pulisci(); const r = posseduto(req, req.params.id);
-        const c = await autorizza(req, s => verifica(s, r.tipo));
+        pulisci(); const r = posseduta(req, req.params.id);
+        const c = await autorizza(req, s => verificatore(s, r.tipo));
         if (res.destroyed || chiuso) return;
         pulisci();
         if (registri.get(r.id) !== r) throw errore('ricerca_non_trovata', 404);
         if (r.stato === 'in_corso') return res.set('Retry-After', '1').json(metadati(r));
         if (r.json === null) return res.status(410).json({ ...metadati(r), codice: 'esito_non_disponibile' });
         const esito = JSON.parse(r.json);
-        const body = esito.status === 200 ? consegna(esito.body, r.sessione, r.tipo) : esito.body;
+        const body = esito.status === 200 ? consegna(esito.body, r.sessione, r.tipo, contesto) : esito.body;
         r.affinita?.(c.azienda);
         r.affinita = null;
         res.json({ ...metadati(r), esito: { status: esito.status, body } });
       } catch (e) { rispostaErrore(res, e); }
     });
-    app.delete('/api/ricerche/:id', async (req, res) => {
+    app.delete(percorso + '/:id', async (req, res) => {
       try {
-        pulisci(); const r = posseduto(req, req.params.id);
-        await autorizza(req, s => verifica(s, r.tipo));
+        pulisci(); const r = posseduta(req, req.params.id);
+        await autorizza(req, s => verificatore(s, r.tipo));
         pulisci();
         if (registri.get(r.id) !== r) throw errore('ricerca_non_trovata', 404);
         r.richiesta?.budget.interrompi(); libera(r);
