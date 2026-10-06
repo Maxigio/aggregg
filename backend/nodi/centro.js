@@ -15,10 +15,10 @@ const { creaBudgetRicerca, creaLimitiRicerca, TEMPO_RICERCA_MS } = require('./li
 const compat = require('./compatibilita-nodo');
 const { creaRicercheHttp } = require('./ricerche-http');
 const { misuraRegistro } = require('./diagnostica-risorse');
+const { creaRetention } = require('./diagnostica-retention');
 const { creaRicercaProprietario, idValido: idProprietarioValido } = require('./ricerca-proprietario');
 
 const MODULI = { aziendaA: ['auto', 'moto'], aziendaB: ['moto'] };
-const SETTE_GIORNI = 7 * 86400000;
 const REVISIONE = 'imac-1';
 const FINO_AL = 150000;
 const CAMPI_RICERCA = new Set(['tipo','marca','modello','versione','prezzoMin','prezzoMax',
@@ -88,7 +88,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   };
   db.exec('CREATE TABLE IF NOT EXISTS eventi (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, livello TEXT NOT NULL, codice TEXT NOT NULL, lavoro TEXT, nodo TEXT, fonte TEXT, azienda TEXT, http INTEGER)');
   db.exec('CREATE INDEX IF NOT EXISTS eventi_ts ON eventi(ts)');
+  const retention = creaRetention({ db, ora });
   const diagnostica = { incompleta: false, fallimenti: 0, ultimoErrore: null, ultimaPulizia: null };
+  Object.defineProperty(diagnostica, 'storia', { enumerable: true, get: retention.stato });
   function segnalaGuastoDiagnostica(fase) {
     const primo = !diagnostica.incompleta;
     diagnostica.incompleta = true;
@@ -130,12 +132,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     if (recuperati) evento('riavvio_lavori');
   });
   const pulisci = () => {
-    if (scriviDiagnostica('pulizia', () => {
-      db.prepare('DELETE FROM lavori WHERE creato < ?').run(ora() - SETTE_GIORNI);
-      db.prepare('DELETE FROM eventi WHERE ts < ?').run(ora() - SETTE_GIORNI);
-      db.exec('DELETE FROM lavori WHERE rowid NOT IN (SELECT rowid FROM lavori ORDER BY creato DESC LIMIT 10000) AND stato NOT IN (\'attesa\',\'in_corso\')');
-      db.exec('DELETE FROM eventi WHERE id NOT IN (SELECT id FROM eventi ORDER BY id DESC LIMIT 10000)');
-    })) diagnostica.ultimaPulizia = ora();
+    if (scriviDiagnostica('pulizia', retention.pulisci)) diagnostica.ultimaPulizia = ora();
   };
   pulisci();
   const pulizia = setInterval(pulisci, 3600000);

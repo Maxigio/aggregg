@@ -465,3 +465,61 @@ isolato. Le prove live M2 richiedono ancora pause e limiti coordinati con la
 produzione dello stesso IP. Il solo routing simulato non chiude questo gate.
 Capacità diagnostica, storage e policy delle sonde/notifiche restano incrementi
 distinti; nessuna delle due nuove funzioni autorizza un deploy implicito.
+
+## Incremento 7 — evidenza del taglio della storia
+
+Decisioni esplicite dell'utente: conservare i cap attuali di 10.000 lavori
+e 10.000 eventi; segnalare i tagli che accorciano la finestra di sette giorni.
+Backup diagnostico mediante download manuale, con conservazione gestita
+dall'utente. AMR non può cancellare dal suo computer il file già scaricato.
+La decisione non riguarda backup e journal commerciali.
+
+`backend/nodi/diagnostica-retention.js` applica la stessa retention e gli
+stessi cap precedenti, preservando l'eccezione per i lavori ancora attivi.
+Il taglio del cap e la sua evidenza aggregata vengono confermati nella
+stessa transazione SQLite. I metadati persistono al riavvio e spariscono
+quando il taglio non riguarda più la finestra dei sette giorni.
+La cancellazione ordinaria di record scaduti non è una troncatura anticipata.
+Nessun annuncio, filtro o identificativo personale è aggiunto a questi metadati.
+
+Le API diagnostiche Admin e il download JSON espongono
+`diagnostica.storia`: cap, durata, `troncata`, istanti e numero di righe
+dell'ultimo taglio per area. `troncata:false` significa che non risulta
+un taglio osservato ancora nella finestra; non certifica la completezza
+della storia precedente all'aggiornamento o di raccolte fallite.
+Se la prima lettura dei metadati non riesce, `conosciuta:false` e
+`troncata:null` dichiarano lo stato sconosciuto.
+Il frontend non è modificato in questo incremento: l'avviso visivo rientra
+nella console owner dopo il gate distribuito. Nessun file di backup viene
+creato automaticamente dal nuovo codice.
+
+Guasti di lettura/scrittura restano segnalati dalla diagnostica fail-soft;
+un errore nel registrare il taglio fa rollback della cancellazione. Non si
+assorbono errori dei controlli operativi o delle autorizzazioni. Non viene
+eseguito VACUUM: il cap logico non promette la riduzione del file sul disco.
+
+Ricevuta Node 24.21.0, SQLite temporaneo/HTTP loopback, dotenv reale escluso:
+`/private/tmp/amr-retention-review-7ntFfw/test.tap`: **57/57 pass**, zero skip.
+Prove: entrambi i cap, restart, scadenza, guasto sul secondo taglio dopo
+il primo, DB in sola lettura, stati attivi, Admin/export e nessun nuovo file.
+Include le regressioni dei guasti diagnostici, i guard Admin e la manutenzione.
+Il precedente giro 35/35 è sovrapposto e non viene sommato.
+
+La review indipendente ha riprodotto due regressioni: creazione della nuova
+tabella fuori dalla protezione diagnostica (`SQLITE_FULL`), e taglio già
+persistito nascosto al riavvio quando la pulizia fallisce. Correzioni:
+costruttore senza SQL; preparazione dentro `pulisci`, protetto dal centro;
+lettura dei metadati confermati prima della transazione di pulizia.
+Due regressioni dedicate provano guasto iniziale e restart con pulizia
+rifiutata. I test non simulano la saturazione del filesystem vivo.
+Seconda review indipendente: stessa controprova del centro in VM con
+SQLite reale in RAM e `SQLITE_FULL`, ora avvio riuscito con stato sconosciuto
+e recupero nello stesso processo. Confermati restart, rollback su secondo
+taglio, stati attivi e scadenza; nessun nuovo finding confermato.
+Il test dedicato al restart è stato poi semplificato senza alterarne il caso
+(riga scaduta inserita direttamente, nessuna modifica del clock).
+
+Fondamento: [SQLite transactions](https://www.sqlite.org/lang_transaction.html)
+per atomicità e rollback; [OWASP Logging](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html)
+per risorse, retention e comportamento in caso di guasto. Nessun dato vivo
+o filesystem riempito artificialmente, nessun deploy o collegamento M2.
