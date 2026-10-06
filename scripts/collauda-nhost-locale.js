@@ -126,7 +126,8 @@ async function collauda({ manuale = false } = {}) {
   fs.chmodSync(directory, 0o700);
   const file = path.join(directory, 'compose.json');
   const progetto = 'amr-auth-' + crypto.randomBytes(6).toString('hex');
-  fs.writeFileSync(file, JSON.stringify(configura({ password: crypto.randomBytes(32).toString('hex'), postgresDiretto: true,
+  const postgresPassword = crypto.randomBytes(32).toString('hex');
+  fs.writeFileSync(file, JSON.stringify(configura({ password: postgresPassword, postgresDiretto: true,
     jwt: JSON.stringify({ type: 'HS256', key: crypto.randomBytes(32).toString('hex') }),
     admin: crypto.randomBytes(32).toString('hex'),
     encryption: crypto.randomBytes(32).toString('hex') })), { mode: 0o600 });
@@ -735,30 +736,50 @@ async function collauda({ manuale = false } = {}) {
     risultati.push('Aziende reali: invito Admin monouso, email verificata e PKCE; solo Moto dopo attivazione; retry non rinnova scadenza; scrittore senza lettura Auth');
     fase = 'concorrenza PostgreSQL';
     await sql(fs.readFileSync(path.join(__dirname, '../test/fixtures/nhost-quote.sql'), 'utf8'));
-    const esito = p => p.then(value => ({ status: 'fulfilled', value }),
-      reason => ({ status: 'rejected', reason }));
-    const attendiStato = async (nome, condizione) => {
-      for (let i = 0; i < 40; i++) {
-        if (await sql(`SELECT count(*) FROM pg_stat_activity WHERE application_name='${nome}' AND ${condizione};`) === '1') return;
-        await new Promise(resolve => setTimeout(resolve, 50));
+    // Solo DB sintetico: il ruolo amministrativo non passa ai pool AMR.
+    const quotePool = new (require('pg').Pool)({ host:'127.0.0.1',port:Number(pgAddress.split(':')[1]),
+      user:'postgres',password:postgresPassword,database:'postgres',max:3,
+      statement_timeout:2500,lock_timeout:1500,connectionTimeoutMillis:2000,query_timeout:3000 });
+    quotePool.on('error',()=>{});
+    let quotaHolder,quotaContendente,quotaOsservatore,quotaSeconda;
+    try {
+      quotaHolder=await quotePool.connect();
+      quotaContendente=await quotePool.connect();
+      quotaOsservatore=await quotePool.connect();
+      await quotaHolder.query('BEGIN');
+      await quotaHolder.query('SELECT 1 FROM amr_prova.aziende WHERE id=1 FOR UPDATE');
+      await quotaHolder.query("SELECT amr_prova.prenota('primo')");
+      const pid=(await quotaHolder.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+      const altro=(await quotaContendente.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+      quotaSeconda=quotaContendente.query("SELECT amr_prova.prenota('secondo')")
+        .then(v=>({v}),e=>({e}));
+      let contesa=false;
+      const termine=performance.now()+1000;
+      for(let n=0;n<100&&!contesa&&performance.now()<termine;n++) {
+        const r=await quotaOsservatore.query('SELECT $1::integer = ANY(pg_blocking_pids($2::integer)) AS osservato',[pid,altro]);
+        contesa=r.rows[0].osservato===true;
+        if(!contesa)await new Promise(r=>setTimeout(r,10));
       }
-      throw new Error('sovrapposizione PostgreSQL non dimostrata');
-    };
-    const prima = esito(sql(`SET application_name='amr_quota_a'; BEGIN;
-      SELECT 1 FROM amr_prova.aziende WHERE id=1 FOR UPDATE;
-      SELECT pg_sleep(4); SELECT amr_prova.prenota('primo'); COMMIT;`));
-    await attendiStato('amr_quota_a', "wait_event='PgSleep'");
-    const seconda = esito(sql("SET application_name='amr_quota_b'; SELECT amr_prova.prenota('secondo');"));
-    await attendiStato('amr_quota_b', "wait_event_type='Lock'");
-    const concorrenti = await Promise.all([prima, seconda]);
-    assert.equal(concorrenti.filter(r => r.status === 'fulfilled').length, 1);
+      assert.equal(contesa,true);
+      await quotaHolder.query('COMMIT');
+      const seconda=await quotaSeconda;
+      assert.equal(seconda.e?.code,'P0001');assert.equal(seconda.e?.message,'quota raggiunta');
+    } finally {
+      let erroreRollback;
+      try{await quotaHolder?.query('ROLLBACK');}catch(e){erroreRollback=e;}
+      quotaHolder?.release(erroreRollback);
+      try{await quotaSeconda;}finally{
+        quotaContendente?.release();quotaOsservatore?.release();await quotePool.end();
+      }
+      if(erroreRollback)throw erroreRollback;
+    }
     assert.equal(await sql('SELECT count(*) FROM amr_prova.inviti;'), '1');
     assert.equal(await sql('SELECT count(*) FROM amr_prova.membri;'), '2');
     await sql('INSERT INTO amr_prova.aziende VALUES (2);');
-    await assert.rejects(sql("INSERT INTO amr_prova.membri VALUES ('collega',2);"));
+    await assert.rejects(sql("INSERT INTO amr_prova.membri VALUES ('collega',2);"),{code:'23505'});
     assert.equal(await sql('SELECT count(*) FROM amr_prova.membri;'), '2');
     await sql("SET ROLE amr_collaudo_senza_permessi; SELECT 1;");
-    await assert.rejects(sql('SET ROLE amr_collaudo_senza_permessi; SELECT * FROM amr_prova.membri;'));
+    await assert.rejects(sql('SET ROLE amr_collaudo_senza_permessi; SELECT * FROM amr_prova.membri;'),{code:'42501'});
     risultati.push('PostgreSQL: attesa del lock osservata, un solo ultimo posto; appartenenza univoca e ruolo senza permessi negato');
     if (!manuale && process.env.AMR_TEST_RESTIC) {
       fase = 'backup commerciale e restore separato';
