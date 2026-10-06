@@ -784,3 +784,27 @@ dei CHECK, con prove privacy e osservatori temporanei della sola fixture;
 vincoli, scadenze e SQL applicativo non sono stati indeboliti. Un successivo
 PASS locale, anche strumentato, non dimostra la risoluzione del precedente
 episodio né autorizza l'aggiornamento remoto o il collegamento M2.
+
+### Gate controllato del 7 ottobre
+
+Decisione dell'utente: proseguire con staging e M2 solo stato mantenendo
+aperto il CHECK storico, senza autorizzare la produzione. La sonda ingress
+ha misurato un peer aggiuntivo e ripristinato l'originale remoto `66e2b24`;
+resta da scegliere la lista esplicita provvisoria dello staging.
+
+Il [gate immagine e migrazioni](staging-build-permessi-2026-10-07.md) registra
+la correzione verificata dei permessi della ricetta, il collaudo completo
+Auth/PostgreSQL/HTTPS locale e le prove del pacchetto append-only.
+Il build di prova usa un overlay e non è distribuibile: il nuovo artefatto
+deve provenire dal commit della correzione. Il CHECK non è ricomparso nel
+giro, ma la sua causa resta non attribuita.
+
+Launcher temporaneo M2 ora protetto da ricevuta persistita prima del
+messaggio CONFERMA; ACK esplicito al chiamante e recovery quando la risposta
+è persa. Il controllo usa un socket privato associato all'istanza, non
+segnali a PID numerici. Guasti e uscita forzata non diventano PASS nominali.
+Prove IPC/processi locali e VM, con dummy worker e riferimenti archiviati,
+non costituiscono un collegamento M2. Nessun SSH, trasferimento o processo
+M2 eseguito in questo incremento. Prima del collegamento restano staging
+verificato, backup aggiornato/ripristinabile e rigenerazione delle procedure
+temporanee per l'esatto nuovo candidato.

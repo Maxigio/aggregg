@@ -10,9 +10,11 @@ COPY pagine/ pagine/
 COPY scripts/ scripts/
 COPY data/ data/
 COPY release.json ./
-RUN node -e "require('./backend/nodi/compatibilita-nodo').verificaArtefatto(require('./release.json'),process.cwd())" \
-    && chmod -R a-w /opt/amr && mkdir -p /var/lib/amr && chown node:node /var/lib/amr
+# COPY conserva i permessi del contesto, anche se creato con umask privata.
+# Il codice resta di root e non scrivibile; la verifica deve poterlo leggere come node.
+RUN chmod -R a+rX,a-w /opt/amr && mkdir -p /var/lib/amr && chown node:node /var/lib/amr
 ENV NODE_ENV=production AMR_NODI_DATA_DIR=/var/lib/amr AMR_NODI_RELEASE_FILE=/opt/amr/release.json
 USER node
+RUN node -e "require('./backend/nodi/compatibilita-nodo').verificaArtefatto(require('./release.json'),process.cwd())"
 EXPOSE 3000
 CMD ["node", "backend/nodi/centro-run.js"]
