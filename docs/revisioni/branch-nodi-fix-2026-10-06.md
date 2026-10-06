@@ -180,6 +180,42 @@ reader; la prova manuale con tecnologia assistiva resta da eseguire.
 
 Fondamento: [WCAG 2.2, status messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html).
 
+## Collaudo integrato — Barriera della prova di contesa
+
+La suite generale del candidato `3c82b02` passa, ma il primo collaudo integrato
+Auth/PostgreSQL 18 si ferma nella barriera `contesa non osservata`. Il precedente
+log `aziende_invita` in `colleghi_quota` è un rifiuto atteso della fixture, non
+la prova della causa del fallimento. Non sono stati modificati SQL, quote o
+timeout applicativi per far passare il test.
+
+Prova isolata: il monitor tramite Docker impiega 713 ms e osserva il lock;
+introducendo 1.600 ms di ritardo prima del monitor, il contendente scade a
+1.514 ms con SQLSTATE `55P03` e il monitor fallisce con `P0001`, pur essendoci
+stata una contesa. Il pool osserva invece il lock in 67/16/11 ms in tre prove
+reali, con ruolo non privilegiato e timeout di 1.500 ms invariato. Senza lock
+il risultato resta falso. Non è stato cronometrato l'avvio del monitor nel
+primo collaudo fallito: il meccanismo è riprodotto, quel singolo episodio non
+è attribuito con certezza al tempo di avvio Docker.
+
+Correzione circoscritta alla fixture: terzo client preparato prima del
+contendente; avvio dei poll per un secondo/massimo 100 verifiche, asserzione
+di lock reale conservata. Una query già inviata mantiene i timeout del pool:
+non si promette una durata totale massima di un secondo. Il cleanup scarta
+l'holder se rollback fallisce, attende comunque il contendente prima di
+rilasciarlo e copre acquisizioni parziali dei client. Non aggiunge diagnostica
+o query periodiche al servizio AMR. Il cluster della prova è stato rimosso e i
+container estranei sono rimasti invariati.
+
+Review indipendente: corretto il cleanup del rollback fallito; rettificato il
+significato della deadline dei poll. Dopo le correzioni, la prova PostgreSQL
+18 completa referente/colleghi passa in 27,7 secondi, con contesa reale, ruoli,
+quote, epoch, rollback e journal. Auth e worker sono sintetici in questa prova.
+
+Fondamento: [PostgreSQL, pg_blocking_pids](https://www.postgresql.org/docs/18/functions-info.html)
+e [node-postgres, pool e rilascio dei client](https://node-postgres.com/features/pooling).
+La frequenza limitata è solo del test: la documentazione avverte che interrogare
+il lock manager frequentemente può influire sulle prestazioni del database.
+
 ## Lavoro restante
 
 - C2: rivalutare menu/dettagli nel collaudo staging; C3 costo idle noto.
@@ -187,3 +223,25 @@ Fondamento: [WCAG 2.2, status messages](https://www.w3.org/WAI/WCAG22/Understand
 - M2: collegamento solo stato successivo al collaudo staging; produzione esclusa.
 
 Gli altri file locali, compreso il lavoro APP, restano fuori dai commit AP.
+
+## Collaudo manuale successivo
+
+Prerequisito: ambiente con le undici migrazioni e il candidato corrispondente,
+non lo staging precedente. Nessun test live automatico è autorizzato da questa
+lista; evitare inviti o revoche di aziende reali.
+
+1. Referente di prova: accettazione, nuovo login e solo moduli assegnati.
+   Un'accettazione già conclusa non deve creare membership o journal aggiuntivi.
+2. Due schede: login iniziato prima di revoca+rinnovo negato; login nuovo
+   consentito dopo rinnovo. Logout deve invalidare le continuazioni pendenti.
+3. Regione/filtri: modificare le scelte durante l'attesa del catalogo e
+   cambiare account. Risposte del contesto precedente non devono riscriverle.
+4. Tastiera e tecnologia assistiva: dopo revoca di un collega il focus resta
+   utilizzabile; esito e conteggio della ricerca sono annunciati senza lettura
+   della griglia intera o ripetizioni causate dal solo refresh diagnostico.
+
+La sonda ingress e l'aggiornamento remoto restano gate distinti. Il pacchetto
+`prepara-schema-staging.js` è solo per prima installazione: non va applicato
+di nuovo al database esistente. L'aggiornamento richiede le tre nuove migrazioni
+append-only, backup/restore e verifica dei ruoli, senza reimpostare utenti,
+epoche o membership.

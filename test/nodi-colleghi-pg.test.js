@@ -85,21 +85,35 @@ async function provaColleghiPostgres({sql,pool,identita}) {
     await assertSQL(`(SELECT count(*) FROM amr_accessi.aziende)=2 AND
       (SELECT bool_and(scadenza=creata_il+interval '7 days') FROM amr_accessi.colleghi_inviti)`);
 
-    const holder=await pool.connect(), contendente=await pool.connect();
-    let seconda;
+    const holder=await pool.connect();
+    let contendente, osservatore, seconda, concorrenza;
     try {
+      contendente=await pool.connect();
+      osservatore=await pool.connect();
       await holder.query('BEGIN');
       seconda=await creaColleghiPostgres({pool:holder}).invita(sa,input(a,{email:c2.email}));
       const pid=(await holder.query('SELECT pg_backend_pid() pid')).rows[0].pid;
       const altro=(await contendente.query('SELECT pg_backend_pid() pid')).rows[0].pid;
-      const concorrenza=creaColleghiPostgres({pool:contendente}).invita(sa,input(a,{email:c3.email})).catch(e=>e);
-      await new Promise(r=>setTimeout(r,20));
-      await sql(`DO $$ DECLARE osservato boolean:=false; BEGIN FOR i IN 1..100 LOOP
-        IF ${pid}=ANY(pg_blocking_pids(${altro})) THEN osservato:=true; EXIT; END IF;
-        PERFORM pg_sleep(0.01); END LOOP;
-        IF NOT osservato THEN RAISE EXCEPTION 'contesa non osservata'; END IF; END $$;`);
+      concorrenza=creaColleghiPostgres({pool:contendente}).invita(sa,input(a,{email:c3.email})).catch(e=>e);
+      // Docker exec può iniziare dopo il lock_timeout del contendente.
+      // Il terzo client osserva il lock reale, senza allungare i timeout SQL.
+      let osservato=false;
+      const termine=performance.now()+1000;
+      for(let i=0;i<100&&!osservato&&performance.now()<termine;i++) {
+        const r=await osservatore.query('SELECT $1::integer = ANY(pg_blocking_pids($2::integer)) AS osservato',[pid,altro]);
+        osservato=r.rows[0].osservato===true;
+        if(!osservato)await new Promise(r=>setTimeout(r,10));
+      }
+      assert.equal(osservato,true,'contesa non osservata');
       await holder.query('COMMIT'); assert.equal((await concorrenza).codice,'quota_persone');
-    } finally {await holder.query('ROLLBACK');holder.release();contendente.release();}
+    } finally {
+      let erroreRollback;
+      try {await holder.query('ROLLBACK');} catch(e) {erroreRollback=e;}
+      holder.release(erroreRollback);
+      try {await concorrenza;}
+      finally {contendente?.release();osservatore?.release();}
+      if(erroreRollback)throw erroreRollback;
+    }
     await assert.rejects(account.accetta(refB.id,{token:inv.token,operazione:crypto.randomUUID()}),{codice:'invito_non_valido'});
     await assert.rejects(account.accetta(c1.id,{token:inv.token,operazione:crypto.randomUUID()}),{codice:'invito_non_valido'});
     await sql(`UPDATE auth.users SET email_verified=true WHERE id='${c1.id}';`);
