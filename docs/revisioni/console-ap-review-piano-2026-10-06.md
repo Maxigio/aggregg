@@ -155,8 +155,9 @@ fase e istante dell'ultimo errore; nessun messaggio SQLite o dato arbitrario.
 Una sola segnalazione stderr evita un log per ogni tentativo fallito.
 
 Lo stato è incluso nelle risposte Admin/stato/export. La rotta
-`GET /api/admin/diagnostica` non legge il registro SQLite: permette di
-consultarlo anche se le tabelle diagnostiche non sono più leggibili.
+`GET /api/admin/diagnostica` espone lo stato RAM anche se le tabelle diagnostiche
+non sono più leggibili. L'incremento 3 aggiunge misure opzionali di risorse:
+un fallimento di queste letture non impedisce la risposta con lo stato RAM.
 Usa il guard Admin esistente, che nel centro Run richiede sessione, MFA ed
 epoca valide. La rappresentazione nel nuovo frontend è ancora da realizzare.
 Il warning RAM non è una nuova persistenza: dopo un restart non può ricostruire
@@ -234,3 +235,55 @@ e non rieseguiti dal reviewer. Nessun frontend o stato remoto modificato.
 - Capacità/completezza dei sette giorni, destinazione del backup diagnostico,
   baseline prestazioni, policy delle sonde e integrazione notifiche restano
   scelte da affrontare nei rispettivi incrementi.
+
+## Incremento 3 — misure del registro, senza manutenzione implicita
+
+`backend/nodi/diagnostica-risorse.js` aggiunge un campione alla rotta Admin
+diagnostica: byte del database e degli eventuali WAL/SHM/journal; modalità,
+pagine allocate e pagine riutilizzabili SQLite; spazio disponibile e totale
+del filesystem. Sono grandezze diverse, non un limite già concordato o una
+misura dello spazio usato esclusivamente da AMR. Il campione non è atomico
+rispetto a scrittori esterni e non attribuisce tutta l'occupazione ad AMR.
+
+File ausiliari assenti sono dichiarati assenti. Errori e misure non attendibili
+diventano `null` con stato `parziale`, senza esportare percorsi o messaggi grezzi.
+File non regolari o non verificabili impediscono anche i PRAGMA: una lettura
+SQLite può accedere ai journal. La prima prova con un WAL simbolico falliva;
+la correzione è controprovata con zero interrogazioni e target immutato.
+Il controllo non promette protezione assoluta da sostituzioni concorrenti dei
+file da parte di un processo locale con accesso alla directory.
+
+L'endpoint conserva gli stessi guard Admin/MFA; non modifica contatori o stato
+del logging. Nessun cambio di retention, soglie, journal mode, VACUUM, backup
+o frontend. Una misura parziale non viene confusa con una lacuna già registrata
+dal logging: i due stati restano distinti.
+
+Inventario dei punti di scrittura esaminati, da completare nel gate operativo:
+
+| Risorsa | Responsabile e limite della verifica |
+| --- | --- |
+| `lavori-prototipo.db` e ausiliari | Il centro scrive storia ed eventi, ma anche sospensioni e token revocati. Le misure coprono questo store; una pulizia indiscriminata distruggerebbe stato operativo. |
+| `amr-fonti.db` e WAL del worker | `fonti-salute.js` conserva stato delle fonti. È distinto dalla storia centrale; nessun campione sul worker reale o M2 in questo incremento. |
+| stdout/stderr centro e worker | Il centro emette messaggi fissi di avvio/errore; gli scraper possono emettere warning. I launcher esaminati ereditano le pipe o le scartano. Retention del runtime/provider e file aperti restano da verificare sull'ambiente distribuito. |
+| PostgreSQL e journal commerciale | Accessi, aziende, operazioni e outbox backup hanno contratti separati. Non sono log da cancellare dopo sette giorni; questa API non misura il database remoto. |
+| Export e copie temporanee | L'export diagnostico HTTP è un download; i backup staging usano directory private temporanee con cleanup. Le copie cifrate deliberate sono una risorsa distinta. Il download del browser non è gestibile dal server. |
+
+Ricevuta principale Node 24.21.0, file SQLite temporanei e HTTP loopback,
+dotenv escluso: `/private/tmp/amr-console-risorse-finale-SByWzy/test.tap`,
+**32/32 pass**, zero skip; comprende misure, guasti, guard e centro.
+Prova di lettura: hash del DB invariato; DELETE aumenta le pagine libere
+senza ridurre il file; errori SQL/FS e valori fuori precisione restano parziali.
+Gate aggiuntivo di avvio Run e compatibilità locale:
+`/private/tmp/amr-console-risorse-run-bN0W0C/test.tap`, **52/52 pass**, zero skip.
+
+Review indipendente in sola lettura: nessun nuovo finding confermato.
+Controprove aggiuntive su Node 24.19.0 con SQLite in RAM e FS simulato,
+12 scenari e guard HTTP con zero misure prima dell'autorizzazione.
+Non è la suite completa, un WAL operativo sotto carico o la misura dello staging.
+
+Fonti verificate: [SQLite PRAGMA](https://www.sqlite.org/pragma.html) per pagine
+e modalità; [SQLite VACUUM](https://www.sqlite.org/lang_vacuum.html) per la
+differenza fra riuso delle pagine e riduzione del file. VACUUM può richiedere
+spazio aggiuntivo e fallire con attività concorrente: non è stato introdotto
+come rimedio automatico. Capacità e completezza dei sette giorni restano da
+decidere prima di cambiare cap o compattazione.

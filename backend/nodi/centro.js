@@ -14,6 +14,7 @@ const { creaAutorizzazioniDettagli } = require('./autorizzazioni-dettagli');
 const { creaBudgetRicerca, creaLimitiRicerca, TEMPO_RICERCA_MS } = require('./limiti-ricerca');
 const compat = require('./compatibilita-nodo');
 const { creaRicercheHttp } = require('./ricerche-http');
+const { misuraRegistro } = require('./diagnostica-risorse');
 
 const MODULI = { aziendaA: ['auto', 'moto'], aziendaB: ['moto'] };
 const SETTE_GIORNI = 7 * 86400000;
@@ -789,7 +790,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     next();
   });
   // Consultabile anche quando il DB diagnostico non si lascia più leggere.
-  app.get('/api/admin/diagnostica', (req, res) => res.json({ diagnostica }));
+  app.get('/api/admin/diagnostica', (req, res) => res.json({ diagnostica,
+    risorse: misuraRegistro({ db, directory, ora }) }));
   app.get('/api/admin', (req, res) => {
     pulisci();
     const nodo = typeof req.query.nodo === 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(req.query.nodo)

@@ -104,7 +104,7 @@ test('stato diagnostico RAM: richiede Admin MFA anche se il registro SQL non è 
   admin.centro.db.exec('DROP TABLE lavori');
   const stato=await admin.request('/api/admin/diagnostica',{cookie});
   assert.equal(stato.status,200);
-  assert.deepEqual(Object.keys(JSON.parse(stato.raw)),['diagnostica']);
+  assert.deepEqual(Object.keys(JSON.parse(stato.raw)),['diagnostica','risorse']);
   assert.equal((await admin.request('/api/auth/logout',{body:{},cookie})).status,200);
   assert.equal((await admin.request('/api/admin/diagnostica',{cookie})).status,401);
  } finally {await referente.close();await admin.close();}
