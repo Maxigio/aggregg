@@ -133,3 +133,163 @@ snapshot, download di dati o modifica dei segreti attivato in questa verifica.
   concorrenza dei file di test configurabile; non è un limite del servizio AMR.
 - [Nhost backup](https://docs.nhost.io/products/database/backups):
   dati Run esclusi dai backup gestiti; restore da provare su ambiente distinto.
+
+## Gate dell'immagine candidata — 6 ottobre
+
+Preparazione committata in `1a497bf7976113363ba7e87c6fdda8e53fc1cfcc`.
+L'immagine locale `amr-centro:staging-1a497bf` proviene esclusivamente dal
+contesto Git di quel commit: Linux amd64, utente `node`, codice
+`219bdde80515c8698180ae907b1eef131914ad7c8b37dddb2f7d0f13e512b70d`,
+cataloghi invariati
+`0f20b3c6473b8c28890724f17b073ffff6d0073e0c090e96cb3c61c176252657`.
+L'ID restituito da Docker è
+`sha256:78e67bee9e016e62609f49ad62af289da6f5a4e9d78aecb7d540b99832f732ac`:
+non è ancora un digest letto dal registry Nhost e non attesta un upload.
+
+Il primo gate completo si è fermato prima della prova dell'immagine:
+`aziende_attiva`, SQLSTATE `23514`, 13 ms, riga 33 del corpo PL/pgSQL,
+durante il ciclo delle aziende extra della fixture colleghi. Il codice
+localizza una violazione CHECK nell'UPDATE; non è un timeout. La review
+indipendente sostiene l'ipotesi del confronto fra accettazione e attivazione
+su due campionamenti di `clock_timestamp()`, senza dimostrare che l'orologio
+sia arretrato nell'evento osservato. Nome del vincolo e valori esatti del
+tentativo non sono stati acquisiti in quel primo giro. NTP, bug PostgreSQL,
+contesa e immagine non sono cause dimostrate. Nessun vincolo, timeout,
+attesa, retry o funzione SQL modificato per superare il gate.
+
+La controprova con osservazione temporanea dei soli nomi di vincolo ammessi
+non riproduce `23514` e completa **il gate integrato con exit 0 e cleanup
+verificato**: PostgreSQL 18.6, Auth locale 0.49.1, quote e isolamento,
+email/MFA, permessi, inviti, rinnovi e revoche; centro HTTPS della stessa
+immagine; SIGTERM e riavvio sullo stesso volume con sospensione e revoca
+conservate, vecchie sessioni respinte. Ricerca sintetica: avvio 73 ms,
+15 consultazioni, massimo 105 ms, lavoro 16.054 ms oltre il timeout del
+proxy fixture di 15 secondi, un solo lavoro. Restic reale: due repository
+locali separati, dump, restore in secondo cluster, journal e replay
+idempotente. Nessun portale o dato di account reale usato dalla fixture.
+Il PASS non chiude la diagnosi del precedente CHECK e Auth cloud 0.52.0
+non è certificato dalla fixture 0.49.1.
+
+Log locali con soli metadati diagnostici e risultati sintetici:
+
+- `/private/var/folders/fg/l5gxkc013yvf8p6pzqkywstc0000gp/T/amr-gate-immagine-1a497bf-GEBSp0/gate.log`;
+- `/private/var/folders/fg/l5gxkc013yvf8p6pzqkywstc0000gp/T/amr-gate-immagine-1a497bf-3puIgM/gate.log`.
+
+Preparato anche l'archivio del nodo dal medesimo contesto: 4.102.750 byte,
+1.410 membri, SHA-256
+`f39e6edcd3f0b0c838b2907ca36a40322d9e71e0eaf4be1bcd5d1e24095535ae`.
+Assenti symlink/hardlink, percorsi assoluti o parent, `.env`, auth locale e
+database. È ancora sull'iMac, non copiato sull'M2. Il worker iMac esistente
+e il centro cloud restano sulla release precedente `66e2b24`.
+
+La lettura dei metadati Nhost ha trovato tre backup PostgreSQL completati
+dal 3 al 5 ottobre; non sono stati scaricati o ripristinati e non si deduce
+che coprano l'ultima attivazione dell'utente. I dati Run restano esclusi.
+L'utente ha scelto una copia cifrata temporanea sul solo iMac, con restore
+isolato, autorizzando la breve manutenzione del solo staging e l'uso interno
+delle credenziali necessarie senza esposizione. Il passaggio allo storage
+gestito è previsto dopo l'ingresso in produzione; non è un requisito già
+implementato né un servizio da attivare ora. La decisione è stata salvata
+anche nella memoria della chat su richiesta esplicita. Nessuna manutenzione,
+nuova credenziale M2, upload, aggiornamento cloud, download di backup reale
+o scrittura sull'M2 effettuati a questo punto: preparazione e prova di
+restore precedono le operazioni remote.
+
+### Procedura temporanea di copia — gate locale
+
+La copia usa un container di manutenzione separato, UID 1000, client
+PostgreSQL 18.6 e Node 24. Una credenziale temporanea viene generata in RAM;
+Run riceve soltanto la sua SHA-256 e una scadenza assoluta, massimo 20 minuti.
+Si riusano origine HTTPS e IP espliciti del proxy; niente rotta AMR, percorsi
+o SQL arbitrari. La richiesta acquisisce una sola copia: un retry del download
+non ripete i dump. I buffer sono limitati a 64 MiB e cancellati all'arresto.
+I temporanei del container stanno in `/dev/shm`; nessuna copia in chiaro
+viene scritta sul volume Run.
+
+Il profilo privato Nhost `nhost_admin`, con possibilità di `SET ROLE postgres`,
+è stato verificato leggendo soltanto metadati e regole HBA. La copia non
+aggiunge password, ruoli o privilegi ai login runtime AMR. Una richiesta di
+password imprevista interrompe il collegamento: niente fallback a `.pgpass`
+o credenziali ambientali. La corrispondenza DNS richiesta dall'HBA resta
+da provare sul container reale; in caso negativo la manutenzione si ferma.
+
+Conteggi e dump PostgreSQL importano lo stesso snapshot `REPEATABLE READ`;
+ruoli globali senza password e SQLite sono acquisiti durante l'arresto AMR.
+Auth può continuare a scrivere, ma non va eseguita contemporaneamente una
+modifica di schema o ruoli. Lo snapshot PostgreSQL non è una fotografia
+atomica globale di PostgreSQL e SQLite.
+
+La review e le controprove hanno corretto: backup SQLite non cancellabile,
+abort segnalato prima dell'uscita del child, conteggi non legati allo snapshot,
+fallback di password impliciti e cleanup interrotto al primo errore.
+Regressioni **9/9 pass**; verifica precedente con restic **60 pass, 3 opt-in
+skip**. Gate Docker reale con dati sintetici: PostgreSQL 18.6, archivio
+10.240 byte, SQLite 20.480 byte, repository cifrati separati, `restic check`,
+restore e SHA uguali, conteggi e permessi conservati, rete del restore `none`,
+cleanup verificato. Il PASS non certifica ancora il backup cloud.
+
+Il primo restore globals con bootstrap differente falliva con SQLSTATE
+`42501` su `GRANT`. Il restore conserva ora l'identità bootstrap e omette
+solo il suo unico `CREATE ROLE` già eseguito da initdb: attributi e grants
+restano invariati; il formato inatteso viene rifiutato. Controprove nel test
+dedicato. Riferimenti: [GRANT PostgreSQL 18](https://www.postgresql.org/docs/18/sql-grant.html)
+e [note di pg_dumpall](https://www.postgresql.org/docs/18/app-pg-dumpall.html).
+
+Lo stato effettivo di Run è consultabile mediante `getProjectStatus`, con
+stato e repliche. La manutenzione deve verificare l'arresto effettivo, non
+soltanto `resources.replicas=0`, prima di cambiare immagine sul medesimo volume.
+
+### Tentativo remoto e recovery da autorizzare — 6 ottobre
+
+L'immagine temporanea di manutenzione è stata caricata nel solo registry
+staging: digest
+`sha256:62edc54fe9ce30de09b2236ed6372a37da8a2dc9f4d329df22b1cb43f3f002a1`,
+manifest OCI remoto verificato, config
+`sha256:87da91ab044722d3a9cdacabfe81bd1273b5ffea43bf49f3dba4fcc6ea0efe5e`.
+Sorgente exporter SHA-256
+`75796b5ba3d98cfb2178c96cef80a5c8b6afb6a65e67ab79fb75a4b0589f9ea3`.
+L'upload non costituisce un backup.
+
+Il preflight remoto passa e la configurazione precedente viene preservata.
+Nhost, durante lo stop, omette il servizio da `getProjectStatus` e rimuove
+la risoluzione del suo hostname. Il controllo iniziale che pretendeva una
+voce esplicita e un HTTP 503 era quindi errato. La correzione considera
+l'assenza soltanto insieme alla configurazione a zero repliche e a due
+campioni di indisponibilità; `EAI_NONAME` è distinto da timeout o generici
+errori di rete, con risoluzione del dominio di controllo `app.nhost.io`.
+Connessioni PostgreSQL dei tre login AMR a zero verificate prima di tentare
+la copia. Il solo DNS non attesta l'arresto.
+
+Il container di manutenzione non diventa pronto entro il budget di avvio:
+provider `Updating`, replica non pronta, nessun messaggio fisso di boot
+trovato nei log interrogati. Non è dimostrata la causa: non attribuirla
+al codice, all'immagine o all'HBA senza ulteriori prove. Nessuna richiesta
+di dump completata, nessun backup cloud acquisito e nessuna copia reale
+conservata sull'iMac. Il profilo PG privato non è ancora collaudato da Run.
+
+La recovery automatica riceve `cloud_rifiutato`; un comando minimale
+`updateRunServiceConfig` per zero repliche viene successivamente accettato.
+Ultima verifica: immagine di manutenzione ancora configurata, zero repliche
+richieste, volume originale conservato; la replica era ancora non pronta
+in `Updating`. Non dichiarare lo staging disponibile né l'arresto fisico
+deducendolo solo dalle repliche richieste.
+
+Verifica successiva in sola lettura, 6 ottobre alle 00:39 UTC: immagine di
+manutenzione ancora configurata, zero repliche richieste, volume identico
+alla configurazione originale. Il provider non elenca più repliche del
+servizio; `/healthz` è indisponibile con `EAI_NONAME`, mentre `app.nhost.io`
+risolve correttamente. Nessun ripristino eseguito durante questa verifica.
+
+Preparata recovery separata che attende l'arresto effettivo, ripristina la
+configurazione originale `66e2b24` sullo stesso volume e verifica replica
+pronta più HTTP 200. La richiesta di esecuzione viene rifiutata dal controllo
+di approvazione (`rejected by user`): il processo di recovery non parte.
+Richiesta nuova decisione all'utente; nessun tentativo equivalente attraverso
+altri strumenti. Il gate M2 resta fermo e la produzione M2 non è stata toccata.
+
+La review indipendente della procedura operativa ha inoltre verificato le
+correzioni a timeout distruttivo del parent, cleanup dopo risposta Docker
+perduta e controlli prima di ogni comando. Le sostituzioni Run rileggono la
+configurazione e rifiutano drift sconosciuto; non sono CAS atomiche e richiedono
+manutenzione esclusiva. Il restore locale non include le password dei ruoli
+PG e non certifica il login Auth o un restore completo del progetto Nhost.

@@ -1,0 +1,11 @@
+FROM node:24.21.0-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS runtime
+FROM amr-centro:staging-1a497bf AS dipendenze
+FROM postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
+COPY --from=runtime /usr/local/bin/node /usr/local/bin/node
+WORKDIR /opt/amr
+COPY --from=dipendenze /opt/amr/node_modules node_modules
+COPY scripts/nhost/esporta-backup-staging.js scripts/nhost/esporta-backup-staging.js
+COPY backend/nodi/trasporto-prova.js backend/nodi/trasporto-prova.js
+USER 1000:1000
+ENTRYPOINT ["node", "--disable-warning=ExperimentalWarning", "scripts/nhost/esporta-backup-staging.js"]
+CMD []
