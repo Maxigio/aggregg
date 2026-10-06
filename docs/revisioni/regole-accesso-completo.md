@@ -4,6 +4,11 @@ Decisione dell'utente, 6 ottobre 2026. Si applicano al lavoro AP su AMR:
 l'accesso tecnico completo non amplia il perimetro autorizzato.
 Queste regole sono operative; non sostituiscono un sandbox del sistema.
 
+Prima di ogni azione eseguire due controlli distinti: verificare prima il
+bersaglio, gli effetti e il recupero possibile; ricontrollare poi il comando
+concreto, i suoi argomenti e l'ambiente effettivo. Fermarsi se può cancellare
+o sovrascrivere risorse preesistenti fuori dal perimetro autorizzato.
+
 ## File e dati
 
 - Non cancellare file, directory, volumi o backup preesistenti senza un
