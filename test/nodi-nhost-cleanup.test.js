@@ -25,6 +25,102 @@ test('collaudo Nhost: diagnostica SQLSTATE preservata tra chunk senza log raw',(
   }
 });
 
+test('collaudo Nhost: accettazione usa un ID stabile e distingue input errato da email non verificata',async()=>{
+  const source=fs.readFileSync(path.join(__dirname,'../scripts/collauda-nhost-locale.js'),'utf8');
+  const start=source.indexOf('const signupInv='),end=source.indexOf('const {risposta:loginReferente',start);
+  assert.ok(start>0&&end>start);
+  const body=source.slice(start,end);
+  async function prova(testo,guasto) {
+    let verificata=false,operazione=null,accettazioni=0;
+    const richieste=[];
+    const risposta=(status,codice,extra={})=>({status,json:async()=>({codice,...extra})});
+    const c={assert,crypto:require('node:crypto'),AbortSignal,setTimeout,encodeURIComponent,
+      invToken:'a'.repeat(64),pwInvito:'password-sintetica',destinatario:'ref@amr.invalid',
+      mailAddress:'127.0.0.1:1',base:'http://127.0.0.1:2',origineLogin:'http://127.0.0.1:3',
+      corpoMailLocale:()=>'?ticket=fixture&codeChallenge='+'c'.repeat(43),
+      aziendeReq:async(fase,_cookie,input)=>{
+        if(fase!=='accetta')return risposta(200);
+        richieste.push(input.operazione);
+        if(!/^[a-f0-9-]{36}$/.test(input.operazione||''))return risposta(400,'input_non_valido');
+        if(!verificata)return guasto==='email'?risposta(503,'identita_non_disponibile'):risposta(403,'identita_non_verificata');
+        if(operazione&&operazione!==input.operazione)return guasto==='operazione'?risposta(503,'operazione_non_disponibile'):risposta(403,'invito_non_valido');
+        const giaEseguita=Boolean(operazione);
+        if(!giaEseguita){operazione=input.operazione;accettazioni++;}
+        return risposta(200,undefined,{giaEseguita});
+      },
+      fetch:async url=>{
+        if(url.includes('/api/v2/messages'))return {json:async()=>({items:[{Raw:{To:['ref@amr.invalid']}}]})};
+        verificata=true;return {status:200,headers:{get:()=>null}};
+      }};
+    await vm.runInNewContext('(async()=>{'+testo+'})()',c);
+    assert.equal(accettazioni,1);
+    assert.equal(richieste.length,4);
+    assert.equal(richieste[0],richieste[1]);assert.equal(richieste[1],richieste[2]);
+    assert.notEqual(richieste[2],richieste[3]);
+  }
+  await prova(body);
+  await assert.rejects(prova(body.replace('operazione:crypto.randomUUID()', 'operazione:undefined')), {code:'ERR_ASSERTION'});
+  for(const guasto of ['email','operazione'])await assert.rejects(prova(body,guasto),{code:'ERR_ASSERTION'});
+});
+
+test('collaudo Nhost: quota aziende osserva i PID reali e rilascia i client anche dopo errore',async()=>{
+  const source=fs.readFileSync(path.join(__dirname,'../scripts/collauda-nhost-locale.js'),'utf8');
+  const start=source.indexOf('const held=await writerPool.connect();'),end=source.indexOf("assert.equal(await sql('SELECT count(*) FROM amr_accessi.aziende;'),'10');",start);
+  assert.ok(start>0&&end>start);
+  const body=source.slice(start,end);
+  const adapter=require('../backend/nodi/aziende-postgres-prova');
+  async function prova(testo=body,guasto) {
+    const eventi=[];let connessi=0,attiva=false,pendente,tempo=0,poll=0;
+    const libera=()=>{if(pendente){const reject=pendente;pendente=null;reject(Object.assign(new Error('quota_aziende'),{code:'P0001'}));}};
+    const clients=[0,1,2].map(indice=>({
+      async query(sql,params){
+        if(sql==='BEGIN'){assert.equal(connessi,3);attiva=true;eventi.push('begin');}
+        if(sql==='COMMIT'){eventi.push('commit');attiva=false;libera();}
+        if(sql==='ROLLBACK'){
+          eventi.push('rollback');
+          if(guasto==='rollback')throw new Error('rollback_fixture');
+          attiva=false;libera();
+        }
+        if(sql.includes('pg_backend_pid'))return {rows:[{pid:indice===0?101:202}]};
+        if(sql.includes('pg_blocking_pids')){
+          assert.equal(indice,2);assert.deepEqual(Array.from(params),[101,202]);
+          poll++;return {rows:[{osservato:guasto!=='senza_lock'&&attiva&&Boolean(pendente)&&poll>1}]};
+        }
+        if(sql.includes('aziende_invita')){
+          if(indice===0)return {rows:[{risultato:{giaCreata:false}}]};
+          assert.equal(indice,1);assert.equal(attiva,true);
+          return new Promise((_resolve,reject)=>{pendente=reject;}).finally(()=>eventi.push('contendente_finito'));
+        }
+        return {rows:[]};
+      },
+      release(error){eventi.push('release_'+indice);if(indice===0&&error){eventi.push('scarta_holder');libera();}},
+    }));
+    const c={assert,crypto:require('node:crypto'),
+      adminFixture:{persona:require('node:crypto').randomUUID(),epoca:0,mfa:true},
+      performance:{now:()=>{tempo+=25;return tempo;}},setTimeout:callback=>queueMicrotask(callback),
+      writerPool:{connect:async()=>{connessi++;if(guasto==='connessione_'+connessi)throw new Error('connessione_fixture');return clients[connessi-1];}},
+      require:()=>adapter,
+      sql:()=>{throw new Error('monitor Docker non ammesso nella barriera');}};
+    try{return await vm.runInNewContext('(async()=>{'+testo+'})()',c);}
+    finally{
+      assert.ok(!pendente,'contendente ancora pendente');
+      assert.ok(eventi.includes('release_0'));
+      for(let n=1;n<Math.min(connessi,3);n++)if(guasto!=='connessione_'+(n+1))assert.ok(eventi.includes('release_'+n));
+      if(eventi.includes('contendente_finito')){
+        assert.ok(eventi.indexOf('contendente_finito')<eventi.indexOf('release_1'));
+        assert.ok(eventi.indexOf('contendente_finito')<eventi.indexOf('release_2'));
+      }
+      if(guasto==='rollback')assert.ok(eventi.includes('scarta_holder'));
+      if(guasto?.startsWith('connessione_'))assert.ok(!eventi.includes('begin'));
+    }
+  }
+  await prova();
+  await assert.rejects(prova(body,'senza_lock'),{code:'ERR_ASSERTION'});
+  await assert.rejects(prova(body.replace('[pid,altro]','[altro,pid]')),{code:'ERR_ASSERTION'});
+  await assert.rejects(prova(body,'rollback'),/rollback_fixture/);
+  for(const guasto of ['connessione_2','connessione_3'])await assert.rejects(prova(body,guasto),/connessione_fixture/);
+});
+
 test('collaudo Nhost: listen fallito raggiunge il cleanup dei soli container di prova', async () => {
   for (const [asincrono,conserva] of [[false,false],[true,false],[false,true]]) {
     const processo = new EventEmitter();

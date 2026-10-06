@@ -575,7 +575,11 @@ async function collauda({ manuale = false } = {}) {
     assert.equal(anticipata.status,409);
     const signupInv=await aziendeReq('registra',null,{token:invToken,password:pwInvito});assert.equal(signupInv.status,200);
     assert.equal((await aziendeReq('verifica',null,{token:invToken})).status,200);
-    assert.ok((await aziendeReq('accetta',null,{token:invToken,password:pwInvito})).status>=400);
+    const accettaInvito={token:invToken,password:pwInvito,operazione:crypto.randomUUID()};
+    const nonVerificato=await aziendeReq('accetta',null,accettaInvito);
+    assert.ok([401,403].includes(nonVerificato.status));
+    assert.equal((await nonVerificato.json()).codice,
+      nonVerificato.status===401?'accesso_negato':'identita_non_verificata');
     let messaggio;
     for(let n=0;n<40&&!messaggio;n++){
       const mailList=await(await fetch('http://'+mailAddress+'/api/v2/messages',{signal:AbortSignal.timeout(3000)})).json();
@@ -589,8 +593,11 @@ async function collauda({ manuale = false } = {}) {
     const verificaInv=await fetch(base+'/verify?ticket='+ticketInv+'&codeChallenge='+challengeInv+'&redirectTo='+encodeURIComponent(origineLogin+'/api/auth/aziende/pagina'),{redirect:'manual',signal:AbortSignal.timeout(10000)});
     assert.ok([200,302,303,307].includes(verificaInv.status));
     assert.ok(!/refreshToken|refresh_token/i.test(verificaInv.headers.get('location')||''));
-    const accettato=await aziendeReq('accetta',null,{token:invToken,password:pwInvito});assert.equal(accettato.status,200);
-    assert.ok((await aziendeReq('accetta',null,{token:invToken,password:pwInvito})).status>=400);
+    const accettato=await aziendeReq('accetta',null,accettaInvito);assert.equal(accettato.status,200);
+    const confermaAccettazione=await aziendeReq('accetta',null,accettaInvito);
+    assert.equal(confermaAccettazione.status,200);assert.equal((await confermaAccettazione.json()).giaEseguita,true);
+    const diversaAccettazione=await aziendeReq('accetta',null,{...accettaInvito,operazione:crypto.randomUUID()});
+    assert.equal(diversaAccettazione.status,403);assert.equal((await diversaAccettazione.json()).codice,'invito_non_valido');
     const {risposta:loginReferente,cookieContesto:contestoReferente}=await loginConContesto({email:destinatario,password:pwInvito});assert.equal(loginReferente.status,200);
     const cookieReferente=contestoReferente+'; '+loginReferente.headers.getSetCookie().find(v=>v.startsWith('amr_sessione_prova=')).split(';')[0];
     assert.equal((await req('/api/search?tipo=moto&marca=Yamaha',cookieReferente)).status,403);
@@ -681,24 +688,40 @@ async function collauda({ manuale = false } = {}) {
     await assert.rejects(writerPool.query('SELECT * FROM auth.users'));
     await assert.rejects(writerPool.query('SELECT * FROM amr_accessi.aziende'));
     fase='quota commerciale PostgreSQL concorrente';
+    diagnosi='';
     const adminFixture={persona:preMfa.user.id,epoca:0,mfa:true};
     for(let n=0;n<6;n++)await sql(`INSERT INTO amr_accessi.aziende(id,scadenza,moduli) VALUES ('quota_${n}',now()+interval '1 day',ARRAY['moto']);`);
     assert.equal(await sql('SELECT count(*) FROM amr_accessi.aziende;'),'9');
-    const held=await writerPool.connect();let ultima;
+    const held=await writerPool.connect();let ultima,contendente,osservatore,concorrenzaQuota;
     try{
+      contendente=await writerPool.connect();
+      osservatore=await writerPool.connect();
       await held.query('BEGIN');
       await held.query("SET LOCAL application_name='amr_azienda_quota_holder'");
       const bound=require('../backend/nodi/aziende-postgres-prova').creaAziendePostgres({pool:held});
       ultima=await bound.invita(adminFixture,{operazione:crypto.randomUUID(),id:'quota_prima',nome:'Quota prima',email:'quota-prima@amr.invalid',moduli:['moto']});
-      const seconda=aziende.invita(adminFixture,{operazione:crypto.randomUUID(),id:'quota_seconda',nome:'Quota seconda',email:'quota-seconda@amr.invalid',moduli:['moto']}).then(v=>({v}),e=>({e}));
+      const pid=(await held.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+      const altro=(await contendente.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+      concorrenzaQuota=require('../backend/nodi/aziende-postgres-prova').creaAziendePostgres({pool:contendente})
+        .invita(adminFixture,{operazione:crypto.randomUUID(),id:'quota_seconda',nome:'Quota seconda',email:'quota-seconda@amr.invalid',moduli:['moto']}).then(v=>({v}),e=>({e}));
+      // Connessioni già pronte: il monitor Docker può arrivare dopo lock_timeout.
+      // Osservare la coppia effettiva evita anche lock estranei alla prova.
       let contesa=false;
-      for(let n=0;n<10&&!contesa;n++){
-        contesa=await sql("SELECT count(*) FROM pg_stat_activity WHERE usename='amr_commerciale' AND wait_event_type='Lock';")==='1';
-        if(!contesa)await new Promise(r=>setTimeout(r,25));
+      const termine=performance.now()+1000;
+      for(let n=0;n<100&&!contesa&&performance.now()<termine;n++){
+        const r=await osservatore.query('SELECT $1::integer = ANY(pg_blocking_pids($2::integer)) AS osservato',[pid,altro]);
+        contesa=r.rows[0].osservato===true;
+        if(!contesa)await new Promise(r=>setTimeout(r,10));
       }
       assert.equal(contesa,true);await held.query('COMMIT');
-      assert.equal((await seconda).e?.codice,'quota_aziende');
-    }finally{await held.query('ROLLBACK').catch(()=>{});held.release();}
+      assert.equal((await concorrenzaQuota).e?.codice,'quota_aziende');
+    }finally{
+      let erroreRollback;
+      try{await held.query('ROLLBACK');}catch(e){erroreRollback=e;}
+      held.release(erroreRollback);
+      try{await concorrenzaQuota;}finally{contendente?.release();osservatore?.release();}
+      if(erroreRollback)throw erroreRollback;
+    }
     assert.equal(await sql('SELECT count(*) FROM amr_accessi.aziende;'),'10');
     assert.equal(await sql("SELECT count(*) FROM amr_accessi.aziende WHERE id='quota_seconda';"),'0');
     // Token valido con l'identità verificata sbagliata non viene consumato.
