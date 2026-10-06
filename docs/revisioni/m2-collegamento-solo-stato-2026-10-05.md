@@ -648,3 +648,92 @@ richiede ID immutabili presenti e concordanti. Nel launcher diagnostico,
 cleanup e segnali precedono lo spawn: un errore successivo di lettura o
 scrittura chiude il solo figlio creato. Queste prove non attestano ancora
 l'esecuzione su Nhost o M2.
+
+### Candidato verificato e blocco dell'ingresso staging
+
+Il candidato definitivo è `8c396f98f6d2ec5b0c8784fb03a2cf694555b3ce`.
+Immagine caricata nel registry Nhost e manifest multiarch verificato:
+`sha256:f5b5dba7b8ea5a04221e9a9d523c3302e886b3fd2cdb4ef23d52ec237c715f43`.
+Entrambe le architetture eseguono Node 24.21.0 come UID 1000 e verificano
+il manifest del candidato. L'immagine è caricata, **non distribuita**.
+
+Collaudo locale sull'identità immutabile dell'immagine: PostgreSQL 18.6,
+Auth/MFA, autorizzazioni, ricerca simulata, riavvio sul volume e
+backup/restore isolato passano. Un job simulato di 16 secondi supera il timeout
+di 15 secondi del proxy locale; le 16 consultazioni GET restano brevi,
+massimo 64 ms. La risoluzione
+del tag viene vincolata all'ID immutabile anche dentro il runner: controllare
+il tag soltanto prima e dopo lascerebbe scoperto un cambio temporaneo.
+Suite completa sul candidato: 1.489 test, 1.480 pass, nove skip, zero
+failure/cancelled; esecuzione seriale con dati e log temporanei.
+Sono prove locali; non sostituiscono il collaudo del deploy remoto.
+
+Il preflight remoto blocca l'aggiornamento con
+`originale_non_disponibile`. La configurazione intera è ancora identica
+all'originale `66e2b24`; Run risulta pronto. Il 6 ottobre alle 04:15:36 UTC
+inizia una nuova controprova anonima di quattro giri, senza cookie,
+credenziali o richieste ai portali:
+
+| Giro | `/healthz` | `/` | `/api/admin` |
+| --- | --- | --- | --- |
+| 1 | 200 | 403 | 403 |
+| 2 | 200 | 200 | 403 |
+| 3 | 200 | 403 | 401 |
+| 4 | 200 | 403 | 401 |
+
+I 403 hanno body standard `Forbidden` e gli header `no-store`, `nosniff`
+e `no-referrer`, coerenti con il controllo di trasporto AMR. Il healthcheck
+lo esclude intenzionalmente: 200 non prova che frontend, login o API siano
+raggiungibili. Il difetto di disponibilità è **verificato**; la causa precisa
+resta **non dimostrata**. Peer proxy fuori dall'allowlist o differenze negli
+header sono ipotesi da misurare, non motivi per estendere la fiducia.
+Il campione precedente di due IP espliciti non garantisce stabilità futura.
+
+La [documentazione Express](https://expressjs.com/en/guide/behind-proxies/)
+richiede che la fiducia corrisponda al proxy effettivo e segnala il rischio
+di header falsificati. La [pagina networking Nhost](https://docs.nhost.io/products/run/networking)
+descrive rete interna e pubblicazione HTTPS; nella pagina consultata non è
+presente una garanzia di IP/CIDR stabili per il proxy. Non è stata applicata
+alcuna fiducia globale, CIDR aggiuntiva o modifica degli header accettati.
+
+Preparato un piano diagnostico distinto, ancora da autorizzare: sei
+configurazioni esatte per arrestare l'originale, avviare la sonda sullo
+stesso servizio e ripristinare l'originale. Usa l'immagine immutabile `8c`,
+stesse risorse/porta/volume, environment vuoto nella sonda. Massimo 20 minuti
+di sonda e 12 richieste brevi pianificate; nessuna chiamata Auth, PostgreSQL,
+nodo o portale. Il volume è preservato e il codice della sonda non lo legge.
+I log contengono soltanto IP privati del peer e classi degli header;
+la risposta pubblica non espone quei dati. Non modifica l'allowlist.
+
+Review indipendente del piano e controprove VM sulla privacy passano.
+Prova sull'immagine reale, senza rete esterna, volumi o porte pubblicate:
+risposta minima 200, UID 1000, SIGTERM/uscita 0 e cleanup confermati.
+**Limite:** il piano JSON non esegue la manutenzione. Il futuro executor
+deve applicare deadline, verifica dei pod arrestati, drift guard e ripristino
+anche su errore. La scadenza interna della sonda lascia `/healthz` acceso:
+non equivale all'arresto Run. La scelta è stata sottoposta all'utente prima
+di qualsiasi nuova pubblicazione diagnostica.
+
+### Preparazione del collegamento M2
+
+La procedura temporanea di collegamento è pronta ma **non eseguita**.
+Richiede prima la ricevuta del nuovo staging verificato, al momento assente.
+Verifica i byte di ogni membro dell'archivio contro l'artefatto pubblico,
+runtime ARM64 contro SHA ufficiale, origine e schema della credenziale,
+quattro campi del manifest centro/worker e marker produzione prima/dopo.
+Usa SSH con host key già verificata e senza agent forwarding; scrive soltanto
+in una nuova directory isolata. Non modifica Node, launchd, app o dati della
+produzione M2 e non installa dipendenze per il primo gate `--solo-stato`.
+
+Review indipendente: chiusi i finding sulle guardie di preparazione,
+ricevuta parziale e identità dei processi. Il collaudo vincola OBSERVE al PID
+restituito da START; STOP verifica la coppia launcher/worker attesa, uscita 0,
+assenza di segnale e scomparsa di entrambi; la riconnessione richiede nuovi
+PID per entrambi. Il launcher invia soltanto SIGTERM al proprio figlio.
+Le controprove sono locali con stub/VM, non un collegamento M2 riuscito.
+
+**Prossimo gate:** diagnosticare e risolvere il 403 senza indebolire i
+controlli, aggiornare/verificare lo staging, poi collegare e collaudare
+l'M2 soltanto per stato/compatibilità, arresto e riconnessione. Nessun file
+trasferito né worker avviato sull'M2 in questo incremento. Le prove live M2
+restano successive al coordinamento delle pause e dei limiti sull'IP condiviso.
