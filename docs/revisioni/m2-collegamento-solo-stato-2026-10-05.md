@@ -293,3 +293,46 @@ perduta e controlli prima di ogni comando. Le sostituzioni Run rileggono la
 configurazione e rifiutano drift sconosciuto; non sono CAS atomiche e richiedono
 manutenzione esclusiva. Il restore locale non include le password dei ruoli
 PG e non certifica il login Auth o un restore completo del progetto Nhost.
+
+### Ripristino autorizzato e verificato — 6 ottobre
+
+L'utente autorizza esplicitamente il ripristino dell'originale e il commit.
+Arresto della manutenzione verificato con configurazione a zero repliche,
+assenza di repliche e due controlli distinti dell'indisponibilità. Ripristinata
+la configurazione originale `66e2b24`, inclusi digest dell'immagine, riferimenti
+dei segreti, porta, healthcheck, compute e identico volume `amr-centro-dati`.
+Nessun restore di database o aggiornamento dello schema eseguito.
+
+La prima attesa di 300 secondi non conferma l'avvio: configurazione originale
+esatta e una replica richiesta, ma Run ancora assente dall'elenco del provider.
+Una richiesta minimale successiva `updateRunServiceConfig(resources.replicas=1)`
+viene accettata; alle 00:50:17 UTC il provider registra una replica pronta,
+stato `Running`. Non è dimostrato che sia stata la richiesta minimale a
+sbloccare il servizio: un ritardo di provisioning resta una spiegazione
+possibile. La CLI ufficiale usa anch'essa `ReplaceRunServiceConfig`; non è
+emerso un passaggio di deploy aggiuntivo mancante nel helper.
+
+Alle 00:51 UTC la configurazione coincide ancora integralmente con l'originale.
+Il resolver di sistema dell'iMac restituisce `EAI_NONAME`, mentre Google e
+Cloudflare DNS rispondono entrambi con stato NOERROR e indirizzi A del servizio.
+Questo distingue un problema del percorso DNS locale dall'assenza del servizio;
+non prova quale cache o resolver abbia conservato l'esito negativo.
+
+Prova HTTPS mediante lookup limitato al solo hostname dello staging e agli
+indirizzi restituiti dal DNS pubblico: certificato e hostname verificati,
+nessuna modifica al DNS di sistema, nessun redirect seguito. `/healthz`:
+HTTP 200, body esatto `ok`, `no-store`, 130 ms; ingresso frontend `/`: 200;
+`/api/auth/backup/stato` anonima: 401. Nessun cookie, login o ricerca ai portali.
+Login MFA, azienda e ricerca dopo questo riavvio restano da ricollaudare
+manualmente; la precedente prova dell'utente non vale come nuova verifica.
+
+I manifest delle immagini originale e di manutenzione sono presenti nel
+registry. L'originale è un indice OCI multiarch; la manutenzione un manifest
+OCI amd64. Questa differenza non dimostra un'incompatibilità di Nhost.
+Il backup reale resta mancante e il gate M2 resta fermo. Produzione M2 e
+file delle altre chat non modificati.
+
+Riferimenti verificati: [Run resources](https://docs.nhost.io/products/run/resources),
+[healthcheck](https://docs.nhost.io/products/run/health-checks),
+[deploy CLI](https://docs.nhost.io/products/run/cli-deployments) e
+[sorgente CLI](https://github.com/nhost/nhost/blob/main/cli/cmd/run/config_deploy.go).

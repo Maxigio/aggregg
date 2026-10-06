@@ -52,6 +52,7 @@ Queste regole sono operative; non sostituiscono un sandbox del sistema.
 
 ## Stato specifico dello staging
 
-Il ripristino della release AMR `66e2b24` resta da autorizzare. L'accesso
-completo concesso il 6 ottobre non autorizza a ripetere la recovery rifiutata.
-La produzione M2 resta esclusa da questa operazione.
+Il solo accesso completo non autorizzava a ripetere la recovery rifiutata.
+L'utente ha poi autorizzato esplicitamente il ripristino della release AMR
+`66e2b24`, eseguito il 6 ottobre sullo stesso volume. Le nuove operazioni
+mantengono i propri gate; la produzione M2 resta esclusa dal ripristino.
