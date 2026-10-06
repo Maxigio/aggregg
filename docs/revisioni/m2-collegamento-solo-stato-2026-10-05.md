@@ -523,3 +523,65 @@ repository riaperti da disco e dati ripristinati correttamente. Gate amd64
 ripetuto dopo le ultime correzioni, con cleanup confermato. Preflight remoto
 aggiornato: configurazione originale, HTTPS e accesso PostgreSQL compatibili;
 nessuna mutazione effettuata dal preflight.
+
+
+Review indipendente finale del commit `ca1ffaf`: nessun blocco confermato
+nelle quattro correzioni. 17 scenari VM passano (durabilità simulata,
+ACL, collisioni, ENOSPC e cause preservate). Sono prove controllate;
+la prova ACL sul filesystem e il gate Docker/Restic sono distinti e reali
+sull'iMac. Nessuna prova di perdita di alimentazione o guasto hardware.
+La nuova acquisizione remota usa l'immagine multiarch già verificata;
+nessun nuovo upload o aggiornamento del candidato AMR.
+
+
+### Backup reale e restore isolato completati
+
+Nuova acquisizione reale completata il 6 ottobre. Copie conservate in
+`/Users/aincrad/AMR-backup-staging/copia-Bvprsj`, fuori dalla repository:
+
+- PostgreSQL: archivio 235.520 byte, dump custom del database, ruoli senza
+  password di connessione e manifest. Snapshot Restic
+  `3d9e45d64f8384240a3018b06ab7acae261bd38b3c89728fff2febbd8059512b`.
+- Run: SQLite coerente 36.864 byte. Snapshot Restic
+  `724a7627ee6a9dbd0faf14faf615d1fa8fef9ce5507666fed20643ccccb3b97f`.
+
+Due repository cifrati separati; chiave esterna ai repository, privata sullo
+stesso iMac. Hash, lunghezze e `restic check --read-data` verificati.
+La ricevuta `esito.json` viene conservata con le copie; l'ultimo controllo
+indipendente conferma `cifrato:true`, `restore:true`, `cleanup:true`.
+Directory 0700 e chiave 0600, controllo ACL applicato; nessun valore di
+credenziale o riga personale esposto. L'exporter accetta soltanto il contenuto
+Run atteso (SQLite e sidecar, oltre a lost+found), non ignora altri dati.
+
+Il restore viene eseguito dopo la ripartenza del centro. Repository riaperti
+in un nuovo processo sull'iMac, byte/hash confrontati con l'acquisizione;
+PostgreSQL 18.6 in container nuovo senza rete o porte, bootstrap coerente,
+ruoli/owner/ACL riprodotti da dump e globals senza opzioni che li eliminino.
+Conteggi di utenti Auth e aziende uguali allo snapshot. SQLite: integrity_check
+`ok` e conteggi di lavori, eventi, sospensioni e revoche coerenti. Nessun
+ripristino sopra lo staging. Nessuna verifica funzionale Auth eseguita sul
+clone: è un restore di dati, non un intero progetto Nhost funzionante.
+
+Cleanup finale confermato: nessun container del collaudo/restore rimasto,
+gli otto container preesistenti ancora presenti; copie cifrate preservate,
+dati in chiaro temporanei rimossi. Chiavi/segreti del progetto Nhost non sono
+inclusi nel dump dei ruoli e restano gestiti separatamente dal provider.
+
+Dopo la manutenzione, il controllo Nhost mostrava originale integralmente
+configurato con una replica richiesta, ma nessuna replica effettiva. È stata
+rinnovata una sola richiesta `replicas:1`, senza modificare altri campi.
+Successiva verifica indipendente: Run `Running`, replica pronta alle
+02:18:16 UTC, configurazione intera esattamente originale (release `66e2b24`),
+healthcheck 200 con `ok`, frontend 200, API protetta anonima 401. Questa
+sequenza non prova che l'aggiornamento minimo abbia causato la ripartenza;
+la latenza della riconciliazione Run resta un punto operativo da osservare
+al prossimo aggiornamento, con timeout e recovery espliciti.
+
+Il gate **copia reale + restore isolato** è chiuso. Restano fuori: storage
+remoto gestito di produzione, perdita fisica dell'iMac, restore completo del
+progetto Nhost, nuovo candidato AMR e collegamento M2. Per il prossimo gate
+si può preparare l'aggiornamento staging e il worker M2 separato, inizialmente
+solo stato/compatibilità; nessuna ricerca live M2 prima del coordinamento
+delle pause sull'IP condiviso. Nessun aggiornamento della produzione M2,
+nessun nuovo servizio, volume, deploy applicativo o chiamata ai portali in
+questa acquisizione.
