@@ -60,7 +60,11 @@ async function provaColleghiPostgres({sql,pool,identita}) {
       DELETE FROM amr_accessi.aziende WHERE id='${aziendaInvito}'; COMMIT;`);
     risultati.push('invito azienda: pending recuperabile, scadenza e accettazione ritirano disponibilità SQL');
     await creaAzienda(a,refA); await creaAzienda(b,refB);
-    const sa={persona:refA.id,epoca:0,mfa:false}, sb={persona:refB.id,epoca:0,mfa:false};
+    const epocaRefA=identita?(await identita(refA.id)).epoca:0;
+    const epocaRefB=identita?(await identita(refB.id)).epoca:0;
+    await assertSQL(`(SELECT epoca FROM amr_accessi.persone WHERE id='${refA.id}')=${epocaRefA} AND
+      (SELECT epoca FROM amr_accessi.persone WHERE id='${refB.id}')=${epocaRefB}`);
+    const sa={persona:refA.id,epoca:epocaRefA,mfa:false}, sb={persona:refB.id,epoca:epocaRefB,mfa:false};
     for(const q of ['SELECT * FROM auth.users','SELECT * FROM amr_accessi.persone',
       'SELECT * FROM amr_accessi.colleghi_inviti','SELECT amr_accessi.colleghi_quota()',
       'SET ROLE amr_colleghi_definitore','CREATE TABLE amr_accessi.vietata(id int)']) {
@@ -126,10 +130,10 @@ async function provaColleghiPostgres({sql,pool,identita}) {
     await assert.rejects(account.revoca(nuovoRef,input(a,{persona:refB.id})),{codice:'collega_non_valido'});
     const revoca=input(a,{persona:refA.id});await account.revoca(nuovoRef,revoca);
     assert.equal((await account.revoca(nuovoRef,revoca)).giaEseguita,true);
-    await assertSQL(`(SELECT epoca FROM amr_accessi.persone WHERE id='${refA.id}')=1`);
+    await assertSQL(`(SELECT epoca FROM amr_accessi.persone WHERE id='${refA.id}')=${epocaRefA+1}`);
     await accetta(nuovoRef,a,refA);
     await account.revoca(nuovoRef,revoca); // vecchio retry non revoca la nuova membership
-    await assertSQL(`(SELECT epoca FROM amr_accessi.persone WHERE id='${refA.id}')=2 AND
+    await assertSQL(`(SELECT epoca FROM amr_accessi.persone WHERE id='${refA.id}')=${epocaRefA+2} AND
       EXISTS(SELECT 1 FROM amr_accessi.membri WHERE persona='${refA.id}')`);
     if (identita) {
       await provaRevocaCentro({account,identita,gestore:nuovoRef,azienda:a,persona:refA,accetta});

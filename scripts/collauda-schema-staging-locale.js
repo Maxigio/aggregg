@@ -5,7 +5,9 @@ const { preparaSchema } = require('./nhost/prepara-schema-staging');
 // Solo il cluster sintetico del launcher: il nome non è un login cloud.
 async function collaudaSchema({ sql, controprove = true,
   leggi = nome => fs.readFileSync(path.join(__dirname, '..', nome), 'utf8') }) {
-  const atteso = preparaSchema();
+  let atteso;
+  try { atteso = preparaSchema(); }
+  catch { throw new Error('schema_checkout_diverso_dal_candidato'); }
   const pacchetto = preparaSchema({ release: atteso.release, leggi });
   assert.deepEqual(pacchetto.impronte, atteso.impronte, 'schema_checkout_diverso_dal_candidato');
   await sql(`CREATE ROLE installatore_prova NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
