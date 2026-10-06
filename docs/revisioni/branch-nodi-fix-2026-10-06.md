@@ -140,9 +140,30 @@ Fondamento: [OWASP Authentication](https://cheatsheetseries.owasp.org/cheatsheet
 per errori generici e canali di distinzione; OWASP Session Management e
 PostgreSQL CREATE FUNCTION già citati per invalidazione e privilegi minimi.
 
+## F3 — Filtri e continuazioni di contesti superati
+
+Implementazione: cataloghi, filtri, scenari e aggiornamento dell'identità
+verificano il contesto dopo ogni attesa prima di modificare il frontend.
+Una risposta identica dei filtri non ricrea i controlli; una risposta aggiornata
+conserva le scelte ancora valide e segnala quelle invalidate, impedendo la
+paginazione della vecchia ricerca. Logout e cambio account invalidano le
+continuazioni precedenti; non vengono aggiunte chiamate alle fonti.
+
+Review indipendente: due regressioni confermate e corrette prima del commit.
+Un login sintetico fallito scartava una sessione iniziale valida; due login
+sintetici concorrenti potevano lasciare UI e cookie di aziende differenti.
+Il bootstrap ora attende il login e conserva la sessione dopo il fallimento;
+il login sintetico è seriale e usa il coordinamento cookie quando disponibile.
+
+Prove: gruppo browser precedente 46 pass su Node 24.21.0; dopo le correzioni,
+dieci casi mirati ripetuti in Chromium reale, zero skip. Coperti cookie HTTP,
+bootstrap nei due ordini, successo/reset, cataloghi pendenti e risposte tardive
+200/503. Seconda review con otto controprove VM e backend cookie reale: nessun
+finding residuo confermato. Il bottone del solo login sintetico resta bloccato
+durante il caricamento dell'identità e dei cataloghi. Prove manuali non eseguite.
+
 ## Lavoro restante
 
-- F3: risposte tardive dei filtri e continuazioni della vecchia identità.
 - F5: annuncio accessibile del conteggio risultati.
 - C2: rivalutare menu/dettagli nel collaudo staging; C3 costo idle noto.
 - Ingress staging: diagnosi remota e aggiornamento conservano il proprio gate.

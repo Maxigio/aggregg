@@ -16,6 +16,8 @@ let nodiElencati = '', diagnosticaAbilitata = false;
 let aggiornamentoStato = 0;
 let accountAbilitato = false, accessoSintetico = false;
 let ricercaHttpAttiva = null;
+let sequenzaContesto = 0, sequenzaTipo = 0, filtriApplicati = '';
+let accessoAttesa = null;
 const aree = ['ricercaPanel', 'diagnosticaPanel', 'accountPanel'];
 function aggiornaAree(aggiornaIndirizzo = true, focus = document.activeElement) {
   const disponibili = { ricercaPanel: accessoSintetico || Boolean(identita && moduli.length),
@@ -49,8 +51,8 @@ const normalizza = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f
   .toLowerCase().replace(/[^a-z0-9]/g, '');
 const tipo = () => form.elements.tipo.value;
 
-async function leggi(url, opzioni) {
-  const r = await fetch(url, opzioni);
+async function leggi(url, opzioni, trasporto = fetch) {
+  const r = await trasporto(url, opzioni);
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(r.status >= 500
     ? (r.status === 504 ? 'Esito incerto: riprova esplicitamente.' : `Servizio non disponibile (HTTP ${r.status}). Riprova più tardi.`)
@@ -135,52 +137,62 @@ function modelloScelto() {
   return modelli.find(m => normalizza(m.nome) === normalizza($('modello').value)) || null;
 }
 async function caricaMarche() {
-  const t = tipo(), numero = ++sequenzaMarche;
+  const t = tipo(), numero = ++sequenzaMarche, contesto = sequenzaContesto;
   $('marcaAiuto').textContent = 'Carico le marche…';
   try {
     if (!cataloghi[t]) cataloghi[t] = await leggi('/api/brands?tipo=' + t);
-    if (numero !== sequenzaMarche || t !== tipo()) return;
+    if (contesto !== sequenzaContesto || numero !== sequenzaMarche || t !== tipo()) return;
     opzioni($('marche'), cataloghi[t].brands.map(b => b.nome));
     $('marcaAiuto').textContent = `${cataloghi[t].brands.length} marche dal catalogo AMR`;
-  } catch (e) { if (numero === sequenzaMarche) $('marcaAiuto').textContent = `Catalogo non disponibile: ${e.message}`; }
+  } catch (e) { if (contesto === sequenzaContesto && numero === sequenzaMarche) $('marcaAiuto').textContent = `Catalogo non disponibile: ${e.message}`; }
 }
 async function caricaModelli() {
-  const numero = ++sequenzaModelli, t = tipo(), marca = marcaScelta();
+  const numero = ++sequenzaModelli, t = tipo(), marca = marcaScelta(), contesto = sequenzaContesto;
   modelli = []; opzioni($('modelli'), []); opzioni($('versioni'), ['Nessuna Versione']);
   if (!marca) { $('modelloAiuto').textContent = 'Seleziona una marca dal catalogo.'; return; }
   const key = `${t}|${marca.nome}`;
   $('modelloAiuto').textContent = 'Carico i modelli…';
   try {
     if (!modelliCache.has(key)) modelliCache.set(key, await leggi(`/api/models?tipo=${t}&marca=${encodeURIComponent(marca.nome)}`));
-    if (numero !== sequenzaModelli || t !== tipo() || marca.nome !== marcaScelta()?.nome) return;
+    if (contesto !== sequenzaContesto || numero !== sequenzaModelli || t !== tipo() || marca.nome !== marcaScelta()?.nome) return;
     const data = modelliCache.get(key); modelli = data.modelli || [];
     opzioni($('modelli'), modelli.map(m => m.nome));
     $('modelloAiuto').textContent = data.fonteMotoitKo
       ? `Catalogo Moto.it non disponibile: ${data.fonteMotoitKo}. Altri modelli disponibili.`
       : `${modelli.length} modelli; la ricerca per sola marca resta possibile.`;
-  } catch (e) { if (numero === sequenzaModelli) $('modelloAiuto').textContent = `Modelli non disponibili: ${e.message}`; }
+  } catch (e) { if (contesto === sequenzaContesto && numero === sequenzaModelli) $('modelloAiuto').textContent = `Modelli non disponibili: ${e.message}`; }
 }
 async function caricaVersioni() {
-  const numero = ++sequenzaVersioni, t = tipo(), marca = marcaScelta(), modello = modelloScelto();
+  const numero = ++sequenzaVersioni, t = tipo(), marca = marcaScelta(), modello = modelloScelto(), contesto = sequenzaContesto;
   opzioni($('versioni'), ['Nessuna Versione']);
   if (!marca || !modello) return;
   const key = `${t}|${marca.nome}|${modello.nome}`;
   try {
     if (!versioniCache.has(key)) versioniCache.set(key, await leggi(`/api/versioni?tipo=${t}&marca=${encodeURIComponent(marca.nome)}&modello=${encodeURIComponent(modello.nome)}`));
-    if (numero !== sequenzaVersioni || t !== tipo() || modello.nome !== modelloScelto()?.nome) return;
+    if (contesto !== sequenzaContesto || numero !== sequenzaVersioni || t !== tipo() || modello.nome !== modelloScelto()?.nome) return;
     opzioni($('versioni'), ['Nessuna Versione', ...(versioniCache.get(key).versioni || [])]);
   } catch (_) { /* Resta disponibile il testo libero e «Nessuna Versione». */ }
 }
-async function caricaFiltri() {
+async function caricaFiltri(contesto = sequenzaContesto) {
+  if (contesto !== sequenzaContesto) return;
   try {
     const data = await leggi('/api/filtri');
-    const regioni = $('regione'); regioni.replaceChildren();
+    if (contesto !== sequenzaContesto) return;
+    const firma = JSON.stringify(data);
+    // Il catalogo è condiviso: una risposta identica non ricrea controlli e focus.
+    if (firma === filtriApplicati) return;
+    const regioni = $('regione'), regioneScelta = regioni.value, area = $('filtriAuto');
+    const scelte = new Map(Array.from(area.querySelectorAll('select'), s => [s.name, s.value]));
+    const focus = area.contains(document.activeElement) ? document.activeElement : null;
+    regioni.replaceChildren();
     for (const nome of ['', ...data.regioni]) {
       const option = document.createElement('option'); option.value = nome;
       option.textContent = nome ? nome[0].toUpperCase() + nome.slice(1) : 'Tutta Italia';
       regioni.append(option);
     }
-    const area = $('filtriAuto'); area.replaceChildren();
+    regioni.value = data.regioni.includes(regioneScelta) ? regioneScelta : '';
+    let cambiati = regioni.value !== regioneScelta;
+    area.replaceChildren();
     for (const f of data.filtriAuto) {
       const label = document.createElement('label'); label.textContent = f.etichetta;
       const select = document.createElement('select'); select.name = f.nome;
@@ -190,11 +202,21 @@ async function caricaFiltri() {
         option.textContent = v.etichetta + (v.allargaSu?.length ? ` · su ${v.allargaSu.join(' e ')} allarga` : '');
         select.append(option);
       }
+      const scelta = scelte.get(f.nome) || '';
+      select.value = Array.from(select.options).some(o => o.value === scelta) ? scelta : '';
+      cambiati ||= select.value !== scelta; scelte.delete(f.nome);
       label.append(select); area.append(label);
     }
-  } catch (e) { messaggio(`Filtri avanzati non disponibili: ${e.message}`); }
+    filtriApplicati = firma;
+    if (cambiati || [...scelte.values()].some(Boolean)) filtriCambiati();
+    if (focus && document.activeElement === document.body) {
+      const equivalente = Array.from(area.querySelectorAll('select')).find(s => s.name === focus.name);
+      equivalente?.focus({ preventScroll: true });
+    }
+  } catch (e) { if (contesto === sequenzaContesto) messaggio(`Filtri avanzati non disponibili: ${e.message}`); }
 }
 function aggiornaTipo() {
+  sequenzaTipo++;
   sequenzaMarche++; sequenzaModelli++; sequenzaVersioni++;
   $('marca').value = ''; $('modello').value = ''; $('versione').value = '';
   modelli = []; opzioni($('modelli'), []); opzioni($('versioni'), ['Nessuna Versione']);
@@ -653,7 +675,8 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0, riprov
   }
 }
 
-async function applicaIdentita(data) {
+async function applicaIdentita(data, contesto = ++sequenzaContesto) {
+  if (contesto !== sequenzaContesto) return;
   abbandonaRicercaHttp();
   identita = data.azienda; moduli = data.moduli; sequenzaRicerca++; ricercaOccupata = false;
   aggiornaAree();
@@ -676,12 +699,16 @@ async function applicaIdentita(data) {
   if (moduli.length) {
     const t = moduli.includes(tipo()) ? tipo() : moduli[0];
     form.querySelector(`[name=tipo][value=${t}]`).checked = true;
-    await aggiornaTipo(); await caricaFiltri();
+    await aggiornaTipo();
+    if (contesto !== sequenzaContesto) return;
+    await caricaFiltri(contesto);
+    if (contesto !== sequenzaContesto) return;
   }
   await aggiornaStato();
 }
 // Una sessione cambiata invalida anche risposte e pagine in attesa nel browser.
 function terminaContesto() {
+  sequenzaContesto++;
   abbandonaRicercaHttp();
   sequenzaRicerca++; sequenzaStato++; sequenzaMarche++; sequenzaModelli++; sequenzaVersioni++;
   aggiornamentoStato = 0;
@@ -702,22 +729,32 @@ document.addEventListener('amr:account', async e => {
   if (firma === contestoAccount) return;
   const focusPrecedente = document.activeElement;
   contestoAccount = firma; terminaContesto();
+  const contesto = sequenzaContesto;
   diagnosticaAbilitata = Boolean(me?.admin);
   aggiornaAree(false, focusPrecedente);
   if (diagnosticaAbilitata) aggiornaStato();
   if (me?.aziendaValida) {
-    try { await applicaIdentita(me); }
-    catch { $('identita').textContent = 'Impossibile aggiornare i cataloghi dell’account.'; }
+    try { await applicaIdentita(me, contesto); }
+    catch { if (contesto === sequenzaContesto) $('identita').textContent = 'Impossibile aggiornare i cataloghi dell’account.'; }
   } else if (me) $('identita').textContent = me.admin
     ? 'Admin gestionale: le ricerche si apriranno con l’account del referente, dopo accettazione e attivazione dell’azienda.' : 'Azienda non attiva: completa l’invito e attendi l’attivazione dell’Admin.';
-  aggiornaAree();
+  if (contesto === sequenzaContesto) aggiornaAree();
 });
 $('entra').addEventListener('click', async () => {
+  // Anche un click sintetico deve evitare POST concorrenti che riscrivono il cookie.
+  if (accessoAttesa) return;
+  $('entra').disabled = true;
+  let contesto = sequenzaContesto;
   try {
-    const data = await leggi('/api/test/login', { method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ azienda: $('azienda').value }) });
-    await applicaIdentita(data);
-  } catch (e) { $('identita').textContent = e.message; }
+    accessoAttesa = leggi('/api/test/login', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ azienda: $('azienda').value }) },
+    window.amrCookieFetch && navigator.locks ? window.amrCookieFetch : fetch);
+    const data = await accessoAttesa;
+    if (contesto !== sequenzaContesto) return;
+    contesto = ++sequenzaContesto;
+    await applicaIdentita(data, contesto);
+  } catch (e) { if (contesto === sequenzaContesto) $('identita').textContent = e.message; }
+  finally { accessoAttesa = null; $('entra').disabled = false; }
 });
 for (const radio of form.querySelectorAll('[name=tipo]')) radio.addEventListener('change', aggiornaTipo);
 function filtriCambiati() {
@@ -734,9 +771,15 @@ $('modello').addEventListener('input', () => { $('versione').value = ''; caricaV
 for (const button of document.querySelectorAll('[data-scenario]')) button.addEventListener('click', async () => {
   const t = button.dataset.scenario;
   if (!moduli.includes(t)) { messaggio('L’identità corrente non ha il modulo ' + t + '.'); return; }
-  form.querySelector(`[name=tipo][value=${t}]`).checked = true; await aggiornaTipo();
+  form.querySelector(`[name=tipo][value=${t}]`).checked = true;
+  const caricamento = aggiornaTipo(), contesto = sequenzaContesto, cambio = sequenzaTipo;
+  const corrente = () => contesto === sequenzaContesto && cambio === sequenzaTipo;
+  await caricamento;
+  if (!corrente()) return;
   $('marca').value = t === 'auto' ? 'Fiat' : 'Yamaha'; await caricaModelli();
+  if (!corrente()) return;
   $('modello').value = t === 'auto' ? 'Panda' : 'MT-07'; await caricaVersioni();
+  if (!corrente()) return;
   $('versione').value = 'Nessuna Versione'; messaggio('');
   filtriCambiati();
 });
@@ -799,10 +842,11 @@ setInterval(() => {
   aggiornaRetryPrimaPagina();
   if (!aggiornamentoStato && !$('aggiorna').disabled) aggiornaStato();
 }, 3000);
+const contestoConfigurazione = sequenzaContesto;
 leggi('/api/test/config').then(async config => {
   if (config.accesso === 'nhost') {
     document.querySelector('.identity-card').hidden = true;
-    $('risultatoAiuto').textContent = 'Le ricerche richiedono una licenza aziendale e un nodo disponibile.';
+    if (contestoConfigurazione === sequenzaContesto) $('risultatoAiuto').textContent = 'Le ricerche richiedono una licenza aziendale e un nodo disponibile.';
     accountAbilitato = true; aggiornaAree(false);
     const script = document.createElement('script');
     script.src = '/api/auth/aziende/pagina.js'; script.defer = true;
@@ -815,7 +859,17 @@ leggi('/api/test/config').then(async config => {
     }
   } else {
     accessoSintetico = true; diagnosticaAbilitata = true; aggiornaAree(); aggiornaStato();
-    try { const data = await leggi('/api/test/me'); $('azienda').value = data.azienda; await applicaIdentita(data); }
+    if (contestoConfigurazione !== sequenzaContesto) return;
+    try {
+      const data = await leggi('/api/test/me');
+      if (contestoConfigurazione !== sequenzaContesto) return;
+      // Il fallimento lascia valida la sessione iniziale; successo e reset la superano.
+      while (accessoAttesa) {
+        try { await accessoAttesa; } catch {}
+        if (contestoConfigurazione !== sequenzaContesto) return;
+      }
+      $('azienda').value = data.azienda; await applicaIdentita(data);
+    }
     catch {}
   }
-}).catch(() => { $('identita').textContent = 'Configurazione accessi non disponibile.'; });
+}).catch(() => { if (contestoConfigurazione === sequenzaContesto) $('identita').textContent = 'Configurazione accessi non disponibile.'; });

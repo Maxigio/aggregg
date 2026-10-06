@@ -13,8 +13,9 @@ async function attendiRichieste(lista, numero) {
   assert.equal(lista.length, numero, 'Richieste sintetiche ricevute');
 }
 
-async function apriPrototipo(t, api) {
+async function apriPrototipo(t, api, http) {
   const server = require('node:http').createServer((req, res) => {
+    if (http?.(req, res)) return;
     const files = { '/': 'backend/nodi/prototipo.html', '/prototipo.js': 'frontend/nodi-prototipo.js',
       '/prototipo.css': 'frontend/nodi-prototipo.css', '/api/auth/bootstrap.js': 'frontend/nodi-bootstrap-prova.js' };
     const file = files[req.url];
@@ -81,6 +82,389 @@ async function apriPrototipo(t, api) {
   await page.waitForFunction(() => document.getElementById('aggiornato').textContent.startsWith('Aggiornato alle'));
   return { page, errors };
 }
+
+const filtriProva = { regioni: ['lazio', 'lombardia'], filtriAuto: [{ nome: 'carburante',
+  etichetta: 'Carburante', voci: [{ id: 'benzina', etichetta: 'Benzina' }, { id: 'diesel', etichetta: 'Diesel' }] }] };
+async function apriCataloghiProva(t, api, http) {
+  const pagina = await apriPrototipo(t, async (route, url) => {
+    if (await api?.(route, url)) return true;
+    const risposte = {
+      '/api/brands': { brands: [{ nome: url.searchParams.get('tipo') === 'auto' ? 'Fiat' : 'Yamaha' }] },
+      '/api/filtri': filtriProva, '/api/models': { modelli: [{ nome: 'Panda' }] },
+      '/api/versioni': { versioni: ['Versione di prova'] },
+      '/api/search': { risultati: [], sources: { subito: { status: 'empty', hasMore: false } } },
+    };
+    if (!Object.hasOwn(risposte, url.pathname)) return false;
+    await route.fulfill({ json: risposte[url.pathname] }); return true;
+  }, http);
+  await pagina.page.locator('.area-nav a[href="#ricercaPanel"]').click();
+  return pagina;
+}
+
+function accessoCookieProva({ iniziale = false, meInAttesa = false } = {}) {
+  const login = [], me = [], aziende = {
+    aziendaA: { azienda: 'aziendaA', moduli: ['auto', 'moto'] },
+    aziendaB: { azienda: 'aziendaB', moduli: ['moto'] },
+  }, cookie = { aziendaA: 'a'.repeat(64), aziendaB: 'b'.repeat(64) };
+  const intestazione = azienda => `amr_prova=${cookie[azienda]}; HttpOnly; SameSite=Strict; Path=/`;
+  function rispondi(res, status, data, azienda) {
+    if (azienda) res.setHeader('set-cookie', intestazione(azienda));
+    res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(data));
+  }
+  return { login, me, cookie,
+    api: async (route, url) => {
+      if (!['/api/test/login', '/api/test/me'].includes(url.pathname)) return false;
+      await route.continue(); return true;
+    },
+    http: (req, res) => {
+      if (req.url === '/' && iniziale) res.setHeader('set-cookie', intestazione('aziendaA'));
+      if (req.url === '/api/test/login' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => login.push({ res, azienda: JSON.parse(body).azienda, cookie: req.headers.cookie }));
+        return true;
+      }
+      if (req.url !== '/api/test/me') return false;
+      const token = /(?:^|;\s*)amr_prova=([^;]+)/.exec(req.headers.cookie || '')?.[1];
+      const azienda = Object.keys(cookie).find(nome => cookie[nome] === token);
+      const risposta = { res, status: azienda ? 200 : 401, data: aziende[azienda] || {} };
+      if (meInAttesa) me.push(risposta);
+      else rispondi(res, risposta.status, risposta.data);
+      return true;
+    },
+    concludiLogin: (indice, status = 200) => {
+      const richiesta = login[indice];
+      rispondi(richiesta.res, status, status === 200 ? aziende[richiesta.azienda] : {},
+        status === 200 ? richiesta.azienda : undefined);
+    },
+    concludiMe: indice => {
+      meInAttesa = false;
+      const risposta = me[indice]; rispondi(risposta.res, risposta.status, risposta.data);
+    },
+  };
+}
+
+async function verificaSessioneCookie(page, fixture, azienda) {
+  const cookie = (await page.context().cookies()).find(c => c.name === 'amr_prova');
+  assert.equal(cookie?.value, fixture.cookie[azienda]);
+  assert.equal(cookie.httpOnly, true); assert.equal(cookie.sameSite, 'Strict');
+  assert.equal(await page.evaluate(async () => (await (await fetch('/api/test/me')).json()).azienda), azienda);
+}
+
+for (const fase of ['brands', 'filtri']) for (const status of [200, 503])
+test(`F3: ${fase} tardivo (${status}) non riscrive filtri, avvisi o diagnostica di B`, opzioniBrowser, async t => {
+  const pendenti = []; let trattieni = true, filtri = 0, stati = 0;
+  const { page, errors } = await apriCataloghiProva(t, async (route, url) => {
+    if (url.pathname === '/api/filtri') filtri++;
+    if (url.pathname === '/api/stato') stati++;
+    if (url.pathname === '/api/' + fase && trattieni) { pendenti.push(route); return true; }
+    return false;
+  });
+  await page.evaluate(() => { window.identitaA = applicaIdentita({ azienda: 'aziendaA', moduli: ['auto', 'moto'] }); });
+  await attendiRichieste(pendenti, 1); trattieni = false;
+  await page.evaluate(() => applicaIdentita({ azienda: 'aziendaB', moduli: ['auto', 'moto'] }));
+  await page.locator('.advanced > summary').click();
+  await page.locator('#regione').selectOption('lombardia');
+  await page.locator('#filtriAuto select').selectOption('diesel');
+  await page.evaluate(() => messaggio('Avviso corrente'));
+  const prima = { filtri, stati };
+  await pendenti.pop().fulfill({ status, json: fase === 'filtri' ? filtriProva : { brands: [{ nome: 'Fiat' }] } });
+  await page.evaluate(() => window.identitaA);
+  assert.equal(await page.locator('#regione').inputValue(), 'lombardia');
+  assert.equal(await page.locator('#filtriAuto select').inputValue(), 'diesel');
+  assert.equal(await page.locator('#formErrore').textContent(), 'Avviso corrente');
+  assert.equal(await page.locator('#identita').textContent(), 'aziendaB · auto + moto');
+  assert.deepEqual({ filtri, stati }, prima, 'Nessun caricamento successivo del contesto A');
+  assert.deepEqual(errors, []);
+});
+
+for (const fase of ['brands', 'filtri']) for (const status of [200, 503])
+test(`F3: reset durante ${fase} (${status}) blocca tutte le continuazioni dell’identità`, opzioniBrowser, async t => {
+  const pendenti = []; let filtri = 0, stati = 0;
+  const { page, errors } = await apriCataloghiProva(t, async (route, url) => {
+    if (url.pathname === '/api/filtri') filtri++;
+    if (url.pathname === '/api/stato') stati++;
+    if (url.pathname === '/api/' + fase) { pendenti.push(route); return true; }
+    return false;
+  });
+  await page.evaluate(() => { window.identitaA = applicaIdentita({ azienda: 'aziendaA', moduli: ['auto', 'moto'] }); });
+  await attendiRichieste(pendenti, 1);
+  await page.evaluate(() => terminaContesto());
+  const prima = { filtri, stati };
+  await pendenti.pop().fulfill({ status, json: fase === 'filtri' ? filtriProva : { brands: [{ nome: 'Fiat' }] } });
+  await page.evaluate(() => window.identitaA);
+  assert.equal(await page.locator('#cerca').isVisible(), false);
+  assert.equal(await page.locator('#regione option').count(), 1);
+  assert.equal(await page.locator('#filtriAuto select').count(), 0);
+  assert.equal(await page.locator('#formErrore').textContent(), '');
+  assert.deepEqual({ filtri, stati }, prima);
+  assert.deepEqual(errors, []);
+});
+
+test('F3: risposta corrente conserva scelte fatte durante l’attesa e resta valida dopo una ricerca', opzioniBrowser, async t => {
+  const pendenti = []; let trattieni = false;
+  const { page, errors } = await apriCataloghiProva(t, async (route, url) => {
+    if (url.pathname === '/api/filtri' && trattieni) { pendenti.push(route); return true; }
+    return false;
+  });
+  await page.evaluate(() => applicaIdentita({ azienda: 'aziendaA', moduli: ['auto', 'moto'] }));
+  await page.locator('.advanced > summary').click();
+  await page.locator('#regione').selectOption('lazio');
+  await page.locator('#filtriAuto select').selectOption('benzina');
+  trattieni = true;
+  await page.evaluate(() => { window.filtriInAttesa = caricaFiltri(); });
+  await attendiRichieste(pendenti, 1);
+  await page.locator('#regione').selectOption('lombardia');
+  await page.locator('#filtriAuto select').selectOption('diesel');
+  await page.evaluate(() => inviaRicerca(new URLSearchParams({ tipo: 'auto', marca: 'Fiat' })));
+  await page.locator('#filtriAuto select').focus();
+  await page.evaluate(() => { window.selectCorrente = document.activeElement; });
+  await pendenti.pop().fulfill({ json: filtriProva });
+  await page.evaluate(() => window.filtriInAttesa);
+  assert.equal(await page.locator('#regione').inputValue(), 'lombardia');
+  assert.equal(await page.locator('#filtriAuto select').inputValue(), 'diesel');
+  assert.equal(await page.evaluate(() => document.activeElement === window.selectCorrente), true);
+  // Un catalogo realmente cambiato deve ancora essere applicato, conservando i valori validi.
+  await page.evaluate(() => { window.filtriInAttesa = caricaFiltri(); });
+  await attendiRichieste(pendenti, 1);
+  await pendenti.pop().fulfill({ json: { ...filtriProva, regioni: [...filtriProva.regioni, 'veneto'],
+    filtriAuto: [{ ...filtriProva.filtriAuto[0], voci: [...filtriProva.filtriAuto[0].voci, { id: 'gpl', etichetta: 'GPL' }] }] } });
+  await page.evaluate(() => window.filtriInAttesa);
+  assert.equal(await page.locator('#regione').inputValue(), 'lombardia');
+  assert.equal(await page.locator('#filtriAuto select').inputValue(), 'diesel');
+  assert.equal(await page.locator('#filtriAuto option[value=gpl]').count(), 1);
+  assert.equal(await page.evaluate(() => document.activeElement.name), 'carburante');
+  assert.deepEqual(errors, []);
+});
+
+test('F3: cambio tipo durante le marche conserva il primo caricamento dei filtri condivisi', opzioniBrowser, async t => {
+  const pendenti = []; let filtri = 0;
+  const { page, errors } = await apriCataloghiProva(t, async (route, url) => {
+    if (url.pathname === '/api/filtri') filtri++;
+    if (url.pathname === '/api/brands' && url.searchParams.get('tipo') === 'auto') { pendenti.push(route); return true; }
+    return false;
+  });
+  await page.evaluate(() => { window.identitaA = applicaIdentita({ azienda: 'aziendaA', moduli: ['auto', 'moto'] }); });
+  await attendiRichieste(pendenti, 1);
+  await page.locator('[name=tipo][value=moto]').check();
+  await page.waitForFunction(() => document.getElementById('marche').textContent === ''
+    && document.getElementById('marche').firstChild?.value === 'Yamaha');
+  await pendenti.pop().fulfill({ json: { brands: [{ nome: 'Fiat' }] } });
+  await page.evaluate(() => window.identitaA);
+  assert.equal(filtri, 1);
+  assert.equal(await page.locator('#regione option').count(), 3);
+  assert.equal(await page.locator('#filtriAuto select').count(), 1);
+  assert.equal(await page.locator('#filtriAuto').isVisible(), false);
+  assert.equal(await page.locator('#marche option').first().getAttribute('value'), 'Yamaha');
+  assert.deepEqual(errors, []);
+});
+
+for (const fase of ['brands', 'models', 'versioni']) for (const cambio of ['tipo', 'reset'])
+test(`F3: scenario superato durante ${fase} non riparte dopo ${cambio}`, opzioniBrowser, async t => {
+  const pendenti = []; let trattieni = false, modelli = 0, versioni = 0;
+  const { page, errors } = await apriCataloghiProva(t, async (route, url) => {
+    if (url.pathname === '/api/models') modelli++;
+    if (url.pathname === '/api/versioni') versioni++;
+    if (url.pathname === '/api/' + fase && trattieni) { pendenti.push(route); return true; }
+    return false;
+  });
+  await page.evaluate(() => applicaIdentita({ azienda: 'aziendaA', moduli: ['auto', 'moto'] }));
+  if (fase === 'brands') await page.evaluate(() => { cataloghi.auto = null; });
+  trattieni = true; await page.locator('[data-scenario=auto]').click();
+  await attendiRichieste(pendenti, 1); trattieni = false;
+  if (cambio === 'tipo') {
+    await page.locator('[name=tipo][value=moto]').check();
+    await page.locator('[name=tipo][value=auto]').check();
+    await page.waitForFunction(() => document.getElementById('marche').firstChild?.value === 'Fiat');
+  } else await page.evaluate(() => terminaContesto());
+  await page.evaluate(() => {
+    $('marca').value = 'Scelta corrente'; $('modello').value = 'Modello corrente'; $('versione').value = 'Versione corrente';
+  });
+  const prima = { modelli, versioni };
+  await pendenti.pop().fulfill({ json: fase === 'brands' ? { brands: [{ nome: 'Fiat' }] }
+    : fase === 'models' ? { modelli: [{ nome: 'Panda' }] } : { versioni: ['Versione di prova'] } });
+  await page.waitForTimeout(50);
+  assert.equal(await page.locator('#marca').inputValue(), 'Scelta corrente');
+  assert.equal(await page.locator('#modello').inputValue(), 'Modello corrente');
+  assert.equal(await page.locator('#versione').inputValue(), 'Versione corrente');
+  assert.deepEqual({ modelli, versioni }, prima);
+  assert.deepEqual(errors, []);
+});
+
+test('F3: scenario corrente completa la sequenza originale, senza richieste aggiuntive', opzioniBrowser, async t => {
+  let modelli = 0, versioni = 0;
+  const { page, errors } = await apriCataloghiProva(t, async (route, url) => {
+    if (url.pathname === '/api/models') modelli++;
+    if (url.pathname === '/api/versioni') versioni++;
+    return false;
+  });
+  await page.evaluate(() => applicaIdentita({ azienda: 'aziendaA', moduli: ['auto', 'moto'] }));
+  await page.locator('[data-scenario=auto]').click();
+  await page.waitForFunction(() => $('versione').value === 'Nessuna Versione');
+  assert.equal(await page.locator('#marca').inputValue(), 'Fiat');
+  assert.equal(await page.locator('#modello').inputValue(), 'Panda');
+  assert.deepEqual({ modelli, versioni }, { modelli: 1, versioni: 1 });
+  assert.deepEqual(errors, []);
+});
+
+test('F3: errore filtri corrente resta visibile e il caricamento successivo resta possibile', opzioniBrowser, async t => {
+  let guasto = true;
+  const { page, errors } = await apriCataloghiProva(t, async (route, url) => {
+    if (url.pathname === '/api/filtri' && guasto) { await route.fulfill({ status: 503, json: {} }); return true; }
+    return false;
+  });
+  await page.evaluate(() => applicaIdentita({ azienda: 'aziendaA', moduli: ['auto', 'moto'] }));
+  assert.match(await page.locator('#formErrore').textContent(), /Filtri avanzati non disponibili/);
+  guasto = false;
+  await page.evaluate(() => caricaFiltri());
+  assert.equal(await page.locator('#regione option').count(), 3);
+  assert.equal(await page.locator('#filtriAuto select').count(), 1);
+  assert.deepEqual(errors, []);
+});
+
+test('F3: login sintetico seriale mantiene UI e cookie HTTP coerenti e permette il login successivo', opzioniBrowser, async t => {
+  const fixture = accessoCookieProva();
+  const { page, errors } = await apriCataloghiProva(t, fixture.api, fixture.http);
+  await page.locator('#entra').click(); await attendiRichieste(fixture.login, 1);
+  assert.equal(await page.locator('#entra').isDisabled(), true);
+  await page.locator('#azienda').selectOption('aziendaB');
+  await page.evaluate(() => $('entra').dispatchEvent(new MouseEvent('click')));
+  fixture.concludiLogin(0);
+  await page.waitForFunction(() => $('regione').options.length === 3);
+  await page.waitForFunction(() => !$('entra').disabled);
+  assert.equal(fixture.login.length, 1, 'Il guard blocca anche click sintetici sul bottone disabilitato');
+  assert.equal(await page.locator('#identita').textContent(), 'aziendaA · auto + moto');
+  await verificaSessioneCookie(page, fixture, 'aziendaA');
+  await page.locator('#entra').click(); await attendiRichieste(fixture.login, 2);
+  assert.match(fixture.login[1].cookie, new RegExp('amr_prova=' + fixture.cookie.aziendaA));
+  fixture.concludiLogin(1);
+  await page.waitForFunction(() => !$('entra').disabled);
+  assert.equal(await page.locator('#identita').textContent(), 'aziendaB · moto');
+  assert.equal(await page.locator('[name=tipo][value=moto]').isChecked(), true);
+  await verificaSessioneCookie(page, fixture, 'aziendaB');
+  assert.deepEqual(errors, []);
+});
+
+test('F3: login fallito conserva il caricamento dei cataloghi della sessione corrente', opzioniBrowser, async t => {
+  const pendenti = [];
+  const { page, errors } = await apriCataloghiProva(t, async (route, url) => {
+    if (url.pathname === '/api/brands') { pendenti.push(route); return true; }
+    if (url.pathname === '/api/test/login') { await route.fulfill({ status: 503, json: {} }); return true; }
+    return false;
+  });
+  await page.evaluate(() => { window.identitaA = applicaIdentita({ azienda: 'aziendaA', moduli: ['auto', 'moto'] }); });
+  await attendiRichieste(pendenti, 1);
+  await page.locator('#entra').click();
+  await page.waitForFunction(() => $('identita').textContent.includes('Servizio non disponibile'));
+  await pendenti.pop().fulfill({ json: { brands: [{ nome: 'Fiat' }] } });
+  await page.evaluate(() => window.identitaA);
+  assert.equal(await page.locator('#cerca').isVisible(), true);
+  assert.equal(await page.locator('#regione option').count(), 3);
+  assert.equal(await page.locator('#marche option').first().getAttribute('value'), 'Fiat');
+  assert.deepEqual(errors, []);
+});
+
+for (const mePrima of [false, true])
+test(`F3: bootstrap valido riprende dopo login fallito con me ${mePrima ? 'prima' : 'dopo'} il fallimento`, opzioniBrowser, async t => {
+  const fixture = accessoCookieProva({ iniziale: true, meInAttesa: true });
+  const { page, errors } = await apriCataloghiProva(t, fixture.api, fixture.http);
+  await attendiRichieste(fixture.me, 1);
+  await page.locator('#azienda').selectOption('aziendaB'); await page.locator('#entra').click();
+  await attendiRichieste(fixture.login, 1);
+  if (mePrima) {
+    fixture.concludiMe(0);
+    await page.waitForTimeout(50);
+    assert.equal(await page.locator('#cerca').isVisible(), false);
+  }
+  fixture.concludiLogin(0, 503);
+  await page.waitForFunction(() => !$('entra').disabled);
+  if (!mePrima) fixture.concludiMe(0);
+  await page.waitForFunction(() => $('regione').options.length === 3);
+  assert.equal(await page.locator('#cerca').isVisible(), true);
+  assert.equal(await page.locator('#identita').textContent(), 'aziendaA · auto + moto');
+  assert.equal(await page.locator('#azienda').inputValue(), 'aziendaA');
+  await verificaSessioneCookie(page, fixture, 'aziendaA');
+  assert.deepEqual(errors, []);
+});
+
+for (const reset of [false, true])
+test(`F3: bootstrap in attesa non supera ${reset ? 'reset' : 'login riuscito'} con cookie HTTP reale`, opzioniBrowser, async t => {
+  const fixture = accessoCookieProva({ iniziale: true, meInAttesa: true });
+  const { page, errors } = await apriCataloghiProva(t, fixture.api, fixture.http);
+  await attendiRichieste(fixture.me, 1);
+  await page.locator('#azienda').selectOption('aziendaB'); await page.locator('#entra').click();
+  await attendiRichieste(fixture.login, 1);
+  fixture.concludiMe(0);
+  await page.waitForTimeout(50);
+  assert.equal(await page.locator('#cerca').isVisible(), false);
+  if (reset) await page.evaluate(() => terminaContesto());
+  fixture.concludiLogin(0);
+  await page.waitForFunction(() => !$('entra').disabled);
+  assert.equal(await page.locator('#cerca').isVisible(), !reset);
+  assert.equal(await page.locator('#identita').textContent(), reset
+    ? 'Accedi con il tuo account locale.' : 'aziendaB · moto');
+  assert.equal(await page.locator('#azienda').inputValue(), 'aziendaB');
+  await verificaSessioneCookie(page, fixture, 'aziendaB');
+  assert.deepEqual(errors, []);
+});
+
+for (const superata of [false, true])
+test(`F3: errore configurazione ${superata ? 'superato è ignorato' : 'corrente è visibile'}`, opzioniBrowser, async t => {
+  const pendenti = []; let trattieni = false;
+  const { page, errors } = await apriCataloghiProva(t, async (route, url) => {
+    if (url.pathname === '/api/test/config' && trattieni) { pendenti.push(route); return true; }
+    return false;
+  });
+  trattieni = true; await page.reload(); await attendiRichieste(pendenti, 1);
+  if (superata) await page.evaluate(() => applicaIdentita({ azienda: 'aziendaB', moduli: ['moto'] }));
+  await pendenti.pop().fulfill({ status: 503, json: {} });
+  await page.waitForTimeout(50);
+  assert.equal(await page.locator('#identita').textContent(), superata
+    ? 'aziendaB · moto' : 'Configurazione accessi non disponibile.');
+  assert.deepEqual(errors, []);
+});
+
+for (const endpoint of ['login', 'me']) for (const status of [200, 503])
+test(`F3: ${endpoint} sintetico tardivo (${status}) non sostituisce identità o errore correnti`, opzioniBrowser, async t => {
+  const pendenti = [];
+  const { page, errors } = await apriCataloghiProva(t, async (route, url) => {
+    if (url.pathname === '/api/test/' + endpoint) { pendenti.push(route); return true; }
+    return false;
+  });
+  if (endpoint === 'login') await page.locator('#entra').click();
+  await attendiRichieste(pendenti, 1);
+  await page.evaluate(() => applicaIdentita({ azienda: 'aziendaB', moduli: ['moto'] }));
+  await page.locator('#azienda').selectOption('aziendaB');
+  await page.evaluate(() => { $('identita').textContent = 'Identità corrente'; });
+  await pendenti.pop().fulfill({ status, json: { azienda: 'aziendaA', moduli: ['auto', 'moto'] } });
+  await page.waitForTimeout(50);
+  assert.equal(await page.locator('#identita').textContent(), 'Identità corrente');
+  assert.equal(await page.locator('#azienda').inputValue(), 'aziendaB');
+  assert.equal(await page.locator('[name=tipo][value=auto]').isEnabled(), false);
+  assert.deepEqual(errors, []);
+});
+
+for (const fallisce of [false, true])
+test(`F3: account superato durante lo stato (${fallisce ? 'errore' : 'successo'}) non cambia aree o messaggi`, opzioniBrowser, async t => {
+  const { page, errors } = await apriCataloghiProva(t);
+  await page.evaluate(() => {
+    window.areeAggiornate = 0;
+    const originale = aggiornaAree;
+    aggiornaAree = (...args) => { window.areeAggiornate++; return originale(...args); };
+    aggiornaStato = () => new Promise((resolve, reject) => { window.liberaStato = resolve; window.fallisciStato = reject; });
+    document.dispatchEvent(new CustomEvent('amr:account', { detail: {
+      azienda: 'aziendaA', aziendaValida: true, moduli: ['auto', 'moto'] } }));
+  });
+  await page.waitForFunction(() => Boolean(window.liberaStato));
+  const prima = await page.evaluate(() => {
+    document.dispatchEvent(new CustomEvent('amr:account', { detail: { azienda: 'aziendaB', aziendaValida: false } }));
+    return { testo: $('identita').textContent, aree: window.areeAggiornate };
+  });
+  await page.evaluate(errore => { if (errore) window.fallisciStato(new Error('Guasto superato')); else window.liberaStato(); }, fallisce);
+  await page.waitForTimeout(50);
+  assert.deepEqual(await page.evaluate(() => ({ testo: $('identita').textContent, aree: window.areeAggiornate })), prima);
+  assert.deepEqual(errors, []);
+});
 
 for (const perdita of ['rete', '502'])
 test(`ricerca breve UI: POST perso (${perdita}) e GET transitorio non ripetono avvio, filtri né pagina`, opzioniBrowser, async t => {
