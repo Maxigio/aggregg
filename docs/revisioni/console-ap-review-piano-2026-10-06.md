@@ -523,3 +523,20 @@ Fondamento: [SQLite transactions](https://www.sqlite.org/lang_transaction.html)
 per atomicità e rollback; [OWASP Logging](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html)
 per risorse, retention e comportamento in caso di guasto. Nessun dato vivo
 o filesystem riempito artificialmente, nessun deploy o collegamento M2.
+
+## Avanzamento del gate staging — 7 ottobre
+
+L'utente autorizza staging e M2 solo stato con il CHECK storico aperto,
+senza autorizzare la produzione. Il [registro del gate](staging-build-permessi-2026-10-07.md)
+documenta il difetto di permessi dell'immagine, la correzione nel commit
+e90b88a, la review indipendente, il PASS Auth/PostgreSQL/HTTPS locale e
+le prove delle migrazioni append-only e della recovery del launcher M2.
+
+Il candidato e90b88a è ora materializzato dai blob Git e costruito localmente
+per linux/amd64 senza overlay; nuovo manifest e costruttore sono verificati.
+Resta da scegliere la lista esplicita provvisoria dei proxy dello staging,
+aggiornare il backup prima della manutenzione e verificare il candidato
+nello staging remoto. Solo dopo: M2 isolato per stato e compatibilità,
+arresto/riconnessione e marker di produzione invariati. Nessun M2 collegato
+né frontend modificato in questo incremento. L'avviso visivo sulla storia
+incompleta e il brainstorming della console restano nel gate frontend.

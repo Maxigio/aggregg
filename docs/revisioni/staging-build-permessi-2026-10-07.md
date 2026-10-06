@@ -114,3 +114,34 @@ Prima del nuovo staging resta la decisione sulla lista esplicita provvisoria
 dei proxy osservati. Prima dell'M2 servono staging verificato, artefatti
 identici e backup aggiornato con restore di prova. Le prove live M2 e la
 console owner restano gate successivi; produzione e portali non coinvolti.
+
+## Candidato dal commit della correzione
+
+Commit sorgente congelato: `e90b88a1a17c49a29564af5422fef51d12278974`.
+Contesto generato con il produttore reale e umask 077: directory 0700,
+sorgenti 0600, Dockerfile alla radice identico alla ricetta inventariata
+del commit. Nessun overlay, dotenv reale o file untracked del checkout.
+
+- Protocollo: 1.
+- Hash codice: `9457d51508cbe65e1ae5b64a43a36474f0f1b53fda011dd03d2c69daf04ef421`.
+- Hash cataloghi: `0f20b3c6473b8c28890724f17b073ffff6d0073e0c090e96cb3c61c176252657`.
+- Inventario: 223 file codice, 474 cataloghi.
+- Immagine locale: `amr-centro:gate-e90b88a-20261007`, linux/amd64.
+- Digest dell'indice locale con attestazione:
+  `sha256:f374e459832fed60813d71399b5a6520d8128639852966adc9583a7d0b8b8c6d`.
+
+Build completato: il manifest del nuovo candidato è verificato come node.
+Costruttore nell'immagine finale con PostgreSQL simulato e rete assente:
+exit 0, nessun EACCES, cleanup verificato.
+Ricevute `/private/tmp/amr-candidato-e90b88a-completo-20261007.json`,
+`/private/tmp/amr-build-e90b88a-amd64-20261007.json` e
+`/private/tmp/amr-avvio-e90b88a-esito-20261007.json`.
+
+Confronto Git `56f9857..e90b88a` sul perimetro runtime: cambia soltanto
+`scripts/docker/centro.Dockerfile`. La prova completa Auth/HTTPS sopra usa
+gli stessi sorgenti applicativi e la stessa ricetta corretta; non viene
+etichettata come un secondo giro completo sul tag finale. Il nuovo manifest
+e il nuovo costruttore sono stati provati separatamente sul tag finale.
+La piattaforma ARM64 e l'esecuzione Nhost restano non verificate per questa
+immagine. Nessun upload, deploy, SQL remoto o collegamento M2 eseguito.
+Il candidato resta fissato a e90b88a anche dopo i commit documentali.
