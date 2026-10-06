@@ -193,3 +193,44 @@ non ha rieseguito questi gruppi di test e non è sommata alle loro ricevute.
 Non è un riempimento del disco reale, una suite completa o una nuova prova
 cloud. Il frontend non è stato modificato; non sono stati inviati messaggi,
 collegati nodi M2, eseguiti deploy o richieste ai portali.
+
+## Incremento 2 — sospensioni coerenti con la persistenza
+
+Nuovo finding D3, P2, preesistente: il comando di sospensione mutava RAM prima
+della conferma SQL. Controprova principale su SQLite reale temporaneo: blocco
+200, ripresa con DB in sola lettura 500, nodo già riabilitato in RAM ma riga
+di sospensione ancora presente. Review indipendente: in quel caso un poll
+poteva consegnare un job. Il rifiuto HTTP, da solo, non provava fail-closed.
+
+Correzione: confermare prima la scrittura, poi aggiornare RAM e coda senza
+`await` fra le due operazioni. Un rifiuto mantiene lo stato in memoria e la
+coda precedenti; niente successo fittizio. Sospensione e revoca token
+restituiscono 503 con `controllo_nodo_non_confermato`, senza stack SQL.
+La revoca token aveva già l'ordine corretto; è allineata solo la risposta
+di errore. In caso di I/O non si promette una certezza del contenuto durevole
+dedotta dal solo errore: il comando non è confermato e richiede verifica.
+
+Controprove: ripresa globale e per fonte rifiutata con RAM/DB ancora sospesi,
+poll senza consegna, successiva ripresa riuscita; sospensione rifiutata di un
+nodo disponibile senza perdita della coda. I guard Admin/MFA, trasporto e
+ricontrollo dopo il body sono preservati.
+
+Ricevuta Node 24.21.0, SQLite/HTTP loopback, dotenv escluso:
+`/private/tmp/amr-console-controlli-MfXmOQ/test.tap`: **30/30 pass**, zero skip,
+comprendendo le regressioni diagnostiche, il centro, i guard, poll e boot.
+Review indipendente del diff: nessun nuovo finding bloccante; test ispezionati
+e non rieseguiti dal reviewer. Nessun frontend o stato remoto modificato.
+
+## Interview ancora aperte
+
+- Confine della manutenzione: proposta di lasciare completare l'intera ricerca
+  dopo la prima consegna al worker, compresi i recuperi previsti. Richieste mai
+  consegnate interrotte e nuovi avvii negati. Non implementata in attesa di risposta.
+- Ricerca owner: proposta di verificare l'ID Nhost del proprietario oltre a
+  Admin/MFA e di usare un contesto diagnostico separato dai clienti, preservando
+  i limiti globali. Non creare un'azienda commerciale né mutare la sessione.
+  La semplice sostituzione del guard commerciale con `admin:true` romperebbe
+  ownership degli ID e cataloghi; il riuso deve coprire anche questi chiamanti.
+- Capacità/completezza dei sette giorni, destinazione del backup diagnostico,
+  baseline prestazioni, policy delle sonde e integrazione notifiche restano
+  scelte da affrontare nei rispettivi incrementi.

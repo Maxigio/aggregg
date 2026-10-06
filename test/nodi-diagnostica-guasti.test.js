@@ -133,10 +133,10 @@ test('diagnostica: errore eventi non produce log ripetuti e le sospensioni resta
   const sospendi = () => fetch(p.url + '/api/admin/nodi/locale', { method: 'POST', headers,
     body: JSON.stringify({ sospeso: true }) });
   // Una scrittura operativa non è un semplice log: nessun successo fittizio.
-  assert.equal((await sospendi()).status, 500);
+  assert.equal((await sospendi()).status, 503);
   const revoca = await fetch(p.url + '/api/admin/nodi/locale/revoca-token', {
     method: 'POST', headers, body: '{}' });
-  assert.equal(revoca.status, 500);
+  assert.equal(revoca.status, 503);
   assert.equal(p.centro.db.prepare('SELECT count(*) AS n FROM token_revocati').get().n, 0);
   p.centro.db.exec('PRAGMA query_only=OFF');
   p.centro.db.exec("CREATE TEMP TRIGGER errore_eventi BEFORE INSERT ON eventi BEGIN SELECT RAISE(ABORT,'guasto_sintetico'); END");
@@ -144,4 +144,32 @@ test('diagnostica: errore eventi non produce log ripetuti e le sospensioni resta
   assert.equal((await sospendi()).status, 200);
   assert.equal((await p.stato()).diagnostica.ultimoErrore.fase, 'evento');
   assert.equal(avvisi.mock.calls.filter(c => c.arguments[0] === '[nodi] raccolta diagnostica incompleta').length, 1);
+});
+
+test('sospensioni: persistenza fallita mantiene nodo/fonte e coda nello stato precedente', async t => {
+  const p = await prepara(t); t.mock.method(console, 'error', () => {});
+  const modifica = (sospeso, fonte) => fetch(p.url + '/api/admin/nodi/locale', { method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-amr-local-admin': '1' },
+    body: JSON.stringify({ sospeso, ...(fonte ? { fonte } : {}) }) });
+  for (const fonte of [undefined, 'subito']) {
+    assert.equal((await modifica(true, fonte)).status, 200);
+    p.centro.db.exec('PRAGMA query_only=ON');
+    const r = await modifica(false, fonte);
+    assert.equal(r.status, 503);
+    assert.deepEqual(await r.json(), { codice: 'controllo_nodo_non_confermato' });
+    assert.equal(fonte ? p.centro.nodi.get('locale').sospese.has(fonte) : p.centro.nodi.get('locale').sospeso, true);
+    assert.equal(p.centro.db.prepare('SELECT count(*) AS n FROM sospensioni WHERE fonte=?').get(fonte || '').n, 1);
+    assert.equal((await p.node('/_nodo/poll?id=locale')).status, 204);
+    p.centro.db.exec('PRAGMA query_only=OFF');
+    assert.equal((await modifica(false, fonte)).status, 200);
+  }
+  const pending = p.ricerca();
+  const erroreRicerca = assert.rejects(pending, e => e.message === 'centro interrotto');
+  for (let n = 0; !p.centro.lavori.size && n < 100; n++) await new Promise(r => setTimeout(r, 5));
+  assert.equal(p.centro.lavori.size, 1);
+  p.centro.db.exec('PRAGMA query_only=ON');
+  assert.equal((await modifica(true)).status, 503);
+  assert.equal(p.centro.nodi.get('locale').sospeso, false);
+  assert.equal(p.centro.nodi.get('locale').coda.length, 1);
+  p.centro.close(); await erroreRicerca;
 });

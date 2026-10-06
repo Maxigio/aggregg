@@ -822,10 +822,17 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     const { sospeso, fonte } = req.body || {};
     if (fonte && !FONTI_PAGINA.includes(fonte)) return res.sendStatus(400);
     if (typeof sospeso !== 'boolean') return res.sendStatus(400);
+    // Una scrittura rifiutata non deve riabilitare il nodo in RAM né toccare
+    // la coda. Nessun await fra conferma della persistenza e stato operativo.
+    try {
+      if (sospeso) db.prepare('INSERT OR IGNORE INTO sospensioni(nodo,fonte) VALUES(?,?)').run(n.id, fonte || '');
+      else db.prepare('DELETE FROM sospensioni WHERE nodo=? AND fonte=?').run(n.id, fonte || '');
+    } catch {
+      evento('controllo_nodo_non_confermato', { nodo: n.id, fonte: fonte || null, http: 503 });
+      return res.status(503).json({ codice: 'controllo_nodo_non_confermato' });
+    }
     if (fonte) sospeso ? n.sospese.add(fonte) : n.sospese.delete(fonte);
     else n.sospeso = sospeso;
-    if (sospeso) db.prepare('INSERT OR IGNORE INTO sospensioni(nodo,fonte) VALUES(?,?)').run(n.id, fonte || '');
-    else db.prepare('DELETE FROM sospensioni WHERE nodo=? AND fonte=?').run(n.id, fonte || '');
     if (sospeso) interrompiAccodati(n, fonte || null);
     evento(sospeso ? 'sospensione_aggiunta' : 'sospensione_rimossa', { nodo: n.id, fonte: fonte || null });
     res.json({ ok: true });
@@ -834,7 +841,12 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     const id=req.params.id;
     if (!Object.hasOwn(tokens,id)) return res.sendStatus(404);
     if (!req.body || Array.isArray(req.body) || Object.keys(req.body).length) return res.sendStatus(400);
-    db.prepare('INSERT OR IGNORE INTO token_revocati(nodo,impronta) VALUES(?,?)').run(id,improntaToken(id));
+    try {
+      db.prepare('INSERT OR IGNORE INTO token_revocati(nodo,impronta) VALUES(?,?)').run(id,improntaToken(id));
+    } catch {
+      evento('controllo_nodo_non_confermato', { nodo: id, http: 503 });
+      return res.status(503).json({ codice: 'controllo_nodo_non_confermato' });
+    }
     tokenRevocati.add(id+':'+improntaToken(id));
     const n=nodi.get(id);
     if(n) interrompiAccodati(n);
