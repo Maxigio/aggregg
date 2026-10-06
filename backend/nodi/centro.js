@@ -80,17 +80,29 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   db.exec('CREATE TABLE IF NOT EXISTS eventi (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, livello TEXT NOT NULL, codice TEXT NOT NULL, lavoro TEXT, nodo TEXT, fonte TEXT, azienda TEXT, http INTEGER)');
   db.exec('CREATE INDEX IF NOT EXISTS eventi_ts ON eventi(ts)');
   const diagnostica = { incompleta: false, fallimenti: 0, ultimoErrore: null, ultimaPulizia: null };
+  function segnalaGuastoDiagnostica(fase) {
+    const primo = !diagnostica.incompleta;
+    diagnostica.incompleta = true;
+    diagnostica.fallimenti = Math.min(Number.MAX_SAFE_INTEGER, diagnostica.fallimenti + 1);
+    diagnostica.ultimoErrore = { fase, istante: ora() };
+    // Il registro guasto non può registrare il proprio errore. Una sola
+    // segnalazione per processo; la lacuna resta visibile anche dopo il recupero.
+    if (primo) { try { console.error('[nodi] raccolta diagnostica incompleta'); } catch {} }
+  }
   function scriviDiagnostica(fase, scrivi) {
     try { scrivi(); return true; }
+    catch { segnalaGuastoDiagnostica(fase); return false; }
+  }
+  function rispondiDiagnostica(res, leggi, fase = 'lettura') {
+    try { res.json(leggi()); }
     catch {
-      const primo = !diagnostica.incompleta;
-      diagnostica.incompleta = true;
-      diagnostica.fallimenti = Math.min(Number.MAX_SAFE_INTEGER, diagnostica.fallimenti + 1);
-      diagnostica.ultimoErrore = { fase, istante: ora() };
-      // Il registro guasto non può registrare il proprio errore. Una sola
-      // segnalazione per processo; la lacuna resta visibile anche dopo il recupero.
-      if (primo) { try { console.error('[nodi] raccolta diagnostica incompleta'); } catch {} }
-      return false;
+      segnalaGuastoDiagnostica(fase);
+      // Un errore nel download non è un export riuscito. Il corpo SQL e lo
+      // stack non devono raggiungere il logger finale Express o il browser.
+      if (!res.destroyed && !res.headersSent) {
+        res.removeHeader('Content-Disposition');
+        res.status(503).json({ codice: 'diagnostica_non_disponibile', diagnostica });
+      }
     }
   }
   function evento(codice, { lavoro = null, nodo = null, fonte = null, azienda = null, http = null } = {}) {
@@ -774,15 +786,15 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     autorizzato:!tokenRevocato(n.id), compatibile:releaseValida(n), occupato:n.occupato,
     simulato:n.simulato,...(n.soloStato ? { soloStato: true } : {}),
     sospeso:n.sospeso,sospese:[...n.sospese],fonti:n.fonti });
-  app.get('/api/stato', (req, res) => {
+  app.get('/api/stato', (req, res) => rispondiDiagnostica(res, () => {
     pulisci();
     const nodo = typeof req.query.nodo === 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(req.query.nodo)
       ? req.query.nodo : null;
-    res.json({ diagnostica, nodi: [...nodi.values()].filter(n => !nodo || n.id === nodo).map(statoNodo),
+    return { diagnostica, nodi: [...nodi.values()].filter(n => !nodo || n.id === nodo).map(statoNodo),
     ...paginaLavori(req, false), lavoriAttivi: nodo
       ? db.prepare("SELECT count(*) AS n FROM lavori WHERE stato IN ('attesa','in_corso') AND nodo=?").get(nodo).n
-      : db.prepare("SELECT count(*) AS n FROM lavori WHERE stato IN ('attesa','in_corso')").get().n });
-  });
+      : db.prepare("SELECT count(*) AS n FROM lavori WHERE stato IN ('attesa','in_corso')").get().n };
+  }));
   app.use('/api/admin', adminDiProva, (req, res, next) => {
     if (!adminLocale && !(sicurezza && accessi)) return res.sendStatus(404);
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)
@@ -792,32 +804,32 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   // Consultabile anche quando il DB diagnostico non si lascia più leggere.
   app.get('/api/admin/diagnostica', (req, res) => res.json({ diagnostica,
     risorse: misuraRegistro({ db, directory, ora }) }));
-  app.get('/api/admin', (req, res) => {
+  app.get('/api/admin', (req, res) => rispondiDiagnostica(res, () => {
     pulisci();
     const nodo = typeof req.query.nodo === 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(req.query.nodo)
       ? req.query.nodo : null;
-    res.json({ diagnostica, nodi: [...nodi.values()].filter(n => !nodo || n.id === nodo).map(statoNodo),
+    return { diagnostica, nodi: [...nodi.values()].filter(n => !nodo || n.id === nodo).map(statoNodo),
       ...paginaLavori(req, true),
       lavoriAttivi: nodo
         ? db.prepare("SELECT count(*) AS n FROM lavori WHERE stato IN ('attesa','in_corso') AND nodo=?").get(nodo).n
         : db.prepare("SELECT count(*) AS n FROM lavori WHERE stato IN ('attesa','in_corso')").get().n,
       eventi: nodo
         ? db.prepare('SELECT ts,livello,codice,lavoro,nodo,fonte,azienda,http FROM eventi WHERE nodo=? ORDER BY id DESC LIMIT 30').all(nodo)
-        : db.prepare('SELECT ts,livello,codice,lavoro,nodo,fonte,azienda,http FROM eventi ORDER BY id DESC LIMIT 30').all() });
-  });
-  app.get('/api/admin/esporta', (req, res) => {
+        : db.prepare('SELECT ts,livello,codice,lavoro,nodo,fonte,azienda,http FROM eventi ORDER BY id DESC LIMIT 30').all() };
+  }));
+  app.get('/api/admin/esporta', (req, res) => rispondiDiagnostica(res, () => {
     pulisci();
     res.set('Content-Disposition', 'attachment; filename="amr-nodi-log.json"');
-    res.json({ generato: new Date(ora()).toISOString(), diagnostica,
+    return { generato: new Date(ora()).toISOString(), diagnostica,
       lavori: db.prepare('SELECT id,azienda,operazione,filtri,stato,creato,aggiornato,nodo,assegnazione_ms,coda_ms,nodo_ms,trasporto_ms,byte_risposta,http FROM lavori ORDER BY creato DESC').all()
         .map(r => ({ ...r, filtri: JSON.parse(r.filtri) })),
-      eventi: db.prepare('SELECT ts,livello,codice,lavoro,nodo,fonte,azienda,http FROM eventi ORDER BY id DESC').all() });
-  });
-  app.delete('/api/admin/lavori', (req, res) => {
+      eventi: db.prepare('SELECT ts,livello,codice,lavoro,nodo,fonte,azienda,http FROM eventi ORDER BY id DESC').all() };
+  }));
+  app.delete('/api/admin/lavori', (req, res) => rispondiDiagnostica(res, () => {
     const rimossi = db.prepare("DELETE FROM lavori WHERE stato NOT IN ('attesa','in_corso')").run().changes;
     evento('lavori_cancellati');
-    res.json({ ok: true, rimossi });
-  });
+    return { ok: true, rimossi };
+  }, 'pulizia_manuale'));
   app.post('/api/admin/nodi/:id', express.json({ limit: '1kb' }), adminDiProva, (req, res) => {
     const n = nodi.get(req.params.id);
     if (!n) return res.sendStatus(404);

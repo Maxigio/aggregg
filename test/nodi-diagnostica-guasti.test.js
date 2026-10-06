@@ -126,6 +126,54 @@ test('diagnostica: una tabella illeggibile non impedisce di consultare il suo st
   assert.equal(JSON.stringify(body).includes('no such table'), false);
 });
 
+test('diagnostica: letture fallite non producono stack ripetuti né export fittizi', async t => {
+  const p = await prepara(t), avvisi = t.mock.method(console, 'error', () => {});
+  p.centro.db.exec('DROP TABLE lavori');
+  const risposte = [];
+  for (const route of ['/api/stato', '/api/admin', '/api/admin/esporta', '/api/admin']) {
+    const r = await fetch(p.url + route);
+    risposte.push({ status: r.status, tipo: r.headers.get('content-type'),
+      allegato: r.headers.get('content-disposition'), body: await r.text() });
+  }
+  // Il logger finale di Express viene richiamato in modo differito.
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(avvisi.mock.calls.some(c => c.arguments.some(a => String(a).includes('no such table'))), false);
+  for (const r of risposte) {
+    assert.equal(r.status, 503);
+    assert.equal(r.tipo.startsWith('application/json'), true);
+    assert.equal(r.allegato, null);
+    const body = JSON.parse(r.body);
+    assert.equal(body.codice, 'diagnostica_non_disponibile');
+    assert.equal(body.diagnostica.incompleta, true);
+    assert.equal(body.diagnostica.ultimoErrore.fase, 'lettura');
+    assert.equal(Object.hasOwn(body, 'lavori'), false);
+  }
+  assert.equal(avvisi.mock.callCount(), 1);
+  assert.equal((await p.stato()).diagnostica.ultimoErrore.fase, 'lettura');
+});
+
+test('diagnostica: pulizia manuale rifiutata conserva le righe e non conferma una cancellazione', async t => {
+  const p = await prepara(t), avvisi = t.mock.method(console, 'error', () => {});
+  const pending = p.ricerca(), job = await p.poll();
+  await p.esito(job); await pending;
+  p.centro.db.exec('PRAGMA query_only=ON');
+  const cancella = () => fetch(p.url + '/api/admin/lavori', { method: 'DELETE',
+    headers: { 'x-amr-local-admin': '1' } });
+  const r = await cancella();
+  assert.equal(r.status, 503);
+  const body = await r.json();
+  assert.equal(body.codice, 'diagnostica_non_disponibile');
+  assert.equal(body.diagnostica.ultimoErrore.fase, 'pulizia_manuale');
+  assert.equal(Object.hasOwn(body, 'rimossi'), false);
+  assert.equal(p.centro.db.prepare('SELECT count(*) AS n FROM lavori').get().n, 1);
+  assert.equal(avvisi.mock.callCount(), 1);
+  p.centro.db.exec('PRAGMA query_only=OFF');
+  const riprova = await cancella();
+  assert.equal(riprova.status, 200);
+  assert.deepEqual(await riprova.json(), { ok: true, rimossi: 1 });
+  assert.equal(p.centro.db.prepare('SELECT count(*) AS n FROM lavori').get().n, 0);
+});
+
 test('diagnostica: errore eventi non produce log ripetuti e le sospensioni restano obbligatorie', async t => {
   const p = await prepara(t), avvisi = t.mock.method(console, 'error', () => {});
   const headers = { cookie: p.cookie, 'content-type': 'application/json', 'x-amr-local-admin': '1' };

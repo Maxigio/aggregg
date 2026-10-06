@@ -287,3 +287,46 @@ differenza fra riuso delle pagine e riduzione del file. VACUUM può richiedere
 spazio aggiuntivo e fallire con attività concorrente: non è stato introdotto
 come rimedio automatico. Capacità e completezza dei sette giorni restano da
 decidere prima di cambiare cap o compattazione.
+
+## Incremento 4 — letture diagnostiche e logger finale Express
+
+Nuovo finding D4, P2, confermato: con una tabella diagnostica illeggibile,
+le letture di `/api/stato`, `/api/admin` e `/api/admin/esporta` arrivavano
+al gestore finale Express. Anche in ambiente production lo stack era
+registrato su stderr per ogni richiesta. Il primo fix limitava gli errori
+di scrittura, non questo percorso. La crescita su disco resta condizionata
+alla cattura e rotazione delle pipe; non è stato riempito un disco reale.
+
+Prova prima della correzione: Node 24.21.0, SQLite temporaneo con tabella
+`lavori` rimossa, ambiente Express production e console intercettata.
+`/private/tmp/amr-console-letture-prima-GRAZ21/test.tap`: il caso fallisce
+perché lo stack SQL viene effettivamente registrato. Nessun errore sensibile
+è stampato nella ricevuta.
+
+Correzione circoscritta: i tre endpoint e la pulizia manuale rispondono 503
+con `diagnostica_non_disponibile` e stato RAM quando il registro fallisce.
+Nessun risultato vuoto inventato, export fittizio o cancellazione confermata.
+L'header di download viene rimosso sull'errore. La segnalazione usa lo stesso
+contatore e warning unico del logging; Auth, sospensioni e token non sono
+assorbiti da un handler generico. Il contratto delle risposte riuscite resta
+invariato. Questo non elimina tutti i log del runtime o del resto dell'app.
+
+Prove dopo: quattro letture rifiutate senza stack aggiuntivi, un solo warning,
+stato incompleto consultabile; cancellazione manuale rifiutata con righe
+ancora presenti, poi riuscita una volta riabilitata la scrittura. Gate
+principale diagnostica, risorse, guard e centro:
+`/private/tmp/amr-console-letture-dopo-kHGEhW/test.tap`, **34/34 pass**.
+Parser/body e avvio Run:
+`/private/tmp/amr-console-letture-gate-qMOe33/test.tap`, **11/11 pass**.
+Tutto su Node 24.21.0, dotenv escluso, SQLite/HTTP locali; nessuna prova cloud.
+
+Confronto aggiornato con [Express: error handling](https://expressjs.com/en/guide/error-handling/)
+e [OWASP Logging](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html).
+Il comportamento stderr è verificato anche nel codice delle dipendenze
+installate; la sola assenza dello stack nella risposta production non prova
+che il runtime non lo registri.
+
+Review indipendente in sola lettura del diff finale e delle ricevute:
+nessun nuovo finding né blocco al commit nel perimetro verificato.
+Auth e controlli operativi restano fuori dal catch; il reviewer non ha
+rieseguito le due suite principali.
