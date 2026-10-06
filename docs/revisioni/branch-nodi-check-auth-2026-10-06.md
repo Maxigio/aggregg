@@ -107,3 +107,13 @@ permette di osservare SQLSTATE e vincolo senza pubblicare il detail.
 Prima del rilascio: attribuzione del CHECK; candidato immutabile e schema
 append-only; gate ingress e aggiornamento/rollback staging. La diagnostica
 remota richiede il suo perimetro autorizzato; le prove locali non lo ampliano.
+
+## Decisione sul collaudo controllato — 6 ottobre, giro successivo
+
+L'utente autorizza a proseguire con staging e M2 **solo stato**, mantenendo
+aperto il finding storico del CHECK non attribuito. Non è un'autorizzazione
+alla produzione né una dimostrazione che il difetto sia risolto.
+L'ultimo Auth completo locale passa; un errore `23514` sul candidato deve
+restare un fallimento esplicito, senza retry automatici o modifiche dei vincoli.
+Ingress, identità del candidato, migrazioni append-only, backup ripristinabile
+e preservazione della produzione M2 restano condizioni del collaudo remoto.
