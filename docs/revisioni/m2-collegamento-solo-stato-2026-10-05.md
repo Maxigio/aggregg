@@ -585,3 +585,38 @@ solo stato/compatibilità; nessuna ricerca live M2 prima del coordinamento
 delle pause sull'IP condiviso. Nessun aggiornamento della produzione M2,
 nessun nuovo servizio, volume, deploy applicativo o chiamata ai portali in
 questa acquisizione.
+
+## Avanzamento verso il collegamento M2 — 6 ottobre
+
+L'utente autorizza i passi fino al collegamento isolato dell'M2 e i commit
+verificati. Il primo collegamento resta `--solo-stato`: nessuna ricerca,
+catalogo remoto o modifica del servizio M2 di produzione. SSH in sola lettura
+con host key verificata e agent forwarding disabilitato: arm64, processo
+di produzione PID 849 in ascolto su 47321, impronta di `fonti-salute.js`
+`b3d33bd2adafbabe5c2046d763e72c89632e86fb38adad8b0ea583b766f19648`.
+Il PATH della sessione SSH non contiene Node: non modificare il PATH o
+l'installazione della produzione per avviare il worker.
+
+La review indipendente riproduce un difetto operativo preesistente: dopo
+401/403 il worker ritenta indefinitamente heartbeat/poll. La revoca è efficace,
+ma lascia traffico inutile. Correzione circoscritta: 401/403 terminano il ciclo;
+il POST heartbeat annulla anche il controller del lavoro attivo. 503 resta
+riprovabile e il precedente header di nodo obsoleto resta terminale.
+
+Test di regressione sul sorgente precedente: tre tentativi invece di uno;
+dopo il fix 25/25 test pertinenti passano, compresi entrambi i percorsi e
+la controprova 503. Review in sola lettura: finding chiuso, 10 scenari VM
+aggiuntivi confermano abort durante/dopo il lavoro e nessuna consegna tardiva.
+Sono prove controllate, non revoche effettuate su nodi remoti reali.
+
+Preflight cloud: configurazione integrale uguale all'originale, Run pronto
+con replica avviata alle 02:18:16 UTC. Alcune prime letture Nhost restituiscono
+`cloud_rifiutato`; le letture bounded successive riescono senza mutazioni.
+Il runtime ARM64 già preparato è stato ricontrollato contro SHASUMS ufficiali
+Node, prima di qualsiasi trasferimento M2. Il collaudo della nuova immagine,
+l'aggiornamento staging e il collegamento remoto restano da eseguire.
+
+Riferimenti: [deploy Nhost multiarch](https://docs.nhost.io/products/run/cli-deployments),
+[healthcheck Nhost](https://docs.nhost.io/products/run/health-checks),
+[OpenSSH](https://man.openbsd.org/ssh.1). Il healthcheck verifica il listener,
+non sostituisce login, compatibilità e mancata assegnazione.

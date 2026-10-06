@@ -122,3 +122,33 @@ test('worker solo stato: registra e invia heartbeat senza caricare scraper o chi
   assert.deepEqual(Object.keys(hb.fonti),['subito','autoscout','moto']);
   assert.ok(!caricati.includes('./operazioni'));assert.ok(!caricati.includes('../annullo'));
 });
+
+test('worker: credenziale rifiutata ferma heartbeat e poll; un 503 resta riprovabile', async () => {
+  const vm = require('node:vm');
+  const sorgente = fs.readFileSync(path.join(__dirname,'../backend/nodi/worker.js'),'utf8');
+  for (const percorso of ['heartbeat','poll']) for (const status of [401,403,503]) {
+    const processo = new EventEmitter(), modulo = {exports:{}};
+    let errori = 0, eseguiti = 0;
+    processo.env = {AMR_CENTRO_URL:'http://127.0.0.1:1234',AMR_NODO_ID:'locale',AMR_NODI_TOKEN:'sintetico'};
+    vm.runInNewContext(sorgente, {
+      module:modulo,process:processo,AbortSignal,AbortController,performance,URL,Headers,
+      setTimeout:fn=>setImmediate(fn),clearTimeout:clearImmediate,setInterval,clearInterval,
+      require:name=>name==='node:crypto'?require(name):name==='./operazioni'
+        ? {statoFonti:()=>({}),esegui:async()=>{eseguiti++;return{status:200,body:{}};}}
+        : {dentro:(_signal,fn)=>fn()},
+      fetch:async url=>{
+        if(url.endsWith('/registrazione'))return{ok:true,json:async()=>({epoca:'centro',boot:null})};
+        if(url.includes('/'+percorso)) {
+          errori++;
+          // Guardia del test: sul vecchio codice termina dopo tre retry.
+          if(errori===3)processo.emit('SIGTERM');
+          return{ok:false,status,headers:new Headers()};
+        }
+        return{ok:true,status:204};
+      },
+    });
+    await modulo.exports.avvia();
+    assert.equal(errori,status===503?3:1,`${percorso} ${status}`);
+    assert.equal(eseguiti,0);
+  }
+});

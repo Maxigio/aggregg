@@ -23,7 +23,9 @@ async function post(percorso, body) {
     headers: { 'content-type': 'application/json', ...headers() },
     body: JSON.stringify(body), signal: AbortSignal.timeout(4000) });
   if (!r.ok) {
-    if (r.headers?.get('x-amr-node-obsoleto') === '1') { attivo = false; controllerAttivo?.abort(); }
+    if ([401,403].includes(r.status) || r.headers?.get('x-amr-node-obsoleto') === '1') {
+      attivo = false; controllerAttivo?.abort();
+    }
     throw new Error(`centro ${r.status}`);
   }
   return r;
@@ -104,7 +106,7 @@ async function avvia() {
       if (!attivo) { await r.body?.cancel(); break; }
       if (r.status === 204) { await pausa(250); continue; }
       if (!r.ok) {
-        if (r.headers?.get('x-amr-node-obsoleto') === '1') attivo = false;
+        if ([401,403].includes(r.status) || r.headers?.get('x-amr-node-obsoleto') === '1') attivo = false;
         throw new Error(`poll ${r.status}`);
       }
       const lavoro = await r.json();
