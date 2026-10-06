@@ -501,6 +501,20 @@ test('ricerca breve UI: ID perso al restart ferma la consultazione, nessun POST 
   assert.deepEqual(errors, []);
 });
 
+test('ricerca breve UI: quota ID locale avvisata senza polling, retry o pausa fonte', opzioniBrowser, async t => {
+  const { page, errors } = await apriPrototipo(t); let inizi = 0, letture = 0;
+  await page.route('**/api/ricerche', async route => {
+    inizi++; await route.fulfill({ status: 429, json: { codice: 'troppe_ricerche_registrate' } });
+  });
+  await page.route('**/api/ricerche/*', async route => { letture++; await route.fulfill({ status: 404, json: {} }); });
+  await page.evaluate(() => inviaRicerca(new URLSearchParams({ tipo: 'moto', marca: 'Yamaha' })));
+  const avviso = await page.locator('#avvisi').textContent();
+  assert.match(avviso, /Limite temporaneo delle nuove ricerche/);
+  assert.doesNotMatch(avviso, /Fonte in pausa|Troppe ricerche in corso/);
+  assert.equal(inizi, 1); assert.equal(letture, 0);
+  assert.equal(await page.locator('#risultati').textContent(), ''); assert.deepEqual(errors, []);
+});
+
 test('ricerca breve UI: cambio contesto invia DELETE e blocca la consegna precedente', opzioniBrowser, async t => {
   const { page, errors } = await apriPrototipo(t); let cancellazioni = 0, pendente;
   await page.route('**/api/ricerche', async route => {

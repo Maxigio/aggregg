@@ -7,8 +7,9 @@ const { creaLimitiRicerca } = require('./limiti-ricerca');
 // Conservare una chiave non autorizza a leggere l'esito senza la sessione originale.
 function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegna,
   ora = Date.now, ttlRisultatoMs = 60000, ttlIdMs = 600000,
-  maxRegistri = 1000, maxByte = 64 * 1024 * 1024 } = {}) {
-  for (const n of [ttlRisultatoMs, ttlIdMs, maxRegistri, maxByte]) {
+  maxRegistri = 1000, maxRegistriPersona = 50, maxRegistriAzienda = 100,
+  maxByte = 64 * 1024 * 1024 } = {}) {
+  for (const n of [ttlRisultatoMs, ttlIdMs, maxRegistri, maxRegistriPersona, maxRegistriAzienda, maxByte]) {
     if (!Number.isSafeInteger(n) || n < 1) throw new Error('limiti esiti non validi');
   }
   if (ttlIdMs < ttlRisultatoMs) throw new Error('scadenza ID precedente al risultato');
@@ -28,6 +29,18 @@ function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegn
       if (r.stato === 'in_corso') continue;
       if (r.fine + ttlRisultatoMs <= adesso) { libera(r); r.stato = 'scaduta'; }
       if (r.fine + ttlIdMs <= adesso) registri.delete(id);
+    }
+  }
+  function controllaRegistri(persona, azienda) {
+    let dellaPersona = 0, dellAzienda = 0;
+    // Il registro è già limitato a 1.000 ID: contare anche errori e tombstone
+    // evita altri contatori da sincronizzare e non sacrifica l'idempotenza.
+    for (const r of registri.values()) {
+      if (r.persona === persona) dellaPersona++;
+      if (r.azienda === azienda) dellAzienda++;
+    }
+    if (dellaPersona >= maxRegistriPersona || dellAzienda >= maxRegistriAzienda) {
+      throw errore('troppe_ricerche_registrate', 429);
     }
   }
   const timer = setInterval(pulisci, Math.min(ttlRisultatoMs, ttlIdMs, 10000)); timer.unref();
@@ -60,7 +73,8 @@ function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegn
   function rispostaErrore(res, e) {
     if (res.destroyed || res.writableEnded) return;
     const codice = ['ricerca_non_trovata', 'ricerca_non_valida', 'chiave_ricerca_riutilizzata',
-      'troppe_ricerche_pendenti', 'esiti_non_disponibili', 'ricerca_scaduta', 'accesso_interrotto'].includes(e.codice)
+      'troppe_ricerche_pendenti', 'troppe_ricerche_registrate', 'esiti_non_disponibili',
+      'ricerca_scaduta', 'accesso_interrotto'].includes(e.codice)
       ? e.codice : [401, 403].includes(e.status) ? 'accesso_interrotto' : 'ricerca_non_disponibile';
     res.status([400, 401, 403, 404, 409, 429, 504].includes(e.status) ? e.status : 503).json({ codice });
   }
@@ -99,6 +113,7 @@ function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegn
         const c = await autorizza(req, () => richiesta.verifica(() => verifica(s, query.tipo)));
         richiesta.budget.controlla();
         if (res.destroyed || chiuso) throw errore('ricerca_abbandonata', 503);
+        pulisci();
         // Nessun await fra secondo controllo e inserimento: due POST concorrenti
         // con la stessa chiave non possono creare due esecuzioni.
         if (registri.has(id)) {
@@ -107,7 +122,9 @@ function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegn
           return res.status(202).set('Retry-After', '1').set('Location', '/api/ricerche/' + id).json(metadati(r));
         }
         if (registri.size >= maxRegistri) throw errore('esiti_non_disponibili', 503);
-        r = { id, sessione: s, azienda: c.azienda, tipo: query.tipo, impronta,
+        const persona = s.persona || s.identita?.persona || s.identita || s;
+        controllaRegistri(persona, c.azienda);
+        r = { id, sessione: s, persona, azienda: c.azienda, tipo: query.tipo, impronta,
           stato: 'in_corso', json: null, byte: 0, affinita: null, richiesta };
         registri.set(id, r); staccata = true;
         richiesta = null;

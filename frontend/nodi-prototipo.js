@@ -82,6 +82,8 @@ async function consultaRicerca(query) {
     : status === 401 || status === 403 ? 'Accesso interrotto. Accedi nuovamente.'
     : data?.interrotto ? 'Ricerca interrotta. Nessun annuncio consegnato; riprova esplicitamente.'
     : status === 504 ? 'Esito incerto: riprova esplicitamente.'
+    : data?.codice === 'troppe_ricerche_registrate'
+      ? 'Limite temporaneo delle nuove ricerche raggiunto. Attendi prima di avviarne altre; puoi ancora consultare quelle già avviate.'
     : status === 429 ? 'Troppe ricerche in corso. Attendi prima di riprovare.'
     : status === 400 ? 'Ricerca non valida. Controlla i filtri.'
     : `Servizio non disponibile (HTTP ${status}). Riprova più tardi.`), { status });
