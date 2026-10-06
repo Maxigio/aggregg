@@ -72,3 +72,34 @@ Una stessa ricerca di prova sul processo monolitico e sul nodo locale produce lo
 - La prima prova con l'M2 comprende soltanto connessione, stato e cataloghi; nessuna chiamata ai portali. Il processo del nodo verra' avviato manualmente via SSH, separato dal servizio AMR esistente, e fermabile subito. L'M2 resta fuori fino al collaudo dell'iMac.
 - I cataloghi dell'iMac e dell'M2 sono identici, ma il codice AMR installato e' diverso. L'uguaglianza dei cataloghi non dimostra compatibilita': centro e worker devono concordare versione del protocollo e comportamento della ricerca. Un eventuale worker M2 compatibile va installato separatamente dal monolite in produzione. Prima di ricerche live sullo stesso IP dell'M2, le pause delle fonti del worker vanno coordinate con quelle dell'AMR di produzione.
 - Le misure locali separano tempo di assegnazione, attesa in coda e durata del lavoro sul nodo. La differenza tra presa in carico e arrivo dell'esito al centro include trasporto, serializzazione e ritorno; non e' una misura pura della latenza di rete. Non si sottraggono orologi di macchine diverse. Servono misure tra host reali prima di scegliere timeout o valutare le prestazioni del servizio remoto.
+
+## Stato verificato il 6 ottobre 2026
+
+Le sezioni precedenti conservano le decisioni iniziali; alcuni punti sono stati
+superati dagli incrementi successivi. La [review del branch a `c77c4c3`](/Volumes/MAIN/BananaChePrezzi-main/docs/revisioni/branch-nodi-2026-10-06-c77c4c3.md)
+ricostruisce il percorso attuale, prove, controprove e gate ancora aperti.
+
+- La composizione delle porzioni ricevute avviene **nel centro**, mediante
+  `componiRicerca`, dopo la scelta approvata e le prove di equivalenza. Il nodo
+  esegue la ricerca/fonti assegnate; non è più richiesto il ritorno al nodo
+  principale per assemblare la risposta finale.
+- Nhost Run ospita lo staging; Auth Nhost e PostgreSQL gestiscono identità e
+  autorizzazioni commerciali. Le identità sintetiche e l'Admin senza login
+  restano modalità locali di prova, non accessi utilizzabili su Internet.
+- La ricerca usa avvio POST con ID e consultazioni GET brevi. Menu e dettagli
+  possono ancora attendere il nodo dentro richieste GET lunghe. Il budget di
+  ricerca è 60 secondi, con limiti iniziali concordati di due richieste pendenti
+  per persona e 60 complessive; non sono misure di capacità produttiva.
+- Il candidato `8c396f9` è caricato nel registry ma non distribuito. L'ultima
+  verifica dello staging rileva l'originale `66e2b24` e 403 intermittenti
+  sull'ingresso; `/healthz` 200 non certifica il frontend o il login.
+- L'M2 non è ancora collegato. Il primo gate remoto resta solo stato e
+  compatibilità, poi arresto/riconnessione; le ricerche live richiedono prima
+  il coordinamento delle pause e dei limiti con la produzione sullo stesso IP.
+- La copia cifrata temporanea staging sull'iMac e il restore isolato sono
+  documentati nel registro. Storage gestito separato e ripristino funzionale
+  completo Nhost restano gate di produzione, non risultati già ottenuti.
+
+Questa review non modifica il runtime. I difetti negli inviti e nell'interfaccia
+sono descritti con proposte; le scelte sulla revoca dei login pendenti e sulle
+operazioni HTTP lunghe restano distinte dai problemi già riprodotti.

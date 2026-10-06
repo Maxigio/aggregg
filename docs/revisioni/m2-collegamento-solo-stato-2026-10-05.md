@@ -737,3 +737,28 @@ controlli, aggiornare/verificare lo staging, poi collegare e collaudare
 l'M2 soltanto per stato/compatibilità, arresto e riconnessione. Nessun file
 trasferito né worker avviato sull'M2 in questo incremento. Le prove live M2
 restano successive al coordinamento delle pause e dei limiti sull'IP condiviso.
+
+### Review del branch del 6 ottobre — HEAD `c77c4c3`
+
+La [review approfondita](/Volumes/MAIN/BananaChePrezzi-main/docs/revisioni/branch-nodi-2026-10-06-c77c4c3.md)
+ricontrolla accessi, aziende, coordinamento, UI, backup e preparazione del
+collegamento. Suite mirata: 172/172; prove aggiuntive su PostgreSQL 18.6
+reale con le otto migrazioni correnti e Auth sintetico. Nessuna operazione
+Nhost, M2 o portale eseguita in questo incremento.
+
+Confermati due difetti nel percorso invito referente: una sessione preesistente
+può restare incoerente dopo l'accettazione, e una risposta persa non può essere
+riconciliata con lo stesso invio. Confermati anche una risposta filtri tardiva
+che modifica il contesto corrente e due problemi di accessibilità. Non sono
+stati corretti in questo incremento di review/documentazione.
+
+Il login preparato prima di una revoca può finalizzarsi dopo, ma le ricerche
+restano negate durante la revoca: non è un bypass verificato. Richiede una
+decisione sul contratto dei tentativi pendenti. Le GET lunghe di menu/dettagli
+e il polling a vuoto restano rischi operativi da misurare; due lavori non
+dimostrano automaticamente due chiamate al portale.
+
+Restano invariati il blocco 403 dello staging, l'autorizzazione pendente della
+sonda remota e il gate M2 `--solo-stato`. Il report distingue checkout,
+immagine candidata e ultima versione remota verificata: nessun nuovo deploy
+o collegamento è attestato da questo commit.
