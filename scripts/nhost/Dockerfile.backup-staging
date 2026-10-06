@@ -1,5 +1,5 @@
 FROM node:24.21.0-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS runtime
-FROM amr-centro:staging-1a497bf AS dipendenze
+FROM registry.eu-central-1.nhost.run/40f9c208-5e1b-49ac-afcd-54e56d70de8b@sha256:c936de03451ae2e7fc562f64010552f54ef26b4a97cefdabe4922a5abdc597fe AS dipendenze
 FROM postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
 COPY --from=runtime /usr/local/bin/node /usr/local/bin/node
 WORKDIR /opt/amr

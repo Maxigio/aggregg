@@ -17,9 +17,10 @@ function globalsPerRestore(bytes,bootstrap) {
 }
 
 // Soltanto fixture nuove: nessun .env, Auth, app, porta pubblicata o dato cloud.
-async function collauda({ host, image, restic }) {
+async function collauda({ host, image, restic, platform = 'linux/amd64' }) {
   if (host !== 'unix://' + path.join(os.homedir(),'.colima/amr-auth/docker.sock')
-      || image !== 'amr-backup:staging-locale' || !path.isAbsolute(restic || '')) throw new Error('collaudo_non_locale');
+      || image !== 'amr-backup:staging-locale' || !path.isAbsolute(restic || '')
+      || !['linux/amd64','linux/arm64'].includes(platform)) throw new Error('collaudo_non_locale');
   const id = 'amr-backup-test-' + crypto.randomBytes(5).toString('hex');
   const directory = fs.mkdtempSync(path.join(os.tmpdir(),id+'-')); fs.chmodSync(directory,0o700);
   const nomi = { pg:id+'-pg', restore:id+'-restore', export:id+'-export', init:id+'-init', volume:id+'-volume', rete:id+'-rete' };
@@ -42,7 +43,8 @@ async function collauda({ host, image, restic }) {
         .find(x=>testo.includes(x));
       if(code!==0||troppo){b.fill(0);reject(Object.assign(new Error('comando_non_confermato'),{stato,motivo,numeroRiga}));}else resolve(b);});
   });
-  const docker=(args,input)=>esegui('docker',['--host',host,...args],input);
+  const docker=(args,input)=>esegui('docker',['--host',host,
+    ...(args[0] === 'run' ? ['run','--platform',platform,...args.slice(1)] : args)],input);
   const sql=(name,user,db,statement)=>docker(['exec','-i',name,'psql','-X','-v','ON_ERROR_STOP=1','-v','VERBOSITY=sqlstate','-U',user,'-d',db,'-At','-f','-'],Buffer.from(statement));
   const attendi=async name=>{
     for(let i=0;i<30;i++) {
@@ -161,7 +163,7 @@ async function collauda({ host, image, restic }) {
         assert.equal(db.prepare('SELECT count(*) AS n FROM '+nome).get().n,manifest.sqlite[nome]);
       }
     } finally { db.close(); }
-    return { ok:true,dimensioni,postgres:'18.6',repoSeparati:true,restore:true,networkRestore:'none' };
+    return { ok:true,dimensioni,postgres:'18.6',platform,repoSeparati:true,restore:true,networkRestore:'none' };
   } catch (e) {
     let faseNodo;
     if(fase==='esportazione') try {
@@ -189,7 +191,8 @@ async function collauda({ host, image, restic }) {
   }
 }
 if(require.main===module) {
-  collauda({host:process.env.AMR_TEST_DOCKER_HOST,image:'amr-backup:staging-locale',restic:process.env.AMR_TEST_RESTIC})
+  collauda({host:process.env.AMR_TEST_DOCKER_HOST,image:'amr-backup:staging-locale',restic:process.env.AMR_TEST_RESTIC,
+    platform:process.env.AMR_TEST_DOCKER_PLATFORM})
     .then(r=>console.log(JSON.stringify(r)),e=>{console.error(JSON.stringify({ok:false,codice:e.message,fase:e.fase,faseNodo:e.faseNodo,stato:e.stato,motivo:e.motivo,numeroRiga:e.numeroRiga,tipoSQL:e.tipoSQL}));process.exitCode=1;});
 }
 module.exports={collauda,globalsPerRestore};

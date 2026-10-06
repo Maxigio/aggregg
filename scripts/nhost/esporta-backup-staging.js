@@ -196,7 +196,10 @@ if (require.main === module) {
       tokenHash: env.AMR_BACKUP_TOKEN_SHA256, scadenza,
       segnala: fase => console.error('Backup non confermato: ' + fase),
       prepara: ({ signal }) => preparaCopia({ pg, signal, release: env.AMR_BACKUP_RELEASE }) });
-    servizio.server.listen(3000,'0.0.0.0',() => console.log('Manutenzione backup pronta.'));
+    servizio.server.listen(3000,'0.0.0.0',() => {
+      console.log('Manutenzione backup pronta.');
+      console.log('Architettura backup: ' + process.arch + '.');
+    });
     servizio.server.once('error',() => { servizio.chiudi(); process.exitCode = 1; });
     const timer = setTimeout(() => servizio.chiudi(), scadenza - Date.now()); timer.unref();
     process.once('SIGTERM',servizio.chiudi); process.once('SIGINT',servizio.chiudi);

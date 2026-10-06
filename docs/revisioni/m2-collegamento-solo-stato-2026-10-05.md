@@ -366,3 +366,83 @@ Queste sono prove locali, non un backup reale dello staging. Nhost conferma
 che i backup gestiti PostgreSQL escludono i dati Run: la copia del volume
 resta necessaria. Riferimenti: [backup Nhost](https://docs.nhost.io/products/database/backups),
 [verifica repository Restic](https://restic.readthedocs.io/en/stable/045_working_with_repos.html).
+
+### Seconda acquisizione staging — preparazione verificata
+
+Immagine di manutenzione del commit `3a513a2`, verificata nel registry:
+`sha256:5e92df98e569ac6edd5a3b545443810e9c1b9495a8c7f891a2d6a7dc4eb93678`.
+Exporter SHA-256:
+`0e1cde40aa788ed43b51ee4e23b50282882fb51379dc4076a8bd7c1eab071ccb`.
+Questo upload non è un backup e non aggiorna il candidato AMR originale.
+
+Prima dell'esecuzione: configurazione completa uguale all'originale,
+replica Run pronta, PostgreSQL 18.6 con `citext`, `pgcrypto`, `plpgsql`,
+nessun tablespace aggiuntivo. Queste estensioni sono presenti nella
+fixture di restore. Riferimenti ai segreti preservati, senza risolverne
+i valori; nessuna migrazione, nuova porta o nuovo volume.
+
+Il helper operativo usa due risposte DNS pubbliche concordanti per il
+solo hostname dello staging, con indirizzi pubblici e TLS/hostname verificati.
+Nessun redirect, proxy da ambiente o modifica al DNS di sistema per la
+connessione di backup. Controprove locali: rifiuto di indirizzi privati
+e risposte discordanti, NXDOMAIN ammesso solo se concordante, altri hostname
+lasciati al resolver originale. HTTPS reale del healthcheck confermato.
+
+Budget di avvio 480 secondi: il precedente ripristino era diventato pronto
+oltre i primi 300 secondi. La scadenza assoluta dell'exporter, 15 minuti,
+viene impostata dopo l'arresto del centro. Il budget non prova che l'avvio
+riuscirà. Rilettura completa della configurazione prima di ogni sostituzione;
+manutenzione esclusiva necessaria perché la API non offre un CAS utilizzato
+dal helper. La review indipendente non rileva blocchi nel diff operativo.
+
+Corretto inoltre il percorso di interruzione controllata: `SIGTERM` avvia
+il cleanup, e un secondo `SIGTERM` non interrompe la recovery. Prova locale
+del signal handler eseguita. La recovery verifica configurazione originale,
+replica pronta, healthcheck, frontend 200 e rifiuto anonimo 401. SIGKILL,
+perdita della macchina o del canale al provider possono comunque impedire
+il ripristino automatico: in quel caso serve recovery separata verificata.
+
+L'esito reale dell'acquisizione e del restore va registrato separatamente
+quando completato; nessuna prova locale chiude questo gate.
+
+### Diagnosi remota e correzione di compatibilità
+
+Il tentativo con immagine solo amd64 non arriva al healthcheck. Un filtro
+iniziale limitato ai messaggi dell'app non restituiva log; la ricerca mirata
+degli errori infrastrutturali trova 11 righe `exec /usr/local/bin/node:
+exec format error`, dal primo tentativo del 5 ottobre fino alle 01:13:36 UTC
+del 6 ottobre. `getServiceLabelValues` conferma il nome corretto del servizio.
+Nessun dato personale o log applicativo completo riportato. È un rifiuto
+del binario prima dell'avvio JS, non una prova di errore del dump o dei proxy.
+
+Il helper viene interrotto con SIGTERM sul suo solo PID verificato. La recovery
+conclude senza acquisire copie. Verifica indipendente successiva: configurazione
+integralmente originale, Run `Running`, replica pronta alle 01:16:59 UTC.
+Frontend 200, healthcheck valido e API anonima 401. Volume e schema invariati.
+
+Correzione: build esplicita `linux/amd64,linux/arm64`; lo stage delle dipendenze
+usa ora il digest dell'immagine originale multiarch dal registry, invece di
+un tag locale solo amd64. Le basi Node e PostgreSQL sono già indici ufficiali
+multiarch fissati per digest. Nessuna installazione npm, nuovo builder o
+modifica alla VM. Il boot stampa anche `process.arch`, senza dati sensibili,
+per verificare quale variante venga eseguita realmente.
+
+Il runner di collaudo accetta soltanto amd64/arm64 e rende esplicita la
+piattaforma di tutti i propri container. Entrambi i gate completi passano:
+dump PG 10.240 byte, SQLite 20.480 byte, cifratura Restic, hash, owner/ACL,
+conteggi e restore isolato; cleanup verificato per entrambe le esecuzioni.
+Test mirati 10/10. Review indipendente del runner: nessun finding confermato.
+Il solo campo `platform` nell'esito non prova un'architettura: servono
+manifest e funzionamento del runtime. La variante scelta da Nhost va ancora
+osservata direttamente, senza dedurla dal solo messaggio `exec format error`.
+
+La review del signal handler trova inoltre che il vecchio `http_code`
+poteva assorbire l'interruzione durante una richiesta HTTP. Controprova
+locale con errore simulato, poi propagazione esplicita nel helper aggiornato
+e codice `manutenzione_interrotta` preservato nel report. Il tentativo
+interrotto aveva già caricato il helper precedente: la sua recovery riuscita
+non prova il nuovo ramo HTTP, che è verificato separatamente.
+
+Riferimenti: [Docker multi-platform](https://docs.docker.com/build/building/multi-platform/)
+e [Nhost CLI deploy](https://docs.nhost.io/products/run/cli-deployments),
+che mostra la build per entrambe le architetture.
