@@ -4,9 +4,9 @@ const fs = require('node:fs'), path = require('node:path'), crypto = require('no
 const { preparaSchema, FILES } = require('../scripts/nhost/prepara-schema-staging');
 const leggi = nome => fs.readFileSync(path.join(__dirname, '..', nome), 'utf8');
 const release = 'a'.repeat(40);
-test('pacchetto staging: dieci migrazioni, una transazione, definizioni invariate e impronte verificabili', () => {
+test('pacchetto staging: undici migrazioni, una transazione, definizioni invariate e impronte verificabili', () => {
   const p = preparaSchema({ leggi, release });
-  assert.equal(p.release, release); assert.equal(p.impronte.length, 10);
+  assert.equal(p.release, release); assert.equal(p.impronte.length, 11);
   assert.equal((p.sql.match(/^BEGIN;$/gm) || []).length, 1);
   assert.equal((p.sql.match(/^COMMIT;$/gm) || []).length, 1);
   let posizione = 0;

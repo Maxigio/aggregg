@@ -315,6 +315,9 @@ async function collauda({ manuale = false } = {}) {
       for (const nome of ['accessi', 'aziende', 'rinnovi', 'colleghi', 'backup']) {
         await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-' + nome + '-prova.sql'), 'utf8'));
       }
+      for (const nome of ['referente-sessioni', 'referente-retry', 'login-inizio']) {
+        await sql(fs.readFileSync(path.join(__dirname, '../backend/nodi/schema-' + nome + '.sql'), 'utf8'));
+      }
     }
     await sql(`INSERT INTO amr_accessi.persone(id,admin) VALUES ('${preMfa.user.id}',true);`);
     const writerPassword = crypto.randomBytes(32).toString('hex');
@@ -422,7 +425,7 @@ async function collauda({ manuale = false } = {}) {
       return richiestaLoginRaw('finalizza', { conferma: data.conferma }, cookie);
     };
     const loginConContesto = async body => {
-      const bootstrap = await richiestaLogin('bootstrap', { login: true });assert.equal(bootstrap.status,200);
+      const bootstrap = await richiestaLogin('bootstrap', { login: true, email: body.email });assert.equal(bootstrap.status,200);
       const cookieContesto = bootstrap.headers.getSetCookie().find(v => v.startsWith('amr_accesso_prova='))?.split(';')[0];
       assert.match(cookieContesto || '', /^amr_accesso_prova=[a-f0-9]{64}$/);
       return { risposta: await richiestaLogin('login', { ...body, tentativo: (await bootstrap.json()).tentativo }, cookieContesto), cookieContesto };

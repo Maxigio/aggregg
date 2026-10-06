@@ -266,7 +266,7 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
         const conferma=json(r).conferma;controlla(/^[a-f0-9]{64}$/.test(conferma));
         return request('/api/auth/finalizza',{method:'POST',body:{conferma},cookie:cookie()});
       };
-      const bootstrap=await request('/api/auth/bootstrap',{method:'POST',body:{login:true}});
+      const bootstrap=await request('/api/auth/bootstrap',{method:'POST',body:{login:true,email:credenziali.email}});
       assert.equal(bootstrap.status,200);aggiorna(bootstrap);
       controlla(jar.has('amr_accesso_prova'));
       const challenge=await autenticazione('/api/auth/login',

@@ -36,7 +36,7 @@ async function manda(endpoint, body) {
   occupato = true; sequenza++;
   document.querySelectorAll('button').forEach(b => { b.disabled = true; });
   try {
-    if (endpoint === 'login') body = { ...body, tentativo: (await window.amrBootstrap(true)).tentativo };
+    if (endpoint === 'login') body = { ...body, tentativo: (await window.amrBootstrap(true, body.email)).tentativo };
     else if (endpoint === 'mfa') await window.amrBootstrap();
     const invia = endpoint === 'logout' && navigator.locks ? window.amrCookieFetch : fetch;
     let r = await invia('/api/auth/' + endpoint, { method: 'POST', credentials: 'same-origin',

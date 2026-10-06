@@ -61,13 +61,15 @@ test('referente PG18: sessioni precedenti, rollback, concorrenza e journal',
       max: 4, statement_timeout: 3000, lock_timeout: 2000, connectionTimeoutMillis: 2000 };
     const pool = user => { const p = new Pool({ ...config, user }); pools.push(p); return p; };
     const sql = pool('postgres');
-    await sql.query(`CREATE SCHEMA auth;
-      CREATE TABLE auth.users(id uuid PRIMARY KEY,email text UNIQUE NOT NULL,
+    await sql.query(`CREATE EXTENSION citext; CREATE SCHEMA auth;
+      CREATE TABLE auth.users(id uuid PRIMARY KEY,email public.citext UNIQUE NOT NULL,
         email_verified boolean NOT NULL DEFAULT true,disabled boolean NOT NULL DEFAULT false,
         password_hash text,locale varchar(3) NOT NULL DEFAULT 'en');`);
     for (const file of FILES.slice(0, FILES.indexOf('backend/nodi/schema-referente-sessioni.sql'))) {
       await sql.query(fs.readFileSync(path.join(root, file), 'utf8'));
     }
+    // Il checkpoint non cambia F1: installarlo prima di usare l'adapter reale.
+    await sql.query(fs.readFileSync(path.join(root, 'backend/nodi/schema-login-inizio.sql'), 'utf8'));
     await sql.query(`CREATE ROLE prova_reader LOGIN IN ROLE amr_accessi_lettore;
       CREATE ROLE prova_writer LOGIN IN ROLE amr_aziende_scrittore;`);
     const writer = pool('prova_writer'), reader = pool('prova_reader');
@@ -86,9 +88,13 @@ test('referente PG18: sessioni precedenti, rollback, concorrenza e journal',
     const origine = 'http://127.0.0.1:' + server.address().port;
     directory = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-referente-pg-'));
     const nodoToken = crypto.randomBytes(32).toString('hex');
-    const client = { login: async email => ({ session: { user: {
-      id: (await sql.query('SELECT id FROM auth.users WHERE email=$1', [email])).rows[0].id,
-      emailVerified: true }, accessToken: crypto.randomUUID(), refreshToken: crypto.randomUUID() } }),
+    let providerInAttesa;
+    const client = { login: async email => {
+      const id = (await sql.query('SELECT id FROM auth.users WHERE email=$1', [email])).rows[0].id;
+      if (providerInAttesa) { providerInAttesa.dentro(); await providerInAttesa.attesa; }
+      return { session: { user: { id, emailVerified: true },
+        accessToken: crypto.randomUUID(), refreshToken: crypto.randomUUID() } };
+    },
       logout: async () => ({}) };
     centro = require('../backend/nodi/centro').creaCentro({ directory, tokens: { prova: nodoToken },
       inizializzaAccessi: app => require('../backend/nodi/login-nhost-prova').mount(app,
@@ -105,7 +111,7 @@ test('referente PG18: sessioni precedenti, rollback, concorrenza e journal',
       return [...map].map(([k, v]) => k + '=' + v).join('; ');
     }
     async function login(email) {
-      const b = await call('/api/auth/bootstrap', { login: true }), jar = cookies(b);
+      const b = await call('/api/auth/bootstrap', { login: true, email }), jar = cookies(b);
       const l = await call('/api/auth/login', { email, password: 'password-sintetica', tentativo: (await b.json()).tentativo }, jar);
       assert.equal(l.status, 200);
       const f = await call('/api/auth/finalizza', { conferma: (await l.json()).conferma }, jar);
@@ -200,6 +206,55 @@ test('referente PG18: sessioni precedenti, rollback, concorrenza e journal',
     await assert.rejects(account.accetta(terza, terzoInvito.token, op), {codice:'invito_non_valido'});
     assert.equal((await sql.query("SELECT has_function_privilege('public','amr_accessi.aziende_accetta(uuid,text,uuid)','EXECUTE') ok")).rows[0].ok, false);
     t.diagnostic('Retry referente: stesso ID, identità/invito estranei, scadenza, revoca e journal singolo');
+
+    const prepara = async () => {
+      const b = await call('/api/auth/bootstrap', {login:true,email:'seconda@amr.invalid'});
+      assert.equal(b.status,200);
+      return {jar:cookies(b),body:{email:'seconda@amr.invalid',password:'password-sintetica',tentativo:(await b.json()).tentativo}};
+    };
+    const ammissione = await prepara();
+    await account.revocaAzienda(manager,{id:'seconda',operazione:crypto.randomUUID()});
+    await account.rinnova(manager,{id:'seconda',operazione:crypto.randomUUID()});
+    const vecchioTentativo = await call('/api/auth/login',ammissione.body,ammissione.jar);
+    assert.equal(vecchioTentativo.status,401,'handle precedente alla revoca non adotta la nuova epoca');
+    assert.deepEqual(vecchioTentativo.headers.getSetCookie(),[]);
+    const pendente = await prepara();
+    let entra, termina;
+    const iniziato = new Promise(r=>{entra=r;}), attesa = new Promise(r=>{termina=r;});
+    providerInAttesa={dentro:entra,attesa};
+    const ritorno = call('/api/auth/login',pendente.body,pendente.jar);
+    try {
+      await iniziato;
+      // Il chiamante ignora la ricevuta, ma la revoca è committata nel DB.
+      const opRevoca = crypto.randomUUID();
+      await account.revocaAzienda(manager,{id:'seconda',operazione:opRevoca});
+      assert.equal((await account.statoOperazione(manager,{id:'seconda',operazione:opRevoca})).confermata,true);
+      await account.rinnova(manager,{id:'seconda',operazione:crypto.randomUUID()});
+      termina();const r=await ritorno;
+      assert.equal(r.status,401,'provider lento durante revoca/rinnovo non crea conferma');
+      assert.deepEqual(r.headers.getSetCookie(),[]);
+    } finally {termina();await ritorno;providerInAttesa=null;}
+    const dopo = await login('seconda@amr.invalid');
+    assert.equal((await call('/api/auth/me',undefined,dopo)).status,200,'nuovo login dopo rinnovo');
+    await account.revocaAzienda(manager,{id:'seconda',operazione:crypto.randomUUID()});
+    const duranteRevoca = await login('seconda@amr.invalid');
+    assert.equal((await call('/api/auth/me',undefined,duranteRevoca)).status,200,'identità ancora attiva');
+    assert.equal((await call('/api/ricerche',{id:crypto.randomUUID(),input:{tipo:'moto',marca:'Ducati'}},duranteRevoca)).status,403);
+    await account.rinnova(manager,{id:'seconda',operazione:crypto.randomUUID()});
+    const rollbackTentativo=await prepara(), revocaRollback=await writer.connect();
+    try {
+      await revocaRollback.query('BEGIN');
+      await require('../backend/nodi/aziende-postgres-prova').creaAziendePostgres({pool:revocaRollback})
+        .revocaAzienda(manager,{id:'seconda',operazione:crypto.randomUUID()});
+      await revocaRollback.query('ROLLBACK');
+    } finally {revocaRollback.release();}
+    const consentito=await call('/api/auth/login',rollbackTentativo.body,rollbackTentativo.jar);
+    assert.equal(consentito.status,200,'rollback SQL non inventa una revoca');
+    const finale=await call('/api/auth/finalizza',{conferma:(await consentito.json()).conferma},rollbackTentativo.jar);
+    assert.equal(finale.status,200);
+    assert.equal((await sql.query("SELECT has_function_privilege('public','amr_accessi.inizio_login(text)','EXECUTE') ok")).rows[0].ok,false);
+    await assert.rejects(reader.query('SELECT email,password_hash FROM auth.users'),{code:'42501'});
+    t.diagnostic('C1 PG/citext: handle e provider precedenti alla revoca, rinnovo, commit ignorato, rollback e ACL; HTTP reale/Auth sintetico');
     // Solo il DB della fixture corrente: rendere vuoto il dominio prima del
     // collaudo colleghi consente di riusare tutte le sue prove con la migrazione.
     await sql.query(`BEGIN; DELETE FROM amr_backup.outbox;

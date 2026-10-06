@@ -83,13 +83,68 @@ La garanzia del POST deriva dall'ID e dai controlli SQL, non dal metodo HTTP.
   login dopo revoca resta possibile; i permessi commerciali rimangono negati.
 - C4: per ora accettazione senza challenge MFA. Le identità con MFA già attiva
   restano rifiutate esplicitamente; il secondo fattore non viene aggirato.
+- C2: l'utente rinvia il protocollo breve per menu/dettagli al collaudo staging.
+  Il comportamento attuale viene preservato, con il rischio condizionato sotto.
+
+## C2/C3 — Misure e controprove
+
+Esecuzione indipendente ripetuta dal processo principale con Node 24.21.0:
+47 pass, nessuna chiamata esterna. Trasporto stub, HTTP loopback e istanze VM
+isolate; nessuna misura del proxy Nhost o dei portali reali.
+
+- C2: una GET fredda produce un job/una chiamata; due GET sullo stesso worker
+  con esito riuscito producono due job/una chiamata grazie alla cache. Su worker
+  diversi o dopo errore non memorizzato: due job/due chiamate. Quindi non è
+  corretto descrivere ogni doppio job come doppio scraping.
+- Tutti i 287 menu Auto e 345 su 450 menu Moto non richiedono rete nella scansione
+  controllata. Per 105 marche Moto resta il fallback remoto: congelare tutto il
+  catalogo al centro cambierebbe copertura, non è una correzione neutra.
+- C3: in due secondi sul loopback, otto heartbeat e otto poll; introducendo 50 ms
+  per risposta, sei e sei. Periodo: 250 ms più le due latenze e l'elaborazione.
+  Non sono misurati sovraccarico, costo cloud o SLA di disconnessione. Timer
+  invariati; ottimizzazione rinviata a una misura che giustifichi il cambiamento.
+
+Ricevuta temporanea: `/private/tmp/amr-c2c3-20261006-t_c45yow/node24.log` e
+`REPORT.md`. Gli scenari essenziali restano qui se i temporanei vengono eliminati.
+
+## C1 — Revoca dei login già ammessi
+
+Implementazione: migrazione append-only `schema-login-inizio.sql`; funzione
+ristretta email → UUID/epoca, owner NOLOGIN e solo EXECUTE al lettore. Il
+bootstrap riserva un tentativo, fotografa il DB e ne vincola l'email prima di
+emettere l'handle. Login, MFA e finalizzazione confrontano quell'epoca senza
+adottare quella nuova. Logout/sostituzione/scadenza durante SQL annullano anche
+la risposta tardiva. La sessione conserva l'epoca iniziale; nessun lock resta
+aperto durante l'attesa di Auth. Il pacchetto include undici migrazioni.
+
+Review indipendente: verificato e corretto un canale di distinzione fra account
+AMR presente/assente nel precheck. La verifica dell'epoca avviene dopo Auth;
+checkpoint presente/assente/ambiguo e password errata fanno una chiamata Auth e
+restituiscono lo stesso errore. Il binding email e le verifiche prima di
+sessione/MFA restano. Non è una garanzia di tempi identici del provider remoto.
+
+Prove: 22 nuovi casi controllati, 32 test del gruppo mirato ripetuti dal main,
+PostgreSQL 18.6 reale con email citext e ruoli limitati. Coperti handle/provider
+pendenti durante revoca+rinnovo, MFA, commit la cui ricevuta è ignorata, rollback,
+ACL e login nuovo durante revoca (ricerca HTTP negata). Auth è sintetico in
+queste prove; nessuna migrazione remota applicata. Aggiornati anche i due runner
+di collaudo con il nuovo bootstrap e le migrazioni del percorso locale PG16.
+
+Confine: una revoca dopo la fotografia finale può precedere la consegna di un
+cookie con l'epoca vecchia. Quel cookie è negato al successivo controllo, anche
+dopo rinnovo; non si promette di impedire ogni risposta tardiva sulla rete.
+Una richiesta ancora in attesa della fotografia iniziale non è un tentativo
+già creato. Conta l'ordine backend/SQL concordato, non l'ordine dei clic.
+
+Fondamento: [OWASP Authentication](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
+per errori generici e canali di distinzione; OWASP Session Management e
+PostgreSQL CREATE FUNCTION già citati per invalidazione e privilegi minimi.
 
 ## Lavoro restante
 
 - F3: risposte tardive dei filtri e continuazioni della vecchia identità.
 - F5: annuncio accessibile del conteggio risultati.
-- C1: implementare e collaudare la politica dei login pendenti concordata.
-- C2/C3: misurare retry menu/dettagli e traffico idle del worker con fonti simulate.
+- C2: rivalutare menu/dettagli nel collaudo staging; C3 costo idle noto.
 - Ingress staging: diagnosi remota e aggiornamento conservano il proprio gate.
 - M2: collegamento solo stato successivo al collaudo staging; produzione esclusa.
 

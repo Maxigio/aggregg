@@ -7,6 +7,9 @@ const crypto = require('node:crypto');
 function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 * 60000, cookiePath = '/api/auth',
   cleanupMs = 10000, proxyAttendibili, trasporto: configTrasporto }) {
   const express = require('express');
+  const inizioLogin = identita.inizioLogin;
+  if (inizioLogin !== undefined && typeof inizioLogin !== 'function') throw new Error('checkpoint login non valido');
+  const emailValida = email => typeof email === 'string' && email.length <= 254 && email.includes('@');
   const config = configTrasporto === undefined ? { origine, proxyAttendibili } : configTrasporto;
   const trasporto = require('./trasporto-prova').trasportoPerRotta({ origine, proxyAttendibili, trasporto: configTrasporto });
   origine = trasporto.origine;
@@ -120,21 +123,49 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
   };
   const preparaLogin = protetta(async (req, res) => {
     if (chiuso) throw errore(503, 'identita_non_disponibile');
+    const email = req.body?.email;
+    if (inizioLogin && !emailValida(email)) throw errore(400, 'input_non_valido');
     const key = browser(req, res);
     if (!tentativiAccesso.has(key) && tentativiAccesso.size >= 50) throw errore(503, 'challenge_non_disponibili');
     const precedente = tentativiAccesso.get(key);
     if (precedente) void ritiraEsito(precedente);
     const handle = crypto.randomBytes(32).toString('hex');
-    tentativiAccesso.set(key, { browser: key, handle: impronta(handle), usato: false,
-      revisione: sequenzaRevoche, scadenza: ora() + 3 * 60000, inVolo: false });
+    // Riservare prima dell'await: logout e sostituzione devono annullare anche SQL pendente.
+    const tentativo = { browser: key, handle: impronta(handle), usato: false,
+      revisione: sequenzaRevoche, scadenza: ora() + 3 * 60000, inVolo: false,
+      pronto: false, email: inizioLogin ? email.toLowerCase() : null, checkpoint: null };
+    tentativiAccesso.set(key, tentativo);
     for (const [id, s] of challenge) if (s.tentativo.browser === key) challenge.delete(id);
-    res.json({ ok: true, tentativo: handle });
+    try {
+      if (inizioLogin) tentativo.checkpoint = await inizioLogin(email);
+      valido(tentativo);
+      if (req.aborted || res.destroyed) throw errore(401, 'ripeti_login');
+      tentativo.pronto = true;
+      // Anche identità assenti/ambigue ricevono un handle: nessun esito del lookup al browser.
+      res.json({ ok: true, tentativo: handle });
+    } catch (e) {
+      if (tentativiAccesso.get(key) === tentativo) tentativiAccesso.delete(key);
+      throw e;
+    }
   }, true);
   app.post('/api/auth/bootstrap', (req, res) => {
     if (req.body?.login === true) return preparaLogin(req, res);
     if (chiuso) return res.status(503).json({ codice: 'identita_non_disponibile' });
     browser(req, res); res.json({ ok: true });
   });
+  async function verificaTentativo(tentativo, provider) {
+    valido(tentativo);
+    const c = tentativo.checkpoint;
+    if (!c) throw errore(401, 'accesso_negato');
+    if (provider?.session && (typeof provider.session.user?.id !== 'string'
+        || provider.session.user.id.toLowerCase() !== c.persona)) throw errore(401, 'accesso_negato');
+    if ((revoche.get(c.persona) || 0) > tentativo.revisione) throw errore(401, 'ripeti_login');
+    const ruolo = await identita(c.persona);
+    valido(tentativo);
+    if ((revoche.get(c.persona) || 0) > tentativo.revisione
+        || !ruolo || ruolo.epoca !== c.epoca) throw errore(401, 'ripeti_login');
+    return ruolo;
+  }
   async function creaSessione(req, res, provider, mfa, tentativo) {
     valido(tentativo);
     const s = provider?.session;
@@ -142,7 +173,7 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
         || typeof s.refreshToken !== 'string') throw errore(401, 'accesso_negato');
     // Ruolo risolto dal server sullo UUID Nhost; metadata client non sono autorità.
     if ((revoche.get(s.user.id) || 0) > tentativo.revisione) throw errore(401, 'ripeti_login');
-    const ruolo = await identita(s.user.id);
+    const ruolo = inizioLogin ? await verificaTentativo(tentativo, provider) : await identita(s.user.id);
     valido(tentativo);
     if ((revoche.get(s.user.id) || 0) > tentativo.revisione) throw errore(401, 'ripeti_login');
     if (!ruolo?.attiva || (ruolo.admin && !mfa)) throw errore(403, 'accesso_non_autorizzato');
@@ -155,7 +186,8 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     const token = crypto.randomBytes(32).toString('hex');
     sessioni.set(impronta(token), { chiave: impronta(token), persona: s.user.id, mfa, provider: s, browser: tentativo.browser,
       id: crypto.randomBytes(32).toString('hex'), creata: ora(),
-      epoca: ruolo.epoca ?? 0, azienda: ruolo.azienda, scadenza: ora() + durataMs });
+      epoca: inizioLogin ? tentativo.checkpoint.epoca : ruolo.epoca ?? 0,
+      azienda: ruolo.azienda, scadenza: ora() + durataMs });
     res.clearCookie('amr_mfa_prova', options);
     res.cookie('amr_sessione_prova', token, { ...options, maxAge: durataMs });
     tentativo.inVolo = false;
@@ -177,17 +209,21 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     const key = cookie(req, 'amr_accesso_prova');
     if (!key) throw errore(401, 'ripeti_login');
     const { email, password } = req.body || {};
-    if (typeof email !== 'string' || email.length > 254 || !email.includes('@')
+    if (!emailValida(email)
         || typeof password !== 'string' || !password.length || password.length > 50) {
       throw errore(400, 'input_non_valido');
     }
     const tentativo = tentativiAccesso.get(key), handle = req.body?.tentativo;
-    if (!tentativo || tentativo.usato || typeof handle !== 'string' || !/^[a-f0-9]{64}$/.test(handle)
+    if (!tentativo || !tentativo.pronto || tentativo.usato || typeof handle !== 'string' || !/^[a-f0-9]{64}$/.test(handle)
         || tentativo.handle !== impronta(handle)) throw errore(401, 'ripeti_login');
     valido(tentativo); tentativo.usato = true; tentativo.inVolo = true;
     let result, preparato = false;
     try {
+      if (inizioLogin) {
+        if (email.toLowerCase() !== tentativo.email) throw errore(401, 'accesso_negato');
+      }
       result = await client.login(email, password);
+      if (inizioLogin) await verificaTentativo(tentativo, result);
       preparaEsito(req, res, tentativo, result, false); preparato = true;
     } finally {
       tentativo.inVolo = false;
@@ -206,7 +242,9 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     pending.usato = true; pending.tentativo.inVolo = true;
     let result, preparato = false;
     try {
+      if (inizioLogin) await verificaTentativo(pending.tentativo);
       result = await client.mfa(pending.ticket, req.body.otp);
+      if (inizioLogin) await verificaTentativo(pending.tentativo, result);
       preparaEsito(req, res, pending.tentativo, result, true); preparato = true;
     } finally {
       pending.tentativo.inVolo = false;
@@ -230,6 +268,7 @@ function mount(app, { client, identita, origine, ora = Date.now, durataMs = 15 *
     try {
       const provider = esito.provider;
       if (!esito.mfa && typeof provider?.mfa?.ticket === 'string' && !provider.session) {
+        if (inizioLogin) await verificaTentativo(tentativo);
         if (challenge.size >= 50) throw errore(503, 'challenge_non_disponibili');
         if (req.aborted || res.destroyed) throw errore(401, 'ripeti_login');
         const token = crypto.randomBytes(32).toString('hex');

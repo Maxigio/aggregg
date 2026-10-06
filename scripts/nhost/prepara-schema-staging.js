@@ -3,7 +3,7 @@ const path = require('node:path'), crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const FILES = Object.freeze(['accessi-prova', 'aziende-prova', 'inviti-consegna',
   'rinnovi-prova', 'rinnovi-datestyle', 'colleghi-prova', 'backup-prova', 'ripristino-sequenza',
-  'referente-sessioni', 'referente-retry']
+  'referente-sessioni', 'referente-retry', 'login-inizio']
   .map(nome => 'backend/nodi/schema-' + nome + '.sql'));
 
 // Solo prima installazione: nessuna connessione, password o applicazione automatica.
