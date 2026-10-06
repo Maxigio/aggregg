@@ -152,3 +152,45 @@ test('worker: credenziale rifiutata ferma heartbeat e poll; un 503 resta riprova
     assert.equal(eseguiti,0);
   }
 });
+
+test('worker con IPC: rifiuto della credenziale e arresto terminano il processo senza SIGKILL', async t => {
+  const { fork } = require('node:child_process');
+  const http = require('node:http');
+  for (const caso of [401,403,'obsoleto','SIGTERM']) await t.test(String(caso), async t => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(),'amr-worker-uscita-'));
+    let figlio, heartbeat = 0;
+    const server = http.createServer((req,res) => {
+      req.resume();
+      if (req.url.endsWith('/registrazione')) {
+        res.setHeader('content-type','application/json');
+        res.end(JSON.stringify({epoca:'centro-fixture',boot:null})); return;
+      }
+      assert.equal(req.url,'/_nodo/heartbeat'); heartbeat++;
+      res.statusCode = typeof caso === 'number' ? caso : caso === 'obsoleto' ? 409 : 200;
+      if (caso === 'obsoleto') res.setHeader('x-amr-node-obsoleto','1');
+      res.end();
+      if (caso === 'SIGTERM') figlio.kill('SIGTERM');
+    }).listen(0,'127.0.0.1');
+    await new Promise(r=>server.once('listening',r));
+    let timeout;
+    t.after(async () => {
+      clearTimeout(timeout);
+      if(figlio && figlio.exitCode === null && figlio.signalCode === null) {
+        figlio.kill('SIGKILL'); await new Promise(r=>figlio.once('exit',r));
+      }
+      server.closeAllConnections(); await new Promise(r=>server.close(r));
+      fs.rmSync(dir,{recursive:true,force:true});
+    });
+    figlio = fork(path.join(__dirname,'../backend/nodi/worker.js'),[],{
+      execArgv:[],env:{PATH:process.env.PATH,AMR_CENTRO_URL:'http://127.0.0.1:'+server.address().port,
+        AMR_NODO_ID:'fixture',AMR_NODI_TOKEN:'credenziale-sintetica',AMR_NODO_SOLO_STATO:'1',
+        USER_DATA_PATH:dir,AMR_LOG_DIR:path.join(dir,'log')},
+      stdio:['ignore','ignore','ignore','ipc'],
+    });
+    const esito = await Promise.race([
+      new Promise((resolve,reject)=>{figlio.once('error',reject);figlio.once('exit',(code,signal)=>resolve({code,signal}));}),
+      new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('worker ancora vivo dopo la fine del ciclo')),4000);}),
+    ]);
+    assert.deepEqual(esito,{code:0,signal:null}); assert.equal(heartbeat,1);
+  });
+});

@@ -620,3 +620,31 @@ Riferimenti: [deploy Nhost multiarch](https://docs.nhost.io/products/run/cli-dep
 [healthcheck Nhost](https://docs.nhost.io/products/run/health-checks),
 [OpenSSH](https://man.openbsd.org/ssh.1). Il healthcheck verifica il listener,
 non sostituisce login, compatibilità e mancata assegnazione.
+
+### Arresto del processo e artefatto candidato
+
+Il giro seriale completo prima dell'ultima correzione termina con 1.484 test:
+1.475 pass, zero failure/cancelled, nove skip opt-in. L'immagine `ddea8a9`
+passa il collaudo locale PostgreSQL 18.6, Auth/MFA, permessi, ricerca simulata,
+riavvio e restore Restic. L'upload successivo riesce per entrambe le
+architetture; il primo fallimento di upload non ha una causa dimostrata.
+Nessun aggiornamento remoto è stato eseguito con questa immagine.
+
+La review indipendente trova un difetto ulteriore, confermato con processi
+reali: dopo la fine del ciclo, l'IPC del launcher mantiene vivo il worker.
+Quattro controprove falliscono sul codice precedente: heartbeat 401, 403,
+409 con header obsoleto e SIGTERM; nessuna uscita entro quattro secondi.
+Correzione: il main chiude l'IPC nel `finally` di `avvia()`, dopo aver terminato
+il lavoro. La funzione esportata e la gestione di 503 restano invariate.
+Le stesse quattro prove passano senza SIGKILL, insieme alle suite centro,
+worker e launcher: 42/42. Review indipendente in sola lettura: nessun finding
+bloccante residuo sul fix e sul test. Serve un nuovo artefatto dello stesso
+commit per centro e worker; l'immagine precedente non verrà distribuita.
+
+La procedura operativa temporanea è stata corretta dopo controprove su
+interruzione, drift concorrente, piano alterato e ricevute senza identità.
+Il piano intero viene ricostruito con il produttore dell'artefatto; il gate
+richiede ID immutabili presenti e concordanti. Nel launcher diagnostico,
+cleanup e segnali precedono lo spawn: un errore successivo di lettura o
+scrittura chiude il solo figlio creato. Queste prove non attestano ancora
+l'esecuzione su Nhost o M2.

@@ -141,5 +141,9 @@ async function avvia() {
 process.on('disconnect', () => { attivo = false; controllerAttivo?.abort(); });
 process.on('SIGTERM', () => { attivo = false; controllerAttivo?.abort(); });
 process.on('SIGINT', () => { attivo = false; controllerAttivo?.abort(); });
-if (require.main === module) avvia();
+// Il canale del launcher tiene vivo il figlio anche dopo la fine del ciclo.
+// Chiuderlo solo a lavoro terminato permette un arresto naturale, senza SIGKILL.
+if (require.main === module) avvia().finally(() => {
+  if (process.connected) process.disconnect();
+});
 module.exports = { avvia };
