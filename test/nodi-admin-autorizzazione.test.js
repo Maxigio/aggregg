@@ -94,6 +94,22 @@ for(const [route,body,table] of [[
  test('Admin ricontrollato dopo body tardivo: '+table,()=>adminBody(route,body,table));
 }
 
+test('stato diagnostico RAM: richiede Admin MFA anche se il registro SQL non è leggibile', async () => {
+ const referente=await fixture(), admin=await fixture({admin:true});
+ try {
+  assert.equal((await admin.request('/api/admin/diagnostica')).status,401);
+  const cliente=await referente.login();
+  assert.equal((await referente.request('/api/admin/diagnostica',{cookie:cliente})).status,403);
+  const cookie=await admin.login();
+  admin.centro.db.exec('DROP TABLE lavori');
+  const stato=await admin.request('/api/admin/diagnostica',{cookie});
+  assert.equal(stato.status,200);
+  assert.deepEqual(Object.keys(JSON.parse(stato.raw)),['diagnostica']);
+  assert.equal((await admin.request('/api/auth/logout',{body:{},cookie})).status,200);
+  assert.equal((await admin.request('/api/admin/diagnostica',{cookie})).status,401);
+ } finally {await referente.close();await admin.close();}
+});
+
 test('sessioni: trenta richieste anonime o letture non impediscono la revoca',async()=>{
  const f=await fixture();try{
   const a=await f.login(), b=await f.login();

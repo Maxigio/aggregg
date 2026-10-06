@@ -144,3 +144,52 @@ Lo skip riguarda le attese reali di 55/65 s della sonda; non è una prova Nhost.
   insieme stabile di IP proxy per la nostra allowlist.
 
 Questi riferimenti sostengono le scelte; non provano da soli AMR o il provider.
+
+## Incremento 1 — guasti della diagnostica
+
+D1/D2 corretti nel backend. Le scritture di lavori/eventi, il riallineamento
+della sola storia al boot e la pulizia sono best effort; i job e le risposte
+restano governati dalle strutture in RAM. Il fallimento lascia uno stato
+`diagnostica.incompleta` fino al termine del processo, con contatore limitato,
+fase e istante dell'ultimo errore; nessun messaggio SQLite o dato arbitrario.
+Una sola segnalazione stderr evita un log per ogni tentativo fallito.
+
+Lo stato è incluso nelle risposte Admin/stato/export. La rotta
+`GET /api/admin/diagnostica` non legge il registro SQLite: permette di
+consultarlo anche se le tabelle diagnostiche non sono più leggibili.
+Usa il guard Admin esistente, che nel centro Run richiede sessione, MFA ed
+epoca valide. La rappresentazione nel nuovo frontend è ancora da realizzare.
+Il warning RAM non è una nuova persistenza: dopo un restart non può ricostruire
+automaticamente tutte le lacune avvenute quando il registro non scriveva.
+
+Inizializzazione dello store, sospensioni, token, Auth e transazioni commerciali
+non sono trasformati in operazioni facoltative. Retention, cap e compattazione
+non sono cambiati. L'export diagnostico resta un download, non un backup server
+che promette di cancellare il file scaricato dal computer del proprietario.
+
+Prove principali Node 24.21.0, SQLite reale temporaneo, `query_only` e trigger
+locali, dotenv escluso e HTTP loopback:
+
+- Cinque regressioni nuove: risultato consegnato e job liberato con registro
+  non scrivibile; pulizia fallita senza eccezione dal timer e successivo recupero;
+  abort/close con job attivo, DB e intervalli chiusi; tabella illeggibile ma
+  stato RAM accessibile; errore eventi con una sola segnalazione, senza assorbire
+  i rifiuti delle scritture operative.
+  `/private/tmp/amr-console-fix-vfT8so/test.tap`: **5/5 pass**.
+- Gate pertinente centro, quote, budget, autorizzazione asincrona, body,
+  Run, poll, protocollo e affinità:
+  `/private/tmp/amr-console-gate-jsKrAr/test.tap`: **128/128 pass**, zero skip.
+- Guard del nuovo endpoint: anonimo 401, referente 403, Admin con MFA 200,
+  logout seguito da 401; insieme alle controprove di body tardivo e sessioni.
+  `/private/tmp/amr-console-admin-jBc9lX/test.tap`: **4/4 pass**.
+  I gruppi si sovrappongono e non vengono sommati.
+- Ultime versioni delle due regressioni nuove/mirate, dopo la revisione dei test:
+  `/private/tmp/amr-console-diagnostica-finale-fm8GKM/test.tap`: **9/9 pass**.
+
+Review indipendente in sola lettura del diff: nessun nuovo finding bloccante;
+catch limitati alla diagnostica e guard dell'endpoint preservati. La review
+non ha rieseguito questi gruppi di test e non è sommata alle loro ricevute.
+
+Non è un riempimento del disco reale, una suite completa o una nuova prova
+cloud. Il frontend non è stato modificato; non sono stati inviati messaggi,
+collegati nodi M2, eseguiti deploy o richieste ai portali.

@@ -78,23 +78,41 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   };
   db.exec('CREATE TABLE IF NOT EXISTS eventi (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, livello TEXT NOT NULL, codice TEXT NOT NULL, lavoro TEXT, nodo TEXT, fonte TEXT, azienda TEXT, http INTEGER)');
   db.exec('CREATE INDEX IF NOT EXISTS eventi_ts ON eventi(ts)');
+  const diagnostica = { incompleta: false, fallimenti: 0, ultimoErrore: null, ultimaPulizia: null };
+  function scriviDiagnostica(fase, scrivi) {
+    try { scrivi(); return true; }
+    catch {
+      const primo = !diagnostica.incompleta;
+      diagnostica.incompleta = true;
+      diagnostica.fallimenti = Math.min(Number.MAX_SAFE_INTEGER, diagnostica.fallimenti + 1);
+      diagnostica.ultimoErrore = { fase, istante: ora() };
+      // Il registro guasto non può registrare il proprio errore. Una sola
+      // segnalazione per processo; la lacuna resta visibile anche dopo il recupero.
+      if (primo) { try { console.error('[nodi] raccolta diagnostica incompleta'); } catch {} }
+      return false;
+    }
+  }
   function evento(codice, { lavoro = null, nodo = null, fonte = null, azienda = null, http = null } = {}) {
     // Soltanto codici interni e identificativi controllati: mai body, annunci o messaggi della fonte.
     if (!/^[a-z_]{1,40}$/.test(codice)) throw new Error('codice evento non valido');
-    try {
+    scriviDiagnostica('evento', () => {
       db.prepare('INSERT INTO eventi(ts,livello,codice,lavoro,nodo,fonte,azienda,http) VALUES(?,?,?,?,?,?,?,?)')
         .run(ora(), ['sospensione_aggiunta','sospensione_rimossa','lavori_cancellati'].includes(codice)
           ? 'info' : codice === 'fonte_parziale' ? 'avviso' : 'errore', codice,
           lavoro, nodo, fonte, azienda, Number.isInteger(http) && http >= 100 && http <= 599 ? http : null);
-    } catch { console.error('[nodi] registro eventi non disponibile'); }
+    });
   }
-  const recuperati = db.prepare("UPDATE lavori SET stato=CASE WHEN stato='attesa' THEN 'interrotto' ELSE 'incerto' END, aggiornato=? WHERE stato IN ('attesa','in_corso')").run(ora()).changes;
-  if (recuperati) evento('riavvio_lavori');
+  scriviDiagnostica('riavvio', () => {
+    const recuperati = db.prepare("UPDATE lavori SET stato=CASE WHEN stato='attesa' THEN 'interrotto' ELSE 'incerto' END, aggiornato=? WHERE stato IN ('attesa','in_corso')").run(ora()).changes;
+    if (recuperati) evento('riavvio_lavori');
+  });
   const pulisci = () => {
-    db.prepare('DELETE FROM lavori WHERE creato < ?').run(ora() - SETTE_GIORNI);
-    db.prepare('DELETE FROM eventi WHERE ts < ?').run(ora() - SETTE_GIORNI);
-    db.exec('DELETE FROM lavori WHERE rowid NOT IN (SELECT rowid FROM lavori ORDER BY creato DESC LIMIT 10000) AND stato NOT IN (\'attesa\',\'in_corso\')');
-    db.exec('DELETE FROM eventi WHERE id NOT IN (SELECT id FROM eventi ORDER BY id DESC LIMIT 10000)');
+    if (scriviDiagnostica('pulizia', () => {
+      db.prepare('DELETE FROM lavori WHERE creato < ?').run(ora() - SETTE_GIORNI);
+      db.prepare('DELETE FROM eventi WHERE ts < ?').run(ora() - SETTE_GIORNI);
+      db.exec('DELETE FROM lavori WHERE rowid NOT IN (SELECT rowid FROM lavori ORDER BY creato DESC LIMIT 10000) AND stato NOT IN (\'attesa\',\'in_corso\')');
+      db.exec('DELETE FROM eventi WHERE id NOT IN (SELECT id FROM eventi ORDER BY id DESC LIMIT 10000)');
+    })) diagnostica.ultimaPulizia = ora();
   };
   pulisci();
   const pulizia = setInterval(pulisci, 3600000);
@@ -209,7 +227,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       pagina, pagine: Math.max(1, Math.ceil(totale / 20)), totale };
   }
   function registra(lavoro, stato) {
-    db.prepare(`INSERT INTO lavori(id,azienda,operazione,filtri,stato,creato,aggiornato,nodo,
+    scriviDiagnostica('lavoro', () => db.prepare(`INSERT INTO lavori(id,azienda,operazione,filtri,stato,creato,aggiornato,nodo,
       assegnazione_ms,coda_ms,nodo_ms,trasporto_ms,byte_risposta,http)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
       stato=excluded.stato, aggiornato=excluded.aggiornato, nodo=excluded.nodo,
@@ -223,7 +241,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
             ? { fonti: Object.keys(lavoro.input.sostituzioni || {}) } : lavoro.input),
         stato, lavoro.creato, ora(), lavoro.nodoAssegnato || null,
         lavoro.assegnazioneMs ?? null, lavoro.codaMs ?? null, lavoro.nodoMs ?? null,
-        lavoro.trasportoMs ?? null, lavoro.byteRisposta ?? null, lavoro.http ?? null);
+        lavoro.trasportoMs ?? null, lavoro.byteRisposta ?? null, lavoro.http ?? null));
     if (['incerto', 'interrotto', 'errore'].includes(stato)) evento('lavoro_' + stato,
       { lavoro: lavoro.idLavoro, nodo: lavoro.nodoAssegnato, fonte: lavoro.fonte,
         azienda: lavoro.azienda, http: lavoro.http });
@@ -759,7 +777,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     pulisci();
     const nodo = typeof req.query.nodo === 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(req.query.nodo)
       ? req.query.nodo : null;
-    res.json({ nodi: [...nodi.values()].filter(n => !nodo || n.id === nodo).map(statoNodo),
+    res.json({ diagnostica, nodi: [...nodi.values()].filter(n => !nodo || n.id === nodo).map(statoNodo),
     ...paginaLavori(req, false), lavoriAttivi: nodo
       ? db.prepare("SELECT count(*) AS n FROM lavori WHERE stato IN ('attesa','in_corso') AND nodo=?").get(nodo).n
       : db.prepare("SELECT count(*) AS n FROM lavori WHERE stato IN ('attesa','in_corso')").get().n });
@@ -770,11 +788,13 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         && req.get('x-amr-local-admin') !== '1') return res.sendStatus(403);
     next();
   });
+  // Consultabile anche quando il DB diagnostico non si lascia più leggere.
+  app.get('/api/admin/diagnostica', (req, res) => res.json({ diagnostica }));
   app.get('/api/admin', (req, res) => {
     pulisci();
     const nodo = typeof req.query.nodo === 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(req.query.nodo)
       ? req.query.nodo : null;
-    res.json({ nodi: [...nodi.values()].filter(n => !nodo || n.id === nodo).map(statoNodo),
+    res.json({ diagnostica, nodi: [...nodi.values()].filter(n => !nodo || n.id === nodo).map(statoNodo),
       ...paginaLavori(req, true),
       lavoriAttivi: nodo
         ? db.prepare("SELECT count(*) AS n FROM lavori WHERE stato IN ('attesa','in_corso') AND nodo=?").get(nodo).n
@@ -786,7 +806,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   app.get('/api/admin/esporta', (req, res) => {
     pulisci();
     res.set('Content-Disposition', 'attachment; filename="amr-nodi-log.json"');
-    res.json({ generato: new Date(ora()).toISOString(),
+    res.json({ generato: new Date(ora()).toISOString(), diagnostica,
       lavori: db.prepare('SELECT id,azienda,operazione,filtri,stato,creato,aggiornato,nodo,assegnazione_ms,coda_ms,nodo_ms,trasporto_ms,byte_risposta,http FROM lavori ORDER BY creato DESC').all()
         .map(r => ({ ...r, filtri: JSON.parse(r.filtri) })),
       eventi: db.prepare('SELECT ts,livello,codice,lavoro,nodo,fonte,azienda,http FROM eventi ORDER BY id DESC').all() });
