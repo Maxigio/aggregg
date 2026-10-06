@@ -51,6 +51,11 @@ const normalizza = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f
   .toLowerCase().replace(/[^a-z0-9]/g, '');
 const tipo = () => form.elements.tipo.value;
 
+function statoRicerca(testo) {
+  const stato = $('ricercaStato');
+  if (stato.textContent !== testo) stato.textContent = testo;
+}
+
 async function leggi(url, opzioni, trasporto = fetch) {
   const r = await trasporto(url, opzioni);
   const data = await r.json().catch(() => ({}));
@@ -103,7 +108,7 @@ async function consultaRicerca(query) {
       try { stato = await richiesta('/api/ricerche/' + attiva.id); }
       catch (e) {
         if ((e.status && e.status < 500) || signal.aborted) throw e;
-        $('ricercaStato').textContent = 'Connessione interrotta: consulto lo stesso lavoro…';
+        statoRicerca('Connessione interrotta: consulto lo stesso lavoro…');
         stato = null;
       }
       if (stato?.esito) {
@@ -463,7 +468,7 @@ function renderRisultato(body, aggiungi = false, richieste = null, paginaRispost
   risultatiCorrenti = aggiungi ? [...risultatiCorrenti, ...righe] : righe;
   fontiCorrenti = { ...(aggiungi ? fontiCorrenti : {}), ...Object.fromEntries(
     Object.entries(body.sources || {}).filter(([f]) => !aggiungi || !richieste || richieste.includes(f))) };
-  $('ricercaStato').textContent = `${risultatiCorrenti.length} annunci`;
+  statoRicerca(`${risultatiCorrenti.length} annunci`);
   $('risultatoAiuto').textContent = `Pagina ${paginaRisposta + 1} · ${righe.length} risultati in questa risposta`;
   if (!aggiungi) avvisiCopertura.clear();
   avvisiNodiCorrenti = body.avvisiNodi || [];
@@ -555,7 +560,7 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0, riprov
   const focusRetry = riprovaPrima && document.activeElement === riprovaFonti;
   ricercaOccupata = true; form.querySelector('[type=submit]').disabled = true; $('altri').disabled = true;
   const id = ++sequenzaRicerca;
-  $('ricercaStato').textContent = 'Ricerca in corso…';
+  statoRicerca('Ricerca in corso…');
   if (!aggiungi) { $('risultatoAiuto').textContent = 'Il nodo sta interrogando le fonti selezionate.';
     primaPaginaMancante = {}; pagineFonti = {}; paginaIncompleta = null; filtriModificati = false;
     pagina = 0; risultatiCorrenti = []; fontiCorrenti = null;
@@ -630,7 +635,7 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0, riprov
         accumulo.avvisiNodi.push(...(body.avvisiNodi || []));
         accumulo.fallite = fallite;
         paginaIncompleta = accumulo;
-        $('ricercaStato').textContent = 'Pagina incompleta';
+        statoRicerca('Pagina incompleta');
         accumulo.avvisiErrori = fallite.map(f =>
           `${nomiFonti[f] || f}: ${body.sources?.[f]?.reason || 'risposta non disponibile'}. Riprova questa pagina.`);
         renderAvvisiRicerca(accumulo.avvisiErrori);
@@ -660,7 +665,7 @@ async function inviaRicerca(query, aggiungi = false, paginaRichiesta = 0, riprov
     await aggiornaStato();
   } catch (e) {
     if (id === sequenzaRicerca) {
-      $('ricercaStato').textContent = 'Non riuscita';
+      statoRicerca('Non riuscita');
       renderAvvisiRicerca([e.message]);
       if (aggiungi && !riprovaPrima) $('altri').textContent = 'Riprova questa pagina';
     }
@@ -685,7 +690,7 @@ async function applicaIdentita(data, contesto = ++sequenzaContesto) {
   avvisiCopertura.clear(); avvisiNodiCorrenti = [];
   paginaIncompleta = null; filtriModificati = false;
   primaPaginaMancante = {}; pagineFonti = {}; aggiornaRetryPrimaPagina();
-  $('ricercaStato').textContent = 'In attesa';
+  statoRicerca('In attesa');
   $('fonti').replaceChildren(); $('risultati').replaceChildren(); $('avvisi').replaceChildren();
   $('altri').hidden = true; $('altri').textContent = 'Carica altro';
   form.querySelector('[type=submit]').disabled = false; $('altri').disabled = false;
@@ -719,7 +724,7 @@ function terminaContesto() {
   avvisiCopertura.clear(); avvisiNodiCorrenti = [];
   form.hidden = true; $('altri').hidden = true;
   for (const id of ['fonti', 'risultati', 'avvisi', 'metriche', 'nodi', 'lavori', 'eventi']) $(id).replaceChildren();
-  $('ricercaStato').textContent = 'In attesa';
+  statoRicerca('In attesa');
   $('identita').textContent = 'Accedi con il tuo account locale.';
   $('risultatoAiuto').textContent = 'Le ricerche richiedono un account e un’azienda attiva.';
 }

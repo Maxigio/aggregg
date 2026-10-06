@@ -591,6 +591,39 @@ test('U05: ampliamenti e versioni non verificate visibili, persistenti fra pagin
   assert.deepEqual(errors, []);
 });
 
+test('F5: stato ricerca accessibile senza focus sottratto o mutazioni identiche', opzioniBrowser, async t => {
+  const { page, errors } = await apriPrototipo(t);
+  assert.equal(await page.locator('#ricercaStato').getAttribute('role'), 'status');
+  assert.equal(await page.locator('#ricercaStato').getAttribute('aria-atomic'), 'true');
+  const prova = await page.evaluate(async () => {
+    document.getElementById('ricercaPanel').hidden = false;
+    form.hidden = false;
+    const stato = document.getElementById('ricercaStato'), focus = document.getElementById('marca');
+    focus.focus();
+    const focusIniziale = document.activeElement.id;
+    const messaggi = [], observer = new MutationObserver(() => messaggi.push(stato.textContent));
+    observer.observe(stato, { childList: true, subtree: true, characterData: true });
+    const aggiorna = async fn => { fn(); await Promise.resolve(); };
+    await aggiorna(() => statoRicerca('Ricerca in corso…'));
+    await aggiorna(() => renderRisultato({ risultati: [], sources: { subito: { status: 'empty' } } }));
+    await aggiorna(() => renderRisultato({ risultati: [], sources: { subito: { status: 'empty' } } }));
+    await aggiorna(() => statoRicerca('Non riuscita'));
+    await aggiorna(() => statoRicerca('Non riuscita'));
+    await aggiorna(() => statoRicerca('Ricerca in corso…'));
+    const riga = { fonte: 'subito', titolo: 'Annuncio sintetico', url: 'https://example.invalid/f5' };
+    await aggiorna(() => renderRisultato({ risultati: [riga], sources: { subito: { status: 'ok' } } }));
+    await aggiorna(() => statoRicerca('Pagina incompleta'));
+    await aggiorna(() => statoRicerca('In attesa'));
+    observer.disconnect();
+    return { messaggi, focusIniziale, focus: document.activeElement.id };
+  });
+  assert.deepEqual(prova.messaggi, ['Ricerca in corso…', '0 annunci', 'Non riuscita',
+    'Ricerca in corso…', '1 annunci', 'Pagina incompleta', 'In attesa']);
+  assert.equal(prova.focus, 'marca');
+  assert.equal(prova.focusIniziale, 'marca');
+  assert.deepEqual(errors, []);
+});
+
 test('F06: polling seriale conserva risposte lente, riparte dopo errori e consente refresh manuale', opzioniBrowser, async t => {
   let trattieni = false, versione = 0;
   const pendenti = [];

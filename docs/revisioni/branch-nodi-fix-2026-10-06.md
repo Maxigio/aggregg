@@ -162,9 +162,26 @@ bootstrap nei due ordini, successo/reset, cataloghi pendenti e risposte tardive
 finding residuo confermato. Il bottone del solo login sintetico resta bloccato
 durante il caricamento dell'identità e dei cataloghi. Prove manuali non eseguite.
 
+## F5 — Annuncio accessibile dello stato ricerca
+
+Implementazione: `ricercaStato` ha `role="status"` e `aria-atomic="true"`.
+Le sette transizioni esistenti passano da una funzione che non riscrive testi
+identici. Griglia, avvisi, query, retry e focus mantengono il comportamento
+precedente; non si rende live l'intera lista degli annunci.
+
+Prove: nuovo test Chromium su Node 24.21.0, 1 pass, verifica markup, mutazioni
+per attesa, zero/nonzero risultati, errore, retry, pagina incompleta e reset.
+Conservato il focus su un controllo attivo, senza mutazioni per testi identici.
+Review indipendente: quindici aggiornamenti controllati producono sette
+scritture; nessun finding confermato. Corretto un prerequisito della fixture:
+il form deve essere visibile prima di verificare il focus. Non è un difetto
+dell'app. MutationObserver non dimostra gli annunci effettivi di uno screen
+reader; la prova manuale con tecnologia assistiva resta da eseguire.
+
+Fondamento: [WCAG 2.2, status messages](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html).
+
 ## Lavoro restante
 
-- F5: annuncio accessibile del conteggio risultati.
 - C2: rivalutare menu/dettagli nel collaudo staging; C3 costo idle noto.
 - Ingress staging: diagnosi remota e aggiornamento conservano il proprio gate.
 - M2: collegamento solo stato successivo al collaudo staging; produzione esclusa.
