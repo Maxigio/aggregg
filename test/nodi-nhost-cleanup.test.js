@@ -7,6 +7,117 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
 
+test('collaudo Nhost: SQL lento non confonde heartbeat scaduto e azienda scaduta', { timeout: 15000 }, async () => {
+  const source = fs.readFileSync(path.join(__dirname, '../scripts/collauda-nhost-locale.js'), 'utf8');
+  const start = source.indexOf('const accodata = cerca(a.cookie);');
+  const end = source.indexOf('await sql("UPDATE amr_accessi.aziende SET scadenza=now()+', start);
+  assert.ok(start > 0 && end > start);
+  const body = source.slice(start, end);
+  async function prova(testo) {
+    const os = require('node:os'), crypto = require('node:crypto');
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-freschezza-test-'));
+    const token = 'a'.repeat(64), s = { persona: crypto.randomUUID(), azienda: 'A', moduli: ['moto'] };
+    let tempo = Date.now(), scaduta = false, attesa, watchdog, completamentoHb;
+    const timersHb = new Map(); let idTimer = 0;
+    const file = path.resolve(__dirname, '../backend/nodi/centro.js'), copia = { exports: {} };
+    // Solo il watchdog lessicale è pilotato: HTTP e timer dei moduli dipendenti restano reali.
+    vm.compileFunction(fs.readFileSync(file, 'utf8'),
+      ['exports', 'require', 'module', '__filename', '__dirname', 'setInterval'], { filename: file })(
+      copia.exports, require('node:module').createRequire(file), copia, file, path.dirname(file), (fn, ms) => {
+        if (ms !== 1000) return setInterval(fn, ms);
+        assert.equal(watchdog, undefined); watchdog = fn;
+        return setInterval(() => {}, 3600000).unref();
+      });
+    const centro = copia.exports.creaCentro({ directory, tokens: { locale: token },
+      ora: () => tempo, inizializzaAccessi: () => ({ sessione: () => s, close: () => {},
+        verifica: async () => ({ azienda: 'A', aziendaValida: !scaduta, moduli: ['moto'] }) }) });
+    const server = await new Promise(resolve => { const server = centro.app.listen(0, '127.0.0.1', () => resolve(server)); });
+    const base = 'http://127.0.0.1:' + server.address().port;
+    const node = (route, dati) => fetch(base + route, { method: dati ? 'POST' : 'GET',
+      headers: { 'x-amr-node-id': 'locale', 'x-amr-node-token': token, ...(dati ? { 'content-type': 'application/json' } : {}) },
+      ...(dati ? { body: JSON.stringify({ id: 'locale', ...dati }) } : {}) });
+    const hb = () => (completamentoHb = (async () => assert.equal((await node('/_nodo/heartbeat', {
+      revisione: 'imac-1', occupato: false,
+      fonti: { subito: { fermo: false }, autoscout: { fermo: false }, moto: { fermo: false } } })).status, 200))());
+    try {
+      await hb();
+      const context = { assert, a: { cookie: 'sintetico' }, node, hb,
+        setTimeout: (fn, ms) => { assert.equal(ms, 500); const id = ++idTimer; timersHb.set(id, fn); return id; },
+        clearTimeout: id => timersHb.delete(id),
+        cerca: () => (attesa = fetch(base + '/api/search?tipo=moto&marca=Yamaha')),
+        attendiJob: async () => {
+          for (let n = 0; n < 100 && !centro.lavori.size; n++) await new Promise(resolve => setTimeout(resolve, 5));
+          assert.equal(centro.lavori.size, 1);
+        },
+        sql: async () => {
+          scaduta = true;
+          for (let n = 0; n < 2; n++) {
+            tempo += 3500;
+            const [id, fn] = timersHb.entries().next().value;
+            timersHb.delete(id); completamentoHb = null; fn();
+            await new Promise(resolve => setImmediate(resolve));
+            await completamentoHb;
+            await new Promise(resolve => setImmediate(resolve));
+            watchdog();
+          }
+        },
+        interrotto: async risposta => { assert.equal(risposta.status, 403);
+          const out = await risposta.json(); assert.equal(out.interrotto, true); assert.ok(!('risultati' in out)); } };
+      await vm.runInNewContext('(async()=>{' + testo + '})()', context);
+      assert.equal(centro.lavori.size, 0);
+      assert.equal(timersHb.size, 0);
+      assert.equal(centro.db.prepare("SELECT count(*) AS n FROM lavori WHERE stato='in_corso'").get().n, 0);
+    } finally {
+      centro.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
+      await attesa?.catch(() => {}); fs.rmSync(directory, { recursive: true });
+    }
+  }
+  await prova(body);
+  await assert.rejects(prova(body.replace('if (!fineBattito) await hb();', '')), { code: 'ERR_ASSERTION', actual: 503, expected: 403 });
+});
+
+test('collaudo Nhost: errore SQL o heartbeat ferma il battito e conserva la causa', async () => {
+  const source = fs.readFileSync(path.join(__dirname, '../scripts/collauda-nhost-locale.js'), 'utf8');
+  const start = source.indexOf('    await hb();\n    let fineBattito');
+  const end = source.indexOf("    assert.equal((await node('/_nodo/poll?id=locale')).status,204)", start);
+  assert.ok(start > 0 && end > start);
+  const body = source.slice(start, end);
+  async function prova(testo, guasto) {
+    const erroreSql = new Error('SQL sintetico'), erroreHb = new Error('HB sintetico');
+    const timers = new Set(); let tick, hb = 0, avviato, sbloccaHb;
+    const iniziato = new Promise(resolve => { avviato = resolve; });
+    const attesaHb = new Promise(resolve => { sbloccaHb = resolve; });
+    const context = {
+      setTimeout: fn => { const id = {}; timers.add(id); tick = () => { timers.delete(id); fn(); }; return id; },
+      clearTimeout: id => timers.delete(id),
+      hb: async () => { if (++hb === 2) {
+        avviato();
+        if (guasto === 'pendente') await attesaHb;
+        else if (guasto !== 'sql') throw erroreHb;
+      } },
+      sql: async () => {
+        if (guasto === 'sql_prima') throw erroreSql;
+        tick(); await iniziato;
+        if (guasto !== 'hb') throw erroreSql;
+      },
+    };
+    const esito = vm.runInNewContext('(async()=>{' + testo + '})()', context);
+    const verifica = assert.rejects(esito,
+      e => e === (guasto === 'hb' ? erroreHb : erroreSql));
+    if (guasto === 'pendente') {
+      let conclusa = false; esito.then(() => { conclusa = true; }, () => { conclusa = true; });
+      await iniziato; await new Promise(resolve => setImmediate(resolve));
+      assert.equal(conclusa, false, 'Il finally deve attendere il battito già partito');
+      sbloccaHb();
+    }
+    await verifica;
+    assert.equal(timers.size, 0);
+    assert.equal(hb, guasto === 'sql_prima' ? 1 : 2, 'Nessun battito dopo il fallimento');
+  }
+  for (const guasto of ['sql_prima', 'sql', 'hb', 'entrambi', 'pendente']) await prova(body, guasto);
+  await assert.rejects(prova(body.replace('clearTimeout(timerBattito);', ''), 'sql_prima'), { code: 'ERR_ASSERTION' });
+});
+
 test('collaudo Nhost: diagnostica SQLSTATE preservata tra chunk senza log raw',()=>{
   const source=fs.readFileSync(path.join(__dirname,'../scripts/collauda-nhost-locale.js'),'utf8');
   const start=source.indexOf('let sqlState ='),end=source.indexOf("child.stdin.on('error'",start);

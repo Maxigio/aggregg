@@ -377,8 +377,10 @@ collegamento M2. Restano necessari anche i controlli manuali del frontend.
 
 ## Lavoro restante
 
-- Gate locale: completare la diagnosi del `23514` intermittente e il collaudo
-  Auth completo sull'ultima versione del runner; le prove mirate non li sostituiscono.
+- Gate locale: completare la diagnosi del `23514` intermittente. Il collaudo
+  Auth completo sull'ultimo runner è ora passato, come documentato nel
+  [nuovo registro CHECK/Auth](branch-nodi-check-auth-2026-10-06.md);
+  non identifica la causa del precedente CHECK.
 - C2: rivalutare menu/dettagli nel collaudo staging; C3 costo idle noto.
 - Ingress staging: diagnosi remota e aggiornamento conservano il proprio gate.
 - M2: collegamento solo stato successivo al collaudo staging; produzione esclusa.

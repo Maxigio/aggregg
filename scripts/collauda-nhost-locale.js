@@ -530,7 +530,23 @@ async function collauda({ manuale = false } = {}) {
     const riuscita = cerca(a.cookie); await attendiJob(); await consegna(await poll());
     assert.equal((await riuscita).status,200);
     const accodata = cerca(a.cookie); await attendiJob();
-    await sql("UPDATE amr_accessi.aziende SET scadenza=now()-interval '1 second' WHERE id='A';");
+    // Il nodo sintetico deve restare vivo anche durante Docker/SQL: il watchdog
+    // può interrompere la coda prima del poll se non riceve heartbeat.
+    await hb();
+    let fineBattito = false, timerBattito, svegliaBattito, erroreBattito;
+    const battiti = (async () => {
+      while (!fineBattito) {
+        await new Promise(resolve => { svegliaBattito = resolve; timerBattito = setTimeout(resolve, 500); });
+        if (!fineBattito) await hb();
+      }
+    })().catch(e => { erroreBattito = e; });
+    try {
+      await sql("UPDATE amr_accessi.aziende SET scadenza=now()-interval '1 second' WHERE id='A';");
+    } finally {
+      fineBattito = true; clearTimeout(timerBattito); svegliaBattito?.(); await battiti;
+    }
+    if (erroreBattito) throw erroreBattito;
+    await hb();
     assert.equal((await node('/_nodo/poll?id=locale')).status,204); await interrotto(await accodata);
     await sql("UPDATE amr_accessi.aziende SET scadenza=now()+interval '1 day' WHERE id='A';");
     const condivisaA = cerca(a.cookie); await attendiJob(); const condivisaB = cerca(b.cookie);
