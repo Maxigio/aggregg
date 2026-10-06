@@ -6,6 +6,7 @@ const { creaLimitiRicerca } = require('./limiti-ricerca');
 // Gli ID rappresentano operazioni del singolo destinatario, non job del nodo.
 // Conservare una chiave non autorizza a leggere l'esito senza la sessione originale.
 function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegna,
+  ammissione = () => {},
   ora = Date.now, ttlRisultatoMs = 60000, ttlIdMs = 600000,
   maxRegistri = 1000, maxRegistriPersona = 50, maxRegistriAzienda = 100,
   maxByte = 64 * 1024 * 1024 } = {}) {
@@ -46,7 +47,7 @@ function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegn
   const timer = setInterval(pulisci, Math.min(ttlRisultatoMs, ttlIdMs, 10000)); timer.unref();
   function esitoErrore(e, richiesta) {
     const incerto = !!e.incerto || (e.codice === 'ricerca_scaduta' && !!richiesta.operazione?.avviati.size);
-    const codice = ['ricerca_scaduta', 'ricerca_abbandonata', 'accesso_interrotto'].includes(e.codice)
+    const codice = ['ricerca_scaduta', 'ricerca_abbandonata', 'accesso_interrotto', 'ricerca_manutenzione'].includes(e.codice)
       ? e.codice : [401, 403].includes(e.status) ? 'accesso_interrotto' : 'ricerca_non_disponibile';
     return { status: [400, 401, 403, 429, 504].includes(e.status) ? e.status : incerto ? 504 : 503,
       body: { codice, interrotto: !incerto, incerto } };
@@ -74,7 +75,7 @@ function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegn
     if (res.destroyed || res.writableEnded) return;
     const codice = ['ricerca_non_trovata', 'ricerca_non_valida', 'chiave_ricerca_riutilizzata',
       'troppe_ricerche_pendenti', 'troppe_ricerche_registrate', 'esiti_non_disponibili',
-      'ricerca_scaduta', 'accesso_interrotto'].includes(e.codice)
+      'ricerca_scaduta', 'accesso_interrotto', 'ricerca_manutenzione'].includes(e.codice)
       ? e.codice : [401, 403].includes(e.status) ? 'accesso_interrotto' : 'ricerca_non_disponibile';
     res.status([400, 401, 403, 404, 409, 429, 504].includes(e.status) ? e.status : 503).json({ codice });
   }
@@ -122,6 +123,7 @@ function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegn
           return res.status(202).set('Retry-After', '1').set('Location', '/api/ricerche/' + id).json(metadati(r));
         }
         if (registri.size >= maxRegistri) throw errore('esiti_non_disponibili', 503);
+        const epocaAmmessa = ammissione();
         const persona = s.persona || s.identita?.persona || s.identita || s;
         controllaRegistri(persona, c.azienda);
         r = { id, sessione: s, persona, azienda: c.azienda, tipo: query.tipo, impronta,
@@ -129,6 +131,7 @@ function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegn
         registri.set(id, r); staccata = true;
         richiesta = null;
         const ammessa = r.richiesta;
+        ammessa.ammissione = epocaAmmessa;
         Promise.resolve().then(() => ricerca(c.azienda, query, () => verifica(s, query.tipo), ammessa))
           .then(out => terminale(r, { status: out.status, body: out.body }, out.registraAffinita),
             e => terminale(r, esitoErrore(e, ammessa)))
@@ -172,7 +175,11 @@ function creaRicercheHttp({ sessione, verifica, valida, ricerca, limiti, consegn
       } catch (e) { rispostaErrore(res, e); }
     });
   }
-  return { mount, close() {
+  return { mount, interrompiNonIniziate(errore) {
+    for (const r of registri.values()) {
+      if (r.stato === 'in_corso' && !r.richiesta?.operazione?.iniziata) r.richiesta?.budget.interrompi(errore);
+    }
+  }, close() {
     chiuso = true; clearInterval(timer); letture.close();
     for (const r of registri.values()) { r.richiesta?.budget.interrompi(); libera(r); }
     registri.clear();

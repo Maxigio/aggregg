@@ -67,6 +67,10 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   }
   db.exec('CREATE TABLE IF NOT EXISTS sospensioni (nodo TEXT NOT NULL, fonte TEXT NOT NULL, PRIMARY KEY (nodo, fonte))');
   db.exec('CREATE TABLE IF NOT EXISTS token_revocati (nodo TEXT NOT NULL, impronta TEXT NOT NULL, PRIMARY KEY(nodo,impronta))');
+  db.exec('CREATE TABLE IF NOT EXISTS controlli_centro (id INTEGER PRIMARY KEY CHECK(id=1), manutenzione INTEGER NOT NULL CHECK(manutenzione IN (0,1)))');
+  db.prepare('INSERT OR IGNORE INTO controlli_centro(id,manutenzione) VALUES(1,0)').run();
+  let manutenzione = db.prepare('SELECT manutenzione FROM controlli_centro WHERE id=1').get().manutenzione === 1;
+  let epocaManutenzione = 0;
   const tokenRevocati = new Set(db.prepare('SELECT nodo,impronta FROM token_revocati').all()
     .map(r => r.nodo+':'+r.impronta));
   const improntaToken = id => crypto.createHash('sha256').update(tokens[id]).digest('hex');
@@ -110,7 +114,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     if (!/^[a-z_]{1,40}$/.test(codice)) throw new Error('codice evento non valido');
     scriviDiagnostica('evento', () => {
       db.prepare('INSERT INTO eventi(ts,livello,codice,lavoro,nodo,fonte,azienda,http) VALUES(?,?,?,?,?,?,?,?)')
-        .run(ora(), ['sospensione_aggiunta','sospensione_rimossa','lavori_cancellati'].includes(codice)
+        .run(ora(), ['sospensione_aggiunta','sospensione_rimossa','lavori_cancellati',
+          'manutenzione_attiva','manutenzione_disattiva'].includes(codice)
           ? 'info' : codice === 'fonte_parziale' ? 'avviso' : 'errore', codice,
           lavoro, nodo, fonte, azienda, Number.isInteger(http) && http >= 100 && http <= 599 ? http : null);
     });
@@ -159,6 +164,13 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     next();
   });
   const nodi = new Map(), lavori = new Map(), sessioni = new Map(), condivise = new Map(), affinita = new Map();
+  const operazioniRicerca = new Set();
+  const erroreManutenzione = () => Object.assign(new Error('ricerca_manutenzione'), {
+    status: 503, codice: 'ricerca_manutenzione', interrotto: true, incerto: false });
+  function ammettiRicerca(operazione = null, epoca = epocaManutenzione) {
+    if (!operazione?.iniziata && (manutenzione || epoca !== epocaManutenzione)) throw erroreManutenzione();
+    return epocaManutenzione;
+  }
   let sequenzaAffinita = 0;
   const epocaCentro = crypto.randomUUID();
   const autorizzazioniDettagli = creaAutorizzazioniDettagli({ ora });
@@ -282,6 +294,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     const avvia = () => {
       const budget = lavoro.ricerca?.budget;
       budget?.controlla();
+      if (lavoro.ricerca) ammettiRicerca(lavoro.ricerca);
       if (budget) limite = Math.min(limite, budget.restante());
       // Scelta e accodamento sono sincroni dopo la verifica dei permessi.
       const n = typeof selezione === 'function' ? selezione() : selezione;
@@ -524,11 +537,13 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   function ricerca(azienda, query, verifica = null, richiesta = null) {
     if ((accountProva || accessi) && !verifica) throw Object.assign(new Error('identita_richiesta'), { status: 401 });
     const budgetRichiesta = richiesta?.budget || creaBudgetRicerca({ timeoutMs: timeoutRicercaMs, oraMono });
+    const epocaAmmessa = richiesta?.ammissione ?? epocaManutenzione;
     const verificaAttiva = richiesta ? () => richiesta.verifica(verifica)
       : verifica || (() => ({ azienda }));
     const avvia = () => {
       budgetRichiesta.controlla();
       if (chiuso) throw Object.assign(new Error('centro interrotto'), { status: 503 });
+      ammettiRicerca(null, epocaAmmessa);
       const input = filtriAmmessi(query);
       const prima = Number(input.fetta || 0) === 0 && !input.fonti
         && input.subitoMainStart == null && input.subitoRecuperoStart == null;
@@ -542,8 +557,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         registra(meta, 'in_corso');
       } else {
         voce = { budget: creaBudgetRicerca({ scadeAl: budgetRichiesta.scadeAl, oraMono }),
-          destinatari: new Set([verificaAttiva]), avviati: new Set(), verifica: !!verifica };
+          destinatari: new Set([verificaAttiva]), avviati: new Set(), iniziata: false, verifica: !!verifica };
         const operazione = voce;
+        operazioniRicerca.add(operazione);
         operazione.budget.signal.addEventListener('abort', () => {
           if (prima && condivise.get(chiave) === operazione) condivise.delete(chiave);
           for (const n of nodi.values()) interrompiAccodati(n, null,
@@ -552,6 +568,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         voce.promessa = voce.budget.attendi(() => ricercaSenzaCondivisione(azienda, input, operazione));
         if (prima) condivise.set(chiave, voce);
         voce.promessa.finally(() => {
+          operazioniRicerca.delete(operazione);
           operazione.budget.chiudi();
           if (prima && condivise.get(chiave) === operazione) condivise.delete(chiave);
         }).catch(() => {});
@@ -675,6 +692,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         try {
           await verificaDestinatari(job.destinatari, job.ricerca?.budget);
           job.ricerca?.budget.controlla();
+          if (job.ricerca) ammettiRicerca(job.ricerca);
         }
         catch (e) {
           if (!bootValido(req)) return bootObsoleto(res);
@@ -696,6 +714,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       }
       if (!job) return res.sendStatus(204);
       n.occupato = true; job.iniziato = true;
+      // Resta vero anche fra due job: la manutenzione lascia completare
+      // recuperi e failover dell'intera ricerca già consegnata al worker.
+      if (job.ricerca) job.ricerca.iniziata = true;
       job.ricerca?.avviati.add(job.idLavoro);
       job.iniziatoMono = performance.now();
       job.codaMs = Math.round(job.iniziatoMono - job.accodatoMono);
@@ -804,6 +825,27 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   // Consultabile anche quando il DB diagnostico non si lascia più leggere.
   app.get('/api/admin/diagnostica', (req, res) => res.json({ diagnostica,
     risorse: misuraRegistro({ db, directory, ora }) }));
+  app.get('/api/admin/manutenzione', (req, res) => res.json({ manutenzione }));
+  app.post('/api/admin/manutenzione', express.json({ limit: '1kb' }), adminDiProva, (req, res) => {
+    if (!req.body || Array.isArray(req.body) || Object.keys(req.body).length !== 1
+        || typeof req.body.manutenzione !== 'boolean') return res.sendStatus(400);
+    const prossima = req.body.manutenzione;
+    try {
+      const aggiornamento = db.prepare('UPDATE controlli_centro SET manutenzione=? WHERE id=1').run(Number(prossima));
+      if (aggiornamento.changes !== 1) throw new Error('controllo assente');
+    } catch {
+      evento('manutenzione_non_confermata', { http: 503 });
+      return res.status(503).json({ codice: 'manutenzione_non_confermata' });
+    }
+    manutenzione = prossima;
+    if (manutenzione) epocaManutenzione++;
+    if (manutenzione) ricercheHttp.interrompiNonIniziate(erroreManutenzione());
+    if (manutenzione) for (const operazione of operazioniRicerca) {
+      if (!operazione.iniziata) operazione.budget.interrompi(erroreManutenzione());
+    }
+    evento(prossima ? 'manutenzione_attiva' : 'manutenzione_disattiva');
+    res.json({ ok: true, manutenzione });
+  });
   app.get('/api/admin', (req, res) => rispondiDiagnostica(res, () => {
     pulisci();
     const nodo = typeof req.query.nodo === 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(req.query.nodo)
@@ -876,7 +918,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     if (!c.moduli.includes(tipo)) throw Object.assign(new Error('accesso_interrotto'), { status: 403 });
     return c;
   },
-    limiti: limitiRicerca, ricerca, ora,
+    limiti: limitiRicerca, ricerca, ora, ammissione: () => ammettiRicerca(),
     valida: input => {
       const query = filtriAmmessi(input), parsed = parseSearchParams(query);
       if (parsed.errors) throw Object.assign(new Error('ricerca_non_valida'), { status: 400, codice: 'ricerca_non_valida' });
@@ -903,6 +945,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     if (!s) return res.sendStatus(401);
     try {
       const richiesta = limitiRicerca.ammetti(s);
+      richiesta.ammissione = epocaManutenzione;
       req.limiteRicerca = richiesta;
       res.once('close', () => {
         if (!res.writableEnded) richiesta.budget.interrompi();

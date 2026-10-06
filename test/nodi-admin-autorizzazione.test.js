@@ -58,6 +58,7 @@ async function fixture({admin=false,pending=false}={}) {
 }
 async function adminBody(route, body, table){
  const f=await fixture({admin:true});try{
+  const conta = () => f.centro.db.prepare(`SELECT count(*) n FROM ${table}${table === 'controlli_centro' ? ' WHERE manutenzione=1' : ''}`).get().n;
   const cookie=await f.login();
   if(table==='sospensioni') {
     const headers={'x-amr-node-id':'fixture','x-amr-node-token':'a'.repeat(64)};
@@ -78,19 +79,20 @@ async function adminBody(route, body, table){
   });
   for(let i=0;i<200&&f.letture()===before;i++)await pause(5);
   assert.equal(f.letture(),before+1);await pause(20);
-  assert.equal(f.centro.db.prepare(`SELECT count(*) n FROM ${table}`).get().n,0);
+  assert.equal(conta(),0);
   assert.equal((await f.request('/api/auth/logout',{body:{},cookie})).status,200);
   const fresh=await f.request(route,{body,cookie});assert.equal(fresh.status,401);
   stream.end(JSON.stringify(body).slice(1));const late=await pending;
-  assert.equal(late.status,401);assert.equal(f.centro.db.prepare(`SELECT count(*) n FROM ${table}`).get().n,0);
-  const nuova=await f.login(); assert.equal((await f.request(route,{body,cookie:nuova})).status,200); assert.equal(f.centro.db.prepare(`SELECT count(*) n FROM ${table}`).get().n,1);
+  assert.equal(late.status,401);assert.equal(conta(),0);
+  const nuova=await f.login(); assert.equal((await f.request(route,{body,cookie:nuova})).status,200); assert.equal(conta(),1);
   console.log('ADMIN_BODY_COUNTER PASS lateAfterLogout=401 priorRevocations=0 freshAuthorized=200 persistedRevocations=1');
  }finally{await f.close();}
 }
 
 for(const [route,body,table] of [[
  '/api/admin/nodi/fixture/revoca-token',{},'token_revocati'],[
- '/api/admin/nodi/fixture',{sospeso:true},'sospensioni']]) {
+ '/api/admin/nodi/fixture',{sospeso:true},'sospensioni'],[
+ '/api/admin/manutenzione',{manutenzione:true},'controlli_centro']]) {
  test('Admin ricontrollato dopo body tardivo: '+table,()=>adminBody(route,body,table));
 }
 

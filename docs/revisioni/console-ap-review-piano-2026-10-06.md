@@ -222,16 +222,18 @@ comprendendo le regressioni diagnostiche, il centro, i guard, poll e boot.
 Review indipendente del diff: nessun nuovo finding bloccante; test ispezionati
 e non rieseguiti dal reviewer. Nessun frontend o stato remoto modificato.
 
-## Interview ancora aperte
+## Decisioni confermate il 6 ottobre
 
-- Confine della manutenzione: proposta di lasciare completare l'intera ricerca
+- Confine della manutenzione: lasciare completare l'intera ricerca
   dopo la prima consegna al worker, compresi i recuperi previsti. Richieste mai
-  consegnate interrotte e nuovi avvii negati. Non implementata in attesa di risposta.
-- Ricerca owner: proposta di verificare l'ID Nhost del proprietario oltre a
+  consegnate interrotte e nuovi avvii negati. Approvato esplicitamente dall'utente.
+- Ricerca owner: verificare l'ID Nhost del proprietario oltre a
   Admin/MFA e di usare un contesto diagnostico separato dai clienti, preservando
   i limiti globali. Non creare un'azienda commerciale né mutare la sessione.
-  La semplice sostituzione del guard commerciale con `admin:true` romperebbe
+  Approvato esplicitamente dall'utente. La semplice sostituzione del guard commerciale con `admin:true` romperebbe
   ownership degli ID e cataloghi; il riuso deve coprire anche questi chiamanti.
+
+## Scelte per incrementi successivi
 - Capacità/completezza dei sette giorni, destinazione del backup diagnostico,
   baseline prestazioni, policy delle sonde e integrazione notifiche restano
   scelte da affrontare nei rispettivi incrementi.
@@ -330,3 +332,55 @@ Review indipendente in sola lettura del diff finale e delle ricevute:
 nessun nuovo finding né blocco al commit nel perimetro verificato.
 Auth e controlli operativi restano fuori dal catch; il reviewer non ha
 rieseguito le due suite principali.
+
+## Incremento 5 — manutenzione globale delle ricerche
+
+Decisione approvata: una ricerca inizia alla prima consegna al worker, non
+al POST del browser né all'inserimento in coda. La manutenzione nega nuovi ID
+e nuove pagine, interrompe le operazioni mai consegnate e lascia terminare
+l'intera operazione già iniziata, inclusi recuperi e failover. Le pause della
+fonte e le sospensioni dei nodi conservano i propri vincoli: la manutenzione
+non le rimuove e non prolunga la deadline di 60 secondi.
+
+`GET/POST /api/admin/manutenzione`, con i guard Admin/MFA e Origin esistenti,
+espone e modifica il controllo persistito in `controlli_centro`. Il comando
+ricontrolla la sessione dopo la lettura del body. Una scrittura rifiutata
+restituisce 503 `manutenzione_non_confermata` senza cambiare RAM o coda.
+Il riavvio conserva la manutenzione; la disattivazione non resuscita lavori.
+Il backup del volume copia l'intero SQLite: la nuova tabella vi rientra,
+ma non è stato eseguito un nuovo backup remoto o un rollback dello staging.
+
+Il parent conserva la prima consegna anche quando non ha job attivi fra due
+passaggi. Il controllo copre coordinatori non condivisi, verifiche ancora
+pendenti, accodamento e poll. I POST ripetuti dello stesso ID e le consultazioni
+restano disponibili e non producono un'altra chiamata. L'esito delle operazioni
+interrotte è `ricerca_manutenzione`, senza annunci né falsa incertezza.
+Menu e dettagli restano al contratto precedente: questo controllo riguarda
+le ricerche, non spegne il centro o la diagnostica e non aggiunge sonde automatiche.
+
+Ricevuta Node 24.21.0, HTTP/SQLite temporanei, dotenv escluso:
+`/private/tmp/amr-manutenzione-chiusura-c40IeK/test.tap`: **67/67 pass**, zero skip.
+Prove: mancata consegna, failover dopo 429, permessi lenti prima del POST e
+durante poll/accodamento, errore SQL, riavvio, retry dello stesso ID, logout
+durante body Admin e gate preesistente di scheduler/Run/diagnostica.
+
+La review indipendente ha riprodotto un P2 non coperto dalla prima ricevuta:
+un ID già accettato 202, ma ancora nella verifica precedente al coordinatore,
+poteva partire dopo ON/OFF. Corretto interrompendo anche i budget degli ID
+mai consegnati e conservando l'epoca della loro ammissione. Il controtest
+verifica l'esito interrotto mentre il provider è ancora in attesa, il mancato
+replay dopo OFF e l'ammissione di un nuovo ID dopo la riapertura.
+
+Riferimenti: [OWASP Authorization](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html)
+per autorizzazione su ogni richiesta e deny-by-default;
+[Google SRE: Handling Overload](https://sre.google/sre-book/handling-overload/)
+per ammissione e limiti. Il confine dell'intera ricerca è una decisione di
+prodotto verificata dal test, non una prescrizione di quelle fonti.
+Nessuna modifica frontend, deploy, portale live o collegamento M2.
+
+Review finale indipendente dei cinque file nell'indice Git: P2 chiuso, nessun
+altro finding confermato. Tre controprove sul codice staged, Node 24.19 con
+SQLite in RAM/HTTP: 202 interrotto prima del ritorno del provider e non
+rilanciato dopo ON/OFF; ricerca condivisa già iniziata con failover 200;
+UPDATE SQLite rifiutato senza cambiare ammissione o stato persistente.
+La ricevuta principale resta quella Node 24.21.0 citata sopra.
