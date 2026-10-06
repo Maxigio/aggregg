@@ -377,6 +377,10 @@ collegamento M2. Restano necessari anche i controlli manuali del frontend.
 
 ## Lavoro restante
 
+Stato aggiornato nella [review dopo i fix](branch-nodi-2026-10-06-8cf9430.md),
+compresa la nuova [protezione del registro ricerche](registro-ricerche-quote-2026-10-06.md).
+I conteggi precedenti conservano il proprio candidato e non attestano il nuovo.
+
 - Gate locale: completare la diagnosi del `23514` intermittente. Il collaudo
   Auth completo sull'ultimo runner è ora passato, come documentato nel
   [nuovo registro CHECK/Auth](branch-nodi-check-auth-2026-10-06.md);
