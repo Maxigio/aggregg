@@ -30,6 +30,7 @@ function chiama(handler, query, fontiSospese = []) {
 async function esegui(lavoro) {
   const { operazione, input } = lavoro;
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('input non valido');
+  if (operazione === 'sonda') return require('./sonde-fonti').eseguiSonda(lavoro.fonte);
   if (operazione === 'componi') {
     return { status: 200, body: componiRicerca(input.principale, input.sostituzioni) };
   }
@@ -63,4 +64,4 @@ function statoFonti() {
   return Object.fromEntries(['subito', 'autoscout', 'moto'].map(f => [f, salute.fermo(f)]));
 }
 
-module.exports = { esegui, statoFonti };
+module.exports = { esegui, statoFonti, abilitaSonde: salute.abilitaSonde };

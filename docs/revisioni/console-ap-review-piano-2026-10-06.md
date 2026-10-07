@@ -554,3 +554,30 @@ L'ordine richiesto è 2–7 con interview e commit per punto, CHECK storico,
 collaudo remoto del candidato/collegamento M2, review del branch e correzioni,
 poi 8 frontend. Il vecchio via a procedere con CHECK aperto non equivale a
 chiusura del finding: prima della console il proprietario chiede di affrontarlo.
+
+## 7 ottobre — punto 2: sonde automatiche implementate e verificate localmente
+
+Policy concordata: avvio alla scadenza anche senza ricerche, una sonda Auto
+Alfa Romeo/Giulietta/Veloce per Subito e AutoScout24, una Moto
+Fantic/Caballero 500/Rally per Moto.it; risposta valida sufficiente anche
+vuota, pause attuali e `Retry-After`, massimo cinque prove persistenti,
+poi intervento. Auth/formato incompatibile richiedono intervento immediato.
+
+Il centro accoda un lavoro interno al primo heartbeat idoneo del worker
+libero. Sospensioni e manutenzione lo impediscono; simulato e `soloStato`
+sono esclusi. Il monolite conserva il comportamento precedente. Una pagina
+senza recuperi/cache, nessun archivio di annunci, nessun failover delle sonde.
+Il frontend attuale espone solo gli stati/eventi necessari a questo incremento;
+il redesign del punto 8 non è iniziato.
+
+Corretti e controverificati annullamento tardivo, falsa classificazione degli
+errori GraphQL, successo dichiarato nonostante un blocco concorrente ed
+esaurimento alla quinta prova invalidata. Review indipendente finale senza
+altri finding confermati. Gate pertinente Node 24.21.0: **486/486 pass**,
+39 file, zero skip/cancelled/fail; UI headless mirata **2/2 pass**.
+Prove, percorso e limiti nel [registro dedicato](sonde-fonti-2026-10-07.md).
+
+Nessun nuovo candidato distribuito, portale live o M2 collegato. Il punto 2
+è chiuso per implementazione e collaudo locale; quello remoto resta al gate
+concordato. Il prossimo punto è l'interview sui restart automatici dei worker.
+Restano nell'ordine 3–7, CHECK storico, gate remoto/M2, review e punto 8.

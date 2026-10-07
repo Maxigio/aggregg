@@ -45,6 +45,8 @@ const nomiEventi = { riavvio_lavori: 'Centro riavviato con lavori pendenti',
   lavoro_interrotto: 'Lavoro interrotto prima dell’avvio',
   lavoro_errore: 'Lavoro terminato con errore', fonte_limitata: 'Fonte in pausa (429)',
   fonte_errore: 'Errore della fonte', fonte_parziale: 'Risposta parziale della fonte',
+  sonda_riuscita: 'Sonda riuscita: fonte riaperta', sonda_fallita: 'Sonda fallita: fonte in pausa',
+  sonda_intervento: 'Sonda fermata: intervento necessario',
   sospensione_aggiunta: 'Sospensione manuale aggiunta',
   sospensione_rimossa: 'Sospensione manuale rimossa', lavori_cancellati: 'Lavori terminati eliminati' };
 const normalizza = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -328,6 +330,8 @@ function renderStato(data) {
       const testo = n.autorizzato === false ? 'Credenziale revocata' : !n.online ? 'Nodo offline'
         : n.compatibile === false ? 'Release incompatibile' : n.soloStato ? 'Solo stato · portale non verificato'
         : n.sospeso || n.sospese.includes(fonte) ? 'Sospesa da Admin'
+        : n.fonti?.[fonte]?.intervento ? `Intervento necessario · ${n.fonti[fonte].intervento}`
+        : n.fonti?.[fonte]?.verifica ? (n.fonti[fonte].inVerifica ? 'Sonda in corso' : 'In attesa della sonda')
         : n.fonti?.[fonte]?.fermo ? `Pausa automatica${Number.isFinite(fine) ? ' fino alle ' + new Date(fine).toLocaleTimeString('it-IT') : ''}`
           : 'Disponibile';
       const row = elemento('div', '', 'source-row'); row.append(elemento('span', nomiFonti[fonte]), elemento('span', testo, fermo ? 'stop' : '')); rows.append(row);

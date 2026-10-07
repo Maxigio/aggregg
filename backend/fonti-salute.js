@@ -117,7 +117,9 @@ function percorso() { return path.join(cartella(), FILE); }
 
 /** Le colonne ammesse. La prova `fonti-salute.test.js` fallisce se la tabella ne acquista altre:
  *  e' il presidio contro la tentazione di salvare qui dentro la richiesta che ha fallito. */
-const COLONNE = ['fonte', 'esito', 'ferma_fino_a', 'stop_fatti', 'aggiornata_il', 'retry_dopo'];
+const COLONNE = ['fonte', 'esito', 'ferma_fino_a', 'stop_fatti', 'aggiornata_il', 'retry_dopo', 'prove_fatte', 'intervento'];
+const MAX_PROVE = 5;
+let sondeAutomatiche = false;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS salute (
@@ -149,6 +151,8 @@ function vuotaRiga(fonte) {
     aggiornataIl: 0,
     retryDopo: null,   // solo la scadenza tecnica Retry-After, mai header o URL
     prova: null,
+    proveFatte: 0,
+    intervento: null,
   };
 }
 function riga(fonte) {
@@ -180,6 +184,11 @@ function apri({ crea = false } = {}) {
     if (!d.prepare('PRAGMA table_info(salute)').all().some(c => c.name === 'retry_dopo')) {
       d.exec('ALTER TABLE salute ADD COLUMN retry_dopo INTEGER');
     }
+    for (const [nome, tipo] of [['prove_fatte', 'INTEGER NOT NULL DEFAULT 0'], ['intervento', 'TEXT']]) {
+      if (!d.prepare('PRAGMA table_info(salute)').all().some(c => c.name === nome)) {
+        d.exec(`ALTER TABLE salute ADD COLUMN ${nome} ${tipo}`);
+      }
+    }
     // LA MEMORIA VINCE SUL DISCO. Questo ciclo gira anche quando `salva()` apre il file per
     // la prima volta in un processo che ha GIA' registrato qualcosa: se riscrivesse le righe
     // gia' in memoria, sovrascriverebbe la pausa appena decisa coi valori vecchi del disco —
@@ -199,6 +208,8 @@ function apri({ crea = false } = {}) {
       m.fermaFinoA = ferma ? Math.max(Math.min(ferma, adesso + FINESTRA_MAX), m.retryDopo || 0) : null;
       m.stopFatti = Number(r.stop_fatti) || 0;
       m.aggiornataIl = Number(r.aggiornata_il) || 0;
+      m.proveFatte = Math.min(MAX_PROVE, Math.max(0, Number(r.prove_fatte) || 0));
+      m.intervento = r.intervento || (m.proveFatte >= MAX_PROVE ? 'tentativi_esauriti' : null);
       // Anche la scala ereditata dal disco invecchia: si misura dall'ultimo cambio di stato
       // scritto, senno' uno `stop_fatti` di mesi fa darebbe sei ore al primo inciampo di oggi.
       m.scalaFinoA = (m.fermaFinoA || m.aggiornataIl) + FINESTRA_MAX;
@@ -229,15 +240,17 @@ function salva(m) {
   if (!d) return false;
   try {
     d.prepare(
-      `INSERT INTO salute (fonte, esito, ferma_fino_a, stop_fatti, aggiornata_il, retry_dopo)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO salute (fonte, esito, ferma_fino_a, stop_fatti, aggiornata_il, retry_dopo, prove_fatte, intervento)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(fonte) DO UPDATE SET
          esito = excluded.esito,
          ferma_fino_a = excluded.ferma_fino_a,
          stop_fatti = excluded.stop_fatti,
          aggiornata_il = excluded.aggiornata_il,
-         retry_dopo = excluded.retry_dopo`
-    ).run(m.fonte, m.esito, m.fermaFinoA, m.stopFatti, m.aggiornataIl, m.retryDopo);
+         retry_dopo = excluded.retry_dopo,
+         prove_fatte = excluded.prove_fatte,
+         intervento = excluded.intervento`
+    ).run(m.fonte, m.esito, m.fermaFinoA, m.stopFatti, m.aggiornataIl, m.retryDopo, m.proveFatte, m.intervento);
     ultimoGuasto = null;
     return true;
   } catch (e) {
@@ -269,6 +282,10 @@ function registra(fonte, { errore = null, conteggio = 0 } = {}) {
   if (eraFerma && !errore) return esito;
   m.esito = esito;
   m.aggiornataIl = Date.now();
+  if (sondeAutomatiche && (esito === 'auth' || errore?.code === 'FONTE_FORMATO')) {
+    m.intervento = esito === 'auth' ? 'credenziali' : 'formato';
+    salva(m);
+  }
 
   if (esito === 'ok') {
     // Le risposte buone azzerano i contatori solo fuori dalla pausa. Lo sblocco
@@ -334,6 +351,8 @@ function registra(fonte, { errore = null, conteggio = 0 } = {}) {
 function fermo(fonte) {
   apri();
   const m = memoria.get(fonte);
+  if (m?.intervento) return { fermo: true, fino: m.fermaFinoA, motivo: m.esito,
+    verifica: false, intervento: m.intervento, proveFatte: m.proveFatte, inVerifica: !!m.prova };
   if (!m || !m.fermaFinoA) return { fermo: false, fino: null, motivo: null };
   const adesso = Date.now();
   // IL TAGLIO SI SCRIVE, NON SI RICALCOLA. Prima `fino` era `min(fermaFinoA, adesso+MAX)`
@@ -344,9 +363,11 @@ function fermo(fonte) {
   if (m.fermaFinoA > tetto) { m.fermaFinoA = tetto; salva(m); }
   const fino = m.fermaFinoA;
   if (fino <= adesso) {
-    return { fermo: !!m.prova, fino, verifica: true, motivo: m.esito };
+    return { fermo: sondeAutomatiche || !!m.prova, fino, verifica: true, motivo: m.esito,
+      ...(sondeAutomatiche ? { proveFatte: m.proveFatte, inVerifica: !!m.prova } : {}) };
   }
-  return { fermo: true, fino, verifica: false, motivo: m.esito };
+  return { fermo: true, fino, verifica: false, motivo: m.esito,
+    ...(sondeAutomatiche ? { proveFatte: m.proveFatte, inVerifica: !!m.prova } : {}) };
 }
 
 function retryDopo(valore, adesso = Date.now()) {
@@ -371,6 +392,8 @@ function erroreHttp(fonte, status, headers = {}) {
 function avvisoPausa(fonte) {
   const f = fermo(fonte);
   const nome = { subito: 'Subito', autoscout: 'AutoScout24', moto: 'Moto.it' }[fonte] || fonte;
+  if (f.intervento) return `${nome}: richieste sospese; necessario un intervento (${f.intervento}).`;
+  if (sondeAutomatiche && f.verifica) return `${nome}: pausa terminata; ${f.inVerifica ? 'verifica in corso' : 'in attesa della sonda autorizzata dal centro'}.`;
   if (f.verifica) return `${nome}: pausa terminata. ${f.fermo ? 'Verifica della disponibilità in corso.' : 'La prossima richiesta verificherà la disponibilità della fonte.'}`;
   return `${nome}: richieste sospese dopo un blocco. Potrai riprovare dal ${new Date(f.fino).toLocaleString('it-IT')}; la disponibilità sarà verificata alla prossima richiesta.`;
 }
@@ -387,26 +410,46 @@ function conStatoFonti(data) {
 }
 
 // Si usa alla porta HTTP/JSON, non attorno alla ricerca completa: durante la
-// verifica passa una sola chiamata. Nessun timer genera traffico da solo.
-async function richiesta(fonte, lavoro) {
+// verifica passa una sola chiamata. Il worker abilita le sonde; il monolite
+// conserva la verifica su richiesta finché non viene integrato nel pool.
+async function richiesta(fonte, lavoro, { sonda = false } = {}) {
   const f = fermo(fonte);
   const m = riga(fonte);
   const corrente = richieste.getStore();
   const interna = corrente?.fonte === fonte;
   const miaProva = interna && corrente.prova && corrente.prova === m.prova && f.verifica;
-  if (f.fermo && !miaProva) throw Object.assign(new Error(avvisoPausa(fonte)),
+  const sondaAmmessa = sondeAutomatiche && sonda && f.verifica && !m.prova && !m.intervento && m.proveFatte < MAX_PROVE;
+  if (f.fermo && !miaProva && !sondaAmmessa) throw Object.assign(new Error(avvisoPausa(fonte)),
     { fonte, code: 'FONTE_IN_PAUSA', kind: 'blocked', fino: f.fino });
   // I redirect appartengono allo stesso tentativo, ma ricontrollano il blocco:
   // una risposta 429 concorrente impedisce anche il salto successivo.
   if (interna) return lavoro();
+  if (sonda && !sondaAmmessa) throw Object.assign(new Error('sonda non ammessa'), { code: 'SONDA_NON_AMMESSA' });
   const prova = f.verifica ? Symbol('verifica') : null;
   if (prova) m.prova = prova;
+  if (sonda) {
+    m.proveFatte++;
+    // Prima della rete: un crash consuma il tentativo e conserva una pausa.
+    // In RAM la verifica resta aperta al solo contesto AsyncLocalStorage.
+    if (!salva({ ...m, fermaFinoA: Math.max(Date.now() + FINESTRE[0], m.retryDopo || 0) })) {
+      m.prova = null; m.intervento = 'persistenza';
+      throw Object.assign(new Error('stato della sonda non persistito'), { code: 'SONDA_PERSISTENZA' });
+    }
+  }
   try {
     const r = await richieste.run({ fonte, prova }, lavoro);
+    // Un parser terminato dopo l'annullamento non prova la disponibilità.
+    if (sonda) require('./annullo').segnale()?.throwIfAborted();
     if (prova && m.prova === prova) {
       m.prova = null; m.fermaFinoA = null; m.retryDopo = null;
       m.colpi = 0; m.fallimenti = 0; m.aggiornataIl = Date.now(); m.esito = 'ok';
-      salva(m);
+      m.proveFatte = 0;
+      if (!salva(m) && sonda) m.intervento = 'persistenza';
+    }
+    // Un nuovo 429 può invalidare la quinta prova mentre arriva la risposta.
+    // Senza riapertura anche questo esito consuma l'ultimo tentativo.
+    if (sonda && m.proveFatte >= MAX_PROVE) {
+      m.intervento ||= 'tentativi_esauriti'; salva(m);
     }
     return r;
   } catch (e) {
@@ -414,16 +457,23 @@ async function richiesta(fonte, lavoro) {
       if (prova && m.prova === prova) m.prova = null;
       throw e;
     }
+    if (sonda) {
+      const retry = retryDopo(e?.retryAfter);
+      if (retry) m.retryDopo = Math.max(m.retryDopo || 0, retry);
+    }
     // Il blocco della verifica deve aggiornare la scala PRIMA della pausa generica:
     // altrimenti il successivo registra() esterno vede gia' 15 minuti di pausa e
     // non sale mai di gradino. Il WeakSet rende innocuo quel riepilogo esterno.
-    if (e?.status === 429 || (prova && m.prova === prova && classifica(e) === 'bloccato')) {
+    if (sonda || e?.status === 429 || (prova && m.prova === prova && classifica(e) === 'bloccato')) {
       registra(fonte, { errore: e });
     }
     if (prova && m.prova === prova) {
       // Anche timeout e formato invalido NON provano che il blocco sia finito.
-      m.prova = null; m.fermaFinoA = Date.now() + FINESTRE[0];
+      m.prova = null; m.fermaFinoA = Math.max(Date.now() + FINESTRE[0], m.retryDopo || 0);
       m.esito = classifica(e); m.aggiornataIl = Date.now(); salva(m);
+    }
+    if (sonda && m.proveFatte >= MAX_PROVE) {
+      m.intervento ||= 'tentativi_esauriti'; salva(m);
     }
     throw e;
   }
@@ -448,6 +498,7 @@ function azzera(fonte = null) {
     if (!m) continue;
     m.colpi = 0; m.fallimenti = 0; m.vuoti = 0; m.fermaFinoA = null;
     m.prova = null; m.retryDopo = null;
+    m.proveFatte = 0; m.intervento = null;
     // Anche la scala: togliere il freno a mano e lasciare `stopFatti` su vorrebbe dire che la
     // fonte torna subito ma il blocco dopo la ferma per il gradino piu' lungo.
     m.stopFatti = 0; m.scalaFinoA = 0;
@@ -467,13 +518,15 @@ function stato() {
   const fonti = [...memoria.values()].map(m => ({
     fonte: m.fonte,
     esito: m.esito,
-    ferma: !!(m.prova || m.fermaFinoA > adesso),
+    ferma: !!(m.intervento || m.prova || m.fermaFinoA > adesso || sondeAutomatiche && m.fermaFinoA),
     fermaFinoA: m.fermaFinoA,
-    verifica: !!m.fermaFinoA && m.fermaFinoA <= adesso,
+    verifica: !m.intervento && !!m.fermaFinoA && m.fermaFinoA <= adesso,
     sospetta: m.vuoti >= VUOTI_SOSPETTI,
     degradata: m.fallimenti >= DEGRADO_A,
     vuotiDiFila: m.vuoti,
     aggiornataIl: m.aggiornataIl || null,
+    proveFatte: m.proveFatte,
+    intervento: m.intervento,
   }));
   return {
     ok: fonti.every(f => !f.ferma && !f.degradata),
@@ -491,10 +544,13 @@ function _reset() {
   try { if (db) db.close(); } catch { /* gia' chiuso */ }
   db = null; caricato = false; ultimoGuasto = null; memoria.clear();
   osservati = new WeakSet();
+  sondeAutomatiche = false;
 }
 
 module.exports = {
   classifica, registra, fermo, azzera, stato, percorso, richiesta, erroreHttp, retryDopo, avvisoPausa, conStatoFonti, guasto: () => ultimoGuasto,
   MOTIVO_PAUSA,
+  abilitaSonde: () => { sondeAutomatiche = true; },
+  sonda: (fonte, lavoro) => richiesta(fonte, lavoro, { sonda: true }), MAX_PROVE,
   COLPI_PER_FERMARSI, FINESTRE, FINESTRA_MAX, VUOTI_SOSPETTI, DEGRADO_A, COLONNE, _reset,
 };

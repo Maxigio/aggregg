@@ -119,8 +119,35 @@ test('worker solo stato: registra e invia heartbeat senza caricare scraper o chi
     '/_nodo/registrazione','/_nodo/registrazione','/_nodo/heartbeat']);
   const hb=chiamate.at(-1).body;
   assert.equal(hb.soloStato,true);assert.equal(hb.simulato,false);assert.equal(hb.occupato,false);
+  assert.equal(hb.sondeAutomatiche,undefined);
   assert.deepEqual(Object.keys(hb.fonti),['subito','autoscout','moto']);
   assert.ok(!caricati.includes('./operazioni'));assert.ok(!caricati.includes('../annullo'));
+});
+
+test('worker: sonda ha deadline e stop non consegna un esito tardivo', async () => {
+  const vm = require('node:vm'), processo = new EventEmitter();
+  processo.env = {AMR_CENTRO_URL:'http://127.0.0.1:1234',AMR_NODO_ID:'locale',AMR_NODI_TOKEN:'sintetico'};
+  const modulo={exports:{}}, tempi=[]; let signal, termina, scadi, abilitate=0, esiti=0;
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../backend/nodi/worker.js'),'utf8'), {
+    module:modulo,process:processo,AbortSignal,AbortController,performance,URL,
+    setTimeout:(fn,ms)=>{tempi.push(ms);scadi=fn;return 1;},clearTimeout:()=>{},setInterval:()=>2,clearInterval:()=>{},
+    require:name=>name==='node:crypto'?require(name):name==='./operazioni'?{
+      abilitaSonde:()=>{abilitate++;},statoFonti:()=>({}),esegui:()=>new Promise(r=>{termina=r;})
+    }:{dentro:(s,fn)=>{signal=s;return fn();}},
+    fetch:async(url,opt)=>{
+      if(url.endsWith('/registrazione'))return{ok:true,json:async()=>({epoca:'centro',boot:null})};
+      if(url.includes('/poll'))return{ok:true,status:200,json:async()=>({versioneProtocollo:1,
+        idLavoro:'sonda',tentativo:1,operazione:'sonda',budgetMs:2500,input:{}})};
+      if(url.endsWith('/heartbeat'))assert.equal(JSON.parse(opt.body).sondeAutomatiche,true);
+      if(url.endsWith('/esito'))esiti++;
+      return{ok:true};
+    },
+  });
+  const p=modulo.exports.avvia();
+  for(let i=0;i<30&&!termina;i++)await new Promise(r=>setImmediate(r));
+  assert.ok(termina);assert.equal(abilitate,1);assert.deepEqual(tempi,[2500]);
+  scadi();assert.equal(signal.aborted,true);processo.emit('SIGTERM');termina({status:200,body:{}});
+  await p;assert.equal(esiti,0);
 });
 
 test('worker: credenziale rifiutata ferma heartbeat e poll; un 503 resta riprovabile', async () => {

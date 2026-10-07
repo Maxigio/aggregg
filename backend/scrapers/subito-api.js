@@ -569,6 +569,7 @@ async function fetchPage(params, start) {
       if (res.status !== 200) throw fail(`Subito hades HTTP ${res.status}`, { status: res.status, kind: kindForStatus(res.status) });
       let j;
       try { j = JSON.parse(res.body); } catch (_) { throw fail('Subito hades: body non-JSON (blocco?)', { status: res.status, kind: 'blocked' }); }
+      if (!j || typeof j !== 'object' || Array.isArray(j)) throw Object.assign(fail('Subito hades: risposta incompatibile'), { code: 'FONTE_FORMATO' });
       if (j.errors) throw fail('Subito hades errors: ' + JSON.stringify(j.errors).slice(0, 100), { kind: 'error' });
       return { ads: Array.isArray(j.ads) ? j.ads : [], total: extractTotal(j) };
     });

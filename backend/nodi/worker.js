@@ -14,6 +14,7 @@ let heartbeatInVolo = null;
 const boot = require('node:crypto').randomUUID();
 let epocaCentro, sequenza = 0;
 let release = null;
+let sondeAutomatiche = false;
 const headers = () => ({ 'x-amr-node-token': token, 'x-amr-node-id': id,
   ...(epocaCentro ? { 'x-amr-node-boot': boot, 'x-amr-center-epoch': epocaCentro } : {}) });
 const pausa = ms => new Promise(r => setTimeout(r, ms));
@@ -38,6 +39,7 @@ async function heartbeat() {
     sequenza: ++sequenza,
     idLavoroAttivo: inCorso?.idLavoro || null,
     ...(soloStato ? { soloStato: true } : {}),
+    ...(sondeAutomatiche ? { sondeAutomatiche: true } : {}),
     simulato: process.env.AMR_NODO_SIMULATO === '1', fonti: statoFonti() });
   heartbeatInVolo = richiesta;
   try { await richiesta; }
@@ -81,7 +83,10 @@ async function avvia() {
     const salute = require('../fonti-salute');
     statoFonti = () => Object.fromEntries(['subito', 'autoscout', 'moto'].map(f => [f, salute.fermo(f)]));
   } else {
-    ({ esegui, statoFonti } = require('./operazioni'));
+    const operazioni = require('./operazioni');
+    ({ esegui, statoFonti } = operazioni);
+    sondeAutomatiche = process.env.AMR_NODO_SIMULATO !== '1' && typeof operazioni.abilitaSonde === 'function';
+    if (sondeAutomatiche) operazioni.abilitaSonde();
     annullo = require('../annullo');
   }
   const registro = await fetch(origine + '/_nodo/registrazione', {
@@ -114,6 +119,8 @@ async function avvia() {
       inCorso = lavoro;
       const ctrl = new AbortController();
       controllerAttivo = ctrl;
+      const scadenzaSonda = lavoro.operazione === 'sonda'
+        ? setTimeout(() => ctrl.abort(), Math.min(29000, Math.max(1, lavoro.budgetMs || 29000))) : null;
       const controllo = setInterval(() => heartbeat().catch(() => ctrl.abort()), 2000);
       let esito;
       const inizioLavoro = performance.now();
@@ -123,6 +130,7 @@ async function avvia() {
         : await annullo.dentro(ctrl.signal, () => esegui(lavoro)); }
       catch (e) { esito = { status: 502, body: { error: e.message || 'errore nodo' } }; }
       const durataMs = Math.round(performance.now() - inizioLavoro);
+      if (scadenzaSonda) clearTimeout(scadenzaSonda);
       clearInterval(controllo);
       // clearInterval non annulla un invio già partito: finirlo prima di cambiare job.
       await heartbeatInVolo?.catch(() => ctrl.abort());

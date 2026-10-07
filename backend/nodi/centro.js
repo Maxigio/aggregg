@@ -122,7 +122,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     scriviDiagnostica('evento', () => {
       db.prepare('INSERT INTO eventi(ts,livello,codice,lavoro,nodo,fonte,azienda,http) VALUES(?,?,?,?,?,?,?,?)')
         .run(ora(), ['sospensione_aggiunta','sospensione_rimossa','lavori_cancellati',
-          'manutenzione_attiva','manutenzione_disattiva'].includes(codice)
+          'manutenzione_attiva','manutenzione_disattiva','sonda_riuscita'].includes(codice)
           ? 'info' : codice === 'fonte_parziale' ? 'avviso' : 'errore', codice,
           lavoro, nodo, fonte, azienda, Number.isInteger(http) && http >= 100 && http <= 599 ? http : null);
     });
@@ -287,10 +287,14 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         fonte, azienda: job.azienda, http: s.erroreHttp });
     }
   }
-  function disponibile(n, fonte = null, consideraCoda = true) {
+  function disponibile(n, fonte = null, consideraCoda = true, sonda = false) {
     if (!n || tokenRevocato(n.id) || ora() - n.visto > 6000 || !releaseValida(n) || n.sospeso || n.soloStato
         || (consideraCoda && n.coda.length >= 10)) return false;
-    return !fonte || (!n.sospese.has(fonte) && !n.fonti[fonte]?.fermo);
+    if (!fonte) return true;
+    const f = n.fonti[fonte];
+    return !n.sospese.has(fonte) && (sonda
+      ? f?.verifica === true && !f.intervento && !f.inVerifica
+      : !f?.fermo);
   }
   function releaseValida(n) {
     return releaseAttesa ? compat.compatibile(releaseAttesa, n?.compatibilita) : n?.revisione === REVISIONE;
@@ -305,7 +309,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       const n = typeof selezione === 'function' ? selezione() : selezione;
       // Dopo l'attesa dei permessi, sospensione/scadenza del nodo possono essere cambiate.
       if (chiuso || !disponibile(n) || n.id === lavoro.nodoEscluso
-          || fontiDelLavoro(lavoro).some(f => !disponibile(n, f))) {
+          || fontiDelLavoro(lavoro).some(f => !disponibile(n, f, true, lavoro.operazione === 'sonda'))) {
         throw Object.assign(new Error('nodo non disponibile'), { status: 503 });
       }
       return new Promise((resolve, reject) => {
@@ -341,7 +345,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     return sceglie([fonte], null, n => disponibile(n, fonte));
   }
   function fontiDelLavoro(job) {
-    if (job.operazione === 'fonte' || job.operazione === 'dettaglio') return [job.fonte];
+    if (['fonte', 'dettaglio', 'sonda'].includes(job.operazione)) return [job.fonte];
     if (job.operazione !== 'ricerca') return [];
     return job.input.fonti?.split(',')
       || (job.input.tipo === 'auto' ? ['subito', 'autoscout'] : FONTI_PAGINA);
@@ -382,7 +386,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       if (job.ricerca && (!job.ricerca.destinatari.size || job.ricerca.budget.signal.aborted)) continue;
       const n = nodi.get(job.nodoAssegnato);
       if (n && ora() - n.visto <= 6000) continue;
-      if (!job.iniziato) {
+      if (!job.iniziato && job.operazione !== 'sonda') {
         const richieste = fontiDelLavoro(job);
         const alternativo = sceglie(richieste, job.nodoAssegnato,
           x => x.id !== job.nodoEscluso && richieste.every(f => disponibile(x, f)));
@@ -654,7 +658,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       return res.sendStatus(409);
     }
     if (!/^[a-zA-Z0-9_-]{1,40}$/.test(id || '') || !fonti || typeof fonti !== 'object'
-        || (soloStato !== undefined && typeof soloStato !== 'boolean')) return res.sendStatus(400);
+        || (soloStato !== undefined && typeof soloStato !== 'boolean')
+        || (req.body.sondeAutomatiche !== undefined && typeof req.body.sondeAutomatiche !== 'boolean')) return res.sendStatus(400);
     let n = nodi.get(id);
     if (n?.boot) {
       const seq = req.body.sequenza;
@@ -680,6 +685,29 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     n.compatibilita = releaseAttesa ? compat.valida(req.body.compatibilita) : null;
     n.occupato = !!occupato;
     if (n.soloStato) interrompiAccodati(n);
+    // Le sonde sono lavori interni: stessi gate, timeout e diagnostica delle
+    // ricerche, ma nessun tenant, failover o ripetizione di un esito incerto.
+    if (req.body.sondeAutomatiche === true && !n.simulato && !manutenzione
+        && !n.occupato && !n.coda.length && !n.sondaInAttesa && disponibile(n)) {
+      const fonte = FONTI_PAGINA.find(f => disponibile(n, f, true, true)
+        && n.ultimaSonda?.[f] !== JSON.stringify([n.boot, n.fonti[f].fino, n.fonti[f].proveFatte]));
+      if (fonte) {
+        n.ultimaSonda ||= {};
+        n.ultimaSonda[fonte] = JSON.stringify([n.boot, n.fonti[fonte].fino, n.fonti[fonte].proveFatte]);
+        n.sondaInAttesa = true;
+        const job = { idLavoro: crypto.randomUUID(), azienda: 'diagnostica-fonti', operazione: 'sonda',
+          fonte, input: { ...require('./sonde-scenari')[fonte] } };
+        assegna(n, job, 30000).then(esito => {
+          evento(esito.body.stato === 'ok' ? 'sonda_riuscita'
+            : esito.body.intervento ? 'sonda_intervento' : 'sonda_fallita',
+          { lavoro: job.idLavoro, nodo: n.id, fonte, http: esito.body.http });
+        }).catch(e => {
+          // Mai consegnata: non ha consumato una prova. Può tornare in coda
+          // dopo la rimozione della manutenzione o sospensione manuale.
+          if (e.interrotto && !e.incerto) delete n.ultimaSonda[fonte];
+        }).finally(() => { n.sondaInAttesa = false; });
+      }
+    }
     res.json({ ok: true });
   });
   app.get('/_nodo/poll', async (req, res) => {
@@ -691,7 +719,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     n.pollInCorso = true;
     try {
       interrompiAccodati(n, null, job => fontiDelLavoro(job)
-        .some(f => n.sospese.has(f) || n.fonti[f]?.fermo));
+        .some(f => !disponibile(n, f, false, job.operazione === 'sonda')));
       let job;
       while ((job = n.coda[0])) {
         if (res.destroyed || res.writableEnded) return;
@@ -713,8 +741,12 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         if (res.destroyed || res.writableEnded) return;
         // Il timer, una sospensione o una disconnessione possono rimuovere il record durante l'await.
         if (lavori.get(job.idLavoro) !== job || n.coda[0] !== job) continue;
-        if (n.occupato || !disponibile(n, null, false) || fontiDelLavoro(job).some(f => !disponibile(n, f, false))) {
+        if (n.occupato || !disponibile(n, null, false) || fontiDelLavoro(job).some(f => !disponibile(n, f, false, job.operazione === 'sonda'))) {
           return res.sendStatus(204);
+        }
+        if (job.operazione === 'sonda' && manutenzione) {
+          interrompiAccodati(n, job.fonte);
+          continue;
         }
         n.coda.shift(); break;
       }
@@ -729,6 +761,8 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       registra(job, 'in_corso');
       res.json({ versioneProtocollo: 1, idLavoro: job.idLavoro, tentativo: job.tentativo,
         azienda: job.azienda, operazione: job.operazione, fonte: job.fonte, input: job.input,
+        // Riserva un secondo per riferire l'esito; nessun confronto fra orologi.
+        ...(job.operazione === 'sonda' ? { budgetMs: Math.max(1, Math.floor(29000 - (performance.now() - job.accodatoMono))) } : {}),
         ...(job.operazione === 'modelli' ? { fontiSospese: [...n.sospese] } : {}) });
     } finally { n.pollInCorso = false; }
   });
@@ -846,6 +880,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     manutenzione = prossima;
     if (manutenzione) epocaManutenzione++;
     if (manutenzione) ricercheHttp.interrompiNonIniziate(erroreManutenzione());
+    if (manutenzione) for (const n of nodi.values()) {
+      interrompiAccodati(n, null, job => job.operazione === 'sonda' ? erroreManutenzione() : false);
+    }
     if (manutenzione) for (const operazione of operazioniRicerca) {
       if (!operazione.iniziata) operazione.budget.interrompi(erroreManutenzione());
     }

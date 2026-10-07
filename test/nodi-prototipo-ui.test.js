@@ -691,6 +691,26 @@ test('diagnostica: nodo solo stato visibile senza indicare disponibilità dei po
   assert.ok(!(await card.innerText()).includes('Disponibile'));assert.deepEqual(errors,[]);
 });
 
+test('diagnostica: sonde in attesa, in corso e intervento sono distinguibili', opzioniBrowser, async t => {
+  const nodi = [{ id:'imac-sonde',online:true,compatibile:true,sospese:[],fonti:{
+    subito:{fermo:true,verifica:true,proveFatte:1},
+    autoscout:{fermo:true,verifica:true,inVerifica:true,proveFatte:2},
+    moto:{fermo:true,intervento:'tentativi_esauriti',proveFatte:5},
+  } }];
+  const {page,errors} = await apriPrototipo(t, async(route,url) => {
+    if (['/api/stato','/api/admin'].includes(url.pathname)) {
+      await route.fulfill({json:{nodi,lavori:[],eventi:[],pagina:1,pagine:1,totale:0}}); return true;
+    }
+    return false;
+  });
+  const righe = page.locator('#nodi .source-row');
+  assert.match(await righe.nth(0).innerText(),/In attesa della sonda/);
+  assert.match(await righe.nth(1).innerText(),/Sonda in corso/);
+  assert.match(await righe.nth(2).innerText(),/Intervento necessario/);
+  assert.equal(await righe.locator('.stop').count(),3);
+  assert.deepEqual(errors,[]);
+});
+
 test('F07: risposte e finally obsoleti non cambiano pagina o controlli della richiesta corrente', opzioniBrowser, async t => {
   const nodi = ['a', 'b'].map(id => ({ id, online: true, sospese: [], fonti: {} }));
   const richiesteA = [], richiesteB = [];

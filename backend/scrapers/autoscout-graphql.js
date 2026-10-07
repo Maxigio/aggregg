@@ -520,11 +520,12 @@ async function fetchPage(params, page, opts = {}) {
   if (res.status !== 200) throw fail(`AS24 GraphQL HTTP ${res.status}`, { status: res.status, kind: kindForStatus(res.status) });
   let j;
   try { j = JSON.parse(res.body); } catch (_) { throw fail('AS24 GraphQL: body non-JSON', { status: res.status, kind: 'blocked' }); }
+  if (!j || typeof j !== 'object' || Array.isArray(j)) throw Object.assign(fail('AS24 GraphQL: risposta incompatibile'), { code: 'FONTE_FORMATO' });
   if (j.errors && (!Array.isArray(j.errors) || j.errors.length))
     throw fail('AS24 GraphQL errors: ' + JSON.stringify(j.errors).slice(0, 120), { kind: 'error' });
   const arr = ((j.data || {}).search || {}).listings;
   if (!arr || !Array.isArray(arr.listings))
-    throw fail('AS24 GraphQL: elenco annunci assente o illeggibile', { kind: 'error' });
+    throw Object.assign(fail('AS24 GraphQL: elenco annunci assente o illeggibile', { kind: 'error' }), { code: 'FONTE_FORMATO' });
   const list = arr.listings;
   // `raw` = annunci grezzi della pagina (per decidere se c'è una pagina dopo);
   // `items` è filtrato (onRequestOnly/prezzo-null) → non usarlo per la paginazione.
@@ -631,7 +632,7 @@ async function scrapeAutoscoutGraphql(params, opts = {}) {
    */
   if (rawTot > 0 && out.length === 0) {
     clearRetryPages(params, opts);
-    throw new Error(`Autoscout: ${rawTot} annunci grezzi e nessuno leggibile — lo schema del payload puo' essere cambiato`);
+    throw Object.assign(new Error(`Autoscout: ${rawTot} annunci grezzi e nessuno leggibile — lo schema del payload puo' essere cambiato`), { code: 'FONTE_FORMATO' });
   }
   const parzialeRete = !!parziale;
   if (!parziale && !opts.retainPages) clearRetryPages(params, opts);

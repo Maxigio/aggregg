@@ -217,20 +217,21 @@ async function scrapeMotoViaHttp(urls, opts = {}) {
         const grezze = extractCardsHtml(body);
         const items = mapCards(grezze, opts);
         if (!grezze.length && !cheerio.load(body)('#plist-top, .plist-head-title-info').length) {
-          throw fail('Moto.it: pagina di ricerca non riconoscibile, disponibilità non verificata', { kind: 'error' });
+          throw Object.assign(fail('Moto.it: pagina di ricerca non riconoscibile, disponibilità non verificata', { kind: 'error' }), { code: 'FONTE_FORMATO' });
         }
         const deriva = !items.length && (grezze.length > 0 || (i === 0 && !(opts.fetta > 0) && totale > 0));
-        if (deriva) throw fail(`Moto.it: ${grezze.length} card in pagina, ${totale == null ? '?' : totale} annunci dichiarati, 0 leggibili — e' cambiato il markup della fonte, non il piazzale a essere vuoto`, { kind: 'error' });
+        if (deriva) throw Object.assign(fail(`Moto.it: ${grezze.length} card in pagina, ${totale == null ? '?' : totale} annunci dichiarati, 0 leggibili — e' cambiato il markup della fonte, non il piazzale a essere vuoto`, { kind: 'error' }), { code: 'FONTE_FORMATO' });
         // Il 200 di una manutenzione senza card né contatore non prova la
         // ripartenza. Lo zero esplicito della fonte rimane un esito valido.
         if (salute.fermo('moto').verifica && !items.length && totale == null) {
-          throw fail('Moto.it: pagina non riconoscibile, disponibilità non verificata', { kind: 'error' });
+          throw Object.assign(fail('Moto.it: pagina non riconoscibile, disponibilità non verificata', { kind: 'error' }), { code: 'FONTE_FORMATO' });
         }
         if (items.length) salute.registra('moto', { conteggio: items.length });
         return { items, totale, scartate: grezze.length - items.length };
       });
     } catch (e) {
       if (i === 0) {
+        if (opts.sonda) throw e;
         if (e.status && e.status !== 403 && e.status !== 429) return { pages: [], statoKo: e.status, truncated: false, cadute: 0 };
         throw e;
       }
