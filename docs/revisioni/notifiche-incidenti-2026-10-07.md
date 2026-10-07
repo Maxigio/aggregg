@@ -613,3 +613,81 @@ e [password storage](https://cheatsheetseries.owasp.org/cheatsheets/Password_Sto
 Punto 4 ancora aperto per URL sostitutiva, recovery concordato e collaudo
 end-to-end; punti successivi non dichiarati completati. Nessun deploy,
 accesso M2, modifica frontend o richiesta live ai portali in questo incremento.
+
+### Custodia temporanea e controprova API — 8 ottobre
+
+L'utente conferma ricezione dell'email del test provider e mancata ricezione
+della push. Conferma anche che `Push notifications` nell'app Android e il
+permesso notifiche Android sono entrambi attivi. Il dispositivo registrato
+risulta collegato di recente; modalità vacanza dell'account disattivata.
+Queste informazioni escludono alcune ipotesi, ma non dimostrano una causa
+del mancato recapito né il funzionamento del canale push.
+
+Autorizzati il token Uptime del solo team e il webhook sostitutivo. Per la
+custodia l'utente ha scelto esplicitamente un `.env` temporaneo, rinviando
+il password manager dopo il signup Bitwarden non completato. Creato fuori
+dal repository `/Users/aincrad/.config/automotoradar/staging/.env`: directory
+di AMR e staging `0700`, file `0600`, proprietario verificato, creazione
+esclusiva senza seguire un symlink. Contiene soltanto le due nuove credenziali
+Better Stack; nessuna password applicativa copiata. Valori salvati senza
+output, argomenti di comando o commit; copia temporanea del token nel
+clipboard del browser rimossa. È **custodia in chiaro**, non cifratura.
+FileVault risulta disattivato; nessuna impostazione di sistema cambiata.
+
+Il token consente lettura/scrittura delle risorse Uptime **del team**, non
+è un token globale né un permesso limitato al singolo monitor. Non è
+collegato al runtime AMR e non viene caricato nei test automatici.
+
+**Correzione della conclusione sul recovery:** la documentazione ufficiale
+descrive `recovery_period` come intero in secondi, ma l'API reale rifiuta 30
+con HTTP 422. La controprova, dopo verifica che nessun monitor fosse stato
+creato, conferma l'elenco ammesso: `0, 60, 180, 300, 900, 1800, 3600, 7200`.
+L'utente ha quindi scelto esplicitamente **60 secondi**. Non costruita una
+soluzione personalizzata per aggirare il vincolo del provider.
+
+Creato il monitor `5036432`, `AMR — centro staging`, inizialmente sospeso:
+GET del solo `/healthz`, controlli 30 s, timeout 10 s, recovery 60 s,
+confirmation period 0, TLS verificato, niente redirect/cookie/credenziali,
+email e push standard, nessun critical alert, SMS, telefonata o escalation
+al team. Controlli aggiuntivi di scadenza dominio/certificato disattivati.
+POST 201 seguito da GET: nessuna differenza sui parametri inviati.
+Non modificato il monitor preesistente del team. La sonda di processo
+non prova funzionamento di Auth, PostgreSQL, worker o ricerche.
+
+Creato il webhook **`60492`**, sostituzione esplicita dello staging, con
+POST 201. Rilettura API conferma:
+
+- vecchio `60479` sospeso, nuova URL diversa e corrispondente al file privato;
+- nuovo webhook sospeso, apertura `incident.status == alert`, risoluzione
+  `incident.status == resolved`, match esatto; acknowledgment manuale;
+- titolo/causa da `incident.title`/`incident.description`; Alert ID integrale
+  `incident.id` in entrambi i rami;
+- email e push standard, nessun critical alert, SMS, telefonata o escalation.
+
+Non spedito alcun payload alla nuova URL, né collegata allo staging.
+La sostituzione evita il riuso della URL precedentemente esposta;
+non equivale a revoca definitiva della vecchia credenziale, che rimane
+sospesa e non va usata.
+
+Impostati a `Never` i promemoria di turno del team, prima a 24 ore;
+reload conferma il valore salvato. Non modificata la grouping policy:
+il suo switch `Notify about all incidents in a group` è attivo, quindi
+la sola presenza del raggruppamento non prova che gli alert siano soppressi.
+Assenza di notifiche di risoluzione e consegna push ancora da dimostrare
+con un incidente reale di collaudo: configurazioni e HTTP 2xx non bastano.
+Richiesta autorizzazione per una sola nuova prova end-to-end, perché il test
+provider precedente aveva già consumato l'invio inizialmente autorizzato.
+
+Ricevuta redatta di configurazione e controverifiche:
+`/private/tmp/amr-betterstack-20261008-ovJ72P/provider.json`.
+La ricevuta include le regole e gli estrattori effettivamente riletti,
+non soltanto booleani di verifica. Review indipendente in sola lettura
+conferma compatibilità con il payload e nessun nuovo finding tecnico nel
+perimetro; il finding documentale iniziale è risolto dalla presente sezione.
+Non dimostra la consegna al telefono. Prova visiva senza segreti in
+`/private/tmp/amr-betterstack-20261008-ovJ72P/monitor-configurato.jpg`.
+Fonti ufficiali aggiuntive: [API incoming webhook](https://betterstack.com/docs/uptime/api/create-incoming-webhook/),
+[parametri di estrazione](https://betterstack.com/docs/uptime/api/incoming-webhooks-response-params/),
+[promemoria on-call](https://betterstack.com/docs/uptime/getting-started-with-oncall-v2/).
+Punto 4 ancora aperto per consegna e percorso completo; nessun nuovo deploy,
+accesso M2, richiesta ai portali o modifica del codice applicativo.
