@@ -532,3 +532,84 @@ e confronto con il writer. Stato backup e ruoli verificati nella fixture;
 frontend/staging non collegati. Copie remote conservate, nessuna retention
 distruttiva, accesso M2 o deploy. Procedura, prove e limiti nel
 [registro PG/R2](storage-r2-postgres-2026-10-07.md).
+
+### Decisioni e verifica provider — 8 ottobre
+
+Risposte dell'utente, da distinguere dagli esiti già collaudati:
+
+1. App Better Stack Android già autenticata.
+2. Un solo collaudo notifiche al proprietario, email e push; niente promemoria
+   o messaggi di ripristino. Nessun destinatario aggiuntivo autorizzato.
+3. Due sole ricerche live di baseline attraverso staging e worker iMac:
+   Alfa Romeo / Giulietta / Veloce e Fantic / Caballero 500 / Rally,
+   senza altri filtri, almeno 15 secondi fra ricerche sulla stessa fonte.
+4. Lentezza: solo avviso diagnostico, senza incidente Better Stack.
+5. Confermati i tre parametri modificabili: deadline, pendenti per persona e
+   pendenti complessive. Solo nuove ricerche, persistenza e audit; intervalli
+   da verificare, nessuna deroga alle pause delle fonti.
+6. Nessun password manager già scelto. Richiesta una custodia sicura dei
+   segreti operativi e delle chiavi di recovery. Non autorizza una cifratura
+   reversibile delle password degli utenti: resta Nhost Auth. Scelta del
+   vault ancora aperta, nessuna nuova installazione effettuata.
+7. Autorizzati due nuovi bucket privati EU del solo staging, con credenziale
+   limitata ai bucket, distinti da collaudo sintetico e futura produzione.
+   Autorizzato backup dei dati reali di staging, non dell'M2.
+8. Manutenzione temporanea di staging, indicativamente 20 minuti, dopo
+   backup e restore verificati e con rollback pronto; nessuna fascia esclusa.
+
+**Configurazione provider eseguita:** nel webhook `60479`, ancora `Paused`,
+apertura solo per `incident.status == alert`, risoluzione solo per
+`incident.status == resolved`; entrambe estraggono `incident.id` integralmente.
+Nome da `incident.title`, causa da `incident.description`. Preview dei due
+payload e reload confermano regole e valori salvati. Email e push standard
+attivi; chiamate, SMS e critical alert disattivati; escalation al team `Do nothing`.
+Nessun collegamento al runtime AMR o invio mediante la URL webhook.
+
+Il comando provider **Send test alert** è stato eseguito una sola volta:
+la pagina conferma invio al proprio account e colleghi non notificati.
+Questo comando non ha creato un incidente mediante il payload AMR: non
+dimostra trasporto, deduplica o risoluzione end-to-end. Ricezione effettiva
+di email e push da confermare dall'utente; nessun secondo invio effettuato.
+
+Il primary on-call era vuoto e prevedeva fallback all'intero team.
+Salvata la selezione del solo proprietario, ogni giorno; pagina risultante
+mostra il proprietario attualmente on-call e conferma aggiornamento.
+L'onboarding mostra ancora un avviso di gap: la presenza attuale non è
+una prova di copertura futura completa. Non aggiunti membri né destinatari.
+In Settings > Alerts risulta un dispositivo Android registrato.
+
+**Incidente della lavorazione:** in una lettura della pagina non redatta,
+la URL webhook è finita nel risultato dello strumento. L'errore è stato
+comunicato all'utente. Non è stata copiata in repository, file, log o Nhost;
+l'integrazione resta sospesa. La URL va sostituita prima del collegamento.
+Non riportare il valore nella documentazione. Richiesta la conferma per
+creare la sostituzione, senza cancellare definitivamente la precedente.
+
+**Monitor HTTP non ancora creato:** `/healthz` risponde 200 alla singola
+verifica senza login. Preparato il form per GET ogni 30 secondi, timeout
+10 secondi, TLS verificato, senza credenziali, redirect o cookie. Il form
+offre recovery immediato o da 1 minuto, ma non 30 secondi: il valore
+concordato è documentato come intero in secondi nell'API ufficiale.
+Richiesta una scelta fra token Uptime del solo team per configurarlo via
+API e modifica esplicita del recovery a 1 minuto; nessun valore alternativo
+applicato, nessun token creato. Non confondere il form preparato con un
+monitor operativo.
+
+**Verifiche locali:** 68/68 test su incidenti, avvio centro e limiti ricerca,
+Node 24.21.0, ambiente senza credenziali, dati/log temporanei e guard che
+nega la rete esterna. Review indipendente in sola lettura: nessun finding
+materiale confermato nel contratto notifiche; 32/32 test Node 24.19.0 e
+controprove SQLite su disco (concorrenza, restart, ACK perso/tardivo e
+riconciliazione). Limiti: nessuna consegna provider, deduplica reale o
+assenza di messaggi di ripristino provata da questi test.
+
+Fonti ufficiali consultate: [incoming webhook](https://betterstack.com/docs/uptime/incoming-webhooks/),
+[mobile app](https://betterstack.com/docs/uptime/ios-and-android-mobile-apps/),
+[monitor API](https://betterstack.com/docs/uptime/api/create-a-new-monitor/),
+[token del team](https://betterstack.com/docs/uptime/api/getting-started-with-uptime-api/),
+[OWASP secrets management](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)
+e [password storage](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html).
+
+Punto 4 ancora aperto per URL sostitutiva, recovery concordato e collaudo
+end-to-end; punti successivi non dichiarati completati. Nessun deploy,
+accesso M2, modifica frontend o richiesta live ai portali in questo incremento.
