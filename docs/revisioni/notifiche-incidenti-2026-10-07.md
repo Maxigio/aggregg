@@ -691,3 +691,55 @@ Fonti ufficiali aggiuntive: [API incoming webhook](https://betterstack.com/docs/
 [promemoria on-call](https://betterstack.com/docs/uptime/getting-started-with-oncall-v2/).
 Punto 4 ancora aperto per consegna e percorso completo; nessun nuovo deploy,
 accesso M2, richiesta ai portali o modifica del codice applicativo.
+
+### Preparazione dei prossimi gate — 8 ottobre
+
+Nuova lettura API, senza invii: webhook `60492` e monitor `5036432`
+ancora sospesi; email/push abilitate, critical alert, SMS e telefonate
+disabilitati, escalation al team assente. Monitor: 30 s, timeout 10 s,
+recovery 60 s. Nessuna nuova notifica o modifica del provider in questo giro.
+
+La pagina Alerts mostra il dispositivo Android registrato. Features conferma
+promemoria `Never`; anche Advanced settings non espone un controllo dei
+messaggi di risoluzione nativi. Questo non dimostra che il provider non lo
+supporti: la soppressione resta da verificare, prima di promettere un test
+senza messaggi di ripristino. L'API di risoluzione documenta `resolved_by`,
+non un'opzione di soppressione. Le regole Outgoing e-mails non provano il
+comportamento delle notifiche native email/push.
+
+La review indipendente ha confermato un rischio **condizionato** nel piano
+del test unico: `incidenti.scarica()` prende tutti gli episodi pendenti,
+anche quelli già chiusi. Una controprova su SQLite in memoria con due episodi
+accumulati produce due alert e un resolved. È comportamento previsto,
+non un difetto della deduplica; il backlog reale non è stato letto.
+La nuova prova, se autorizzata, deve quindi usare un registro sintetico nuovo
+e un solo episodio, senza collegare il sender al registro vivo dello staging.
+
+Separati due gate prima confusi nell'ordine dei lavori:
+
+1. Configurazione provider e collaudo isolato del trasporto AMR/webhook.
+2. Integrazione nel runtime staging, solo dopo backup/restore e aggiornamento
+   del candidato. La release remota documentata `66e2b24` non contiene il
+   nuovo sender: pretendere questa integrazione prima dell'aggiornamento
+   creerebbe una dipendenza circolare. L'ordine degli incrementi 4–7 resta
+   valido; non certifica da solo il funzionamento remoto.
+
+Domande presentate insieme all'utente, **ancora senza risposta** in questo
+giro: nuovo test unico di notifica; seconda copia della chiave di recovery;
+limiti Admin inizialmente entro i default o collaudo degli aumenti;
+collocazione dell'archiviazione log/report R2; indice cifrato del punto di
+recovery con ricevuta separata e stop in caso di copie mancanti.
+Restano già approvate le sole due ricerche live, il `.env` privato temporaneo,
+i nuovi bucket dello staging e la manutenzione successiva al backup.
+
+Review in sola lettura: 21/21 prove mirate Node 26.4.0, più controprova del
+backlog in memoria; nessuna chiamata esterna o lettura di dati vivi da parte
+del reviewer. Non è un nuovo gate Node 24, né una prova di recapito Android.
+Corretta la checklist recovery da 30 a 60 s; nessun nuovo difetto applicativo
+confermato nel perimetro. I punti 4–7, CHECK e gate remoto/M2 non sono
+dichiarati completati. Il brainstorming frontend resta successivo ai gate.
+
+Fonti ricontrollate: [push standard e critical alerts](https://betterstack.com/docs/uptime/ios-and-android-mobile-apps/),
+[timeline degli incidenti](https://betterstack.com/docs/uptime/api/list-of-incident-timeline-events/),
+[risoluzione API](https://betterstack.com/docs/uptime/api/resolve-an-ongoing-incident/)
+e [threat model restic](https://restic.readthedocs.io/en/stable/100_references.html#threat-model).
