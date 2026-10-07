@@ -469,6 +469,66 @@ Prima di attivare: registrare il dispositivo nell'app Better Stack On-call,
 verificare il destinatario, nessun promemoria/escalation ripetuta né messaggio
 di ripristino, mappare lo stesso Alert ID per creazione/risoluzione. Poi
 collaudo minimo senza portali né dati cliente, misurando consegna e duplicati.
-Il recovery del monitor HTTP è ancora da concordare; non adottare tacitamente
-il default di tre minuti del form come nuova decisione del prodotto.
+Il recovery del monitor HTTP è stato concordato a **30 secondi** nella
+successiva risposta dell'utente. È distinto dalla frequenza dei controlli
+(30 secondi) e dalla ripresa dei nodi (15 secondi di heartbeat regolari).
+La decisione è registrata; la configurazione nel provider resta da eseguire
+e verificare. Il precedente default di tre minuti del form non si applica.
 Punto 4 ancora aperto per il provider; punto 5 e frontend del punto 8 non avviati.
+
+### Decisioni successive: candidati e storage
+
+- Candidati per la baseline delle prestazioni: Auto **Alfa Romeo / Giulietta /
+  Veloce** e Moto **Fantic / Caballero 500 / Rally**. Sono le ricerche già
+  indicate per le sonde, non misure di prestazione già eseguite. Restano da
+  definire condizioni confrontabili, filtri aggiuntivi, stato della cache e
+  copertura delle fonti; nessuna nuova richiesta live è stata eseguita.
+- Per lo storage l'utente preferisce un provider gestito, valutato anche per
+  gli eventuali file applicativi del SaaS. Chiede costi espliciti di spazio,
+  traffico e operazioni. Allora non era ancora scelto né attivato un provider;
+  restava la direzione restic open source più storage gestito. Le operazioni sui
+  backup e i file applicativi avranno autorizzazioni e retention separate.
+- Il punto 6 è stato successivamente concordato: parametri della console
+  modificabili entro intervalli collaudati, applicati soltanto alle nuove
+  ricerche e con registrazione delle modifiche. Baseline: due richieste
+  pendenti per persona, 60 complessive, deadline di 60 secondi. Gli estremi
+  degli intervalli richiedono misure; nessun comando deve aggirare le pause
+  automatiche delle fonti. Decisione confermata, implementazione non eseguita.
+- Per i file applicativi l'utente ha precisato **log e bug report inviati
+  dal frontend AMR**, oltre ai backup già concordati. Allegati, screenshot,
+  copia degli annunci e invio indiscriminato dei payload non sono requisiti
+  autorizzati. Retention dei report e modalità di archiviazione dei log
+  restano da definire prima dell'integrazione.
+- **R2 Standard era un candidato** nell'analisi iniziale.
+  Il [debunking storage](storage-r2-debunking-2026-10-07.md) confronta
+  documentazione ufficiale, costi e codice esistente. Nessuna prova R2 live,
+  lettura di segreti, modifica applicativa, accesso M2 o deploy eseguito.
+
+### Attivazione R2 e perimetro del primo collaudo
+
+L'utente ha successivamente attivato R2 e autorizzato il solo collaudo
+isolato: due bucket privati Standard EU, `amr-collaudo-backup-db` e
+`amr-collaudo-backup-journal`, credenziale Object Read & Write limitata
+ai due bucket e valida 24 ore, dati sintetici sotto 10 MiB.
+Bucket e credenziale creati; public URL disabilitata e nessuna expiration
+degli oggetti restic. Dopo il salvataggio protetto della credenziale,
+collaudo R2 concluso: 262.279 byte sintetici, repository distinti,
+backup/check completo/restore identico per entrambi, chiave errata respinta
+con codice specifico 12, retention solo dry-run e una copia conservata
+per repository. È una prova dell'integrità di byte sintetici, non del restore
+PostgreSQL o dell'outbox e stato Admin dello staging. Le copie di prova
+rimangono nei bucket; nessuna cancellazione remota avviata.
+Staging, M2, dati cliente, archiviazione remota di log/report e produzione
+non sono collegati. Evidenze e limiti nel
+[registro R2](storage-r2-debunking-2026-10-07.md#collaudo-isolato-autorizzato-il-7-ottobre).
+
+### Collaudo successivo PG/R2
+
+Verificato anche il percorso con PostgreSQL reale ma dati sintetici:
+250.245 byte, due dump e tredici journal, restore su cluster separato,
+replay ordinato e idempotente dei sette journal successivi al dump.
+Corretto il replay degli inviti del collega revocato, dopo prova fallente
+e confronto con il writer. Stato backup e ruoli verificati nella fixture;
+frontend/staging non collegati. Copie remote conservate, nessuna retention
+distruttiva, accesso M2 o deploy. Procedura, prove e limiti nel
+[registro PG/R2](storage-r2-postgres-2026-10-07.md).
