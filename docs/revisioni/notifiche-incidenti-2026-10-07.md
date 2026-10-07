@@ -743,3 +743,65 @@ Fonti ricontrollate: [push standard e critical alerts](https://betterstack.com/d
 [timeline degli incidenti](https://betterstack.com/docs/uptime/api/list-of-incident-timeline-events/),
 [risoluzione API](https://betterstack.com/docs/uptime/api/resolve-an-ongoing-incident/)
 e [threat model restic](https://restic.readthedocs.io/en/stable/100_references.html#threat-model).
+
+### Decisioni confermate e incidente unico — 8 ottobre
+
+L'utente ha risposto alle cinque domande del giro precedente:
+
+1. Autorizzato un nuovo incidente sintetico, solo al proprietario, email e
+   push standard. Non autorizzati nuovi incidenti automatici di prova.
+2. Approvata una seconda copia offline della chiave di recovery, custodita
+   dall'utente. Non ancora attestata la sua effettiva preparazione.
+3. Limiti Admin entro i default già approvati (60 s, 2/persona, 60 totali);
+   aumenti oltre questi valori richiedono un collaudo separato di capacità.
+4. Log e bug report su R2 saranno affrontati durante il lavoro sulla console,
+   senza trasformarli in un prerequisito dei backup o del collegamento M2.
+5. Approvato indice di recovery cifrato con ricevuta separata e stop in caso
+   di copie necessarie mancanti o indice non verificabile.
+
+Usato un registro SQLite sintetico nuovo, un solo episodio di sospensione
+del nodo fittizio `collaudo-notifica-20261008`; nessun registro vivo letto.
+Il primo controllo preliminare si è fermato prima di aprire il registro o
+spedire payload: il confronto richiedeva uguaglianza anche dei campi
+aggiunti dal provider (`created_at`, campi opzionali null). Corretto il
+confronto sui soli parametri attesi, mantenendo numero esatto delle regole.
+Artefatti e marcatori esclusivi precedenti conservati, non cancellati.
+
+Il trasporto effettivo `creaIncidenti` → `creaInvio` ha spedito **un solo
+payload alert** e ottenuto HTTP 200. GET provider conferma incidente
+`1028713720`, ancora aperto, email/push abilitate, altri canali disabilitati.
+Nessun payload `resolved`, nuovo incidente o retry del payload.
+
+**Finding verificato nel collaudo, non nel codice AMR:** risospendere
+subito il webhook dopo HTTP 200 interrompe l'elaborazione asincrona delle
+notifiche. La timeline registra esplicitamente l'escalation interrotta
+perché l'integrazione era sospesa. Il test deve attendere evidenza della
+notifica o dichiarare esito incerto prima della pausa; HTTP 200 non basta.
+
+Riattivato lo stesso webhook e richiesta una sola escalation dello stesso
+incidente al proprietario via API, con email/push e nessun critical alert,
+SMS o chiamata. La timeline registra ripresa automatica dopo la riattivazione,
+escalation API, **una email e una push** inviate al dispositivo Android.
+Osservate sia la ripresa automatica sia l'escalation API; non è determinabile
+quale abbia prodotto gli invii. Non adottare questa combinazione come
+procedura ordinaria: in altre condizioni potrebbe duplicare l'avviso.
+La prova osservata non registra due invii per canale.
+Risospensione effettuata solo dopo questa evidenza e confermata con GET.
+Non cambiati monitor HTTP, runtime staging o nodi; nessuna richiesta ai portali.
+
+Ricevuta e prove redatte:
+`/private/tmp/amr-notifica-unica-20261008-gnHoeb/` (`ricevuta.json`,
+`provider.json`, `timeline-notifica.json`, `notifica-esistente.json`).
+La conferma di ricezione sul telefono resta richiesta all'utente: la
+timeline dimostra l'invio del provider, non il recapito visibile.
+La soppressione delle notifiche di ripristino resta non provata; incidente
+lasciato aperto, senza risoluzione o cancellazione. Non dichiarato chiuso il
+punto 4 o il gate remoto.
+
+Review indipendente: confermati il rischio della pausa anticipata e un
+controllo insufficiente dell'exit code nel solo script temporaneo; nessun
+nuovo difetto applicativo provato. Test incidenti sintetici **21/21 Node 24**,
+fetch disabilitato, nessuna credenziale o rete per il reviewer.
+Fonti: [elaborazione alert](https://betterstack.com/docs/uptime/processing-alerts-for-integrations/),
+[timeline](https://betterstack.com/docs/uptime/api/list-of-incident-timeline-events/),
+[escalation su incidente esistente](https://betterstack.com/docs/uptime/api/escalate-an-ongoing-incident/).
