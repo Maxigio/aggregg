@@ -130,6 +130,14 @@ async function avvia() {
   await post('/_nodo/registrazione', { epoca: epocaCentro, boot, precedente: contesto.boot,
     ...(release ? { compatibilita: release } : {}) });
   notifica({ tipo: 'worker_contesto', epoca: epocaCentro, boot });
+  let guastoHeartbeat = null;
+  // Anche durante un poll lento il centro deve poter osservare il nodo.
+  const controllo = setInterval(() => {
+    if (attivo) void heartbeat().catch(e => {
+      guastoHeartbeat = e; attivo = false; controllerAttivo?.abort();
+    });
+  }, 2000);
+  try {
   while (attivo) {
     try {
       await heartbeat();
@@ -152,8 +160,6 @@ async function avvia() {
       controllerAttivo = ctrl;
       const scadenzaSonda = lavoro.operazione === 'sonda'
         ? setTimeout(() => ctrl.abort(), Math.min(29000, Math.max(1, lavoro.budgetMs || 29000))) : null;
-      let guastoHeartbeat = null;
-      const controllo = setInterval(() => heartbeat().catch(e => { guastoHeartbeat = e; ctrl.abort(); }), 2000);
       let esito;
       const inizioLavoro = performance.now();
       try { esito = lavoro.versioneProtocollo !== 1
@@ -163,8 +169,7 @@ async function avvia() {
       catch (e) { esito = { status: 502, body: { error: e.message || 'errore nodo' } }; }
       const durataMs = Math.round(performance.now() - inizioLavoro);
       if (scadenzaSonda) clearTimeout(scadenzaSonda);
-      clearInterval(controllo);
-      // clearInterval non annulla un invio già partito: finirlo prima di cambiare job.
+      // Un invio già partito conserva l'identità del job: finirlo prima di cambiarla.
       await heartbeatInVolo?.catch(e => { guastoHeartbeat = e; ctrl.abort(); });
       if (guastoHeartbeat) throw guastoHeartbeat;
       try { if (!ctrl.signal.aborted) await post('/_nodo/esito', { id, idLavoro: lavoro.idLavoro,
@@ -177,6 +182,11 @@ async function avvia() {
       if (attivo || e.uscita) throw e;
     }
   }
+  } finally {
+    clearInterval(controllo);
+    await heartbeatInVolo?.catch(e => { guastoHeartbeat = e; });
+  }
+  if (guastoHeartbeat) throw guastoHeartbeat;
 }
 
 // Se il launcher del collaudo cade, non lasciare un worker orfano che continua a fare polling.

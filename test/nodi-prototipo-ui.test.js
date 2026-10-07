@@ -85,6 +85,36 @@ async function apriPrototipo(t, api, http) {
 
 const filtriProva = { regioni: ['lazio', 'lombardia'], filtriAuto: [{ nome: 'carburante',
   etichetta: 'Carburante', voci: [{ id: 'benzina', etichetta: 'Benzina' }, { id: 'diesel', etichetta: 'Diesel' }] }] };
+test('incidenti UI: pagine separate dai lavori e stato incerto riconciliabile senza HTML attivo', opzioniBrowser, async t => {
+  const pagine = [], riconciliazioni = []; let verificato = false;
+  const id = '00000000-0000-4000-8000-000000000001';
+  const { page, errors } = await apriPrototipo(t, async (route, url) => {
+    if (url.pathname === '/api/admin/incidenti/' + id) {
+      riconciliazioni.push(route.request().postDataJSON());
+      assert.equal(route.request().headers()['x-amr-local-admin'], '1'); verificato = true;
+      await route.fulfill({ json: { ok: true } }); return true;
+    }
+    if (url.pathname !== '/api/admin') return false;
+    const pagina = Number(url.searchParams.get('incidentiPagina')) || 1; pagine.push(pagina);
+    assert.equal(url.searchParams.get('pagina'), '1');
+    await route.fulfill({ json: { nodi: [], lavori: [], eventi: [], pagina: 1, pagine: 1,
+      incidenti: { configurato: true, pagina, pagine: 2, episodi: pagina === 1 ? [] : [{ id,
+        aperto: 100, chiuso: 101, codice: '<img src=x onerror=alert(1)>',
+        avviso: verificato ? 'riconciliato' : 'incerto', risoluzione: 'pendente' }] } } }); return true;
+  });
+  await page.click('.area-nav a[href="#diagnosticaPanel"]');
+  await page.click('#incidentiDopo');
+  await page.waitForFunction(() => document.getElementById('incidentiPagina').textContent === 'Pagina 2 di 2');
+  assert.equal(await page.locator('#incidenti img').count(), 0);
+  assert.match(await page.locator('#incidenti').innerText(), /Esito incerto/);
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Ho verificato: incidente presente', exact: true }).click();
+  await page.waitForFunction(() => document.getElementById('incidenti').textContent.includes('Presenza verificata'));
+  assert.deepEqual(riconciliazioni, [{ azione: 'presente' }]);
+  await page.click('#incidentiPrima');
+  await page.waitForFunction(() => document.getElementById('incidentiPagina').textContent === 'Pagina 1 di 2');
+  assert.ok(pagine.includes(2)); assert.deepEqual(errors, []);
+});
 async function apriCataloghiProva(t, api, http) {
   const pagina = await apriPrototipo(t, async (route, url) => {
     if (await api?.(route, url)) return true;

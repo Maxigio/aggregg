@@ -31,6 +31,7 @@ async function creaServizio(config, { Pool = require('pg').Pool,
     copie = backupApi.creaBackupPostgres({pool:backup});
     const trasporto = {origine:config.origine,proxyAttendibili:config.proxy};
     centro = creaCentro({tokens:config.tokens,directory:config.directory,compatibilita:manifest,
+      inviaIncidente: require('./betterstack').creaInvio({ url: config.webhookIncidenti }),
       proprietarioId:config.proprietarioId,
       trasporto,timeoutRicercaMs:config.timeoutRicercaMs,maxPersona:config.maxPersona,maxTotale:config.maxTotale,
       inizializzaAccessi:app=>{

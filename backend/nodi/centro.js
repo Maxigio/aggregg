@@ -42,7 +42,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   timeoutRicercaMs = TEMPO_RICERCA_MS, oraMono = () => performance.now(),
   maxPersona = 2, maxTotale = 60,
   adminLocale = false, accountProva = null, inizializzaAccessi = null, compatibilita = null, trasporto = null,
-  proprietarioId = null }) {
+  proprietarioId = null, inviaIncidente = null }) {
   // Validare prima di aprire il registro o inizializzare altri provider.
   const limitiRicerca = creaLimitiRicerca({ timeoutMs: timeoutRicercaMs, maxPersona, maxTotale, oraMono });
   if (proprietarioId !== null && (!idProprietarioValido(proprietarioId) || !inizializzaAccessi)) {
@@ -90,6 +90,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   db.exec('CREATE TABLE IF NOT EXISTS supervisione_worker (nodo TEXT PRIMARY KEY, boot TEXT, sequenza INTEGER NOT NULL, stato TEXT NOT NULL, motivo TEXT, restart INTEGER NOT NULL, prossimo INTEGER, aggiornato INTEGER NOT NULL)');
   db.exec('CREATE INDEX IF NOT EXISTS eventi_ts ON eventi(ts)');
   const retention = creaRetention({ db, ora });
+  const incidenti = require('./incidenti').creaIncidenti({ db, ora, invia: inviaIncidente });
   const diagnostica = { incompleta: false, fallimenti: 0, ultimoErrore: null, ultimaPulizia: null };
   Object.defineProperty(diagnostica, 'storia', { enumerable: true, get: retention.stato });
   function segnalaGuastoDiagnostica(fase) {
@@ -189,7 +190,11 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     accessi = inizializzaAccessi ? inizializzaAccessi(app) : null;
     proprietario = creaRicercaProprietario({ identificatore: proprietarioId, accessi });
   }
-  catch(e) { clearInterval(pulizia);db.close();throw e; }
+  catch(e) { incidenti.close();clearInterval(pulizia);db.close();throw e; }
+  const controlloIncidenti = setInterval(() => {
+    incidenti.verifica(); void incidenti.scarica();
+  }, 1000);
+  controlloIncidenti.unref();
   const nodoAutorizzato = (req, res, next) => stessoToken(req.get('x-amr-node-token'),
     req.get('x-amr-node-id'))
     ? next() : res.sendStatus(401);
@@ -313,7 +318,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       const budget = lavoro.ricerca?.budget;
       budget?.controlla();
       if (lavoro.ricerca) ammettiRicerca(lavoro.ricerca);
-      if (budget) limite = Math.min(limite, budget.restante());
+      const restante = budget?.restante();
+      const scadeRicerca = budget && restante <= limite;
+      if (budget) limite = Math.min(limite, restante);
       // Scelta e accodamento sono sincroni dopo la verifica dei permessi.
       const n = typeof selezione === 'function' ? selezione() : selezione;
       // Dopo l'attesa dei permessi, sospensione/scadenza del nodo possono essere cambiate.
@@ -334,8 +341,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
           }
           registra(record, record.iniziato ? 'incerto' : 'interrotto');
           reject(Object.assign(new Error(record.iniziato ? 'esito incerto: nodo senza risposta' : 'nodo non disponibile'),
-            { incerto: record.iniziato, interrotto: !record.iniziato }));
-        }, limite);
+            { incerto: record.iniziato, interrotto: !record.iniziato,
+              ...(scadeRicerca ? { status: 504, codice: 'ricerca_scaduta' } : {}) }));
+        }, Math.ceil(limite));
         record.timer = timer;
         lavori.set(record.idLavoro, record);
         n.coda.push(record);
@@ -636,11 +644,15 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     if (n?.supervisione?.boot === b.boot && b.sequenza <= n.supervisione.sequenza) return res.json({ ok: true, accepted: false });
     const s = { nodo: id, boot: b.boot, sequenza: b.sequenza, stato: b.stato, motivo: b.motivo,
       restart: b.restart, prossimo: b.prossimo, aggiornato: ora() };
-    if (!scriviDiagnostica('supervisione', () => db.prepare(`INSERT INTO supervisione_worker
+    if (!scriviDiagnostica('supervisione', () => incidenti.transazione(() => {
+      db.prepare(`INSERT INTO supervisione_worker
       (nodo,boot,sequenza,stato,motivo,restart,prossimo,aggiornato) VALUES(?,?,?,?,?,?,?,?)
       ON CONFLICT(nodo) DO UPDATE SET boot=excluded.boot,sequenza=excluded.sequenza,
       stato=excluded.stato,motivo=excluded.motivo,restart=excluded.restart,prossimo=excluded.prossimo,aggiornato=excluded.aggiornato`)
-      .run(...Object.values(s)))) return res.sendStatus(503);
+      .run(...Object.values(s));
+      incidenti.supervisione(s);
+    }))) return res.sendStatus(503);
+    incidenti.confermaSupervisione(s);
     let attuale = n;
     if (!attuale) {
       // La supervisione può precedere il CAS di registrazione: anche in quel
@@ -702,7 +714,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       if (precedente) precedente.compatibilita = null;
       return res.sendStatus(409);
     }
-    if (!/^[a-zA-Z0-9_-]{1,40}$/.test(id || '') || !fonti || typeof fonti !== 'object'
+    if (!/^[a-zA-Z0-9_-]{1,40}$/.test(id || '') || !require('./stato-fonti-nodo').valide(fonti)
         || (soloStato !== undefined && typeof soloStato !== 'boolean')
         || (req.body.sondeAutomatiche !== undefined && typeof req.body.sondeAutomatiche !== 'boolean')) return res.sendStatus(400);
     let n = nodi.get(id);
@@ -710,7 +722,6 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       const seq = req.body.sequenza;
       if (!Number.isSafeInteger(seq) || seq < 1) return res.sendStatus(400);
       if (seq <= n.sequenza) return res.json({ ok: true, accepted: false });
-      n.sequenza = seq;
     }
     if (!n) {
       const sospensioni = db.prepare('SELECT fonte FROM sospensioni WHERE nodo=?').all(id).map(r => r.fonte);
@@ -718,6 +729,10 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
         sospeso: sospensioni.includes('') };
       nodi.set(id, n);
     }
+    // Prima il registro: un heartbeat rifiutato non rinnova disponibilità o sequenza in RAM.
+    const prossimo = { ...n, id, fonti, soloStato: !!soloStato };
+    if (!scriviDiagnostica('incidenti', () => incidenti.heartbeat(prossimo))) return res.sendStatus(503);
+    if (n.boot) n.sequenza = req.body.sequenza;
     const avviato = [...lavori.values()].find(j => j.nodoAssegnato === id && j.iniziato);
     if (avviato && avviato.idLavoro !== idLavoroAttivo) {
       lavori.delete(avviato.idLavoro);
@@ -913,13 +928,23 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   app.get('/api/admin/diagnostica', (req, res) => res.json({ diagnostica,
     risorse: misuraRegistro({ db, directory, ora }) }));
   app.get('/api/admin/manutenzione', (req, res) => res.json({ manutenzione }));
+  app.post('/api/admin/incidenti/:id', express.json({ limit: '1kb' }), adminDiProva, (req, res) => {
+    if (!/^[a-f0-9-]{36}$/.test(req.params.id) || !req.body || Object.keys(req.body).length !== 1
+        || !['presente','risolto'].includes(req.body.azione)) return res.sendStatus(400);
+    try { incidenti.transazione(() => incidenti.riconcilia(req.params.id, req.body.azione)); }
+    catch (e) { return res.status(e.status === 409 ? 409 : 503).json({ codice: 'riconciliazione_non_confermata' }); }
+    evento('incidente_riconciliato'); res.json({ ok: true });
+  });
   app.post('/api/admin/manutenzione', express.json({ limit: '1kb' }), adminDiProva, (req, res) => {
     if (!req.body || Array.isArray(req.body) || Object.keys(req.body).length !== 1
         || typeof req.body.manutenzione !== 'boolean') return res.sendStatus(400);
     const prossima = req.body.manutenzione;
     try {
-      const aggiornamento = db.prepare('UPDATE controlli_centro SET manutenzione=? WHERE id=1').run(Number(prossima));
-      if (aggiornamento.changes !== 1) throw new Error('controllo assente');
+      incidenti.transazione(() => {
+        const aggiornamento = db.prepare('UPDATE controlli_centro SET manutenzione=? WHERE id=1').run(Number(prossima));
+        if (aggiornamento.changes !== 1) throw new Error('controllo assente');
+        incidenti.controllo({ codice: 'manutenzione', attivo: prossima });
+      });
     } catch {
       evento('manutenzione_non_confermata', { http: 503 });
       return res.status(503).json({ codice: 'manutenzione_non_confermata' });
@@ -940,7 +965,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     pulisci();
     const nodo = typeof req.query.nodo === 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(req.query.nodo)
       ? req.query.nodo : null;
-    return { diagnostica, nodi: [...nodi.values()].filter(n => !nodo || n.id === nodo).map(statoNodo),
+    return { diagnostica, incidenti: incidenti.stato(nodo, Number(req.query.incidentiPagina)), nodi: [...nodi.values()].filter(n => !nodo || n.id === nodo).map(statoNodo),
       ...paginaLavori(req, true),
       lavoriAttivi: nodo
         ? db.prepare("SELECT count(*) AS n FROM lavori WHERE stato IN ('attesa','in_corso') AND nodo=?").get(nodo).n
@@ -971,8 +996,11 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     // Una scrittura rifiutata non deve riabilitare il nodo in RAM né toccare
     // la coda. Nessun await fra conferma della persistenza e stato operativo.
     try {
-      if (sospeso) db.prepare('INSERT OR IGNORE INTO sospensioni(nodo,fonte) VALUES(?,?)').run(n.id, fonte || '');
-      else db.prepare('DELETE FROM sospensioni WHERE nodo=? AND fonte=?').run(n.id, fonte || '');
+      incidenti.transazione(() => {
+        if (sospeso) db.prepare('INSERT OR IGNORE INTO sospensioni(nodo,fonte) VALUES(?,?)').run(n.id, fonte || '');
+        else db.prepare('DELETE FROM sospensioni WHERE nodo=? AND fonte=?').run(n.id, fonte || '');
+        incidenti.controllo({ codice: 'sospensione', nodo: n.id, fonte: fonte || null, attivo: sospeso });
+      });
     } catch {
       evento('controllo_nodo_non_confermato', { nodo: n.id, fonte: fonte || null, http: 503 });
       return res.status(503).json({ codice: 'controllo_nodo_non_confermato' });
@@ -1183,6 +1211,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       job.reject(Object.assign(new Error('centro interrotto'), { incerto: job.iniziato }));
     }
     lavori.clear(); for (const n of nodi.values()) n.coda.length = 0;
+    clearInterval(controlloIncidenti); incidenti.close();
     clearInterval(controlloNodi); clearInterval(pulizia); db.close();
   } };
 }

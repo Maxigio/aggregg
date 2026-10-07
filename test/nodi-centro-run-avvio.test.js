@@ -27,6 +27,7 @@ function avvio() {
     'pg': { Pool },
     './compatibilita-nodo': { verificaArtefatto: m => m },
     './config-centro-run': { configura: env => { assert.equal(env, processo.env); return config; } },
+    './betterstack': { creaInvio: opzioni => { assert.equal(opzioni.url, undefined); return null; } },
     './centro': { creaCentro: opzioni => { opzioni.inizializzaAccessi({}); return { app: {}, close: close('centro') }; } },
     './nhost-auth-client': { creaClient: opzioni => { assert.equal(opzioni.origineAuth, 'https://auth.amr.invalid'); return {}; } },
     './accessi-postgres-prova': { creaAccessiPostgres: () => ({}) },

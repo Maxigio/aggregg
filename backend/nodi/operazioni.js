@@ -61,7 +61,7 @@ async function esegui(lavoro) {
 }
 
 function statoFonti() {
-  return Object.fromEntries(['subito', 'autoscout', 'moto'].map(f => [f, salute.fermo(f)]));
+  return require('./stato-fonti-nodo').statoFonti(salute);
 }
 
 module.exports = { esegui, statoFonti, abilitaSonde: salute.abilitaSonde };

@@ -125,6 +125,87 @@ test('supervisore: collisione del file temporaneo non cancella un file preesiste
   const p = f.w.close(); f.closeChild(0); await p;
 });
 
+test('supervisore: stop in coda a un invio precedente viene confermato prima della chiusura', async t => {
+  let completa; const inviati = [];
+  const f = fixture(t, { invia: async (_u, opts) => {
+    const b = JSON.parse(opts.body); inviati.push(b);
+    if (inviati.length === 1) await new Promise(r => { completa = r; });
+    return { ok: true };
+  } });
+  f.figli[0].emit('message', { tipo: 'worker_contesto', epoca: 'centro', boot: require('node:crypto').randomUUID() });
+  let finito = false; const close = f.w.close().then(() => { finito = true; });
+  f.closeChild(0); await new Promise(r => setImmediate(r)); assert.equal(finito, false);
+  completa(); await close;
+  assert.deepEqual(inviati.map(x => x.stato), ['avvio', 'fermato']);
+  const registro = JSON.parse(fs.readFileSync(path.join(f.dir, 'worker-supervisione.json')));
+  assert.equal(registro.comunicazione.stato, 'accettato');
+  assert.equal(registro.comunicazione.sequenza, inviati[1].sequenza);
+  assert.equal(f.timers.filter(x => !x.cleared).length, 0);
+});
+
+test('supervisore: stop non confermato sopravvive al successivo avvio senza replay obsoleto', async t => {
+  const f = fixture(t, { invia: async () => { throw new Error('centro assente'); } });
+  f.figli[0].emit('message', { tipo: 'worker_contesto', epoca: 'centro', boot: require('node:crypto').randomUUID() });
+  const p = f.w.close(); f.closeChild(0); await p;
+  const registro = path.join(f.dir, 'worker-supervisione.json');
+  assert.equal(JSON.parse(fs.readFileSync(registro)).comunicazione.stato, 'incerto');
+  const figlio = new EventEmitter(); figlio.kill = () => {};
+  const inviati = [];
+  const nuovo = supervisiona({ file: path.join(f.dir, 'worker.js'), cwd: f.dir,
+    env: { USER_DATA_PATH: f.dir }, spawn: () => figlio,
+    invia: async (_u, opts) => { inviati.push(opts); return { ok: true }; } });
+  const dopo = JSON.parse(fs.readFileSync(registro));
+  assert.equal(dopo.precedentiNonConfermati[0].stato, 'fermato'); assert.equal(inviati.length, 0);
+  const q = nuovo.close(); figlio.emit('exit', 0); await q;
+});
+
+test('supervisore: stop terminale autonomo scarica la coda senza close o timer di retry', async t => {
+  let completa; const inviati = [];
+  const f = fixture(t, { invia: async (_u, opts) => {
+    inviati.push(JSON.parse(opts.body));
+    if (inviati.length === 1) await new Promise(r => { completa = r; });
+    return { ok: true };
+  } });
+  f.figli[0].emit('message', { tipo: 'worker_contesto', epoca: 'centro', boot: require('node:crypto').randomUUID() });
+  f.closeChild(0); completa(); await new Promise(r => setImmediate(r));
+  assert.deepEqual(inviati.map(x => x.stato), ['avvio', 'fermato']);
+  await f.w.close(); assert.equal(inviati.length, 2);
+});
+
+test('supervisore: più stop non confermati sopravvivono senza sostituire quello precedente', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-stop-incerti-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'worker-supervisione.json'), boots = [];
+  for (let n = 0; n < 3; n++) {
+    const figlio = new EventEmitter(); figlio.kill = () => {};
+    const w = supervisiona({ file: path.join(dir, 'worker.js'), cwd: dir,
+      env: { USER_DATA_PATH: dir, AMR_CENTRO_URL: 'http://127.0.0.1:1234', AMR_NODO_ID: 'prova', AMR_NODI_TOKEN: 'sintetico' },
+      spawn: () => figlio, invia: async () => { throw new Error('risposta persa'); } });
+    const boot = require('node:crypto').randomUUID(); boots.push(boot);
+    figlio.emit('message', { tipo: 'worker_contesto', epoca: 'centro', boot });
+    const p = w.close(); figlio.emit('exit', 0); await p;
+    const registro = JSON.parse(fs.readFileSync(file));
+    assert.equal(registro.precedentiNonConfermati.length, n);
+    assert.deepEqual(registro.precedentiNonConfermati.map(r => r.comunicazione.boot), boots.slice(0, n));
+    assert.equal(registro.comunicazione.boot, boot);
+  }
+});
+
+test('supervisore: ACK di un boot precedente non conferma il nuovo stato con la stessa sequenza', async t => {
+  let completa;
+  const f = fixture(t, { invia: () => new Promise(r => { completa = r; }) });
+  const p = f.figli[0], crypto = require('node:crypto');
+  p.emit('message', { tipo: 'worker_contesto', epoca: 'centro-a', boot: crypto.randomUUID() });
+  p.emit('message', { tipo: 'worker_contesto', epoca: 'centro-b', boot: crypto.randomUUID() });
+  completa({ ok: true }); await new Promise(r => setImmediate(r));
+  const registro = JSON.parse(fs.readFileSync(path.join(f.dir, 'worker-supervisione.json')));
+  assert.equal(registro.comunicazione.stato, 'pendente');
+  assert.equal(registro.comunicazione.epoca, 'centro-b');
+  // Nessun contesto nuovo viene inviato finché non termina quello vecchio.
+  const close = f.w.close(); f.closeChild(0);
+  await new Promise(r => setImmediate(r)); completa({ ok: true }); await close;
+});
+
 test('supervisore: guasto del registro dopo exit conclude con intervento, senza falso successo', async t => {
   const f = fixture(t), terminali = [];
   f.w.eventi.on('fine', x => terminali.push(x));

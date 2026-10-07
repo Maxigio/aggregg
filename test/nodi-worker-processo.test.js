@@ -43,20 +43,22 @@ test('worker: stop durante il poll non avvia il lavoro ricevuto dopo', async () 
   const vm = require('node:vm');
   const sorgente = fs.readFileSync(path.join(__dirname,'../backend/nodi/worker.js'),'utf8');
   for (const evento of ['disconnect','SIGTERM']) {
-    let completaPoll, eseguiti = 0, letture = 0;
+    let completaPoll, eseguiti = 0, letture = 0, controllo, heartbeat = 0;
     const processo = new EventEmitter();
     processo.env = { AMR_CENTRO_URL:'http://127.0.0.1:1234',AMR_NODO_ID:'locale',AMR_NODI_TOKEN:'sintetico' };
     const modulo = {exports:{}};
     const context = vm.createContext({module:modulo,process:processo,AbortSignal,AbortController,performance,URL,
-      setTimeout,clearTimeout,setInterval,clearInterval,
+      setTimeout,clearTimeout,setInterval: fn => { controllo = fn; return 1; },clearInterval: () => {},
       require: name => name === 'node:crypto' ? require(name) : name === './operazioni' ? {statoFonti:()=>({}),esegui:async()=>{eseguiti++;return {status:200,body:{}};}}
         : {dentro:async(signal,fn)=>fn()},
-      fetch:async url=>url.endsWith('/registrazione')?{ok:true,json:async()=>({epoca:'centro',boot:null})}:url.includes('/poll')?new Promise(r=>{completaPoll=r;}):{ok:true}
+      fetch:async url=>url.endsWith('/registrazione')?{ok:true,json:async()=>({epoca:'centro',boot:null})}:url.includes('/poll')?new Promise(r=>{completaPoll=r;}):(heartbeat++, {ok:true})
     });
     vm.runInContext(sorgente,context);
     const p = modulo.exports.avvia();
     for(let i=0;i<10&&!completaPoll;i++)await new Promise(r=>setImmediate(r));
-    assert.ok(completaPoll); processo.emit(evento);
+    assert.ok(completaPoll); assert.equal(heartbeat, 1);
+    controllo(); await new Promise(r => setImmediate(r)); assert.equal(heartbeat, 2);
+    processo.emit(evento); controllo(); assert.equal(heartbeat, 2);
     completaPoll({status:200,ok:true,body:{cancel:async()=>{}},json:async()=>{letture++;return{operazione:'fonte',input:{}};}});
     await p;assert.equal(eseguiti,0);assert.equal(letture,0);
   }

@@ -12,6 +12,7 @@ let filtriModificati = false, paginaIncompleta = null;
 let primaPaginaMancante = {}, pagineFonti = {};
 let avvisiCopertura = new Set(), avvisiNodiCorrenti = [];
 let paginaLavori = 1, paginaVisualizzata = 1, pagineDisponibili = 1;
+let paginaIncidenti = 1, paginaIncidentiVisualizzata = 1, pagineIncidenti = 1;
 let nodiElencati = '', diagnosticaAbilitata = false;
 let aggiornamentoStato = 0;
 let accountAbilitato = false, accessoSintetico = false;
@@ -432,6 +433,50 @@ function renderStato(data) {
   for (const e of data.eventi || []) eventi.append(elemento('li',
     `${orario(e.ts)} · ${nomiEventi[e.codice] || e.codice}${e.fonte ? ' · ' + (nomiFonti[e.fonte] || e.fonte) : ''}${e.nodo ? ' · ' + e.nodo : ''}${e.http ? ' · HTTP ' + e.http : ''}${e.lavoro ? ' · lavoro ' + e.lavoro.slice(0, 8) : ''}`));
   if (!eventi.childElementCount) eventi.append(elemento('li', 'Nessun evento operativo recente.'));
+  const i = data.incidenti;
+  paginaIncidenti = paginaIncidentiVisualizzata = i?.pagina || 1; pagineIncidenti = i?.pagine || 1;
+  $('incidentiPagina').textContent = `Pagina ${paginaIncidenti} di ${pagineIncidenti}`;
+  $('incidentiPrima').disabled = paginaIncidenti <= 1;
+  $('incidentiDopo').disabled = paginaIncidenti >= pagineIncidenti;
+  const statiInvio = { pendente: 'In attesa di invio', invio: 'Invio in corso',
+    accettato: 'Accettato da Better Stack; consegna non verificata',
+    incerto: 'Esito incerto; nessun reinvio automatico', fallito: 'Invio rifiutato',
+    riconciliato: 'Presenza verificata dall’Admin', riconciliata: 'Chiusura verificata dall’Admin',
+    annullato: 'Rientrato prima dell’invio', non_necessaria: 'Non necessaria' };
+  $('notificheStato').textContent = !i ? 'Registro non disponibile.' : i.guasto === 'capacita_incidenti_esaurita'
+    ? 'Capacità del registro raggiunta. Gli episodi aperti o incerti non sono stati cancellati: verifica necessaria.' : i.guasto
+    ? 'Registro incidenti non disponibile: verifica necessaria.'
+    : !i.configurato ? 'Better Stack non collegato. Gli episodi sono registrati localmente.'
+    : 'Email e push Better Stack. Lo stato accettato non conferma la consegna sul dispositivo.';
+  const incidenti = $('incidenti'), focusIncidente = incidenti.contains(document.activeElement) ? document.activeElement : null;
+  incidenti.replaceChildren();
+  for (const r of i?.episodi || []) {
+    const li = elemento('li',
+      `${orario(r.aperto)} · ${r.codice}${r.nodo ? ' · ' + r.nodo : ''}${r.fonte ? ' · ' + (nomiFonti[r.fonte] || r.fonte) : ''} · ${r.chiuso === null ? 'Aperto' : 'Chiuso'} · ${statiInvio[r.avviso] || r.avviso}${r.chiuso !== null && r.risoluzione !== 'non_necessaria' ? ' · chiusura provider: ' + (statiInvio[r.risoluzione] || r.risoluzione) : ''}`);
+    const azioni = [];
+    if (['incerto','fallito'].includes(r.avviso)) azioni.push(['presente', 'Ho verificato: incidente presente']);
+    if (r.chiuso !== null && ['incerto','fallito','accettato','riconciliato'].includes(r.avviso)
+        && !['invio','accettato','riconciliata'].includes(r.risoluzione)) azioni.push(['risolto', 'Ho verificato: incidente risolto']);
+    if (azioni.length) li.append(elemento('p', 'Alert ID da verificare in Better Stack: ' + r.id));
+    for (const [azione, testo] of azioni) {
+      const b = elemento('button', testo, 'btn quiet'); b.type = 'button'; b.dataset.incidente = r.id; b.dataset.azione = azione;
+      b.addEventListener('click', async () => {
+        if (!window.confirm(`Confermi di aver verificato in Better Stack l’Alert ID ${r.id} come ${azione === 'presente' ? 'presente' : 'già risolto'}? L’avviso non verrà reinviato.`)) return;
+        b.disabled = true;
+        try { await leggi('/api/admin/incidenti/' + encodeURIComponent(r.id), { method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-amr-local-admin': '1' }, body: JSON.stringify({ azione }) });
+          await aggiornaStato();
+        } catch (e) { $('aggiornato').textContent = e.message; b.disabled = false; }
+      }); li.append(b);
+    }
+    incidenti.append(li);
+  }
+  if (!incidenti.childElementCount) incidenti.append(elemento('li', 'Nessun episodio registrato.'));
+  if (focusIncidente && document.activeElement === document.body) {
+    const b = Array.from(incidenti.querySelectorAll('button')).find(x => x.dataset.incidente === focusIncidente.dataset.incidente
+      && x.dataset.azione === focusIncidente.dataset.azione);
+    (b || $('aggiorna')).focus({ preventScroll: true });
+  }
 }
 async function aggiornaStato(manuale = false) {
   if (!diagnosticaAbilitata) return;
@@ -450,7 +495,7 @@ async function aggiornaStato(manuale = false) {
       $('nodoOsservato').options[0].textContent = 'Tutti i nodi';
       $('nodoOsservato').value = elenco.nodi.some(n => n.id === scelta) ? scelta : '';
     }
-    const url = () => '/api/admin?pagina=' + paginaLavori
+    const url = () => '/api/admin?pagina=' + paginaLavori + '&incidentiPagina=' + paginaIncidenti
       + ($('nodoOsservato').value ? '&nodo=' + encodeURIComponent($('nodoOsservato').value) : '');
     let dettaglio = await leggi(url());
     if (numero !== sequenzaStato) return;
@@ -461,6 +506,7 @@ async function aggiornaStato(manuale = false) {
     if (numero === sequenzaStato) renderStato(dettaglio);
   } catch (e) { if (numero === sequenzaStato) {
     paginaLavori = paginaVisualizzata;
+    paginaIncidenti = paginaIncidentiVisualizzata;
     $('aggiornato').textContent = 'Stato non disponibile: ' + e.message;
   } }
   finally {
@@ -705,7 +751,7 @@ async function applicaIdentita(data, contesto = ++sequenzaContesto) {
   abbandonaRicercaHttp();
   identita = data.azienda; moduli = data.moduli; sequenzaRicerca++; ricercaOccupata = false;
   aggiornaAree();
-  paginaLavori = 1;
+  paginaLavori = paginaIncidenti = 1;
   parametriRicerca = null; pagina = 0; fontiCorrenti = null; risultatiCorrenti = [];
   avvisiCopertura.clear(); avvisiNodiCorrenti = [];
   paginaIncompleta = null; filtriModificati = false;
@@ -738,12 +784,14 @@ function terminaContesto() {
   sequenzaRicerca++; sequenzaStato++; sequenzaMarche++; sequenzaModelli++; sequenzaVersioni++;
   aggiornamentoStato = 0;
   $('aggiorna').disabled = false; $('lavoriPrima').disabled = true; $('lavoriDopo').disabled = true;
+  paginaIncidenti = paginaIncidentiVisualizzata = pagineIncidenti = 1;
+  $('incidentiPrima').disabled = true; $('incidentiDopo').disabled = true;
   identita = null; moduli = []; parametriRicerca = null; paginaIncompleta = null;
   primaPaginaMancante = {}; pagineFonti = {}; aggiornaRetryPrimaPagina();
   risultatiCorrenti = []; fontiCorrenti = null; ricercaOccupata = false;
   avvisiCopertura.clear(); avvisiNodiCorrenti = [];
   form.hidden = true; $('altri').hidden = true;
-  for (const id of ['fonti', 'risultati', 'avvisi', 'metriche', 'nodi', 'lavori', 'eventi']) $(id).replaceChildren();
+  for (const id of ['fonti', 'risultati', 'avvisi', 'metriche', 'nodi', 'lavori', 'eventi', 'incidenti', 'notificheStato']) $(id).replaceChildren();
   statoRicerca('In attesa');
   $('identita').textContent = 'Accedi con il tuo account locale.';
   $('risultatoAiuto').textContent = 'Le ricerche richiedono un account e un’azienda attiva.';
@@ -847,7 +895,9 @@ riprovaFonti.addEventListener('click', () => {
   inviaRicerca(q, true, 0, true);
 });
 $('aggiorna').addEventListener('click', () => aggiornaStato(true));
-$('nodoOsservato').addEventListener('change', () => { paginaLavori = 1; aggiornaStato(true); });
+$('nodoOsservato').addEventListener('change', () => { paginaLavori = paginaIncidenti = 1; aggiornaStato(true); });
+$('incidentiPrima').addEventListener('click', () => { if (paginaIncidenti > 1) { paginaIncidenti--; aggiornaStato(true); } });
+$('incidentiDopo').addEventListener('click', () => { if (paginaIncidenti < pagineIncidenti) { paginaIncidenti++; aggiornaStato(true); } });
 $('lavoriPrima').addEventListener('click', () => { if (paginaLavori > 1) { paginaLavori--; aggiornaStato(true); } });
 $('lavoriDopo').addEventListener('click', () => { paginaLavori++; aggiornaStato(true); });
 $('cancellaLavori').addEventListener('click', async () => {

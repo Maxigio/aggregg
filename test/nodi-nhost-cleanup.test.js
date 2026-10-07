@@ -17,15 +17,16 @@ test('collaudo Nhost: SQL lento non confonde heartbeat scaduto e azienda scaduta
     const os = require('node:os'), crypto = require('node:crypto');
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-freschezza-test-'));
     const token = 'a'.repeat(64), s = { persona: crypto.randomUUID(), azienda: 'A', moduli: ['moto'] };
-    let tempo = Date.now(), scaduta = false, attesa, watchdog, completamentoHb;
+    let tempo = Date.now(), scaduta = false, attesa, completamentoHb;
+    const watchdogs = [];
     const timersHb = new Map(); let idTimer = 0;
     const file = path.resolve(__dirname, '../backend/nodi/centro.js'), copia = { exports: {} };
-    // Solo il watchdog lessicale è pilotato: HTTP e timer dei moduli dipendenti restano reali.
+    // Si pilotano i controlli periodici del centro; HTTP e timer dipendenti restano reali.
     vm.compileFunction(fs.readFileSync(file, 'utf8'),
       ['exports', 'require', 'module', '__filename', '__dirname', 'setInterval'], { filename: file })(
       copia.exports, require('node:module').createRequire(file), copia, file, path.dirname(file), (fn, ms) => {
         if (ms !== 1000) return setInterval(fn, ms);
-        assert.equal(watchdog, undefined); watchdog = fn;
+        watchdogs.push(fn);
         return setInterval(() => {}, 3600000).unref();
       });
     const centro = copia.exports.creaCentro({ directory, tokens: { locale: token },
@@ -58,7 +59,7 @@ test('collaudo Nhost: SQL lento non confonde heartbeat scaduto e azienda scaduta
             await new Promise(resolve => setImmediate(resolve));
             await completamentoHb;
             await new Promise(resolve => setImmediate(resolve));
-            watchdog();
+            for (const controllo of watchdogs) controllo();
           }
         },
         interrotto: async risposta => { assert.equal(risposta.status, 403);

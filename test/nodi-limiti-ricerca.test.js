@@ -23,11 +23,11 @@ const risposta = (sources = {}) => ({ risultati: [{ id: 'sintetico', fonte: 'aut
   sources: { subito: { status: 'empty', count: 0 }, autoscout: { status: 'ok', count: 1 },
     moto: { status: 'empty', count: 0 }, ...sources } });
 
-async function setup(t, opzioni = {}, verifica = async s => contesto(s)) {
+async function setup(t, opzioni = {}, verifica = async s => contesto(s), crea = creaCentro) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-limiti-ricerca-'));
   const sessions = new Map();
   const tokens = { a: 'a'.repeat(64), b: 'b'.repeat(64) };
-  const centro = creaCentro({ tokens, directory, timeoutMs: 3000, ...opzioni,
+  const centro = crea({ tokens, directory, timeoutMs: 3000, ...opzioni,
     inizializzaAccessi: () => ({ sessione: req => sessions.get(req.headers.cookie),
       verifica: (...args) => verifica(...args), close() {} }) });
   const server = await new Promise(resolve => {
@@ -403,6 +403,33 @@ test('diagnosi ingress: deadline reale sul lavoro avviato consegna esito incerto
   assert.equal((await f.esito('a', job)).status, 409);
   assert.equal(proxy.ingressi[0].tentativi.length, 1);
   assert.equal(f.centro.db.prepare('SELECT stato FROM lavori WHERE id=?').get(job.idLavoro).stato, 'incerto');
+});
+
+test('deadline: il timer del lavoro conserva la causa anche se precede quello della ricerca', async t => {
+  const vm = require('node:vm'), file = path.resolve(__dirname, '../backend/nodi/centro.js');
+  for (const localePiuBreve of [false, true]) {
+    const timers = [], copia = { exports: {} };
+    vm.compileFunction(fs.readFileSync(file, 'utf8'),
+      ['exports', 'require', 'module', '__filename', '__dirname', 'setTimeout'], { filename: file })(
+      copia.exports, require('node:module').createRequire(file), copia, file, path.dirname(file), (fn, ms) => {
+        const id = setTimeout(() => {}, 3600000).unref();
+        timers.push({ fn: () => { clearTimeout(id); fn(); }, ms }); return id;
+      });
+    let mono = 0;
+    const f = await setup(t, { timeoutRicercaMs: 60000,
+      timeoutMs: localePiuBreve ? 1000 : 90000, oraMono: () => mono }, undefined, copia.exports.creaCentro);
+    await f.heartbeat('a');
+    const richiesta = f.cerca(f.sessione('persona-a')), job = await f.poll();
+    assert.equal(timers.length, 1);
+    assert.equal(timers[0].ms, localePiuBreve ? 1000 : 60000);
+    // Solo il callback del lavoro viene eseguito: la deadline globale non ha ancora eseguito il proprio.
+    mono = timers[0].ms; timers[0].fn();
+    const r = await richiesta.promise, body = await r.json();
+    assert.equal(r.status, 504); assert.equal(body.incerto, true);
+    assert.equal(body.codice, localePiuBreve ? undefined : 'ricerca_scaduta');
+    assert.equal(body.risultati, undefined);
+    assert.equal((await f.esito('a', job)).status, 409);
+  }
 });
 
 for (const composta of [false, true]) for (const primaPersona of ['a', 'b'])

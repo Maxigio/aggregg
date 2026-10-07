@@ -59,6 +59,37 @@ test('centro supervisione: avviso di intervento sopravvive al riavvio e non incl
   assert.ok(admin.eventi.some(x => x.codice === 'worker_intervento'));
 });
 
+test('centro incidenti: sospensione/manutenzione e avviso sono atomici, comandi ripetuti non duplicano', async t => {
+  const f = await fixture(t), c = await f.registra(); await f.hb(c);
+  const pausa = () => f.richiesta('/api/admin/nodi/prova', { sospeso: true, fonte: 'subito' }, { 'x-amr-local-admin': '1' });
+  f.centro.db.exec("CREATE TRIGGER guasto_incidente BEFORE INSERT ON incidenti BEGIN SELECT RAISE(ABORT,'guasto sintetico'); END");
+  assert.equal((await pausa()).status, 503);
+  assert.equal(f.centro.nodi.get('prova').sospese.has('subito'), false);
+  assert.equal(f.centro.db.prepare('SELECT count(*) AS n FROM sospensioni').get().n, 0);
+  const manutenzione = () => f.richiesta('/api/admin/manutenzione', { manutenzione: true }, { 'x-amr-local-admin': '1' });
+  assert.equal((await manutenzione()).status, 503);
+  assert.equal(f.centro.db.prepare('SELECT manutenzione FROM controlli_centro').get().manutenzione, 0);
+  f.centro.db.exec('DROP TRIGGER guasto_incidente');
+  assert.equal((await pausa()).status, 200); assert.equal((await pausa()).status, 200);
+  assert.equal((await manutenzione()).status, 200); assert.equal((await manutenzione()).status, 200);
+  assert.equal((await f.admin()).incidenti.totale, 2);
+  await f.restart(); assert.equal((await f.admin()).incidenti.totale, 2);
+});
+
+test('centro incidenti: heartbeat duplicato/obsoleto non riconcilia una fonte o prolunga disponibilità', async t => {
+  const f = await fixture(t), c = await f.registra();
+  const headers = { 'x-amr-node-boot': c.boot, 'x-amr-center-epoch': c.epoca };
+  const hb = (seq, fonti, h = headers) => f.richiesta('/_nodo/heartbeat', { id: 'prova', sequenza: seq, fonti }, h);
+  assert.equal((await hb(1, { subito: { fermo: true, esito: 'bloccato', aggiornataIl: 10 } })).status, 200);
+  assert.equal((await hb(2, { subito: { fermo: false, esito: 'dato personale' } })).status, 400);
+  const buono = { subito: { fermo: false, esito: 'ok', aggiornataIl: 11 } };
+  assert.equal((await (await hb(1, buono)).json()).accepted, false);
+  assert.equal((await hb(2, buono, { ...headers, 'x-amr-center-epoch': 'obsoleta' })).status, 409);
+  assert.equal((await f.admin()).incidenti.episodi[0].chiuso, null);
+  assert.equal((await hb(2, buono)).status, 200);
+  assert.notEqual((await f.admin()).incidenti.episodi[0].chiuso, null);
+});
+
 test('centro supervisione: stato prima della registrazione conserva stop e pause persistite', async t => {
   const f = await fixture(t);
   f.centro.db.prepare('INSERT INTO sospensioni(nodo,fonte) VALUES(?,?)').run('prova','');

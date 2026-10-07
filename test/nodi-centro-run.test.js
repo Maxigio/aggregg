@@ -93,6 +93,20 @@ test('centro HTTPS: il vecchio GET non crea lavori; avvio POST e DELETE richiedo
   r=await f.call('/api/ricerche',input,admin);assert.equal(r.status,403);
   assert.equal(f.servizio.lavori.size,0);
 });
+test('centro HTTPS: riconciliazione incidenti richiede Admin, Origin e header esplicito',async t=>{
+  const f=await centro(t);
+  assert.equal((await f.call('/api/admin/manutenzione',{manutenzione:true},admin)).status,200);
+  const stato=await(await f.call('/api/admin',undefined,admin)).json(),id=stato.incidenti.episodi[0].id;
+  f.servizio.db.prepare("UPDATE incidenti SET avviso='incerto' WHERE id=?").run(id);
+  for(const headers of [{...admin,cookie:''},{...admin,origin:'https://evil.invalid'},
+    {...admin,'x-amr-local-admin':'0'},nodo]) {
+    assert.equal((await f.call('/api/admin/incidenti/'+id,{azione:'presente'},headers)).status,403);
+    assert.equal(f.servizio.db.prepare('SELECT avviso FROM incidenti WHERE id=?').get(id).avviso,'incerto');
+  }
+  assert.equal((await f.call('/api/admin/incidenti/'+id,{azione:'presente'},admin)).status,200);
+  assert.equal((await f.call('/api/admin/incidenti/'+id,{azione:'presente'},admin)).status,409);
+  assert.equal((await(await f.call('/api/admin',undefined,admin)).json()).incidenti.guasto,null);
+});
 test('credenziale nodo: revoca persistente e nuova chiave distinta',async t=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'amr-revoca-token-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
   const f=await centro(t,{directory:dir});

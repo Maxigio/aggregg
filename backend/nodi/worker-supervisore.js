@@ -21,6 +21,18 @@ function supervisiona({ file, cwd, env, stdio = ['ignore', 'ignore', 'ignore', '
   let childChiuso = true;
   let fineEmessa = false;
   let richiestaInVolo = false, daInviare = false;
+  let invioAttuale = null, invioFinale = null, ricevuta = null, generazione = 0, precedentiNonConfermati = [];
+  if (fs.existsSync(registro)) {
+    if (fs.lstatSync(registro).isSymbolicLink() || fs.statSync(registro).size > 3 * 1024 * 1024) throw new Error('registro_supervisione_non_valido');
+    const precedente = JSON.parse(fs.readFileSync(registro, { encoding: 'utf8', flag: fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW }));
+    precedentiNonConfermati = precedente.precedentiNonConfermati ||
+      (precedente.precedenteNonConfermato ? [precedente.precedenteNonConfermato] : []);
+    if (!Array.isArray(precedentiNonConfermati) || precedentiNonConfermati.length >= 10000) throw new Error('registro_supervisione_non_valido');
+    if (['fermato', 'intervento'].includes(precedente.stato) && precedente.comunicazione?.stato !== 'accettato') {
+      precedentiNonConfermati.push({ stato: precedente.stato, motivo: precedente.motivo,
+        aggiornato: precedente.aggiornato, comunicazione: precedente.comunicazione || { stato: 'non_confermato' } });
+    }
+  }
   let stato = { stato: 'avvio', motivo: null, restart: 0, prossimo: null, aggiornato: ora() };
 
   function salva() {
@@ -28,36 +40,64 @@ function supervisiona({ file, cwd, env, stdio = ['ignore', 'ignore', 'ignore', '
     const tmp = registro + '.tmp-' + require('node:crypto').randomUUID();
     let creato = false;
     try {
-      fs.writeFileSync(tmp, JSON.stringify(stato), { mode: 0o600, flag: 'wx' });
+      fs.writeFileSync(tmp, JSON.stringify({ ...stato, comunicazione: ricevuta,
+        precedentiNonConfermati }), { mode: 0o600, flag: 'wx' });
       creato = true;
       fs.renameSync(tmp, registro);
     } finally {
       if (creato) { try { fs.unlinkSync(tmp); } catch (e) { if (e.code !== 'ENOENT') throw e; } }
     }
   }
-  async function comunica() {
-    if (richiestaInVolo || !contesto || !daInviare) return;
+  function comunica() {
+    if (richiestaInVolo) return invioAttuale;
+    if (!contesto || !daInviare) return Promise.resolve();
     richiestaInVolo = true; daInviare = false;
-    const versione = sequenza, c = { ...contesto };
+    const versione = sequenza, c = { ...contesto }, invioGenerazione = generazione;
+    invioAttuale = (async () => {
+    let timeout;
     try {
-      const r = await invia(env.AMR_CENTRO_URL + '/_nodo/supervisione', {
+      const r = await Promise.race([invia(env.AMR_CENTRO_URL + '/_nodo/supervisione', {
         method: 'POST', redirect: 'error', signal: AbortSignal.timeout(4000),
         headers: { 'content-type': 'application/json', 'x-amr-node-id': env.AMR_NODO_ID,
           'x-amr-node-token': env.AMR_NODI_TOKEN },
-        body: JSON.stringify({ ...stato, epoca: c.epoca, boot: c.boot, sequenza: versione }) });
+        body: JSON.stringify({ ...stato, epoca: c.epoca, boot: c.boot, sequenza: versione }) }),
+        new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('invio_scaduto')), 4500); })]);
+      const confermata = r.ok && (!r.json || (await r.json()).accepted !== false);
       await r.body?.cancel();
+      if (invioGenerazione === generazione) {
+        ricevuta = { stato: confermata ? 'accettato' : r.ok || r.status >= 500 ? 'incerto' : 'rifiutato',
+          epoca: c.epoca, boot: c.boot, sequenza: versione };
+        salva();
+      }
       if (!r.ok && ![401, 403, 409].includes(r.status)) daInviare = true;
-    } catch { daInviare = true; }
+    } catch {
+      daInviare = true;
+      if (invioGenerazione === generazione) {
+        ricevuta = { stato: 'incerto', epoca: c.epoca, boot: c.boot, sequenza: versione };
+        try { salva(); } catch {}
+      }
+    }
     finally {
+      clearTimeout(timeout);
       richiestaInVolo = false;
       if (daInviare && !chiuso) {
         invioTimer = timer(() => { invioTimer = null; void comunica(); }, 5000);
         invioTimer.unref?.();
       }
     }
+    })();
+    return invioAttuale;
+  }
+  function comunicaFinale() {
+    return invioFinale ||= (async () => {
+      await comunica();
+      // Uno stato precedente in volo non deve impedire il tentativo finale dello stop.
+      if (daInviare && contesto) { cancella(invioTimer); invioTimer = null; await comunica(); }
+    })();
   }
   function aggiorna(nome, motivo = null, prossimo = null) {
-    stato = { stato: nome, motivo, restart, prossimo, aggiornato: ora() }; sequenza++;
+    stato = { stato: nome, motivo, restart, prossimo, aggiornato: ora() }; sequenza++; generazione++;
+    ricevuta = { stato: 'pendente', epoca: contesto?.epoca ?? null, boot: contesto?.boot ?? null, sequenza };
     try { salva(); }
     catch {
       // Senza ricevuta locale non perdere silenziosamente l'avviso di stop.
@@ -112,7 +152,7 @@ function supervisiona({ file, cwd, env, stdio = ['ignore', 'ignore', 'ignore', '
     if (chiuso) {
       finito = true;
       if (stato.stato !== 'intervento') aggiorna('fermato', 'stop_manuale');
-      emettiFine(code, signal); fineChiusura?.(); return;
+      emettiFine(code, signal); void comunicaFinale().finally(() => fineChiusura?.()); return;
     }
     if (finito) { emettiFine(code, signal); return; }
     const manuale = code === 0 || ['SIGTERM', 'SIGINT'].includes(signal);
@@ -131,14 +171,15 @@ function supervisiona({ file, cwd, env, stdio = ['ignore', 'ignore', 'ignore', '
   }
   function emettiFine(code, signal) {
     if (fineEmessa) return;
+    void comunicaFinale();
     fineEmessa = true; eventi.emit('fine', { code, signal, ...stato });
   }
   const close = () => chiusura ||= new Promise(resolve => {
     chiuso = true; fineChiusura = resolve;
     cancella(restartTimer); cancella(invioTimer);
     if (!child || childChiuso) {
-      if (finito) { resolve(); return; }
-      finito = true; aggiorna('fermato', 'stop_manuale'); resolve(); return;
+      if (!finito) { finito = true; aggiorna('fermato', 'stop_manuale'); }
+      void comunicaFinale().finally(resolve); return;
     }
     killTimer ||= timer(() => child.kill('SIGKILL'), 5000);
     child.kill('SIGTERM');
