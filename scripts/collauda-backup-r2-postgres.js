@@ -7,7 +7,8 @@ const { creaRestic } = require('../backend/nodi/backup-restic');
 const { creaBackupPostgres, creaDumpPostgres, creaStatoBackup } = require('../backend/nodi/backup-postgres-prova');
 const { creaAziendePostgres } = require('../backend/nodi/aziende-postgres-prova');
 const { creaColleghiPostgres } = require('../backend/nodi/colleghi-postgres-prova');
-const { applicaJournalOrdinati, preparaJournalDaRepository } = require('../backend/nodi/ripristino-journal');
+const { applicaJournalOrdinati } = require('../backend/nodi/ripristino-journal');
+const { pubblicaIndiceRecovery, preparaRecoveryIndice } = require('../backend/nodi/recovery-indice');
 const { preparaSchema } = require('./nhost/prepara-schema-staging');
 const PG = 'postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650';
 const ENDPOINT = 'https://88508b25fc92046c93f7a33eaac1bc2c.eu.r2.cloudflarestorage.com';
@@ -105,6 +106,13 @@ async function collauda(config) {
       const out = await raw.copia(bytes, category, options);
       receipt.copie.push({ categoria: category, snapshot: out.snapshot, bytes: length, sha256: hash,
         durata_ms: Math.round(performance.now() - start) });
+      return out;
+    }, async copiaIndice(bytes) {
+      if (receipt.payload_bytes + bytes.length >= MAX) throw new Error('collaudo_payload_eccessivo');
+      receipt.payload_bytes += bytes.length;
+      const hash = sha(bytes), length = bytes.length;
+      const out = await raw.copiaIndice(bytes);
+      receipt.copie.push({ categoria: 'recovery', snapshot: out.snapshot, bytes: length, sha256: hash });
       return out;
     } };
   }
@@ -204,7 +212,20 @@ async function collauda(config) {
     assert.equal(status.journal.stato, 'confermato'); assert.equal(status.database.stato, 'confermato');
     receipt.prove.push('outbox_e_stato_admin_confermati');
     for (const r of Object.values(repo)) await r.verifica();
-    // La selezione deve funzionare senza outbox né ricevute come indice.
+    // Source della fixture congelato: nessuna nuova operazione dopo expected.
+    // La lista attesa proviene dall'outbox, non dai soli snapshot ancora presenti.
+    const attesi = (await source.query("SELECT snapshot FROM amr_backup.outbox WHERE categoria='journal' ORDER BY sequenza")).rows.map(r => r.snapshot);
+    assert.equal(attesi.length, 13); assert.ok(attesi.every(s => /^[a-f0-9]{64}$/.test(s || '')));
+    const dumps = (await repo.database.elenca('database')).sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+    assert.equal(dumps.length, 2); assert.ok(Date.parse(dumps[0].time) < Date.parse(dumps[1].time));
+    // Dump vecchio solo per esercitare il replay; punto selezionato esplicitamente.
+    const ricevutaRecovery = await pubblicaIndiceRecovery({ repositoryDatabase: repo.database,
+      repositoryJournal: repo.journal, database: dumps[0].id, journalAttesi: attesi });
+    const fileRicevuta = path.join(directory, 'ricevuta-recovery.json');
+    fs.writeFileSync(fileRicevuta, JSON.stringify(ricevutaRecovery), { mode: 0o600, flag: 'wx' });
+    receipt.prove.push('indice_cifrato_e_ricevuta_separata');
+    await repo.database.verifica();
+    // Dopo lo spegnimento la selezione riceve soltanto la ricevuta e i repository.
     // Fermare soltanto il source nuovo di questa esecuzione, non gli stack Auth.
     receipt.fase = 'source_indisponibile';
     writer.release(true); writer = undefined;
@@ -214,16 +235,16 @@ async function collauda(config) {
     await assert.rejects(source.query('SELECT 1'));
     receipt.prove.push('source_spento_prima_del_recovery');
     receipt.fase = 'discovery_repository';
-    const dumps = (await repo.database.elenca('database')).sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
-    assert.equal(dumps.length, 2);
-    // Si sceglie il dump più vecchio SOLO per provare il replay successivo.
-    // In recovery operativa l'operatore dovrà scegliere un ID esatto validato.
-    assert.ok(Date.parse(dumps[0].time) < Date.parse(dumps[1].time));
-    const plan = await preparaJournalDaRepository({ repository: repo.journal });
+    const anchor = JSON.parse(fs.readFileSync(fileRicevuta, 'utf8'));
+    const plan = await preparaRecoveryIndice({ ricevuta: anchor, repositoryDatabase: repo.database, repositoryJournal: repo.journal });
     assert.equal(plan.journals.length, 13);
     receipt.discovery = { dump: dumps.length, journal: plan.journals.length,
       snapshot_journal: plan.snapshot, duplicati: plan.duplicati, solo_repository: true };
     receipt.prove.push('indice_da_repository_senza_outbox');
+    await assert.rejects(preparaRecoveryIndice({ ricevuta: anchor, repositoryDatabase: repo.database,
+      repositoryJournal: { ...repo.journal, elenca: async categoria => (await repo.journal.elenca(categoria)).filter(s => s.id !== attesi[0]) } }),
+      { codice: 'recovery_copia_mancante' });
+    receipt.prove.push('copia_mancante_ferma_prima_del_restore');
     receipt.fase = 'restore';
     const restoreAndRead = async (category, snapshot, filename) => {
       const dir = await repo[category].ripristina(snapshot, directory);
@@ -234,7 +255,7 @@ async function collauda(config) {
       return bytes;
     };
     receipt.fase = 'restore_integrita_dump';
-    const restored = await restoreAndRead('database', dumps[0].id, 'database.dump');
+    const restored = await restoreAndRead('database', plan.database, 'database.dump');
     receipt.fase = 'restore_ruoli';
     for (const role of ROLES) {
       const inherit = ['amr_accessi_lettore', 'amr_gateway', 'amr_commerciale', 'amr_copie'].includes(role) ? 'INHERIT' : 'NOINHERIT';

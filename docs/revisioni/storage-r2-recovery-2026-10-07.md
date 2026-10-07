@@ -176,3 +176,13 @@ Log e bug report su R2 richiedono inoltre campi ammessi, accessi e retention
 distinti dai backup. Non sono autorizzati screenshot, allegati o copie di
 annunci. Il loro eventuale gate va concordato; non viene aggiunto implicitamente
 al prossimo incremento o al release blocker della console.
+
+## Aggiornamento 8 ottobre
+
+Concordati e collaudati localmente indice cifrato del punto esplicito e
+ricevuta separata: [nuovo registro](recovery-indice-2026-10-08.md). La
+completezza vale rispetto alla lista attesa dal source congelato, senza
+estenderla agli eventi futuri. Backup operativo staging e custodia duratura
+restano da verificare. Log/bug report R2 saranno affrontati durante la console.
+Il [contratto backend dei limiti Admin](limiti-admin-2026-10-08.md) è verificato,
+senza anticiparne i controlli grafici o il deploy.

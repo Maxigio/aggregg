@@ -89,6 +89,21 @@ test('restic: lettura journal senza file, ID esatto e limite 16 KiB', async () =
   await assert.rejects(f.repo.leggiJournal('c'.repeat(64)), /backup_non_disponibile/);
 });
 
+test('restic: indice recovery separato, ID completo e limite di 16 MiB', async () => {
+  const f = resticSimulato([{ output: JSON.stringify({ message_type: 'summary', snapshot_id: 'a'.repeat(64) }) },
+    { output: '{"versione":1}' }, { output: Buffer.alloc(16 * MiB + 1) }]);
+  assert.deepEqual(await f.repo.copiaIndice(Buffer.from('{}')), { snapshot: 'a'.repeat(64) });
+  assert.ok(f.chiamate[0].includes('recovery.json')); assert.ok(f.chiamate[0].includes('recovery'));
+  assert.equal((await f.repo.leggiIndice('a'.repeat(64))).toString(), '{"versione":1}');
+  assert.deepEqual(f.chiamate[1], ['--no-cache','dump','a'.repeat(64),'/recovery.json']);
+  await assert.rejects(f.repo.leggiIndice('latest'), /backup_input_non_valido/);
+  await assert.rejects(f.repo.copiaIndice(Buffer.alloc(16 * MiB + 1)), /backup_input_non_valido/);
+  await assert.rejects(f.repo.copia(Buffer.from('{}'), 'recovery'), /backup_input_non_valido/);
+  await assert.rejects(f.repo.retention('recovery', { snapshot: 'a'.repeat(64) }), /backup_input_non_valido/);
+  await assert.rejects(f.repo.leggiIndice('a'.repeat(64)), /backup_non_disponibile/);
+  assert.deepEqual(f.processi[2].segnali, ['SIGTERM']);
+});
+
 test('restic: discovery con exit 0 e diagnostica non accetta un indice parziale o vuoto', async t => {
   for (const snapshots of [[], pianoSintetico()[0].keep]) await t.test('indice con errori', async () => {
     const f = resticSimulato([{ output: JSON.stringify(snapshots),

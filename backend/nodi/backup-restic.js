@@ -79,10 +79,27 @@ function creaRestic({ binario, ambiente, spawnProcesso = spawn }) {
     try { return JSON.parse(await esegui(args, undefined, limiteOutput)); }
     catch { throw new Error('backup_non_disponibile'); }
   };
-  const filename = categoria => categoria === 'journal' ? 'operazioni.json' : 'database.dump';
+  const filename = categoria => categoria === 'journal' ? 'operazioni.json'
+    : categoria === 'recovery' ? 'recovery.json' : 'database.dump';
   const categoriaValida = categoria => {
     if (!['journal', 'database'].includes(categoria)) throw new Error('backup_input_non_valido');
   };
+  async function copiaFile(contenuto, categoria, { data } = {}) {
+    if (!Buffer.isBuffer(contenuto)) throw new Error('backup_input_non_valido');
+    if (data !== undefined && (typeof data !== 'string' || !Number.isFinite(Date.parse(data))
+        || new Date(data).toISOString() !== data || Date.parse(data) > Date.now())) {
+      throw new Error('backup_input_non_valido');
+    }
+    const output = await esegui(['backup', '--json', '--stdin', '--stdin-filename',
+      filename(categoria), '--host', 'amr-centro', '--tag', categoria,
+      '--group-by', 'host,paths,tags', ...(data ? ['--time', data.slice(0,19).replace('T',' ')] : [])], contenuto);
+    let summary;
+    try { summary = output.trim().split('\n').map(v => JSON.parse(v))
+      .find(v => v.message_type === 'summary'); }
+    catch { throw new Error('backup_non_disponibile'); }
+    if (!/^[a-f0-9]{64}$/.test(summary?.snapshot_id || '')) throw new Error('backup_non_disponibile');
+    return { snapshot: summary.snapshot_id };
+  }
   const repo = {
     async identita() {
       const config = await json(['cat', 'config']);
@@ -91,22 +108,19 @@ function creaRestic({ binario, ambiente, spawnProcesso = spawn }) {
     },
     async inizializza() { await esegui(['init']); return { ok: true }; },
     async copia(contenuto, categoria, { data } = {}) {
-      if (!['journal', 'database'].includes(categoria) || !Buffer.isBuffer(contenuto)) {
+      categoriaValida(categoria);
+      return copiaFile(contenuto, categoria, { data });
+    },
+    // Categoria separata: nessuna discovery "latest" o retention implicita.
+    async copiaIndice(contenuto) {
+      if (!Buffer.isBuffer(contenuto) || !contenuto.length || contenuto.length > LIMITE_PIANO) {
         throw new Error('backup_input_non_valido');
       }
-      if (data !== undefined && (typeof data !== 'string' || !Number.isFinite(Date.parse(data))
-          || new Date(data).toISOString() !== data || Date.parse(data) > Date.now())) {
-        throw new Error('backup_input_non_valido');
-      }
-      const output = await esegui(['backup', '--json', '--stdin', '--stdin-filename',
-        filename(categoria), '--host', 'amr-centro', '--tag', categoria,
-        '--group-by', 'host,paths,tags', ...(data ? ['--time', data.slice(0,19).replace('T',' ')] : [])], contenuto);
-      let summary;
-      try { summary = output.trim().split('\n').map(v => JSON.parse(v))
-        .find(v => v.message_type === 'summary'); }
-      catch { throw new Error('backup_non_disponibile'); }
-      if (!/^[a-f0-9]{64}$/.test(summary?.snapshot_id || '')) throw new Error('backup_non_disponibile');
-      return { snapshot: summary.snapshot_id };
+      return copiaFile(contenuto, 'recovery');
+    },
+    async leggiIndice(snapshot) {
+      if (!/^[a-f0-9]{64}$/.test(snapshot || '')) throw new Error('backup_input_non_valido');
+      return Buffer.from(await esegui(['dump', snapshot, '/recovery.json'], undefined, LIMITE_PIANO), 'utf8');
     },
     async verifica() { await esegui(['check', '--read-data']); return { ok: true }; },
     // Indice del repository, non dell'outbox perduta. Non restituire utenti,
