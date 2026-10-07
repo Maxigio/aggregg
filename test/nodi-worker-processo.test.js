@@ -8,7 +8,7 @@ test('worker collaudo: ambiente minimo, dati temporanei e arresto del solo figli
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-worker-env-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const figlio = new EventEmitter(), segnali = []; let config;
-  figlio.kill = s => { segnali.push(s); setImmediate(() => figlio.emit('exit', 0)); };
+  figlio.kill = s => { segnali.push(s); setImmediate(() => { figlio.emit('exit', 0); figlio.emit('close', 0); }); };
   const w = avviaWorker({ origine: 'http://127.0.0.1:1234', token: 't'.repeat(64), directory,
     spawn: (exe, args, opts) => { config = opts; assert.equal(exe, process.execPath); assert.match(args[0], /worker\.js$/); return figlio; } });
   assert.equal(config.env.USER_DATA_PATH, directory);
@@ -174,8 +174,8 @@ test('worker: credenziale rifiutata ferma heartbeat e poll; un 503 resta riprova
         return{ok:true,status:204};
       },
     });
-    await modulo.exports.avvia();
-    assert.equal(errori,status===503?3:1,`${percorso} ${status}`);
+    await assert.rejects(modulo.exports.avvia(), e => e.uscita === (status === 503 ? 75 : 77));
+    assert.equal(errori,1,`${percorso} ${status}`);
     assert.equal(eseguiti,0);
   }
 });
@@ -218,6 +218,52 @@ test('worker con IPC: rifiuto della credenziale e arresto terminano il processo 
       new Promise((resolve,reject)=>{figlio.once('error',reject);figlio.once('exit',(code,signal)=>resolve({code,signal}));}),
       new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('worker ancora vivo dopo la fine del ciclo')),4000);}),
     ]);
-    assert.deepEqual(esito,{code:0,signal:null}); assert.equal(heartbeat,1);
+    assert.deepEqual(esito,{code:caso === 'SIGTERM' ? 0 : caso === 'obsoleto' ? 79 : 77,signal:null}); assert.equal(heartbeat,1);
   });
+});
+
+test('worker: risultato scaduto viene scartato senza restart né replay', async () => {
+  const vm = require('node:vm'), processo = new EventEmitter(), modulo = { exports: {} };
+  processo.env = { AMR_CENTRO_URL: 'http://127.0.0.1:1234', AMR_NODO_ID: 'locale', AMR_NODI_TOKEN: 'sintetico' };
+  let poll = 0, esiti = 0, eseguiti = 0;
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../backend/nodi/worker.js'), 'utf8'), {
+    module: modulo, process: processo, AbortSignal, AbortController, performance, URL,
+    setTimeout, clearTimeout, setInterval, clearInterval,
+    require: n => n === 'node:crypto' ? require(n) : n === './operazioni'
+      ? { statoFonti: () => ({}), esegui: async () => { eseguiti++; return { status: 200, body: {} }; } }
+      : { dentro: (_s, fn) => fn() },
+    fetch: async url => {
+      if (url.endsWith('/registrazione')) return { ok: true, json: async () => ({ epoca: 'centro', boot: null }) };
+      if (url.endsWith('/esito')) { esiti++; return { ok: false, status: 409, headers: new Headers() }; }
+      if (url.includes('/poll')) {
+        if (++poll > 1) { processo.emit('SIGTERM'); return { ok: true, status: 204 }; }
+        return { ok: true, json: async () => ({ versioneProtocollo: 1, idLavoro: 'scaduto', input: {} }) };
+      }
+      return { ok: true };
+    },
+  });
+  await modulo.exports.avvia(); assert.equal(poll, 2); assert.equal(esiti, 1); assert.equal(eseguiti, 1);
+});
+
+test('worker: nuova epoca centrale consente restart, sostituzione nella stessa epoca richiede intervento', async () => {
+  const vm = require('node:vm');
+  for (const epoca of ['prima','nuova']) {
+    const processo = new EventEmitter(), modulo = { exports: {} }; let registrazioni = 0, lavori = 0;
+    processo.env = { AMR_CENTRO_URL: 'http://127.0.0.1:1234', AMR_NODO_ID: 'locale', AMR_NODI_TOKEN: 'sintetico' };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../backend/nodi/worker.js'), 'utf8'), {
+      module: modulo, process: processo, AbortSignal, AbortController, performance, URL,
+      setTimeout, clearTimeout, setInterval, clearInterval,
+      require: n => n === 'node:crypto' ? require(n) : n === './operazioni'
+        ? { statoFonti: () => ({}), esegui: async () => { lavori++; } } : {},
+      fetch: async (url, opts) => {
+        if (url.endsWith('/registrazione')) {
+          if (opts.method === 'POST') return { ok: true };
+          return { ok: true, json: async () => ({ epoca: ++registrazioni === 1 ? 'prima' : epoca, boot: null }) };
+        }
+        return { ok: false, status: 409, headers: new Headers({ 'x-amr-node-obsoleto': '1' }) };
+      },
+    });
+    await assert.rejects(modulo.exports.avvia(), e => e.uscita === (epoca === 'nuova' ? 75 : 79));
+    assert.equal(registrazioni, 2); assert.equal(lavori, 0);
+  }
 });

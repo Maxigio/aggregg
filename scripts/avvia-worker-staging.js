@@ -44,19 +44,9 @@ function configura({ file, radice, directory, live = false, soloStato = false })
 
 function avvia(options, spawnProcess = spawn) {
   const { manifest, env } = configura(options);
-  const child = spawnProcess(process.execPath, [path.join(options.radice, 'backend/nodi/worker.js')], {
-    cwd: options.radice, env, stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-  });
-  let chiusura, terminato = false;
-  child.once('exit', () => { terminato = true; });
-  child.once('error', () => { terminato = true; });
-  const close = () => chiusura ||= new Promise(resolve => {
-    if (terminato) return resolve();
-    const finito = () => { clearTimeout(timer); child.off('exit', finito); child.off('error', finito); resolve(); };
-    const timer = setTimeout(() => child.kill('SIGKILL'), 5000);
-    child.once('exit', finito); child.once('error', finito); child.kill('SIGTERM');
-  });
-  return { child, manifest, close };
+  const worker = require('../backend/nodi/worker-supervisore').supervisiona({
+    file: path.join(options.radice, 'backend/nodi/worker.js'), cwd: options.radice, env, spawn: spawnProcess });
+  return Object.assign(worker, { manifest });
 }
 if (require.main === module) {
   let worker;
@@ -65,14 +55,20 @@ if (require.main === module) {
     if (resto.length || (flag !== undefined && !['--live', '--solo-stato'].includes(flag))
         || Number(process.versions.node.split('.')[0]) !== 24) throw new Error();
     worker = avvia({ file, radice, directory, live: flag === '--live', soloStato: flag === '--solo-stato' });
-    worker.child.once('spawn', () => console.log(JSON.stringify({ evento: 'processo_worker_avviato',
+    const osserva = child => child.once('spawn', () => console.log(JSON.stringify({ evento: 'processo_worker_avviato',
       simulato: flag === undefined, soloStato: flag === '--solo-stato',
-      release: worker.manifest.release, pid: worker.child.pid })));
-    worker.child.once('exit', (code, signal) => {
-      console.log(JSON.stringify({ evento: 'processo_worker_terminato', code, signal }));
-      process.exitCode = code ?? 1;
+      release: worker.manifest.release, pid: child.pid })));
+    if (worker.child) osserva(worker.child);
+    worker.eventi.on('processo', osserva);
+    worker.eventi.on('stato', stato => console.log(JSON.stringify({ evento: 'supervisione_worker', ...stato })));
+    worker.eventi.once('fine', esito => {
+      console.log(JSON.stringify({ evento: 'processo_worker_terminato', code: esito.code, signal: esito.signal }));
+      process.exitCode = esito.stato === 'fermato' ? 0 : 1;
     });
-    worker.child.once('error', () => { console.error('Worker staging non avviato.'); process.exitCode = 1; });
+    if (worker.terminato) {
+      console.log(JSON.stringify({ evento: 'supervisione_worker', ...worker.stato }));
+      process.exitCode = worker.stato.stato === 'fermato' ? 0 : 1;
+    }
     for (const segnale of ['SIGINT', 'SIGTERM']) process.once(segnale, () => { void worker.close(); });
   } catch { console.error('Worker staging non avviato: verificare configurazione e artefatto.'); process.exitCode = 1; }
 }

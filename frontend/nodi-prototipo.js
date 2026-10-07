@@ -40,6 +40,9 @@ function aggiornaAree(aggiornaIndirizzo = true, focus = document.activeElement) 
 }
 window.addEventListener('hashchange', () => aggiornaAree());
 const nomiFonti = { subito: 'Subito', autoscout: 'AutoScout24', moto: 'Moto.it' };
+const motiviWorker = { credenziale_revocata: 'credenziale revocata',
+  configurazione_incompatibile: 'configurazione o release incompatibile', worker_sostituito: 'worker sostituito',
+  restart_esauriti: 'cinque restart esauriti', registro_non_disponibile: 'registro locale non disponibile' };
 const nomiEventi = { riavvio_lavori: 'Centro riavviato con lavori pendenti',
   lavoro_incerto: 'Lavoro avviato, esito non confermato',
   lavoro_interrotto: 'Lavoro interrotto prima dell’avvio',
@@ -47,6 +50,9 @@ const nomiEventi = { riavvio_lavori: 'Centro riavviato con lavori pendenti',
   fonte_errore: 'Errore della fonte', fonte_parziale: 'Risposta parziale della fonte',
   sonda_riuscita: 'Sonda riuscita: fonte riaperta', sonda_fallita: 'Sonda fallita: fonte in pausa',
   sonda_intervento: 'Sonda fermata: intervento necessario',
+  worker_avvio: 'Worker in avvio', worker_attivo: 'Worker collegato',
+  worker_restart: 'Restart del worker programmato', worker_intervento: 'Worker fermo: intervento necessario',
+  worker_fermato: 'Worker fermato manualmente',
   sospensione_aggiunta: 'Sospensione manuale aggiunta',
   sospensione_rimossa: 'Sospensione manuale rimossa', lavori_cancellati: 'Lavori terminati eliminati' };
 const normalizza = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -323,6 +329,14 @@ function renderStato(data) {
     title.append(elemento('h3', n.id), elemento('p', n.soloStato ? 'Solo stato · ricerche disabilitate'
       : `${n.simulato ? 'Simulato · nessun portale interrogato' : 'Worker reale'} · ${n.occupato ? 'in lavoro' : 'libero'}`));
     head.append(title, elemento('span', '', `status-dot${n.online ? ' live' : ''}`)); card.append(head);
+    if (n.supervisione) {
+      const s = n.supervisione;
+      const testo = s.stato === 'intervento' ? `Worker fermo: intervento necessario · ${motiviWorker[s.motivo] || 'verificare il nodo'}`
+        : s.stato === 'attesa_restart' ? `Restart ${s.restart}/5${s.prossimo ? ' alle ' + new Date(s.prossimo).toLocaleTimeString('it-IT') : ''}`
+        : s.stato === 'fermato' ? 'Worker fermato manualmente' : s.stato === 'avvio' ? 'Worker in avvio'
+          : `${n.online ? 'Worker attivo' : 'Ultimo stato: worker attivo'} · restart consecutivi ${s.restart}/5`;
+      card.append(elemento('p', testo, s.stato === 'intervento' ? 'stop' : 'muted'));
+    }
     const rows = elemento('div', '', 'source-rows');
     for (const fonte of ['subito', 'autoscout', 'moto']) {
       const fermo = n.soloStato || n.sospeso || n.sospese.includes(fonte) || n.fonti?.[fonte]?.fermo;

@@ -1065,6 +1065,24 @@ test('F02: errore principale Subito non diventa solo recovery; retry prima pagin
   assert.deepEqual(errors, []);
 });
 
+test('prototipo: restart e intervento del worker restano visibili con etichette leggibili', opzioniBrowser, async t => {
+  let supervisione = { stato: 'intervento', motivo: 'restart_esauriti', restart: 5, prossimo: null };
+  const { page, errors } = await apriPrototipo(t, async (route, url) => {
+    if (!['/api/admin','/api/stato'].includes(url.pathname)) return false;
+    await route.fulfill({ json: { nodi: [{ id: 'imac-prova', online: false, occupato: false,
+      autorizzato: true, compatibile: true, sospese: [], fonti: {}, supervisione }],
+      lavori: [], eventi: [{ codice: 'worker_intervento', nodo: 'imac-prova' }],
+      pagina: 1, pagine: 1, totale: 0 } }); return true;
+  });
+  assert.match(await page.locator('#nodi').textContent(), /Intervento necessario|intervento necessario/);
+  assert.match(await page.locator('#nodi').textContent(), /cinque restart esauriti/);
+  assert.ok(!(await page.locator('#nodi').textContent()).includes('restart_esauriti'));
+  supervisione = { stato: 'attesa_restart', motivo: 'crash', restart: 2, prossimo: Date.now() + 2000 };
+  await page.evaluate(() => window.pollDiagnosticaProva());
+  await page.waitForFunction(() => document.getElementById('nodi').textContent.includes('Restart 2/5'));
+  assert.deepEqual(errors, []);
+});
+
 test('prototipo: aggiornamento lavori conserva dettagli, focus e scroll senza congelare i dati',
   { skip: !fs.existsSync(browserPath) && 'Chromium non disponibile' }, async t => {
   const server = require('node:http').createServer((req, res) => {

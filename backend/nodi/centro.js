@@ -87,6 +87,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     return a.length === b.length && crypto.timingSafeEqual(a, b);
   };
   db.exec('CREATE TABLE IF NOT EXISTS eventi (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, livello TEXT NOT NULL, codice TEXT NOT NULL, lavoro TEXT, nodo TEXT, fonte TEXT, azienda TEXT, http INTEGER)');
+  db.exec('CREATE TABLE IF NOT EXISTS supervisione_worker (nodo TEXT PRIMARY KEY, boot TEXT, sequenza INTEGER NOT NULL, stato TEXT NOT NULL, motivo TEXT, restart INTEGER NOT NULL, prossimo INTEGER, aggiornato INTEGER NOT NULL)');
   db.exec('CREATE INDEX IF NOT EXISTS eventi_ts ON eventi(ts)');
   const retention = creaRetention({ db, ora });
   const diagnostica = { incompleta: false, fallimenti: 0, ultimoErrore: null, ultimaPulizia: null };
@@ -122,7 +123,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     scriviDiagnostica('evento', () => {
       db.prepare('INSERT INTO eventi(ts,livello,codice,lavoro,nodo,fonte,azienda,http) VALUES(?,?,?,?,?,?,?,?)')
         .run(ora(), ['sospensione_aggiunta','sospensione_rimossa','lavori_cancellati',
-          'manutenzione_attiva','manutenzione_disattiva','sonda_riuscita'].includes(codice)
+          'manutenzione_attiva','manutenzione_disattiva','sonda_riuscita','worker_attivo','worker_fermato'].includes(codice)
           ? 'info' : codice === 'fonte_parziale' ? 'avviso' : 'errore', codice,
           lavoro, nodo, fonte, azienda, Number.isInteger(http) && http >= 100 && http <= 599 ? http : null);
     });
@@ -166,6 +167,13 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     next();
   });
   const nodi = new Map(), lavori = new Map(), sessioni = new Map(), condivise = new Map(), affinita = new Map();
+  // Lo stop resta osservabile anche se il worker non può più fare heartbeat.
+  for (const s of db.prepare('SELECT * FROM supervisione_worker').all()) {
+    if (!Object.hasOwn(tokens, s.nodo)) continue;
+    const sospensioni = db.prepare('SELECT fonte FROM sospensioni WHERE nodo=?').all(s.nodo).map(r => r.fonte);
+    nodi.set(s.nodo, { id: s.nodo, coda: [], visto: 0, fonti: {},
+      sospeso: sospensioni.includes(''), sospese: new Set(sospensioni.filter(Boolean)), supervisione: s });
+  }
   const operazioniRicerca = new Set();
   const erroreManutenzione = () => Object.assign(new Error('ricerca_manutenzione'), {
     status: 503, codice: 'ricerca_manutenzione', interrotto: true, incerto: false });
@@ -289,6 +297,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   }
   function disponibile(n, fonte = null, consideraCoda = true, sonda = false) {
     if (!n || tokenRevocato(n.id) || ora() - n.visto > 6000 || !releaseValida(n) || n.sospeso || n.soloStato
+        || (n.supervisione && n.supervisione.boot === n.boot && n.supervisione.stato !== 'attivo')
         || (consideraCoda && n.coda.length >= 10)) return false;
     if (!fonte) return true;
     const f = n.fonti[fonte];
@@ -611,6 +620,42 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   }
 
   app.use('/_nodo', nodoAutorizzato, express.json({ limit: '8mb' }));
+  app.post('/_nodo/supervisione', (req, res) => {
+    const id = req.get('x-amr-node-id'), b = req.body || {};
+    const n = nodi.get(id);
+    if (b.epoca !== epocaCentro || b.boot !== (n?.boot || null)) return res.sendStatus(409);
+    if (!['avvio','attivo','attesa_restart','intervento','fermato'].includes(b.stato)
+        || ![null,'crash','centro_non_disponibile','stop_manuale','credenziale_revocata',
+          'configurazione_incompatibile','worker_sostituito','restart_esauriti','registro_non_disponibile'].includes(b.motivo)
+        || !Number.isSafeInteger(b.sequenza) || b.sequenza < 1
+        || !Number.isInteger(b.restart) || b.restart < 0 || b.restart > 5
+        || !(b.prossimo === null || Number.isSafeInteger(b.prossimo) && b.prossimo >= 0)
+        || Object.keys(b).some(k => !['epoca','boot','sequenza','stato','motivo','restart','prossimo','aggiornato'].includes(k))) {
+      return res.sendStatus(400);
+    }
+    if (n?.supervisione?.boot === b.boot && b.sequenza <= n.supervisione.sequenza) return res.json({ ok: true, accepted: false });
+    const s = { nodo: id, boot: b.boot, sequenza: b.sequenza, stato: b.stato, motivo: b.motivo,
+      restart: b.restart, prossimo: b.prossimo, aggiornato: ora() };
+    if (!scriviDiagnostica('supervisione', () => db.prepare(`INSERT INTO supervisione_worker
+      (nodo,boot,sequenza,stato,motivo,restart,prossimo,aggiornato) VALUES(?,?,?,?,?,?,?,?)
+      ON CONFLICT(nodo) DO UPDATE SET boot=excluded.boot,sequenza=excluded.sequenza,
+      stato=excluded.stato,motivo=excluded.motivo,restart=excluded.restart,prossimo=excluded.prossimo,aggiornato=excluded.aggiornato`)
+      .run(...Object.values(s)))) return res.sendStatus(503);
+    let attuale = n;
+    if (!attuale) {
+      // La supervisione può precedere il CAS di registrazione: anche in quel
+      // caso i gate già salvati dall'Admin devono restare obbligatori.
+      try {
+        const sospensioni = db.prepare('SELECT fonte FROM sospensioni WHERE nodo=?').all(id).map(r => r.fonte);
+        attuale = { id, coda: [], visto: 0, fonti: {}, sospeso: sospensioni.includes(''),
+          sospese: new Set(sospensioni.filter(Boolean)) };
+      } catch { segnalaGuastoDiagnostica('supervisione'); return res.sendStatus(503); }
+    }
+    attuale.supervisione = s; nodi.set(id, attuale);
+    if (s.stato !== 'attivo') interrompiAccodati(attuale);
+    evento(s.stato === 'attesa_restart' ? 'worker_restart' : 'worker_' + s.stato, { nodo: id });
+    res.json({ ok: true });
+  });
   app.get('/_nodo/registrazione', (req, res) => res.json({ epoca: epocaCentro,
     boot: nodi.get(req.get('x-amr-node-id'))?.boot || null,
     ...(releaseAttesa ? { compatibilita: releaseAttesa } : {}) }));
@@ -843,10 +888,12 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     } catch (e) { res.status(e.status || 503).json({ codice: e.codice || 'autorizzazione_non_disponibile' }); }
   }
   app.use('/api/stato', adminDiProva);
-  const statoNodo = n => ({ id:n.id, online:!tokenRevocato(n.id) && ora()-n.visto<6000,
+  const statoNodo = n => ({ id:n.id, online:!tokenRevocato(n.id) && ora()-n.visto<6000
+      && !(n.supervisione && n.supervisione.boot === n.boot && n.supervisione.stato !== 'attivo'),
     autorizzato:!tokenRevocato(n.id), compatibile:releaseValida(n), occupato:n.occupato,
     simulato:n.simulato,...(n.soloStato ? { soloStato: true } : {}),
-    sospeso:n.sospeso,sospese:[...n.sospese],fonti:n.fonti });
+    sospeso:n.sospeso,sospese:[...n.sospese],fonti:n.fonti,
+    ...(n.supervisione ? { supervisione: n.supervisione } : {}) });
   app.get('/api/stato', (req, res) => rispondiDiagnostica(res, () => {
     pulisci();
     const nodo = typeof req.query.nodo === 'string' && /^[a-zA-Z0-9_-]{1,40}$/.test(req.query.nodo)

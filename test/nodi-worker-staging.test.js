@@ -57,7 +57,7 @@ test('staging worker: configurazioni e artefatti rifiutati non avviano processi'
 
 test('staging worker: arresto idempotente del solo figlio e nessun token negli argv', async t => {
   const f = fixture(t), p = new EventEmitter(), segnali = []; let opts, args;
-  p.kill = s => { segnali.push(s); setImmediate(() => p.emit('exit', 0)); };
+  p.kill = s => { segnali.push(s); setImmediate(() => { p.emit('exit', 0); p.emit('close', 0); }); };
   const w = avvia(f, (_exe, a, o) => { args = a; opts = o; return p; });
   assert.deepEqual(args, [path.join(f.radice, 'backend/nodi/worker.js')]);
   assert.deepEqual(opts.stdio, ['ignore', 'ignore', 'ignore', 'ipc']);
@@ -76,11 +76,11 @@ test('staging worker solo stato: rifiuta worker precedenti che ignorano il vinco
   assert.throws(() => configura({ ...attuale, live: true, soloStato: true }), /configurazione_worker_staging_non_valida/);
 });
 
-test('staging worker CLI: runtime scelto e morte del figlio per segnale non diventano successo', {
+test('staging worker CLI: runtime scelto e configurazione incompatibile non diventano successo', {
   skip: Number(process.versions.node.split('.')[0]) !== 24 ? 'CLI collaudata con Node 24' : false,
 }, t => {
   const { spawnSync } = require('node:child_process');
-  for (const [worker, atteso] of [['', 0], ["process.kill(process.pid, 'SIGKILL');", 1]]) {
+  for (const [worker, atteso] of [['', 0], ['process.exit(78);', 1]]) {
     const f = fixture(t, worker);
     const r = spawnSync(process.execPath, [path.join(__dirname, '../scripts/avvia-worker-staging.js'),
       f.file, f.radice, f.directory], { encoding: 'utf8', timeout: 10000 });
@@ -88,6 +88,6 @@ test('staging worker CLI: runtime scelto e morte del figlio per segnale non dive
     assert.ok(!r.stdout.includes(f.config.token));
     const ultimo = JSON.parse(r.stdout.trim().split('\n').at(-1));
     assert.equal(ultimo.evento, 'processo_worker_terminato');
-    if (atteso === 1) { assert.equal(ultimo.code, null); assert.equal(ultimo.signal, 'SIGKILL'); }
+    if (atteso === 1) { assert.equal(ultimo.code, 78); assert.equal(ultimo.signal, null); }
   }
 });

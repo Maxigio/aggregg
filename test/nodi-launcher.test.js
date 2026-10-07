@@ -20,3 +20,22 @@ test('launcher: stop o uscita del centro impedisce avvii tardivi dei worker',()=
     children[0].emit('exit',0);assert.ok(timers.find(t=>t.ms===5000).cleared);
   }
 });
+
+test('launcher: worker in intervento non ferma il centro; stop del launcher chiude entrambi',()=>{
+  const processo=new EventEmitter();processo.env={};processo.execPath='node';
+  const centro=new EventEmitter(),segnali=[],workers=[],timers=[];centro.kill=s=>segnali.push(s);
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../scripts/avvia-nodi-prototipo.js'),'utf8'),{
+    process:processo,__dirname:path.join(__dirname,'../scripts'),console:{log(){}},
+    setTimeout(fn,ms){const t={fn,ms,unref(){}};timers.push(t);return t;},clearTimeout(){},
+    require:n=>n==='node:fs'?{mkdirSync(){}}:n==='node:child_process'?{spawn:()=>centro}
+      :n==='../backend/nodi/worker-supervisore'?{supervisiona:()=>{
+        const w={eventi:new EventEmitter(),close:()=>{w.chiusure++;},chiusure:0};workers.push(w);return w;
+      }}:require(n),
+  });
+  for(const t of timers.filter(t=>t.ms<1000))t.fn();
+  assert.equal(workers.length,2);
+  workers[0].eventi.emit('fine',{code:1,stato:'intervento'});
+  assert.deepEqual(segnali,[]);assert.equal(workers[1].chiusure,0);assert.equal(processo.exitCode,undefined);
+  processo.emit('SIGTERM');assert.deepEqual(segnali,['SIGTERM']);
+  assert.ok(workers.every(w=>w.chiusure===1));
+});

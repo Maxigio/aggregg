@@ -18,10 +18,19 @@ const env = { ...baseEnv, USER_DATA_PATH: directory, AMR_LOG_DIR: directory,
   AMR_NODI_DATA_DIR: directory, AMR_NODI_TOKENS: JSON.stringify(tokens), AMR_CENTRO_PORT: String(port),
   AMR_CENTRO_URL: `http://127.0.0.1:${port}`, AMR_NODI_ADMIN_LOCALE: '1' };
 const figli = [], avvii = [];
+const worker = [];
 let chiudendo = false;
 function avvia(file, extra = {}) {
   if (chiudendo) return;
   if (extra.AMR_NODO_ID) fs.mkdirSync(path.join(directory, extra.AMR_NODO_ID), { recursive: true, mode: 0o700 });
+  if (extra.AMR_NODO_ID) {
+    const w = require('../backend/nodi/worker-supervisore').supervisiona({ file: path.join(radice, file),
+      cwd: radice, env: { ...env, ...extra, USER_DATA_PATH: path.join(directory, extra.AMR_NODO_ID) },
+      stdio: ['inherit','inherit','inherit','ipc'] });
+    worker.push(w);
+    w.eventi.on('stato', stato => console.log(JSON.stringify({ nodo: extra.AMR_NODO_ID, ...stato })));
+    return;
+  }
   const p = spawn(process.execPath, [path.join(radice, file)], {
     cwd: radice, env: { ...env, ...extra,
       ...(extra.AMR_NODO_ID ? { USER_DATA_PATH: path.join(directory, extra.AMR_NODO_ID) } : {}) },
@@ -35,6 +44,7 @@ function termina() {
   if (chiudendo) return;
   chiudendo = true;
   for (const timer of avvii) clearTimeout(timer);
+  for (const w of worker) void w.close();
   for (const p of figli) {
     if (p.exitCode != null || p.signalCode != null) continue;
     const timer = setTimeout(() => p.kill('SIGKILL'), 5000); timer.unref();

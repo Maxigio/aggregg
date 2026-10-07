@@ -581,3 +581,28 @@ Nessun nuovo candidato distribuito, portale live o M2 collegato. Il punto 2
 è chiuso per implementazione e collaudo locale; quello remoto resta al gate
 concordato. Il prossimo punto è l'interview sui restart automatici dei worker.
 Restano nell'ordine 3–7, CHECK storico, gate remoto/M2, review e punto 8.
+
+## 7 ottobre — punto 3: restart limitati dei worker
+
+Policy approvata: crash e problemi temporanei possono riavviare il worker;
+stop manuale, revoca e incompatibilità richiedono intervento. Cinque restart
+con backoff e jitter, poi stop. Il supervisor esterno riusa i launcher
+esistenti e non riavvia il centro o ripete lavori incerti. Budget azzerato
+solo dopo cinque minuti di heartbeat stabili; un nuovo avvio manuale del
+supervisor apre un nuovo ciclo. Nessun supervisor di sistema installato.
+
+Stato tecnico locale atomico e ultimo stato persistito nel centro;
+Admin esistente mostra restart e intervento. Epoca, boot, sequenza e
+credenziale proteggono la consegna diagnostica. Con centro irraggiungibile
+non promettiamo la consegna dell'avviso: il registro locale resta la ricevuta.
+
+Corretti e controverificati perdita delle sospensioni nella race di startup,
+falso successo del launcher in caso di guasto I/O, cleanup IPC, compatibilità
+dei nodi legacy e classificazione del risultato scaduto. Review indipendente
+finale PASS nel perimetro, gate pertinente Node 24.21.0 **515/515 pass**,
+44 file; UI headless **2/2 pass**. Prove e limiti nel
+[registro dedicato](restart-worker-2026-10-07.md).
+
+Punto 3 chiuso per codice e collaudo locale. Nessun deploy, portale live o
+M2 collegato. Prossimo punto: interview sulla policy delle notifiche (4),
+poi 5–7, CHECK storico, gate remoto/M2, review e soltanto dopo punto 8.
