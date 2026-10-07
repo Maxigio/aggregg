@@ -54,6 +54,52 @@ function pianoConRimozioni(n) {
   return piano;
 }
 
+test('restic: discovery limitato di snapshot, restituisce solo ID e data', async t => {
+  for (const categoria of ['journal', 'database']) await t.test(categoria, async () => {
+    const snapshots = pianoSintetico(2)[0].keep;
+    for (const s of snapshots) { s.tags = [categoria]; s.paths = [categoria === 'journal' ? '/operazioni.json' : '/database.dump']; }
+    const f = resticSimulato([{ output: JSON.stringify(snapshots) }]);
+    assert.deepEqual(await f.repo.elenca(categoria), snapshots.map(({ id, time }) => ({ id, time })));
+    assert.deepEqual(f.chiamate[0], ['--no-cache', 'snapshots', '--json', '--host', 'amr-centro',
+      '--path', snapshots[0].paths[0], '--tag', categoria]);
+  });
+  const f = resticSimulato([{ output: '[]' }]); assert.deepEqual(await f.repo.elenca('journal'), []);
+});
+
+test('restic: indice inatteso, duplicato o oltre cap interrompe discovery', async t => {
+  const good = pianoSintetico()[0].keep[0];
+  for (const bad of [null, [{ ...good, hostname: 'altro' }], [{ ...good, paths: ['/extra', '/operazioni.json'] }],
+    [{ ...good, tags: ['journal', 'extra'] }], [{ ...good, id: 'latest' }], [{ ...good, time: 'non-data' }],
+    [good, good], pianoSintetico(10001)[0].keep]) await t.test('indice rifiutato', async () => {
+    const f = resticSimulato([{ output: JSON.stringify(bad) }]);
+    await assert.rejects(f.repo.elenca('journal'), /backup_indice_non_valido/);
+    assert.equal(f.chiamate.length, 1);
+  });
+  const f = resticSimulato([{ output: JSON.stringify(pianoSintetico(10000)[0].keep) }]);
+  assert.equal((await f.repo.elenca('journal')).length, 10000);
+});
+
+test('restic: lettura journal senza file, ID esatto e limite 16 KiB', async () => {
+  const f = resticSimulato([{ output: '{"versione":1}' }, { output: Buffer.alloc(16385, ' ') }, { code: 1 }]);
+  assert.deepEqual(await f.repo.leggiJournal('a'.repeat(64)), { versione: 1 });
+  assert.deepEqual(f.chiamate[0], ['--no-cache', 'dump', 'a'.repeat(64), '/operazioni.json']);
+  await assert.rejects(f.repo.leggiJournal('latest'), /backup_input_non_valido/);
+  await assert.rejects(f.repo.leggiJournal('b'.repeat(64)), /backup_non_disponibile/);
+  assert.deepEqual(f.processi[1].segnali, ['SIGTERM']);
+  await assert.rejects(f.repo.leggiJournal('c'.repeat(64)), /backup_non_disponibile/);
+});
+
+test('restic: discovery con exit 0 e diagnostica non accetta un indice parziale o vuoto', async t => {
+  for (const snapshots of [[], pianoSintetico()[0].keep]) await t.test('indice con errori', async () => {
+    const f = resticSimulato([{ output: JSON.stringify(snapshots),
+      stderr: 'Ignoring "snapshot-sintetico": load snapshot failed\n' }]);
+    await assert.rejects(f.repo.elenca('journal'), e => e.message === 'backup_non_disponibile' && !e.cause);
+    assert.equal(f.chiamate.length, 1);
+  });
+  const f = resticSimulato([{ code: 1, output: '[]' }]);
+  await assert.rejects(f.repo.elenca('journal'), /backup_non_disponibile/);
+});
+
 test('restic: configurazione esplicita senza caricamento env', () => {
   assert.throws(() => creaRestic({ binario: 'restic', ambiente: {} }), /backup_non_configurato/);
   assert.throws(() => creaRestic({ binario: '/restic', ambiente: {
@@ -438,6 +484,42 @@ test('restic reale: repository cifrati separati, restore e password errata',
     await assert.rejects(repo.ripristina(copie.journal.snapshot, dir), e => e.message === 'backup_non_disponibile');
     await assert.rejects(repo.ripristina(copie.journal.snapshot,path.join(dir,'assente')), e =>
       e.message === 'backup_non_disponibile' && !e.path);
+  });
+
+test('restic reale: snapshot illeggibile con exit 0 non produce discovery parziale',
+  { skip: !process.env.AMR_TEST_RESTIC && 'Impostare AMR_TEST_RESTIC al binario verificato' }, async t => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-restic-discovery-'));
+    fs.chmodSync(dir, 0o700); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const password = path.join(dir, 'password'), location = path.join(dir, 'repository');
+    fs.writeFileSync(password, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
+    const ambiente = { RESTIC_REPOSITORY: location, RESTIC_PASSWORD_FILE: password };
+    const repo = creaRestic({ binario: process.env.AMR_TEST_RESTIC, ambiente });
+    await repo.inizializza();
+    const one = await repo.copia(Buffer.from('{"versione":1,"sintetico":1}'), 'journal');
+    const two = await repo.copia(Buffer.from('{"versione":1,"sintetico":2}'), 'journal');
+    assert.equal((await repo.elenca('journal')).length, 2);
+    const file = path.join(location, 'snapshots', one.snapshot), original = fs.readFileSync(file);
+    const mode = fs.statSync(file).mode & 0o777;
+    fs.chmodSync(file, mode | 0o200);
+    try {
+      // Corrompere soltanto un file appena creato nella fixture privata,
+      // conservando i byte originali per ripristinarlo prima del cleanup.
+      fs.writeFileSync(file, Buffer.from('snapshot sintetico illeggibile'));
+      const { execFile } = require('node:child_process');
+      const raw = await new Promise((resolve, reject) => execFile(process.env.AMR_TEST_RESTIC,
+        ['--no-cache', 'snapshots', '--json', '--host', 'amr-centro', '--path', '/operazioni.json', '--tag', 'journal'],
+        { env: { PATH: process.env.PATH, LANG: 'C', TZ: 'UTC', ...ambiente }, timeout: 120000, maxBuffer: 65536 },
+        (e, stdout, stderr) => e ? reject(new Error('restic_sintetico_non_confermato'))
+          : resolve({ code: 0, stdout, diagnostica: stderr.length > 0 })));
+      assert.equal(raw.code, 0); assert.equal(raw.diagnostica, true);
+      assert.deepEqual(JSON.parse(raw.stdout).map(s => s.id), [two.snapshot]);
+      await assert.rejects(repo.elenca('journal'), /backup_non_disponibile/);
+    } finally {
+      try { fs.writeFileSync(file, original); }
+      finally { original.fill(0); fs.chmodSync(file, mode); }
+    }
+    assert.equal((await repo.elenca('journal')).length, 2);
+    await repo.verifica();
   });
 
 test('restic reale: retention 90 giorni e 14 giorni DB, dry-run e restore dei conservati',

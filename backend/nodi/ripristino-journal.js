@@ -260,6 +260,36 @@ async function applicaJournal(args = {}) {
   return applicaJournalInterno(args);
 }
 
+// Recovery offline da copie esistenti: prima leggere e validare TUTTO,
+// poi passare il piano al replay. Nessuna connessione al database sorgente.
+// I numeri della sequence possono avere buchi dopo rollback: non provano
+// la presenza o l'assenza di una copia. Non filtrare per timestamp del dump.
+async function preparaJournalDaRepository({ repository } = {}) {
+  if (typeof repository?.elenca !== 'function' || typeof repository?.leggiJournal !== 'function') {
+    throw errore('ripristino_repository_non_valido');
+  }
+  const snapshots = await repository.elenca('journal');
+  if (!Array.isArray(snapshots) || snapshots.length > 10000
+      || snapshots.some(s => !/^[a-f0-9]{64}$/.test(s?.id || ''))
+      || new Set(snapshots.map(s => s.id)).size !== snapshots.length) {
+    throw errore('ripristino_repository_non_valido');
+  }
+  const operazioni = new Map(), sequenze = new Map();
+  let duplicati = 0;
+  for (const { id } of snapshots) {
+    const v = validaJournal(await repository.leggiJournal(id)), j = v.journal;
+    const op = j.dominio + ':' + j.operazione;
+    const precedente = operazioni.get(op), altra = sequenze.get(j.sequenza);
+    if (precedente && precedente.impronta !== v.impronta) throw errore('ripristino_operazione_in_conflitto');
+    if (altra !== undefined && altra !== op) throw errore('ripristino_sequenza_in_conflitto');
+    if (precedente) duplicati++;
+    else { operazioni.set(op, { journal: j, impronta: v.impronta }); sequenze.set(j.sequenza, op); }
+  }
+  const journals = [...operazioni.values()].map(v => v.journal).sort((a, b) =>
+    BigInt(a.sequenza) < BigInt(b.sequenza) ? -1 : BigInt(a.sequenza) > BigInt(b.sequenza) ? 1 : 0);
+  return { journals, snapshot: snapshots.length, duplicati };
+}
+
 // Solo recovery offline: validare l'intero input prima di iniziare; ogni journal
 // resta atomico e idempotente. Un errore ferma il batch e il DB non va riaperto.
 async function applicaJournalOrdinati({ client, journals } = {}) {
@@ -276,4 +306,4 @@ async function applicaJournalOrdinati({ client, journals } = {}) {
   } finally { batchInUso.delete(client); }
 }
 
-module.exports = { applicaJournal, applicaJournalOrdinati };
+module.exports = { applicaJournal, applicaJournalOrdinati, preparaJournalDaRepository };

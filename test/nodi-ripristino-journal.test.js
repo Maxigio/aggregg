@@ -1,7 +1,7 @@
 'use strict';
 
 const test = require('node:test'), assert = require('node:assert/strict');
-const { applicaJournal, applicaJournalOrdinati } = require('../backend/nodi/ripristino-journal');
+const { applicaJournal, applicaJournalOrdinati, preparaJournalDaRepository } = require('../backend/nodi/ripristino-journal');
 const id = n => '00000000-0000-4000-8000-' + String(n).padStart(12, '0');
 const clone = v => structuredClone(v);
 function journal() {
@@ -83,6 +83,67 @@ const scrittureCommerciali = d => d.chiamate.filter(c=>/^(INSERT INTO|UPDATE|DEL
 const codice = v => e => e.codice===v && e.message===v && e.manuale===true;
 
 if (require.main === module) {
+
+test('recovery repository: ordina per sequenza, deduplica copie, non per data né timestamp di upload', async () => {
+  const first = journal(), last = { ...journal(), operazione: id(101), sequenza: '20',
+    confermata_il: '2026-10-01T12:00:00Z' };
+  const input = [last, first, { ...first, confermata_il: '2026-10-02T12:00:00.123456Z' }];
+  const repository = { async elenca(categoria) {
+    assert.equal(categoria, 'journal');
+    return input.map((_, n) => ({ id: String(n + 1).padStart(64, '0') }));
+  }, async leggiJournal(snapshot) { return input[Number(snapshot) - 1]; } };
+  const plan = await preparaJournalDaRepository({ repository });
+  assert.equal(plan.snapshot, 3); assert.equal(plan.duplicati, 1);
+  assert.deepEqual(plan.journals.map(j => j.sequenza), ['12', '20']);
+  const d = database();
+  assert.ok((await applicaJournalOrdinati({ client: d.client, journals: plan.journals })).every(r => r.stato === 'applicato'));
+  assert.ok((await applicaJournalOrdinati({ client: d.client, journals: plan.journals })).every(r => r.giaEseguita));
+});
+
+test('recovery repository: copia non valida, conflitto o download fallito prima di qualsiasi replay', async t => {
+  for (const caso of ['payload', 'operazione', 'sequenza', 'rete']) await t.test(caso, async () => {
+    const d = database(), first = journal();
+    const bad = caso === 'payload' ? { ...first, extra: true }
+      : caso === 'operazione' ? { ...first, persone: first.persone.map(p => ({ ...p, epoca: p.epoca + 1 })) }
+      : { ...first, operazione: id(101) };
+    const repository = { async elenca() { return ['a', 'b'].map(c => ({ id: c.repeat(64) })); },
+      async leggiJournal(snapshot) {
+        if (snapshot[0] === 'a') return first;
+        if (caso === 'rete') throw new Error('backup_non_disponibile');
+        return bad;
+      } };
+    await assert.rejects((async () => {
+      const plan = await preparaJournalDaRepository({ repository });
+      await applicaJournalOrdinati({ client: d.client, journals: plan.journals });
+    })(), { message: caso === 'payload' ? 'ripristino_journal_non_valido' : caso === 'operazione'
+      ? 'ripristino_operazione_in_conflitto' : caso === 'sequenza' ? 'ripristino_sequenza_in_conflitto' : 'backup_non_disponibile' });
+    assert.equal(d.chiamate.length, 0);
+  });
+});
+
+test('recovery repository: lista vuota ammessa, indice errato respinto senza download', async () => {
+  let calls = 0;
+  const repository = { async elenca() { return []; }, async leggiJournal() { calls++; } };
+  assert.deepEqual(await preparaJournalDaRepository({ repository }), { journals: [], snapshot: 0, duplicati: 0 });
+  for (const list of [null, [{ id: 'latest' }], [{ id: 'a'.repeat(64) }, { id: 'a'.repeat(64) }]]) {
+    repository.elenca = async () => list;
+    await assert.rejects(preparaJournalDaRepository({ repository }), codice('ripristino_repository_non_valido'));
+  }
+  assert.equal(calls, 0);
+});
+
+test('recovery repository: un indice incompleto non prova che tutti i journal siano disponibili', async () => {
+  const d = database(), first = journal(), last = { ...journal(), operazione: id(101), sequenza: '20' };
+  const repository = { async elenca() { return [{ id: 'a'.repeat(64) }]; }, async leggiJournal() { return last; } };
+  const plan = await preparaJournalDaRepository({ repository });
+  // Entrambi sono snapshot completi: omettere first non viola un vincolo SQL.
+  // Non interpretare il successo del replay come prova di nessuna copia persa.
+  assert.equal(plan.journals.length, 1);
+  assert.equal(Object.hasOwn(plan, 'completo'), false);
+  await applicaJournalOrdinati({ client: d.client, journals: plan.journals });
+  assert.equal(d.stato.operazioni.has(first.dominio + ':' + first.operazione), false);
+  assert.equal(d.stato.operazioni.has(last.dominio + ':' + last.operazione), true);
+});
 
 test('journal offline: snapshot atomico, audit privato e massima epoca; nessun ruolo o Auth restaurato',async()=>{
   const d=database(),j=journal();

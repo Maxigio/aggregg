@@ -47,7 +47,7 @@ function creaRestic({ binario, ambiente, spawnProcesso = spawn }) {
     try { verificaSeparazione(env); } catch { return reject(new Error('backup_non_configurato')); }
     try { child = spawnProcesso(binario, ['--no-cache', ...args], { env, stdio: ['pipe', 'pipe', 'pipe'] }); }
     catch { return reject(new Error('backup_non_disponibile')); }
-    let output = Buffer.alloc(limiteOutput), byte = 0, troppo = false;
+    let output = Buffer.alloc(limiteOutput), byte = 0, troppo = false, discoveryIncompleta = false;
     const interrompi = () => {
       if (troppo) return;
       troppo = true; output = undefined; child.kill('SIGTERM');
@@ -59,14 +59,18 @@ function creaRestic({ binario, ambiente, spawnProcesso = spawn }) {
       if (b.length > limiteOutput - byte) interrompi();
       else { b.copy(output, byte); byte += b.length; }
     });
-    child.stderr.resume(); child.stdin.on('error', () => {});
+    // snapshots può ignorare copie illeggibili e terminare con exit 0.
+    // Non interpretare quella lista parziale come indice affidabile. Qualsiasi
+    // diagnostica interrompe SOLO discovery, senza conservarne il contenuto.
+    child.stderr.on('data', b => { if (args[0] === 'snapshots' && b.length) discoveryIncompleta = true; });
+    child.stdin.on('error', () => {});
     child.once('error', () => {
       troppo = true; output = undefined;
       clearTimeout(timer); clearTimeout(escalation); reject(new Error('backup_non_disponibile'));
     });
     child.once('close', code => {
       clearTimeout(timer); clearTimeout(escalation);
-      if (code !== 0 || troppo) { output = undefined; return reject(new Error('backup_non_disponibile')); }
+      if (code !== 0 || troppo || discoveryIncompleta) { output = undefined; return reject(new Error('backup_non_disponibile')); }
       resolve(output.toString('utf8', 0, byte)); output = undefined;
     });
     child.stdin.end(input);
@@ -105,6 +109,26 @@ function creaRestic({ binario, ambiente, spawnProcesso = spawn }) {
       return { snapshot: summary.snapshot_id };
     },
     async verifica() { await esegui(['check', '--read-data']); return { ok: true }; },
+    // Indice del repository, non dell'outbox perduta. Non restituire utenti,
+    // percorsi o configurazione del processo che ha creato gli snapshot.
+    async elenca(categoria) {
+      categoriaValida(categoria);
+      const snapshots = await json(['snapshots', '--json', '--host', 'amr-centro',
+        '--path', '/' + filename(categoria), '--tag', categoria], LIMITE_PIANO);
+      if (!Array.isArray(snapshots) || snapshots.length > MAX_SNAPSHOT
+          || snapshots.some(s => !s || !/^[a-f0-9]{64}$/.test(s.id || '')
+            || s.hostname !== 'amr-centro' || s.paths?.length !== 1 || s.paths[0] !== '/' + filename(categoria)
+            || s.tags?.length !== 1 || s.tags[0] !== categoria || !Number.isFinite(Date.parse(s.time)))
+          || new Set(snapshots.map(s => s.id)).size !== snapshots.length) {
+        throw new Error('backup_indice_non_valido');
+      }
+      return snapshots.map(({ id, time }) => ({ id, time }));
+    },
+    // Il journal resta in memoria: nessun file JSON decifrato di appoggio.
+    async leggiJournal(snapshot) {
+      if (!/^[a-f0-9]{64}$/.test(snapshot || '')) throw new Error('backup_input_non_valido');
+      return json(['dump', snapshot, '/operazioni.json'], 16384);
+    },
     // Default non distruttivo. Il piano resta interno: niente percorsi/config in API.
     // Eliminazione solo di ID approvati dal dry-run, mai lifecycle dello storage.
     async retention(categoria, { dryRun = true, snapshot } = {}) {

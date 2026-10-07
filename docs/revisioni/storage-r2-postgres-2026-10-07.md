@@ -196,3 +196,12 @@ della chiave, account R2/permessi di altri bucket, recovery Auth completo,
 grandi database, costi mensili, UI staging e collegamento M2. Nessun deploy
 o attivazione di log/bug report su storage. La credenziale conserva la
 scadenza temporanea di 24 ore.
+
+## Incremento successivo: discovery senza source
+
+Il [collaudo recovery](storage-r2-recovery-2026-10-07.md) spegne il source
+prima di elencare e leggere le copie disponibili nel solo repository.
+PASS locale e R2 sintetico con replay equivalente e idempotente; non usa
+l'outbox o le ricevute come indice di selezione. Restano distinti la
+completezza rispetto alle operazioni mai confermate, il punto di recovery,
+la custodia duratura della chiave e il backup dei dati vivi. Nessun deploy.

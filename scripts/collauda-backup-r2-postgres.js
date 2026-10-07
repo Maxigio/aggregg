@@ -7,7 +7,7 @@ const { creaRestic } = require('../backend/nodi/backup-restic');
 const { creaBackupPostgres, creaDumpPostgres, creaStatoBackup } = require('../backend/nodi/backup-postgres-prova');
 const { creaAziendePostgres } = require('../backend/nodi/aziende-postgres-prova');
 const { creaColleghiPostgres } = require('../backend/nodi/colleghi-postgres-prova');
-const { applicaJournalOrdinati } = require('../backend/nodi/ripristino-journal');
+const { applicaJournalOrdinati, preparaJournalDaRepository } = require('../backend/nodi/ripristino-journal');
 const { preparaSchema } = require('./nhost/prepara-schema-staging');
 const PG = 'postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650';
 const ENDPOINT = 'https://88508b25fc92046c93f7a33eaac1bc2c.eu.r2.cloudflarestorage.com';
@@ -170,7 +170,6 @@ async function collauda(config) {
     await business.attiva(admin, { id: 'second', operazione: crypto.randomUUID() });
     const colleague = await colleagues.invita(admin, { id: 'second', email: 'colleague@amr.invalid', operazione: crypto.randomUUID() });
     const pending = await colleagues.invita(admin, { id: 'second', email: 'pending@amr.invalid', operazione: crypto.randomUUID() });
-    const checkpoint = (await source.query('SELECT max(sequenza)::text n FROM amr_backup.outbox')).rows[0].n;
     const dump = creaDumpPostgres({ binario: '/usr/bin/pg_dump', ambiente: { PGDATABASE: 'postgres' }, maxBytes: MAX,
       spawnProcesso: (_bin, args, options) => spawn('docker', ['--host', host, 'exec', names.source, 'pg_dump',
         '-U', 'postgres', '-d', 'postgres', ...args], options) });
@@ -178,8 +177,7 @@ async function collauda(config) {
     for (const r of Object.values(repo)) await r.inizializza();
     assert.notEqual(await repo.database.identita(), await repo.journal.identita());
     const baseline = await dump();
-    let baselineCopy;
-    try { baselineCopy = await repo.database.copia(baseline, 'database'); }
+    try { await repo.database.copia(baseline, 'database'); }
     finally { baseline.fill(0); }
     await business.accetta(people.first, first.token, crypto.randomUUID());
     await business.attiva(admin, { id: 'first', operazione: crypto.randomUUID() });
@@ -206,6 +204,26 @@ async function collauda(config) {
     assert.equal(status.journal.stato, 'confermato'); assert.equal(status.database.stato, 'confermato');
     receipt.prove.push('outbox_e_stato_admin_confermati');
     for (const r of Object.values(repo)) await r.verifica();
+    // La selezione deve funzionare senza outbox né ricevute come indice.
+    // Fermare soltanto il source nuovo di questa esecuzione, non gli stack Auth.
+    receipt.fase = 'source_indisponibile';
+    writer.release(true); writer = undefined;
+    await source.end(); pools.splice(pools.indexOf(source), 1);
+    await docker(['stop', '--time', '10', names.source]);
+    assert.equal((await docker(['inspect', '--format', '{{.State.Running}}', names.source])).toString().trim(), 'false');
+    await assert.rejects(source.query('SELECT 1'));
+    receipt.prove.push('source_spento_prima_del_recovery');
+    receipt.fase = 'discovery_repository';
+    const dumps = (await repo.database.elenca('database')).sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+    assert.equal(dumps.length, 2);
+    // Si sceglie il dump più vecchio SOLO per provare il replay successivo.
+    // In recovery operativa l'operatore dovrà scegliere un ID esatto validato.
+    assert.ok(Date.parse(dumps[0].time) < Date.parse(dumps[1].time));
+    const plan = await preparaJournalDaRepository({ repository: repo.journal });
+    assert.equal(plan.journals.length, 13);
+    receipt.discovery = { dump: dumps.length, journal: plan.journals.length,
+      snapshot_journal: plan.snapshot, duplicati: plan.duplicati, solo_repository: true };
+    receipt.prove.push('indice_da_repository_senza_outbox');
     receipt.fase = 'restore';
     const restoreAndRead = async (category, snapshot, filename) => {
       const dir = await repo[category].ripristina(snapshot, directory);
@@ -216,7 +234,7 @@ async function collauda(config) {
       return bytes;
     };
     receipt.fase = 'restore_integrita_dump';
-    const restored = await restoreAndRead('database', baselineCopy.snapshot, 'database.dump');
+    const restored = await restoreAndRead('database', dumps[0].id, 'database.dump');
     receipt.fase = 'restore_ruoli';
     for (const role of ROLES) {
       const inherit = ['amr_accessi_lettore', 'amr_gateway', 'amr_commerciale', 'amr_copie'].includes(role) ? 'INHERIT' : 'NOINHERIT';
@@ -233,14 +251,7 @@ async function collauda(config) {
     // La funzione di finalizzazione è già nel dump del pacchetto completo.
     assert.notDeepEqual(await readBusiness(recovery), expected);
     receipt.fase = 'restore_journal';
-    const journalRows = (await source.query('SELECT snapshot FROM amr_backup.outbox WHERE categoria=$1 AND sequenza>$2 ORDER BY sequenza',
-      ['journal', checkpoint])).rows;
-    assert.equal(journalRows.length, 7);
-    const journals = [];
-    for (const row of journalRows) {
-      const b = await restoreAndRead('journal', row.snapshot, 'operazioni.json');
-      try { journals.push(JSON.parse(b.toString())); } finally { b.fill(0); }
-    }
+    const journals = plan.journals;
     const client = await recovery.connect();
     try {
       // Senza l'accettazione iniziale, un journal successivo non deve inventare l'identità.
@@ -249,7 +260,9 @@ async function collauda(config) {
         { codice: 'ripristino_accettazione_mancante' });
       receipt.fase = 'replay_ordinato';
       const applied = await applicaJournalOrdinati({ client, journals: [...journals].reverse() });
-      assert.ok(applied.every(r => r.stato === 'applicato' && !r.giaEseguita));
+      assert.ok(applied.every(r => !r.giaEseguita));
+      assert.equal(applied.filter(r => r.stato === 'applicato').length, 7);
+      assert.equal(applied.filter(r => r.stato === 'superato').length, 6);
       receipt.fase = 'replay_equivalenza';
       const actual = await readBusiness(client);
       receipt.differenze = Object.fromEntries(Object.keys(expected).map(table => [table,

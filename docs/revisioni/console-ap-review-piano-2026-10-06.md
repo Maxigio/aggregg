@@ -606,3 +606,19 @@ finale PASS nel perimetro, gate pertinente Node 24.21.0 **515/515 pass**,
 Punto 3 chiuso per codice e collaudo locale. Nessun deploy, portale live o
 M2 collegato. Prossimo punto: interview sulla policy delle notifiche (4),
 poi 5–7, CHECK storico, gate remoto/M2, review e soltanto dopo punto 8.
+
+## 7 ottobre — stato dopo i collaudi storage
+
+I collaudi R2 di byte, PostgreSQL e recovery senza source sono registrati
+in [storage R2/recovery](storage-r2-recovery-2026-10-07.md). La discovery
+delle copie disponibili è provata anche dopo lo spegnimento del database
+sintetico; backup vivi, completezza del punto di recovery e custodia della
+chiave non sono ancora chiusi. Nessun collegamento di staging o M2.
+
+Prima del frontend restano: configurazione/consegna Better Stack (4),
+baseline prestazioni (5), intervalli e comandi delle soglie (6), gate
+operativo backup (7), diagnosi CHECK, collaudo remoto del candidato e M2,
+review del branch. Decisioni e prove mancanti sono elencate nel registro
+recovery, senza interpretare provider acquistati o test locali come gate
+di produzione. Il brainstorming del punto 8 resta da implementare dopo
+questi passaggi, uno alla volta.
