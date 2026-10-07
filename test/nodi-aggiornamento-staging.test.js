@@ -75,6 +75,29 @@ test('staging: anche origine, auth e proxy possono rimanere riferimenti non riso
   assert.deepEqual(validaStato(s), s);
   assert.ok(toml(s.config).includes('{{ secrets.AMR_NODI_TOKENS }}'));
 });
+test('staging: aggiunge un IP alla lista referenziata senza risolverla, preservandola al rollback', () => {
+  const s = stato(), voce = s.config.environment.find(e => e.name === 'AMR_CENTRO_PROXY_IP');
+  voce.value = '{{ secrets.AMR_CENTRO_PROXY_IP }},10.110.18.147';
+  assert.deepEqual(validaStato(s), s);
+  const p = preparaPiano({ stato: s, candidato: wire('b'), image: digest('b') });
+  for (const c of Object.values(p.configurazioni)) {
+    assert.equal(c.environment.find(e => e.name === voce.name).value, voce.value);
+  }
+  assert.ok(toml(s.config).includes(voce.value));
+  for (const value of ['{{ secrets.AMR_CENTRO_PROXY_IP }},',
+    '{{ secrets.AMR_CENTRO_PROXY_IP }},10.0.0.0/8',
+    '{{ secrets.AMR_CENTRO_PROXY_IP }},{{ secrets.ALTRO }}',
+    '{{ secrets.ALTRO }},10.110.18.147',
+    '{{ secrets.AMR_CENTRO_PROXY_IP }},10.110.18.147,,127.0.0.1']) {
+    voce.value = value;
+    assert.throws(() => validaStato(s), /pacchetto_staging_non_valido/);
+  }
+  const senzaProxy = stato();
+  senzaProxy.config.environment = senzaProxy.config.environment.filter(e => e.name !== voce.name);
+  senzaProxy.config.environment.push({ name: 'AMR_CENTRO_PROPRIETARIO_ID',
+    value: '{{ secrets.AMR_CENTRO_PROPRIETARIO_ID }}' });
+  assert.throws(() => validaStato(senzaProxy), /pacchetto_staging_non_valido/);
+});
 test('staging: ID proprietario opzionale solo come riferimento, preservato al rollback', () => {
   const s = stato(), name = 'AMR_CENTRO_PROPRIETARIO_ID';
   s.config.environment.push({ name, value: '{{ secrets.' + name + ' }}' });

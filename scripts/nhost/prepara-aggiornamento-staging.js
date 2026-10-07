@@ -70,12 +70,17 @@ function validaStato(stato) {
     if (env[nome] !== value && env[nome] !== riferimento(nome)) errore();
   }
   const proxy = env.AMR_CENTRO_PROXY_IP;
-  if (proxy !== riferimento('AMR_CENTRO_PROXY_IP')
-    && (!proxy || proxy.length > 512 || proxy.split(',').some(ip => !net.isIP(ip.trim())))) errore();
+  if (typeof proxy !== 'string') errore();
+  const refProxy = riferimento('AMR_CENTRO_PROXY_IP');
+  const proxyConAggiunta = proxy.startsWith(refProxy + ',');
+  const ipEspliciti = proxyConAggiunta ? proxy.slice(refProxy.length + 1) : proxy;
+  if (proxy !== refProxy
+    && (!ipEspliciti || proxy.length > 512 || ipEspliciti.split(',').some(ip => !net.isIP(ip.trim())))) errore();
   // Riusa la validazione runtime con soli valori sintetici. Non risolve segreti Nhost.
   configura({ ...env, AMR_CENTRO_ORIGINE: ORIGINE, AMR_NHOST_AUTH_URL: AUTH,
     ...(env[opzionale] === undefined ? {} : { [opzionale]: '00000000-0000-4000-8000-000000000001' }),
-    AMR_CENTRO_PROXY_IP: proxy === riferimento('AMR_CENTRO_PROXY_IP') ? '127.0.0.1' : proxy,
+    AMR_CENTRO_PROXY_IP: proxy === refProxy ? '127.0.0.1'
+      : proxyConAggiunta ? '127.0.0.1,' + ipEspliciti : proxy,
     AMR_NODI_TOKENS: JSON.stringify({ sintetico: 'a'.repeat(64) }), AMR_PG_DATABASE: 'postgres',
     ...Object.fromEntries(SEGRETE.filter(n => n.endsWith('_PASSWORD')).map(n => [n, 'sintetico-non-segreto'])) });
   return { ...structuredClone(stato), manifest };

@@ -540,3 +540,17 @@ nello staging remoto. Solo dopo: M2 isolato per stato e compatibilità,
 arresto/riconnessione e marker di produzione invariati. Nessun M2 collegato
 né frontend modificato in questo incremento. L'avviso visivo sulla storia
 incompleta e il brainstorming della console restano nel gate frontend.
+
+## 7 ottobre — decisione proxy applicata e ordine successivo
+
+Il proprietario approva l'aggiunta del peer osservato solo nello staging.
+Applicata come append al riferimento esistente, senza leggere o modificare
+il segreto: [prove e limiti](staging-proxy-aggiunta-2026-10-07.md).
+Readback esatto, servizio ready e 16/16 controlli ingress anonimi PASS;
+nessun nuovo candidato distribuito né M2 collegato. La decisione proxy è chiusa
+per questo collaudo provvisorio; il contratto ingress produzione resta aperto.
+
+L'ordine richiesto è 2–7 con interview e commit per punto, CHECK storico,
+collaudo remoto del candidato/collegamento M2, review del branch e correzioni,
+poi 8 frontend. Il vecchio via a procedere con CHECK aperto non equivale a
+chiusura del finding: prima della console il proprietario chiede di affrontarlo.

@@ -23,7 +23,8 @@ value = "{{ secrets.AMR_NHOST_AUTH_URL }}"
 
 [[environment]]
 name = "AMR_CENTRO_PROXY_IP"
-value = "{{ secrets.AMR_CENTRO_PROXY_IP }}"
+# Aggiunta provvisoria solo qui: preserva la lista esistente senza risolverla.
+value = "{{ secrets.AMR_CENTRO_PROXY_IP }},10.110.18.147"
 
 [[environment]]
 name = "AMR_CENTRO_REPLICHE"
