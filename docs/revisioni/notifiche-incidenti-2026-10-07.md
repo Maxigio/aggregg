@@ -805,3 +805,25 @@ fetch disabilitato, nessuna credenziale o rete per il reviewer.
 Fonti: [elaborazione alert](https://betterstack.com/docs/uptime/processing-alerts-for-integrations/),
 [timeline](https://betterstack.com/docs/uptime/api/list-of-incident-timeline-events/),
 [escalation su incidente esistente](https://betterstack.com/docs/uptime/api/escalate-an-ongoing-incident/).
+
+### Verifica della chiusura dello stesso incidente — 8 ottobre
+
+L'utente ha autorizzato la chiusura del solo incidente sintetico, accettando
+che il provider potesse notificare il ripristino. Il controllo preliminare
+ha trovato l'incidente **già risolto** alle 23:07:35.212 UTC del 7 ottobre
+(01:07:35.212 locali dell'8 ottobre), da un utente secondo la timeline.
+Il marcatore esclusivo registra **zero POST di risoluzione**: non ripetuta
+un'operazione già completata, non riaperto l'incidente e nessun altro alert.
+Il webhook rimane sospeso, verificato con GET.
+
+La timeline successiva contiene la risoluzione e i precedenti invii email e
+push delle 22:48:44 UTC; non registra altri invii al ripristino. Questo è un
+campione osservato con chiusura manuale e integrazione sospesa, **non prova
+di soppressione universale** nelle future chiusure automatiche del runtime.
+La conferma della ricezione sul dispositivo e il collegamento operativo
+staging restano aperti. Non dichiarato concluso il punto 4.
+
+Prove private redatte: `risoluzione.json`,
+`timeline-risoluzione-redatta.json` nella stessa directory del collaudo.
+La documentazione [Resolve incident](https://betterstack.com/docs/uptime/api/resolve-an-ongoing-incident/)
+espone `resolved_by`, senza un parametro di silenziamento degli invii.
