@@ -25,6 +25,9 @@ function database() {
       [id(4),{id:id(4),attiva:true,admin:false,epoca:11}]]),
     aziende: new Map([['sintetica',{...journal().azienda,scadenza:'2027-01-01T00:00:00Z'}]]),
     membri: new Map([[id(2),'sintetica'],[id(3),'sintetica'],[id(4),'sintetica']]),
+    inviti: new Map([[id(200),{persona:id(3),azienda:'sintetica',stato:'accettato',revocata_il:null}],
+      [id(201),{persona:id(4),azienda:'sintetica',stato:'accettato',revocata_il:null}],
+      [id(202),{persona:id(3),azienda:'altra',stato:'accettato',revocata_il:null}]]),
     operazioni: new Map(), sequenze: new Map(),
     dumpSequenze: new Map([['sintetica','10']]), watermarkTabella: true,
   };
@@ -59,6 +62,11 @@ function database() {
       stato.aziende.set(id,{id,nome,attiva,moduli,scadenza,referente,accettata_il,attivata_il});
     } else if (sql.startsWith('DELETE FROM amr_accessi.membri')) {
       for(const [persona,azienda]of stato.membri)if(azienda===values[0])stato.membri.delete(persona);
+    } else if (sql.startsWith("UPDATE amr_accessi.colleghi_inviti SET stato='revocato'")) {
+      const [persona,azienda,data]=values;
+      for(const invito of stato.inviti.values())if(invito.persona===persona&&invito.azienda===azienda&&invito.stato==='accettato') {
+        invito.stato='revocato';invito.revocata_il=data;
+      }
     } else if (sql.startsWith('INSERT INTO amr_accessi.membri')) {
       assert.equal(stato.membri.has(values[0]),false);stato.membri.set(values[0],values[1]);
     } else if (sql.startsWith('INSERT INTO amr_ripristino.aziende')) stato.sequenze.set(values[0],values[1]);
@@ -92,8 +100,19 @@ test('journal offline: snapshot atomico, audit privato e massima epoca; nessun r
   assert.match(ddl,/REVOKE ALL ON ALL TABLES IN SCHEMA amr_ripristino FROM PUBLIC/);
   assert.ok(d.chiamate.some(c=>c.sql==='SET CONSTRAINTS ALL DEFERRED'));
   assert.ok(d.chiamate.every(c=>!/^\s*(INSERT INTO|UPDATE|DELETE FROM) auth\./.test(c.sql)));
-  assert.ok(scrittureCommerciali(d).every(c=>!/(admin\s*=|inviti|operazioni)/.test(c.sql)));
+  assert.ok(scrittureCommerciali(d).every(c=>!/(admin\s*=|operazioni)/.test(c.sql)));
+  assert.ok(!d.chiamate.some(c=>/^INSERT INTO amr_accessi\..*inviti/.test(c.sql)));
   assert.ok(!d.chiamate.some(c=>c.sql.startsWith('INSERT INTO amr_accessi.aziende')));
+});
+
+test('journal: revoca collega conserva anche lo stato degli inviti, senza toccare altra persona o azienda',async()=>{
+  const d=database(),j=journal();
+  await applicaJournal({client:d.client,journal:j});
+  assert.deepEqual(d.stato.inviti.get(id(200)),{persona:id(3),azienda:'sintetica',stato:'revocato',revocata_il:'2026-10-02T12:00:00.123456Z'});
+  assert.equal(d.stato.inviti.get(id(201)).stato,'accettato');
+  assert.equal(d.stato.inviti.get(id(202)).stato,'accettato');
+  const before=clone(d.stato);await applicaJournal({client:d.client,journal:j});assert.deepEqual(d.stato,before);
+  assert.equal(d.chiamate.filter(c=>c.sql.startsWith("UPDATE amr_accessi.colleghi_inviti SET stato='revocato'")).length,1);
 });
 
 test('journal: stesso op e fingerprint no-op anche dopo snapshot successivi, ordine JSON irrilevante',async()=>{

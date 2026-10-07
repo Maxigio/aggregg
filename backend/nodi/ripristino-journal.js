@@ -219,6 +219,13 @@ async function applicaJournalInterno({ client, journal: input } = {}) {
           } else if (!collega || j.invito.stato !== 'revocato') throw errore('ripristino_invito_in_conflitto');
         }
       }
+      // La revoca del collega chiude anche gli inviti già accettati: il writer
+      // non valorizza invito nel journal, ma conserva destinatario e v_ora.
+      if (j.dominio === 'colleghi' && j.tipo === 'revoca') {
+        await client.query("UPDATE amr_accessi.colleghi_inviti SET stato='revocato',revocata_il=$3"
+          + " WHERE persona=$1 AND azienda=$2 AND stato='accettato'",
+        [j.destinatario,a.id,j.confermata_il]);
+      }
       const prenotazioni = (await client.query(`SELECT prenotazioni.azienda FROM (
         SELECT azienda,lower(email) AS email FROM amr_accessi.aziende_inviti
           WHERE persona IS NULL AND scadenza>clock_timestamp()
