@@ -4,7 +4,7 @@ const SETTE_GIORNI = 7 * 86400000;
 const CAP = 10000;
 const TABELLE = Object.freeze({ lavori: 'creato', eventi: 'ts' });
 
-function creaRetention({ db, ora }) {
+function creaRetention({ db, ora, pulisciExtra = () => {} }) {
   // Solo metadati aggregati del taglio: nessun filtro, annuncio o identificativo.
   let tagli = null;
   function pulisci() {
@@ -30,6 +30,7 @@ function creaRetention({ db, ora }) {
             .run(tabella, adesso, taglio.fino, taglio.n);
         }
       }
+      pulisciExtra();
       db.prepare('DELETE FROM diagnostica_tagli WHERE fino_il < ?').run(soglia);
       const nuove = db.prepare('SELECT area,ultimo_il,fino_il,righe FROM diagnostica_tagli ORDER BY area').all();
       // Il taglio e la sua evidenza sono atomici. Un guasto non può

@@ -44,7 +44,9 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   adminLocale = false, accountProva = null, inizializzaAccessi = null, compatibilita = null, trasporto = null,
   proprietarioId = null, inviaIncidente = null }) {
   // Validare prima di aprire il registro o inizializzare altri provider.
-  const limitiRicerca = creaLimitiRicerca({ timeoutMs: timeoutRicercaMs, maxPersona, maxTotale, oraMono });
+  let configurazioneLimiti = null;
+  const limitiRicerca = creaLimitiRicerca({ timeoutMs: timeoutRicercaMs, maxPersona, maxTotale, oraMono,
+    leggi: () => { const c = configurazioneLimiti.stato(); return { ...c.valori, revisione: c.revisione }; } });
   if (proprietarioId !== null && (!idProprietarioValido(proprietarioId) || !inizializzaAccessi)) {
     throw new Error('configurazione_proprietario_non_valida');
   }
@@ -61,6 +63,10 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   }
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(path.join(directory, 'lavori-prototipo.db'));
+  try {
+    configurazioneLimiti = require('./limiti-configurazione').creaConfigurazioneLimiti({ db, ora,
+      iniziali: { timeoutMs: timeoutRicercaMs, maxPersona, maxTotale } });
+  } catch (e) { db.close(); throw e; }
   db.exec('CREATE TABLE IF NOT EXISTS lavori (id TEXT PRIMARY KEY, azienda TEXT NOT NULL, operazione TEXT NOT NULL, filtri TEXT NOT NULL, stato TEXT NOT NULL, creato INTEGER NOT NULL, aggiornato INTEGER NOT NULL, nodo TEXT)');
   if (!db.prepare('PRAGMA table_info(lavori)').all().some(col => col.name === 'nodo')) {
     db.exec('ALTER TABLE lavori ADD COLUMN nodo TEXT');
@@ -89,7 +95,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   db.exec('CREATE TABLE IF NOT EXISTS eventi (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, livello TEXT NOT NULL, codice TEXT NOT NULL, lavoro TEXT, nodo TEXT, fonte TEXT, azienda TEXT, http INTEGER)');
   db.exec('CREATE TABLE IF NOT EXISTS supervisione_worker (nodo TEXT PRIMARY KEY, boot TEXT, sequenza INTEGER NOT NULL, stato TEXT NOT NULL, motivo TEXT, restart INTEGER NOT NULL, prossimo INTEGER, aggiornato INTEGER NOT NULL)');
   db.exec('CREATE INDEX IF NOT EXISTS eventi_ts ON eventi(ts)');
-  const retention = creaRetention({ db, ora });
+  const retention = creaRetention({ db, ora, pulisciExtra: configurazioneLimiti.pulisci });
   const incidenti = require('./incidenti').creaIncidenti({ db, ora, invia: inviaIncidente });
   const diagnostica = { incompleta: false, fallimenti: 0, ultimoErrore: null, ultimaPulizia: null };
   Object.defineProperty(diagnostica, 'storia', { enumerable: true, get: retention.stato });
@@ -124,7 +130,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
     scriviDiagnostica('evento', () => {
       db.prepare('INSERT INTO eventi(ts,livello,codice,lavoro,nodo,fonte,azienda,http) VALUES(?,?,?,?,?,?,?,?)')
         .run(ora(), ['sospensione_aggiunta','sospensione_rimossa','lavori_cancellati',
-          'manutenzione_attiva','manutenzione_disattiva','sonda_riuscita','worker_attivo','worker_fermato'].includes(codice)
+          'manutenzione_attiva','manutenzione_disattiva','sonda_riuscita','worker_attivo','worker_fermato','limiti_modificati'].includes(codice)
           ? 'info' : codice === 'fonte_parziale' ? 'avviso' : 'errore', codice,
           lavoro, nodo, fonte, azienda, Number.isInteger(http) && http >= 100 && http <= 599 ? http : null);
     });
@@ -562,7 +568,10 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
 
   function ricerca(azienda, query, verifica = null, richiesta = null) {
     if ((accountProva || accessi) && !verifica) throw Object.assign(new Error('identita_richiesta'), { status: 401 });
-    const budgetRichiesta = richiesta?.budget || creaBudgetRicerca({ timeoutMs: timeoutRicercaMs, oraMono });
+    const limitiAmmessi = richiesta?.limiti || (() => {
+      const c = configurazioneLimiti.stato(); return { ...c.valori, revisione: c.revisione };
+    })();
+    const budgetRichiesta = richiesta?.budget || creaBudgetRicerca({ timeoutMs: limitiAmmessi.timeoutMs, oraMono });
     const epocaAmmessa = richiesta?.ammissione ?? epocaManutenzione;
     const verificaAttiva = richiesta ? () => richiesta.verifica(verifica)
       : verifica || (() => ({ azienda }));
@@ -573,7 +582,7 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
       const input = filtriAmmessi(query);
       const prima = Number(input.fetta || 0) === 0 && !input.fonti
         && input.subitoMainStart == null && input.subitoRecuperoStart == null;
-      const chiave = prima ? JSON.stringify([richiesta?.contesto || 'cliente', revisioneRicerca,
+      const chiave = prima ? JSON.stringify([richiesta?.contesto || 'cliente', revisioneRicerca, limitiAmmessi,
         Object.entries(input).sort(([a], [b]) => a.localeCompare(b))]) : null;
       let voce = prima ? condivise.get(chiave) : null;
       const esistente = voce && !voce.budget.signal.aborted;
@@ -928,6 +937,19 @@ function creaCentro({ tokens, directory, ora = () => Date.now(), timeoutMs = FIN
   app.get('/api/admin/diagnostica', (req, res) => res.json({ diagnostica,
     risorse: misuraRegistro({ db, directory, ora }) }));
   app.get('/api/admin/manutenzione', (req, res) => res.json({ manutenzione }));
+  app.get('/api/admin/limiti', (req, res) => rispondiDiagnostica(res, configurazioneLimiti.stato));
+  app.post('/api/admin/limiti', express.json({ limit: '1kb' }), adminDiProva, (req, res) => {
+    const persona = sessione(req)?.persona;
+    const operatore = typeof persona === 'string' && /^[a-f0-9-]{36}$/.test(persona) ? persona : adminLocale ? 'locale' : null;
+    try {
+      const out = configurazioneLimiti.aggiorna(req.body, operatore);
+      evento('limiti_modificati'); res.json(out);
+    } catch (e) {
+      const codici = ['limiti_non_validi','limiti_modificati','operatore_non_valido','audit_limiti_esaurito'];
+      res.status(codici.includes(e.codice) ? e.status : 503)
+        .json({ codice: codici.includes(e.codice) ? e.codice : 'limiti_non_disponibili' });
+    }
+  });
   app.post('/api/admin/incidenti/:id', express.json({ limit: '1kb' }), adminDiProva, (req, res) => {
     if (!/^[a-f0-9-]{36}$/.test(req.params.id) || !req.body || Object.keys(req.body).length !== 1
         || !['presente','risolto'].includes(req.body.azione)) return res.sendStatus(400);

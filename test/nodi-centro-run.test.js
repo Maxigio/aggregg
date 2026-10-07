@@ -21,7 +21,8 @@ test('config centro: HTTPS, singolo processo, tre ruoli e limiti espliciti',()=>
     {AMR_CENTRO_ORIGINE:'http://amr.invalid'},{AMR_NHOST_AUTH_URL:'https://auth.invalid/v1?token=secret'},
     {AMR_PG_COMMERCIALE_USER:'lettura'},{AMR_PG_HOST:'cloud.invalid'},{AMR_NODI_RELEASE_FILE:'../release'},
     {AMR_NODI_TOKENS:'{}'},{AMR_NODI_TOKENS:JSON.stringify({a:'a'.repeat(64),b:'a'.repeat(64)})},
-    {AMR_NODI_RICERCHE_MAX_PERSONA:'0'}, {AMR_CENTRO_PROPRIETARIO_ID:''},
+    {AMR_NODI_RICERCHE_MAX_PERSONA:'0'}, {AMR_NODI_RICERCHE_MAX_PERSONA:'3'},
+    {AMR_NODI_RICERCHE_MAX_TOTALE:'61'}, {AMR_NODI_RICERCA_TIMEOUT_MS:'60001'}, {AMR_CENTRO_PROPRIETARIO_ID:''},
     {AMR_CENTRO_PROPRIETARIO_ID:'admin'}, {AMR_CENTRO_PROPRIETARIO_ID:'mail@amr.invalid'}]) {
     assert.throws(()=>configura({...ambiente(),...patch}),/configurazione_centro_run_non_valida/);
   }

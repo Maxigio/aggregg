@@ -44,7 +44,7 @@ function creaBudgetRicerca({ timeoutMs = TEMPO_RICERCA_MS, scadeAl,
     chiudi: () => clearTimeout(timer) };
 }
 
-function creaLimitiRicerca({ timeoutMs = TEMPO_RICERCA_MS, maxPersona = 2, maxTotale = 60, oraMono } = {}) {
+function creaLimitiRicerca({ timeoutMs = TEMPO_RICERCA_MS, maxPersona = 2, maxTotale = 60, oraMono, leggi = null } = {}) {
   validaTimeout(timeoutMs);
   for (const [nome, valore] of Object.entries({ maxPersona, maxTotale })) {
     if (!Number.isSafeInteger(valore) || valore < 1) throw new Error(nome + ' non valido');
@@ -54,12 +54,18 @@ function creaLimitiRicerca({ timeoutMs = TEMPO_RICERCA_MS, maxPersona = 2, maxTo
   const richieste = new Set();
   let totale = 0;
   function ammetti(sessione) {
+    // Una sola fotografia per ammissione; gli avvii già ammessi conservano il budget.
+    const correnti = leggi ? leggi() : { timeoutMs, maxPersona, maxTotale };
+    validaTimeout(correnti.timeoutMs);
+    for (const k of ['maxPersona', 'maxTotale']) {
+      if (!Number.isSafeInteger(correnti[k]) || correnti[k] < 1) throw new Error(k + ' non valido');
+    }
     const persona = sessione.persona || sessione.identita?.persona || sessione.identita || sessione;
-    if (totale >= maxTotale || (persone.get(persona) || 0) >= maxPersona) {
+    if (totale >= correnti.maxTotale || (persone.get(persona) || 0) >= correnti.maxPersona) {
       throw Object.assign(new Error('troppe ricerche pendenti'), {
         status: 429, codice: 'troppe_ricerche_pendenti' });
     }
-    const budget = creaBudgetRicerca({ timeoutMs, oraMono });
+    const budget = creaBudgetRicerca({ timeoutMs: correnti.timeoutMs, oraMono });
     totale++; persone.set(persona, (persone.get(persona) || 0) + 1);
     let terminata = false, inVolo = 0, liberata = false;
     function libera() {
@@ -69,7 +75,9 @@ function creaLimitiRicerca({ timeoutMs = TEMPO_RICERCA_MS, maxPersona = 2, maxTo
       const n = persone.get(persona) - 1;
       if (n) persone.set(persona, n); else persone.delete(persona);
     }
-    const richiesta = { budget, verifica: fn => budget.attendi(async () => {
+    const richiesta = { budget, limiti: Object.freeze({ timeoutMs: correnti.timeoutMs,
+      maxPersona: correnti.maxPersona, maxTotale: correnti.maxTotale, revisione: correnti.revisione ?? 0 }),
+    verifica: fn => budget.attendi(async () => {
       inVolo++;
       try { return await fn(); } finally { inVolo--; libera(); }
     }), termina: () => { terminata = true; budget.chiudi(); richieste.delete(richiesta); libera(); } };
