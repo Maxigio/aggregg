@@ -138,7 +138,9 @@ async function collaudaImmagine({ host, docker, directory, image, readerPassword
     await cli(['volume','create','--label',label+'='+nonce,volume]);
     risorse.push(['volume',volumeTls]);
     await cli(['volume','create','--label',label+'='+nonce,volumeTls]);
+    // Centro e proxy TLS non usano il VOLUME PostgreSQL ereditato dalla base.
     const limiti = ['--pull','never','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges',
+      '--tmpfs','/var/lib/postgresql:rw,noexec,nosuid,size=1m',
       '--pids-limit','128','--cpus','1','--memory','512m','--log-driver','none','--label',label+'='+nonce];
     risorse.push(['container',tls]);
     await cli(['create','--name',tls,...limiti,'--network',ingresso,

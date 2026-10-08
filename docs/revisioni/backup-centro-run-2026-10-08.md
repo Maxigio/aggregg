@@ -236,3 +236,48 @@ download HTTP rifiutato, configurazione originale Run ripristinata e
 confrontata esattamente. `/healthz` 200 ma frontend 403 su richieste ripetute.
 La diagnosi ingress e il restore verificato precedono altri aggiornamenti.
 Backup automatici R2 non attivati, candidato non distribuito, M2 non collegato.
+
+### Diagnosi del gate completo e correzione della fixture
+
+Build immutabile del commit `fffdf17`, Linux amd64, eseguito: Node 24.21.0,
+UID 1000, pg_dump 18.6 e restic 0.19.1 funzionanti. Il gate completo con
+Auth reale locale e restic nativo si è fermato nel restore commerciale.
+La diagnostica filtrata conferma `pg_restore` exit 1: manca
+`amr_login_definitore`, richiesto dall'OWNER della funzione `inizio_login`.
+Il problema è nella lista dei ruoli della fixture, precedente alla nuova
+migrazione login; non dimostra un dump corrotto o un guasto di restic.
+
+Il runner ricrea ora quel ruolo NOLOGIN con attributi limitati e verifica
+il proprietario effettivamente ripristinato. Restano ACL, transazione unica
+e invalidazione degli accessi: nessun `--no-owner` o `--no-acl` per ottenere
+un PASS artificiale. La [documentazione PostgreSQL](https://www.postgresql.org/docs/18/app-pgrestore.html)
+descrive il ripristino degli owner; i ruoli globali devono essere preparati
+separatamente dal dump del database.
+
+La review indipendente ha rilevato un volume anonimo anche nella fixture
+TLS, che usa la stessa immagine PostgreSQL. Il tmpfs sul percorso inutilizzato
+è stato spostato nei limiti comuni a centro e TLS. Seconda review statica:
+nessun finding nei due diff. Il nuovo gate reale è **PASS**, exit 0: login/MFA,
+centro HTTPS e riavvio, permessi, restic nativo, restore nel secondo cluster,
+replay dei journal, revoche e invalidazione degli accessi; cleanup verificato.
+Questi runner modificati non fanno parte dell'immagine `fffdf17` già costruita:
+il candidato definitivo richiede un nuovo contesto immutabile dopo il commit.
+
+Ricevuta locale del gate corretto:
+`/var/folders/fg/l5gxkc013yvf8p6pzqkywstc0000gp/T/amr-candidato-fffdf17-verifica-561k2_ei/auth-gate-corretto.log`.
+Le due controprove precedenti falliscono sul ruolo mancante. Nessun nuovo
+CHECK 23514 osservato: la causa intermittente storica resta non dimostrata.
+
+La sonda ingress non ha ancora prodotto misure. La review ha confermato
+una riserva insufficiente per l'arresto entro la finestra: tentativo interrotto
+prima delle misure, conversazione MCP non più utilizzabile per il recovery.
+Una connessione nuova ha ripristinato esattamente la configurazione originale
+e richiesto una replica; questo readback non attesta da solo la disponibilità
+HTTP. Il controller rivisto separa recovery e frontend funzionante, riserva
+600 secondi all'arresto e usa una nuova connessione per il recovery.
+Readback successivo: configurazione originale esatta, Running, una replica
+pronta e health 200. Due successivi tentativi della sonda si fermano prima
+delle mutazioni: prima preflight non disponibile, poi inizializzazione MCP
+non disponibile. Un controllo indipendente inizializza la CLI correttamente;
+non è dimostrata una scadenza del login. Nessuna nuova misura ingress,
+aggiunta di IP o modifica dei controlli di trasporto.

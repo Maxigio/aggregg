@@ -69,7 +69,7 @@ async function collaudaBackup({ args, directory, fileCompose, docker, sql, backu
       user:'postgres',password:restorePass,database:'postgres',query_timeout:10000});
     await client.connect();
     // Ruoli globali dal manifest fidato, nessuna copia di password/login del cluster.
-    for(const ruolo of ['amr_accessi_lettore','amr_aziende_definitore','amr_aziende_scrittore',
+    for(const ruolo of ['amr_accessi_lettore','amr_login_definitore','amr_aziende_definitore','amr_aziende_scrittore',
       'amr_colleghi_definitore','amr_colleghi_scrittore','amr_backup_definitore','amr_backup_esecutore',
       'amr_collaudo_senza_permessi']) {
       await client.query('CREATE ROLE '+ruolo+' NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS');
@@ -89,6 +89,8 @@ async function collaudaBackup({ args, directory, fileCompose, docker, sql, backu
       } finally { input.fill(0); }
     };
     await ripristinaDump(path.join(dbDir,'database.dump'),'postgres');
+    assert.equal((await client.query("SELECT pg_get_userbyid(proowner) AS proprietario FROM pg_proc WHERE oid='amr_accessi.inizio_login(text)'::regprocedure")).rows[0].proprietario,
+      'amr_login_definitore');
     await client.query(fs.readFileSync(path.join(__dirname,'../backend/nodi/schema-ripristino-sequenza.sql'),'utf8'));
     const prima=(await client.query('SELECT scadenza FROM amr_accessi.aziende WHERE id=$1',[azienda])).rows[0].scadenza;
     assert.notEqual(prima.toISOString(),scadenza);
