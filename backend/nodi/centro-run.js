@@ -54,22 +54,29 @@ async function creaServizio(config, { Pool = require('pg').Pool,
   }
 }
 if (require.main===module) {
-  let servizio, server, chiusura, interrotto=false;
+  let servizio, server, chiusura, segreti, interrotto=false;
   const chiudi=()=>chiusura ||= (async()=>{
-    server?.close(); server?.closeAllConnections(); await servizio?.close();
+    server?.close(); server?.closeAllConnections();
+    try { await servizio?.close(); } finally { segreti?.chiudi(); }
   })();
-  const segnale=()=>{ interrotto=true; if(servizio) void chiudi(); };
+  const erroreChiusura=()=>{console.error('Centro AMR: chiusura non confermata.');process.exitCode=1;};
+  const segnale=()=>{ interrotto=true; if(servizio) void chiudi().catch(erroreChiusura); };
   process.once('SIGTERM',segnale); process.once('SIGINT',segnale);
   (async()=>{
     // Versione scelta da provare sul candidato; non basta package.json >=20.
     if(Number(process.versions.node.split('.')[0])!==24)throw new Error('centro_run_richiede_node24');
-    const config=require('./config-centro-run').configura(process.env);
+    segreti=require('./backup-segreti-run').preparaSegreti(process.env);
+    delete process.env.AMR_COPIE_SEGRETI;
+    const config=require('./config-centro-run').configura(segreti.ambiente);
     servizio=await creaServizio(config);
     if(interrotto) { await chiudi(); return; }
     server=require('node:http').createServer(servizio.app);
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(config.port,'0.0.0.0',resolve);});
     if(interrotto) { await chiudi(); return; }
     console.log('Centro AMR avviato con configurazione HTTPS esplicita.');
-  })().catch(async()=>{await chiudi();console.error('Centro AMR non avviato: verificare configurazione e runtime.');process.exitCode=1;});
+  })().catch(async()=>{
+    try { await chiudi(); } catch { erroreChiusura(); }
+    console.error('Centro AMR non avviato: verificare configurazione e runtime.');process.exitCode=1;
+  });
 }
 module.exports={creaServizio};

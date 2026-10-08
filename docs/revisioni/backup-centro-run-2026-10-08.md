@@ -159,3 +159,80 @@ Fonti ufficiali consultate:
   una copia o un check non sostituiscono la prova di ripristino.
 - [OWASP Secrets Management](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html):
   minimo privilegio, separazione, custodia e ciclo di vita delle chiavi.
+
+## Decisione successiva: esecuzione nel centro web e packaging
+
+Il proprietario sceglie dump e upload nel medesimo centro web, senza un
+servizio Run permanente aggiuntivo. R2 conserva le copie; non esegue il dump.
+Confermati anche la seconda copia offline della chiave restic R2 e il recapito
+visibile della push sintetica Better Stack. Le raccomandazioni precedenti su
+un executor separato non rappresentano più la direzione scelta.
+
+L'identità del dump deve restare distinta dall'outbox e senza scrittura;
+i subprocess ricevono ambienti separati. Questo non isola i privilegi dal
+processo web: un attaccante che compromette quel processo può accedere ai
+suoi segreti. Le regole `trust` del PostgreSQL Nhost restano un rischio da
+verificare con una connessione effettiva, non una prova di escalation già
+eseguita. Nessun nuovo ruolo o privilegio remoto applicato in questo incremento.
+
+`backup-segreti-run.js` prepara i tre file temporanei privati dal riferimento
+Run `AMR_COPIE_SEGRETI`. JSON chiuso: credenziali R2, chiave restic e password
+del dump; niente password in argv, log o volume diagnostico. I metadati dei
+binari sono generati nell'immagine e protetti insieme al codice. La chiusura
+rimuove soltanto i tre file creati dopo aver verificato l'identità della
+directory. I buffer di scrittura vengono azzerati; le stringhe JavaScript
+non consentono una garanzia di cancellazione fisica dei segreti dalla RAM.
+SIGKILL non esegue il cleanup applicativo; i file non sono collocati nel
+volume persistente.
+
+Il Dockerfile riusa immagini ufficiali fissate per digest: Node 24.21.0,
+PostgreSQL 18.6 e restic 0.19.1. L'entrypoint PostgreSQL è disattivato;
+parte soltanto Node come UID 1000. La base conserva il `VOLUME` PostgreSQL:
+lo smoke locale lo copre con tmpfs e usa `--rm`, evitando volumi anonimi
+residui. Nessun database server viene avviato dal centro.
+
+### Verifiche e controprove dell'incremento
+
+- **28/28 test Node 24.21.0**, quattro file runtime/backup, zero skip o
+  failure, ambiente privo delle credenziali reali. Il sorgente completo
+  dell'entrypoint viene eseguito in VM con dipendenze simulate.
+- La prima review indipendente ha individuato due problemi confermati:
+  porta pgpass non canonica (`05432` contro `5432`) e rejection del cleanup
+  non gestita durante arresto/startup. Corretti con test di regressione:
+  porta normalizzata come il config, diagnostica fissa ed exitCode 1,
+  senza percorsi o errori grezzi.
+- Seconda review indipendente in sola lettura: entrambi i fix confermati,
+  **12/12 test sintetici** sui due file avvio/segreti, nessun nuovo finding
+  nel perimetro di cinque file. Il build Docker resta una prova del main,
+  non una seconda esecuzione indipendente del packaging.
+- Build **Linux amd64** della sola ricetta Docker PASS, con sorgenti del
+  precedente commit `c01d109`: non è l'artefatto distribuibile del nuovo
+  codice. Smoke senza rete: UID 1000, Node 24.21.0, SHA dei due binari e
+  verifica del precedente manifest PASS. Il gate Auth dell'artefatto
+  definitivo resta necessario.
+
+### Incidente locale durante il collaudo
+
+Il profilo Docker `amr-auth` aveva 10 GiB esauriti. Su autorizzazione del
+proprietario è stato ampliato a 30 GiB: circa 19 GiB disponibili, stessi
+otto container, stessi 38 volumi e contesto Docker invariato. Nessun prune,
+eliminazione di immagini o file, installazione host o intervento M2.
+
+**Mancato controllo prima del riavvio:** i due PostgreSQL preesistenti
+conservavano i dati in tmpfs. Il riavvio ha azzerato quello stato volatile;
+l'inventario dei volumi non lo proteggeva. Ricreato soltanto lo schema Auth
+iniziale secondo il runner esistente; tutti gli otto container sono ripartiti,
+ma i due database Auth hanno zero utenti. Gli account e gli stati precedenti
+non sono stati ripristinati. Non equiparare il riavvio a un restore dei dati.
+Per future operazioni rilevare anche tmpfs e ottenere una copia consistente
+prima di arrestare un ambiente di cui occorre preservare lo stato.
+
+Ricevute locali:
+`/var/folders/fg/l5gxkc013yvf8p6pzqkywstc0000gp/T/amr-colima-ampliamento-20261008-lkndcfua/esito.json`
+e `/var/folders/fg/l5gxkc013yvf8p6pzqkywstc0000gp/T/amr-staging-checkpoint-yv4g1p_e/build-riprova.log`.
+
+Il checkpoint remoto tentato prima dell'aggiornamento non è acquisito:
+download HTTP rifiutato, configurazione originale Run ripristinata e
+confrontata esattamente. `/healthz` 200 ma frontend 403 su richieste ripetute.
+La diagnosi ingress e il restore verificato precedono altri aggiornamenti.
+Backup automatici R2 non attivati, candidato non distribuito, M2 non collegato.
