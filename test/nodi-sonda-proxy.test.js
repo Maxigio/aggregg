@@ -39,6 +39,10 @@ async function fixture(t, opzioni = {}) {
     if (modo === 'redirect') { res.writeHead(302, { location: origine + '/secondo?' + SENTINELLA }); return res.end(SENTINELLA); }
     if (modo === 'infinito') return;
     if (modo === 'cookie') { res.writeHead(200, { 'set-cookie': 'riservato=' + SENTINELLA }); return res.end('ok'); }
+    if (modo === 'vuoto' || modo === 'vuoto-no-store') {
+      res.writeHead(200, modo === 'vuoto-no-store' ? { 'cache-control': 'no-store' } : {});
+      return res.end();
+    }
     if (modo === 'grande') { res.writeHead(200, { 'cache-control': 'no-store' }); return res.end('x'.repeat(65537) + SENTINELLA); }
     if (modo === 'troncato') { res.writeHead(200, { 'content-length': 10000, 'cache-control': 'no-store' }); res.write(SENTINELLA); return setImmediate(() => res.destroy()); }
     if (modo === 'anticipa' && req.url.startsWith('/sonda/attesa-')) {
@@ -245,12 +249,16 @@ test('disponibilità sonda: provisioning, budget, abort e TLS distinti senza dat
   const tls = await attendiSonda({ origine: f.origine, intervalloMs: 1 });
   assert.equal(tls.codice, 'tls_non_valido'); assert.equal(tls.controlli.length, 1);
   assert.equal(f.richieste.length, 0);
-  for (const modo of ['redirect', 'cookie', 'grande', 'troncato', 'limitata']) {
+  for (const modo of ['redirect', 'cookie', 'grande', 'troncato', 'limitata', 'vuoto', 'vuoto-no-store']) {
     f.modo(modo); const negata = await attendiSonda({ ...f, intervalloMs: 1 });
     assert.equal(negata.ok, false, modo); assert.equal(negata.controlli.length, 1, modo);
     assert.equal(f.richieste.length, 1, modo); assert.equal(JSON.stringify(negata).includes(SENTINELLA), false);
     if (modo === 'grande') assert.equal(negata.codice, 'risposta_troppo_grande');
     if (modo === 'troncato') assert.equal(negata.codice, 'risposta_interrotta');
+    if (modo.startsWith('vuoto')) {
+      assert.equal(negata.controlli[0].status, 200);
+      assert.equal(negata.codice, 'risposta_inattesa');
+    }
   }
 });
 

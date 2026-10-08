@@ -45,10 +45,109 @@ grezzo/tipizzato e degli schemi sconosciuti: 14 casi PASS.
 
 Le prove del controller sono simulate; quelle Docker sono locali. Il
 checkpoint remoto e il ritorno verificato all'originale richiedono una
-ricevuta di esecuzione separata.
+ricevuta di esecuzione separata. Gli esiti effettivi sono riportati sotto;
+le prove preparatorie non sostituiscono il gate remoto.
 
 Evidenze private prive di body applicativi, cookie o segreti:
 `/var/folders/fg/l5gxkc013yvf8p6pzqkywstc0000gp/T/amr-checkpoint-nhost-20261008-yex4nmod/`.
+
+## Esecuzioni remote e controprove
+
+Cinque tentativi del checkpoint hanno incontrato errori. Le ricevute
+fallite restano tali: non vengono riscritte per trasformarle in successi.
+I primi quattro tentativi hanno verificato il ritorno alla configurazione
+originale e alla risposta applicativa originale. Il quinto ha completato
+la cifratura ma non ha confermato il recovery pubblico entro il budget.
+
+Finding verificati durante l'esecuzione:
+
+- Con zero repliche effettive e zero connessioni dei tre ruoli AMR, Run
+  rispondeva a `/healthz` con HTTP 200 e `Content-Length: 0`; la rotta
+  applicativa rispondeva 404. Contare soltanto lo status 200 rendeva il
+  guard di arresto troppo restrittivo. Ora l'eventuale 200 vuoto è ammesso
+  soltanto con lunghezza dichiarata esattamente zero, senza
+  Transfer-Encoding né cookie, rotta applicativa non disponibile e due
+  osservazioni concordi di Run/connessioni. Il body `ok` non è mai
+  interpretato come arresto.
+- La controprova con `http.client.HTTPResponse` ha mostrato che `read(3)`
+  può restituire vuoto anche dopo una risposta troncata che dichiarava
+  due byte. Il guard richiede quindi la lunghezza zero dagli header,
+  anziché dedurla dalla sola lettura. Ventuno casi HTTP/quorum PASS.
+- Il secondo tentativo acquisiva i file ma tentava il recovery prima
+  della cifratura; un errore del canale cloud impediva la conservazione.
+  Il controller ora cifra prima del recovery, riservando tempo al
+  ripristino e registrando separatamente i due esiti.
+- Il resolver pubblico forzato nel controller dava esiti discordanti
+  dal resolver di sistema. È stato rimosso l'override, mantenendo TLS,
+  verifica hostname e divieto di redirect. Questo finding non spiega
+  automaticamente tutti gli errori DNS precedenti.
+
+Il test di regressione della sonda distingue anche HTTP 200 vuoto,
+con o senza `no-store`, dalla risposta applicativa attesa: **14 pass,
+1 skip opt-in**, zero errori. Review indipendente in sola lettura del
+guard e della controprova di risposta troncata.
+
+## Copia reale ripristinata e candidato
+
+Il quinto tentativo ha prodotto una copia cifrata reale in
+`/Users/aincrad/AMR-backup-staging/copia-aC0Ys8`: dump PostgreSQL
+235.520 byte e snapshot SQLite del volume 36.864 byte. Due repository
+restic locali separati; directory privata e chiave distinta dalle
+credenziali runtime. Nessuna copia preesistente eliminata.
+
+Restore in PostgreSQL/SQLite isolati, senza rete, e verifica cleanup:
+**PASS**, ricevuta `restore-copia.json`. Il restore locale riuscito
+non attesta la raggiungibilità dello staging.
+
+Candidato immutabile `d632f50`, verificato localmente con Nhost Auth
+0.49.1, PostgreSQL 18.6, centro HTTPS e worker sintetico:
+
+- digest multiarch: `sha256:4ed5414ae8cae68c5e8f7df345d4103dbdce704251ad4e30e4ff65292393e64f`;
+- codice: `35e6c369a75bc5bbe406425db5986e96b136fcddf404b95f8fbd64006f1e6d60`;
+- cataloghi: `0f20b3c6473b8c28890724f17b073ffff6d0073e0c090e96cb3c61c176252657`.
+
+Upload nel registry riuscito e manifest amd64/arm64 verificato. Il primo
+tentativo era stato respinto con 503; un solo retry dello stesso digest
+è riuscito. Non è dimostrato un legame con il problema DNS.
+Nessuna distribuzione del candidato o migrazione remota ancora eseguita.
+Il CHECK storico non è ricomparso in questo collaudo, ma la causa resta
+non dimostrata.
+
+## Recovery pubblico ancora aperto
+
+Readback completo: configurazione originale esatta, immagine `66e2b24`,
+una replica Running/ready e avvio applicativo confermato dai log filtrati.
+Alle **12:20 UTC** tutti e quattro i nameserver autorevoli della zona
+rispondevano NXDOMAIN per l'indirizzo del centro. ID progetto, servizio e
+subdomain coincidono con quelli originali; la porta resta pubblica 3000
+HTTP. Non si tratta soltanto della cache negativa di un resolver.
+
+Il preflight delle 12:24 UTC conferma la configurazione originale ma
+non la risposta HTTP pubblica. Il gate resta aperto.
+
+Alle **12:35:58 UTC** una sola riconciliazione dell'intero array di porte
+già dichiarato, senza toggle o nuove risorse, ha ricevuto ACK esatto e
+readback originale. Il DNS autorevole resta NXDOMAIN; il pod ha mantenuto
+la data di avvio originale. Nessun recupero pubblico dimostrato.
+
+La review indipendente dell'executor ha trovato, prima dell'esecuzione,
+sintassi non valida, readiness assorbita come errore HTTP e flag di
+interruzione/cleanup ignorati. Correzioni verificate con sedici modelli
+(nessuna rete): conflitti prima/dopo la mutation, readiness persa,
+identità errata, ACK incerto, segnali e cleanup. Seconda review: finding
+chiusi. La ricevuta viene prenotata con `O_EXCL` prima della mutation;
+un ACK incerto non provoca un retry automatico. I guard prima/dopo
+non costituiscono CAS: altre modifiche dello staging vanno escluse
+durante l'operazione.
+
+Lo schema ufficiale delle porte comprende anche `ingresses` e `rateLimit`.
+Il JSON grezzo corrente contiene soltanto port/type/publish; la vista
+tipizzata restituisce zero ingress espliciti. Non è stata dimostrata
+la perdita di un dominio configurato dal nostro restore. La documentazione
+prevede il dominio automatico con HTTP/pubblicazione attiva.
+
+ACK, readiness e readback non sono prove di recupero DNS/HTTP. La
+diagnosi non contatta il supporto Nhost e non coinvolge M2 o portali.
 
 ## Riferimenti
 
