@@ -127,10 +127,10 @@ async function snapshotPostgres(pg, { signal, tempoMs }) {
   } catch { await termina();throw new Error('snapshot_non_confermato'); }
 }
 
-function creaServer({ origine, proxy, tokenHash, scadenza, prepara, ora = () => Date.now(), segnala = () => {} }) {
+function creaServer({ origine, proxy, ingress, tokenHash, scadenza, prepara, ora = () => Date.now(), segnala = () => {} }) {
   if (!/^[a-f0-9]{64}$/.test(tokenHash || '') || !Number.isSafeInteger(scadenza)
       || scadenza <= ora() || scadenza - ora() > 20 * 60000) throw new Error('backup_config_non_valida');
-  const trasporto = creaTrasporto({ origine, proxy }), atteso = Buffer.from(tokenHash, 'hex');
+  const trasporto = creaTrasporto({ origine, proxy, ingress }), atteso = Buffer.from(tokenHash, 'hex');
   let copia = null, richiesta = null, chiuso = false;
   const controller = new AbortController();
   const server = require('node:http').createServer((req,res) => {
@@ -192,7 +192,9 @@ if (require.main === module) {
     const pg = { host: 'postgres-service', user: 'nhost_admin', database: env.AMR_BACKUP_DATABASE };
     if (!/^[a-z0-9]{20}$/.test(pg.database || '')) throw new Error('pg_non_configurato');
     const scadenza = Number(env.AMR_BACKUP_SCADENZA);
+    if (env.AMR_BACKUP_INGRESS !== undefined && env.AMR_BACKUP_PROXY !== undefined) throw new Error('trasporto_ambiguo');
     servizio = creaServer({ origine: env.AMR_BACKUP_ORIGINE, proxy: proxyDaEnv(env.AMR_BACKUP_PROXY),
+      ingress: env.AMR_BACKUP_INGRESS,
       tokenHash: env.AMR_BACKUP_TOKEN_SHA256, scadenza,
       segnala: fase => console.error('Backup non confermato: ' + fase),
       prepara: ({ signal }) => preparaCopia({ pg, signal, release: env.AMR_BACKUP_RELEASE }) });

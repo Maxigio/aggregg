@@ -40,6 +40,48 @@ test('staging: cinque fasi conservano configurazione, volume e riferimenti; roll
   assert.ok(p.verificheRemote.includes('arresto_processi'));
   assert.ok(p.verificheRemote.includes('compatibilita_schema_e_stato'));
 });
+
+test('staging: ingress Nhost cambia solo il candidato; arresto e rollback conservano la policy originale', () => {
+  const s=stato(),name='AMR_CENTRO_PROPRIETARIO_ID';
+  s.config.environment.push({name,value:'{{ secrets.'+name+' }}'});
+  s.config.environment.find(e=>e.name==='AMR_CENTRO_PROXY_IP').value='{{ secrets.AMR_CENTRO_PROXY_IP }},10.110.1.249';
+  const prima=structuredClone(s),p=preparaPiano({stato:s,candidato:wire('b'),image:digest('b'),ingress:'nhost'});
+  assert.deepEqual(s,prima);
+  const arresto=structuredClone(prima.config);arresto.resources.replicas=0;
+  assert.deepEqual(p.configurazioni['01-arresto'],arresto);
+  assert.deepEqual(p.configurazioni['05-rollback-avvio'],prima.config);
+  for(const fase of ['02-candidato-fermo','03-candidato-avvio','04-rollback-arresto']) {
+    const c=p.configurazioni[fase];
+    assert.equal(c.environment.some(e=>e.name==='AMR_CENTRO_PROXY_IP'),false);
+    assert.deepEqual(c.environment.find(e=>e.name==='AMR_CENTRO_INGRESS'),{name:'AMR_CENTRO_INGRESS',value:'nhost'});
+    assert.deepEqual(c.environment.find(e=>e.name===name),prima.config.environment.find(e=>e.name===name));
+    const input={...s,config:structuredClone(c)};input.config.resources.replicas=1;
+    assert.deepEqual(validaStato(input),input);
+    const ripristino=structuredClone(c);ripristino.image=prima.config.image;ripristino.resources.replicas=1;
+    ripristino.environment=prima.config.environment;
+    assert.deepEqual(ripristino,prima.config);
+  }
+  const nuovo={...s,manifest:wire('b'),config:p.configurazioni['03-candidato-avvio']};
+  const prossimo=preparaPiano({stato:nuovo,candidato:wire('c'),image:digest('c')});
+  assert.deepEqual(prossimo.configurazioni['05-rollback-avvio'],nuovo.config);
+  assert.deepEqual(prossimo.configurazioni['03-candidato-avvio'].environment,nuovo.config.environment);
+  for(const ingress of ['',null,false,'altro']) assert.throws(()=>preparaPiano({stato:s,candidato:wire('b'),image:digest('b'),ingress}));
+});
+
+test('staging: ingress dichiarato rifiuta valori ignoti o proxy concorrente', () => {
+  const s=stato();
+  s.config.environment=s.config.environment.filter(e=>e.name!=='AMR_CENTRO_PROXY_IP');
+  s.config.environment.push({name:'AMR_CENTRO_INGRESS',value:'nhost'});
+  assert.deepEqual(validaStato(s),s);
+  for(const value of ['', 'Nhost', '{{ secrets.AMR_CENTRO_INGRESS }}']) {
+    const c=structuredClone(s);c.config.environment.at(-1).value=value;
+    assert.throws(()=>validaStato(c),/pacchetto_staging_non_valido/);
+  }
+  for(const value of ['', '10.110.1.21']) {
+    const c=structuredClone(s);c.config.environment.push({name:'AMR_CENTRO_PROXY_IP',value});
+    assert.throws(()=>validaStato(c),/pacchetto_staging_non_valido/);
+  }
+});
 test('staging: rifiuta perdita di configurazione, segreti letterali, destinazione diversa e tag mobili', async t => {
   const modificaEnv = (s, nome, value) => { s.config.environment.find(e => e.name === nome).value = value; };
   const casi = [
@@ -142,8 +184,10 @@ function gitFixture(dir) {
 test('staging: pacchetto e contesto da commit; nessun overlay, segreto o mutazione del checkout', t => {
   const parent = temporanea(t), radice = path.join(parent, 'repo'); fs.mkdirSync(radice);
   const git = gitFixture(radice);
-  const p = preparaPacchetto({ stato: stato(), image: digest('b'), radice, genitore: parent, git });
+  const p = preparaPacchetto({ stato: stato(), image: digest('b'), ingress:'nhost', radice, genitore: parent, git });
   const piano = JSON.parse(fs.readFileSync(path.join(p.directory, 'piano.json')));
+  assert.equal(piano.configurazioni['03-candidato-avvio'].environment.find(e=>e.name==='AMR_CENTRO_INGRESS').value,'nhost');
+  assert.deepEqual(piano.configurazioni['05-rollback-avvio'],stato().config);
   const artefatto = JSON.parse(fs.readFileSync(path.join(p.contesto, 'release.json')));
   assert.deepEqual(verificaArtefatto(artefatto, p.contesto), piano.candidato.manifest);
   assert.equal(artefatto.release, 'b'.repeat(40));

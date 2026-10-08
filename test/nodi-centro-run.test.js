@@ -27,10 +27,11 @@ test('config centro: HTTPS, singolo processo, tre ruoli e limiti espliciti',()=>
     assert.throws(()=>configura({...ambiente(),...patch}),/configurazione_centro_run_non_valida/);
   }
 });
-async function centro(t,{directory,tokens={locale:'a'.repeat(64)}}={}) {
+async function centro(t,{directory,tokens={locale:'a'.repeat(64)},
+  trasporto={origine:'https://amr.invalid',proxyAttendibili:['127.0.0.1']}}={}) {
   const dir=directory||fs.mkdtempSync(path.join(os.tmpdir(),'amr-centro-https-'));
   const servizio=require('../backend/nodi/centro').creaCentro({tokens,directory:dir,compatibilita:manifest,
-    trasporto:{origine:'https://amr.invalid',proxyAttendibili:['127.0.0.1']},
+    trasporto,
     inizializzaAccessi:()=>({close(){},sessione:req=>req.get('cookie')==='admin=prova'?{persona:'admin',azienda:null}:null,
       verifica:async(s,{admin}={})=>{if(!s||!admin)throw Object.assign(new Error('negato'),{status:403});return{admin:true};}})});
   const server=http.createServer(servizio.app);await new Promise((r,j)=>{server.once('error',j);server.listen(0,'127.0.0.1',r);});
@@ -47,6 +48,61 @@ async function centro(t,{directory,tokens={locale:'a'.repeat(64)}}={}) {
 }
 const nodo={'x-amr-node-id':'locale','x-amr-node-token':'a'.repeat(64)};
 const admin={origin:'https://amr.invalid',cookie:'admin=prova','x-amr-local-admin':'1'};
+
+test('config centro: ingress Nhost esplicito esclude IP, valori sconosciuti e HTTP',()=>{
+  const env=ambiente();delete env.AMR_CENTRO_PROXY_IP;env.AMR_CENTRO_INGRESS='nhost';
+  const c=configura(env);assert.equal(c.ingress,'nhost');assert.deepEqual(c.proxy,[]);
+  for(const patch of [{AMR_CENTRO_PROXY_IP:'127.0.0.1'},{AMR_CENTRO_PROXY_IP:''},
+    {AMR_CENTRO_INGRESS:undefined},{AMR_CENTRO_INGRESS:''},{AMR_CENTRO_INGRESS:'Nhost'},
+    {AMR_CENTRO_ORIGINE:'http://127.0.0.1:3000'}]) {
+    assert.throws(()=>configura({...env,...patch}),/configurazione_centro_run_non_valida/);
+  }
+});
+
+test('centro Nhost: trasporto ammesso non autorizza Admin, ricerche o token nodo falsi',async t=>{
+  const f=await centro(t,{trasporto:{origine:'https://amr.invalid',ingress:'nhost'}});
+  assert.equal((await f.call('/api/test/config')).status,200);
+  assert.equal((await f.call('/api/admin')).status,403);
+  assert.equal((await f.call('/api/admin',undefined,admin)).status,200);
+  assert.equal((await f.call('/api/ricerche',{id:require('node:crypto').randomUUID(),input:{tipo:'moto',marca:'Yamaha'}},
+    {origin:'https://amr.invalid'})).status,401);
+  assert.equal(f.servizio.lavori.size,0);
+  assert.equal((await f.call('/_nodo/registrazione')).status,401);
+  assert.equal((await f.call('/_nodo/registrazione',undefined,{...nodo,'x-amr-node-token':'b'.repeat(64)})).status,401);
+  assert.equal((await f.call('/_nodo/registrazione',undefined,nodo)).status,200);
+  assert.equal((await f.call('/_nodo/registrazione',{}, {...nodo,origin:'https://evil.invalid'})).status,403);
+  assert.equal((await f.call('/api/admin/manutenzione',{manutenzione:true},{...admin,origin:''})).status,403);
+  assert.equal((await f.call('/api/admin',undefined,{...admin,'x-forwarded-proto':'http'})).status,403);
+});
+
+test('entrypoint Nhost: policy propagata a centro e login, nessuna chiamata Auth o PostgreSQL per accesso anonimo',async t=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'amr-run-ingress-'));
+  t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const env=ambiente();delete env.AMR_CENTRO_PROXY_IP;env.AMR_CENTRO_INGRESS='nhost';
+  const config={...configura(env),directory:dir,releaseFile:path.join(dir,'release.json')};
+  fs.writeFileSync(config.releaseFile,JSON.stringify(manifest));
+  const {EventEmitter}=require('node:events');
+  class Pool extends EventEmitter {
+    query(){throw new Error('nessun_database_atteso');}
+    connect(){throw new Error('nessun_database_atteso');}
+    async end(){}
+  }
+  const run=await require('../backend/nodi/centro-run').creaServizio(config,{Pool,verificaRelease:v=>v});
+  const server=http.createServer(run.app);
+  t.after(async()=>{server.closeAllConnections();await new Promise(r=>server.close(r));await run.close();});
+  await new Promise((r,j)=>{server.once('error',j);server.listen(0,'127.0.0.1',r);});
+  const req=(url,headers={})=>new Promise((r,j)=>{
+    const q=http.request({host:'127.0.0.1',port:server.address().port,path:url,
+      headers:{host:'amr.invalid','x-forwarded-proto':'https',...headers}},res=>{
+      res.resume();res.on('end',()=>r(res.statusCode));
+    });q.on('error',j);q.end();
+  });
+  assert.equal(await req('/api/test/config'),200);
+  assert.equal(await req('/api/auth/me'),401);
+  assert.equal(await req('/api/admin'),401);
+  assert.equal(await req('/api/auth/me',{'x-forwarded-proto':'http'}),403);
+  assert.equal(await req('/api/auth/me',{host:'evil.invalid'}),403);
+});
 test('sonda: solo GET/HEAD esatti, nessun requisito Host/TLS e nessun bypass API',async t=>{
   const f=await centro(t);
   const interno={host:'interno.invalid','x-forwarded-proto':'http',origin:'https://evil.invalid'};

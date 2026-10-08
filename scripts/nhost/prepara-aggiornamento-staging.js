@@ -54,7 +54,9 @@ function validaStato(stato) {
   if (c.ports[0].port !== 3000 || c.ports[0].type !== 'http' || c.ports[0].publish !== true) errore();
   chiavi(c.healthCheck, ['port', 'initialDelaySeconds', 'probePeriodSeconds']);
   if (c.healthCheck.port !== 3000 || c.healthCheck.initialDelaySeconds !== 30 || c.healthCheck.probePeriodSeconds !== 60) errore();
-  const nomi = [...Object.keys(PUBBLICHE), ...SEGRETE, 'AMR_CENTRO_ORIGINE', 'AMR_NHOST_AUTH_URL', 'AMR_CENTRO_PROXY_IP'];
+  const ingressoNhost = Array.isArray(c.environment) && c.environment.some(e => e?.name === 'AMR_CENTRO_INGRESS');
+  const nomi = [...Object.keys(PUBBLICHE), ...SEGRETE, 'AMR_CENTRO_ORIGINE', 'AMR_NHOST_AUTH_URL',
+    ingressoNhost ? 'AMR_CENTRO_INGRESS' : 'AMR_CENTRO_PROXY_IP'];
   const opzionale = 'AMR_CENTRO_PROPRIETARIO_ID';
   if (!Array.isArray(c.environment) || ![nomi.length, nomi.length + 1].includes(c.environment.length)) errore();
   const env = Object.create(null);
@@ -70,17 +72,18 @@ function validaStato(stato) {
     if (env[nome] !== value && env[nome] !== riferimento(nome)) errore();
   }
   const proxy = env.AMR_CENTRO_PROXY_IP;
-  if (typeof proxy !== 'string') errore();
+  if (ingressoNhost && env.AMR_CENTRO_INGRESS !== 'nhost') errore();
+  if (!ingressoNhost && typeof proxy !== 'string') errore();
   const refProxy = riferimento('AMR_CENTRO_PROXY_IP');
-  const proxyConAggiunta = proxy.startsWith(refProxy + ',');
+  const proxyConAggiunta = !ingressoNhost && proxy.startsWith(refProxy + ',');
   const ipEspliciti = proxyConAggiunta ? proxy.slice(refProxy.length + 1) : proxy;
-  if (proxy !== refProxy
+  if (!ingressoNhost && proxy !== refProxy
     && (!ipEspliciti || proxy.length > 512 || ipEspliciti.split(',').some(ip => !net.isIP(ip.trim())))) errore();
   // Riusa la validazione runtime con soli valori sintetici. Non risolve segreti Nhost.
   configura({ ...env, AMR_CENTRO_ORIGINE: ORIGINE, AMR_NHOST_AUTH_URL: AUTH,
     ...(env[opzionale] === undefined ? {} : { [opzionale]: '00000000-0000-4000-8000-000000000001' }),
-    AMR_CENTRO_PROXY_IP: proxy === refProxy ? '127.0.0.1'
-      : proxyConAggiunta ? '127.0.0.1,' + ipEspliciti : proxy,
+    ...(ingressoNhost ? {} : { AMR_CENTRO_PROXY_IP: proxy === refProxy ? '127.0.0.1'
+      : proxyConAggiunta ? '127.0.0.1,' + ipEspliciti : proxy }),
     AMR_NODI_TOKENS: JSON.stringify({ sintetico: 'a'.repeat(64) }), AMR_PG_DATABASE: 'postgres',
     ...Object.fromEntries(SEGRETE.filter(n => n.endsWith('_PASSWORD')).map(n => [n, 'sintetico-non-segreto'])) });
   return { ...structuredClone(stato), manifest };
@@ -97,17 +100,28 @@ function toml(c) {
     + sezioni.map(([n, v]) => '[' + n + ']\n' + valori(v)).join('\n\n') + '\n\n'
     + array.flatMap(([n, a]) => a.map(v => '[[' + n + ']]\n' + valori(v))).join('\n\n') + '\n';
 }
-function preparaPiano({ stato, candidato, image }) {
+function preparaPiano({ stato, candidato, image, ingress }) {
   const precedente = validaStato(stato), nuovo = valida(candidato);
   immagine(image);
+  if (ingress !== undefined && ingress !== 'nhost') errore();
   if (nuovo.release === precedente.manifest.release || image === precedente.config.image.image) errore();
   const config = (imm, replicas) => {
     const c = structuredClone(precedente.config); c.image.image = imm; c.resources.replicas = replicas; return c;
   };
+  const configCandidato = replicas => {
+    const c = config(image, replicas);
+    if (ingress === 'nhost') {
+      c.environment = c.environment.filter(e => !['AMR_CENTRO_PROXY_IP','AMR_CENTRO_INGRESS'].includes(e.name));
+      c.environment.push({ name: 'AMR_CENTRO_INGRESS', value: 'nhost' });
+    }
+    // Anche la configurazione convertita deve soddisfare il contratto runtime.
+    validaStato({ ...precedente, config: { ...c, resources: { ...c.resources, replicas: 1 } } });
+    return c;
+  };
   const configurazioni = {
     '01-arresto': config(precedente.config.image.image, 0),
-    '02-candidato-fermo': config(image, 0), '03-candidato-avvio': config(image, 1),
-    '04-rollback-arresto': config(image, 0), '05-rollback-avvio': structuredClone(precedente.config),
+    '02-candidato-fermo': configCandidato(0), '03-candidato-avvio': configCandidato(1),
+    '04-rollback-arresto': configCandidato(0), '05-rollback-avvio': structuredClone(precedente.config),
   };
   return { versione: 1, stato: 'preparato_non_distribuito', progetto: PROGETTO, servizio: SERVIZIO,
     precedente, candidato: { manifest: nuovo, image }, configurazioni,
@@ -127,13 +141,13 @@ function leggiStato(file) {
   } catch { errore(); } finally { if (fd !== undefined) fs.closeSync(fd); }
 }
 
-function preparaPacchetto({ stato, image, radice, genitore = os.tmpdir(), git } = {}) {
+function preparaPacchetto({ stato, image, ingress, radice, genitore = os.tmpdir(), git } = {}) {
   // Prima validare l'input; poi creare esclusivamente directory nuove possedute.
   stato = validaStato(stato); immagine(image);
   const contesto = preparaContesto({ radice, genitore, git });
   let directory;
   try {
-    const piano = preparaPiano({ stato, candidato: contesto.manifest, image });
+    const piano = preparaPiano({ stato, candidato: contesto.manifest, image, ingress });
     directory = fs.mkdtempSync(path.join(genitore, 'amr-staging-update-')); fs.chmodSync(directory, 0o700);
     const scrivi = (nome, raw) => fs.writeFileSync(path.join(directory, nome), raw, { mode: 0o600, flag: 'wx' });
     const impronte = {};
@@ -156,9 +170,9 @@ function preparaPacchetto({ stato, image, radice, genitore = os.tmpdir(), git } 
 }
 if (require.main === module) {
   try {
-    const { values, positionals } = parseArgs({ options: { stato: { type: 'string' }, immagine: { type: 'string' } } });
+    const { values, positionals } = parseArgs({ options: { stato: { type: 'string' }, immagine: { type: 'string' }, ingress: { type: 'string' } } });
     if (positionals.length || !values.stato || !values.immagine) errore();
-    console.log(JSON.stringify(preparaPacchetto({ stato: leggiStato(values.stato), image: values.immagine })));
+    console.log(JSON.stringify(preparaPacchetto({ stato: leggiStato(values.stato), image: values.immagine, ingress: values.ingress })));
   } catch (e) {
     console.error(['pacchetto_staging_pulizia_incompleta', 'contesto_centro_pulizia_incompleta'].includes(e.message)
       ? 'Pacchetto non preparato e pulizia temporanea incompleta: verifica le directory amr-staging-update e amr-centro-context. Nessun deploy eseguito.'

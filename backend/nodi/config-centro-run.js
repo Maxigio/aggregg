@@ -27,7 +27,11 @@ function configura(env) {
   // Un solo scheduler e sessioni RAM: vietato uno scaling non ancora implementato.
   if (env.AMR_CENTRO_REPLICHE !== '1') errore();
   const proxy = (env.AMR_CENTRO_PROXY_IP || '').split(',').map(s=>s.trim()).filter(Boolean);
-  if (!proxy.length || proxy.some(v=>require('node:net').isIP(v)===0)) errore();
+  const ingress = env.AMR_CENTRO_INGRESS;
+  if (ingress === 'nhost') {
+    if (env.AMR_CENTRO_PROXY_IP !== undefined) errore();
+  } else if (ingress !== undefined || !proxy.length || proxy.length > 32
+      || proxy.some(v=>require('node:net').isIP(v)===0)) errore();
   const pgHost = env.AMR_PG_HOST;
   if (typeof pgHost !== 'string' || !/^[a-zA-Z0-9.-]+$/.test(pgHost)
     || !/^[a-zA-Z0-9_-]{1,63}$/.test(env.AMR_PG_DATABASE || '')) errore();
@@ -46,7 +50,7 @@ function configura(env) {
   if (new Set(Object.values(pools).map(p=>p.user)).size!==3) errore();
   const webhookIncidenti = require('./betterstack').validaWebhook(env.AMR_BETTERSTACK_WEBHOOK_URL);
   const copie = require('./backup-centro-run').configuraCopie(env, pools.backup);
-  return {origine:origine.origin,auth:auth.href,proxy,tokens,pools,proprietarioId,webhookIncidenti,copie,
+  return {origine:origine.origin,auth:auth.href,proxy,ingress,tokens,pools,proprietarioId,webhookIncidenti,copie,
     port:intero('PORT',3000,65535),directory:env.AMR_NODI_DATA_DIR,releaseFile:env.AMR_NODI_RELEASE_FILE,
     timeoutRicercaMs:intero('AMR_NODI_RICERCA_TIMEOUT_MS',60000,60000),
     maxPersona:intero('AMR_NODI_RICERCHE_MAX_PERSONA',2,2),maxTotale:intero('AMR_NODI_RICERCHE_MAX_TOTALE',60,60)};

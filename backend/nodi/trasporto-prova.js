@@ -12,13 +12,16 @@ function origineConfigurata(origine) {
 }
 const versioneIP = ip => typeof ip === 'string' && !ip.includes('%') ? isIP(ip) : 0;
 const tipoIP = ip => versioneIP(ip) === 6 ? 'ipv6' : 'ipv4';
-function creaTrasporto({ origine, proxy, proxyAttendibili }) {
+function creaTrasporto({ origine, proxy, proxyAttendibili, ingress }) {
   if (proxy !== undefined && proxyAttendibili !== undefined) throw new Error('configurazione proxy duplicata');
   const ips = proxy !== undefined ? proxy : proxyAttendibili !== undefined ? proxyAttendibili : [];
   const url = origineConfigurata(origine), secure = url.protocol === 'https:';
   if (!Array.isArray(ips) || ips.length > 32
       || ips.some(ip => !versioneIP(ip)) || (!secure && ips.length)) {
     throw new Error('proxy attendibili devono essere IP espliciti in modalita HTTPS');
+  }
+  if (ingress !== undefined && (ingress !== 'nhost' || !secure || ips.length)) {
+    throw new Error('ingress Nhost richiede HTTPS e nessuna lista proxy');
   }
   // Confronto IP nativo, incluse le rappresentazioni IPv4-mapped IPv6.
   const proxyIPs = new BlockList(), loopback = new BlockList();
@@ -40,6 +43,11 @@ function creaTrasporto({ origine, proxy, proxyAttendibili }) {
     if (!versioneIP(peer)) return res.sendStatus(403);
     if (!secure) {
       if (!loopback.check(peer, tipoIP(peer)) || req.socket.encrypted) return res.sendStatus(403);
+    } else if (ingress === 'nhost') {
+      // Run termina il TLS pubblico. La rete del progetto appartiene al
+      // confine fidato: questo header non autentica il chiamante interno.
+      // La modalita non rende fidati Forwarded-For/Host per Express.
+      if (req.headers['x-forwarded-proto'] !== 'https') return res.sendStatus(403);
     } else if (trustProxy(req.socket.remoteAddress)) {
       // Il proxy configurato deve sovrascrivere questo header, non appendere.
       if (req.headers['x-forwarded-proto'] !== 'https') return res.sendStatus(403);

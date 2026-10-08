@@ -116,3 +116,37 @@ test('trasporto: guard separati non implicano alcuna esenzione Origin per Auth',
   assert.throws(() => creaTrasporto({ origine: tr.origine, proxy: [], proxyAttendibili: [] }));
 });
 
+test('ingress Nhost: rotazione peer ammessa solo con protocollo singolo, Host/Origin invariati', () => {
+  const tr = creaTrasporto({ origine: 'https://amr.invalid', ingress: 'nhost' });
+  const headers = { 'x-forwarded-proto': 'https', 'x-forwarded-for': '127.0.0.1',
+    'x-forwarded-host': 'evil.invalid' };
+  for (const peer of ['10.110.1.21', '10.110.1.249', '203.0.113.9', '::ffff:10.110.1.21']) {
+    assert.equal(valuta(tr, { peer, headers }).status, 200);
+    assert.equal(tr.trustProxy(peer), false);
+  }
+  assert.equal(tr.secure, true);
+  assert.equal(valuta(tr, { headers }).risposta['Strict-Transport-Security'], 'max-age=31536000');
+  for (const proto of [undefined, 'http', 'HTTPS', 'https,http', 'https, https']) {
+    assert.equal(valuta(tr, { headers: { ...headers, 'x-forwarded-proto': proto } }).status, 403);
+  }
+  assert.equal(valuta(tr, { headers, host: 'evil.invalid' }).status, 403);
+  assert.equal(valuta(tr, { headers, origin: 'https://evil.invalid' }).status, 403);
+  assert.equal(valuta(tr, { headers: { ...headers, origin: undefined } }).status, 403);
+  assert.equal(valuta(tr, { method: 'GET', headers: { ...headers, origin: undefined } }).status, 200);
+  assert.equal(valuta(tr, { peer: 'non-un-ip', headers }).status, 403);
+  for (const name of ['host', 'origin', 'x-forwarded-proto']) {
+    assert.equal(valuta(tr, { headers, rawHeaders: [name, 'valore', name, 'valore'] }).status, 403);
+  }
+  // Il solo header non attiva la modalita nella configurazione precedente.
+  const vecchio = creaTrasporto({ origine: tr.origine, proxy: ['10.110.1.249'] });
+  assert.equal(valuta(vecchio, { peer: '10.110.1.21', headers }).status, 403);
+});
+
+test('ingress Nhost: attivazione esplicita HTTPS, nessuna configurazione mista', () => {
+  for (const ingress of ['', null, false, 'Nhost', 'altro']) {
+    assert.throws(() => creaTrasporto({ origine: 'https://amr.invalid', ingress }));
+  }
+  assert.throws(() => creaTrasporto({ origine: 'http://127.0.0.1:5000', ingress: 'nhost' }));
+  assert.throws(() => creaTrasporto({ origine: 'https://amr.invalid', ingress: 'nhost', proxy: ['127.0.0.1'] }));
+  assert.throws(() => creaTrasporto({ origine: 'https://amr.invalid', ingress: 'nhost', proxy: null }));
+});

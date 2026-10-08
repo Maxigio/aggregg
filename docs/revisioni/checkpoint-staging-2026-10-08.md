@@ -12,7 +12,8 @@ La sonda successiva misura nella stessa istanza peer fidato e non fidato,
 con Host/protocollo corretti. Il middleware originale riproduce rispettivamente
 200 e 403: la lista campionata non copre tutti i percorsi osservati.
 L'originale è ripristinato; nessun nuovo IP o trust più ampio viene applicato.
-Diagnosi verificata, correzione duratura dell'ingress ancora da definire.
+Diagnosi verificata. Aggiornamento successivo: [policy Nhost esplicita
+confermata e fix locale](ingress-policy-2026-10-08.md); non ancora distribuito.
 
 ## Primo tentativo e recovery
 

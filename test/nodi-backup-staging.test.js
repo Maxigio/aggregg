@@ -21,7 +21,7 @@ test('avvio backup: stessa normalizzazione dei proxy del centro, nessuna fiducia
   }
 });
 
-async function server(t, prepara, { attesa = 60000 } = {}) {
+async function server(t, prepara, { attesa = 60000, ingress, ora } = {}) {
   const token = 'a'.repeat(64), scadenza = Date.now() + attesa;
   // Il transport valida Host reale; la porta viene fissata dopo listen.
   let out;
@@ -29,12 +29,41 @@ async function server(t, prepara, { attesa = 60000 } = {}) {
   await new Promise(r => placeholder.listen(0,'127.0.0.1',r));
   const port = placeholder.address().port;
   await new Promise(r => placeholder.close(r));
-  out = creaServer({ origine: 'http://127.0.0.1:' + port, proxy: [], tokenHash: sha(token), scadenza, prepara });
+  out = creaServer({ origine: ingress ? 'https://amr.invalid' : 'http://127.0.0.1:' + port,
+    proxy: [], ingress, ora, tokenHash: sha(token), scadenza, prepara });
   await new Promise(r => out.server.listen(port,'127.0.0.1',r));
   t.after(() => out.chiudi());
-  return { ...out, token, url: 'http://127.0.0.1:' + port };
+  return { ...out, token, scadenza, url: 'http://127.0.0.1:' + port };
 }
 const richiesta = (s, route, headers = {}) => fetch(s.url + route, { headers: { Authorization: 'Bearer ' + s.token, ...headers } });
+
+test('backup Nhost: peer ammesso non evita bearer, scadenza, Origin o percorsi fissi; retry senza nuovo dump',async t=>{
+  let chiamate=0,adesso=Date.now();
+  const s=await server(t,async()=>{chiamate++;return {postgres:Buffer.from('pg'),volume:Buffer.from('sqlite')};},
+    {ingress:'nhost',ora:()=>adesso});
+  const headers={Host:'amr.invalid','X-Forwarded-Proto':'https','X-Forwarded-For':'127.0.0.1'};
+  // Il client HTTP nativo permette di simulare il vero Host dell'ingress.
+  const get=(route,extra={})=>new Promise((resolve,reject)=>{
+    const r=require('node:http').get(s.url+route,{headers:{...headers,Authorization:'Bearer '+s.token,...extra}},res=>{
+      let body='';res.setEncoding('utf8');res.on('data',b=>{body+=b;});
+      res.on('end',()=>resolve({status:res.statusCode,body}));
+    });r.on('error',reject);
+  });
+  assert.equal((await get('/backup/volume',{Authorization:''})).status,401);
+  assert.equal((await get('/backup/volume',{Authorization:'Bearer '+'b'.repeat(64)})).status,401);
+  assert.equal((await get('/backup/volume',{Origin:'https://amr.invalid'})).status,403);
+  assert.equal((await get('/backup/volume',{Host:'evil.invalid'})).status,403);
+  assert.equal((await get('/backup/volume',{'X-Forwarded-Proto':'http'})).status,403);
+  assert.equal((await get('/backup/segreto')).status,403);
+  assert.equal(chiamate,0);
+  for(const [route,valore] of [['volume','sqlite'],['postgres','pg'],['volume','sqlite']]) {
+    const r=await get('/backup/'+route);assert.equal(r.status,200);assert.equal(r.body,valore);
+  }
+  assert.equal(chiamate,1);
+  adesso=s.scadenza;
+  assert.equal((await get('/backup/volume')).status,503);
+  assert.equal(chiamate,1);
+});
 test('backup: niente copia senza autorizzazione e nessun percorso libero', async t => {
   let chiamate = 0;
   const s = await server(t, async () => { chiamate++; throw new Error('fixture'); });

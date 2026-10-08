@@ -18,7 +18,7 @@ function certificato(t) {
   return { key: fs.readFileSync(path.join(dir, 'key.pem')), cert: fs.readFileSync(path.join(dir, 'cert.pem')) };
 }
 
-async function setup(t, { tls, proxyAttendibili = [], origine = 'https://amr.invalid', trasporto } = {}) {
+async function setup(t, { tls, proxyAttendibili = [], origine = 'https://amr.invalid', trasporto, admin = false } = {}) {
   const app = express();
   let server, auth, numero = 0, mfa = false;
   t.after(async () => {
@@ -28,7 +28,7 @@ async function setup(t, { tls, proxyAttendibili = [], origine = 'https://amr.inv
   server = tls ? https.createServer(tls, app) : http.createServer(app);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   const session = () => ({ session: { user: { id: 'anna', emailVerified: true }, accessToken: 'access-' + ++numero, refreshToken: 'refresh-' + numero } });
-  auth = mount(app, { origine, ...(trasporto ? { trasporto } : { proxyAttendibili }), cookiePath: '/', identita: async () => ({ attiva: true, epoca: 0 }),
+  auth = mount(app, { origine, ...(trasporto ? { trasporto } : { proxyAttendibili }), cookiePath: '/', identita: async () => ({ attiva: true, epoca: 0, admin }),
     client: { login: async () => mfa ? { mfa: { ticket: 'ticket-sintetico' } } : session(), mfa: async () => session(), logout: async () => {} } });
   const raw = (route, body, cookie, extra = {}, ca = tls?.cert) => new Promise((resolve, reject) => {
     const r = (tls ? https : http).request({ hostname: '127.0.0.1', port: server.address().port,
@@ -54,9 +54,42 @@ async function setup(t, { tls, proxyAttendibili = [], origine = 'https://amr.inv
     r.cookieContesto = contesto;
     return r;
   };
-  return { req, login, auth, setMfa: () => { mfa = true; } };
+  return { app, req, login, auth, setMfa: () => { mfa = true; } };
 }
 const cookie = r => (r.headers['set-cookie'] || []).map(v => v.split(';')[0]).filter(v => !v.endsWith('=')).join('; ');
+
+test('ingress Nhost: Express ignora header di identita; MFA, cookie Secure e revoca restano necessari', async t => {
+  const trasporto = { origine: 'https://amr.invalid', ingress: 'nhost' };
+  const f = await setup(t, { trasporto, admin: true });
+  f.app.set('trust proxy', require('../backend/nodi/trasporto-prova').creaTrasporto(trasporto).trustProxy);
+  f.app.get('/api/auth/trasporto-sintetico', (req, res) => res.json({ ip: req.ip, protocol: req.protocol,
+    secure: req.secure, hostname: req.hostname }));
+  const headers = { 'x-forwarded-proto': 'https', 'x-forwarded-for': '203.0.113.7', 'x-forwarded-host': 'evil.invalid' };
+  const peer = (await f.req('trasporto-sintetico', undefined, undefined, headers)).json();
+  assert.match(peer.ip, /^(::ffff:)?127\.0\.0\.1$/);
+  assert.deepEqual({ ...peer, ip: 'loopback' }, { ip: 'loopback', protocol: 'http', secure: false, hostname: 'amr.invalid' });
+  assert.equal((await f.req('me', undefined, undefined, headers)).status, 401);
+  for (const extra of [{ ...headers, host: 'evil.invalid' }, { ...headers, origin: 'https://evil.invalid' },
+    { ...headers, 'x-forwarded-proto': 'http' }]) {
+    const r = await f.login(undefined, extra);
+    assert.equal(r.status, 403); assert.equal(r.headers['set-cookie'], undefined);
+  }
+  assert.equal((await f.login(undefined, headers)).status, 403);
+  f.setMfa();
+  const challenge = await f.login(undefined, headers);
+  assert.equal(challenge.json().mfa, true);
+  assert.equal((await f.req('me', undefined, challenge.cookieContesto + '; ' + cookie(challenge), headers)).status, 401);
+  const r = await f.req('mfa', { otp: '123456' }, challenge.cookieContesto + '; ' + cookie(challenge), headers);
+  assert.equal(r.status, 200);
+  for (const h of [...challenge.headers['set-cookie'], ...r.headers['set-cookie']]) {
+    assert.match(h, /; Secure/); assert.match(h, /; HttpOnly/); assert.match(h, /SameSite=Strict/);
+  }
+  const c = challenge.cookieContesto + '; ' + cookie(r);
+  const lista = await f.req('sessioni', undefined, c, headers);
+  assert.equal(lista.status, 200);
+  assert.equal((await f.req('sessioni/revoca', { id: lista.json().sessioni[0].id }, c, headers)).status, 200);
+  assert.equal((await f.req('me', undefined, c, headers)).status, 401);
+});
 
 test('HTTPS TLS reale sintetico: cookie Secure su sessione/MFA/clear, rotte proprie e restart fail closed', async t => {
   const tls = certificato(t), f = await setup(t, { tls });
@@ -104,11 +137,13 @@ test('HTTPS da proxy esplicito: Host/Origin/protocollo negati prima di login e r
 });
 
 test('guard HTTPS aziende/colleghi/backup indipendenti da login: proxy, Origin e Host prima del dominio', async t => {
-  for (const trusted of [true, false]) {
+  for (const modalita of ['proxy', 'nhost', 'diretto']) {
+    const trusted = modalita !== 'diretto';
     const app = express(), server = http.createServer(app), chiamate = [];
     let colleghi, aziende;
     t.after(async () => { colleghi?.close(); aziende?.close(); server.closeAllConnections(); if (server.listening) await new Promise(r => server.close(r)); });
-    const trasporto = { origine: 'https://amr.invalid', proxyAttendibili: trusted ? ['127.0.0.1'] : [] };
+    const trasporto = { origine: 'https://amr.invalid', ...(modalita === 'nhost' ? { ingress: 'nhost' }
+      : { proxyAttendibili: trusted ? ['127.0.0.1'] : [] }) };
     const accessi = { sessione: () => ({ persona: 'sintetica', epoca: 0, mfa: true }),
       verifica: async () => { chiamate.push('verifica'); return { admin: true }; } };
     const elenco = async () => { chiamate.push('elenco'); return { aziende: [], colleghi: [] }; };

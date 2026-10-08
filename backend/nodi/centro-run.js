@@ -29,7 +29,7 @@ async function creaServizio(config, { Pool = require('pg').Pool,
     const backupApi = require('./backup-postgres-prova');
     copie = backupApi.creaBackupPostgres({pool:backup,
       ...require('./backup-centro-run').preparaCopie(config.copie)});
-    const trasporto = {origine:config.origine,proxyAttendibili:config.proxy};
+    const trasporto = {origine:config.origine,proxyAttendibili:config.proxy,ingress:config.ingress};
     centro = creaCentro({tokens:config.tokens,directory:config.directory,compatibilita:manifest,
       inviaIncidente: require('./betterstack').creaInvio({ url: config.webhookIncidenti }),
       proprietarioId:config.proprietarioId,
