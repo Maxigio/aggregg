@@ -125,3 +125,82 @@ il candidato definitivo richiede un nuovo manifest, build immutabile e
 worker compatibili. L'immagine della controprova è solo diagnostica,
 non un candidato da distribuire. `d632f50` resta deployed; R2 ancora non
 operativo dal centro remoto.
+
+## Checkpoint prima del candidato con CA
+
+Nuova copia iniziata alle 16:00:27 UTC, con la baseline `d632f50` e runtime
+R2 attivo: 245.760 byte PostgreSQL e 90.112 byte di volume. Cifratura
+restic, restore PostgreSQL isolato senza rete e cleanup confermati;
+servizio originale ripristinato con configurazione esatta. Finestra di
+manutenzione: 280.243 ms, entro i venti minuti. Copia privata conservata
+in `/Users/aincrad/AMR-backup-staging/copia-sWRPIa`; precedenti preservate.
+Ricevuta `checkpoint-ca/esito-execute.json` nella directory di evidenze.
+
+La review ha rilevato due errori nel wrapper temporaneo, corretti prima
+dell'esecuzione: controllo `amr_dump` una sola volta dopo il polling, che
+poteva impedire anche il recovery; loader della nuova baseline non
+collegato dopo il riuso del controller. Ora tutte e quattro le connessioni
+sono considerate nello stesso polling, con due campioni a zero; loader
+esplicito. Core preservato in una copia che differisce dall'originale
+soltanto nelle due query dei pool. Controprove `1→0→0`, `0→1→0→0`, timeout,
+conflitto di configurazione e recovery PASS; review finale senza finding
+residui nel perimetro. Due arresti cloud confermati anche tramite endpoint.
+
+Candidato immutabile `3870675`: build Linux amd64 e manifest non
+privilegiato verificati; entrambe le identità R2 leggibili dalla stessa
+immagine nel test nativo. Digest root riletto dal registry:
+`sha256:f6377bd6be04b3237ca2d6177ccbded9b85cd8da6ea826c60c3052944e115b04`.
+L'immagine ha amd64 e attestazione, non un secondo target arm64.
+
+Il preflight del pacchetto ha impedito l'aggiornamento a causa del
+confronto canonico: il pacchetto aggiunge contesto e impronte e l'opzione
+`ingress=nhost` riordinava le variabili di un ingress già Nhost. Corretti
+entrambi i confronti senza modificare il piano: estensioni validate
+esplicitamente, ambiente preservato. Secondo preflight remoto delle
+16:07:38 UTC PASS. Solo l'immagine differisce dalla baseline; rollback
+identico all'originale e cinque impronte TOML verificate.
+
+Cinque controprove locali del controller di aggiornamento PASS: successo,
+ACK perso senza retry della mutazione, manifest errato, fsync finale
+fallito e segnale prima della conferma; i fallimenti richiedono il recovery
+esatto. Sono prove con mock, non fault injection sul cloud. Aggiornamento
+remoto e restore delle copie R2 non ancora completati in questa sezione.
+
+Ulteriore review del controller: due rischi condizionati di riuso, non
+riprodotti sul pacchetto corrente, sono stati corretti. Le impronte ora
+supportano anche il suffisso `.toml` del produttore standard, rifiutando
+alias e collisioni. Il checkpoint appena verificato è vincolato a path,
+SHA-256, inizio e release; qualsiasi altra ricevuta di esecuzione nella
+stessa directory blocca il prerequisite, anche se indica failure.
+Review indipendente finale: 35 mock RAM PASS, nessun finding residuo nel
+perimetro. Terzo preflight remoto delle 16:15:46 UTC PASS.
+
+### Primo aggiornamento remoto non riuscito
+
+Il candidato amd64 `3870675` non ha confermato l'avvio nei 420 secondi del
+controller. Run osservato in `Updating`, una replica non pronta e health
+503; successivamente `Error`. Recovery concluso alle 16:29:10 UTC:
+configurazione originale esatta, replica pronta e health applicativo
+confermati. Nessuna modifica a schema, ruolo, secrets, token, M2 o portali.
+Ricevuta `candidato-ca-execute.jsonl`; il candidato non è deployed.
+
+Questo non smentisce la prova TLS nativa e non dimostra da solo una causa
+nel codice applicativo. Metadati dei log del periodo: nessun errore di
+avvio del candidato trovato; un messaggio del servizio originale avviato
+alle 16:28:45 UTC. Nessun body di log mostrato o conservato. Introspezione
+ufficiale API: gli errori di container sono disponibili in
+`ReplicaStatus.errors.lastError`, ma il controller li ometteva prima del
+rollback. Il servizio originale osservato successivamente è `Running`,
+ready, senza errori di container.
+
+Preparate acquisizione di sole classi/codici, ricevuta distinta, budget di
+avvio ridotto e recovery identico. L'eventuale messaggio remoto resta solo
+transitorio in RAM; anche il ritorno in caso ready viene proiettato su
+stato e readiness, senza errori grezzi. Preflight diagnostico delle
+16:38:44 UTC PASS; prova remota ancora da eseguire.
+
+Riferimenti di comportamento Run:
+[health check](https://docs.nhost.io/products/run/health-checks),
+[build e deploy CLI](https://docs.nhost.io/products/run/cli-deployments).
+L'esempio ufficiale costruisce amd64 e arm64; non attesta quale architettura
+abbia la replica attuale. Non assumere amd64 dalla sola prova locale.
