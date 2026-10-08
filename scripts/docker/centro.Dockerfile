@@ -12,6 +12,8 @@ WORKDIR /opt/amr
 COPY --from=dependencies /usr/local/bin/node /usr/local/bin/node
 COPY --from=dependencies /opt/amr/node_modules node_modules/
 COPY --from=restic /usr/bin/restic /usr/bin/restic
+# Il client restic usa il trust store del sistema, assente nel runtime PostgreSQL.
+COPY --from=restic /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 RUN groupadd --gid 1000 node && useradd --uid 1000 --gid 1000 --create-home node
 COPY package.json package-lock.json ./
 COPY backend/ backend/
@@ -20,6 +22,7 @@ COPY pagine/ pagine/
 COPY scripts/ scripts/
 COPY data/ data/
 COPY release.json ./
+RUN node -e "const fs=require('node:fs'),crypto=require('node:crypto');const ca=fs.readFileSync('/etc/ssl/certs/ca-certificates.crt','utf8').match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g);if(!ca?.length)throw new Error('trust_store_tls_assente');for(const pem of ca)new crypto.X509Certificate(pem);"
 RUN node -e "const fs=require('node:fs'),crypto=require('node:crypto');const info=p=>({path:p,sha256:crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex')});fs.writeFileSync('backup-binaries.json',JSON.stringify({restic:info('/usr/bin/restic'),pgDump:info('/usr/lib/postgresql/18/bin/pg_dump')}));"
 # COPY conserva i permessi del contesto, anche se creato con umask privata.
 # Il codice resta di root e non scrivibile; la verifica deve poterlo leggere come node.
