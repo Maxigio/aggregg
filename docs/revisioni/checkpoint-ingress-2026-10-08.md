@@ -177,6 +177,9 @@ non è dimostrata; non attribuire il ritorno del DNS all'aggiornamento
 identico delle porte. I fallimenti precedenti non vengono cancellati.
 Il candidato resta da distribuire dopo la review delle migrazioni.
 
+**Aggiornamento successivo:** [candidato `d632f50` distribuito e ingress remoto verificato](candidato-ingress-staging-2026-10-08.md).
+La conferma manuale Admin/MFA resta un gate distinto.
+
 ## Riferimenti
 
 [PostgreSQL pg_dump](https://www.postgresql.org/docs/18/app-pgdump.html):

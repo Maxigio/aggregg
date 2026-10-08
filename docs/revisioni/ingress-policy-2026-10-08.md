@@ -214,3 +214,9 @@ La policy ingress è decisa; i gate remoti sopra restano da eseguire.
 Le scelte già confermate su moduli, pause, quote, retention e M2 solo stato
 non vengono riaperte.
 Il mancato collaudo di una scelta non è una nuova domanda di prodotto.
+
+**Aggiornamento verificato:** [checkpoint e recovery dell'originale](checkpoint-ingress-2026-10-08.md)
+completati; [candidato `d632f50` distribuito nello staging](candidato-ingress-staging-2026-10-08.md),
+configurazione esatta e 16/16 controlli anonimi remoti PASS. Il login
+Admin/MFA manuale resta pendente; runtime R2/Better Stack e M2 non sono
+ancora collegati da questo incremento.
