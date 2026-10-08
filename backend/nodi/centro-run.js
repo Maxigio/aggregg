@@ -27,8 +27,8 @@ async function creaServizio(config, { Pool = require('pg').Pool,
     const aziende = require('./aziende-postgres-prova').creaAziendePostgres({pool:writer});
     const colleghi = require('./colleghi-postgres-prova').creaColleghiPostgres({pool:writer});
     const backupApi = require('./backup-postgres-prova');
-    // Repository remoto non configurato senza un gate storage separato: avviso persistente.
-    copie = backupApi.creaBackupPostgres({pool:backup});
+    copie = backupApi.creaBackupPostgres({pool:backup,
+      ...require('./backup-centro-run').preparaCopie(config.copie)});
     const trasporto = {origine:config.origine,proxyAttendibili:config.proxy};
     centro = creaCentro({tokens:config.tokens,directory:config.directory,compatibilita:manifest,
       inviaIncidente: require('./betterstack').creaInvio({ url: config.webhookIncidenti }),

@@ -20,26 +20,9 @@ const sha = b => crypto.createHash('sha256').update(b).digest('hex');
 
 // File scelto esplicitamente: niente ricerca di credenziali o caricamento del .env AMR.
 function leggiCredenziali(file) {
-  let fd;
   try {
-    if (!path.isAbsolute(file || '')) throw new Error();
-    const parent = fs.lstatSync(path.dirname(file));
-    if (!parent.isDirectory() || (parent.mode & 0o777) !== 0o700 || parent.uid !== process.getuid()) throw new Error();
-    fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
-    const stat = fs.fstatSync(fd);
-    if (!stat.isFile() || stat.size > 4096 || (stat.mode & 0o777) !== 0o600 || stat.uid !== process.getuid()) throw new Error();
-    const env = {};
-    for (const line of fs.readFileSync(fd, 'utf8').split(/\r?\n/)) {
-      if (!line.trim() || line.trimStart().startsWith('#')) continue;
-      const m = /^(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY)=([a-f0-9]+)$/.exec(line);
-      if (!m || Object.hasOwn(env, m[1])) throw new Error();
-      env[m[1]] = m[2];
-    }
-    if (!/^[a-f0-9]{32}$/.test(env.AWS_ACCESS_KEY_ID || '')
-      || !/^[a-f0-9]{64}$/.test(env.AWS_SECRET_ACCESS_KEY || '')) throw new Error();
-    return env;
+    return require('../backend/nodi/backup-centro-run').leggiCredenzialiR2(file);
   } catch { throw new Error('credenziali_collaudo_non_valide'); }
-  finally { if (fd !== undefined) fs.closeSync(fd); }
 }
 
 function validaConfigurazione({ host, restic, impronta, credenziali }) {

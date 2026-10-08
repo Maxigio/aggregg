@@ -45,7 +45,8 @@ function configura(env) {
   }
   if (new Set(Object.values(pools).map(p=>p.user)).size!==3) errore();
   const webhookIncidenti = require('./betterstack').validaWebhook(env.AMR_BETTERSTACK_WEBHOOK_URL);
-  return {origine:origine.origin,auth:auth.href,proxy,tokens,pools,proprietarioId,webhookIncidenti,
+  const copie = require('./backup-centro-run').configuraCopie(env, pools.backup);
+  return {origine:origine.origin,auth:auth.href,proxy,tokens,pools,proprietarioId,webhookIncidenti,copie,
     port:intero('PORT',3000,65535),directory:env.AMR_NODI_DATA_DIR,releaseFile:env.AMR_NODI_RELEASE_FILE,
     timeoutRicercaMs:intero('AMR_NODI_RICERCA_TIMEOUT_MS',60000,60000),
     maxPersona:intero('AMR_NODI_RICERCHE_MAX_PERSONA',2,2),maxTotale:intero('AMR_NODI_RICERCHE_MAX_TOTALE',60,60)};

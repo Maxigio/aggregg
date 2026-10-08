@@ -94,10 +94,14 @@ completa e non certifica backup o restore vivi.
 
 ## Gate non concluso
 
-Il runtime `backend/nodi/centro-run.js` istanzia ancora il worker backup
-senza repository o dump: i bucket da soli **non collegano** il backup vivo.
-Restano seconda copia offline della chiave, configurazione e prova del
-backup staging con restore isolato e ricevuta del punto di recovery.
+Alla baseline `8622564`, `backend/nodi/centro-run.js` istanziava il worker
+senza repository o dump. Il successivo [incremento del runtime](backup-centro-run-2026-10-08.md)
+collega queste dipendenze con configurazione esplicita, verificata localmente;
+non è stato distribuito o configurato nello staging.
+I bucket e l'adapter da soli **non provano** un backup vivo. Restano seconda
+copia offline della chiave, packaging Linux, permessi del dump da discutere
+(il ruolo attuale è insufficiente), provisioning e prova del backup staging
+con restore isolato e ricevuta del punto di recovery.
 Il collaudo locale del nuovo indice non sostituisce questa prova.
 Nessun deploy, connessione M2 o modifica della console effettuati qui.
 

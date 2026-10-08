@@ -37,6 +37,7 @@ function avvio() {
     './aziende-prova-route': { mount: () => aziende },
     './colleghi-prova-route': { mount: () => colleghi },
     './backup-prova-route': { mount: () => {} },
+    './backup-centro-run': { preparaCopie: () => ({}) },
     './backup-postgres-prova': { creaBackupPostgres: () => worker, creaStatoBackup: () => ({}),
       collegaNotificheBackup: () => init },
     'node:http': { createServer: () => { conta('server'); return server; } },

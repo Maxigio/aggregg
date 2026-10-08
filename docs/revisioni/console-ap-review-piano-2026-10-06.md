@@ -622,3 +622,39 @@ review del branch. Decisioni e prove mancanti sono elencate nel registro
 recovery, senza interpretare provider acquistati o test locali come gate
 di produzione. Il brainstorming del punto 8 resta da implementare dopo
 questi passaggi, uno alla volta.
+
+## 8 ottobre — stato prima del collegamento backup Run
+
+Gli aggiornamenti più recenti sostituiscono i prossimi passi storici sopra:
+
+- Punto 4: provider configurato e un incidente sintetico con email/push
+  registrate dal servizio; conferma visibile sul telefono ancora da ricevere.
+  Chiusura manuale osservata senza nuovi invii, non garanzia della futura
+  risoluzione automatica silenziosa. Integrazione runtime staging dopo il
+  backup e l'aggiornamento del candidato. Evidenze nel
+  [registro notifiche](notifiche-incidenti-2026-10-07.md), sezioni finali.
+- Punto 5: restano le sole due ricerche live già autorizzate, Auto
+  Alfa Romeo/Giulietta/Veloce e Moto Fantic/Caballero 500/Rally. Misurare
+  il percorso effettivo senza aggiungere richieste e con almeno 15 s fra
+  ricerche sulla stessa fonte. Nessuna eseguita in questo incremento.
+- Punto 6: [backend limiti verificato](limiti-admin-2026-10-08.md);
+  rappresentazione e comandi della nuova UI durante il punto 8. Massimi
+  approvati invariati: 60 s, 2/persona e 60 totali.
+- Punto 7: [repository R2](storage-r2-staging-2026-10-08.md) inizializzati,
+  identità distinte e zero snapshot vivi. Il
+  [collegamento runtime](backup-centro-run-2026-10-08.md) è verificato
+  localmente, non distribuito. Restano custodia offline della chiave,
+  binari Linux/provisioning e identità del dump da discutere: `amr_copie`
+  è insufficiente; un lettore sintetico funziona ma non bypassa RLS.
+  Poi backup vivi, restore isolato e ricevuta del punto di recovery,
+  oltre al checkpoint del volume Run prima della manutenzione.
+
+Successivamente: diagnosi CHECK storico (causa non dimostrata), gate remoto
+del candidato e collegamento M2 isolato per stato/compatibilità, poi review
+del branch e correzioni verificate. Live M2 soltanto dopo coordinamento di
+pause e limiti con la produzione sullo stesso IP. Il via al collaudo con CHECK
+aperto non chiude il finding né autorizza la produzione.
+
+La console del punto 8 resta successiva a questi gate. Log e bug report R2
+saranno affrontati durante quel lavoro, come concordato. Nessuna modifica
+frontend, deploy, collegamento M2 o azione sui provider in questo incremento.
