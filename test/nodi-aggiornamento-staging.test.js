@@ -152,6 +152,58 @@ test('staging: ID proprietario opzionale solo come riferimento, preservato al ro
     assert.throws(() => validaStato(s), /pacchetto_staging_non_valido/);
   }
 });
+function runtime(s, { copie = true, webhook = true } = {}) {
+  if (copie) s.config.environment.push(
+    { name: 'AMR_COPIE_SEGRETI', value: '{{ secrets.AMR_COPIE_SEGRETI }}' },
+    { name: 'AMR_COPIE_REPOSITORY', value: '{{ secrets.AMR_COPIE_REPOSITORY }}' },
+    { name: 'AMR_COPIE_PG_USER', value: 'amr_dump' });
+  if (webhook) s.config.environment.push(
+    { name: 'AMR_BETTERSTACK_WEBHOOK_URL', value: '{{ secrets.AMR_BETTERSTACK_WEBHOOK_URL }}' });
+  return s;
+}
+const opzioniRuntime = v => v.filter(e => /^(AMR_COPIE_|AMR_BETTERSTACK_)/.test(e.name));
+function ambienteToml(raw) {
+  return [...raw.matchAll(/\[\[environment\]\]\nname = ("(?:[^"\\]|\\.)*")\nvalue = ("(?:[^"\\]|\\.)*")\n/g)]
+    .map(m => ({ name: JSON.parse(m[1]), value: JSON.parse(m[2]) }));
+}
+test('staging: backup e webhook opzionali conservati in ogni fase e nel rollback, senza risolvere segreti', () => {
+  for (const copie of [false, true]) for (const webhook of [false, true]) {
+    const s = runtime(stato(), { copie, webhook });
+    s.config.environment.push({ name: 'AMR_CENTRO_PROPRIETARIO_ID', value: '{{ secrets.AMR_CENTRO_PROPRIETARIO_ID }}' });
+    const prima = structuredClone(s);
+    assert.deepEqual(validaStato(s), s);
+    const p = preparaPiano({ stato: s, candidato: wire('b'), image: digest('b'), ingress: 'nhost' });
+    for (const c of Object.values(p.configurazioni)) {
+      assert.deepEqual(opzioniRuntime(c.environment), opzioniRuntime(s.config.environment));
+      assert.deepEqual(ambienteToml(toml(c)), c.environment);
+    }
+    assert.deepEqual(s, prima);
+    assert.deepEqual(p.configurazioni['05-rollback-avvio'], s.config);
+    assert.ok(toml(p.configurazioni['03-candidato-avvio']).includes('{{ secrets.AMR_NODI_TOKENS }}'));
+    if (copie) assert.ok(toml(p.configurazioni['03-candidato-avvio']).includes('{{ secrets.AMR_COPIE_SEGRETI }}'));
+    const prossimo = preparaPiano({ stato: { ...s, manifest: wire('b'), config: p.configurazioni['03-candidato-avvio'] },
+      candidato: wire('c'), image: digest('c') });
+    assert.deepEqual(prossimo.configurazioni['05-rollback-avvio'], p.configurazioni['03-candidato-avvio']);
+  }
+});
+test('staging: rifiuta backup parziale, ruoli estranei, segreti e webhook letterali, campi extra o duplicati', () => {
+  for (const name of ['AMR_COPIE_SEGRETI', 'AMR_COPIE_REPOSITORY', 'AMR_COPIE_PG_USER']) {
+    const s = runtime(stato()); s.config.environment = s.config.environment.filter(e => e.name !== name);
+    assert.throws(() => validaStato(s), /pacchetto_staging_non_valido/);
+  }
+  for (const name of ['AMR_COPIE_SEGRETI', 'AMR_COPIE_REPOSITORY', 'AMR_COPIE_PG_USER', 'AMR_BETTERSTACK_WEBHOOK_URL']) {
+    for (const value of ['', 'NON-MOSTRARE', '{{ secrets.ALTRO }}']) {
+      const s = runtime(stato()); s.config.environment.find(e => e.name === name).value = value;
+      assert.throws(() => validaStato(s), e => e.message === 'pacchetto_staging_non_valido');
+    }
+    const s = runtime(stato()); s.config.environment.push(s.config.environment.find(e => e.name === name));
+    assert.throws(() => validaStato(s), /pacchetto_staging_non_valido/);
+  }
+  for (const name of ['AMR_COPIE_RETENTION', 'AMR_COPIE_R2_ENV', 'AMR_BETTERSTACK_TOKEN']) {
+    const s = runtime(stato()); s.config.environment.push({ name, value: 'NON-MOSTRARE' });
+    assert.throws(() => validaStato(s), /pacchetto_staging_non_valido/);
+  }
+});
 test('staging: legge una sola FD, rifiuta symlink, JSON grande o segreti senza riportarli', t => {
   const dir = temporanea(t), file = path.join(dir, 'stato.json');
   fs.writeFileSync(file, JSON.stringify(stato())); assert.deepEqual(leggiStato(file), stato());
@@ -284,16 +336,20 @@ test('staging: comando completo sul vero HEAD, senza login o ambiente applicativ
 test('staging: TOML di tutte le fasi accettato dalla CLI ufficiale isolata', {
   skip: !process.env.AMR_TEST_NHOST_CLI,
 }, t => {
-  const dir = temporanea(t), p = preparaPiano({ stato: stato(), candidato: wire('b'), image: digest('b') });
-  const secrets = SEGRETE.map(n => n + '=' + JSON.stringify(n === 'AMR_NODI_TOKENS'
+  const dir = temporanea(t);
+  const secrets = [...SEGRETE, 'AMR_COPIE_SEGRETI', 'AMR_COPIE_REPOSITORY', 'AMR_BETTERSTACK_WEBHOOK_URL']
+    .map(n => n + '=' + JSON.stringify(n === 'AMR_NODI_TOKENS'
     ? JSON.stringify({ sintetico: 'a'.repeat(64) }) : 'sintetico-non-segreto')).join('\n') + '\n';
   fs.mkdirSync(path.join(dir, '.nhost')); fs.mkdirSync(path.join(dir, 'nhost'));
   fs.writeFileSync(path.join(dir, '.secrets'), secrets, { mode: 0o600 });
-  for (const [nome, c] of Object.entries(p.configurazioni)) {
-    const file = path.join(dir, nome + '.toml'); fs.writeFileSync(file, toml(c));
-    execFileSync(process.env.AMR_TEST_NHOST_CLI, ['--root-folder', dir, '--dot-nhost-folder', path.join(dir, '.nhost'),
-      '--nhost-folder', path.join(dir, 'nhost'), 'run', 'config-validate', '--config', file], {
-      cwd: dir, env: { HOME: dir, PATH: process.env.PATH }, encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'pipe'],
-    });
+  for (const [caso, s] of [['baseline', stato()], ['runtime', runtime(stato())]]) {
+    const p = preparaPiano({ stato: s, candidato: wire('b'), image: digest('b'), ingress: 'nhost' });
+    for (const [nome, c] of Object.entries(p.configurazioni)) {
+      const file = path.join(dir, caso + '-' + nome + '.toml'); fs.writeFileSync(file, toml(c));
+      execFileSync(process.env.AMR_TEST_NHOST_CLI, ['--root-folder', dir, '--dot-nhost-folder', path.join(dir, '.nhost'),
+        '--nhost-folder', path.join(dir, 'nhost'), 'run', 'config-validate', '--config', file], {
+        cwd: dir, env: { HOME: dir, PATH: process.env.PATH }, encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    }
   }
 });

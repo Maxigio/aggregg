@@ -21,6 +21,8 @@ const PUBBLICHE = {
 };
 const SEGRETE = ['AMR_NODI_TOKENS', 'AMR_PG_DATABASE', 'AMR_PG_LETTURA_PASSWORD',
   'AMR_PG_COMMERCIALE_PASSWORD', 'AMR_PG_BACKUP_PASSWORD'];
+const COPIE = ['AMR_COPIE_SEGRETI', 'AMR_COPIE_REPOSITORY', 'AMR_COPIE_PG_USER'];
+const OPZIONALI = ['AMR_CENTRO_PROPRIETARIO_ID', 'AMR_BETTERSTACK_WEBHOOK_URL', ...COPIE];
 const riferimento = nome => '{{ secrets.' + nome + ' }}';
 const errore = () => { throw new Error('pacchetto_staging_non_valido'); };
 function chiavi(v, attese) {
@@ -58,16 +60,23 @@ function validaStato(stato) {
   const nomi = [...Object.keys(PUBBLICHE), ...SEGRETE, 'AMR_CENTRO_ORIGINE', 'AMR_NHOST_AUTH_URL',
     ingressoNhost ? 'AMR_CENTRO_INGRESS' : 'AMR_CENTRO_PROXY_IP'];
   const opzionale = 'AMR_CENTRO_PROPRIETARIO_ID';
-  if (!Array.isArray(c.environment) || ![nomi.length, nomi.length + 1].includes(c.environment.length)) errore();
+  if (!Array.isArray(c.environment) || c.environment.length < nomi.length
+      || c.environment.length > nomi.length + OPZIONALI.length) errore();
   const env = Object.create(null);
   for (const voce of c.environment) {
     chiavi(voce, ['name', 'value']);
-    if ((!nomi.includes(voce.name) && voce.name !== opzionale) || typeof voce.value !== 'string' || Object.hasOwn(env, voce.name)) errore();
+    if ((!nomi.includes(voce.name) && !OPZIONALI.includes(voce.name)) || typeof voce.value !== 'string' || Object.hasOwn(env, voce.name)) errore();
     env[voce.name] = voce.value;
   }
   for (const [nome, value] of Object.entries(PUBBLICHE)) if (env[nome] !== value) errore();
   for (const nome of SEGRETE) if (env[nome] !== riferimento(nome)) errore();
   if (env[opzionale] !== undefined && env[opzionale] !== riferimento(opzionale)) errore();
+  const copiePresenti = COPIE.filter(nome => env[nome] !== undefined);
+  if (copiePresenti.length && (copiePresenti.length !== COPIE.length
+      || env.AMR_COPIE_PG_USER !== 'amr_dump'
+      || ['AMR_COPIE_SEGRETI', 'AMR_COPIE_REPOSITORY'].some(nome => env[nome] !== riferimento(nome)))) errore();
+  if (env.AMR_BETTERSTACK_WEBHOOK_URL !== undefined
+      && env.AMR_BETTERSTACK_WEBHOOK_URL !== riferimento('AMR_BETTERSTACK_WEBHOOK_URL')) errore();
   for (const [nome, value] of [['AMR_CENTRO_ORIGINE', ORIGINE], ['AMR_NHOST_AUTH_URL', AUTH]]) {
     if (env[nome] !== value && env[nome] !== riferimento(nome)) errore();
   }
@@ -80,7 +89,22 @@ function validaStato(stato) {
   if (!ingressoNhost && proxy !== refProxy
     && (!ipEspliciti || proxy.length > 512 || ipEspliciti.split(',').some(ip => !net.isIP(ip.trim())))) errore();
   // Riusa la validazione runtime con soli valori sintetici. Non risolve segreti Nhost.
-  configura({ ...env, AMR_CENTRO_ORIGINE: ORIGINE, AMR_NHOST_AUTH_URL: AUTH,
+  // Le due dipendenze opzionali restano riferimenti nel piano. Per verificare
+  // il contratto runtime usiamo solo dati sintetici: niente file o segreti reali.
+  const ambienteRuntime = { ...env };
+  delete ambienteRuntime.AMR_COPIE_SEGRETI;
+  if (copiePresenti.length) Object.assign(ambienteRuntime, {
+    AMR_COPIE_R2_ENV: '/tmp/amr-sintetico/r2.env', AMR_COPIE_PASSWORD_FILE: '/tmp/amr-sintetico/password',
+    AMR_COPIE_PG_PASSFILE: '/tmp/amr-sintetico/pgpass', AMR_COPIE_RESTIC: '/usr/bin/restic',
+    AMR_COPIE_PG_DUMP: '/usr/lib/postgresql/18/bin/pg_dump',
+    AMR_COPIE_RESTIC_SHA256: 'a'.repeat(64), AMR_COPIE_PG_DUMP_SHA256: 'b'.repeat(64),
+    AMR_COPIE_REPOSITORY: JSON.stringify({ endpoint: 'https://' + 'a'.repeat(32) + '.eu.r2.cloudflarestorage.com',
+      database: { bucket: 'amr-sintetico-db', id: 'c'.repeat(64) },
+      journal: { bucket: 'amr-sintetico-journal', id: 'd'.repeat(64) } }),
+  });
+  if (env.AMR_BETTERSTACK_WEBHOOK_URL !== undefined) ambienteRuntime.AMR_BETTERSTACK_WEBHOOK_URL
+    = 'https://incidents.betterstack.com/api/v1/incoming-webhook/sintetico';
+  configura({ ...ambienteRuntime, AMR_CENTRO_ORIGINE: ORIGINE, AMR_NHOST_AUTH_URL: AUTH,
     ...(env[opzionale] === undefined ? {} : { [opzionale]: '00000000-0000-4000-8000-000000000001' }),
     ...(ingressoNhost ? {} : { AMR_CENTRO_PROXY_IP: proxy === refProxy ? '127.0.0.1'
       : proxyConAggiunta ? '127.0.0.1,' + ipEspliciti : proxy }),
