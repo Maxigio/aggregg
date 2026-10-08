@@ -70,6 +70,22 @@ Ricevute private in
 checkpoint: un executor fissato alla vecchia lista deve fermarsi, non
 eliminare le aggiunte appena autorizzate.
 
-Prossimo incremento: checkpoint fresco di PostgreSQL e volume, cifratura e
-restore isolato della copia. Solo dopo: candidato remoto e M2 solo stato.
-CHECK storico e stabilità ingress restano gate di produzione aperti.
+Aggiornamento successivo: il [checkpoint](checkpoint-staging-2026-10-08.md)
+non è acquisito. Dopo il recovery dell'originale, nuove richieste anonime
+alternano 200/403 sul frontend e 401/403 sull'API protetta, con liveness 200.
+La modifica autorizzata rimane applicata, ma il PASS 16/16 precedente non
+prova accesso stabile dopo il riavvio. L'indagine deve isolare il controllo
+che produce il 403. Il proprietario ha escluso il contatto al supporto:
+verificare prima le nostre assunzioni e il guard effettivamente distribuito.
+Poi: checkpoint fresco, cifratura e restore isolato; candidato remoto e M2
+solo stato. CHECK storico e stabilità ingress restano gate di produzione.
+
+**Diagnosi successiva verificata:** la sonda multiarch delle 05:25 UTC
+misura `10.110.1.21` non fidato e `10.110.1.249` fidato nella stessa istanza,
+con Host atteso e protocollo https. Il middleware originale riproduce
+403/200 rispettivamente. La lista dei campioni precedenti non copre tutti
+i percorsi osservati; il PASS iniziale non ne dimostrava l'esaustività.
+Dettagli e controprove nel [checkpoint](checkpoint-staging-2026-10-08.md).
+Originale ripristinato, nessun ulteriore IP aggiunto. Prima del prossimo
+checkpoint serve concordare la correzione della policy ingress; un nuovo
+IP provvisorio non chiuderebbe il requisito di stabilità per la produzione.

@@ -374,6 +374,27 @@ checkpoint remoto fresco, restore isolato della copia, distribuzione del
 candidato e M2 solo stato restano da completare in questo ordine. CHECK storico ancora
 non riprodotto e non spiegato: produzione non autorizzata.
 
+**Aggiornamento successivo:** [i due IP sono stati autorizzati e applicati](staging-proxy-due-ip-2026-10-08.md),
+con 16/16 controlli ingress iniziali passati. Il successivo
+[checkpoint e recovery](checkpoint-staging-2026-10-08.md) non ha acquisito
+una copia fresca; dopo il ripristino esatto dell'originale riappare accesso
+HTTP intermittente. Il nuovo retry si ferma al preflight senza mutazioni.
+La [bozza tecnica](nhost-ingress-richiesta-2026-10-08.md) non è inviata;
+il proprietario ha escluso il contatto al supporto. Prosegue l'indagine
+sui nostri controlli e sulle assunzioni della lista fidata, senza aspettare
+un intervento esterno. Nessun ulteriore IP/subnet aggiunto o guard rimosso;
+checkpoint, candidato remoto e M2 restano sospesi su questa verifica.
+
+**Esito dell'indagine:** il [checkpoint](checkpoint-staging-2026-10-08.md)
+documenta una sonda finalmente operativa dopo la correzione della piattaforma
+del container. Nella stessa istanza sono misurati peer fidato e non fidato;
+il middleware originale riproduce il diniego del secondo. La lista campionata
+dei proxy è incompleta: diagnosi concreta, policy duratura ancora da discutere.
+Originale ripristinato e nessuna nuova fiducia applicata. Il candidato
+`b8e8050` ha un gate locale amd64, non una prova di compatibilità col runtime
+remoto; va preparato e collaudato per le piattaforme richieste prima del deploy.
+Nessun nuovo checkpoint acquisito, backup automatico o collegamento M2 attivato.
+
 Review indipendente delle nuove conclusioni: ricevute locali e limiti della
 sonda confermati. Corretto un finding documentale: la bozza per il supporto
 descrive ora il rifiuto di un peer non autorizzato come regola del middleware,
