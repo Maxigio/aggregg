@@ -220,3 +220,8 @@ completati; [candidato `d632f50` distribuito nello staging](candidato-ingress-st
 configurazione esatta e 16/16 controlli anonimi remoti PASS. Il login
 Admin/MFA manuale resta pendente; runtime R2/Better Stack e M2 non sono
 ancora collegati da questo incremento.
+
+Conferma successiva: l'utente ha effettuato il login nello staging; una
+lettura dei pannelli conferma accesso Admin e storia operativa disponibile.
+Il prossimo gate è il runtime R2/Better Stack. Non confondere i sei lavori
+storici con ricerche appena eseguite o con un worker attualmente online.

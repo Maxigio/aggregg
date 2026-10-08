@@ -97,6 +97,24 @@ Seguono runtime R2/Better Stack, poi M2 isolato solo stato/compatibilità.
 Il CHECK storico resta non riprodotto e non spiegato; produzione e
 redesign della console non sono autorizzati da questo esito.
 
+### Conferma successiva del login e lettura dei pannelli
+
+L'utente conferma il login nel browser integrato. Verifica successiva in
+sola lettura: «Nodi e lavori» mostra sei lavori storici del 5 ottobre e
+zero nodi online; «Account e aziende» mostra i comandi Admin senza errori
+di accesso. Non sono stati copiati cookie, token, email o identificatori
+personali, né inviate operazioni commerciali o ricerche.
+
+Il pannello Backup dichiara «Non configurato», nessuna copia confermata,
+quattro operazioni in attesa e quattro fallite. La diagnostica dichiara
+Better Stack non collegato. È lo stato incompleto atteso prima del prossimo
+gate, non una prova che le copie R2 funzionino.
+
+Login reale e disponibilità delle due aree sono ora confermati. Questa
+prova non include rinnovi, revoche, restore, ricerche o un nuovo test di
+isolamento fra clienti. Resta l'ordine: runtime R2/Better Stack, poi M2
+separato solo stato/compatibilità, prima di ulteriori prove live.
+
 Fonti ufficiali: [deploy Run](https://docs.nhost.io/products/run/cli-deployments),
 [health check Run](https://docs.nhost.io/products/run/health-checks),
 [transazioni PostgreSQL](https://www.postgresql.org/docs/18/tutorial-transactions.html).
