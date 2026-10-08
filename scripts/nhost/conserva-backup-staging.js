@@ -106,6 +106,17 @@ function comandi() {
   return { esegui, cleanup:() => { fineCleanup = performance.now() + 90000; } };
 }
 
+async function pulisciRestore(docker, id, proprietario) {
+  const nomi = () => docker(['ps','-a','--format','{{.Names}}']).then(b => b.toString().trim().split('\n'));
+  if (!(await nomi()).includes(id)) return;
+  const proprieta = (await docker(['inspect','--format','{{.Id}} {{index .Config.Labels "amr.backup.restore"}}',id]))
+    .toString().trim().split(' ');
+  // Un'identità diversa impedisce sia la rimozione sia una conferma di cleanup.
+  if (proprieta[1] !== proprietario || !/^[a-f0-9]{64}$/.test(proprieta[0])) throw new Error('cleanup_non_confermato');
+  await docker(['rm','-f',proprieta[0]]);
+  if ((await nomi()).includes(id)) throw new Error('cleanup_non_confermato');
+}
+
 // Solo ripristino in risorse nuove sul Docker locale, senza rete né porte.
 // La copia cifrata rimane intatta anche quando verifica o cleanup falliscono.
 async function verifica(directory, { parent = PARENT, restic, platform = 'linux/amd64' } = {}) {
@@ -164,16 +175,8 @@ async function verifica(directory, { parent = PARENT, restic, platform = 'linux/
   } catch { errore = Object.assign(new Error('restore_non_confermato'), { fase, directory }); }
   finally {
     runner.cleanup(); riservati.forEach(b => b.fill(0));
-    try {
-      const nomi = () => docker(['ps','-a','--format','{{.Names}}']).then(b => b.toString().trim().split('\n'));
-      if ((await nomi()).includes(id)) {
-        const proprieta = (await docker(['inspect','--format','{{.Id}} {{index .Config.Labels "amr.backup.restore"}}',id])).toString().trim().split(' ');
-        if (proprieta[1] === proprietario && /^[a-f0-9]{64}$/.test(proprieta[0])) {
-          await docker(['rm','-f',proprieta[0]]);
-          if ((await nomi()).includes(id)) cleanup = false;
-        }
-      }
-    } catch { cleanup = false; }
+    try { await pulisciRestore(docker, id, proprietario); }
+    catch { cleanup = false; }
     if (temp) try { fs.rmSync(temp, { recursive:true, force:true }); } catch { cleanup = false; }
     info.cleanup = cleanup; if (!cleanup) info.restore = false;
     try { scrivi(directory, info); }
@@ -209,4 +212,4 @@ if (require.main === module) {
     }
   });
 }
-module.exports = { cifra, verifica };
+module.exports = { cifra, verifica, pulisciRestore };

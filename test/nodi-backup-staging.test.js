@@ -191,6 +191,23 @@ test('restore: rifiuta una directory estranea prima di eseguire comandi', async 
   await assert.rejects(verifica(path.join(parent,'..','estranea'),{parent,restic:'/fixture/restic'}),/checkpoint_non_atteso/);
 });
 
+test('restore: cleanup confermato solo per il container posseduto e scomparso', async () => {
+  const { pulisciRestore } = require('../scripts/nhost/conserva-backup-staging');
+  for (const caso of ['assente','corretto','label_diversa','id_invalido','ricreato']) {
+    const rimozioni = []; let elenchi = 0;
+    const docker = async args => {
+      if (args[0] === 'ps') return Buffer.from(caso === 'assente' || (elenchi++ && caso !== 'ricreato') ? '' : 'fixture');
+      if (args[0] === 'inspect') return Buffer.from((caso === 'id_invalido' ? 'invalid' : 'a'.repeat(64))
+        + ' ' + (caso === 'label_diversa' ? 'estraneo' : 'possesso'));
+      assert.equal(args[0], 'rm'); rimozioni.push(args[2]); return Buffer.alloc(0);
+    };
+    const esito = pulisciRestore(docker, 'fixture', 'possesso');
+    if (['label_diversa','id_invalido','ricreato'].includes(caso)) await assert.rejects(esito, /cleanup_non_confermato/);
+    else await esito;
+    assert.deepEqual(rimozioni, ['corretto','ricreato'].includes(caso) ? ['a'.repeat(64)] : [], caso);
+  }
+});
+
 test('checkpoint macOS: ACL permissiva reale rifiutata senza modificare il parent',
   {skip:process.platform!=='darwin'}, async t => {
     const {execFileSync}=require('node:child_process');
