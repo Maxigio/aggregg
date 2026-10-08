@@ -281,3 +281,102 @@ delle mutazioni: prima preflight non disponibile, poi inizializzazione MCP
 non disponibile. Un controllo indipendente inizializza la CLI correttamente;
 non è dimostrata una scadenza del login. Nessuna nuova misura ingress,
 aggiunta di IP o modifica dei controlli di trasporto.
+
+### Candidato immutabile dopo il fix
+
+Commit candidato: `b8e80509feb52a66661ffade9f56d64c37128901`.
+Build Linux amd64 dal solo inventario Git; image ID locale
+`sha256:ddf2781c82961c297488122af0cfc0638a999a71eab04e626013899b5063fd7a`.
+Ripetuto il gate completo su questa immagine: **exit 0**, manifest/digest,
+commit e checkout invariati fra inizio e fine. Auth 0.49.1 e PostgreSQL 18.6
+locali; la versione Auth remota 0.52 richiede ancora collaudo nello staging.
+Non sono state caricate credenziali reali né interrogati portali.
+Controprova di cleanup: gli stessi 41 volumi presenti prima della fixture
+immagine, otto container originali attivi e zero fixture residue. Nessun
+prune o rimozione indiscriminata dei volumi preesistenti.
+
+Ricevuta con manifest e identità:
+`/var/folders/fg/l5gxkc013yvf8p6pzqkywstc0000gp/T/amr-candidato-b8e8050-ywgbx5m3/gate.json`.
+Questo è il candidato verificato; i successivi commit di sole evidenze non
+aggiornano l'immagine o il servizio remoto. Backup remoto e collegamento M2
+restano aperti: il PASS locale non li sostituisce.
+
+### Nuove misure ingress e limite della diagnosi
+
+La successiva sonda temporanea ha prodotto **otto risposte 200** e otto
+record corrispondenti, tutti della medesima istanza. Durate end-to-end:
+211, 204, 235, 232, 433, 222, 215 e 212 ms. Sono misure della piccola sonda,
+non dei tempi di una ricerca AMR. Il tentativo seguente si è fermato con
+`operazione_non_confermata`: la causa di quel fallimento non è isolata.
+Non riportare questo giro come un gate 12/12 superato.
+
+Nei record acquisiti compaiono i peer `10.110.1.249` e `10.110.21.247`,
+diversi da quelli osservati nelle sonde precedenti. Host e protocollo
+risultano quelli attesi; nel campione con sentinelle `X-Forwarded-Host`
+e `X-Forwarded-Proto` sono sovrascritti. Questo non dimostra la stabilità
+degli IP né la sanitizzazione di tutti gli header o l'isolamento di rete.
+
+La sonda è stata arrestata con conferma dopo 270.489 ms, entro i 20 minuti.
+Configurazione originale confrontata esattamente e processo originale
+Running con una replica ready. `/healthz` risponde 200; `/` e `/api/admin`
+rispondono ancora 403, come nella baseline precedente. Il ripristino della
+configurazione non significa frontend accessibile. Nessun nuovo IP ammesso,
+nuovo segreto/ruolo applicato, backup automatico attivato o nodo collegato.
+
+Ricevute private:
+`/var/folders/fg/l5gxkc013yvf8p6pzqkywstc0000gp/T/amr-sonda-ripresa-20261008-y7_572zu/esito-robusto.json`
+e `osservazioni-parziali.json` nella stessa directory. I record conservano
+soltanto metadati tecnici consentiti, non body applicativi, cookie o credenziali.
+
+Controprova locale sul middleware reale `trasporto-prova.js`: con la lista
+storica i due nuovi peer ricevono 403; con le sole due aggiunte esplicite
+passano, mentre Host o protocollo errati restano negati, **otto controlli
+PASS**. La lista storica non è la verifica del valore segreto remoto attuale.
+La configurazione Run non risolta conserva il riferimento già approvato
+`{{ secrets.AMR_CENTRO_PROXY_IP }},10.110.18.147`. L'introspezione Cloud
+mostra `appSecrets(appID)` con soli campi `name` e `value`, senza filtro per
+nome: non sono stati acquisiti tutti i segreti per leggere una sola lista.
+Il cambio dei peer è verificato; la spiegazione del 403 mediante la lista
+effettiva resta condizionata a quel dato o alla controprova sullo staging.
+
+### Decisione necessaria prima di riprendere il checkpoint remoto
+
+La [guida Express](https://expressjs.com/en/guide/behind-proxies/) richiede
+che la fiducia corrisponda alla configurazione effettiva del reverse proxy.
+La [pagina Nhost Run](https://docs.nhost.io/products/run/networking) descrive
+la rete condivisa e l'esposizione HTTPS, ma nella pagina consultata non
+fornisce un contratto di IP/CIDR ingress stabili. Non è una prova che Nhost
+non offra tale contratto attraverso altri canali.
+
+Raccomandazione: chiarire con Nhost l'identità fidata dell'ingress e la
+protezione della porta interna prima di considerare la soluzione stabile.
+Alternativa per il solo collaudo: appendere i due IP osservati al riferimento
+esistente, con readback integrale e controprove HTTP; potrebbe ripristinare
+l'accesso, ma non risolve la futura rotazione dei peer. La precedente
+autorizzazione del solo `10.110.18.147` non è un'autorizzazione automatica
+per altri peer o intere subnet. Nessuna delle due direzioni è applicata.
+
+Bozza tecnica per il supporto, non inviata:
+
+> In un servizio Run HTTPS osserviamo peer interni differenti fra avvii.
+> Il backend ammette solo reverse proxy esplicitamente fidati e richiede
+> Host atteso e X-Forwarded-Proto=https; un peer non in lista viene negato.
+> Qual è il contratto supportato per identificare l'ingress: IP/CIDR stabili,
+> altro meccanismo autenticato o network policy? La porta HTTP interna può
+> essere raggiunta soltanto dall'ingress o anche da altri workload, e con
+> quale isolamento fra progetti/organizzazioni? Il proxy sovrascrive sempre
+> X-Forwarded-For, X-Forwarded-Host e X-Forwarded-Proto? Come vengono
+> comunicati cambiamenti di questa configurazione?
+
+La bozza non contiene credenziali o dati dei clienti. L'invio richiede
+istruzione esplicita del proprietario. Candidato locale `b8e8050` verificato;
+checkpoint remoto fresco, restore isolato della copia, distribuzione del
+candidato e M2 solo stato restano da completare in questo ordine. CHECK storico ancora
+non riprodotto e non spiegato: produzione non autorizzata.
+
+Review indipendente delle nuove conclusioni: ricevute locali e limiti della
+sonda confermati. Corretto un finding documentale: la bozza per il supporto
+descrive ora il rifiuto di un peer non autorizzato come regola del middleware,
+senza presentarlo come causa remota già provata. Controverifica della nuova
+formulazione positiva. Nessun nuovo accesso a cloud, credenziali o M2 nel
+passaggio del reviewer.
