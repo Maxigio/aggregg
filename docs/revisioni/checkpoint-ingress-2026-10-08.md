@@ -113,21 +113,24 @@ Nessuna distribuzione del candidato o migrazione remota ancora eseguita.
 Il CHECK storico non è ricomparso in questo collaudo, ma la causa resta
 non dimostrata.
 
-## Recovery pubblico ancora aperto
+## Recovery pubblico: evidenze iniziali e conferma successiva
 
 Readback completo: configurazione originale esatta, immagine `66e2b24`,
 una replica Running/ready e avvio applicativo confermato dai log filtrati.
-Alle **12:20 UTC** tutti e quattro i nameserver autorevoli della zona
-rispondevano NXDOMAIN per l'indirizzo del centro. ID progetto, servizio e
-subdomain coincidono con quelli originali; la porta resta pubblica 3000
-HTTP. Non si tratta soltanto della cache negativa di un resolver.
+Alle **12:20 UTC** il nostro helper `resolve4` contro i quattro nameserver
+della zona restituiva ENOTFOUND. I resolver pubblici riportavano un lookup
+negativo. ID progetto, servizio e subdomain coincidono con quelli
+originali; la porta resta pubblica 3000 HTTP. Correzione della diagnosi:
+queste letture ricorsive non dimostrano quale elemento della catena DNS
+fosse assente, né escludono da sole una cache negativa. L'attribuzione
+precedente al record autorevole del servizio era troppo forte.
 
 Il preflight delle 12:24 UTC conferma la configurazione originale ma
 non la risposta HTTP pubblica. Il gate resta aperto.
 
 Alle **12:35:58 UTC** una sola riconciliazione dell'intero array di porte
 già dichiarato, senza toggle o nuove risorse, ha ricevuto ACK esatto e
-readback originale. Il DNS autorevole resta NXDOMAIN; il pod ha mantenuto
+readback originale. Il lookup DNS continua a fallire; il pod ha mantenuto
 la data di avvio originale. Nessun recupero pubblico dimostrato.
 
 La review indipendente dell'executor ha trovato, prima dell'esecuzione,
@@ -148,6 +151,31 @@ prevede il dominio automatico con HTTP/pubblicazione attiva.
 
 ACK, readiness e readback non sono prove di recupero DNS/HTTP. La
 diagnosi non contatta il supporto Nhost e non coinvolge M2 o portali.
+
+### Recovery confermato, senza ritiro della porta
+
+L'utente ha poi autorizzato una sola prova di ritiro/ripubblicazione della
+porta. Executor preparato con quindici controprove simulate PASS e review
+indipendente senza finding residui. Il preflight delle **12:57:53 UTC**
+ha trovato l'originale già raggiungibile: **zero mutazioni**, nessun ritiro.
+
+Ricevuta separata `recovery-originale.json`: due osservazioni delle
+**12:59:57 e 13:00:03 UTC**, configurazione originale esatta, una replica
+pronta con la stessa data di avvio, `/healthz` 200 con body applicativo
+`ok` e risposta 403 originale riconosciuta. Il 403 è quello del vecchio
+guard del peer, non un gate Auth superato.
+
+Le quattro interrogazioni DNS senza ricorsione (`dig +norecurse`) rispondono
+NOERROR e mostrano un CNAME. La controprova mostra inoltre che `resolve4`
+contro quei server può restituire zero indirizzi pur essendoci il CNAME:
+la lettura della catena va distinta dall'assenza del record.
+Ricevuta `dns-pacchetti-recuperato.json`. Nessuna modifica del resolver Mac.
+
+Checkpoint cifrato + restore isolato + recovery dell'originale sono ora
+verificati con ricevute distinte. La causa del precedente lookup negativo
+non è dimostrata; non attribuire il ritorno del DNS all'aggiornamento
+identico delle porte. I fallimenti precedenti non vengono cancellati.
+Il candidato resta da distribuire dopo la review delle migrazioni.
 
 ## Riferimenti
 
