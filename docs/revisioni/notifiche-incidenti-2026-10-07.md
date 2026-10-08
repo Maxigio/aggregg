@@ -827,3 +827,34 @@ Prove private redatte: `risoluzione.json`,
 `timeline-risoluzione-redatta.json` nella stessa directory del collaudo.
 La documentazione [Resolve incident](https://betterstack.com/docs/uptime/api/resolve-an-ongoing-incident/)
 espone `resolved_by`, senza un parametro di silenziamento degli invii.
+
+### Monitor corretto dopo il collaudo ingress — 8 ottobre
+
+Il GET delle 14:08:46 UTC conferma che `5036432` era sospeso e controllava
+solo il codice HTTP. Run può rispondere 200 con body vuoto quando AMR è
+fermo: osservazione registrata nel checkpoint, quindi il monitor solo
+status poteva non rilevare il processo fermo.
+
+Alle 14:25:05 UTC, una sola PATCH modifica `monitor_type=keyword` e
+`required_keyword=ok`, mantenendo `paused=true`. Readback confermato:
+status paused, timestamp di pausa presente, metodo GET; gli altri campi
+di configurazione sono identici. Frequenza 30 s, timeout 10 s, recovery
+60 s ed email/push restano quelli approvati. Nessuna riattivazione,
+richiesta a Run, payload di prova o modifica ad altri monitor.
+
+Review indipendente prima dell'applicazione: corretti tre problemi
+nell'executor temporaneo (dipendenza inutile dall'health corrente;
+sospensione non verificata tramite status; metodo HEAD accettato).
+13/13 controprove locali e 68 controlli aggiuntivi del reviewer PASS;
+write/readback incerti non producono una seconda PATCH. I due conteggi
+non rappresentano un test di recapito o di downtime live.
+
+La keyword è case-insensitive: esclude il body vuoto osservato, senza
+certificare l'uguaglianza esatta della risposta né Auth/DB/ricerche.
+Il sender runtime e il monitor attivo restano da collegare. Anche
+la soppressione dei messaggi di ripristino automatici resta non provata.
+
+Ricevuta privata: `monitor-corretto.json` in
+`/var/folders/fg/l5gxkc013yvf8p6pzqkywstc0000gp/T/amr-runtime-backup-preflight-20261008-me172a0h/`.
+Fonti: [keyword](https://betterstack.com/docs/uptime/keyword-monitor/),
+[PATCH monitor](https://betterstack.com/docs/uptime/api/update-an-existing-monitor/).

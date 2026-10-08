@@ -26,7 +26,8 @@ il codice durante la controprova.
 Prove Node 24.21.0 con ambiente sterile:
 
 - 32 test ordinari del pacchetto PASS; due gate opt-in distinti.
-- Gate HEAD completo PASS; nessun overlay, credenziale o deploy.
+- Gate HEAD completo PASS prima del successivo rafforzamento dei soli test;
+  nessun overlay, credenziale o deploy.
 - CLI Nhost ufficiale 1.51.2: dieci TOML baseline/runtime, cinque fasi
   ciascuno, validati senza login o rete.
 - 21 test backup/runtime PASS; centro/incidenti 31/31 PASS. Le prime
