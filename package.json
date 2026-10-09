@@ -23,7 +23,7 @@
     "test": "AMR_LOG_DIR=\"$(mktemp -d)\" node --require ./test/no-dotenv-preload.cjs --test --test-timeout=120000 test/*.test.js"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   },
   "build": {
     "appId": "com.automotoradar.app",
