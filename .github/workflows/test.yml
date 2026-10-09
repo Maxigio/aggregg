@@ -1,0 +1,32 @@
+name: Test
+
+on:
+  push:
+    branches: [main, 'feat/**', 'claude/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    # La suite dura pochi minuti: un file che non termina deve far fallire il job, non bloccarlo.
+    timeout-minutes: 30
+    env:
+      # Electron serve solo alla build desktop, non ai test.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Chromium della versione di Playwright in uso, per i test UI (altrimenti vengono saltati).
+      - run: npx playwright install --with-deps chromium
+      - run: npm test

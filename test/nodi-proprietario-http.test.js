@@ -3,6 +3,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { creaCentro } = require('../backend/nodi/centro');
 const ownerId = '00000000-0000-4000-8000-000000000001';
@@ -15,7 +17,7 @@ const risposta = { risultati: [{ id: 'fixture', fonte: 'subito', url: 'https://w
   sources: { subito: { status: 'ok', count: 1, hasMore: false },
     autoscout: { status: 'empty', count: 0 }, moto: { status: 'empty', count: 0 } } };
 async function fixture(t, options = {}) {
-  const directory = fs.mkdtempSync('/private/tmp/amr-proprietario-http-');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-proprietario-http-'));
   const owner = { persona: ownerId, azienda: null, admin: true, mfa: true, scadenza: Date.now() + 60000 };
   const sessioni = { owner, owner2: { ...owner }, cliente: { persona: 'cliente', azienda: 'aziendaA', scadenza: owner.scadenza },
     admin: { ...owner, persona: '00000000-0000-4000-8000-000000000002' } };
