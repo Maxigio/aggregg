@@ -1,6 +1,7 @@
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const http = require('node:http');
 const path = require('node:path');
 const root = path.resolve(__dirname,'..');
@@ -16,7 +17,7 @@ function jar(r, old='') {
   return [...out].map(([k,v])=>k+'='+v).join('; ');
 }
 async function fixture({admin=false,pending=false,proprietarioId=null}={}) {
- const directory=fs.mkdtempSync('/private/tmp/amr-account-review-');
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(), 'amr-account-review-'));
  let now=Date.now(), resolveLogin, loginEntrato, ruoloLetture=0, rilasciProvider=0;
  const loginIniziato=new Promise(r=>loginEntrato=r);
  const origine='https://amr.invalid'; let accessi;

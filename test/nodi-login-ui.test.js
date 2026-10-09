@@ -2,6 +2,9 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const {chromium}=require('playwright');
+const browserPath=process.env.AMR_TEST_CHROMIUM || (fs.existsSync(chromium.executablePath())
+  ? chromium.executablePath() : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
 
 test('pagina login: una lettura iniziale tardiva non riapre la sessione dopo logout',async()=>{
   let completa;
@@ -20,8 +23,8 @@ test('pagina login: una lettura iniziale tardiva non riapre la sessione dopo log
   assert.equal(nodes.login.hidden,false);assert.equal(nodes.logout.hidden,true);assert.equal(nodes.prototipo.hidden,true);assert.deepEqual(navigazioni,['/']);
 });
 
-test('C03: due schede iniziali condividono contesto e logout; altro browser e login successivo indipendenti', { timeout: 20000 }, async t => {
-  const express = require('express'), { chromium } = require('playwright');
+test('C03: due schede iniziali condividono contesto e logout; altro browser e login successivo indipendenti', { timeout: 20000, skip: !fs.existsSync(browserPath) && 'Chromium non disponibile' }, async t => {
+  const express = require('express');
   const { mount } = require('../backend/nodi/login-nhost-prova');
   let server, browser, auth, entra, libera, prima = true, contesti = 0;
   const dentro = new Promise(r => { entra = r; }), attesa = new Promise(r => { libera = r; });
@@ -39,9 +42,7 @@ test('C03: due schede iniziali condividono contesto e logout; altro browser e lo
   } });
   app.get('/', (req, res) => res.send('Accesso sintetico completato'));
   t.after(async () => { libera(); auth.close(); await browser?.close(); server.closeAllConnections(); await new Promise(r => server.close(r)); });
-  const executablePath = process.env.AMR_TEST_CHROMIUM || (fs.existsSync(chromium.executablePath())
-    ? chromium.executablePath() : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
-  browser = await chromium.launch({ headless: true, executablePath });
+  browser = await chromium.launch({ headless: true, executablePath: browserPath });
   const context = await browser.newContext(), a = await context.newPage(), b = await context.newPage();
   await Promise.all([a.goto(origine + '/api/auth/pagina'), b.goto(origine + '/api/auth/pagina')]);
   await a.waitForFunction(() => typeof window.amrBootstrap === 'function');

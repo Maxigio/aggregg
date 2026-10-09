@@ -2,6 +2,9 @@
 const { test } = require('node:test'), assert = require('node:assert/strict');
 const express = require('express'), http = require('node:http');
 const { mount } = require('../backend/nodi/login-nhost-prova');
+const fs = require('node:fs'), { chromium } = require('playwright');
+const browserPath = process.env.AMR_TEST_CHROMIUM || (fs.existsSync(chromium.executablePath())
+  ? chromium.executablePath() : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
 const differita = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 async function setup(t, { identita, mfa = false } = {}) {
   let now = Date.now(), numero = 0;
@@ -118,10 +121,9 @@ test('finalizza: MFA richiede due esiti server; logout tra verifica OTP e confer
   assert.deepEqual(f.revocate,['refresh-1']);
 });
 
-test('finalizza browser: lock ordina risposta ritardata e logout; timeout reale non applica cookie dopo nuovo login', {timeout:20000}, async t => {
-  const fs=require('node:fs'), {chromium}=require('playwright'), f=await setup(t);
-  const executablePath=process.env.AMR_TEST_CHROMIUM||(fs.existsSync(chromium.executablePath())?chromium.executablePath():'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
-  const browser=await chromium.launch({headless:true,executablePath});t.after(()=>browser.close());
+test('finalizza browser: lock ordina risposta ritardata e logout; timeout reale non applica cookie dopo nuovo login', {timeout:20000, skip:!fs.existsSync(browserPath)&&'Chromium non disponibile'}, async t => {
+  const f=await setup(t);
+  const browser=await chromium.launch({headless:true,executablePath:browserPath});t.after(()=>browser.close());
   const ctx=await browser.newContext(), a=await ctx.newPage(), b=await ctx.newPage();
   await Promise.all([a.goto(f.origine+'/api/auth/pagina'),b.goto(f.origine+'/api/auth/pagina')]);
   const prepara=page=>page.evaluate(async()=>{const p=await amrBootstrap(true);return(await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'sintetica@amr.invalid',password:'sintetica',tentativo:p.tentativo})})).json();});

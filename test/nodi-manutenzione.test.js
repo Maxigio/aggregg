@@ -3,6 +3,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { creaCentro } = require('../backend/nodi/centro');
 
@@ -16,7 +18,7 @@ const completa = { risultati: [], sources: {
 } };
 
 async function fixture(t, { directory, hook = async () => {} } = {}) {
-  const dati = directory || fs.mkdtempSync('/private/tmp/amr-manutenzione-');
+  const dati = directory || fs.mkdtempSync(path.join(os.tmpdir(), 'amr-manutenzione-'));
   const sessioni = { cliente: { persona: 'cliente', azienda: 'aziendaA' },
     admin: { persona: 'admin', admin: true, mfa: true } };
   const c = creaCentro({ directory: dati, tokens: { a: 'a'.repeat(64), b: 'b'.repeat(64) }, adminLocale: true,
@@ -157,7 +159,7 @@ test('manutenzione: persistenza obbligatoria e autorizzazione Admin MFA', async 
 });
 
 test('manutenzione: il riavvio mantiene la pausa e non riprende la vecchia coda', async t => {
-  const directory = fs.mkdtempSync('/private/tmp/amr-manutenzione-riavvio-');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-manutenzione-riavvio-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const primo = await fixture(t, { directory }); await primo.modo(true); await primo.close();
   const secondo = await fixture(t, { directory });
