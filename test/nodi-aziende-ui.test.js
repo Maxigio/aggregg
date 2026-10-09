@@ -223,7 +223,8 @@ test('F13: refresh account chiude il pending invalidato e una risposta tardiva n
     assert.match(await page.locator('#account-stato').textContent(), /Nhost non è confermata/);
     assert.equal(await page.locator('#account-sessioni-panel').isVisible(), false);
     attivo = true; await page.reload();
-    await page.waitForFunction(() => !document.getElementById('account-sessione-aggiorna').disabled);
+    // Dopo il reload il pannello account viene ricostruito: il bottone può non esistere ancora.
+    await page.waitForFunction(() => document.getElementById('account-sessione-aggiorna')?.disabled === false);
   }
   // Un nuovo login e un nuovo invito prevalgono sul poll già in volo.
   await page.click('#account-esci');
