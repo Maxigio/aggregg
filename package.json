@@ -20,7 +20,7 @@
     "dist:mac": "electron-builder --mac --x64",
     "dist:mac-arm64": "electron-builder --mac --arm64",
     "dist:win": "electron-builder --win --x64",
-    "test": "AMR_LOG_DIR=\"$(mktemp -d)\" node --test test/*.test.js"
+    "test": "AMR_LOG_DIR=\"$(mktemp -d)\" node --require ./test/no-dotenv-preload.cjs --test --test-timeout=120000 test/*.test.js"
   },
   "engines": {
     "node": ">=20.0.0"
