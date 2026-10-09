@@ -877,6 +877,8 @@ test('F09: refresh nodi conserva il comando, rispetta focus esterno e ripiega se
   await page.evaluate(() => { window.refreshProva = aggiornaStato(); });
   await attendiRichieste(pendenti, 1);
   await page.locator('.area-nav a[href="#ricercaPanel"]').click();
+  // hashchange arriva dopo il click: focus() su un pannello ancora nascosto non ha effetto.
+  await page.locator('#ricercaPanel').waitFor();
   await page.locator('#azienda').focus();
   trattieniStato = false;
   await pendenti.pop().fulfill({ json: { nodi } });
@@ -884,6 +886,7 @@ test('F09: refresh nodi conserva il comando, rispetta focus esterno e ripiega se
   assert.equal(await page.evaluate(() => document.activeElement.id), 'azienda');
 
   await page.locator('.area-nav a[href="#diagnosticaPanel"]').click();
+  await page.locator('#diagnosticaPanel').waitFor();
   await page.locator('#nodi button').first().focus();
   nodi[0].online = false;
   await page.evaluate(() => aggiornaStato());
