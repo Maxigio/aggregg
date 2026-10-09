@@ -219,7 +219,10 @@ for(const durantePermessi of [false,true])test('S02: owner torna '+(durantePerme
 
 for(const caso of ['nessun-nodo','timeout-fonte','429-pausa','http-429','parziale-con-righe',
   'settlement-in-coda','settlement-incerto','completa'])test('R1: fonte omessa recuperabile dopo '+caso,async()=>{
- const f=await fixture('fonte-omessa',{timeoutMs:300});
+ // Lo stesso timeout vale per il lavoro principale, che deve ricevere l'esito in tempo,
+ // e per quello alternativo, che nei casi settlement deve scadere: 300 ms non bastavano
+ // al lavoro principale su una CI carica.
+ const f=await fixture('fonte-omessa',{timeoutMs:1500});
  const riga=(fonte,id)=>({fonte,id,url:'https://www.'+(fonte==='subito'?'subito.it':'autoscout24.it')+'/annunci/'+id});
  const omessa={status:'skipped',reason:'fonte esaurita nelle pagine precedenti',count:0,hasMore:false};
  const principale={...completa,risultati:[riga('autoscout','principale')],totale:1,
@@ -233,7 +236,7 @@ for(const caso of ['nessun-nodo','timeout-fonte','429-pausa','http-429','parzial
   }
   const p=f.cerca('tipo=auto&marca=Fiat');await attendi(()=>f.c.lavori.size===1);
   const ja=await(await f.poll('a')).json();assert.equal(ja.input.fonti,'autoscout');
-  await f.esito('a',ja,principale);
+  assert.equal((await f.esito('a',ja,principale)).status,200);
   let statoAlternativo;
   if(caso!=='nessun-nodo'){
    await attendi(()=>f.c.lavori.size===1&&[...f.c.lavori.values()][0].operazione==='fonte');
