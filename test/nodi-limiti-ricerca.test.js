@@ -237,6 +237,9 @@ test('protocollo breve: deadline invariata dai GET, errore consultabile senza re
   const out = await f.conclusa(cookie, id);
   assert.equal(out.esito.status, 504); assert.equal(out.esito.body.incerto, true);
   assert.equal(out.esito.body.risultati, undefined);
+  // Il timer del lavoro è distinto da quello della ricerca: come negli altri test di deadline,
+  // l'esito tardivo si invia dopo che il lavoro è scaduto.
+  await f.attendi(() => !f.centro.lavori.size);
   assert.equal((await f.esito('a', job)).status, 409);
   assert.equal((await f.avvia(cookie, id)).status, 202);
   assert.equal((await f.nodo('a', 'poll?id=a')).status, 204);
